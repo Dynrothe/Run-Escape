@@ -1,0 +1,51 @@
+/* A notice over the title screen; a long one scrolls, so the button stays in
+   view */
+.ui-notice {
+    width: min(480px, calc(90vw / var(--ui-scale)));
+    max-height: calc(80vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-notice > h2,
+.ui-notice-close {
+    flex-shrink: 0;
+}
+
+.ui-notice-body {
+    min-height: 0;
+    overflow-y: auto;
+    line-height: 1.3;
+}
+
+.ui-notice-body p,
+.ui-notice-body ul {
+    margin: 0 0 8px;
+}
+
+.ui-notice-body > :last-child {
+    margin-bottom: 0;
+}
+
+.ui-notice-body ul {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 18px;
+}
+
+.ui-notice-body li::marker {
+    color: var(--ui-orange);
+}
+
+.ui-notice-body strong {
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    color: var(--ui-white);
+}
+
+.ui-notice-close {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+}

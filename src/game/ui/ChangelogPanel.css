@@ -1,0 +1,68 @@
+/* What's new: the versions scroll, so the Back button stays in view */
+.ui-changelog {
+    width: min(620px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-changelog > h2,
+.ui-changelog > .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-changelog-list {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.ui-changelog-version {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 16px 0 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--ui-edge-light);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 18px;
+    color: var(--ui-orange);
+}
+
+.ui-changelog-list > section:first-child .ui-changelog-version {
+    margin-top: 0;
+}
+
+.ui-changelog-date {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: #b8aa8a;
+}
+
+.ui-changelog-heading {
+    margin: 8px 0 4px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 16px;
+    color: var(--ui-yellow);
+}
+
+.ui-changelog ul {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding-left: 18px;
+}
+
+.ui-changelog li::marker {
+    color: var(--ui-orange);
+}
+
+.ui-changelog strong {
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    color: var(--ui-white);
+}

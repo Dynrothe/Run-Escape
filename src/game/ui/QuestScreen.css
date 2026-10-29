@@ -1,0 +1,103 @@
+/* Quests: the list map by map, coloured like the client's quest tab */
+
+.ui-quests {
+    width: min(760px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-quests > h2,
+.ui-quests > .ui-subtle,
+.ui-quests > .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-quest-list {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ui-quest-group + .ui-quest-group {
+    margin-top: 10px;
+}
+
+.ui-quest-group-name {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 3px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--ui-edge-light);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-quest-group-note {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: #8a7f6a;
+}
+
+/* Name, what it asks for, how far it's got, what it pays */
+.ui-quest {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr) 90px 90px;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+}
+
+.ui-quest-name {
+    font-family: "OSRS Bold", sans-serif;
+}
+
+.ui-quest-new .ui-quest-name {
+    color: var(--ui-red);
+}
+
+.ui-quest-started .ui-quest-name {
+    color: var(--ui-yellow);
+}
+
+.ui-quest-done .ui-quest-name,
+.ui-quest-done .ui-quest-progress {
+    color: var(--ui-green);
+}
+
+.ui-quest-progress {
+    text-align: right;
+    color: var(--ui-white);
+}
+
+.ui-quest-reward {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.ui-quest-done .ui-quest-task,
+.ui-quest-done .ui-quest-reward {
+    opacity: 0.6;
+}
+
+.ui-quests-count {
+    color: #b8aa8a;
+}
+
+/* Narrow windows: what it asks for under its name */
+@media (max-width: 759px) {
+    .ui-quest {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        row-gap: 0;
+        padding: 3px 0;
+    }
+
+    .ui-quest-task {
+        grid-row: 2;
+        grid-column: 1 / -1;
+    }
+}

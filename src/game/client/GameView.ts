@@ -1,0 +1,1219 @@
+import {
+    ActorAnim,
+    ActorModel,
+    ActorRenderer,
+    NO_TINT,
+} from "../../mapviewer/webgl/actor/ActorRenderer";
+import { CASKETS } from "../content/items";
+import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
+import {
+    DEATH_SINK_TICKS,
+    MAX_DEATH_ANIM_TICKS,
+    Sim,
+    TICKS_PER_SECOND,
+    yawFromVector,
+} from "../core/Sim";
+import { Enemy, Glyph, Pickup, SimEvent, Thrall } from "../core/entities";
+import {
+    CANNON_MODEL_KEY,
+    GameAssets,
+    HITSPLAT_SPRITES,
+    PLAYER_SEQS,
+    getEnemyModelKey,
+    getPickupModelKey,
+    getPileLook,
+    getShieldedModelKey,
+} from "./GameAssets";
+import { Overlay, ScreenPoint } from "./Overlay";
+
+const FROZEN_TINT = 0xa8d8ff;
+// Shielded enemies (that can't be hurt yet) are washed in lilac
+const SHIELDED_TINT = 0xd0b8ff;
+// A blockable attack winding up shows the shelter behind the glyph out this
+// far from the boss, in tiles
+const SHELTER_LENGTH = 30;
+const CANNON_SCALE = 0.75;
+// Yaws face the way NPC models do (south at 0); the cannon's barrel points
+// north in its model, so it's turned half a turn to aim where it shoots
+const CANNON_YAW_OFFSET = 1024;
+const PLAYER_HIT_TINT = 0xff9090;
+
+// Heights above the ground, in tiles
+const PROJECTILE_HEIGHT = 0.9;
+// Runes circling the player are small ground items; bigger reads better
+const RUNE_SCALE = 1.6;
+// Enemy and boss projectiles smaller than a tile across (radius in model
+// units, 128 a tile) are drawn up to this much bigger than in OSRS, and all
+// of them with an outline this thick (model units), flat orange behind them
+const ENEMY_PROJECTILE_SCALE = 1.8;
+const PROJECTILE_MIN_RADIUS = 64;
+const PROJECTILE_OUTLINE = 12;
+// ...and a soft glow round them this many pixels across (at the UI's scale)
+const PROJECTILE_GLOW = 20;
+// Health bars sit 15 units over the head, like the client's
+const HEALTH_BAR_GAP = 15 / 128;
+
+const HITSPLAT_MS = 900;
+const MAX_HITSPLATS = 120;
+// The splat a little smaller than the client draws it; the number stays at
+// the font's own size, where it's crisp
+const HITSPLAT_SPRITE_SCALE = 0.85;
+const SLASH_MS = 180;
+// Swooshes are white, apart from these weapons' (r, g, b)
+const SLASH_COLORS: Record<string, string> = {
+    abyssal_whip: "180, 60, 60",
+    scythe_of_vitur: "150, 20, 40",
+};
+const AURA_MS = 320;
+const BLAST_MS = 480;
+const SWING_MS = 260;
+// Overhead chat stays up this long (the client's is 150 cycles, 3 seconds)
+const SHOUT_MS = 3000;
+
+// A casket thrown out of an elite: up and down, then a little bounce
+const CASKET_HOP_TICKS = 28;
+const CASKET_HOP_HEIGHT = 1.6;
+// Loot beams on caskets lying on the ground (like RuneLite's), in tiles
+const LOOT_BEAM_HEIGHT = 4;
+// Power-ups are drawn bigger than other ground items and bob up and down
+const POWER_UP_SCALE = 1.3;
+const POWER_UP_LOC_SCALE = 0.45;
+const POWER_UP_BOB = 0.15;
+// A power-up's flash over the screen fades out over this long
+const FLASH_MS = 700;
+// Thralls are small next to a top-down player; they fade out over their last
+// second
+const THRALL_SCALE = 1.5;
+const THRALL_FADE_TICKS = TICKS_PER_SECOND;
+
+type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
+
+type Hitsplat = {
+    kind: HitsplatKind;
+    x: number;
+    y: number;
+    amount: number;
+    start: number;
+    // Follows this enemy, or the player when onPlayer
+    enemyUid: number;
+    onPlayer: boolean;
+    height: number;
+};
+type SlashFx = {
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    reach: number;
+    // Half the angle it covers, radians
+    arc: number;
+    start: number;
+    // r, g, b; white when unset
+    color?: string;
+};
+type AuraFx = { x: number; y: number; radius: number; start: number };
+type BlastFx = { x: number; y: number; radius: number; start: number };
+type SwingFx = { x: number; y: number; radius: number; start: number };
+// enemyUid 0: the player (enemies' uids start at 1)
+type Shout = { enemyUid: number; text: string; start: number };
+const PLAYER_SHOUT = 0;
+type FlashFx = { color: string; start: number };
+
+function lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+}
+
+// Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
+// and weapon swooshes on the 2D overlay.
+export class GameView {
+    private hitsplats: Hitsplat[] = [];
+    private slashes: SlashFx[] = [];
+    auras: AuraFx[] = [];
+    private blasts: BlastFx[] = [];
+    private swings: SwingFx[] = [];
+    private shouts: Shout[] = [];
+    private flash?: FlashFx;
+    private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
+    private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
+    private enemiesByUid = new Map<number, Enemy>();
+
+    constructor(readonly assets: GameAssets) {}
+
+    reset(): void {
+        this.hitsplats = [];
+        this.slashes = [];
+        this.auras = [];
+        this.blasts = [];
+        this.swings = [];
+        this.shouts = [];
+        this.flash = undefined;
+    }
+
+    private addHitsplat(hitsplat: Omit<Hitsplat, "start">): void {
+        if (this.hitsplats.length >= MAX_HITSPLATS) {
+            this.hitsplats.shift();
+        }
+        this.hitsplats.push({ ...hitsplat, start: performance.now() + this.rngDelay() });
+    }
+
+    // Where hitsplats on the player go, in tiles above the ground
+    private playerHitsplatHeight(): number {
+        return ((this.assets.getPlayer()?.height ?? 200) / 128) * 0.6;
+    }
+
+    onEvents(sim: Sim, events: SimEvent[]): void {
+        const now = performance.now();
+        for (const event of events) {
+            switch (event.type) {
+                case "damage": {
+                    const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
+                    const model =
+                        enemy && this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+                    const height = model ? (model.height * enemy.scale) / 128 : 1;
+                    this.addHitsplat({
+                        kind: event.blocked ? "block" : event.poison ? "poison" : "damage",
+                        x: event.x,
+                        y: event.y,
+                        amount: event.amount,
+                        enemyUid: event.enemyUid,
+                        onPlayer: false,
+                        height: height * 0.6,
+                    });
+                    break;
+                }
+                case "playerHit":
+                case "playerPoisoned":
+                    this.addHitsplat({
+                        kind: event.type === "playerHit" ? "damage" : "poison",
+                        x: sim.player.x,
+                        y: sim.player.y,
+                        amount: event.amount,
+                        enemyUid: 0,
+                        onPlayer: true,
+                        height: this.playerHitsplatHeight(),
+                    });
+                    break;
+                case "bossSwing":
+                    this.swings.push({ x: event.x, y: event.y, radius: event.radius, start: now });
+                    break;
+                case "bossShout":
+                    // A new line replaces what it was saying
+                    this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
+                    this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
+                    break;
+                case "playerShout":
+                    this.shouts = this.shouts.filter((s) => s.enemyUid !== PLAYER_SHOUT);
+                    this.shouts.push({ enemyUid: PLAYER_SHOUT, text: event.text, start: now });
+                    break;
+                case "slash":
+                    this.slashes.push({
+                        x: event.x,
+                        y: event.y,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        reach: event.reach,
+                        arc: event.arc,
+                        start: now,
+                        color: SLASH_COLORS[event.weaponId],
+                    });
+                    break;
+                case "aura":
+                    this.auras.push({ x: event.x, y: event.y, radius: event.radius, start: now });
+                    break;
+                case "blast":
+                    this.blasts.push({ x: event.x, y: event.y, radius: event.radius, start: now });
+                    break;
+                case "powerUp": {
+                    const powerUp = getPowerUp(event.id);
+                    if (powerUp.flash) {
+                        this.flash = { color: powerUp.flash, start: now };
+                    }
+                    if (powerUp.effect.kind === "nuke") {
+                        this.blasts.push({ x: event.x, y: event.y, radius: 16, start: now });
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Spreads hitsplats landing on the same tick a little, like the client does
+    private rngDelay(): number {
+        return Math.random() * 60;
+    }
+
+    private ground(sim: Sim, x: number, y: number): number {
+        return sim.grid.getHeight(x, y) / 128;
+    }
+
+    submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const tick = sim.tick;
+        this.drawPlayer(actors, sim, alpha);
+
+        for (const enemy of sim.enemies) {
+            this.drawEnemy(actors, sim, enemy, alpha);
+        }
+
+        for (const thrall of sim.thralls) {
+            this.drawThrall(actors, sim, thrall, alpha);
+        }
+
+        for (const turret of sim.turrets) {
+            const model = this.assets.get(CANNON_MODEL_KEY);
+            if (model) {
+                const anim = model.anims[0];
+                // The real cannon takes up 3x3 tiles; smaller reads better next to the player
+                actors.draw(
+                    model,
+                    anim,
+                    0,
+                    turret.x,
+                    this.ground(sim, turret.x, turret.y),
+                    turret.y,
+                    (turret.yaw + CANNON_YAW_OFFSET) & 2047,
+                    {
+                        scale: CANNON_SCALE,
+                    },
+                );
+            }
+        }
+
+        for (const projectile of sim.enemyProjectiles) {
+            const spotAnim = projectile.attack.spotAnim;
+            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            if (!model || !hasGeometry(model)) {
+                // Drawn as a glow on the overlay instead
+                continue;
+            }
+            const x = lerp(projectile.prevX, projectile.x, alpha);
+            const y = lerp(projectile.prevY, projectile.y, alpha);
+            const anim = model.anims[0];
+            const frame = anim.getFrame(tick - projectile.startTick);
+            const height = this.ground(sim, x, y) - PROJECTILE_HEIGHT;
+            // Bigger than in OSRS: most are a few pixels across from up here
+            // Small ones drawn bigger, up to a tile across, and all outlined
+            // the same thickness
+            const scale = Math.min(
+                ENEMY_PROJECTILE_SCALE,
+                Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
+            );
+            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
+                scale,
+                outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
+            });
+        }
+
+        for (const projectile of sim.projectiles) {
+            const x = lerp(projectile.prevX, projectile.x, alpha);
+            const y = lerp(projectile.prevY, projectile.y, alpha);
+            const height = this.ground(sim, x, y) - PROJECTILE_HEIGHT;
+            let model: ActorModel | undefined;
+            if (projectile.objId !== -1) {
+                model = this.assets.get("obj:" + projectile.objId);
+            } else if (projectile.spotAnim !== -1) {
+                model = this.assets.get("spot:" + projectile.spotAnim);
+            }
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(tick - projectile.startTick);
+            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
+                scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+            });
+        }
+
+        for (const pickup of sim.pickups) {
+            const model = this.assets.get(getPickupModelKey(pickup));
+            if (!model) {
+                continue;
+            }
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            // Ground items turn slowly so they catch the eye
+            let yaw = (pickup.uid * 331 + tick * 6) & 2047;
+            let height = this.ground(sim, x, y);
+            // Ground item models are big next to a top-down player; bigger
+            // piles of bones and coins show a little bigger
+            const pile = getPileLook(pickup);
+            let scale = 0.85;
+            if (pile) {
+                scale = pile.scale;
+            } else if (pickup.kind === "food") {
+                scale = 1.1;
+            } else if (pickup.kind === "casket") {
+                scale = 1.3;
+                const t = (tick - pickup.spawnTick) / CASKET_HOP_TICKS;
+                height -= casketHop(t);
+                // Tumbling while it's in the air
+                if (t < 1) {
+                    yaw = (yaw + Math.round(t * 2048)) & 2047;
+                }
+            } else if (pickup.kind === "powerUp") {
+                // Blinks when it's about to go
+                const age = (tick - pickup.spawnTick) / TICKS_PER_SECOND;
+                if (age > POWER_UP_LIFETIME - POWER_UP_BLINK && Math.floor(tick / 6) % 2 === 0) {
+                    continue;
+                }
+                scale = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+                height -= POWER_UP_BOB * (1 + Math.sin((tick + pickup.uid * 13) / 8));
+            }
+            actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
+        }
+
+        for (const glyph of sim.glyphs) {
+            this.drawGlyph(actors, sim, glyph, alpha);
+        }
+
+        for (const effect of sim.effects) {
+            const model = this.assets.get("spot:" + effect.spotAnim);
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(tick - effect.startTick, effect.loop ?? false);
+            const height = this.ground(sim, effect.x, effect.y) - effect.height;
+            actors.draw(model, anim, frame, effect.x, height, effect.y, 0);
+        }
+    }
+
+    // A boss's glyph, idling as it slides, facing the boss
+    private drawGlyph(actors: ActorRenderer, sim: Sim, glyph: Glyph, alpha: number): void {
+        const model = this.assets.get(getEnemyModelKey(glyph.look, 0));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(glyph.look.idleSeq);
+        const x = lerp(glyph.prevX, glyph.x, alpha);
+        const y = lerp(glyph.prevY, glyph.y, alpha);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick),
+            x,
+            this.ground(sim, x, y),
+            y,
+            yawFromVector(-glyph.dirX, -glyph.dirY),
+            { scale: glyph.look.scale ?? 1, silhouette: true },
+        );
+    }
+
+    private drawThrall(actors: ActorRenderer, sim: Sim, thrall: Thrall, alpha: number): void {
+        const def = thrall.def;
+        const model = this.assets.get("thrall:" + def.id);
+        if (!model) {
+            return;
+        }
+        const tick = sim.tick;
+        let anim = model.getAnim(def.attackSeq);
+        let frame: number;
+        if (thrall.attackStart !== -1 && tick - thrall.attackStart < anim.totalTicks) {
+            frame = anim.getFrame(tick - thrall.attackStart, false);
+        } else {
+            anim = model.getAnim(thrall.moving ? def.walkSeq : def.idleSeq);
+            frame = anim.getFrame(tick + thrall.uid * 7);
+        }
+        const x = lerp(thrall.prevX, thrall.x, alpha);
+        const y = lerp(thrall.prevY, thrall.y, alpha);
+        const fade = Math.min(1, (thrall.endTick - tick) / THRALL_FADE_TICKS);
+        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, thrall.yaw, {
+            scale: THRALL_SCALE,
+            alpha: Math.max(0, fade),
+        });
+    }
+
+    private drawPlayer(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const model = this.assets.getPlayer();
+        if (!model) {
+            return;
+        }
+        const player = sim.player;
+        const tick = sim.tick;
+        let anim: ActorAnim;
+        let frame: number;
+        const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
+        if (player.deathTick !== -1) {
+            // The death animation holds its last frame (lying down)
+            anim = model.getAnim(PLAYER_SEQS.death);
+            frame = anim.getFrame(Math.min(tick - player.deathTick, MAX_DEATH_ANIM_TICKS), false);
+        } else if (
+            attack &&
+            attack.seqId === player.attackSeq &&
+            !player.moving &&
+            tick - player.attackStart < attack.totalTicks
+        ) {
+            anim = attack;
+            frame = anim.getFrame(tick - player.attackStart, false);
+        } else {
+            anim = model.getAnim(player.moving ? PLAYER_SEQS.run : PLAYER_SEQS.idle);
+            frame = anim.getFrame(tick - player.moveStart);
+        }
+        const x = lerp(player.prevX, player.x, alpha);
+        const y = lerp(player.prevY, player.y, alpha);
+        let tint = NO_TINT;
+        let flash = 0;
+        if (player.flash > 0) {
+            tint = PLAYER_HIT_TINT;
+        }
+        if (player.frozen > 0) {
+            tint = FROZEN_TINT;
+        }
+        if (player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0) {
+            flash = 0.5;
+        }
+        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, player.yaw, {
+            silhouette: true,
+            tint,
+            flash,
+        });
+    }
+
+    private drawEnemy(actors: ActorRenderer, sim: Sim, enemy: Enemy, alpha: number): void {
+        const def = enemy.def;
+        const tick = sim.tick;
+        // Drawn as its shielded version while it's shielded, if it has one
+        const shielded = !enemy.dead && enemy.shieldEnd > tick ? def.shield?.look : undefined;
+        const model = this.assets.get(
+            shielded ? getShieldedModelKey(def) : getEnemyModelKey(def, enemy.variant),
+        );
+        if (!model) {
+            return;
+        }
+        const x = lerp(enemy.prevX, enemy.x, alpha);
+        const y = lerp(enemy.prevY, enemy.y, alpha);
+        let anim: ActorAnim;
+        let frame: number;
+        let sink = 0;
+        if (enemy.dead) {
+            const t = tick - enemy.deathTick;
+            if (def.deathSeq !== -1) {
+                anim = model.getAnim(def.deathSeq);
+                const length = Math.min(anim.totalTicks, MAX_DEATH_ANIM_TICKS);
+                frame = anim.getFrame(Math.min(t, length - 1), false);
+                if (t > length) {
+                    sink = (t - length) / DEATH_SINK_TICKS;
+                }
+            } else {
+                anim = model.getAnim(def.idleSeq);
+                frame = 0;
+                sink = t / DEATH_SINK_TICKS;
+            }
+        } else if (shielded) {
+            anim = model.getAnim(shielded.idleSeq);
+            frame = anim.getFrame(tick + enemy.uid * 7);
+        } else if (enemy.anim === "jump" && def.jumpSeq !== undefined) {
+            anim = model.getAnim(def.jumpSeq);
+            frame = anim.getFrame(tick - enemy.animStart, false);
+        } else if (enemy.anim === "attack" && enemy.attackSeq !== -1) {
+            anim = model.getAnim(enemy.attackSeq);
+            frame = anim.getFrame(tick - enemy.animStart, false);
+        } else {
+            const moving =
+                Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
+            anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
+            // Offset by uid so a crowd doesn't move in lockstep
+            frame = anim.getFrame(tick + enemy.uid * 7);
+        }
+        const height = this.ground(sim, x, y) + (sink * model.height * enemy.scale) / 128;
+        let tint = enemy.tint;
+        if (enemy.frozen > 0 && !enemy.dead) {
+            tint = FROZEN_TINT;
+        } else if (enemy.shieldEnd > tick) {
+            tint = SHIELDED_TINT;
+        }
+        // The boss is hit all the time; a full flash would leave him white
+        const flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
+        actors.draw(model, anim, frame, x, height, y, enemy.yaw, {
+            scale: enemy.scale,
+            tint,
+            flash,
+            silhouette: enemy.boss,
+        });
+    }
+
+    drawOverlay(overlay: Overlay, sim: Sim, alpha: number): void {
+        const ctx = overlay.ctx;
+        const now = performance.now();
+        const scale = Math.max(overlay.height / 900, 0.75);
+
+        this.enemiesByUid.clear();
+        for (const enemy of sim.enemies) {
+            this.enemiesByUid.set(enemy.uid, enemy);
+        }
+
+        this.drawLootBeams(overlay, sim, alpha, now, scale);
+        this.drawBossWindups(overlay, sim, alpha);
+        this.drawAuras(overlay, sim, now);
+        this.drawBlasts(overlay, sim, now, scale);
+        this.drawSwings(overlay, sim, now, scale);
+        this.drawSlashes(overlay, sim, now, scale);
+        this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
+
+        // Health bars over hurt elites; with hundreds of enemies bars on all of
+        // them are just noise (hitsplats show the damage), and the boss has his
+        // bar at the top of the screen
+        for (const enemy of sim.enemies) {
+            if (enemy.dead || enemy.hp >= enemy.maxHp || !enemy.elite) {
+                continue;
+            }
+            const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+            const x = lerp(enemy.prevX, enemy.x, alpha);
+            const y = lerp(enemy.prevY, enemy.y, alpha);
+            const top =
+                this.ground(sim, x, y) -
+                ((model?.height ?? 128) * enemy.scale) / 128 -
+                HEALTH_BAR_GAP;
+            const p = overlay.project(x, top, y, this.screen);
+            if (p.visible) {
+                drawHealthBar(ctx, p.x, p.y, scale, enemy.hp / enemy.maxHp);
+            }
+        }
+
+        // The player's own bar over their head, gone when they die like in the game
+        const player = sim.player;
+        if (player.deathTick === -1) {
+            const model = this.assets.getPlayer();
+            const px = lerp(player.prevX, player.x, alpha);
+            const py = lerp(player.prevY, player.y, alpha);
+            const top = this.ground(sim, px, py) - (model?.height ?? 200) / 128 - HEALTH_BAR_GAP;
+            const p = overlay.project(px, top, py, this.screen);
+            if (p.visible) {
+                drawHealthBar(ctx, p.x, p.y, scale, player.hp / player.maxHp);
+            }
+        }
+
+        this.drawHitsplats(overlay, sim, alpha, now, scale);
+        this.drawShouts(overlay, sim, alpha, now, scale);
+        this.drawFlash(overlay, now);
+    }
+
+    // A power-up's flash: the whole screen, fading out
+    private drawFlash(overlay: Overlay, now: number): void {
+        const flash = this.flash;
+        if (!flash) {
+            return;
+        }
+        const t = (now - flash.start) / FLASH_MS;
+        if (t >= 1) {
+            this.flash = undefined;
+            return;
+        }
+        overlay.ctx.fillStyle = withAlpha(flash.color, 0.75 * (1 - t) * (1 - t));
+        overlay.ctx.fillRect(0, 0, overlay.width, overlay.height);
+    }
+
+    // Overhead chat: yellow text over the speaker's head, like the client's
+    private drawShouts(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        this.shouts = this.shouts.filter((s) => now - s.start < SHOUT_MS);
+        const pixel = Math.max(1, Math.round(scale));
+        ctx.font = `${16 * pixel}px "OSRS Bold", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        for (const shout of this.shouts) {
+            let x: number;
+            let y: number;
+            let height: number;
+            if (shout.enemyUid === PLAYER_SHOUT) {
+                const player = sim.player;
+                x = lerp(player.prevX, player.x, alpha);
+                y = lerp(player.prevY, player.y, alpha);
+                height = this.assets.getPlayer()?.height ?? 200;
+            } else {
+                const enemy = this.enemiesByUid.get(shout.enemyUid);
+                if (!enemy || enemy.dead) {
+                    continue;
+                }
+                const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+                x = lerp(enemy.prevX, enemy.x, alpha);
+                y = lerp(enemy.prevY, enemy.y, alpha);
+                height = (model?.height ?? 200) * enemy.scale;
+            }
+            const top = this.ground(sim, x, y) - height / 128;
+            const p = overlay.project(x, top, y, this.screen);
+            if (!p.visible) {
+                continue;
+            }
+            ctx.fillStyle = "#000000";
+            ctx.fillText(shout.text, p.x + pixel, p.y - 4 * pixel + pixel);
+            ctx.fillStyle = "#ffff00";
+            ctx.fillText(shout.text, p.x, p.y - 4 * pixel);
+        }
+    }
+
+    private drawHitsplats(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        this.hitsplats = this.hitsplats.filter((h) => now - h.start < HITSPLAT_MS);
+        // The font at a whole number of screen pixels per font pixel, so the
+        // numbers stay crisp; the client's splats scale along with it
+        const pixel = Math.max(1, Math.round(scale));
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.font = `${16 * pixel}px "OSRS Small", sans-serif`;
+        // The splat is scaled down a little, so smooth it
+        ctx.imageSmoothingQuality = "high";
+        const player = sim.player;
+        for (const hitsplat of this.hitsplats) {
+            const t = (now - hitsplat.start) / HITSPLAT_MS;
+            if (t < 0) {
+                continue;
+            }
+            const enemy = this.enemiesByUid.get(hitsplat.enemyUid);
+            if (hitsplat.onPlayer) {
+                hitsplat.x = lerp(player.prevX, player.x, alpha);
+                hitsplat.y = lerp(player.prevY, player.y, alpha);
+            } else if (enemy) {
+                hitsplat.x = enemy.x;
+                hitsplat.y = enemy.y;
+            }
+            const height = this.ground(sim, hitsplat.x, hitsplat.y) - hitsplat.height - t * 0.4;
+            const p = overlay.project(hitsplat.x, height, hitsplat.y, this.screen);
+            if (!p.visible) {
+                continue;
+            }
+            ctx.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
+            const sprite = this.assets.getSprite(HITSPLAT_SPRITES[hitsplat.kind]);
+            drawHitsplat(ctx, sprite, p.x, p.y, pixel, hitsplat.amount, hitsplat.kind);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // A boss winding up: a red circle filling in over the ground a swing or
+    // blast will hit, or a ring closing in at its feet before anything else
+    private drawBossWindups(overlay: Overlay, sim: Sim, alpha: number): void {
+        const ctx = overlay.ctx;
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            if (!windup || enemy.dead) {
+                continue;
+            }
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - windup.startTick) /
+                        Math.max(1, windup.landTick - windup.startTick),
+                ),
+            );
+            const kind = windup.attack.kind;
+            if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
+                // Where to hide instead of where it hits (it hits everywhere else)
+                continue;
+            }
+            if (kind === "swing" || kind === "blast") {
+                // Around the boss, or on the spots a blast lands on
+                const spots =
+                    kind === "blast"
+                        ? windup.targets
+                        : [
+                              {
+                                  x: lerp(enemy.prevX, enemy.x, alpha),
+                                  y: lerp(enemy.prevY, enemy.y, alpha),
+                              },
+                          ];
+                const radius = windup.attack.radius ?? 2;
+                for (const { x, y } of spots) {
+                    this.traceGroundCircle(overlay, sim, x, y, radius);
+                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                    this.traceGroundCircle(overlay, sim, x, y, radius * t);
+                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+                    ctx.fill();
+                }
+            } else {
+                const x = lerp(enemy.prevX, enemy.x, alpha);
+                const y = lerp(enemy.prevY, enemy.y, alpha);
+                this.traceGroundCircle(overlay, sim, x, y, 1.6 - t);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = `rgba(255, 200, 80, ${0.3 + 0.6 * t})`;
+                ctx.stroke();
+            }
+        }
+    }
+
+    // The ground the boss's glyph shelters from a blockable attack: from the
+    // glyph's edges away from the boss, green, while a red ring closes in on
+    // the boss. False if it has no glyph.
+    private drawShelter(overlay: Overlay, sim: Sim, enemy: Enemy, t: number): boolean {
+        const glyph = sim.glyphs.find((g) => g.bossUid === enemy.uid);
+        const width = enemy.def.boss?.glyph?.width;
+        if (!glyph || width === undefined) {
+            return false;
+        }
+        const ctx = overlay.ctx;
+        // Where the glyph's edges are, and where the rays from the boss past
+        // them end
+        const edge = (side: number) => {
+            const ex = glyph.x + glyph.acrossX * width * side;
+            const ey = glyph.y + glyph.acrossY * width * side;
+            const dx = ex - enemy.x;
+            const dy = ey - enemy.y;
+            const length = Math.max(0.001, Math.hypot(dx, dy));
+            const far = SHELTER_LENGTH / length;
+            return { x: ex, y: ey, farX: enemy.x + dx * far, farY: enemy.y + dy * far };
+        };
+        const left = edge(-1);
+        const right = edge(1);
+        const steps = 12;
+        ctx.beginPath();
+        const point = (wx: number, wy: number, first: boolean) => {
+            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.1, wy, this.screen2);
+            if (first) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        };
+        for (let i = 0; i <= steps; i++) {
+            const f = i / steps;
+            point(lerp(left.x, left.farX, f), lerp(left.y, left.farY, f), i === 0);
+        }
+        for (let i = steps; i >= 0; i--) {
+            const f = i / steps;
+            point(lerp(right.x, right.farX, f), lerp(right.y, right.farY, f), false);
+        }
+        ctx.closePath();
+        ctx.fillStyle = `rgba(40, 220, 90, ${0.12 + 0.18 * t})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(120, 255, 150, ${0.5 + 0.4 * t})`;
+        ctx.stroke();
+        this.traceGroundCircle(overlay, sim, enemy.x, enemy.y, 1 + 3 * (1 - t));
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(255, 60, 40, ${0.4 + 0.6 * t})`;
+        ctx.stroke();
+        return true;
+    }
+
+    // A boss's swing landing
+    private drawSwings(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        this.swings = this.swings.filter((s) => now - s.start < SWING_MS);
+        for (const swing of this.swings) {
+            const t = (now - swing.start) / SWING_MS;
+            this.traceGroundCircle(overlay, sim, swing.x, swing.y, swing.radius * (0.7 + 0.3 * t));
+            ctx.fillStyle = `rgba(255, 40, 20, ${0.35 * (1 - t)})`;
+            ctx.fill();
+            ctx.lineWidth = 6 * scale * (1 - t) + 1;
+            ctx.strokeStyle = `rgba(255, 230, 200, ${0.9 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // A soft glow round every enemy projectile, so a thin one (an arrow, a
+    // bolt) can be made out at the camera's height; one without a model to
+    // draw (or whose model didn't load) is drawn as a bright glow instead
+    private drawEnemyProjectileGlows(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        for (const projectile of sim.enemyProjectiles) {
+            const x = lerp(projectile.prevX, projectile.x, alpha);
+            const y = lerp(projectile.prevY, projectile.y, alpha);
+            const p = overlay.project(
+                x,
+                this.ground(sim, x, y) - PROJECTILE_HEIGHT,
+                y,
+                this.screen,
+            );
+            if (!p.visible) {
+                continue;
+            }
+            const spotAnim = projectile.attack.spotAnim;
+            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const drawn = model !== undefined && hasGeometry(model);
+            const radius = (drawn ? PROJECTILE_GLOW : 9) * scale;
+            const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
+            if (drawn) {
+                glow.addColorStop(0, "rgba(255, 170, 60, 0.5)");
+                glow.addColorStop(0.5, "rgba(255, 120, 20, 0.28)");
+                glow.addColorStop(1, "rgba(255, 90, 0, 0)");
+            } else {
+                glow.addColorStop(0, "rgba(255, 255, 220, 0.95)");
+                glow.addColorStop(0.4, "rgba(255, 140, 40, 0.8)");
+                glow.addColorStop(1, "rgba(255, 60, 0, 0)");
+            }
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    private drawSlashes(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        this.slashes = this.slashes.filter((s) => now - s.start < SLASH_MS);
+        for (const slash of this.slashes) {
+            const t = (now - slash.start) / SLASH_MS;
+            // Follows the player, like the weapon does
+            const cx = sim.player.x;
+            const cy = sim.player.y;
+            const base = Math.atan2(slash.dirY, slash.dirX);
+            const sweep = slash.arc;
+            // Enough points for a wide sweep to stay round
+            const steps = Math.max(10, Math.ceil(sweep * 9));
+            ctx.beginPath();
+            for (let i = 0; i <= steps; i++) {
+                const a = base - sweep + ((2 * sweep * i) / steps) * Math.min(t * 2, 1);
+                const r = slash.reach * 0.8;
+                const wx = cx + Math.cos(a) * r;
+                const wy = cy + Math.sin(a) * r;
+                const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.7, wy, this.screen);
+                if (i === 0) {
+                    ctx.moveTo(p.x, p.y);
+                } else {
+                    ctx.lineTo(p.x, p.y);
+                }
+            }
+            ctx.lineCap = "round";
+            ctx.lineWidth = 14 * scale * (1 - t * 0.6);
+            ctx.strokeStyle = slash.color
+                ? `rgba(${slash.color}, ${0.75 * (1 - t)})`
+                : `rgba(255, 255, 255, ${0.6 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // A circle on the ground, as the current canvas path
+    private traceGroundCircle(
+        overlay: Overlay,
+        sim: Sim,
+        cx: number,
+        cy: number,
+        radius: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const steps = 32;
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+            const a = (i / steps) * Math.PI * 2;
+            const wx = cx + Math.cos(a) * radius;
+            const wy = cy + Math.sin(a) * radius;
+            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.1, wy, this.screen2);
+            if (i === 0) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        }
+        ctx.closePath();
+    }
+
+    private drawAuras(overlay: Overlay, sim: Sim, now: number): void {
+        const ctx = overlay.ctx;
+        this.auras = this.auras.filter((a) => now - a.start < AURA_MS);
+        for (const aura of this.auras) {
+            const t = (now - aura.start) / AURA_MS;
+            const radius = aura.radius * (0.5 + t * 0.5);
+            this.traceGroundCircle(overlay, sim, sim.player.x, sim.player.y, radius);
+            ctx.fillStyle = `rgba(150, 210, 255, ${0.18 * (1 - t)})`;
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(200, 235, 255, ${0.8 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // Chinchompa explosions: a fiery ring racing out over the ground
+    private drawBlasts(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        this.blasts = this.blasts.filter((b) => now - b.start < BLAST_MS);
+        for (const blast of this.blasts) {
+            const t = (now - blast.start) / BLAST_MS;
+            const eased = 1 - (1 - t) * (1 - t);
+            this.traceGroundCircle(overlay, sim, blast.x, blast.y, blast.radius * (0.2 + eased));
+            ctx.fillStyle = `rgba(255, 140, 30, ${0.3 * (1 - t)})`;
+            ctx.fill();
+            ctx.lineWidth = 10 * scale * (1 - t) + 2;
+            ctx.strokeStyle = `rgba(255, 220, 120, ${0.9 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // A beam of the casket's tier colour over every casket on the ground (and
+    // of the power-up colour over power-ups), and an arrow at the edge of the
+    // screen for ones out of view
+    private drawLootBeams(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const pulse = 0.75 + 0.25 * Math.sin(now / 180);
+        for (const pickup of sim.pickups) {
+            let color: string;
+            // The beam shoots up once a casket has landed
+            let landTick = pickup.spawnTick;
+            if (pickup.kind === "casket" && pickup.tier) {
+                color = CASKETS[pickup.tier].color;
+                landTick += CASKET_HOP_TICKS;
+            } else if (pickup.kind === "powerUp") {
+                color = POWER_UP_COLOR;
+            } else {
+                continue;
+            }
+            const ground = this.ground(sim, pickup.x, pickup.y);
+            const base = overlay.project(pickup.x, ground, pickup.y, this.screen);
+            if (!base.visible) {
+                this.drawEdgeArrow(overlay, sim, pickup, alpha, color, pulse, scale);
+                continue;
+            }
+            const grow = Math.min(1, Math.max(0, (sim.tick - landTick) / 20));
+            const bx = base.x;
+            const by = base.y;
+            const glow = ctx.createRadialGradient(bx, by, 0, bx, by, 30 * scale);
+            glow.addColorStop(0, withAlpha(color, 0.55 * pulse));
+            glow.addColorStop(1, withAlpha(color, 0));
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.ellipse(bx, by, 30 * scale, 13 * scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+            if (grow <= 0) {
+                continue;
+            }
+            const top = overlay.project(
+                pickup.x,
+                ground - LOOT_BEAM_HEIGHT * grow,
+                pickup.y,
+                this.screen2,
+            );
+            ctx.lineCap = "round";
+            const beam = ctx.createLinearGradient(bx, by, top.x, top.y);
+            beam.addColorStop(0, withAlpha(color, 0.7 * pulse));
+            beam.addColorStop(1, withAlpha(color, 0));
+            ctx.strokeStyle = beam;
+            ctx.lineWidth = 18 * scale;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(top.x, top.y);
+            ctx.stroke();
+            const core = ctx.createLinearGradient(bx, by, top.x, top.y);
+            core.addColorStop(0, `rgba(255, 255, 255, ${0.8 * pulse})`);
+            core.addColorStop(1, "rgba(255, 255, 255, 0)");
+            ctx.strokeStyle = core;
+            ctx.lineWidth = 5 * scale;
+            ctx.stroke();
+        }
+    }
+
+    private drawEdgeArrow(
+        overlay: Overlay,
+        sim: Sim,
+        pickup: Pickup,
+        alpha: number,
+        color: string,
+        pulse: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const player = sim.player;
+        const px = lerp(player.prevX, player.x, alpha);
+        const py = lerp(player.prevY, player.y, alpha);
+        const dx = pickup.x - px;
+        const dy = pickup.y - py;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 0.001) {
+            return;
+        }
+        // Which way it is on screen: from the player towards it, a couple of
+        // tiles along (both ends stay on screen, unlike the casket itself)
+        const from = overlay.project(px, this.ground(sim, px, py), py, this.screen);
+        const fromX = from.x;
+        const fromY = from.y;
+        const ax = px + (dx / distance) * 2;
+        const ay = py + (dy / distance) * 2;
+        const to = overlay.project(ax, this.ground(sim, ax, ay), ay, this.screen2);
+        let dirX = to.x - fromX;
+        let dirY = to.y - fromY;
+        const len = Math.hypot(dirX, dirY);
+        if (!from.visible || len < 0.001) {
+            return;
+        }
+        dirX /= len;
+        dirY /= len;
+        // Out from the player to the edge of the screen, kept a little inside
+        const margin = 34 * scale;
+        const edgeX = dirX > 0 ? overlay.width - margin : margin;
+        const edgeY = dirY > 0 ? overlay.height - margin : margin;
+        const t = Math.min(
+            Math.abs(dirX) > 0.001 ? (edgeX - fromX) / dirX : Infinity,
+            Math.abs(dirY) > 0.001 ? (edgeY - fromY) / dirY : Infinity,
+        );
+        const x = fromX + dirX * t;
+        const y = fromY + dirY * t;
+        const size = 16 * scale * (0.9 + 0.1 * pulse);
+        const angle = Math.atan2(dirY, dirX);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(size, 0);
+        ctx.lineTo(-size * 0.7, size * 0.75);
+        ctx.lineTo(-size * 0.35, 0);
+        ctx.lineTo(-size * 0.7, -size * 0.75);
+        ctx.closePath();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 14 * scale * pulse;
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+        ctx.restore();
+        ctx.font = `${Math.round(14 * scale)}px "OSRS Small", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelX = x - dirX * size * 1.9;
+        const labelY = y - dirY * size * 1.9;
+        ctx.fillStyle = "#000000";
+        ctx.fillText(`${Math.round(distance)}`, labelX + 1, labelY + 1);
+        ctx.fillStyle = color;
+        ctx.fillText(`${Math.round(distance)}`, labelX, labelY);
+    }
+}
+
+// The client's health bar: 30 by 5 pixels, green for what's left and red for
+// what's gone, no border, its top 3 pixels above the point over the head
+export function drawHealthBar(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    scale: number,
+    fraction: number,
+): void {
+    const width = Math.round(30 * scale);
+    const height = Math.round(5 * scale);
+    const left = Math.round(x - width / 2);
+    const top = Math.round(y - height * 0.6);
+    let green = Math.floor(width * Math.max(0, Math.min(1, fraction)));
+    // Anything left shows, however little
+    if (green === 0 && fraction > 0) {
+        green = 1;
+    }
+    ctx.fillStyle = "#00ff00";
+    ctx.fillRect(left, top, green, height);
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(left + green, top, width - green, height);
+}
+
+// A hitsplat: the client's sprite with the number on it in white. If the
+// sprite didn't load, a blob of its colour stands in.
+function drawHitsplat(
+    ctx: CanvasRenderingContext2D,
+    sprite: HTMLCanvasElement | undefined,
+    x: number,
+    y: number,
+    pixel: number,
+    amount: number,
+    kind: HitsplatKind,
+): void {
+    // The digits themselves (not the space around them) on whole pixels so
+    // they stay sharp, and the splat (scaled, so smoothed anyway) centred on
+    // them
+    const text = String(amount);
+    const ink = ctx.measureText(text);
+    const inkWidth = ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight;
+    const inkHeight = ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent;
+    const inkLeft = Math.round(x - inkWidth / 2);
+    const inkTop = Math.round(y - inkHeight / 2);
+    const centerX = inkLeft + inkWidth / 2;
+    const centerY = inkTop + inkHeight / 2;
+    const width = (sprite?.width ?? 24) * pixel * HITSPLAT_SPRITE_SCALE;
+    const height = (sprite?.height ?? 23) * pixel * HITSPLAT_SPRITE_SCALE;
+    if (sprite) {
+        ctx.drawImage(sprite, centerX - width / 2, centerY - height / 2, width, height);
+    } else {
+        drawHitsplatBlob(ctx, centerX, centerY, width / 2, kind);
+    }
+    const textX = inkLeft + ink.actualBoundingBoxLeft;
+    const textY = inkTop + ink.actualBoundingBoxAscent;
+    ctx.fillStyle = "#000000";
+    ctx.fillText(text, textX + pixel, textY + pixel);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, textX, textY);
+}
+
+// Fill and edge of the blob that stands in for a splat that didn't load
+const HITSPLAT_BLOB_COLORS: Record<HitsplatKind, [string, string]> = {
+    damage: ["#b0120c", "#3a0402"],
+    poison: ["#1f8a12", "#063a02"],
+    block: ["#1c5fd0", "#061a3a"],
+};
+
+function drawHitsplatBlob(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    kind: HitsplatKind,
+): void {
+    ctx.beginPath();
+    const points = 9;
+    for (let i = 0; i <= points * 2; i++) {
+        const a = (i / (points * 2)) * Math.PI * 2;
+        const r = i % 2 === 0 ? radius : radius * 0.82;
+        const px = x + Math.cos(a) * r;
+        const py = y + Math.sin(a) * r * 0.9;
+        if (i === 0) {
+            ctx.moveTo(px, py);
+        } else {
+            ctx.lineTo(px, py);
+        }
+    }
+    ctx.closePath();
+    ctx.fillStyle = HITSPLAT_BLOB_COLORS[kind][0];
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = HITSPLAT_BLOB_COLORS[kind][1];
+    ctx.stroke();
+}
+
+// Baked models are empty when the cache had nothing to draw
+function hasGeometry(model: ActorModel): boolean {
+    return model.height > 0 || model.radius > 0;
+}
+
+// Height above the ground (tiles) of a casket t hops into its throw
+function casketHop(t: number): number {
+    if (t < 0 || t >= 1.5) {
+        return 0;
+    }
+    if (t < 1) {
+        return CASKET_HOP_HEIGHT * Math.sin(Math.PI * t);
+    }
+    return CASKET_HOP_HEIGHT * 0.22 * Math.sin(Math.PI * (t - 1) * 2);
+}
+
+// "#rrggbb" with an alpha, for canvas gradients
+function withAlpha(hex: string, alpha: number): string {
+    const value = parseInt(hex.slice(1), 16);
+    return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+export function formatTime(seconds: number): string {
+    const s = Math.floor(seconds);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+export { TICKS_PER_SECOND };

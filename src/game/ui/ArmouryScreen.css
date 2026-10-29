@@ -1,0 +1,158 @@
+/* Armoury: the gear slot by slot on the left, the piece picked on the right */
+
+.ui-armoury {
+    width: min(900px, calc(94vw / var(--ui-scale)));
+    max-height: calc(92vh / var(--ui-scale));
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.ui-armoury-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    align-items: start;
+    gap: 12px;
+}
+
+.ui-armoury-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ui-armoury-slot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-armoury-slot-name {
+    flex-shrink: 0;
+    width: 48px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    color: var(--ui-white);
+}
+
+.ui-armoury-pieces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.ui-armoury-tile {
+    position: relative;
+    justify-content: center;
+    width: 40px;
+    height: 38px;
+    padding: 0;
+}
+
+/* Lighter too, as the borders are already in the rarities' colours */
+.ui-armoury-tile.ui-card-selected {
+    background: var(--ui-card-hover);
+}
+
+/* One for each upgrade along the piece's line, lit once it's done */
+.ui-armoury-pips {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 2px;
+    display: flex;
+    justify-content: center;
+    gap: 1px;
+}
+
+.ui-armoury-pip {
+    width: 5px;
+    height: 3px;
+    background: #2a231a;
+    border: 1px solid #000;
+}
+
+.ui-armoury-details {
+    gap: 6px;
+    min-height: 250px;
+    box-sizing: border-box;
+}
+
+.ui-armoury-stats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    color: var(--ui-white);
+}
+
+.ui-armoury-stats .ui-armoury-set {
+    color: var(--ui-cyan);
+}
+
+/* The piece's line, from what caskets give to the best it can become */
+.ui-armoury-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(107, 94, 74, 0.6);
+}
+
+.ui-armoury-step {
+    display: flex;
+    padding: 1px;
+    border: 1px solid transparent;
+    opacity: 0.45;
+    filter: grayscale(0.7);
+}
+
+.ui-armoury-step-done {
+    opacity: 1;
+    filter: none;
+}
+
+.ui-armoury-step-now {
+    border-color: var(--ui-yellow);
+}
+
+.ui-armoury-arrow {
+    color: #b8aa8a;
+}
+
+.ui-armoury-next {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(107, 94, 74, 0.6);
+}
+
+.ui-armoury-into {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.ui-armoury-changes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+}
+
+.ui-armoury-buy {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 8px;
+}
+
+.ui-armoury-count {
+    color: #b8aa8a;
+}
+
+@media (max-width: 759px) {
+    .ui-armoury-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

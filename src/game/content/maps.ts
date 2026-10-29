@@ -1,0 +1,332 @@
+import { getEnemy } from "./enemies";
+import { FUN_MAPS } from "./fun/maps";
+import { MapDef } from "./types";
+import {
+    BARROWS_EVENTS,
+    BARROWS_WAVES,
+    DESERT_EVENTS,
+    DESERT_WAVES,
+    FREMENNIK_EVENTS,
+    FREMENNIK_WAVES,
+    GOD_WARS_EVENTS,
+    GOD_WARS_WAVES,
+    INFERNO_EVENTS,
+    INFERNO_WAVES,
+    KARAMJA_EVENTS,
+    KARAMJA_WAVES,
+    KOUREND_EVENTS,
+    KOUREND_WAVES,
+    LUMBRIDGE_EVENTS,
+    LUMBRIDGE_WAVES,
+    MORYTANIA_EVENTS,
+    MORYTANIA_WAVES,
+    PRIFDDINAS_EVENTS,
+    PRIFDDINAS_WAVES,
+    VARLAMORE_EVENTS,
+    VARLAMORE_WAVES,
+    WILDERNESS_EVENTS,
+    WILDERNESS_WAVES,
+} from "./waves";
+
+// The maps, in the order they open up: beating one unlocks the next. Arenas
+// are whole map squares (64 tiles), in world tiles.
+export const MAPS: MapDef[] = [
+    {
+        id: "lumbridge",
+        name: "Lumbridge",
+        description:
+            "Farm animals, goblins and the undead of Draynor Manor. Count Draynor wakes " +
+            "halfway, and the Wise Old Man comes at the end.",
+        // Bronze axe
+        iconObjId: 1351,
+        // Lumbridge, the swamp, Draynor Village and Draynor Manor (map squares
+        // 48-50 x 49-52)
+        arena: { baseX: 48 * 64, baseY: 49 * 64, sizeX: 3 * 64, sizeY: 4 * 64 },
+        // The castle courtyard
+        spawn: { x: 3222.5, y: 3218.5 },
+        difficulty: { hp: 1, damage: 1 },
+        waves: LUMBRIDGE_WAVES,
+        events: LUMBRIDGE_EVENTS,
+        finalBossWarning: "The Wise Old Man is on his way...",
+        victoryText: "The Wise Old Man is defeated!",
+    },
+    {
+        id: "barrows",
+        name: "Barrows",
+        description:
+            "Crypt rats, spiders and bloodworms, ghouls, Mort'ton's afflicted and shades, " +
+            "and feral vampyres. The six Barrows brothers climb out of their crypts one by " +
+            "one, every two and a half minutes. Dharok comes last.",
+        // Dharok's helm
+        iconObjId: 4716,
+        // The Barrows and the swamp around it (map squares 54-56 x 50-52)
+        arena: { baseX: 54 * 64, baseY: 50 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // Among the six mounds
+        spawn: { x: 3565.5, y: 3287.5 },
+        difficulty: { hp: 1.25, damage: 1.15 },
+        waves: BARROWS_WAVES,
+        events: BARROWS_EVENTS,
+        finalBossWarning: "The last brother stirs in his crypt...",
+        victoryText: "The Barrows brothers are laid to rest!",
+    },
+    {
+        id: "wilderness",
+        name: "Wilderness",
+        description:
+            "Revenants, bandits, dark warriors and chaos druids, the undead of the Graveyard " +
+            "of Shadows, hill giants and the Ankou. The Crazy archaeologist and the Chaos " +
+            "Fanatic, and the King Black Dragon at the end.",
+        // Dragon bones
+        iconObjId: 536,
+        // Around the Bone Yard, level 27 Wilderness (map squares 49-51 x 57-59)
+        arena: { baseX: 49 * 64, baseY: 57 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        spawn: { x: 3237.5, y: 3742.5 },
+        difficulty: { hp: 1.5, damage: 1.3 },
+        waves: WILDERNESS_WAVES,
+        events: WILDERNESS_EVENTS,
+        finalBossWarning: "Something huge stirs beneath the Lava Maze...",
+        victoryText: "The King Black Dragon is slain!",
+    },
+    {
+        id: "desert",
+        name: "Kharidian Desert",
+        description:
+            "Lizards, scorpions and jackals, desert bandits, kalphites out of their hive, " +
+            "crocodiles, mummies and locust riders. Desert Treasure's Fareed, Dessous and " +
+            "Damis come one by one, and the Kalphite Queen at the end.",
+        // The Kalphite Queen's head
+        iconObjId: 7981,
+        // The Bandit Camp, the Bedabin Camp and the Jaldraocht pyramid (map
+        // squares 49-51 x 45-47)
+        arena: { baseX: 49 * 64, baseY: 45 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // Open sand by the Bandit Camp
+        spawn: { x: 3200.5, y: 2985.5 },
+        difficulty: { hp: 1.75, damage: 1.45 },
+        waves: DESERT_WAVES,
+        events: DESERT_EVENTS,
+        finalBossWarning: "The sand trembles beneath your feet...",
+        victoryText: "The Kalphite Queen is slain!",
+    },
+    {
+        id: "fremennik",
+        name: "Fremennik Province",
+        description:
+            "Rock crabs and wolves, cockatrices and yaks, trolls, basilisks and jellies, " +
+            "dagannoths and wallasalki, kurasks and rock lobsters. The three Dagannoth Kings " +
+            "come one by one, and Vorkath at the end.",
+        // Vorkath's head
+        iconObjId: 21907,
+        // Rellekka, the rock crab beaches, the Slayer Dungeon's entrance and
+        // the Mountain Camp (map squares 41-43 x 56-58)
+        arena: { baseX: 41 * 64, baseY: 56 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // Outside Rellekka's gate
+        spawn: { x: 2670.5, y: 3640.5 },
+        difficulty: { hp: 2, damage: 1.6 },
+        waves: FREMENNIK_WAVES,
+        events: FREMENNIK_EVENTS,
+        finalBossWarning: "Something stirs in the ice of Ungael...",
+        victoryText: "Vorkath is slain!",
+    },
+    {
+        id: "karamja",
+        name: "Karamja",
+        description:
+            "Monkeys, snakes and jungle spiders, tribesmen, jogres and moss giants, lesser " +
+            "demons, and the TzHaar up out of the volcano. Elvarg, Nezikchened and Ket-Zek " +
+            "come one by one, and TzTok-Jad at the end.",
+        // Tokkul
+        iconObjId: 6529,
+        // Brimhaven, the volcano, Musa Point and the jungle down to Tai Bwo
+        // Wannai (map squares 43-45 x 47-49)
+        arena: { baseX: 43 * 64, baseY: 47 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // In Tai Bwo Wannai
+        spawn: { x: 2790.5, y: 3070.5 },
+        difficulty: { hp: 2.25, damage: 1.75 },
+        waves: KARAMJA_WAVES,
+        events: KARAMJA_EVENTS,
+        finalBossWarning: "The volcano rumbles... TzTok-Jad is coming!",
+        victoryText: "TzTok-Jad is slain!",
+    },
+    {
+        id: "kourend",
+        name: "Kourend",
+        description:
+            "Guanic bats, swamp crabs and lizards, lizardmen and their brutes, bloodvelds, " +
+            "Xeric's deathly rangers, mages and skeletal mystics, and hydras. The Lizardman " +
+            "shaman, Sarachnis and Skotizo come one by one, and the Alchemical Hydra at the end.",
+        // The Alchemical Hydra's heads
+        iconObjId: 23077,
+        // Shayzien and the Lizardman Canyon (map squares 22-24 x 55-57)
+        arena: { baseX: 22 * 64, baseY: 55 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // Outside Shayzien
+        spawn: { x: 1500.5, y: 3600.5 },
+        difficulty: { hp: 2.5, damage: 1.9 },
+        waves: KOUREND_WAVES,
+        events: KOUREND_EVENTS,
+        finalBossWarning: "Something stirs beneath Mount Karuulm...",
+        victoryText: "The Alchemical Hydra is slain!",
+    },
+    {
+        id: "varlamore",
+        name: "Varlamore",
+        description:
+            "Jerboas, pyre foxes and antelopes, blood jaguars, serpent shamans and jaguar " +
+            "warriors, naguas, the Fremennik warband, gryphons and minotaurs. The Manticore and " +
+            "the Shockwave and Javelin Colossi come one by one, and Sol Heredit at the end.",
+        // Sunfire splinters
+        iconObjId: 28924,
+        // Civitas illa Fortis and the grounds of the Fortis Colosseum (map
+        // squares 26-28 x 47-49)
+        arena: { baseX: 26 * 64, baseY: 47 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // In the city's streets
+        spawn: { x: 1700.5, y: 3100.5 },
+        difficulty: { hp: 2.75, damage: 2.05 },
+        waves: VARLAMORE_WAVES,
+        events: VARLAMORE_EVENTS,
+        finalBossWarning: "The crowd roars... Sol Heredit enters the arena!",
+        victoryText: "Sol Heredit is defeated!",
+    },
+    {
+        id: "morytania",
+        name: "Morytania",
+        description:
+            "Ghasts, shades and zombies out of Mort Myre, vampyre juveniles and juvinates, " +
+            "werewolves, nail beasts and mutated bloodvelds, the Theatre of Blood's Nylocas and " +
+            "Darkmeyer's vyrewatch. Vanstrom Klause, the Pestilent Bloat and Sotetseg come one " +
+            "by one, and Verzik Vitur at the end.",
+        // Lil' Zik
+        iconObjId: 22473,
+        // Slepe and the swamp under Darkmeyer's walls (map squares 56-58 x
+        // 51-53). Darkmeyer and Meiyerditch themselves are walled in and too
+        // cramped to fight in, so they stand at the arena's edge.
+        arena: { baseX: 56 * 64, baseY: 51 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // In Slepe
+        spawn: { x: 3720.5, y: 3310.5 },
+        difficulty: { hp: 3, damage: 2.2 },
+        waves: MORYTANIA_WAVES,
+        events: MORYTANIA_EVENTS,
+        finalBossWarning: "The Theatre's curtain rises... Verzik Vitur awaits!",
+        victoryText: "Verzik Vitur is defeated!",
+        // The client has no Theatre or Darkmeyer track yet; this one fits a
+        // theatre of blood
+        music: "Massacre",
+    },
+    {
+        id: "god_wars",
+        name: "God Wars Dungeon",
+        description:
+            "The armies of Bandos, Armadyl, Saradomin and Zamorak, at war with each other as " +
+            "much as with you: goblins, orks and cyclopes, aviansies, knights and priests, imps, " +
+            "hellhounds and bloodvelds, and the gods' spiritual warriors. Commander Zilyana, " +
+            "Kree'arra and K'ril Tsutsaroth come one by one, General Graardor leads a charge, " +
+            "and Nex comes at the end.",
+        // An Armadyl hilt
+        iconObjId: 11810,
+        // The dungeon's main cave, up on plane 2 (map squares 44-45 x 82-83).
+        // The generals' rooms and Saradomin's encampment are behind doors and
+        // ropes, so the fighting is in the middle of the cave where the
+        // armies meet.
+        arena: { baseX: 44 * 64, baseY: 82 * 64, sizeX: 2 * 64, sizeY: 2 * 64 },
+        plane: 2,
+        // In the middle of the cave
+        spawn: { x: 2866.5, y: 5311.5 },
+        // Its enemies hit softer than Morytania's: with the armies closing in
+        // from every side of the cave at once, at the usual step (2.35) it
+        // was as hard as the Inferno by simulate-run's count. Lowered again
+        // (from 2.1) when its bosses grew to full size and anything the
+        // player hits stopped fighting the other armies
+        difficulty: { hp: 3.25, damage: 1.95 },
+        waves: GOD_WARS_WAVES,
+        events: GOD_WARS_EVENTS,
+        finalBossWarning: "The frozen door cracks... Nex is breaking free!",
+        victoryText: "Nex is defeated!",
+    },
+    {
+        id: "prifddinas",
+        name: "Prifddinas",
+        description:
+            "The Gauntlet's crystalline rats, bats, spiders, scorpions, wolves, bears and dark " +
+            "beasts, the city's guards, the Iorwerth's warriors and archers and Zulrah's " +
+            "snakelings, and the corrupted ones late on. Zulrah, Zalcano and the Crystalline " +
+            "Hunllef come one by one, and the Corrupted Hunllef at the end.",
+        // An enhanced crystal weapon seed, the Gauntlet's reward
+        iconObjId: 25859,
+        // The city of Prifddinas, inside its walls (map squares 50-51 x
+        // 94-95: the walls fill them, and outside is out of reach)
+        arena: { baseX: 50 * 64, baseY: 94 * 64, sizeX: 2 * 64, sizeY: 2 * 64 },
+        // By the Tower of Voices
+        spawn: { x: 3264.5, y: 6060.5 },
+        difficulty: { hp: 3.5, damage: 2.5 },
+        waves: PRIFDDINAS_WAVES,
+        events: PRIFDDINAS_EVENTS,
+        finalBossWarning: "The crystal singing turns sour... the Corrupted Hunllef is coming!",
+        victoryText: "The Corrupted Hunllef is slain!",
+    },
+    {
+        id: "inferno",
+        name: "The Inferno",
+        description:
+            "Mor Ul Rek's TzHaar and the Inferno's creatures: nibblers, Jal-MejRah bats, Jal-Ak " +
+            "blobs that split, Jal-ImKot that dig up next to you, Jal-Xil, and Jal-Zek that " +
+            "raise the dead. JalTok-Jad, a Jal-Zek champion and a TzHaar-Ket champion come one " +
+            "by one, and three JalTok-Jads at once at the end.",
+        // An infernal cape
+        iconObjId: 21295,
+        // Mor Ul Rek, the TzHaar city under the volcano, above the Inferno
+        // (map squares 38-39 x 79-80). The Inferno itself is a room too small
+        // to fight a crowd in.
+        arena: { baseX: 38 * 64, baseY: 79 * 64, sizeX: 2 * 64, sizeY: 2 * 64 },
+        // In the square south of the city's middle
+        spawn: { x: 2497.5, y: 5097.5 },
+        difficulty: { hp: 3.75, damage: 2.7 },
+        waves: INFERNO_WAVES,
+        events: INFERNO_EVENTS,
+        finalBossWarning: "The lava churns... three JalTok-Jads are rising!",
+        victoryText: "The JalTok-Jads are slain! You are the champion of the Inferno!",
+    },
+];
+
+// The fun maps (fun/maps.ts): open from the start and endless, outside the
+// campaign's chain
+export { FUN_MAPS };
+
+// Every map, the campaign's and the fun ones
+export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS];
+
+export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
+
+export function isFunMap(mapId: string): boolean {
+    return MAP_BY_ID.get(mapId)?.fun !== undefined;
+}
+
+export function getMap(id: string): MapDef {
+    const map = MAP_BY_ID.get(id);
+    if (!map) {
+        throw new Error("Unknown map " + id);
+    }
+    return map;
+}
+
+// The part of the world a map's collision, heights and scenery come from: its
+// arena, on its plane
+export function getArenaRegion(map: MapDef): {
+    baseX: number;
+    baseY: number;
+    sizeX: number;
+    sizeY: number;
+    plane: number;
+} {
+    return { ...map.arena, plane: map.plane ?? 0 };
+}
+
+// Whether anything on the map poisons you (the King Black Dragon's breath).
+// Antipoisons are only found where something does.
+export function hasPoison(map: MapDef): boolean {
+    const enemyIds = [
+        ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
+        ...map.events.map((event) => event.enemyId),
+    ];
+    return enemyIds.some((id) =>
+        getEnemy(id).boss?.attacks.some((attack) => attack.effect?.kind === "poison"),
+    );
+}

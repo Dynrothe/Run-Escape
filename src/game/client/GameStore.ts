@@ -1,0 +1,229 @@
+import { Rarity } from "../content/rarity";
+import { GearSlot } from "../content/types";
+import { ChestAction } from "../core/Loot";
+import { RunResult } from "../core/Sim";
+import { SaveData } from "../core/save";
+import { DisplaySettings } from "./DisplaySettings";
+import { AudioSettings } from "./GameAudio";
+
+export type Screen = "loading" | "title" | "characters" | "shop" | "armoury" | "quests" | "run";
+
+export type RunOverlay = "none" | "levelUp" | "chest" | "paused" | "dead" | "victory";
+
+export type SlotView = {
+    id: string;
+    name: string;
+    level: number;
+    maxLevel: number;
+    iconObjId: number;
+    iconSpriteId?: number;
+    // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
+    detail: string;
+    // The item's own rarity, for the slot's border
+    rarityColor: string;
+};
+
+export type ItemView = {
+    id: string;
+    name: string;
+    objId: number;
+    rarity: { name: string; color: string };
+    // "Head slot", "Utility"
+    kindLabel: string;
+    // What it does, a line per stat or effect
+    lines: string[];
+    // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
+    // whether its bonus is on
+    set?: { text: string; active: boolean };
+};
+
+export type GearSlotView = { slot: GearSlot; name: string; item?: ItemView };
+
+export type InventorySlotView = { item: ItemView; count: number } | null;
+
+export type BuffView = {
+    id: string;
+    name: string;
+    objId: number;
+    secondsLeft: number;
+    // Time left, 1 when just drunk
+    fraction: number;
+    // A boss attack's drain rather than a potion or power-up
+    harmful: boolean;
+};
+
+// An opened reward casket, for the opening animation and the decision after
+export type ChestView = {
+    uid: number;
+    casketName: string;
+    casketObjId: number;
+    tierColor: string;
+    // The item's rarity sets how big the reveal is
+    rarity: Rarity;
+    coins: number;
+    item: ItemView;
+    // Gear the Armoury has upgraded: the name of the piece it was found as
+    upgradedFrom?: string;
+    isGear: boolean;
+    // Gear: what it replaces (alched when the new piece goes on) and what
+    // changes
+    replaces?: { item: ItemView; alchCoins: number };
+    changes: { text: string; good: boolean }[];
+    // Utility: whether it fits in the inventory, and how many are carried
+    canStash: boolean;
+    carried: number;
+    alchCoins: number;
+    // What Space does: equip/keep, unless that would be a step down
+    recommended: ChestAction;
+    // Caskets waiting after this one
+    queued: number;
+};
+
+export type HudView = {
+    // The run's map
+    mapId: string;
+    // An endless run's round
+    round?: number;
+    // Seconds until this round's final boss
+    bossIn: number;
+    hp: number;
+    maxHp: number;
+    // The hitpoints bar turns green, like the client's orb
+    poisoned: boolean;
+    level: number;
+    // Progress to the next level, 0-1
+    xpFraction: number;
+    seconds: number;
+    kills: number;
+    coins: number;
+    weapons: SlotView[];
+    passives: SlotView[];
+    gear: GearSlotView[];
+    inventory: InventorySlotView[];
+    buffs: BuffView[];
+    // Left this run, for a level up's rewards or a casket's item
+    rerolls: number;
+    // enraged: below half its hitpoints, faster and with its enraged attacks
+    boss?: { name: string; fraction: number; enraged: boolean };
+    // The quests this run can get on with: this map's, then the ones done all
+    // over, leaving out the ones done before it
+    quests: QuestTrackView[];
+};
+
+// done / of: how far it's got, this run's kills and caskets included;
+// finished: this run finished it (it pays once the run is over)
+export type QuestTrackView = {
+    id: string;
+    name: string;
+    task: string;
+    done: number;
+    of: number;
+    finished: boolean;
+};
+
+export type ChoiceView = {
+    title: string;
+    text: string;
+    iconObjId: number;
+    iconSpriteId?: number;
+    isNew: boolean;
+    isEvolution: boolean;
+    // A godsword's hilt to pick
+    isHilt: boolean;
+    // The rolled rarity of this offer, if it has one
+    rarity?: { name: string; color: string };
+};
+
+export type Toast = { id: number; text: string; until: number };
+
+export type UiSnapshot = {
+    screen: Screen;
+    loadingText: string;
+    loadingProgress: number;
+    save: SaveData;
+    characterId: string;
+    // The map the next run is on, and whether it's endless (once the map's
+    // been beaten)
+    mapId: string;
+    endless: boolean;
+    hud?: HudView;
+    overlay: RunOverlay;
+    choices: ChoiceView[];
+    chest?: ChestView;
+    // unlockedMap: the name of the map this run's win opened up;
+    // unlockedCharacters / unlockedItems: the names of the adventurers and
+    // items it brought in; endlessRecord: an endless run that went further
+    // than any before it on the map; newGear: the names of the gear it found
+    // for the first time, for the Armoury; quests: the quests it finished,
+    // and what they paid
+    result?: RunResult & {
+        characterName: string;
+        endlessRecord: boolean;
+        unlockedMap?: string;
+        unlockedCharacters: string[];
+        unlockedItems: string[];
+        newGear: string[];
+        quests: { name: string; coins: number }[];
+    };
+    toasts: Toast[];
+    debug: boolean;
+    audio: AudioSettings;
+    display: DisplaySettings;
+};
+
+// The UI's view of the game: an immutable snapshot replaced on every change,
+// read by React through useSyncExternalStore.
+export class GameStore {
+    private snapshot: UiSnapshot;
+    private readonly listeners = new Set<() => void>();
+    private nextToastId = 1;
+
+    constructor(save: SaveData) {
+        this.snapshot = {
+            screen: "loading",
+            loadingText: "Loading Lumbridge",
+            loadingProgress: 0,
+            save,
+            characterId: save.unlockedCharacters[0] ?? "warrior",
+            mapId: "lumbridge",
+            endless: false,
+            overlay: "none",
+            choices: [],
+            toasts: [],
+            debug: false,
+            audio: { muted: false, volume: 0.6 },
+            display: { menuSpin: true, pauseOnBlur: true, questTracker: true },
+        };
+    }
+
+    subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    };
+
+    getSnapshot = (): UiSnapshot => this.snapshot;
+
+    set(changes: Partial<UiSnapshot>): void {
+        this.snapshot = { ...this.snapshot, ...changes };
+        for (const listener of this.listeners) {
+            listener();
+        }
+    }
+
+    toast(text: string, ms = 3500): void {
+        const now = performance.now();
+        // The same message twice at once (three Jads turning up together)
+        // shows once
+        const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
+        toasts.push({ id: this.nextToastId++, text, until: now + ms });
+        this.set({ toasts: toasts.slice(-4) });
+    }
+
+    expireToasts(): void {
+        const now = performance.now();
+        const toasts = this.snapshot.toasts;
+        if (toasts.some((t) => t.until <= now)) {
+            this.set({ toasts: toasts.filter((t) => t.until > now) });
+        }
+    }
+}

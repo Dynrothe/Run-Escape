@@ -1,0 +1,445 @@
+import { ActorBakeLoader } from "../../mapviewer/webgl/actor/ActorBakeLoader";
+import {
+    ActorBakeInput,
+    ActorBakeResult,
+    BakeRequest,
+} from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
+import {
+    SpriteDataInput,
+    SpriteDataLoader,
+    SpriteImage,
+} from "../../mapviewer/worker/SpriteDataLoader";
+import {
+    EquipSlot,
+    PlayerAppearance,
+    createAppearance,
+    getAppearanceKey,
+} from "../../rs/model/player/PlayerModelLoader";
+import { getCharacter } from "../content/characters";
+import { ENEMIES } from "../content/enemies";
+import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { getPassive } from "../content/passives";
+import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { EnemyDef, EnemyOutfit, GearSlot } from "../content/types";
+import { WEAPONS } from "../content/weapons";
+import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
+import { Pickup } from "../core/entities";
+import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+
+export const PLAYER_SEQS = {
+    idle: 808,
+    walk: 819,
+    run: 824,
+    death: 836,
+};
+
+export const PICKUP_OBJS: Record<"food" | "casket", number> = {
+    food: 2140,
+    casket: 405,
+};
+
+// Bones and coins gather into piles on the ground, and a pile looks like what
+// it's worth: bones go up through the Prayer bones as their experience adds up,
+// coins through their stack sizes. Each look is from minValue up to the next.
+export type PileLook = { minValue: number; objId: number; count: number; scale: number };
+
+export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
+    bones: [
+        // Bones, Big bones, Dragon bones, Wyvern bones, Lava dragon bones,
+        // Superior dragon bones
+        { minValue: 0, objId: 526, count: 1, scale: 0.75 },
+        { minValue: 20, objId: 532, count: 1, scale: 0.85 },
+        { minValue: 100, objId: 536, count: 1, scale: 0.95 },
+        { minValue: 300, objId: 6812, count: 1, scale: 1 },
+        { minValue: 1000, objId: 11943, count: 1, scale: 1.1 },
+        { minValue: 3000, objId: 22124, count: 1, scale: 1.2 },
+    ],
+    coins: [
+        { minValue: 0, objId: 995, count: 25, scale: 0.85 },
+        { minValue: 10, objId: 995, count: 100, scale: 0.95 },
+        { minValue: 25, objId: 995, count: 250, scale: 1.05 },
+        { minValue: 60, objId: 995, count: 1000, scale: 1.2 },
+        { minValue: 150, objId: 995, count: 10000, scale: 1.4 },
+    ],
+};
+
+function getPileLookIndex(kind: "bones" | "coins", value: number): number {
+    const looks = PILE_LOOKS[kind];
+    let index = 0;
+    while (index + 1 < looks.length && value >= looks[index + 1].minValue) {
+        index++;
+    }
+    return index;
+}
+
+// How a pile of bones or coins looks, undefined for other pickups
+export function getPileLook(pickup: Pickup): PileLook | undefined {
+    if (pickup.kind !== "bones" && pickup.kind !== "coins") {
+        return undefined;
+    }
+    return PILE_LOOKS[pickup.kind][getPileLookIndex(pickup.kind, pickup.value)];
+}
+
+// Bones and coins are drawn as their pile, caskets as the reward casket of
+// their tier, power-ups as their item (or scenery)
+export function getPickupModelKey(pickup: Pickup): string {
+    if (pickup.kind === "bones" || pickup.kind === "coins") {
+        return `pickup:${pickup.kind}_${getPileLookIndex(pickup.kind, pickup.value)}`;
+    }
+    if (pickup.kind === "casket" && pickup.tier) {
+        return "pickup:casket_" + pickup.tier;
+    }
+    if (pickup.kind === "powerUp" && pickup.powerUp) {
+        const powerUp = getPowerUp(pickup.powerUp);
+        return powerUp.locId !== undefined ? "loc:" + powerUp.locId : "obj:" + powerUp.objId;
+    }
+    return "pickup:" + pickup.kind;
+}
+
+// The dwarf multicannon, set up
+const CANNON_LOC = 6;
+export const CANNON_MODEL_KEY = "loc:" + CANNON_LOC;
+
+// Hitsplat sprites (RuneLite's SpriteID): the red damage splat, the green
+// poison one and the blue one for a hit that was blocked (a shield's)
+export const HITSPLAT_SPRITES = { damage: 1359, poison: 1360, block: 1358 } as const;
+
+// Every spot animation the content uses, plus the fixed ones (cannonball,
+// level up fireworks, a frozen player's ice, the bot nuke's explosions, the
+// Amulet of blood fury's heal)
+function getSpotAnimIds(): number[] {
+    const ids = new Set<number>([53, 199, FREEZE_SPOTANIM, NUKE_SPOTANIM, BLOOD_FURY_SPOTANIM]);
+    const add = (...spotAnims: (number | undefined)[]) => {
+        for (const id of spotAnims) {
+            if (id !== undefined) {
+                ids.add(id);
+            }
+        }
+    };
+    for (const weapon of WEAPONS) {
+        for (const level of weapon.levels) {
+            add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
+        }
+        add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.burns?.spotAnim);
+        add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
+    }
+    for (const thrall of THRALLS) {
+        add(thrall.projectileSpotAnim, thrall.impactSpotAnim);
+    }
+    for (const enemy of ENEMIES) {
+        add(enemy.spawnSpotAnim);
+        add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
+        for (const attack of enemy.boss?.attacks ?? []) {
+            add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
+        }
+        add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);
+        add(enemy.revives?.spotAnim, enemy.splits?.spotAnim, enemy.explodes?.spotAnim);
+        add(enemy.blinks?.castSpotAnim, enemy.blinks?.impactSpotAnim);
+    }
+    return [...ids];
+}
+
+// Items drawn flying or circling: thrown knives, and orbiting runes
+function getThrownObjIds(): number[] {
+    const ids = new Set<number>();
+    for (const weapon of WEAPONS) {
+        if (weapon.kind === "knives") {
+            for (const level of weapon.levels) {
+                const objId = level.projectileObjId ?? level.objId;
+                if (objId !== undefined) {
+                    ids.add(objId);
+                }
+            }
+        }
+        for (const objId of weapon.orbitObjIds ?? []) {
+            ids.add(objId);
+        }
+    }
+    return [...ids];
+}
+
+export function getPlayerAttackSeqs(): number[] {
+    const seqs = WEAPONS.flatMap((w) => [w.playerSeq, w.special?.playerSeq ?? -1]);
+    return [...new Set(seqs.filter((id) => id !== -1))];
+}
+
+// The player's look in a run: the character's outfit, the held weapon tier,
+// any gear their passives add, and what they've equipped from caskets (which
+// goes over the rest).
+export function getRunAppearance(sim: Sim): PlayerAppearance {
+    const appearance = getCharacterAppearance(sim.characterId);
+    const held = sim.getHeldObjId();
+    if (held !== -1) {
+        appearance.equipment[EquipSlot.WEAPON] = held;
+    }
+    for (const passive of sim.passives) {
+        const def = getPassive(passive.id);
+        for (const piece of def.equipment ?? []) {
+            // Levels past the last (endless runs) wear the last level's
+            const level = Math.min(passive.level, piece.objIds.length);
+            const objId = piece.objIds[level - 1] ?? -1;
+            if (objId !== -1) {
+                appearance.equipment[piece.slot] = objId;
+            }
+        }
+    }
+    for (const [slot, itemId] of Object.entries(sim.gear)) {
+        const equipSlot = GEAR_SLOT_BY_ID.get(slot as GearSlot)?.equipSlot;
+        if (equipSlot !== undefined) {
+            appearance.equipment[equipSlot] = getItem(itemId).objId;
+        }
+    }
+    return appearance;
+}
+
+// The baked model for an enemy: its NPC, or the outfit it wears (the fun
+// maps' players, one model per outfit)
+export function getEnemyModelKey(def: EnemyDef, variant: number): string {
+    return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
+}
+
+// The baked model for an enemy's look while shielded (EnemyDef.shield.look)
+export function getShieldedModelKey(def: EnemyDef): string {
+    return "npc:" + def.id + ":shielded";
+}
+
+// A player look for one of an enemy's outfits
+export function getOutfitAppearance(outfit: EnemyOutfit): PlayerAppearance {
+    const appearance = createAppearance(outfit.equipment);
+    if (outfit.colors) {
+        appearance.colors = outfit.colors.slice();
+    }
+    return appearance;
+}
+
+export function getCharacterAppearance(characterId: string): PlayerAppearance {
+    const character = getCharacter(characterId);
+    const appearance = createAppearance(character.equipment);
+    if (character.kits) {
+        appearance.kits = character.kits.slice();
+    }
+    if (character.colors) {
+        appearance.colors = character.colors.slice();
+    }
+    return appearance;
+}
+
+// All the models a run draws, baked up front, and the player's model, re-baked
+// whenever their gear changes.
+export class GameAssets {
+    readonly models = new Map<string, ActorModel>();
+    // Cache sprites by id, for the 2D overlay
+    readonly sprites = new Map<number, HTMLCanvasElement>();
+
+    private playerKey?: string;
+    private playerModel?: ActorModel;
+    private pendingPlayerKey?: string;
+
+    constructor(
+        readonly workerPool: RenderDataWorkerPool,
+        readonly renderer: GameWebGLRenderer,
+        readonly actors: ActorRenderer,
+    ) {}
+
+    static getBaseRequests(): BakeRequest[] {
+        const requests: BakeRequest[] = [];
+        for (const enemy of ENEMIES) {
+            const seqIds = [
+                enemy.walkSeq,
+                enemy.idleSeq,
+                enemy.attackSeq,
+                enemy.deathSeq,
+                enemy.jumpSeq ?? -1,
+                enemy.shot?.seq ?? -1,
+                enemy.revives?.seq ?? -1,
+                enemy.blinks?.seq ?? -1,
+                ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
+            ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
+            if (enemy.outfits) {
+                enemy.outfits.forEach((outfit, variant) => {
+                    requests.push({
+                        kind: "player",
+                        key: getEnemyModelKey(enemy, variant),
+                        appearance: getOutfitAppearance(outfit),
+                        seqIds,
+                    });
+                });
+                continue;
+            }
+            requests.push({ kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds });
+            const shielded = enemy.shield?.look;
+            if (shielded) {
+                requests.push({
+                    kind: "npc",
+                    key: getShieldedModelKey(enemy),
+                    npcId: shielded.npcId,
+                    seqIds: [shielded.idleSeq],
+                });
+            }
+        }
+        for (const id of getSpotAnimIds()) {
+            requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
+        }
+        for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {
+            requests.push({ kind: "obj", key: "pickup:" + kind, objId, count: 1 });
+        }
+        for (const [kind, looks] of Object.entries(PILE_LOOKS)) {
+            looks.forEach(({ objId, count }, i) => {
+                requests.push({ kind: "obj", key: `pickup:${kind}_${i}`, objId, count });
+            });
+        }
+        for (const casket of Object.values(CASKETS)) {
+            requests.push({
+                kind: "obj",
+                key: "pickup:casket_" + casket.tier,
+                objId: casket.objId,
+                count: 1,
+            });
+        }
+        for (const thrall of THRALLS) {
+            requests.push({
+                kind: "npc",
+                key: "thrall:" + thrall.id,
+                npcId: thrall.npcId,
+                seqIds: [thrall.idleSeq, thrall.walkSeq, thrall.attackSeq],
+            });
+        }
+        const objIds = new Set(getThrownObjIds());
+        const locIds = new Set([CANNON_LOC]);
+        for (const powerUp of POWER_UPS) {
+            if (powerUp.locId !== undefined) {
+                locIds.add(powerUp.locId);
+            } else {
+                objIds.add(powerUp.objId);
+            }
+        }
+        for (const objId of objIds) {
+            requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
+        }
+        for (const locId of locIds) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId });
+        }
+        return requests;
+    }
+
+    private async bake(requests: BakeRequest[]): Promise<ActorBakeResult> {
+        return await this.workerPool.queueLoad<ActorBakeInput, ActorBakeResult, ActorBakeLoader>(
+            new ActorBakeLoader(),
+            { requests, loadedTextureIds: this.renderer.loadedTextureIds },
+        );
+    }
+
+    private addBake(bake: ActorBakeResult): Map<string, ActorModel> {
+        this.renderer.updateTextureArray(bake.loadedTextures);
+        const models = this.actors.addBake(bake);
+        for (const [key, model] of models) {
+            this.models.set(key, model);
+        }
+        return models;
+    }
+
+    // Splits the bake over the workers, one page each
+    async loadBase(onProgress?: (done: number, total: number) => void): Promise<void> {
+        const requests = GameAssets.getBaseRequests();
+        const chunks: BakeRequest[][] = [];
+        const chunkCount = this.workerPool.size;
+        for (let i = 0; i < chunkCount; i++) {
+            chunks.push([]);
+        }
+        requests.forEach((request, i) => chunks[i % chunkCount].push(request));
+        let done = 0;
+        const started = performance.now();
+        const bakes = await Promise.all(
+            chunks.map(async (chunk) => {
+                const bake = await this.bake(chunk);
+                onProgress?.(++done, chunks.length);
+                return bake;
+            }),
+        );
+        let bytes = 0;
+        for (const bake of bakes) {
+            bytes += bake.vertices.byteLength + bake.indices.byteLength;
+            this.addBake(bake);
+        }
+        console.log(
+            `baked ${requests.length} actor models in ${(performance.now() - started).toFixed(0)}ms, ` +
+                `${(bytes / 1024 / 1024).toFixed(1)}MB`,
+        );
+    }
+
+    async loadSprites(spriteIds: number[]): Promise<void> {
+        const images = await this.workerPool.queueLoad<
+            SpriteDataInput,
+            SpriteImage[],
+            SpriteDataLoader
+        >(new SpriteDataLoader(), { spriteIds });
+        for (const image of images) {
+            if (image.width > 0 && image.height > 0) {
+                this.sprites.set(image.id, toCanvas(image));
+            }
+        }
+    }
+
+    get(key: string): ActorModel | undefined {
+        return this.models.get(key);
+    }
+
+    // Undefined when the cache has no such sprite
+    getSprite(id: number): HTMLCanvasElement | undefined {
+        return this.sprites.get(id);
+    }
+
+    getPlayer(): ActorModel | undefined {
+        return this.playerModel;
+    }
+
+    // Bakes a player model for this look unless it's already the current one.
+    // The old model keeps drawing until the new one is ready.
+    async setPlayerAppearance(appearance: PlayerAppearance): Promise<void> {
+        const key = getAppearanceKey(appearance);
+        if (key === this.playerKey || key === this.pendingPlayerKey) {
+            return;
+        }
+        this.pendingPlayerKey = key;
+        const seqIds = [
+            PLAYER_SEQS.idle,
+            PLAYER_SEQS.walk,
+            PLAYER_SEQS.run,
+            PLAYER_SEQS.death,
+            ...getPlayerAttackSeqs(),
+        ];
+        const bake = await this.bake([{ kind: "player", key: "player", appearance, seqIds }]);
+        if (this.pendingPlayerKey !== key) {
+            // A newer look was asked for while this one baked
+            return;
+        }
+        this.pendingPlayerKey = undefined;
+        const previous = this.playerModel;
+        this.renderer.updateTextureArray(bake.loadedTextures);
+        const model = this.actors.addBake(bake).get("player");
+        this.playerModel = model;
+        this.playerKey = key;
+        if (previous) {
+            this.actors.removePage(previous.page);
+        }
+    }
+}
+
+function toCanvas(sprite: SpriteImage): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = sprite.width;
+    canvas.height = sprite.height;
+    const ctx = canvas.getContext("2d")!;
+    const image = ctx.createImageData(sprite.width, sprite.height);
+    sprite.pixels.forEach((pixel, i) => {
+        image.data[i * 4] = (pixel >> 16) & 0xff;
+        image.data[i * 4 + 1] = (pixel >> 8) & 0xff;
+        image.data[i * 4 + 2] = pixel & 0xff;
+        image.data[i * 4 + 3] = (pixel >>> 24) & 0xff;
+    });
+    ctx.putImageData(image, 0, 0);
+    return canvas;
+}

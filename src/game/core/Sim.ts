@@ -1,0 +1,4904 @@
+import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
+import { getCharacter } from "../content/characters";
+import {
+    LATER_ROUND_START,
+    ROUND_DAMAGE,
+    ROUND_HP,
+    ROUND_XP,
+    endlessCoinScale,
+    getGearStats,
+    roundCrowd,
+    roundScale,
+} from "../content/endless";
+import { getEnemy } from "../content/enemies";
+import { CASKETS, getGear, getItem } from "../content/items";
+import { getMap, hasPoison } from "../content/maps";
+import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
+import {
+    POWER_UPS,
+    POWER_UP_CHANCE,
+    POWER_UP_LIFETIME,
+    POWER_UP_MIN_GAP,
+    THRALLS,
+    getPowerUp,
+} from "../content/powerups";
+import { RARITIES, RARITY_ORDER } from "../content/rarity";
+import { getActiveSets, getSet } from "../content/sets";
+import {
+    BoltProcDef,
+    BossAttackDef,
+    CasketTier,
+    CombatStyle,
+    EnemyBlinksDef,
+    EnemyDef,
+    EnemyHealsDef,
+    EnemyRevivesDef,
+    EnemyShotDef,
+    EnemySpawnsDef,
+    EnemyTag,
+    GearSlot,
+    MapDef,
+    PlayerEffectDef,
+    PowerUpDef,
+    PowerUpEffect,
+    SpecialAttackDef,
+    Stats,
+    UtilityDef,
+    WeaponDef,
+    emptyStats,
+} from "../content/types";
+import { RUN_LENGTH } from "../content/waves";
+import { getWeapon, getWeaponStyle } from "../content/weapons";
+import {
+    CASKET_DROP_CHANCE,
+    ChestAction,
+    ChestOffer,
+    InventorySlot,
+    MAX_INVENTORY,
+    findInventorySlot,
+    getAlchValue,
+    rollBossCasketTier,
+    rollCasketItem,
+    rollCasketTier,
+} from "./Loot";
+import { Rng } from "./Rng";
+import { SpatialHash } from "./SpatialHash";
+import {
+    MAX_PASSIVES,
+    MAX_WEAPONS,
+    UpgradeChoice,
+    getOverlevelDamage,
+    hiltChoices,
+    rollChoices,
+} from "./Upgrades";
+import {
+    ActivePowerUp,
+    BossWindup,
+    Buff,
+    Death,
+    Debuff,
+    Effect,
+    Enemy,
+    EnemyAbilities,
+    EnemyProjectile,
+    Glyph,
+    GroundFire,
+    PassiveState,
+    PendingHit,
+    Pickup,
+    PickupKind,
+    Player,
+    Projectile,
+    ProjectileKind,
+    SimEvent,
+    Thrall,
+    Turret,
+    WeaponState,
+} from "./entities";
+import { ArenaGrid } from "./world/ArenaGrid";
+import { findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
+import { FlowField } from "./world/FlowField";
+import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
+
+export const TICKS_PER_SECOND = 50;
+
+// OSRS run speed: 2 tiles per 600ms tick
+const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
+const PLAYER_RADIUS = 0.35;
+const PLAYER_BASE_HP = 25;
+// Rerolls every run has, before the shop's
+const BASE_REROLLS = 1;
+const BASE_MAGNET = 2.2;
+// Chance a kill drops food (luck makes it likelier), and what it heals
+const FOOD_DROP_CHANCE = 0.003;
+const FOOD_HEAL = 10;
+// After being hit the player can't be hit again for a moment, so a crowd hurts
+// more than one enemy but can't melt them instantly
+const HIT_INVULNERABLE_TICKS = 12;
+
+const SPAWN_MIN_DISTANCE = 19;
+const SPAWN_MAX_DISTANCE = 24;
+// Bosses turn up a little closer, so the fight starts soon
+const BOSS_SPAWN_MIN_DISTANCE = 12;
+const BOSS_SPAWN_MAX_DISTANCE = 16;
+// Enemies left this far behind are brought back near the player
+const RELOCATE_DISTANCE = 34;
+const FLOW_FIELD_SIZE = 96;
+const FLOW_FIELD_INTERVAL = 8;
+// A ditch jump, in ticks from its start: the leap is from JUMP_LEAVE to
+// JUMP_LAND, then it gets up (timed to the player's ditch jump, animation 6132)
+const JUMP_LEAVE = 25;
+const JUMP_LAND = 63;
+const JUMP_TICKS = 75;
+
+const ENEMY_ATTACK_COOLDOWN = 50;
+const DEATH_SINK_TICKS = 25;
+const MAX_DEATH_ANIM_TICKS = 60;
+const MAX_PICKUPS = 400;
+// Every so often bones lying this close to a bigger pile slide over and join
+// it, and coins do the same
+const PILE_INTERVAL = 25;
+const PILE_RADIUS = 2;
+const MAX_ENEMIES = 400;
+const MAX_EFFECTS = 160;
+
+// Enemies are kept this many ticks after dying for their death animation
+const CORPSE_TICKS = MAX_DEATH_ANIM_TICKS + DEATH_SINK_TICKS;
+
+const ELITE_TINT = 0xffd480;
+
+// Bosses are enraged below this fraction of their hitpoints: they attack this
+// much more often, move this much faster and glow red
+const ENRAGE_AT = 0.5;
+const ENRAGED_INTERVAL = 0.7;
+const ENRAGED_SPEED = 1.3;
+const ENRAGED_TINT = 0xff7a66;
+
+const CANNON_SPOTANIM = 53;
+const LEVEL_UP_SPOTANIM = 199;
+// Ice Barrage's freeze, on a player frozen by a boss
+export const FREEZE_SPOTANIM = 369;
+const ENEMY_PROJECTILE_RADIUS = 0.35;
+// Rangers and mages (EnemyDef.shot) stop walking up at this fraction of their
+// range
+const SHOOTER_KEEP = 0.75;
+// Fun maps' chat comes from enemies this many tiles from the player or closer
+const CHAT_RANGE = 14;
+// Utility blasts show their explosion on this many of the enemies they hit
+const MAX_BLAST_EFFECTS = 14;
+// Slashes' swooshes cover this much either side of where they aim, radians
+const SLASH_ARC = 1.1;
+// Special attacks' glows stay on the player this long
+const SPECIAL_SPOTANIM_TICKS = 60;
+// Cannonballs and thralls' projectiles, tiles per second
+const CANNONBALL_SPEED = 12;
+const THRALL_PROJECTILE_SPEED = 14;
+// Thralls keep up with the player, stand this far from them, and are brought
+// back when left this far behind
+const THRALL_SPEED = PLAYER_SPEED * 1.1;
+const THRALL_FOLLOW_DISTANCE = 2;
+const THRALL_LEASH = 14;
+const THRALL_RADIUS = 0.4;
+// The bot nuke shows its explosion on this many of the enemies it kills
+const MAX_NUKE_EFFECTS = 24;
+// Fire Wave's explosion
+export const NUKE_SPOTANIM = 157;
+// The Amulet of blood fury: a hit has the healChance stat's chance of healing
+// the player this much, with the Sanguinesti staff's glow on them. Only one hit
+// in so many ticks gets the roll, hit or miss, or weapons hitting thousands of
+// times a minute late in a run would heal all the time.
+const BLOOD_FURY_HEAL = 2;
+const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
+export const BLOOD_FURY_SPOTANIM = 1542;
+// The Twisted bow does half its most extra damage to a target with this many
+// hitpoints (a late goblin has a few hundred, a boss thousands)
+const TOUGH_TARGET_HP = 600;
+// Axes are thrown at enemies this close, and bounce on to ones this close to
+// what they hit
+const AXE_RANGE = 10;
+const BOUNCE_RANGE = 5;
+// The Toxic blowpipe prefers enemies without venom this close over nearer
+// ones that have it, so the venom spreads
+const VENOM_SPREAD_RANGE = 7;
+
+// Enemies of different factions that touch hit each other this many times
+// harder than they hit the player (they have far more hitpoints than the
+// player does), so a scrap is over in a few hits
+const FACTION_DAMAGE = 2;
+// Each faction's army marches in from its own side, the sides this far apart
+// (the golden angle: well spread however many factions there are), and they
+// all turn this many radians a second so no side stays quiet for long
+const FACTION_SPREAD = Math.PI * (3 - Math.sqrt(5));
+const FACTION_TURN = 0.02;
+// An enemy of a faction goes for one of another faction this close (tiles),
+// rather than the player, unless the player's closer than this to it; it
+// looks round for one every so often
+const FOE_RANGE = 8;
+const FOE_IGNORE_PLAYER = 2.5;
+const FOE_LOOK_TICKS = TICKS_PER_SECOND / 2;
+// Revivers bring back what died lately: the last this many deaths, no older
+// than this
+const MAX_DEATHS = 48;
+const REVIVE_MAX_AGE = 20 * TICKS_PER_SECOND;
+// Healers look for something to heal this often, and go this far for it when
+// their def doesn't say
+const HEAL_RETARGET_TICKS = 25;
+const HEAL_SEEK = 12;
+// A spawner's calls: no more of its own alive than this, this far from it,
+// when its def doesn't say
+const SPAWNS_MAX = 8;
+const SPAWNS_RADIUS = 2;
+// A shielded enemy shows a blocked hit at most this often
+const BLOCKED_SPLAT_TICKS = 10;
+// Multi-hit slashes (the Dragon claws') land this many ticks apart
+const FOLLOW_UP_HIT_TICKS = 4;
+// Damage a level (CharacterDef bonus levelMight) grows for this many levels,
+// to level 41
+export const LEVEL_MIGHT_LEVELS = 40;
+// Burning ground hurts what's in it this often, and shows its flames on this
+// many spots across it
+const FIRE_INTERVAL = 25;
+const FIRE_SPOTS = 4;
+// At most this many patches of burning ground at once; a pulse this close to
+// one (a share of its radius) keeps it burning rather than lighting another
+const MAX_FIRES = 3;
+const FIRE_MERGE = 0.5;
+// Split arrows look for enemies this close to where the arrow split
+const SPLIT_RANGE = 6;
+// A fleeing enemy runs straight away from the player, or failing that (a wall
+// in the way, a tile ahead) turned this far either way, a bit more each try
+const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
+const FLEE_LOOKAHEAD = 1;
+
+// levelUp and chest wait for the player to choose
+export type SimState = "playing" | "levelUp" | "chest" | "dead" | "victory";
+
+export type SimOptions = {
+    grid: ArenaGrid;
+    // Lumbridge when unset
+    mapId?: string;
+    characterId: string;
+    // Permanent bonuses from the shop
+    metaStats: Stats;
+    seed: number;
+    // Where the player starts (the nearest free spot to it)
+    spawnX: number;
+    spawnY: number;
+    // The weapons, passives and items brought in by map tasks; everything can
+    // turn up when unset
+    unlockedItems?: ReadonlySet<string>;
+    // Round after round until the player falls, rather than a win at the
+    // final boss (see endless.ts)
+    endless?: boolean;
+    // The pieces upgraded in the Armoury, which caskets give as what they've
+    // become (none when unset)
+    armoury?: ArmouryUpgrades;
+};
+
+export type RunResult = {
+    mapId: string;
+    endless: boolean;
+    // The round reached (1 outside endless runs)
+    round: number;
+    victory: boolean;
+    seconds: number;
+    level: number;
+    kills: number;
+    coins: number;
+    // Enemy ids of the bosses killed, in order
+    bossesKilled: string[];
+    // The gear that came out of caskets (as found, before the Armoury's
+    // upgrades), for the Armoury
+    gearFound: string[];
+    // For quests: enemy id -> times killed, and reward caskets opened
+    enemyKills: Record<string, number>;
+    caskets: number;
+};
+
+export class Sim {
+    readonly grid: ArenaGrid;
+    readonly map: MapDef;
+    readonly rng: Rng;
+    readonly characterId: string;
+    private readonly unlockedItems: ReadonlySet<string> | undefined;
+    private readonly armoury: ArmouryUpgrades | undefined;
+    readonly metaStats: Stats;
+    readonly endless: boolean;
+
+    tick = 0;
+    // Tick the run ended, -1 while it's going
+    endTick = -1;
+    state: SimState = "playing";
+
+    player: Player;
+    stats: Stats = emptyStats();
+    weapons: WeaponState[] = [];
+    passives: PassiveState[] = [];
+    // Item id worn in each slot, and how many times it's upgraded (gear from
+    // an endless run's later rounds)
+    gear: Partial<Record<GearSlot, string>> = {};
+    // The sets whose bonus the worn gear gives
+    activeSets: string[] = [];
+    gearUpgrades: Partial<Record<GearSlot, number>> = {};
+    // Utility items; slots keep their place (they're used with 1-4)
+    inventory: (InventorySlot | null)[] = new Array(MAX_INVENTORY).fill(null);
+    buffs: Buff[] = [];
+    // Stats lowered by boss attacks
+    debuffs: Debuff[] = [];
+    // Opened caskets waiting for a decision, the first one on screen
+    chests: ChestOffer[] = [];
+
+    enemies: Enemy[] = [];
+    projectiles: Projectile[] = [];
+    enemyProjectiles: EnemyProjectile[] = [];
+    pickups: Pickup[] = [];
+    effects: Effect[] = [];
+    turrets: Turret[] = [];
+    thralls: Thrall[] = [];
+    // Power-ups that last a while, for their timers
+    powerUps: ActivePowerUp[] = [];
+    // Bosses' glyphs (BossDef.glyph)
+    glyphs: Glyph[] = [];
+    // Burning ground left by weapons
+    fires: GroundFire[] = [];
+    // Hits still to land, a moment after their swing
+    private pendingHits: PendingHit[] = [];
+    // Enemies that died lately, for revivers (oldest first)
+    private deaths: Death[] = [];
+
+    xp = 0;
+    level = 1;
+    pendingLevelUps = 0;
+    choices: UpgradeChoice[] = [];
+    kills = 0;
+    // Enemy id -> times killed (a boss that rose again as its second form's)
+    enemyKills: Record<string, number> = {};
+    bossesKilled: string[] = [];
+    // Gear out of caskets this run, rerolled away or not
+    readonly gearFound = new Set<string>();
+    coins = 0;
+    casketsOpened = 0;
+    revivesLeft = 0;
+    // For a level up's rewards or a casket's item, shared
+    rerollsLeft = 0;
+    // The final boss is up
+    bossSpawned = false;
+    // Endless runs' round, and the tick it started; killing the final boss
+    // starts the next
+    round = 1;
+    roundStartTick = 0;
+
+    // Bumped whenever the player's look changes (new weapon tier, gear)
+    appearanceVersion = 0;
+
+    events: SimEvent[] = [];
+
+    readonly flowField = new FlowField(FLOW_FIELD_SIZE);
+    private readonly enemyHash = new SpatialHash<Enemy>(2);
+    private readonly pileHash = new SpatialHash<Pickup>(PILE_RADIUS);
+    private nextUid = 1;
+    private spawnAccumulator = 0;
+    private eventIndex = 0;
+    private regenAccumulator = 0;
+    // When a hit next gets the Amulet of blood fury's roll to heal
+    private bloodFuryRollTick = 0;
+    // When the last power-up dropped; the longer ago, the likelier the next
+    private lastPowerUpTick = 0;
+    // Enemies (other than bosses) stand still until then, new ones too
+    private freezeEndTick = 0;
+    // Fun maps: run second the next random boss is due, the last one picked
+    // (not picked twice running), and when the next chat lines are due
+    private nextFunBossSeconds = Infinity;
+    private lastFunBoss?: string;
+    // A pool that turns up together (FunMapDef.bosses.together): the ones out
+    // now, until the last of them is killed
+    private funBossGroup: Enemy[] = [];
+    private nextChatTick = 0;
+    private nextPlayerChatSeconds = Infinity;
+    // The factions seen so far, in order, and where the first one comes from
+    // (see factionAngle)
+    private readonly factions: string[] = [];
+    private factionBaseAngle?: number;
+    private readonly temp = { x: 0, y: 0 };
+
+    constructor(options: SimOptions) {
+        this.grid = options.grid;
+        this.map = getMap(options.mapId ?? "lumbridge");
+        this.rng = new Rng(options.seed);
+        this.characterId = options.characterId;
+        this.unlockedItems = options.unlockedItems;
+        this.armoury = options.armoury;
+        this.metaStats = options.metaStats;
+        // Fun maps are endless from the start
+        this.endless = (options.endless ?? false) || this.map.fun !== undefined;
+        this.flowField.ditchY = this.map.ditch?.y;
+        const fun = this.map.fun;
+        if (fun) {
+            this.nextFunBossSeconds = fun.bosses.firstAt;
+            if (fun.playerChat) {
+                this.nextPlayerChatSeconds = this.rng.range(...fun.playerChat.every);
+            }
+        }
+        const start = findFreeSpot(this.grid, options.spawnX, options.spawnY, PLAYER_RADIUS);
+        this.player = {
+            x: start.x,
+            y: start.y,
+            prevX: start.x,
+            prevY: start.y,
+            radius: PLAYER_RADIUS,
+            facingX: 0,
+            facingY: -1,
+            yaw: 0,
+            moving: false,
+            hp: PLAYER_BASE_HP,
+            maxHp: PLAYER_BASE_HP,
+            attackSeq: -1,
+            attackStart: 0,
+            deathTick: -1,
+            moveStart: 0,
+            invulnerable: 0,
+            flash: 0,
+            frozen: 0,
+            poisonDamage: 0,
+            poisonEnd: -1,
+        };
+        const character = getCharacter(options.characterId);
+        this.addWeapon(character.startingWeapon);
+        this.updateStats();
+        this.player.hp = this.player.maxHp;
+        this.revivesLeft = this.stats.revival;
+        this.rerollsLeft = BASE_REROLLS + this.stats.reroll;
+        this.updateFlowField();
+    }
+
+    // Enemies find their way to the player's tile, or when they're standing on
+    // part of an object's (beside a signpost's post), the nearest open one
+    private updateFlowField(): void {
+        const player = this.player;
+        let tileX = Math.floor(player.x);
+        let tileY = Math.floor(player.y);
+        if (this.grid.isSolid(tileX, tileY)) {
+            let best = Infinity;
+            const fromX = tileX;
+            const fromY = tileY;
+            for (let d = 1; d <= 3 && best === Infinity; d++) {
+                for (let y = fromY - d; y <= fromY + d; y++) {
+                    for (let x = fromX - d; x <= fromX + d; x++) {
+                        if (
+                            Math.max(Math.abs(x - fromX), Math.abs(y - fromY)) !== d ||
+                            this.grid.isSolid(x, y)
+                        ) {
+                            continue;
+                        }
+                        const distance = Math.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
+                        if (distance < best) {
+                            best = distance;
+                            tileX = x;
+                            tileY = y;
+                        }
+                    }
+                }
+            }
+        }
+        if (tileX !== this.flowField.targetX || tileY !== this.flowField.targetY) {
+            this.flowField.update(this.grid, tileX, tileY);
+        }
+    }
+
+    // Run time; stops when the run ends, though ticks carry on for animations
+    get seconds(): number {
+        return (this.endTick >= 0 ? this.endTick : this.tick) / TICKS_PER_SECOND;
+    }
+
+    // Where the run is in the map's waves and events: the whole run outside
+    // endless runs, and an endless run's later rounds start some way in
+    get mapSeconds(): number {
+        const start = this.round > 1 ? LATER_ROUND_START : 0;
+        return start + this.seconds - this.roundStartTick / TICKS_PER_SECOND;
+    }
+
+    get xpForNextLevel(): number {
+        return this.xpForLevel(this.level + 1);
+    }
+
+    get xpForThisLevel(): number {
+        return this.xpForLevel(this.level);
+    }
+
+    private xpForLevel(level: number): number {
+        return this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
+    }
+
+    getResult(): RunResult {
+        return {
+            mapId: this.map.id,
+            endless: this.endless,
+            round: this.round,
+            victory: this.state === "victory",
+            seconds: this.seconds,
+            level: this.level,
+            kills: this.kills,
+            coins: this.coins,
+            bossesKilled: [...this.bossesKilled],
+            gearFound: [...this.gearFound],
+            enemyKills: { ...this.enemyKills },
+            caskets: this.casketsOpened,
+        };
+    }
+
+    // ---- Stats and upgrades ----
+
+    updateStats(): void {
+        const stats = emptyStats();
+        addStats(stats, getCharacter(this.characterId).bonus);
+        addStats(stats, this.metaStats);
+        for (const passive of this.passives) {
+            const def = getPassive(passive.id);
+            for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
+                stats[stat] += passive.value;
+            }
+        }
+        for (const [slot, itemId] of Object.entries(this.gear)) {
+            const upgrades = this.gearUpgrades[slot as GearSlot] ?? 0;
+            addStats(stats, getGearStats(getGear(itemId), upgrades));
+        }
+        const sets = getActiveSets(this.gear);
+        for (const set of sets) {
+            addStats(stats, set.stats ?? {});
+            if (!this.activeSets.includes(set.id)) {
+                this.events.push({
+                    type: "notice",
+                    message: `${set.name} set bonus: ${set.bonus}!`,
+                });
+            }
+        }
+        this.activeSets = sets.map((set) => set.id);
+        for (const buff of this.buffs) {
+            addStats(stats, buff.stats);
+        }
+        for (const debuff of this.debuffs) {
+            addStats(stats, debuff.stats);
+        }
+        // Grows with every level gained (the Gauntlet runner starts weak), up
+        // to about where a normal run ends, so it doesn't run away in endless
+        stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
+        this.stats = stats;
+        const player = this.player;
+        const maxHp = Math.round(PLAYER_BASE_HP * (1 + stats.maxHp));
+        if (maxHp !== player.maxHp) {
+            // Swapping off max hitpoints never kills
+            player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
+            player.maxHp = maxHp;
+        }
+    }
+
+    addWeapon(weaponId: string, bonus = 0): void {
+        if (this.weapons.length >= MAX_WEAPONS) {
+            return;
+        }
+        this.weapons.push({
+            def: getWeapon(weaponId),
+            level: 1,
+            cooldown: TICKS_PER_SECOND,
+            bonus,
+            uses: 0,
+        });
+        this.appearanceVersion++;
+    }
+
+    choose(index: number): void {
+        if (this.state !== "levelUp") {
+            return;
+        }
+        const choice = this.choices[index];
+        if (choice) {
+            this.apply(choice);
+        }
+        // A godsword's blade that just reached its hilt level: picking the
+        // hilt is the rest of this level up
+        const weapon =
+            choice?.kind === "weaponLevel"
+                ? this.weapons.find((w) => w.def.id === choice.weaponId)
+                : undefined;
+        const hilts = weapon ? hiltChoices(weapon) : [];
+        if (hilts.length > 0) {
+            this.choices = hilts;
+            return;
+        }
+        this.pendingLevelUps--;
+        this.choices = [];
+        if (this.pendingLevelUps > 0) {
+            this.choices = this.roll();
+        } else {
+            this.state = this.chests.length > 0 ? "chest" : "playing";
+        }
+    }
+
+    private roll(): UpgradeChoice[] {
+        return rollChoices(
+            this.rng,
+            this.weapons,
+            this.passives,
+            this.stats.luck,
+            getCharacter(this.characterId).style,
+            this.unlockedItems,
+            this.endless,
+        );
+    }
+
+    // Picking a godsword's hilt, which can't be rerolled
+    get choosingHilt(): boolean {
+        return this.choices.some((c) => c.kind === "hilt");
+    }
+
+    // Rolls what's on offer again, for one of the run's rerolls: the level
+    // up's rewards, or the open casket's item (another one, its rarity rolled
+    // again too). False when there's no reroll left or nothing on offer.
+    reroll(): boolean {
+        const chest = this.chest;
+        if (this.rerollsLeft <= 0 || this.choosingHilt) {
+            return false;
+        }
+        if (this.state === "levelUp") {
+            this.choices = this.roll();
+        } else if (this.state === "chest" && chest) {
+            const { itemId, upgradedFrom } = this.rollChestItem(chest.tier, chest.itemId);
+            chest.itemId = itemId;
+            chest.upgradedFrom = upgradedFrom;
+            chest.upgrades = this.offeredUpgrades(itemId);
+        } else {
+            return false;
+        }
+        this.rerollsLeft--;
+        return true;
+    }
+
+    apply(choice: UpgradeChoice): void {
+        switch (choice.kind) {
+            case "newWeapon":
+                this.addWeapon(choice.weaponId, RARITIES[choice.quality].weaponBonus);
+                break;
+            case "weaponLevel": {
+                const weapon = this.weapons.find((w) => w.def.id === choice.weaponId);
+                if (weapon) {
+                    const last = weapon.def.levels.length;
+                    // Endless runs level on past the last level, for damage
+                    weapon.level = this.endless ? choice.level : Math.min(choice.level, last);
+                    if (choice.level > last) {
+                        // Multiplies everything the weapon had
+                        const more = getOverlevelDamage(choice.quality);
+                        weapon.bonus = (1 + weapon.bonus) * (1 + more) - 1;
+                    } else {
+                        weapon.bonus += RARITIES[choice.quality].weaponBonus;
+                    }
+                    this.appearanceVersion++;
+                }
+                break;
+            }
+            case "evolve": {
+                const index = this.weapons.findIndex((w) => w.def.id === choice.weaponId);
+                if (index !== -1) {
+                    // Bonus damage from rare rolls carries over
+                    this.weapons[index] = {
+                        def: getWeapon(choice.into),
+                        level: 1,
+                        cooldown: 0,
+                        bonus: this.weapons[index].bonus,
+                        uses: 0,
+                    };
+                    this.appearanceVersion++;
+                }
+                break;
+            }
+            case "hilt": {
+                // Everything carries over: level, bonus damage and the count
+                // towards the special attack
+                const weapon = this.weapons.find((w) => w.def.id === choice.weaponId);
+                if (weapon) {
+                    weapon.def = getWeapon(choice.into);
+                    this.appearanceVersion++;
+                }
+                break;
+            }
+            case "newPassive": {
+                const def = getPassive(choice.passiveId);
+                if (this.passives.length < MAX_PASSIVES) {
+                    this.passives.push({
+                        id: choice.passiveId,
+                        level: 1,
+                        value: getPassiveGain(def, choice.quality),
+                    });
+                }
+                this.updateStats();
+                this.appearanceVersion++;
+                break;
+            }
+            case "passiveLevel": {
+                const passive = this.passives.find((p) => p.id === choice.passiveId);
+                if (passive) {
+                    const def = getPassive(passive.id);
+                    if (canLevelPassive(def, passive.level, this.endless)) {
+                        passive.level++;
+                        passive.value += getPassiveGain(def, choice.quality);
+                    }
+                }
+                this.updateStats();
+                this.appearanceVersion++;
+                break;
+            }
+            case "coins":
+                this.coins += choice.amount;
+                break;
+            case "food":
+                this.heal(choice.amount);
+                break;
+        }
+    }
+
+    heal(amount: number): void {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
+    }
+
+    // ---- Caskets and items ----
+
+    get chest(): ChestOffer | undefined {
+        return this.chests[0];
+    }
+
+    // Whether a utility item would fit in the inventory
+    canStash(itemId: string): boolean {
+        return findInventorySlot(this.inventory, itemId) !== -1;
+    }
+
+    // Does what the player chose with the open casket's item, then carries on
+    // (or opens the next casket, or a level up that came in meanwhile)
+    resolveChest(action: ChestAction): void {
+        if (this.state !== "chest") {
+            return;
+        }
+        const chest = this.chests.shift();
+        if (chest) {
+            this.applyChest(chest, action);
+        }
+        // A blast from the casket can end the run (it can hit the boss)
+        if (this.runOver || this.chests.length > 0) {
+            return;
+        }
+        this.state = "playing";
+        this.checkLevelUp();
+    }
+
+    private applyChest(chest: ChestOffer, action: ChestAction): void {
+        const item = getItem(chest.itemId);
+        if (action === "alch") {
+            const coins = this.alchValue(item.id, chest.upgrades);
+            this.coins += coins;
+            this.events.push({ type: "alch", itemId: item.id, coins });
+            return;
+        }
+        if (item.kind === "gear") {
+            this.equip(item.id, chest.upgrades);
+            return;
+        }
+        if (action === "take" && this.stash(item.id)) {
+            return;
+        }
+        this.useUtility(item);
+    }
+
+    // Wears a piece of gear (upgraded this many times); whatever was in its
+    // slot is alched
+    equip(itemId: string, upgrades = 0): void {
+        const item = getGear(itemId);
+        const replacedId = this.gear[item.slot];
+        const replacedUpgrades = this.gearUpgrades[item.slot] ?? 0;
+        const coins = replacedId ? this.alchValue(replacedId, replacedUpgrades) : 0;
+        this.coins += coins;
+        this.gear[item.slot] = item.id;
+        this.gearUpgrades[item.slot] = upgrades;
+        this.updateStats();
+        this.appearanceVersion++;
+        this.events.push({ type: "equip", itemId, replacedId, coins });
+    }
+
+    // Puts a utility item in the inventory; false when there's no room
+    stash(itemId: string): boolean {
+        const index = findInventorySlot(this.inventory, itemId);
+        if (index === -1) {
+            return false;
+        }
+        const slot = this.inventory[index];
+        if (slot) {
+            slot.count++;
+        } else {
+            this.inventory[index] = { itemId, count: 1 };
+        }
+        this.events.push({ type: "stash", itemId });
+        return true;
+    }
+
+    // Uses the utility item in an inventory slot (0-3) while playing
+    useItem(index: number): boolean {
+        const slot = this.inventory[index];
+        if (this.state !== "playing" || !slot) {
+            return false;
+        }
+        const item = getItem(slot.itemId);
+        if (item.kind !== "utility") {
+            return false;
+        }
+        slot.count--;
+        if (slot.count <= 0) {
+            this.inventory[index] = null;
+        }
+        this.useUtility(item);
+        this.checkLevelUp();
+        return true;
+    }
+
+    private useUtility(item: UtilityDef): void {
+        const player = this.player;
+        const use = item.use;
+        this.events.push({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
+        switch (use.kind) {
+            case "heal":
+                this.heal(use.amount * this.healScale);
+                if (use.stats && use.seconds) {
+                    this.addBuff(item.id, use.stats, use.seconds, false);
+                }
+                break;
+            case "buff":
+                this.addBuff(item.id, use.stats, use.seconds, false);
+                break;
+            case "cure":
+                this.player.poisonEnd = -1;
+                this.player.poisonDamage = 0;
+                this.debuffs = [];
+                this.addBuff(item.id, {}, use.seconds, true);
+                this.heal((use.heal ?? 0) * this.healScale);
+                break;
+            case "bones":
+                for (const pickup of this.pickups) {
+                    if (pickup.kind === "bones") {
+                        pickup.attracted = true;
+                        pickup.speed = Math.max(pickup.speed, 0.15);
+                    }
+                }
+                break;
+            case "blast": {
+                const radius = use.radius * (1 + this.stats.area);
+                this.events.push({ type: "blast", x: player.x, y: player.y, radius });
+                // Not the spatial hash: this can run between ticks, when it's stale
+                const hit = this.enemies.filter(
+                    (e) =>
+                        !e.dead && Math.hypot(e.x - player.x, e.y - player.y) <= radius + e.radius,
+                );
+                hit.forEach((enemy, i) => {
+                    if (i < MAX_BLAST_EFFECTS) {
+                        this.addEffect(use.spotAnim, enemy.x, enemy.y, 0, 30, enemy.uid);
+                    }
+                    this.damageEnemy(enemy, use.damage * this.roundHp, 2.5, player.x, player.y);
+                });
+                break;
+            }
+            case "xp":
+                this.xp += (this.xpForNextLevel - this.xpForThisLevel) * use.levels;
+                break;
+        }
+    }
+
+    // A potion's effect, for seconds stretched by effect duration. Drinking
+    // another dose starts the timer again.
+    private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
+        const ticks = Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
+        this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
+        this.buffs.push({
+            itemId,
+            stats,
+            cures,
+            startTick: this.tick,
+            endTick: this.tick + ticks,
+        });
+        this.updateStats();
+    }
+
+    // What an endless round multiplies enemies' hitpoints and damage by (1 in
+    // the first round, and outside endless runs)
+    get roundHp(): number {
+        return roundScale(ROUND_HP, this.round);
+    }
+
+    get roundDamage(): number {
+        return roundScale(ROUND_DAMAGE, this.round);
+    }
+
+    // What coins found in the run are worth: less in endless runs, and less
+    // again in their later rounds (see endless.ts)
+    get coinScale(): number {
+        return this.endless ? endlessCoinScale(this.round) : 1;
+    }
+
+    // Coins for high alching an item, as the run pays them
+    alchValue(itemId: string, upgrades = 0): number {
+        return Math.round(
+            getAlchValue(getItem(itemId), this.stats.greed, upgrades) * this.coinScale,
+        );
+    }
+
+    // Healing keeps up with how hard enemies hit
+    private get healScale(): number {
+        return this.roundDamage;
+    }
+
+    // An antidote is keeping poison and drains off
+    get cured(): boolean {
+        return this.buffs.some((b) => b.cures);
+    }
+
+    // The item shown in the player's hand: the current tier of their rarest
+    // weapon that has one (the first of them on a tie), so a Twisted bow
+    // found later is wielded over the starting knives.
+    getHeldObjId(): number {
+        let held = -1;
+        let heldRarity = -1;
+        for (const weapon of this.weapons) {
+            const level = this.getLevel(weapon);
+            const rarity = RARITY_ORDER.indexOf(weapon.def.rarity);
+            if (level.objId !== undefined && rarity > heldRarity) {
+                held = level.objId;
+                heldRarity = rarity;
+            }
+        }
+        return held;
+    }
+
+    // ---- Tick ----
+
+    step(moveX: number, moveY: number): void {
+        if (this.runOver) {
+            // Keep the clock going so death animations play out
+            this.tick++;
+            return;
+        }
+        if (this.state !== "playing") {
+            return;
+        }
+        this.tick++;
+        this.stepBuffs();
+        this.stepPlayer(moveX, moveY);
+        if (this.runOver) {
+            // Poison finished them
+            return;
+        }
+        if (this.tick % FLOW_FIELD_INTERVAL === 0) {
+            this.updateFlowField();
+        }
+        // A fun map's round turns over every fifteen minutes of waves (there's
+        // no final boss to kill for it)
+        if (this.map.fun && this.mapSeconds >= RUN_LENGTH) {
+            this.nextRound();
+        }
+        this.stepDirector();
+        this.stepChat();
+        this.rebuildEnemyHash();
+        this.stepEnemies();
+        this.stepGlyphs();
+        this.stepWeapons();
+        this.stepPendingHits();
+        this.stepTurrets();
+        this.stepThralls();
+        this.stepProjectiles();
+        this.stepFires();
+        this.stepEnemyProjectiles();
+        this.stepPickups();
+        this.cleanUp();
+        this.checkLevelUp();
+    }
+
+    private stepBuffs(): void {
+        const tick = this.tick;
+        if (
+            this.buffs.some((b) => b.endTick <= tick) ||
+            this.debuffs.some((d) => d.endTick <= tick)
+        ) {
+            this.buffs = this.buffs.filter((b) => b.endTick > tick);
+            this.debuffs = this.debuffs.filter((d) => d.endTick > tick);
+            this.updateStats();
+        }
+        this.powerUps = this.powerUps.filter((p) => p.endTick > tick);
+    }
+
+    private stepPlayer(moveX: number, moveY: number): void {
+        const player = this.player;
+        player.prevX = player.x;
+        player.prevY = player.y;
+        const frozen = player.frozen > 0;
+        if (frozen) {
+            player.frozen--;
+        }
+        const moving = !frozen && (moveX !== 0 || moveY !== 0);
+        if (moving) {
+            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed);
+            moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
+            const len = Math.hypot(moveX, moveY);
+            player.facingX = moveX / len;
+            player.facingY = moveY / len;
+            player.yaw = yawFromVector(moveX, moveY);
+        }
+        if (moving !== player.moving) {
+            player.moving = moving;
+            player.moveStart = this.tick;
+        }
+        if (player.invulnerable > 0) {
+            player.invulnerable--;
+        }
+        if (player.flash > 0) {
+            player.flash--;
+        }
+        if (this.stats.regen > 0 && player.hp < player.maxHp) {
+            // Regen is hitpoints a minute
+            this.regenAccumulator += this.stats.regen / (60 * TICKS_PER_SECOND);
+            if (this.regenAccumulator >= 1) {
+                const amount = Math.floor(this.regenAccumulator);
+                this.regenAccumulator -= amount;
+                this.heal(amount);
+            }
+        }
+        this.stepPoison();
+    }
+
+    // Poison hits once a second until it wears off; armour doesn't help
+    private stepPoison(): void {
+        const player = this.player;
+        if (player.poisonEnd === -1) {
+            return;
+        }
+        if ((player.poisonEnd - this.tick) % TICKS_PER_SECOND === 0 && !this.reviving) {
+            const amount = player.poisonDamage;
+            player.hp -= amount;
+            this.events.push({ type: "playerPoisoned", amount });
+            if (player.hp <= 0) {
+                this.playerDied();
+            }
+        }
+        if (this.tick >= player.poisonEnd) {
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+        }
+    }
+
+    // Just brought back by a ring of life, so nothing can hurt them
+    private get reviving(): boolean {
+        return this.player.invulnerable > HIT_INVULNERABLE_TICKS;
+    }
+
+    // ---- Spawning ----
+
+    private currentWave() {
+        const seconds = this.mapSeconds;
+        const waves = this.map.waves;
+        let wave = waves[0];
+        for (const w of waves) {
+            if (w.start <= seconds) {
+                wave = w;
+            }
+        }
+        return wave;
+    }
+
+    private stepDirector(): void {
+        const seconds = this.mapSeconds;
+        const events = this.map.events;
+        while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
+            const event = events[this.eventIndex];
+            if (event.kind === "elite") {
+                this.spawnEnemy(getEnemy(event.enemyId), "elite");
+            } else if (event.kind === "ring") {
+                this.spawnRing(getEnemy(event.enemyId), event.count);
+            } else if (!this.spawnBoss(getEnemy(event.enemyId), event.kind, event.hp)) {
+                // Nowhere to put it this tick; bosses can't be skipped
+                break;
+            }
+            this.eventIndex++;
+        }
+
+        const fun = this.map.fun;
+        if (fun?.bosses.together && this.seconds >= this.nextFunBossSeconds) {
+            // All at once, each on its own spot; the next lot is due once
+            // they're all dead
+            this.funBossGroup = fun.bosses.pool.flatMap((id) => {
+                const boss = this.spawnBoss(getEnemy(id), "boss", undefined);
+                return boss ? [boss] : [];
+            });
+            if (this.funBossGroup.length > 0) {
+                this.nextFunBossSeconds = Infinity;
+            }
+        } else if (fun && this.seconds >= this.nextFunBossSeconds) {
+            const pool = fun.bosses.pool;
+            const choices = pool.length > 1 ? pool.filter((id) => id !== this.lastFunBoss) : pool;
+            const id = choices[this.rng.int(choices.length)];
+            if (this.spawnBoss(getEnemy(id), "boss", undefined)) {
+                this.lastFunBoss = id;
+                this.nextFunBossSeconds = this.seconds + this.rng.range(...fun.bosses.every);
+            }
+        }
+
+        const wave = this.currentWave();
+        // Endless runs' later rounds bring bigger crowds
+        const crowd = roundCrowd(this.round);
+        const alive = this.countAlive();
+        const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
+        const minAlive = Math.min(Math.round(wave.minAlive * crowd), maxAlive);
+        let toSpawn = 0;
+        if (alive < minAlive) {
+            toSpawn = Math.min(minAlive - alive, 8);
+        }
+        this.spawnAccumulator += (wave.spawnRate * crowd) / TICKS_PER_SECOND;
+        while (this.spawnAccumulator >= 1) {
+            this.spawnAccumulator--;
+            toSpawn++;
+        }
+        const weights = wave.enemies.map((e) => e.weight);
+        for (let i = 0; i < toSpawn && alive + i < maxAlive; i++) {
+            const pick = wave.enemies[this.rng.weightedIndex(weights)];
+            this.spawnEnemy(getEnemy(pick.id), "normal");
+        }
+    }
+
+    // Fun maps' chat: now and then an enemy near the player says one of its
+    // lines (one at a time, so it can be read), and the player answers back
+    private stepChat(): void {
+        const fun = this.map.fun;
+        if (!fun) {
+            return;
+        }
+        if (fun.chatEvery !== undefined && this.tick >= this.nextChatTick) {
+            this.nextChatTick =
+                this.tick + Math.round(fun.chatEvery * this.rng.range(0.6, 1.4) * TICKS_PER_SECOND);
+            const player = this.player;
+            let speaker: Enemy | undefined;
+            let seen = 0;
+            for (const enemy of this.enemies) {
+                if (
+                    enemy.dead ||
+                    !enemy.def.chat ||
+                    Math.hypot(enemy.x - player.x, enemy.y - player.y) > CHAT_RANGE
+                ) {
+                    continue;
+                }
+                // Any one of them, as likely as the next
+                seen++;
+                if (this.rng.int(seen) === 0) {
+                    speaker = enemy;
+                }
+            }
+            const lines = speaker?.def.chat;
+            if (speaker && lines) {
+                const text = lines[this.rng.int(lines.length)];
+                this.events.push({ type: "bossShout", enemyUid: speaker.uid, text });
+            }
+        }
+        if (fun.playerChat && this.seconds >= this.nextPlayerChatSeconds && !this.runOver) {
+            const lines = fun.playerChat.lines;
+            this.events.push({ type: "playerShout", text: lines[this.rng.int(lines.length)] });
+            this.nextPlayerChatSeconds = this.seconds + this.rng.range(...fun.playerChat.every);
+        }
+    }
+
+    private countAlive(): number {
+        let alive = 0;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                alive++;
+            }
+        }
+        return alive;
+    }
+
+    private findSpawnPoint(
+        def: EnemyDef,
+        minDistance: number,
+        maxDistance: number,
+        angle?: number,
+    ) {
+        const player = this.player;
+        for (let attempt = 0; attempt < 16; attempt++) {
+            const a =
+                angle !== undefined && attempt < 4
+                    ? angle + this.rng.range(-0.6, 0.6)
+                    : this.rng.range(0, Math.PI * 2);
+            const distance = this.rng.range(minDistance, maxDistance);
+            const x = Math.floor(player.x + Math.cos(a) * distance) + 0.5;
+            const y = Math.floor(player.y + Math.sin(a) * distance) + 0.5;
+            const tileX = Math.floor(x);
+            const tileY = Math.floor(y);
+            if (!this.grid.contains(tileX, tileY)) {
+                continue;
+            }
+            if (!def.ghost) {
+                if (!this.flowField.isReachable(tileX, tileY)) {
+                    continue;
+                }
+                if (!isCircleFree(this.grid, x, y, def.radius)) {
+                    continue;
+                }
+            }
+            return { x, y };
+        }
+        return undefined;
+    }
+
+    private spawnBoss(
+        def: EnemyDef,
+        type: "boss" | "finalBoss",
+        hp: number | undefined,
+    ): Enemy | undefined {
+        const boss = this.spawnEnemy(def, type, undefined, hp);
+        if (boss) {
+            const finalBoss = type === "finalBoss";
+            if (finalBoss) {
+                this.bossSpawned = true;
+            }
+            if (def.spawnSpotAnim !== undefined) {
+                this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
+            }
+            this.events.push({
+                type: "bossSpawned",
+                enemyId: def.id,
+                name: def.name,
+                message: def.spawnMessage ?? `${def.name} has appeared!`,
+                finalBoss,
+                x: boss.x,
+                y: boss.y,
+            });
+        }
+        return boss;
+    }
+
+    // bossHp: a boss's hitpoints when they're not its own times the map's
+    spawnEnemy(
+        def: EnemyDef,
+        type: "normal" | "elite" | "boss" | "finalBoss",
+        at?: { x: number; y: number },
+        bossHp?: number,
+    ): Enemy | undefined {
+        const boss = type === "boss" || type === "finalBoss";
+        let pos = at;
+        if (!pos && def.spawnAt) {
+            pos = this.pickSpawnSpot(def);
+        } else if (!pos) {
+            pos = boss
+                ? this.findSpawnPoint(def, BOSS_SPAWN_MIN_DISTANCE, BOSS_SPAWN_MAX_DISTANCE)
+                : this.findSpawnPoint(
+                      def,
+                      SPAWN_MIN_DISTANCE,
+                      SPAWN_MAX_DISTANCE,
+                      def.faction !== undefined ? this.factionAngle(def.faction) : undefined,
+                  );
+        }
+        if (!pos) {
+            return undefined;
+        }
+        // Enemies start hitting harder after 5 minutes (of the round)
+        const minutes = this.mapSeconds / 60;
+        const hpScale = this.enemyHpScale();
+        const damageScale = 1 + Math.max(0, minutes - 5) * 0.03;
+        // Bosses are tuned as they are (or for the map they're on); later maps
+        // are tougher all round, and so are endless runs' later rounds
+        const difficulty = this.map.difficulty;
+        const bossDamage = difficulty.damage * this.roundDamage;
+        let hp =
+            (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
+            this.roundHp;
+        // What its hits are multiplied by: its touch, a boss's attacks, its
+        // explosion
+        let hitScale = bossDamage * (boss ? 1 : damageScale);
+        let scale = def.scale ?? 1;
+        let tint = 0xffffff;
+        let xp = def.xp * roundScale(ROUND_XP, this.round);
+        if (type === "elite") {
+            hp *= 8;
+            hitScale *= 1.25;
+            scale *= 1.6;
+            tint = ELITE_TINT;
+            xp *= 5;
+        }
+        const enemy: Enemy = {
+            uid: this.nextUid++,
+            def,
+            variant: def.outfits ? this.rng.int(def.outfits.length) : 0,
+            x: pos.x,
+            y: pos.y,
+            prevX: pos.x,
+            prevY: pos.y,
+            vx: 0,
+            vy: 0,
+            hp: Math.round(hp),
+            maxHp: Math.round(hp),
+            damage: Math.round(def.damage * hitScale),
+            speed: (def.speed * (type === "elite" ? 0.85 : 1)) / TICKS_PER_SECOND,
+            radius: def.radius,
+            scale,
+            tint,
+            elite: type === "elite",
+            boss,
+            finalBoss: type === "finalBoss",
+            bossState:
+                boss && def.boss
+                    ? {
+                          cooldowns: def.boss.attacks.map(() => 0),
+                          stolenCoins: 0,
+                          rises: 0,
+                          enraged: false,
+                          summonsDone: 0,
+                      }
+                    : undefined,
+            damageScale: hitScale,
+            yaw: 0,
+            anim: "walk",
+            animStart: this.tick,
+            attackSeq: def.attackSeq,
+            // Bosses take a moment before their first attack
+            attackCooldown: boss ? TICKS_PER_SECOND : 0,
+            // Turning up while time stands still
+            frozen: boss ? 0 : Math.max(0, this.freezeEndTick - this.tick),
+            drain: 0,
+            drainEnd: 0,
+            venom: 0,
+            venomNext: 0,
+            venomEnd: -1,
+            flash: 0,
+            dead: false,
+            deathTick: 0,
+            xp,
+            shieldEnd: 0,
+            blockedTick: -BLOCKED_SPLAT_TICKS,
+            spawnedBy: 0,
+            nextFoeLook: this.tick + (this.nextUid % FOE_LOOK_TICKS),
+            aggro: false,
+            noDrops: false,
+            bonesOnly: false,
+            abilities: getAbilities(def, this.tick, this.rng),
+        };
+        this.enemies.push(enemy);
+        if (def.shield) {
+            const ticks = Math.round(def.shield.seconds * TICKS_PER_SECOND);
+            enemy.shieldEnd = this.tick + ticks;
+            if (def.shield.spotAnim !== undefined) {
+                this.addEffect(def.shield.spotAnim, enemy.x, enemy.y, 0, ticks, enemy.uid, true);
+            }
+        }
+        const glyph = boss ? def.boss?.glyph : undefined;
+        if (glyph) {
+            this.addGlyph(enemy, getEnemy(glyph.lookId));
+        }
+        return enemy;
+    }
+
+    // The way a faction's army comes from, around the player: so the armies
+    // meet (and fight) around them rather than arriving mixed together
+    private factionAngle(faction: string): number {
+        if (this.factionBaseAngle === undefined) {
+            this.factionBaseAngle = this.rng.range(0, Math.PI * 2);
+        }
+        let index = this.factions.indexOf(faction);
+        if (index === -1) {
+            index = this.factions.push(faction) - 1;
+        }
+        return this.factionBaseAngle + index * FACTION_SPREAD + this.mapSeconds * FACTION_TURN;
+    }
+
+    // One of the spots an enemy turns up at (EnemyDef.spawnAt) with room for
+    // it, undefined if none has
+    private pickSpawnSpot(def: EnemyDef): { x: number; y: number } | undefined {
+        const free = def.spawnAt!.filter(
+            ({ x, y }) =>
+                this.grid.contains(Math.floor(x), Math.floor(y)) &&
+                // What never moves can stand on its own spot, solid or not (a
+                // portal's is in the map's collision)
+                (def.ghost || def.stationary || isCircleFree(this.grid, x, y, def.radius)),
+        );
+        return free.length > 0 ? free[this.rng.int(free.length)] : undefined;
+    }
+
+    // Enemies get tougher faster as the run (or round) goes on: gently for the
+    // first few minutes, then 1.9x hitpoints at 10 minutes and 2.65x at 15
+    private enemyHpScale(): number {
+        const minutes = this.mapSeconds / 60;
+        return 1 + minutes * 0.05 + minutes * minutes * 0.004;
+    }
+
+    private spawnRing(def: EnemyDef, count: number): void {
+        const player = this.player;
+        const radius = 12;
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const x = player.x + Math.cos(angle) * radius;
+            const y = player.y + Math.sin(angle) * radius;
+            if (!this.grid.contains(Math.floor(x), Math.floor(y))) {
+                continue;
+            }
+            if (!def.ghost && !isCircleFree(this.grid, x, y, def.radius)) {
+                continue;
+            }
+            this.spawnEnemy(def, "normal", { x, y });
+        }
+    }
+
+    // ---- Enemies ----
+
+    private rebuildEnemyHash(): void {
+        this.enemyHash.clear();
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.enemyHash.insert(enemy);
+            }
+        }
+    }
+
+    private stepEnemies(): void {
+        const player = this.player;
+        const grid = this.grid;
+        const step = this.temp;
+        for (const enemy of this.enemies) {
+            enemy.prevX = enemy.x;
+            enemy.prevY = enemy.y;
+            if (enemy.flash > 0) {
+                enemy.flash--;
+            }
+            if (enemy.dead) {
+                continue;
+            }
+            if (enemy.shieldEnd !== 0 && this.tick >= enemy.shieldEnd) {
+                this.dropShield(enemy);
+            }
+            if (enemy.attackCooldown > 0) {
+                enemy.attackCooldown--;
+            }
+            if (enemy.venomEnd >= this.tick && this.tick >= enemy.venomNext) {
+                enemy.venomNext += TICKS_PER_SECOND;
+                this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
+                if (enemy.dead) {
+                    continue;
+                }
+            }
+
+            if (enemy.jump) {
+                this.stepJump(enemy);
+                continue;
+            }
+
+            let dx = player.x - enemy.x;
+            let dy = player.y - enemy.y;
+            const distance = Math.hypot(dx, dy);
+
+            // The final boss waits for the player, and what can't move stays
+            // put; anything else left behind comes back
+            const stationary = enemy.def.stationary ?? false;
+            if (distance > RELOCATE_DISTANCE && !enemy.finalBoss && !stationary) {
+                this.relocate(enemy);
+                continue;
+            }
+
+            const abilities = enemy.abilities;
+            if (abilities && enemy.frozen === 0 && this.stepAbilities(enemy, abilities, distance)) {
+                // It blinked over to the player
+                continue;
+            }
+
+            // Knockback
+            let moveX = enemy.vx;
+            let moveY = enemy.vy;
+            enemy.vx *= 0.75;
+            enemy.vy *= 0.75;
+
+            if (enemy.frozen > 0) {
+                enemy.frozen--;
+            } else {
+                let dirX = 0;
+                let dirY = 0;
+                const tileX = Math.floor(enemy.x);
+                const tileY = Math.floor(enemy.y);
+                const jump = enemy.def.ghost ? 0 : this.flowField.jumpFrom(grid, tileX, tileY);
+                if (distance < 2.5 && jump !== 0 && Math.sign(dy) === Math.sign(jump)) {
+                    // Close, but over the ditch
+                    this.startJump(enemy, jump);
+                    continue;
+                } else if (enemy.def.ghost || distance < 2.5) {
+                    if (distance > 0.001) {
+                        dirX = dx / distance;
+                        dirY = dy / distance;
+                    }
+                } else if (this.flowField.getStep(grid, tileX, tileY, step)) {
+                    if (Math.abs(step.y) > 1) {
+                        this.startJump(enemy, step.y);
+                        continue;
+                    }
+                    // Head for the middle of the next tile, which keeps big
+                    // enemies off corners
+                    const tx = tileX + step.x + 0.5 - enemy.x;
+                    const ty = tileY + step.y + 0.5 - enemy.y;
+                    const len = Math.hypot(tx, ty);
+                    if (len > 0.001) {
+                        dirX = tx / len;
+                        dirY = ty / len;
+                    }
+                } else if (distance > 0.001) {
+                    dirX = dx / distance;
+                    dirY = dy / distance;
+                }
+
+                const bossState = enemy.bossState;
+                if (bossState) {
+                    const keep = enemy.def.boss?.keepDistance;
+                    if (bossState.windup) {
+                        // Stands still winding up, so a swing can be stepped away from
+                        dirX = dirY = 0;
+                    } else if (keep !== undefined && distance < keep) {
+                        // Ranged bosses stop once they're in range (and stand their
+                        // ground if you come at them)
+                        dirX = dirY = 0;
+                    }
+                } else if (enemy.def.shot && distance < enemy.def.shot.range * SHOOTER_KEEP) {
+                    // Rangers and mages hang back to shoot, and close in when
+                    // they're out of reach
+                    dirX = dirY = 0;
+                }
+                // Running off with the flag: away from the player when they're
+                // close, standing their ground a bit further out, and only
+                // coming back when they're far off
+                const flees = enemy.def.flees;
+                let fleeing = false;
+                if (flees && !bossState?.windup) {
+                    if (distance < flees.range) {
+                        fleeing = this.fleeFrom(enemy, dx, dy, distance, step);
+                        dirX = fleeing ? step.x : 0;
+                        dirY = fleeing ? step.y : 0;
+                    } else if (distance < flees.range * 2) {
+                        dirX = dirY = 0;
+                    }
+                }
+                const healTarget = abilities?.healTarget;
+                const fighting =
+                    stationary || healTarget || fleeing ? undefined : this.findFoe(enemy, distance);
+                if (fighting) {
+                    // Off to fight another god's army, stopping once it's in
+                    // reach (the hit itself is the touch below)
+                    const fx = fighting.x - enemy.x;
+                    const fy = fighting.y - enemy.y;
+                    const length = Math.hypot(fx, fy);
+                    const reach = enemy.radius + fighting.radius + 0.05;
+                    dirX = length > reach ? fx / length : 0;
+                    dirY = length > reach ? fy / length : 0;
+                }
+                if (stationary || (abilities && abilities.blinkLand !== -1)) {
+                    // Winding up a blink, it stands still
+                    dirX = dirY = 0;
+                } else if (healTarget) {
+                    // Off to heal something instead, stopping once it's in reach
+                    const hx = healTarget.x - enemy.x;
+                    const hy = healTarget.y - enemy.y;
+                    const reach = enemy.def.heals!.range * 0.8 + healTarget.radius;
+                    const length = Math.hypot(hx, hy);
+                    dirX = dirY = 0;
+                    if (length > reach) {
+                        dirX = hx / length;
+                        dirY = hy / length;
+                    }
+                }
+
+                // Keep apart from each other, and bump into other factions
+                // (bosses and elites don't get dragged into it: they'd lose
+                // their caskets; nor does one after the player)
+                let sepX = 0;
+                let sepY = 0;
+                const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
+                let foe: Enemy | undefined;
+                this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
+                    if (other === enemy) {
+                        return;
+                    }
+                    const ox = enemy.x - other.x;
+                    const oy = enemy.y - other.y;
+                    const minDist = enemy.radius + other.radius;
+                    const distSq = ox * ox + oy * oy;
+                    if (
+                        faction !== undefined &&
+                        other.def.faction !== undefined &&
+                        other.def.faction !== faction &&
+                        !other.boss &&
+                        !other.elite &&
+                        !other.dead &&
+                        distSq < (minDist + 0.1) * (minDist + 0.1)
+                    ) {
+                        foe = other;
+                    }
+                    if (distSq < minDist * minDist && distSq > 1e-6) {
+                        const d = Math.sqrt(distSq);
+                        const push = (minDist - d) / d;
+                        sepX += ox * push;
+                        sepY += oy * push;
+                    }
+                });
+
+                const touching = distance < enemy.radius + player.radius + 0.1;
+                if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
+                    moveX += dirX * enemy.speed;
+                    moveY += dirY * enemy.speed;
+                }
+                moveX += sepX * 0.25;
+                moveY += sepY * 0.25;
+
+                if (fleeing) {
+                    // Looking where it's running, not back at the player
+                    enemy.yaw = yawFromVector(dirX, dirY);
+                } else if (fighting) {
+                    enemy.yaw = yawFromVector(fighting.x - enemy.x, fighting.y - enemy.y);
+                } else if (dirX !== 0 || dirY !== 0 || bossState) {
+                    enemy.yaw = yawFromVector(dx, dy);
+                }
+
+                // Bosses hit with their own attacks instead
+                const canHit = enemy.attackCooldown === 0 && !bossState && enemy.damage > 0;
+                if (touching && canHit) {
+                    this.enemyAttack(enemy);
+                } else if (foe && canHit && !enemy.boss) {
+                    this.enemyHitsEnemy(enemy, foe);
+                } else if (
+                    enemy.def.shot &&
+                    !bossState &&
+                    enemy.attackCooldown === 0 &&
+                    distance <= enemy.def.shot.range
+                ) {
+                    this.enemyShoot(enemy, enemy.def.shot);
+                }
+            }
+
+            if (stationary) {
+                moveX = moveY = 0;
+                enemy.vx = enemy.vy = 0;
+            }
+            if (moveX !== 0 || moveY !== 0) {
+                if (enemy.def.ghost) {
+                    enemy.x += moveX;
+                    enemy.y += moveY;
+                } else {
+                    moveCircle(grid, enemy, moveX, moveY, enemy.radius);
+                }
+            }
+
+            // Crowd round the player rather than standing inside them (and
+            // the player can't walk into what doesn't move)
+            const ox = enemy.x - player.x;
+            const oy = enemy.y - player.y;
+            const minDist = enemy.radius + player.radius;
+            const distSq = ox * ox + oy * oy;
+            if (distSq < minDist * minDist && distSq > 1e-6) {
+                const d = Math.sqrt(distSq);
+                const push = Math.min((minDist - d) / d, 0.5);
+                if (stationary) {
+                    moveCircle(grid, player, -ox * push, -oy * push, player.radius);
+                } else if (enemy.def.ghost) {
+                    enemy.x += ox * push;
+                    enemy.y += oy * push;
+                } else {
+                    moveCircle(grid, enemy, ox * push, oy * push, enemy.radius);
+                }
+            }
+
+            if (enemy.bossState) {
+                this.stepBoss(enemy, distance);
+            }
+
+            // Back to walking once an attack has played
+            if (
+                enemy.anim === "attack" &&
+                this.tick - enemy.animStart > 30 &&
+                !enemy.bossState?.windup &&
+                (enemy.abilities?.blinkLand ?? -1) === -1
+            ) {
+                enemy.anim = "walk";
+                enemy.animStart = this.tick;
+            }
+        }
+    }
+
+    // The way to run from the player (dx, dy away from the enemy): straight
+    // away if there's room a tile on, otherwise the nearest way round that
+    // has (along a wall, or back past them out of a corner). False if it's
+    // boxed in.
+    private fleeFrom(
+        enemy: Enemy,
+        dx: number,
+        dy: number,
+        distance: number,
+        out: { x: number; y: number },
+    ): boolean {
+        const awayX = distance > 0.001 ? -dx / distance : 1;
+        const awayY = distance > 0.001 ? -dy / distance : 0;
+        for (const turn of FLEE_TURNS) {
+            const cos = Math.cos(turn);
+            const sin = Math.sin(turn);
+            const x = awayX * cos - awayY * sin;
+            const y = awayX * sin + awayY * cos;
+            const aheadX = enemy.x + x * FLEE_LOOKAHEAD;
+            const aheadY = enemy.y + y * FLEE_LOOKAHEAD;
+            if (
+                this.grid.contains(Math.floor(aheadX), Math.floor(aheadY)) &&
+                (enemy.def.ghost || isCircleFree(this.grid, aheadX, aheadY, enemy.radius))
+            ) {
+                out.x = x;
+                out.y = y;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Over the ditch, this many tiles north or south, landing in the middle
+    // of a tile if there isn't room straight across
+    private startJump(enemy: Enemy, tiles: number): void {
+        const toY = Math.floor(enemy.y) + tiles + 0.5;
+        const toX = isCircleFree(this.grid, enemy.x, toY, enemy.radius)
+            ? enemy.x
+            : Math.floor(enemy.x) + 0.5;
+        enemy.jump = { fromX: enemy.x, fromY: enemy.y, toX, toY, start: this.tick };
+        enemy.anim = "jump";
+        enemy.animStart = this.tick;
+        enemy.yaw = yawFromVector(0, tiles);
+    }
+
+    private stepJump(enemy: Enemy): void {
+        const jump = enemy.jump!;
+        const t = this.tick - jump.start;
+        const f = Math.min(Math.max((t - JUMP_LEAVE) / (JUMP_LAND - JUMP_LEAVE), 0), 1);
+        enemy.x = jump.fromX + (jump.toX - jump.fromX) * f;
+        enemy.y = jump.fromY + (jump.toY - jump.fromY) * f;
+        if (t >= JUMP_TICKS) {
+            enemy.jump = undefined;
+            enemy.vx = enemy.vy = 0;
+            enemy.anim = "walk";
+            enemy.animStart = this.tick;
+        }
+    }
+
+    private relocate(enemy: Enemy): void {
+        const player = this.player;
+        // Ahead of the player if they're moving, so they keep running into things
+        const angle = player.moving ? Math.atan2(player.facingY, player.facingX) : undefined;
+        const pos = this.findSpawnPoint(enemy.def, SPAWN_MIN_DISTANCE, SPAWN_MAX_DISTANCE, angle);
+        if (pos) {
+            enemy.x = enemy.prevX = pos.x;
+            enemy.y = enemy.prevY = pos.y;
+            enemy.vx = enemy.vy = 0;
+            if (enemy.bossState) {
+                enemy.bossState.windup = undefined;
+            }
+        }
+    }
+
+    private enemyAttack(enemy: Enemy): void {
+        enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
+        enemy.anim = "attack";
+        enemy.animStart = this.tick;
+        if (this.player.invulnerable > 0) {
+            return;
+        }
+        this.damagePlayer(enemy.damage, enemy.def.id, enemy.elite);
+        this.recoil(enemy);
+    }
+
+    // A ranger's or mage's shot: a projectile at where the player is now, for
+    // the enemy's own damage
+    private enemyShoot(enemy: Enemy, shot: EnemyShotDef): void {
+        enemy.attackCooldown = Math.round(shot.interval * TICKS_PER_SECOND);
+        enemy.anim = "attack";
+        enemy.animStart = this.tick;
+        enemy.attackSeq = shot.seq ?? enemy.def.attackSeq;
+        if (shot.castSpotAnim !== undefined) {
+            this.addEffect(shot.castSpotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+        }
+        this.events.push({
+            type: "bossAttack",
+            enemyId: enemy.def.id,
+            sound: shot.sound ?? -1,
+            x: enemy.x,
+            y: enemy.y,
+        });
+        this.launchProjectiles(enemy, shotAttack(shot), enemy.damage, true);
+    }
+
+    // A hit on the player; armour takes some off (unless it hits through it).
+    // Returns what it took.
+    private damagePlayer(
+        damage: number,
+        enemyId: string,
+        elite: boolean,
+        sound?: number,
+        ignoreArmor = false,
+    ): number {
+        const player = this.player;
+        const armor = ignoreArmor ? 0 : this.stats.armor;
+        const amount = Math.max(1, Math.round(damage - armor));
+        player.hp -= amount;
+        player.flash = 6;
+        player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+        this.events.push({ type: "playerHit", amount, enemyId, elite, sound });
+        if (player.hp <= 0) {
+            this.playerDied();
+        }
+        return amount;
+    }
+
+    // Ring of recoil: hits hurt whoever lands them
+    private recoil(enemy: Enemy | undefined): void {
+        if (this.stats.thorns > 0 && enemy && !enemy.dead && !this.runOver) {
+            const player = this.player;
+            this.damageEnemy(enemy, this.stats.thorns, 0.5, player.x, player.y);
+        }
+    }
+
+    // Another faction's enemy for this one to go and fight instead of the
+    // player (EnemyDef.faction): the one it's fighting while it's still up and
+    // close, otherwise the nearest it finds when it looks round. None for
+    // bosses and elites (they'd lose their caskets), for one the player's hit,
+    // or with the player close.
+    private findFoe(enemy: Enemy, playerDistance: number): Enemy | undefined {
+        const faction = enemy.def.faction;
+        if (
+            faction === undefined ||
+            enemy.boss ||
+            enemy.elite ||
+            enemy.aggro ||
+            playerDistance < FOE_IGNORE_PLAYER
+        ) {
+            enemy.foe = undefined;
+            return undefined;
+        }
+        const current = enemy.foe;
+        if (
+            current &&
+            !current.dead &&
+            Math.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
+        ) {
+            return current;
+        }
+        enemy.foe = undefined;
+        if (this.tick < enemy.nextFoeLook) {
+            return undefined;
+        }
+        enemy.nextFoeLook = this.tick + FOE_LOOK_TICKS;
+        let nearest = FOE_RANGE * FOE_RANGE;
+        this.enemyHash.query(enemy.x, enemy.y, FOE_RANGE, (other) => {
+            if (
+                other.dead ||
+                other.boss ||
+                other.elite ||
+                other.def.faction === undefined ||
+                other.def.faction === faction
+            ) {
+                return;
+            }
+            const ox = other.x - enemy.x;
+            const oy = other.y - enemy.y;
+            const distSq = ox * ox + oy * oy;
+            if (distSq < nearest) {
+                nearest = distSq;
+                enemy.foe = other;
+            }
+        });
+        return enemy.foe;
+    }
+
+    // A touch from an enemy of another faction: a hit like the ones it gives
+    // the player, only harder, and nobody's kill
+    private enemyHitsEnemy(enemy: Enemy, foe: Enemy): void {
+        enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
+        enemy.anim = "attack";
+        enemy.animStart = this.tick;
+        enemy.attackSeq = enemy.def.attackSeq;
+        if (foe.shieldEnd > this.tick) {
+            this.showBlocked(foe);
+            return;
+        }
+        const amount = Math.max(
+            1,
+            Math.round(enemy.damage * FACTION_DAMAGE * this.rng.range(0.85, 1.15)),
+        );
+        foe.hp -= amount;
+        foe.flash = 5;
+        // It turns on whatever hit it, unless it's after the player
+        if (!foe.aggro) {
+            foe.foe ??= enemy;
+        }
+        this.events.push({
+            type: "damage",
+            x: foe.x,
+            y: foe.y,
+            amount,
+            enemyUid: foe.uid,
+            enemyId: foe.def.id,
+        });
+        if (foe.hp <= 0) {
+            this.killEnemy(foe, "enemy");
+        }
+    }
+
+    // ---- What enemies do besides hitting ----
+
+    // An enemy's spawns, heals, revives and blinks, as their timers come
+    // round. True if it blinked (it's done for this tick).
+    private stepAbilities(enemy: Enemy, abilities: EnemyAbilities, distance: number): boolean {
+        const def = enemy.def;
+        const tick = this.tick;
+        if (def.spawns && tick >= abilities.nextSpawn) {
+            abilities.nextSpawn = tick + secondsToTicks(def.spawns.interval);
+            this.callIn(enemy, def.spawns);
+        }
+        if (def.heals) {
+            this.stepHealer(enemy, abilities, def.heals);
+        }
+        if (def.revives && tick >= abilities.nextRevive) {
+            // Nothing to bring back: look again in a moment
+            abilities.nextRevive =
+                tick +
+                (this.revive(enemy, def.revives)
+                    ? secondsToTicks(def.revives.interval)
+                    : HEAL_RETARGET_TICKS);
+        }
+        if (def.blinks) {
+            return this.stepBlink(enemy, abilities, def.blinks, distance);
+        }
+        return false;
+    }
+
+    // A spawner's call: some of its enemies around it, as long as it hasn't
+    // too many of its own about already
+    private callIn(enemy: Enemy, spawns: EnemySpawnsDef): void {
+        let own = 0;
+        for (const other of this.enemies) {
+            if (!other.dead && other.spawnedBy === enemy.uid) {
+                own++;
+            }
+        }
+        const count = Math.min(spawns.count, (spawns.max ?? SPAWNS_MAX) - own);
+        if (count <= 0 || this.countAlive() >= MAX_ENEMIES) {
+            return;
+        }
+        const weights = spawns.enemies.map((e) => e.weight);
+        for (let i = 0; i < count; i++) {
+            const def = getEnemy(spawns.enemies[this.rng.weightedIndex(weights)].id);
+            const spawned = this.spawnNear(enemy, def, spawns.radius ?? SPAWNS_RADIUS, i, count, 3);
+            if (spawned) {
+                spawned.spawnedBy = enemy.uid;
+                spawned.bonesOnly = spawns.bonesOnly ?? false;
+                if (spawns.spotAnim !== undefined) {
+                    this.addEffect(spawns.spotAnim, spawned.x, spawned.y, 0, 40);
+                }
+            }
+        }
+    }
+
+    // One of count enemies turning up in a ring radius tiles around another,
+    // trying a few spots before giving up
+    private spawnNear(
+        enemy: Enemy,
+        def: EnemyDef,
+        radius: number,
+        index: number,
+        count: number,
+        attempts = 1,
+    ): Enemy | undefined {
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            const angle =
+                attempt === 0
+                    ? (index / count) * Math.PI * 2 + this.rng.range(0, 0.5)
+                    : this.rng.range(0, Math.PI * 2);
+            const x = enemy.x + Math.cos(angle) * radius;
+            const y = enemy.y + Math.sin(angle) * radius;
+            if (!this.grid.contains(Math.floor(x), Math.floor(y))) {
+                continue;
+            }
+            if (!def.ghost && !isCircleFree(this.grid, x, y, def.radius)) {
+                continue;
+            }
+            return this.spawnEnemy(def, "normal", { x, y });
+        }
+        return undefined;
+    }
+
+    // A healer goes to the most hurt thing it heals nearby, and heals it once
+    // it's close enough, every so often
+    private stepHealer(enemy: Enemy, abilities: EnemyAbilities, heals: EnemyHealsDef): void {
+        const tick = this.tick;
+        let target = abilities.healTarget;
+        if (target && (target.hp >= target.maxHp || !this.canHeal(enemy, heals, target))) {
+            target = abilities.healTarget = undefined;
+        }
+        if (!target && (tick + enemy.uid) % HEAL_RETARGET_TICKS === 0) {
+            target = abilities.healTarget = this.findHealTarget(enemy, heals);
+        }
+        if (!target || tick < abilities.nextHeal) {
+            return;
+        }
+        const reach = heals.range + target.radius;
+        if (Math.hypot(target.x - enemy.x, target.y - enemy.y) > reach) {
+            return;
+        }
+        abilities.nextHeal = tick + secondsToTicks(heals.interval);
+        target.hp = Math.min(
+            target.maxHp,
+            target.hp + Math.max(1, Math.round(target.maxHp * heals.fraction)),
+        );
+        if (heals.spotAnim !== undefined) {
+            this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
+        }
+        enemy.anim = "attack";
+        enemy.animStart = tick;
+        enemy.attackSeq = enemy.def.attackSeq;
+        enemy.yaw = yawFromVector(target.x - enemy.x, target.y - enemy.y);
+    }
+
+    // The most hurt enemy a healer heals within its reach
+    private findHealTarget(enemy: Enemy, heals: EnemyHealsDef): Enemy | undefined {
+        let best: Enemy | undefined;
+        let bestFraction = 1;
+        for (const other of this.enemies) {
+            const fraction = other.hp / other.maxHp;
+            if (fraction < bestFraction && this.canHeal(enemy, heals, other)) {
+                best = other;
+                bestFraction = fraction;
+            }
+        }
+        return best;
+    }
+
+    // Whether a healer would go and heal this enemy: one it heals (checked
+    // again as it goes, as a boss can get back up as a form it doesn't heal),
+    // within its seek, and close enough to the player that the healer isn't
+    // brought back to them on the way (RELOCATE_DISTANCE), which would have
+    // it going back and forth
+    private canHeal(enemy: Enemy, heals: EnemyHealsDef, other: Enemy): boolean {
+        if (
+            other === enemy ||
+            other.dead ||
+            !(heals.targets ? heals.targets.includes(other.def.id) : other.boss)
+        ) {
+            return false;
+        }
+        const seek = heals.seek ?? HEAL_SEEK;
+        const player = this.player;
+        return (
+            Math.hypot(other.x - enemy.x, other.y - enemy.y) <= seek + other.radius &&
+            Math.hypot(other.x - player.x, other.y - player.y) + heals.range < RELOCATE_DISTANCE
+        );
+    }
+
+    // Brings back the last enemy to die near a reviver, where it fell. False
+    // if there's none.
+    private revive(enemy: Enemy, revives: EnemyRevivesDef): boolean {
+        const rangeSq = revives.range * revives.range;
+        for (let i = this.deaths.length - 1; i >= 0; i--) {
+            const death = this.deaths[i];
+            if (this.tick - death.tick > REVIVE_MAX_AGE) {
+                // The rest are older still
+                break;
+            }
+            const dx = death.x - enemy.x;
+            const dy = death.y - enemy.y;
+            if (
+                dx * dx + dy * dy > rangeSq ||
+                (!death.def.ghost && !isCircleFree(this.grid, death.x, death.y, death.def.radius))
+            ) {
+                continue;
+            }
+            this.deaths.splice(i, 1);
+            const risen = this.spawnEnemy(death.def, "normal", { x: death.x, y: death.y });
+            if (!risen) {
+                continue;
+            }
+            risen.variant = death.variant;
+            risen.noDrops = true;
+            risen.hp = Math.max(1, Math.round(risen.maxHp * (revives.hp ?? 1)));
+            if (revives.spotAnim !== undefined) {
+                this.addEffect(revives.spotAnim, risen.x, risen.y, 0, 60);
+            }
+            enemy.anim = "attack";
+            enemy.animStart = this.tick;
+            enemy.attackSeq = revives.seq ?? enemy.def.attackSeq;
+            enemy.yaw = yawFromVector(dx, dy);
+            return true;
+        }
+        return false;
+    }
+
+    // Digging in (or blinking) and coming up by the player: it winds up
+    // standing still, then it's there. True on the tick it lands.
+    private stepBlink(
+        enemy: Enemy,
+        abilities: EnemyAbilities,
+        blinks: EnemyBlinksDef,
+        distance: number,
+    ): boolean {
+        const tick = this.tick;
+        if (abilities.blinkLand === -1) {
+            if (tick < abilities.nextBlink || distance < blinks.minRange) {
+                return false;
+            }
+            abilities.blinkLand = tick + secondsToTicks(blinks.windup ?? 0);
+            enemy.anim = "attack";
+            enemy.animStart = tick;
+            enemy.attackSeq = blinks.seq ?? enemy.def.attackSeq;
+            if (blinks.castSpotAnim !== undefined) {
+                this.addEffect(blinks.castSpotAnim, enemy.x, enemy.y, 0, 60);
+            }
+            if (blinks.sound !== undefined) {
+                this.events.push({
+                    type: "bossAttack",
+                    enemyId: enemy.def.id,
+                    sound: blinks.sound,
+                    x: enemy.x,
+                    y: enemy.y,
+                });
+            }
+        }
+        if (tick < abilities.blinkLand) {
+            return false;
+        }
+        abilities.blinkLand = -1;
+        abilities.nextBlink = tick + secondsToTicks(blinks.interval);
+        enemy.anim = "walk";
+        enemy.animStart = tick;
+        const player = this.player;
+        const spot = this.findSpotNear(player.x, player.y, blinks.distance, enemy.radius);
+        if (!spot) {
+            return false;
+        }
+        enemy.x = enemy.prevX = spot.x;
+        enemy.y = enemy.prevY = spot.y;
+        enemy.vx = enemy.vy = 0;
+        enemy.yaw = yawFromVector(player.x - spot.x, player.y - spot.y);
+        if (blinks.impactSpotAnim !== undefined) {
+            this.addEffect(blinks.impactSpotAnim, spot.x, spot.y, 0, 60);
+        }
+        return true;
+    }
+
+    // A free spot about distance tiles from (x, y) that the player can get
+    // to, undefined if a few tries find none
+    private findSpotNear(
+        x: number,
+        y: number,
+        distance: number,
+        radius: number,
+    ): { x: number; y: number } | undefined {
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const angle = this.rng.range(0, Math.PI * 2);
+            const spotX = x + Math.cos(angle) * distance;
+            const spotY = y + Math.sin(angle) * distance;
+            const tileX = Math.floor(spotX);
+            const tileY = Math.floor(spotY);
+            if (
+                this.grid.contains(tileX, tileY) &&
+                this.flowField.isReachable(tileX, tileY) &&
+                isCircleFree(this.grid, spotX, spotY, radius)
+            ) {
+                return { x: spotX, y: spotY };
+            }
+        }
+        return undefined;
+    }
+
+    private dropShield(enemy: Enemy): void {
+        enemy.shieldEnd = 0;
+        const message = enemy.def.shield?.message;
+        if (message) {
+            this.events.push({ type: "notice", message });
+        }
+    }
+
+    // A hit a shield took: a blocked hitsplat now and then
+    private showBlocked(enemy: Enemy): void {
+        if (this.tick - enemy.blockedTick < BLOCKED_SPLAT_TICKS) {
+            return;
+        }
+        enemy.blockedTick = this.tick;
+        this.events.push({
+            type: "damage",
+            x: enemy.x,
+            y: enemy.y,
+            amount: 0,
+            enemyUid: enemy.uid,
+            enemyId: enemy.def.id,
+            blocked: true,
+        });
+    }
+
+    // ---- Glyphs ----
+
+    private addGlyph(boss: Enemy, look: EnemyDef): void {
+        const player = this.player;
+        let dirX = player.x - boss.x;
+        let dirY = player.y - boss.y;
+        const length = Math.hypot(dirX, dirY);
+        if (length > 0.001) {
+            dirX /= length;
+            dirY /= length;
+        } else {
+            dirX = 0;
+            dirY = -1;
+        }
+        const glyph: Glyph = {
+            uid: this.nextUid++,
+            bossUid: boss.uid,
+            look,
+            x: boss.x,
+            y: boss.y,
+            prevX: boss.x,
+            prevY: boss.y,
+            dirX,
+            dirY,
+            acrossX: -dirY,
+            acrossY: dirX,
+            startTick: this.tick,
+        };
+        this.placeGlyph(glyph, boss);
+        glyph.prevX = glyph.x;
+        glyph.prevY = glyph.y;
+        this.glyphs.push(glyph);
+    }
+
+    // Glyphs slide along their lines, and go with their bosses
+    private stepGlyphs(): void {
+        if (this.glyphs.length === 0) {
+            return;
+        }
+        this.glyphs = this.glyphs.filter((glyph) => {
+            const boss = this.enemies.find((e) => e.uid === glyph.bossUid);
+            if (!boss || boss.dead || !boss.def.boss?.glyph) {
+                return false;
+            }
+            glyph.prevX = glyph.x;
+            glyph.prevY = glyph.y;
+            this.placeGlyph(glyph, boss);
+            return true;
+        });
+    }
+
+    // Back and forth along its line at a steady speed, from the middle
+    private placeGlyph(glyph: Glyph, boss: Enemy): void {
+        const def = boss.def.boss!.glyph!;
+        const travel = ((this.tick - glyph.startTick) / TICKS_PER_SECOND) * def.speed;
+        const along = pingPong(travel, def.halfLength);
+        glyph.x = boss.x + glyph.dirX * def.distance + glyph.acrossX * along;
+        glyph.y = boss.y + glyph.dirY * def.distance + glyph.acrossY * along;
+    }
+
+    // Whether a boss's glyph is between it and (x, y)
+    glyphBlocks(boss: Enemy, x: number, y: number): boolean {
+        const def = boss.def.boss?.glyph;
+        const glyph = def && this.glyphs.find((g) => g.bossUid === boss.uid);
+        if (!glyph) {
+            return false;
+        }
+        const vx = x - boss.x;
+        const vy = y - boss.y;
+        const lengthSq = vx * vx + vy * vy;
+        if (lengthSq < 1e-6) {
+            return false;
+        }
+        const t = ((glyph.x - boss.x) * vx + (glyph.y - boss.y) * vy) / lengthSq;
+        if (t <= 0 || t >= 1) {
+            return false;
+        }
+        return Math.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
+    }
+
+    // ---- Bosses ----
+
+    // Picks an attack once the last one is done (among those the player is in
+    // range of), winds it up, then lands or fires it
+    private stepBoss(enemy: Enemy, distance: number): void {
+        const state = enemy.bossState!;
+        const def = enemy.def.boss!;
+        if (!state.enraged && enemy.hp <= enemy.maxHp * ENRAGE_AT) {
+            this.enrage(enemy);
+        }
+        this.callSummons(enemy, false);
+        for (let i = 0; i < state.cooldowns.length; i++) {
+            if (state.cooldowns[i] > 0) {
+                state.cooldowns[i]--;
+            }
+        }
+        const windup = state.windup;
+        if (windup) {
+            if (this.tick >= windup.landTick) {
+                state.windup = undefined;
+                this.landBossAttack(enemy, windup);
+            }
+            return;
+        }
+        if (enemy.attackCooldown > 0) {
+            return;
+        }
+        const usable: number[] = [];
+        def.attacks.forEach((attack, i) => {
+            if (
+                state.cooldowns[i] === 0 &&
+                distance <= attack.range &&
+                distance >= (attack.minRange ?? 0) &&
+                (!attack.enraged || state.enraged)
+            ) {
+                usable.push(i);
+            }
+        });
+        if (usable.length === 0) {
+            return;
+        }
+        const index = usable[this.rng.weightedIndex(usable.map((i) => def.attacks[i].weight))];
+        const attack = def.attacks[index];
+        state.cooldowns[index] = Math.round(attack.cooldown * TICKS_PER_SECOND);
+        state.windup = {
+            attack,
+            startTick: this.tick,
+            landTick: this.tick + Math.max(1, Math.round(attack.windup * TICKS_PER_SECOND)),
+            targets: attack.kind === "blast" ? this.pickBlastTargets(attack) : [],
+        };
+        const interval = def.attackInterval * (state.enraged ? ENRAGED_INTERVAL : 1);
+        enemy.attackCooldown = Math.round(interval * TICKS_PER_SECOND);
+        enemy.anim = "attack";
+        enemy.animStart = this.tick;
+        enemy.attackSeq = attack.seq ?? enemy.def.attackSeq;
+        if (attack.shout) {
+            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
+        }
+        if (attack.message) {
+            this.events.push({ type: "notice", message: attack.message });
+        }
+    }
+
+    // Below half its hitpoints a boss attacks and moves faster, and uses its
+    // enraged attacks too
+    private enrage(enemy: Enemy): void {
+        const state = enemy.bossState!;
+        const enrage = enemy.def.boss!.enrage;
+        state.enraged = true;
+        enemy.speed *= ENRAGED_SPEED;
+        enemy.tint = ENRAGED_TINT;
+        this.events.push({
+            type: "bossEnraged",
+            enemyId: enemy.def.id,
+            message: enrage.message,
+            x: enemy.x,
+            y: enemy.y,
+        });
+        if (enrage.shout) {
+            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: enrage.shout });
+        }
+    }
+
+    // On the player, and the rest of a blast of several scattered around them
+    private pickBlastTargets(attack: BossAttackDef): { x: number; y: number }[] {
+        const player = this.player;
+        const targets = [{ x: player.x, y: player.y }];
+        for (let i = 1; i < (attack.count ?? 1); i++) {
+            const angle = this.rng.range(0, Math.PI * 2);
+            const distance = this.rng.range(1, Math.max(1, attack.spread ?? 2));
+            targets.push({
+                x: player.x + Math.cos(angle) * distance,
+                y: player.y + Math.sin(angle) * distance,
+            });
+        }
+        return targets;
+    }
+
+    // Dharok's hits grow as his hitpoints drop; harder maps hit harder
+    private getBossDamage(enemy: Enemy, attack: BossAttackDef): number {
+        const wretched = enemy.def.boss?.wretched ?? 0;
+        return attack.damage * enemy.damageScale * (1 + wretched * (1 - enemy.hp / enemy.maxHp));
+    }
+
+    private landBossAttack(enemy: Enemy, windup: BossWindup): void {
+        const player = this.player;
+        const attack = windup.attack;
+        this.events.push({
+            type: "bossAttack",
+            enemyId: enemy.def.id,
+            sound: attack.sound ?? -1,
+            x: enemy.x,
+            y: enemy.y,
+        });
+        if (attack.kind === "swing" || attack.kind === "blast") {
+            // A swing hits around the boss, a blast where the player was (and
+            // around there); the player is hit once however many land on them
+            const spots = attack.kind === "swing" ? [{ x: enemy.x, y: enemy.y }] : windup.targets;
+            if (attack.leap) {
+                this.leapTo(enemy, spots[0]);
+            }
+            const radius = attack.radius ?? 2;
+            let hit = false;
+            for (const { x, y } of spots) {
+                this.events.push({ type: "bossSwing", x, y, radius });
+                if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
+                    this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
+                }
+                hit ||= Math.hypot(player.x - x, player.y - y) <= radius + player.radius;
+            }
+            if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
+                // Behind the glyph: it takes the blow
+                hit = false;
+                this.glyphBlocked(enemy, attack);
+            }
+            if (hit) {
+                // A blast's impact is already showing where it landed
+                const damage = this.getBossDamage(enemy, attack);
+                this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
+            }
+            return;
+        }
+        if (attack.kind === "teleport") {
+            this.teleportBoss(enemy, attack);
+            return;
+        }
+        if (attack.kind === "summon") {
+            this.summonAround(enemy, attack);
+            return;
+        }
+        if (attack.castSpotAnim !== undefined) {
+            this.addEffect(attack.castSpotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+        }
+        this.launchProjectiles(enemy, attack, this.getBossDamage(enemy, attack), false);
+    }
+
+    // At where the player is now: keep moving and it misses
+    private launchProjectiles(
+        enemy: Enemy,
+        attack: BossAttackDef,
+        damage: number,
+        crowd: boolean,
+    ): void {
+        const player = this.player;
+        const base = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        const count = attack.count ?? 1;
+        const speed = (attack.speed ?? 10) / TICKS_PER_SECOND;
+        for (let i = 0; i < count; i++) {
+            const angle = base + (i - (count - 1) / 2) * (attack.spread ?? 0);
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this.enemyProjectiles.push({
+                uid: this.nextUid++,
+                enemyUid: enemy.uid,
+                enemyId: enemy.def.id,
+                attack,
+                x: enemy.x,
+                y: enemy.y,
+                prevX: enemy.x,
+                prevY: enemy.y,
+                vx,
+                vy,
+                speed,
+                homing: (attack.homing ?? 0) / TICKS_PER_SECOND,
+                life: Math.ceil((attack.range + 6) / speed),
+                radius: ENEMY_PROJECTILE_RADIUS,
+                damage,
+                yaw: yawFromVector(vx, vy),
+                startTick: this.tick,
+                crowd,
+            });
+        }
+    }
+
+    // Calls in the attack's enemies in a ring around the boss
+    private summonAround(enemy: Enemy, attack: BossAttackDef): void {
+        if (!attack.summon) {
+            return;
+        }
+        const def = getEnemy(attack.summon.enemyId);
+        const count = attack.summon.count;
+        for (let i = 0; i < count; i++) {
+            this.spawnNear(enemy, def, 1.5, i, count);
+        }
+    }
+
+    // A blockable attack's blow landing on the glyph instead of the player
+    private glyphBlocked(boss: Enemy, attack: BossAttackDef): void {
+        const glyph = this.glyphs.find((g) => g.bossUid === boss.uid);
+        if (glyph && attack.impactSpotAnim !== undefined) {
+            this.addEffect(attack.impactSpotAnim, glyph.x, glyph.y, 0, 40);
+        }
+    }
+
+    // A boss that gets back up (Count Draynor, without a stake) does so with
+    // part of its hitpoints instead of dying, maybe as its next form
+    private riseAgain(enemy: Enemy): boolean {
+        const rises = enemy.def.boss?.rises;
+        const state = enemy.bossState;
+        if (!rises || !state || state.rises >= rises.times) {
+            return false;
+        }
+        state.rises++;
+        state.windup = undefined;
+        enemy.hp = Math.round(enemy.maxHp * rises.hp);
+        if (rises.into) {
+            // Anything this form had still to call in comes now (it can go
+            // from above a threshold to beaten in one big hit)
+            this.callSummons(enemy, true);
+            // It fights the new form's way, calm again until it's hurt, and
+            // calls in the new form's helpers as it's hurt (BossDef.summonsAt)
+            const form = getEnemy(rises.into);
+            enemy.scale *= (form.scale ?? 1) / (enemy.def.scale ?? 1);
+            enemy.def = form;
+            enemy.radius = form.radius;
+            enemy.speed = form.speed / TICKS_PER_SECOND;
+            enemy.tint = 0xffffff;
+            enemy.attackSeq = form.attackSeq;
+            enemy.anim = "idle";
+            enemy.animStart = this.tick;
+            enemy.attackCooldown = TICKS_PER_SECOND;
+            state.cooldowns = form.boss?.attacks.map(() => 0) ?? [];
+            state.enraged = false;
+            state.summonsDone = 0;
+        }
+        this.events.push({
+            type: "bossRose",
+            enemyId: enemy.def.id,
+            message: rises.message,
+            x: enemy.x,
+            y: enemy.y,
+        });
+        return true;
+    }
+
+    // Calls in a boss's helpers for each fraction of its hitpoints it's down to
+    // (BossDef.summonsAt). One with no room around it for any of them waits
+    // and tries again next tick. all: every one still to come, whatever its
+    // hitpoints (a form beaten before it got to them, as it rises as the next).
+    private callSummons(enemy: Enemy, all: boolean): void {
+        const state = enemy.bossState!;
+        const summonsAt = enemy.def.boss?.summonsAt ?? [];
+        while (
+            state.summonsDone < summonsAt.length &&
+            (all || enemy.hp <= enemy.maxHp * summonsAt[state.summonsDone].hp)
+        ) {
+            const summon = summonsAt[state.summonsDone];
+            const summoned = getEnemy(summon.enemyId);
+            let spawned = 0;
+            for (let i = 0; i < summon.count; i++) {
+                if (this.spawnNear(enemy, summoned, 2, i, summon.count, all ? 8 : 3)) {
+                    spawned++;
+                }
+            }
+            if (spawned === 0 && !all) {
+                return;
+            }
+            state.summonsDone++;
+            if (summon.message) {
+                this.events.push({ type: "notice", message: summon.message });
+            }
+            if (summon.shout) {
+                this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: summon.shout });
+            }
+        }
+    }
+
+    // Jumps onto a spot, if there's room for it there
+    private leapTo(enemy: Enemy, spot: { x: number; y: number }): void {
+        const tileX = Math.floor(spot.x);
+        const tileY = Math.floor(spot.y);
+        if (
+            !this.grid.contains(tileX, tileY) ||
+            !this.flowField.isReachable(tileX, tileY) ||
+            !isCircleFree(this.grid, spot.x, spot.y, enemy.radius)
+        ) {
+            return;
+        }
+        enemy.x = enemy.prevX = spot.x;
+        enemy.y = enemy.prevY = spot.y;
+        enemy.vx = enemy.vy = 0;
+    }
+
+    // Blinks to a free spot about attack.radius tiles from the player
+    private teleportBoss(enemy: Enemy, attack: BossAttackDef): void {
+        const player = this.player;
+        const spot = this.findSpotNear(player.x, player.y, attack.radius ?? 7, enemy.radius);
+        if (!spot) {
+            return;
+        }
+        if (attack.castSpotAnim !== undefined) {
+            this.addEffect(attack.castSpotAnim, enemy.x, enemy.y, 0, 60);
+        }
+        enemy.x = enemy.prevX = spot.x;
+        enemy.y = enemy.prevY = spot.y;
+        enemy.vx = enemy.vy = 0;
+        if (attack.impactSpotAnim !== undefined) {
+            this.addEffect(attack.impactSpotAnim, spot.x, spot.y, 0, 60);
+        }
+    }
+
+    private stepEnemyProjectiles(): void {
+        const player = this.player;
+        for (const projectile of this.enemyProjectiles) {
+            projectile.prevX = projectile.x;
+            projectile.prevY = projectile.y;
+            projectile.life--;
+            const dx = player.x - projectile.x;
+            const dy = player.y - projectile.y;
+            if (projectile.homing > 0) {
+                // Turn towards the player, a little each tick
+                const heading = Math.atan2(projectile.vy, projectile.vx);
+                let turn = Math.atan2(dy, dx) - heading;
+                turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+                const angle =
+                    heading + Math.max(-projectile.homing, Math.min(projectile.homing, turn));
+                projectile.vx = Math.cos(angle) * projectile.speed;
+                projectile.vy = Math.sin(angle) * projectile.speed;
+                projectile.yaw = yawFromVector(projectile.vx, projectile.vy);
+            }
+            projectile.x += projectile.vx;
+            projectile.y += projectile.vy;
+            if (projectile.attack.blockable && this.hitsGlyph(projectile)) {
+                projectile.life = 0;
+                continue;
+            }
+            const reach = projectile.radius + player.radius;
+            if (
+                projectile.life > 0 &&
+                Math.hypot(player.x - projectile.x, player.y - projectile.y) <= reach
+            ) {
+                projectile.life = 0;
+                // A crowd's shot doesn't land on a player just hit (bosses' do)
+                if (projectile.crowd && player.invulnerable > 0) {
+                    continue;
+                }
+                const enemy = this.enemies.find((e) => e.uid === projectile.enemyUid);
+                this.bossHit(projectile.enemyId, enemy, projectile.attack, projectile.damage);
+                if (this.runOver) {
+                    return;
+                }
+            }
+        }
+    }
+
+    // Whether a blockable projectile has run into its boss's glyph (which
+    // breaks it)
+    private hitsGlyph(projectile: EnemyProjectile): boolean {
+        const glyph = this.glyphs.find((g) => g.bossUid === projectile.enemyUid);
+        const boss = glyph && this.enemies.find((e) => e.uid === glyph.bossUid);
+        const width = boss?.def.boss?.glyph?.width;
+        if (!glyph || width === undefined) {
+            return false;
+        }
+        if (
+            Math.hypot(projectile.x - glyph.x, projectile.y - glyph.y) >
+            width + projectile.radius
+        ) {
+            return false;
+        }
+        const impact = projectile.attack.impactSpotAnim;
+        if (impact !== undefined) {
+            this.addEffect(impact, projectile.x, projectile.y, 0, 30);
+        }
+        return true;
+    }
+
+    // A boss attack hitting the player. Unlike a crowd's hits these land
+    // whenever they connect (a hit a moment ago doesn't stop them), unless
+    // the player was just revived.
+    private bossHit(
+        enemyId: string,
+        enemy: Enemy | undefined,
+        attack: BossAttackDef,
+        damage: number,
+        showImpact = true,
+    ): void {
+        const player = this.player;
+        if (this.reviving) {
+            return;
+        }
+        if (showImpact && attack.impactSpotAnim !== undefined) {
+            this.addEffect(attack.impactSpotAnim, player.x, player.y, 0, 30);
+        }
+        const amount = this.damagePlayer(
+            damage,
+            enemyId,
+            false,
+            attack.hitSound,
+            attack.ignoreArmor,
+        );
+        const lifesteal = enemy?.def.boss?.lifesteal ?? 0;
+        if (enemy && lifesteal > 0 && !enemy.dead) {
+            enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.round(amount * lifesteal));
+        }
+        if (this.runOver || this.reviving) {
+            return;
+        }
+        if (attack.effect) {
+            this.applyPlayerEffect(attack.effect, enemy);
+        }
+        this.recoil(enemy);
+    }
+
+    // enemy: the boss that did it, which keeps any coins it steals
+    applyPlayerEffect(effect: PlayerEffectDef, enemy?: Enemy): void {
+        const player = this.player;
+        if (effect.kind === "steal") {
+            const state = enemy?.bossState;
+            const amount = Math.floor(this.coins * effect.fraction);
+            if (state && amount > 0 && !enemy.dead) {
+                this.coins -= amount;
+                state.stolenCoins += amount;
+                this.events.push({ type: "coinsStolen", enemyId: enemy.def.id, amount });
+            }
+            return;
+        }
+        if ((effect.kind === "poison" || effect.kind === "debuff") && this.cured) {
+            return;
+        }
+        const ticks = Math.round(effect.seconds * TICKS_PER_SECOND);
+        switch (effect.kind) {
+            case "freeze":
+                player.frozen = Math.max(player.frozen, ticks);
+                this.addEffect(FREEZE_SPOTANIM, player.x, player.y, 0, ticks);
+                break;
+            case "poison":
+                // A new dose starts the clock again, at the stronger damage
+                player.poisonDamage = Math.max(player.poisonDamage, effect.damage);
+                player.poisonEnd = this.tick + ticks;
+                break;
+            case "debuff":
+                this.debuffs = this.debuffs.filter((d) => d.id !== effect.id);
+                this.debuffs.push({
+                    id: effect.id,
+                    name: effect.name,
+                    iconObjId: effect.iconObjId,
+                    stats: effect.stats,
+                    startTick: this.tick,
+                    endTick: this.tick + ticks,
+                });
+                this.updateStats();
+                break;
+        }
+    }
+
+    // The boss with its bar on screen: the final boss once it's up (one still
+    // standing, of the Inferno's three Jads; the last one's empty bar stays on
+    // the victory screen), otherwise the latest to turn up that's still alive,
+    // or of several that came together (Pest Control's four portals) the
+    // nearest
+    get shownBoss(): Enemy | undefined {
+        let shown: Enemy | undefined;
+        let fallen: Enemy | undefined;
+        for (const enemy of this.enemies) {
+            if (enemy.finalBoss && !enemy.dead) {
+                return enemy;
+            }
+            if (enemy.finalBoss && !this.endless) {
+                fallen = enemy;
+            }
+            if (enemy.boss && !enemy.dead) {
+                shown = enemy;
+            }
+        }
+        if (fallen) {
+            return fallen;
+        }
+        if (shown && this.funBossGroup.includes(shown)) {
+            const player = this.player;
+            let nearest = Infinity;
+            for (const boss of this.funBossGroup) {
+                const distance = Math.hypot(boss.x - player.x, boss.y - player.y);
+                if (!boss.dead && distance < nearest) {
+                    nearest = distance;
+                    shown = boss;
+                }
+            }
+        }
+        return shown;
+    }
+
+    // Whether a final boss is still standing (a dead one is marked dead
+    // before this is asked)
+    private finalBossLeft(): boolean {
+        return this.enemies.some((enemy) => enemy.finalBoss && !enemy.dead);
+    }
+
+    private playerDied(): void {
+        const player = this.player;
+        if (this.revivesLeft > 0) {
+            this.revivesLeft--;
+            player.hp = player.maxHp;
+            player.invulnerable = 3 * TICKS_PER_SECOND;
+            this.events.push({ type: "revive" });
+            return;
+        }
+        player.hp = 0;
+        player.deathTick = this.tick;
+        this.endRun("dead");
+    }
+
+    // Returns the damage done (0 if it was already dead). mightScale
+    // multiplies the player's damage bonus (Tumeken's shadow triples it; 0
+    // leaves out the bonuses to damage, bosses' included); poison is for venom's damage, which shows as a poison splat.
+    damageEnemy(
+        enemy: Enemy,
+        baseDamage: number,
+        knockback: number,
+        fromX: number,
+        fromY: number,
+        mightScale = 1,
+        poison = false,
+    ): number {
+        if (enemy.dead) {
+            return 0;
+        }
+        // Hit by the player, it's after the player from now on
+        enemy.aggro = true;
+        if (enemy.shieldEnd > this.tick) {
+            this.showBlocked(enemy);
+            return 0;
+        }
+        const drain = enemy.drainEnd > this.tick ? enemy.drain : 0;
+        // Damage that ignores the damage bonus (mightScale 0: the nuke's share
+        // of a boss's hitpoints, a ruby bolt's) ignores this one too
+        const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;
+        const damage = Math.max(
+            1,
+            Math.round(
+                baseDamage *
+                    (1 + this.stats.might * mightScale) *
+                    (1 + bossMight) *
+                    (1 + drain) *
+                    this.rng.range(0.85, 1.15),
+            ),
+        );
+        enemy.hp -= damage;
+        enemy.flash = 5;
+        this.events.push({
+            type: "damage",
+            x: enemy.x,
+            y: enemy.y,
+            amount: damage,
+            enemyUid: enemy.uid,
+            enemyId: enemy.def.id,
+            ...(poison && { poison }),
+        });
+        const resist = enemy.def.knockbackResist ?? 0;
+        if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
+            const dx = enemy.x - fromX;
+            const dy = enemy.y - fromY;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.001) {
+                const k = (knockback * (1 - resist)) / 4;
+                enemy.vx += (dx / len) * k;
+                enemy.vy += (dy / len) * k;
+            }
+        }
+        if (enemy.hp <= 0 && !this.riseAgain(enemy)) {
+            this.killEnemy(enemy);
+        }
+        return damage;
+    }
+
+    // cause: the player's doing (the bot nuke's too, though what it kills
+    // doesn't split or blow up), or another faction's enemy (which drops
+    // nothing and isn't the player's kill, so luring armies into each other
+    // isn't free experience, and the ground doesn't fill with bones far away)
+    private killEnemy(enemy: Enemy, cause: "player" | "nuke" | "enemy" = "player"): void {
+        enemy.dead = true;
+        enemy.hp = 0;
+        enemy.deathTick = this.tick;
+        enemy.anim = "death";
+        enemy.animStart = this.tick;
+        enemy.vx = enemy.vy = 0;
+        const byEnemy = cause === "enemy";
+        // One brought back by a reviver was counted the first time it died
+        if (!byEnemy && !enemy.noDrops) {
+            this.kills++;
+            this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
+        }
+        if (enemy.boss) {
+            this.bossesKilled.push(enemy.def.id);
+            // A boss's glyph goes with it, rather than hanging about on the
+            // victory screen
+            this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
+        }
+        this.events.push({
+            type: "kill",
+            enemyUid: enemy.uid,
+            enemyId: enemy.def.id,
+            boss: enemy.boss,
+            x: enemy.x,
+            y: enemy.y,
+            ...(byEnemy && { byEnemy }),
+        });
+
+        if (!byEnemy && !enemy.noDrops) {
+            this.dropLoot(enemy);
+        }
+        if (enemy.boss) {
+            this.funBossDown(enemy);
+        }
+        if (!enemy.boss && !enemy.elite && !enemy.noDrops) {
+            // For revivers
+            this.deaths.push({
+                def: enemy.def,
+                variant: enemy.variant,
+                x: enemy.x,
+                y: enemy.y,
+                tick: this.tick,
+            });
+            if (this.deaths.length > MAX_DEATHS) {
+                this.deaths.shift();
+            }
+        }
+        if (cause !== "nuke") {
+            this.splitUp(enemy);
+            this.explode(enemy);
+        }
+
+        const stolen = enemy.bossState?.stolenCoins ?? 0;
+        if (stolen > 0) {
+            this.coins += stolen;
+            enemy.bossState!.stolenCoins = 0;
+            this.events.push({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
+        }
+
+        // With the last of the final bosses (the Inferno has three)
+        if (enemy.finalBoss && !this.finalBossLeft()) {
+            if (this.endless) {
+                this.nextRound();
+            } else {
+                this.endRun("victory");
+            }
+        }
+    }
+
+    // One of a pool that came together is down (FunMapDef.bosses.together):
+    // with the last of them, their casket drops and the next lot is due in a
+    // few minutes
+    private funBossDown(enemy: Enemy): void {
+        const together = this.map.fun?.bosses.together;
+        if (!together || !this.funBossGroup.includes(enemy)) {
+            return;
+        }
+        if (this.funBossGroup.some((boss) => !boss.dead)) {
+            return;
+        }
+        this.funBossGroup = [];
+        this.dropCasketOfTier(together.casket, enemy.x - 0.4, enemy.y + 0.4);
+        this.events.push({ type: "notice", message: together.message });
+        this.nextFunBossSeconds = this.seconds + this.rng.range(...this.map.fun!.bosses.every);
+    }
+
+    // Splits into smaller enemies where it died (EnemyDef.splits)
+    private splitUp(enemy: Enemy): void {
+        const splits = enemy.def.splits;
+        if (!splits) {
+            return;
+        }
+        const into = getEnemy(splits.into);
+        for (let i = 0; i < splits.count; i++) {
+            // Where it was, if there's no room around it
+            const part =
+                this.spawnNear(enemy, into, 0.7, i, splits.count, 3) ??
+                this.spawnEnemy(into, "normal", { x: enemy.x, y: enemy.y });
+            if (part) {
+                part.noDrops = enemy.noDrops;
+            }
+        }
+        if (splits.spotAnim !== undefined) {
+            this.addEffect(splits.spotAnim, enemy.x, enemy.y, 0, 40);
+        }
+    }
+
+    // Blows up where it died (EnemyDef.explodes), hurting the player if
+    // they're in reach. It lands like a boss's attack, a hit a moment ago or
+    // not.
+    private explode(enemy: Enemy): void {
+        const explodes = enemy.def.explodes;
+        if (!explodes) {
+            return;
+        }
+        if (explodes.spotAnim !== undefined) {
+            this.addEffect(explodes.spotAnim, enemy.x, enemy.y, 0, 40);
+        }
+        this.events.push({ type: "blast", x: enemy.x, y: enemy.y, radius: explodes.radius });
+        if (explodes.sound !== undefined) {
+            this.events.push({
+                type: "bossAttack",
+                enemyId: enemy.def.id,
+                sound: explodes.sound,
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
+        const player = this.player;
+        if (
+            !this.runOver &&
+            !this.reviving &&
+            Math.hypot(player.x - enemy.x, player.y - enemy.y) <= explodes.radius + player.radius
+        ) {
+            this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
+        }
+    }
+
+    // Bones, and now and then a casket, coins, food or a power-up
+    private dropLoot(enemy: Enemy): void {
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp);
+        if (enemy.bonesOnly) {
+            return;
+        }
+        const luck = 1 + this.stats.luck;
+        const caskets = enemy.def.caskets;
+        if (enemy.elite) {
+            this.dropCasket(enemy.x + 0.4, enemy.y, true);
+        } else if (enemy.boss && !enemy.finalBoss && caskets) {
+            // Its own caskets instead of the usual one
+            caskets.forEach((tier, i) => {
+                this.dropCasketOfTier(tier, enemy.x + 0.4, enemy.y + i * 0.6);
+            });
+        } else if (enemy.boss && (!enemy.finalBoss || this.endless)) {
+            // An endless round's final boss always drops a master casket (the
+            // last of them, where there are several)
+            this.dropCasketOfTier(
+                enemy.finalBoss && !this.finalBossLeft()
+                    ? "master"
+                    : rollBossCasketTier(this.rng, this.stats.luck),
+                enemy.x + 0.4,
+                enemy.y,
+            );
+        } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
+            this.dropCasket(enemy.x + 0.3, enemy.y, false);
+        } else if (this.rng.chance(0.03 * luck)) {
+            this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
+        } else if (this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+            this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
+        }
+        if (!enemy.boss) {
+            this.rollPowerUp(enemy.x - 0.3, enemy.y + 0.3);
+        }
+    }
+
+    // Endless runs: the final boss is down, so the map comes round again,
+    // its waves and bosses from five minutes in and everything tougher
+    private nextRound(): void {
+        this.round++;
+        this.roundStartTick = this.tick;
+        const events = this.map.events;
+        const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
+        this.eventIndex = first === -1 ? events.length : first;
+        this.bossSpawned = false;
+        this.events.push({ type: "roundStarted", round: this.round });
+    }
+
+    private endRun(state: "dead" | "victory"): void {
+        this.endTick = this.tick;
+        this.state = state;
+        // Everything stands still from here on; idle rather than walk on the spot
+        for (const enemy of this.enemies) {
+            enemy.prevX = enemy.x;
+            enemy.prevY = enemy.y;
+        }
+    }
+
+    // ---- Weapons ----
+
+    // Past the last level (endless runs) is the last level, with more damage
+    private getLevel(weapon: WeaponState) {
+        const levels = weapon.def.levels;
+        return levels[Math.min(weapon.level, levels.length) - 1];
+    }
+
+    // speed: a bonus of the weapon's own on top of the player's cooldown
+    // bonus (a set's), the two together capped like the player's alone
+    private cooldownTicks(seconds: number, speed = 0): number {
+        const bonus = 1 - (1 - Math.min(this.stats.cooldown, 0.6)) * (1 - speed);
+        return Math.max(5, Math.round(seconds * TICKS_PER_SECOND * (1 - Math.min(bonus, 0.6))));
+    }
+
+    // A weapon's level with what else changes it folded in: its bonus damage
+    // from rare rolls, its style's damage bonus (Rigour's, the rings'), the
+    // worn sets' boosts to it, and for auras their own area bonus (the
+    // Ancient sceptre's). The sets' speed boost isn't in it (see setBoosts).
+    private getEffectiveLevel(weapon: WeaponState): WeaponDef["levels"][number] {
+        const level = this.getLevel(weapon);
+        const def = weapon.def;
+        const boosts = this.setBoosts(def);
+        const damage =
+            (1 + weapon.bonus) * (1 + this.styleMight(getWeaponStyle(def))) * boosts.damage;
+        const area = (def.kind === "aura" ? 1 + this.stats.auraArea : 1) * boosts.area;
+        if (damage === 1 && area === 1) {
+            return level;
+        }
+        return { ...level, damage: level.damage * damage, area: level.area * area };
+    }
+
+    // What the worn sets do for a weapon: damage and area multipliers, and a
+    // speed bonus that cooldownTicks caps along with the player's own
+    private setBoosts(def: WeaponDef): { damage: number; area: number; speed: number } {
+        let damage = 1;
+        let area = 1;
+        let slower = 1;
+        for (const setId of this.activeSets) {
+            const boost = getSet(setId).weapons;
+            if (boost && (boost.kinds?.includes(def.kind) || boost.ids?.includes(def.id))) {
+                damage *= 1 + (boost.damage ?? 0);
+                slower *= 1 - (boost.cooldown ?? 0);
+                area *= 1 + (boost.area ?? 0);
+            }
+        }
+        return { damage, area, speed: 1 - slower };
+    }
+
+    private styleMight(style: CombatStyle): number {
+        switch (style) {
+            case "melee":
+                return this.stats.meleeMight;
+            case "ranged":
+                return this.stats.rangedMight;
+            case "magic":
+                return this.stats.magicMight;
+        }
+    }
+
+    private stepWeapons(): void {
+        for (const weapon of this.weapons) {
+            if (weapon.cooldown > 0) {
+                weapon.cooldown--;
+                continue;
+            }
+            const level = this.getEffectiveLevel(weapon);
+            const special = this.takeSpecial(weapon, level);
+            const fired = this.fireWeapon(weapon.def, level, special);
+            // Nothing to shoot at: try again soon rather than wasting the cooldown
+            weapon.cooldown = fired
+                ? this.cooldownTicks(level.cooldown, this.setBoosts(weapon.def).speed)
+                : 10;
+            if (fired) {
+                this.events.push({
+                    type: "weapon",
+                    weaponId: weapon.def.id,
+                    sound: special?.sound ?? level.sound ?? weapon.def.sound,
+                    x: this.player.x,
+                    y: this.player.y,
+                });
+            }
+            if (fired && !this.player.moving) {
+                this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
+                this.player.attackStart = this.tick;
+            }
+        }
+    }
+
+    // Counts an attack, and returns the weapon's special attack if this one
+    // is it. A special that's due waits until something is in reach, so it
+    // isn't swung at nothing.
+    private takeSpecial(
+        weapon: WeaponState,
+        level: WeaponDef["levels"][number],
+    ): SpecialAttackDef | undefined {
+        const special = weapon.def.special;
+        if (!special) {
+            return undefined;
+        }
+        if (weapon.uses % special.every !== special.every - 1) {
+            weapon.uses++;
+            return undefined;
+        }
+        const reach = level.area * (1 + this.stats.area);
+        const player = this.player;
+        if (this.nearestEnemies(player.x, player.y, reach + 0.5, 1).length === 0) {
+            return undefined;
+        }
+        weapon.uses++;
+        return special;
+    }
+
+    private fireWeapon(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        special?: SpecialAttackDef,
+    ): boolean {
+        switch (def.kind) {
+            case "slash":
+                this.fireSlash(def, level, special);
+                return true;
+            case "sweep":
+                this.fireSweep(def, level, special);
+                return true;
+            case "missile":
+                return this.fireMissiles(def, level);
+            case "knives":
+                this.fireKnives(def, level);
+                return true;
+            case "axes":
+                return this.fireAxes(def, level);
+            case "aura":
+                this.fireAura(def, level);
+                return true;
+            case "strike":
+                return this.fireStrikes(def, level);
+            case "orbit":
+                this.fireOrbit(def, level);
+                return true;
+        }
+    }
+
+    // Where a melee attack aims: at the nearest enemy in reach, otherwise the
+    // way the player faces (kiting means facing away from what's chasing you)
+    private aimMelee(reach: number): { x: number; y: number } {
+        const player = this.player;
+        const nearest = this.nearestEnemies(player.x, player.y, reach + 1.5, 1)[0];
+        if (nearest) {
+            const dx = nearest.x - player.x;
+            const dy = nearest.y - player.y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.001) {
+                return { x: dx / len, y: dy / len };
+            }
+        }
+        return { x: player.facingX, y: player.facingY };
+    }
+
+    private fireSlash(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        special?: SpecialAttackDef,
+    ): void {
+        const player = this.player;
+        const reach = level.area * (1 + this.stats.area);
+        const width = 1.1 * (1 + this.stats.area);
+        const sides = Math.min(level.amount, 2);
+        const aim = this.aimMelee(reach);
+        // Each side hits what's in it, so something right on top of the
+        // player can be hit by both
+        const hit: Enemy[] = [];
+        for (let side = 0; side < sides; side++) {
+            const dirX = side === 0 ? aim.x : -aim.x;
+            const dirY = side === 0 ? aim.y : -aim.y;
+            this.events.push({
+                type: "slash",
+                x: player.x,
+                y: player.y,
+                dirX,
+                dirY,
+                reach,
+                width,
+                arc: SLASH_ARC,
+                weaponId: def.id,
+            });
+            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+                const ox = enemy.x - player.x;
+                const oy = enemy.y - player.y;
+                const along = ox * dirX + oy * dirY;
+                const across = Math.abs(ox * -dirY + oy * dirX);
+                if (
+                    along >= -0.3 &&
+                    along <= reach + enemy.radius &&
+                    across <= width / 2 + enemy.radius
+                ) {
+                    hit.push(enemy);
+                }
+            });
+        }
+        this.meleeHits(def, level, hit, special);
+    }
+
+    // Everything within reach in an arc either side of where it aims (and
+    // behind too with amount 2), each hit once. Bosses and elites take the
+    // weapon's extra hits; a special attack hits harder and does its effect.
+    private fireSweep(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        special?: SpecialAttackDef,
+    ): void {
+        const player = this.player;
+        const reach = level.area * (1 + this.stats.area);
+        const arc = level.arc ?? SLASH_ARC;
+        const sides = Math.min(level.amount, 2);
+        const aim = this.aimMelee(reach);
+        const hit = new Set<Enemy>();
+        for (let side = 0; side < sides; side++) {
+            const dirX = side === 0 ? aim.x : -aim.x;
+            const dirY = side === 0 ? aim.y : -aim.y;
+            this.events.push({
+                type: "slash",
+                x: player.x,
+                y: player.y,
+                dirX,
+                dirY,
+                reach,
+                width: 0,
+                arc,
+                weaponId: def.id,
+            });
+            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+                const ox = enemy.x - player.x;
+                const oy = enemy.y - player.y;
+                const dist = Math.hypot(ox, oy);
+                if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
+                    return;
+                }
+                // Anything right on top of the player is in the way of the
+                // swing, whichever way it goes
+                const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
+                const angle = Math.acos(Math.max(-1, Math.min(1, along)));
+                if (dist > 0.8 && angle > arc + enemy.radius / dist) {
+                    return;
+                }
+                hit.add(enemy);
+            });
+        }
+        this.meleeHits(def, level, hit, special);
+    }
+
+    // A slash or sweep landing on what it caught. Bosses and elites take the
+    // weapon's extra hits; a special attack hits harder and does its effect.
+    private meleeHits(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        hit: Iterable<Enemy>,
+        special: SpecialAttackDef | undefined,
+    ): void {
+        const player = this.player;
+        const damage = level.damage * (special?.damage ?? 1);
+        if (special) {
+            this.addEffect(special.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
+        }
+        let dealt = 0;
+        let effects = 0;
+        for (const enemy of hit) {
+            const enemyDamage = damage * this.slayerScale(def, enemy);
+            const hits = def.hits ?? [1];
+            const hitDealt =
+                this.damageEnemy(
+                    enemy,
+                    enemyDamage * hits[0],
+                    level.knockback,
+                    player.x,
+                    player.y,
+                ) + this.bigHits(def, enemy, enemyDamage, player.x, player.y);
+            // The rest of a multi-hit weapon's hits land a moment apart
+            hits.slice(1).forEach((fraction, i) => {
+                this.pendingHits.push({
+                    enemy,
+                    weapon: def,
+                    damage: enemyDamage * fraction,
+                    knockback: 0,
+                    tick: this.tick + (i + 1) * FOLLOW_UP_HIT_TICKS,
+                });
+            });
+            dealt += hitDealt;
+            this.stealLife(def, hitDealt);
+            const effect = special?.effect;
+            if (effect?.kind === "freeze" && !enemy.boss && !enemy.dead) {
+                this.freezeEnemy(enemy, effect.seconds);
+                if (effects++ < 10) {
+                    this.addEffect(FREEZE_SPOTANIM, enemy.x, enemy.y, 0, 60, enemy.uid);
+                }
+            } else if (effect?.kind === "drain" && !enemy.dead) {
+                this.drainEnemy(enemy, effect.amount, effect.seconds);
+            }
+        }
+        if (special?.effect?.kind === "heal" && dealt > 0) {
+            this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
+        }
+        if (def.chain) {
+            this.chainHits(def, def.chain, hit, damage);
+        }
+    }
+
+    // How much harder a weapon hits this enemy for what it is (the Ivandis
+    // flail and vampyres)
+    private slayerScale(def: WeaponDef, enemy: Enemy): number {
+        const slayer = def.slayer;
+        return slayer && hasTag(enemy, slayer.tags) ? 1 + slayer.damage : 1;
+    }
+
+    // Each enemy of the chain's kind that a swing hit passes it on to more of
+    // its kind nearby, up to the chain's count in all (the Blisterwood flail)
+    private chainHits(
+        def: WeaponDef,
+        chain: NonNullable<WeaponDef["chain"]>,
+        hit: Iterable<Enemy>,
+        damage: number,
+    ): void {
+        const done = new Set(hit);
+        let left = chain.count;
+        for (const from of [...done]) {
+            if (left <= 0) {
+                break;
+            }
+            if (!hasTag(from, chain.tags)) {
+                continue;
+            }
+            this.enemyHash.query(from.x, from.y, chain.range + 0.5, (enemy) => {
+                if (
+                    left <= 0 ||
+                    enemy.dead ||
+                    done.has(enemy) ||
+                    !hasTag(enemy, chain.tags) ||
+                    Math.hypot(enemy.x - from.x, enemy.y - from.y) > chain.range
+                ) {
+                    return;
+                }
+                done.add(enemy);
+                left--;
+                this.addEffect(chain.spotAnim, enemy.x, enemy.y, 0, 30, enemy.uid);
+                const dealt = this.damageEnemy(
+                    enemy,
+                    damage * chain.damage * this.slayerScale(def, enemy),
+                    0,
+                    from.x,
+                    from.y,
+                );
+                this.stealLife(def, dealt);
+            });
+        }
+    }
+
+    // Lands the hits that were waiting for their moment
+    private stepPendingHits(): void {
+        if (this.pendingHits.length === 0) {
+            return;
+        }
+        const player = this.player;
+        this.pendingHits = this.pendingHits.filter((hit) => {
+            if (hit.tick > this.tick) {
+                return true;
+            }
+            const dealt = this.damageEnemy(
+                hit.enemy,
+                hit.damage,
+                hit.knockback,
+                player.x,
+                player.y,
+            );
+            this.stealLife(hit.weapon, dealt);
+            return false;
+        });
+    }
+
+    // The weapon's extra hits on a boss or an elite (the scythe's), and the
+    // damage they dealt
+    private bigHits(
+        def: WeaponDef,
+        enemy: Enemy,
+        damage: number,
+        fromX: number,
+        fromY: number,
+    ): number {
+        let dealt = 0;
+        if (enemy.boss || enemy.elite) {
+            for (const fraction of def.bigHits ?? []) {
+                dealt += this.damageEnemy(
+                    enemy,
+                    damage * fraction,
+                    0,
+                    fromX,
+                    fromY,
+                    def.mightScale,
+                );
+            }
+        }
+        return dealt;
+    }
+
+    // Can't move for this many seconds, longer with duration (bosses shrug it
+    // off)
+    private freezeEnemy(enemy: Enemy, seconds: number): void {
+        if (!enemy.boss) {
+            const ticks = seconds * (1 + this.stats.duration) * TICKS_PER_SECOND;
+            enemy.frozen = Math.max(enemy.frozen, Math.round(ticks));
+        }
+    }
+
+    // Takes amount more damage from everything for this many seconds, longer
+    // with duration (the Bandos godsword's Warstrike)
+    private drainEnemy(enemy: Enemy, amount: number, seconds: number): void {
+        const ticks = seconds * (1 + this.stats.duration) * TICKS_PER_SECOND;
+        enemy.drain = amount;
+        enemy.drainEnd = this.tick + Math.round(ticks);
+    }
+
+    // Venom damage every second for this many ticks. Topped up rather than
+    // started again, so its next hit still comes on time.
+    private envenom(enemy: Enemy, venom: number, ticks: number): void {
+        if (enemy.venomEnd < this.tick) {
+            enemy.venomNext = this.tick + TICKS_PER_SECOND;
+            enemy.venom = 0;
+        }
+        enemy.venom = Math.max(enemy.venom, venom);
+        enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
+    }
+
+    // A hit's chance of healing the player: the weapon's (the Sanguinesti
+    // staff's, by part of what it dealt), and the Amulet of blood fury's
+    private stealLife(def: WeaponDef, dealt: number): void {
+        if (dealt <= 0) {
+            return;
+        }
+        const lifesteal = def.lifesteal;
+        if (lifesteal && this.rng.chance(lifesteal.chance)) {
+            const amount = Math.min(Math.round(dealt * lifesteal.fraction), lifesteal.max);
+            this.lifestealHeal(amount, lifesteal.spotAnim);
+        }
+        if (
+            this.stats.healChance > 0 &&
+            this.tick >= this.bloodFuryRollTick &&
+            this.player.hp < this.player.maxHp
+        ) {
+            this.bloodFuryRollTick = this.tick + BLOOD_FURY_ROLL_INTERVAL;
+            if (this.rng.chance(this.stats.healChance)) {
+                this.lifestealHeal(BLOOD_FURY_HEAL, BLOOD_FURY_SPOTANIM);
+            }
+        }
+    }
+
+    private lifestealHeal(amount: number, spotAnim: number): void {
+        if (amount > 0 && this.player.hp < this.player.maxHp) {
+            this.heal(amount);
+            this.addEffect(spotAnim, this.player.x, this.player.y, 0, 40);
+        }
+    }
+
+    // What an aura's or a strike's hit does besides its damage: the level's
+    // venom and the weapon's drain and lifesteal
+    private spellHitEffects(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        enemy: Enemy,
+        dealt: number,
+    ): void {
+        if (!enemy.dead) {
+            if (level.venom) {
+                const ticks = level.duration * (1 + this.stats.duration) * TICKS_PER_SECOND;
+                this.envenom(enemy, level.venom, Math.round(ticks));
+            }
+            if (def.drain) {
+                this.drainEnemy(enemy, def.drain, level.duration);
+            }
+        }
+        this.stealLife(def, dealt);
+    }
+
+    // What the player's weapons go for. Shielded enemies (Pest Control's
+    // portals, Verzik's first form) are left out: every hit on them is
+    // blocked, so aiming at them would waste shots while pests close in.
+    private nearestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
+        const found: { enemy: Enemy; distSq: number }[] = [];
+        const rangeSq = range * range;
+        for (const enemy of this.enemies) {
+            if (enemy.dead || enemy.shieldEnd > this.tick) {
+                continue;
+            }
+            const dx = enemy.x - x;
+            const dy = enemy.y - y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= rangeSq) {
+                found.push({ enemy, distSq });
+            }
+        }
+        found.sort((a, b) => a.distSq - b.distSq);
+        return found.slice(0, count).map((f) => f.enemy);
+    }
+
+    // The enemies in range with the most hitpoints (the nearest of them on a
+    // tie), for the Twisted bow
+    private toughestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
+        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
+        // Sorting is stable, so equally tough ones stay nearest first
+        return near.sort((a, b) => b.maxHp - a.maxHp).slice(0, count);
+    }
+
+    // The nearest enemies in range, those without venom first, so venom
+    // spreads through a crowd (the Toxic blowpipe)
+    private unvenomedEnemies(x: number, y: number, range: number, count: number): Enemy[] {
+        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
+        const later = (enemy: Enemy) =>
+            enemy.venomEnd >= this.tick ||
+            Math.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
+        // Sorting is stable, so each half stays nearest first
+        return near.sort((a, b) => Number(later(a)) - Number(later(b))).slice(0, count);
+    }
+
+    // Spells and arrows
+    private fireMissiles(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
+        const player = this.player;
+        const amount = level.amount + this.stats.amount;
+        const targets = def.toughTargets
+            ? this.toughestEnemies(player.x, player.y, 14, amount)
+            : level.venom
+              ? this.unvenomedEnemies(player.x, player.y, 14, amount)
+              : this.nearestEnemies(player.x, player.y, 14, amount);
+        if (targets.length === 0) {
+            return false;
+        }
+        if (level.castSpotAnim !== undefined) {
+            this.addEffect(level.castSpotAnim, player.x, player.y, 0, 40);
+        }
+        for (let i = 0; i < amount; i++) {
+            const target = targets[i % targets.length];
+            this.addProjectile(
+                "spell",
+                def,
+                level,
+                target,
+                Math.atan2(target.y - player.y, target.x - player.x),
+            );
+        }
+        return true;
+    }
+
+    private fireKnives(def: WeaponDef, level: WeaponDef["levels"][number]): void {
+        const player = this.player;
+        const amount = level.amount + this.stats.amount;
+        // At the nearest enemy close by, otherwise the way the player faces
+        const nearest = this.nearestEnemies(player.x, player.y, 9, 1)[0];
+        const base = nearest
+            ? Math.atan2(nearest.y - player.y, nearest.x - player.x)
+            : Math.atan2(player.facingY, player.facingX);
+        for (let i = 0; i < amount; i++) {
+            // Fan out: 0, +1, -1, +2, -2 ... steps of 7 degrees
+            const offset = Math.ceil(i / 2) * (i % 2 === 0 ? -1 : 1) * 0.12;
+            this.addProjectile("knife", def, level, undefined, base + offset);
+        }
+    }
+
+    // At the nearest enemies, one each; each axe bounces on from what it hits
+    private fireAxes(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
+        const player = this.player;
+        const amount = level.amount + this.stats.amount;
+        const targets = this.nearestEnemies(player.x, player.y, AXE_RANGE, amount);
+        if (targets.length === 0) {
+            return false;
+        }
+        for (let i = 0; i < amount; i++) {
+            const target = targets[i % targets.length];
+            const angle = Math.atan2(target.y - player.y, target.x - player.x);
+            this.addProjectile("axe", def, level, target, angle);
+        }
+        return true;
+    }
+
+    // Sends an axe on from the enemy it just hit to the nearest it hasn't hit
+    // yet; false when there's nothing close enough
+    private bounce(projectile: Projectile, from: Enemy): boolean {
+        let next: Enemy | undefined;
+        let best = BOUNCE_RANGE * BOUNCE_RANGE;
+        for (const enemy of this.enemies) {
+            if (enemy.dead || projectile.hit.has(enemy.uid) || enemy.shieldEnd > this.tick) {
+                continue;
+            }
+            const distSq = (enemy.x - from.x) ** 2 + (enemy.y - from.y) ** 2;
+            if (distSq <= best) {
+                best = distSq;
+                next = enemy;
+            }
+        }
+        if (!next) {
+            return false;
+        }
+        projectile.bounces--;
+        projectile.targetUid = next.uid;
+        projectile.life = Math.ceil((BOUNCE_RANGE * 2) / Math.max(projectile.speed, 0.01));
+        return true;
+    }
+
+    // Puts the weapon's items circling the player, evenly spaced, in place of
+    // any still going round from last time
+    private fireOrbit(def: WeaponDef, level: WeaponDef["levels"][number]): void {
+        const player = this.player;
+        this.projectiles = this.projectiles.filter((p) => !(p.orbit && p.weapon === def));
+        const amount = level.amount + this.stats.amount;
+        const radius = level.area * (1 + this.stats.area);
+        // Speed is how fast they go round, in tiles a second
+        const angularSpeed = (level.speed * (1 + this.stats.speed)) / radius / TICKS_PER_SECOND;
+        const life = Math.round(level.duration * (1 + this.stats.duration) * TICKS_PER_SECOND);
+        // A little less than the time one takes to come round again, so
+        // whatever's in the way is hit once a pass
+        const rehitTicks = Math.max(5, Math.round(((2 * Math.PI) / angularSpeed) * 0.6));
+        const start = Math.atan2(player.facingY, player.facingX);
+        const objIds = def.orbitObjIds ?? [];
+        for (let i = 0; i < amount; i++) {
+            const angle = start + (i / amount) * Math.PI * 2;
+            const x = player.x + Math.cos(angle) * radius;
+            const y = player.y + Math.sin(angle) * radius;
+            this.projectiles.push({
+                uid: this.nextUid++,
+                kind: "rune",
+                weapon: def,
+                x,
+                y,
+                prevX: x,
+                prevY: y,
+                vx: 0,
+                vy: 0,
+                speed: 0,
+                targetUid: 0,
+                damage: level.damage,
+                pierce: 0,
+                bounces: 0,
+                venom: 0,
+                venomTicks: 0,
+                orbit: { angle, angularSpeed, radius, nextHit: new Map(), rehitTicks },
+                life,
+                radius: 0.5,
+                splash: 0,
+                knockback: level.knockback,
+                hit: new Set(),
+                yaw: yawFromVector(-Math.sin(angle), Math.cos(angle)),
+                spotAnim: -1,
+                impactSpotAnim: -1,
+                hitSound: -1,
+                objId: objIds.length > 0 ? objIds[i % objIds.length] : -1,
+                startTick: this.tick,
+            });
+        }
+    }
+
+    private addProjectile(
+        kind: ProjectileKind,
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        target: Enemy | undefined,
+        angle: number,
+        fromX = this.player.x,
+        fromY = this.player.y,
+    ): void {
+        const speed = (level.speed * (1 + this.stats.speed)) / TICKS_PER_SECOND;
+        const range = kind === "knife" ? 18 : 24;
+        this.projectiles.push({
+            uid: this.nextUid++,
+            kind,
+            weapon: def,
+            x: fromX,
+            y: fromY,
+            prevX: fromX,
+            prevY: fromY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            speed,
+            targetUid: target?.uid ?? 0,
+            damage: level.damage,
+            pierce: level.pierce,
+            bounces: level.bounce ?? 0,
+            venom: level.venom ?? 0,
+            venomTicks: Math.round(level.duration * (1 + this.stats.duration) * TICKS_PER_SECOND),
+            life: Math.ceil(range / Math.max(speed, 0.01)),
+            radius: 0.4,
+            splash: level.area > 0 ? level.area * (1 + this.stats.area) : 0,
+            knockback: level.knockback,
+            hit: new Set(),
+            yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+            spotAnim: level.projectileSpotAnim ?? -1,
+            impactSpotAnim: level.impactSpotAnim ?? -1,
+            hitSound: level.hitSound ?? def.hitSound,
+            objId: kind === "knife" ? (level.projectileObjId ?? level.objId ?? -1) : -1,
+            startTick: this.tick,
+            ...(def.split && { split: def.split }),
+        });
+    }
+
+    // A cannonball or a thrall's projectile, steering towards its target
+    private shootAt(
+        kind: ProjectileKind,
+        fromX: number,
+        fromY: number,
+        target: Enemy,
+        damage: number,
+        speed: number,
+        knockback: number,
+        spotAnim: number,
+        impactSpotAnim = -1,
+    ): void {
+        const perTick = (speed * (1 + this.stats.speed)) / TICKS_PER_SECOND;
+        const dx = target.x - fromX;
+        const dy = target.y - fromY;
+        const angle = Math.atan2(dy, dx);
+        this.projectiles.push({
+            uid: this.nextUid++,
+            kind,
+            x: fromX,
+            y: fromY,
+            prevX: fromX,
+            prevY: fromY,
+            vx: Math.cos(angle) * perTick,
+            vy: Math.sin(angle) * perTick,
+            speed: perTick,
+            targetUid: target.uid,
+            damage,
+            pierce: 0,
+            bounces: 0,
+            venom: 0,
+            venomTicks: 0,
+            life: Math.ceil(24 / Math.max(perTick, 0.01)),
+            radius: 0.4,
+            splash: 0,
+            knockback,
+            hit: new Set(),
+            yaw: yawFromVector(dx, dy),
+            spotAnim,
+            impactSpotAnim,
+            hitSound: -1,
+            objId: -1,
+            startTick: this.tick,
+        });
+    }
+
+    private placeCannon(effect: Extract<PowerUpEffect, { kind: "cannon" }>): void {
+        const player = this.player;
+        // A free spot next to the player (clear of them: it's drawn over two
+        // tiles across), or under them
+        let x = player.x;
+        let y = player.y;
+        const sideX = player.x - player.facingX * 2.2;
+        const sideY = player.y - player.facingY * 2.2;
+        if (isCircleFree(this.grid, sideX, sideY, 0.6)) {
+            x = sideX;
+            y = sideY;
+        }
+        const turret: Turret = {
+            uid: this.nextUid++,
+            x,
+            y,
+            yaw: player.yaw,
+            startTick: this.tick,
+            endTick: this.tick + this.powerUpTicks(effect.seconds),
+            nextShot: this.tick + 15,
+            damage: effect.damage * this.powerUpDamageScale(),
+            range: effect.range * (1 + this.stats.area),
+            amount: effect.amount + this.stats.amount,
+            interval: this.cooldownTicks(effect.interval),
+        };
+        this.turrets.push(turret);
+        this.events.push({ type: "cannonSetup", x, y });
+    }
+
+    private stepTurrets(): void {
+        for (const turret of this.turrets) {
+            if (this.tick < turret.nextShot || this.tick >= turret.endTick) {
+                continue;
+            }
+            const targets = this.nearestEnemies(turret.x, turret.y, turret.range, turret.amount);
+            if (targets.length === 0) {
+                turret.nextShot = this.tick + 5;
+                continue;
+            }
+            turret.nextShot = this.tick + turret.interval;
+            turret.yaw = yawFromVector(targets[0].x - turret.x, targets[0].y - turret.y);
+            this.events.push({ type: "cannonFire", x: turret.x, y: turret.y });
+            for (const target of targets) {
+                this.shootAt(
+                    "cannonball",
+                    turret.x,
+                    turret.y,
+                    target,
+                    turret.damage,
+                    CANNONBALL_SPEED,
+                    0.2,
+                    CANNON_SPOTANIM,
+                );
+            }
+        }
+        this.turrets = this.turrets.filter((t) => this.tick < t.endTick);
+    }
+
+    // Raises a thrall (one of the three at random) beside the player
+    private raiseThrall(seconds: number): Thrall {
+        const def = THRALLS[this.rng.int(THRALLS.length)];
+        const player = this.player;
+        const thrall: Thrall = {
+            uid: this.nextUid++,
+            def,
+            x: player.x,
+            y: player.y,
+            prevX: player.x,
+            prevY: player.y,
+            yaw: player.yaw,
+            moving: false,
+            attackStart: -1,
+            cooldown: TICKS_PER_SECOND / 2,
+            damage: def.damage * this.powerUpDamageScale(),
+            startTick: this.tick,
+            endTick: this.tick + this.powerUpTicks(seconds),
+        };
+        this.thralls.push(thrall);
+        return thrall;
+    }
+
+    private stepThralls(): void {
+        const player = this.player;
+        this.thralls = this.thralls.filter((t) => this.tick < t.endTick);
+        this.thralls.forEach((thrall, index) => {
+            const def = thrall.def;
+            thrall.prevX = thrall.x;
+            thrall.prevY = thrall.y;
+            if (thrall.cooldown > 0) {
+                thrall.cooldown--;
+            }
+            // Ranged and magic thralls shoot what's near them; a melee one goes
+            // after what's near the player
+            const melee = def.style === "melee";
+            const target = melee
+                ? this.nearestEnemies(player.x, player.y, def.range, 1)[0]
+                : this.nearestEnemies(thrall.x, thrall.y, def.range, 1)[0];
+
+            // Up to its target, or behind the player (fanned out to either side)
+            let goalX: number;
+            let goalY: number;
+            let stop: number;
+            if (melee && target) {
+                goalX = target.x;
+                goalY = target.y;
+                stop = THRALL_RADIUS + target.radius + 0.1;
+            } else {
+                const side = index % 2 === 0 ? 1 : -1;
+                const angle =
+                    Math.atan2(-player.facingY, -player.facingX) +
+                    side * (0.7 + Math.floor(index / 2) * 0.5);
+                goalX = player.x + Math.cos(angle) * THRALL_FOLLOW_DISTANCE;
+                goalY = player.y + Math.sin(angle) * THRALL_FOLLOW_DISTANCE;
+                stop = 0.3;
+            }
+            const dx = goalX - thrall.x;
+            const dy = goalY - thrall.y;
+            const distance = Math.hypot(dx, dy);
+            thrall.moving = distance > stop;
+            if (thrall.moving) {
+                const move = Math.min(THRALL_SPEED, distance - stop);
+                const moveX = (dx / distance) * move;
+                const moveY = (dy / distance) * move;
+                if (def.ghost) {
+                    thrall.x += moveX;
+                    thrall.y += moveY;
+                } else {
+                    moveCircle(this.grid, thrall, moveX, moveY, THRALL_RADIUS);
+                }
+                thrall.yaw = yawFromVector(dx, dy);
+            }
+            // Stuck behind a wall: back beside the player
+            if (Math.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
+                thrall.x = thrall.prevX = player.x;
+                thrall.y = thrall.prevY = player.y;
+            }
+
+            if (!target || thrall.cooldown > 0) {
+                return;
+            }
+            const tx = target.x - thrall.x;
+            const ty = target.y - thrall.y;
+            const reach = melee ? THRALL_RADIUS + target.radius + 0.4 : def.range;
+            if (Math.hypot(tx, ty) > reach) {
+                return;
+            }
+            thrall.cooldown = this.cooldownTicks(def.interval);
+            thrall.attackStart = this.tick;
+            thrall.yaw = yawFromVector(tx, ty);
+            this.events.push({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
+            if (melee) {
+                this.damageEnemy(target, thrall.damage, def.knockback, thrall.x, thrall.y);
+            } else {
+                this.shootAt(
+                    "spell",
+                    thrall.x,
+                    thrall.y,
+                    target,
+                    thrall.damage,
+                    THRALL_PROJECTILE_SPEED,
+                    def.knockback,
+                    def.projectileSpotAnim ?? -1,
+                    def.impactSpotAnim ?? -1,
+                );
+            }
+        });
+    }
+
+    private fireAura(def: WeaponDef, level: WeaponDef["levels"][number]): void {
+        const player = this.player;
+        const radius = level.area * (1 + this.stats.area);
+        this.events.push({ type: "aura", x: player.x, y: player.y, radius });
+        const hit: Enemy[] = [];
+        this.enemyHash.query(player.x, player.y, radius + 0.5, (enemy) => {
+            if (Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
+                hit.push(enemy);
+            }
+        });
+        let effects = 0;
+        for (const enemy of hit) {
+            if (def.freezes) {
+                this.freezeEnemy(enemy, level.duration);
+            }
+            if (level.impactSpotAnim !== undefined && effects < 10) {
+                this.addEffect(level.impactSpotAnim, enemy.x, enemy.y, 0, 60, enemy.uid);
+                effects++;
+            }
+            const dealt = this.damageEnemy(
+                enemy,
+                level.damage,
+                level.knockback,
+                player.x,
+                player.y,
+            );
+            this.spellHitEffects(def, level, enemy, dealt);
+        }
+        if (def.burns) {
+            this.burnGround(def.burns, level);
+        }
+    }
+
+    // Leaves the ground around the player burning for the level's duration
+    // (Toktz-mej-tal), its flames on a few spots across it. A pulse where the
+    // ground's already burning keeps that fire going instead, and only a few
+    // burn at once (the oldest goes out), so a fast-pulsing staff doesn't
+    // fill the effect slots with flames and starve everything else.
+    private burnGround(
+        burns: NonNullable<WeaponDef["burns"]>,
+        level: WeaponDef["levels"][number],
+    ): void {
+        const { x, y } = this.player;
+        const ticks = Math.round(level.duration * (1 + this.stats.duration) * TICKS_PER_SECOND);
+        const endTick = this.tick + ticks;
+        // A share of the aura's own reach, so it grows with its area bonuses
+        const radius = level.area * (1 + this.stats.area) * burns.radius;
+        const damage = level.damage * burns.damage;
+        const same = this.fires.find(
+            (fire) => Math.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
+        );
+        if (same) {
+            same.endTick = Math.max(same.endTick, endTick);
+            same.damage = Math.max(same.damage, damage);
+            for (const effect of this.effects) {
+                if (same.effectUids.includes(effect.uid)) {
+                    effect.endTick = same.endTick;
+                }
+            }
+            return;
+        }
+        if (this.fires.length >= MAX_FIRES) {
+            this.putOut(this.fires.shift()!);
+        }
+        const effectUids: number[] = [];
+        for (let i = 0; i < FIRE_SPOTS; i++) {
+            // One in the middle, the rest around it
+            const angle = (i / (FIRE_SPOTS - 1)) * Math.PI * 2;
+            const r = i === 0 ? 0 : radius * 0.6;
+            const effect = this.addEffect(
+                burns.spotAnim,
+                x + Math.cos(angle) * r,
+                y + Math.sin(angle) * r,
+                0,
+                ticks,
+                0,
+                true,
+            );
+            if (effect) {
+                effectUids.push(effect.uid);
+            }
+        }
+        this.fires.push({
+            uid: this.nextUid++,
+            x,
+            y,
+            radius,
+            damage,
+            nextTick: this.tick + FIRE_INTERVAL,
+            endTick,
+            effectUids,
+        });
+    }
+
+    // A fire goes out early, its flames with it
+    private putOut(fire: GroundFire): void {
+        for (const effect of this.effects) {
+            if (fire.effectUids.includes(effect.uid)) {
+                effect.endTick = this.tick;
+            }
+        }
+    }
+
+    // Burning ground hurts whatever's standing in it every so often
+    private stepFires(): void {
+        if (this.fires.length === 0) {
+            return;
+        }
+        this.fires = this.fires.filter((fire) => fire.endTick > this.tick);
+        for (const fire of this.fires) {
+            if (this.tick < fire.nextTick) {
+                continue;
+            }
+            fire.nextTick += FIRE_INTERVAL;
+            this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
+                if (Math.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
+                    this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
+                }
+            });
+        }
+    }
+
+    private fireStrikes(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
+        const player = this.player;
+        const candidates = this.nearestEnemies(player.x, player.y, 12, 60);
+        if (candidates.length === 0) {
+            return false;
+        }
+        const amount = level.amount + this.stats.amount;
+        const radius = level.area * (1 + this.stats.area);
+        for (let i = 0; i < amount && candidates.length > 0; i++) {
+            const index = this.rng.int(candidates.length);
+            const target = candidates[index];
+            candidates.splice(index, 1);
+            if (level.impactSpotAnim !== undefined) {
+                this.addEffect(level.impactSpotAnim, target.x, target.y, 0, 30);
+            }
+            const tx = target.x;
+            const ty = target.y;
+            this.enemyHash.query(tx, ty, radius + 0.5, (enemy) => {
+                if (
+                    enemy === target ||
+                    Math.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
+                ) {
+                    if (def.freezes) {
+                        this.freezeEnemy(enemy, level.duration);
+                    }
+                    const dealt =
+                        this.damageEnemy(enemy, level.damage, level.knockback, tx, ty) +
+                        this.bigHits(def, enemy, level.damage, tx, ty);
+                    this.spellHitEffects(def, level, enemy, dealt);
+                }
+            });
+        }
+        return true;
+    }
+
+    private stepProjectiles(): void {
+        const enemiesByUid = new Map<number, Enemy>();
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                enemiesByUid.set(enemy.uid, enemy);
+            }
+        }
+        for (const projectile of this.projectiles) {
+            projectile.prevX = projectile.x;
+            projectile.prevY = projectile.y;
+            projectile.life--;
+            if (projectile.orbit) {
+                this.stepOrbit(projectile, projectile.orbit);
+                continue;
+            }
+            // Spells, axes and cannonballs steer towards their target
+            const target = projectile.targetUid
+                ? enemiesByUid.get(projectile.targetUid)
+                : undefined;
+            if (target) {
+                const dx = target.x - projectile.x;
+                const dy = target.y - projectile.y;
+                const len = Math.hypot(dx, dy);
+                if (len > 0.001) {
+                    projectile.vx = (dx / len) * projectile.speed;
+                    projectile.vy = (dy / len) * projectile.speed;
+                    projectile.yaw = yawFromVector(dx, dy);
+                }
+            }
+            projectile.x += projectile.vx;
+            projectile.y += projectile.vy;
+
+            // An axe that has bounced is on its way to the next one
+            let bounced = false;
+            // Venom darts fly past everything but what they're aimed at, so
+            // the venom spreads
+            const only = projectile.venom > 0 && target ? target.uid : 0;
+            this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+                if (
+                    bounced ||
+                    projectile.life <= 0 ||
+                    enemy.dead ||
+                    projectile.hit.has(enemy.uid) ||
+                    (only !== 0 && enemy.uid !== only)
+                ) {
+                    return;
+                }
+                const reach = projectile.radius + enemy.radius;
+                if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+                    return;
+                }
+                projectile.hit.add(enemy.uid);
+                this.projectileHit(projectile, enemy);
+                if (projectile.bounces > 0 && this.bounce(projectile, enemy)) {
+                    bounced = true;
+                } else if (projectile.pierce > 0) {
+                    projectile.pierce--;
+                    // Pass through, and stop steering at the one already hit
+                    if (projectile.targetUid === enemy.uid) {
+                        projectile.targetUid = 0;
+                    }
+                } else {
+                    projectile.life = 0;
+                }
+            });
+        }
+    }
+
+    // Goes round the player, hitting whatever's in the way (knocked outwards)
+    private stepOrbit(projectile: Projectile, orbit: NonNullable<Projectile["orbit"]>): void {
+        const player = this.player;
+        const angle = orbit.angle + (this.tick - projectile.startTick) * orbit.angularSpeed;
+        projectile.x = player.x + Math.cos(angle) * orbit.radius;
+        projectile.y = player.y + Math.sin(angle) * orbit.radius;
+        projectile.yaw = yawFromVector(-Math.sin(angle), Math.cos(angle));
+        this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+            if (enemy.dead || (orbit.nextHit.get(enemy.uid) ?? 0) > this.tick) {
+                return;
+            }
+            const reach = projectile.radius + enemy.radius;
+            if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+                return;
+            }
+            orbit.nextHit.set(enemy.uid, this.tick + orbit.rehitTicks);
+            const dealt = this.damageEnemy(
+                enemy,
+                projectile.damage,
+                projectile.knockback,
+                player.x,
+                player.y,
+            );
+            if (projectile.weapon) {
+                this.stealLife(projectile.weapon, dealt);
+            }
+        });
+    }
+
+    private projectileHit(projectile: Projectile, enemy: Enemy): void {
+        if (projectile.impactSpotAnim !== -1) {
+            this.addEffect(projectile.impactSpotAnim, enemy.x, enemy.y, 0, 30, enemy.uid);
+        }
+        if (projectile.hitSound !== -1) {
+            this.events.push({
+                type: "impact",
+                sound: projectile.hitSound,
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
+        const weapon = projectile.weapon;
+        const mightScale = weapon?.mightScale ?? 1;
+        let damage = projectile.damage;
+        if (weapon?.toughTargets) {
+            damage *= 1 + (weapon.toughTargets * enemy.maxHp) / (enemy.maxHp + TOUGH_TARGET_HP);
+        }
+        if (weapon) {
+            damage *= this.slayerScale(weapon, enemy);
+        }
+        // An enchanted bolt's effect, now and then (the Armadyl crossbow)
+        const procs = weapon?.boltProcs;
+        const proc =
+            procs && this.rng.chance(procs.chance)
+                ? procs.procs[this.rng.weightedIndex(procs.procs.map((p) => p.weight))]
+                : undefined;
+        if (proc?.effect.kind === "pierce") {
+            damage *= 1 + proc.effect.damage;
+            projectile.pierce += proc.effect.pierce;
+        }
+        const dealt = this.damageEnemy(
+            enemy,
+            damage,
+            projectile.knockback,
+            projectile.x - projectile.vx,
+            projectile.y - projectile.vy,
+            mightScale,
+        );
+        if (weapon) {
+            this.bigHits(weapon, enemy, damage, projectile.x, projectile.y);
+        }
+        if (projectile.venom > 0 && !enemy.dead) {
+            this.envenom(enemy, projectile.venom, projectile.venomTicks);
+        }
+        if (weapon) {
+            this.stealLife(weapon, dealt);
+        }
+        if (proc) {
+            this.boltProc(proc, projectile, enemy);
+        }
+        if (projectile.split) {
+            this.splitProjectile(projectile, projectile.split, enemy);
+        }
+        if (projectile.splash > 0) {
+            const x = enemy.x;
+            const y = enemy.y;
+            this.enemyHash.query(x, y, projectile.splash + 0.5, (other) => {
+                if (other !== enemy && Math.hypot(other.x - x, other.y - y) <= projectile.splash) {
+                    this.damageEnemy(
+                        other,
+                        projectile.damage * 0.5,
+                        projectile.knockback,
+                        x,
+                        y,
+                        mightScale,
+                    );
+                }
+            });
+        }
+    }
+
+    // What an enchanted bolt does besides its hit: a ruby takes a share of
+    // what's left of the target's hitpoints (whatever the damage bonus), a
+    // dragonstone sets it burning
+    private boltProc(proc: BoltProcDef, projectile: Projectile, enemy: Enemy): void {
+        this.addEffect(proc.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+        const effect = proc.effect;
+        if (enemy.dead) {
+            return;
+        }
+        if (effect.kind === "hpFraction") {
+            const damage = Math.min(enemy.hp * effect.fraction, projectile.damage * effect.max);
+            this.damageEnemy(enemy, damage, 0, enemy.x, enemy.y, 0);
+        } else if (effect.kind === "burn") {
+            this.envenom(
+                enemy,
+                projectile.damage * effect.damage,
+                Math.round(effect.seconds * (1 + this.stats.duration) * TICKS_PER_SECOND),
+            );
+        }
+    }
+
+    // Splits a shot where it first hits into more, which fly on to the
+    // nearest other enemies, or fan out when there aren't enough (the Crystal
+    // bow's arrows)
+    private splitProjectile(
+        projectile: Projectile,
+        split: NonNullable<Projectile["split"]>,
+        from: Enemy,
+    ): void {
+        projectile.split = undefined;
+        const targets = this.nearestEnemies(from.x, from.y, SPLIT_RANGE, split.count + 1).filter(
+            (e) => e !== from,
+        );
+        const ahead = Math.atan2(projectile.vy, projectile.vx);
+        for (let i = 0; i < split.count; i++) {
+            const target = targets[i];
+            const angle = target
+                ? Math.atan2(target.y - from.y, target.x - from.x)
+                : ahead + (i - (split.count - 1) / 2) * 0.6;
+            this.projectiles.push({
+                ...projectile,
+                uid: this.nextUid++,
+                x: from.x,
+                y: from.y,
+                prevX: from.x,
+                prevY: from.y,
+                vx: Math.cos(angle) * projectile.speed,
+                vy: Math.sin(angle) * projectile.speed,
+                targetUid: target?.uid ?? 0,
+                damage: projectile.damage * split.damage,
+                pierce: split.pierce,
+                life: Math.ceil((SPLIT_RANGE * 2) / Math.max(projectile.speed, 0.01)),
+                hit: new Set([from.uid]),
+                yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+                startTick: this.tick,
+                split: undefined,
+            });
+        }
+    }
+
+    addEffect(
+        spotAnim: number,
+        x: number,
+        y: number,
+        height: number,
+        ticks: number,
+        enemyUid = 0,
+        loop = false,
+    ): Effect | undefined {
+        if (this.effects.length >= MAX_EFFECTS) {
+            return undefined;
+        }
+        const effect: Effect = {
+            uid: this.nextUid++,
+            spotAnim,
+            x,
+            y,
+            height,
+            startTick: this.tick,
+            endTick: this.tick + ticks,
+            enemyUid,
+            ...(loop && { loop }),
+        };
+        this.effects.push(effect);
+        return effect;
+    }
+
+    // ---- Pickups ----
+
+    dropCasket(x: number, y: number, elite: boolean): void {
+        this.dropCasketOfTier(rollCasketTier(this.rng, this.seconds, elite, this.stats.luck), x, y);
+    }
+
+    private dropCasketOfTier(tier: CasketTier, x: number, y: number): void {
+        this.dropPickup("casket", x, y, 1, { tier });
+        this.events.push({ type: "casketDropped", tier, x, y });
+    }
+
+    dropPickup(
+        kind: PickupKind,
+        x: number,
+        y: number,
+        value: number,
+        extra: Pick<Pickup, "tier" | "powerUp"> = {},
+    ): void {
+        if (kind === "bones" && this.pickups.length >= MAX_PICKUPS) {
+            // Too many lying around: the pile furthest from the player comes
+            // here and takes these on too. Piles left behind as the player
+            // moves on would otherwise keep what they're worth for good.
+            const player = this.player;
+            let pile: Pickup | undefined;
+            let furthest = -1;
+            for (const pickup of this.pickups) {
+                // (one already flying to the player, or to another pile, stays
+                // where it is)
+                if (pickup.kind !== "bones" || pickup.attracted || pickup.pileUid !== 0) {
+                    continue;
+                }
+                const d = Math.abs(pickup.x - player.x) + Math.abs(pickup.y - player.y);
+                if (d > furthest) {
+                    furthest = d;
+                    pile = pickup;
+                }
+            }
+            if (pile) {
+                pile.x = pile.prevX = x;
+                pile.y = pile.prevY = y;
+                pile.value += value;
+                return;
+            }
+        }
+        this.pickups.push({
+            uid: this.nextUid++,
+            kind,
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            value,
+            attracted: false,
+            speed: 0,
+            spawnTick: this.tick,
+            pileUid: 0,
+            ...extra,
+        });
+    }
+
+    private stepPickups(): void {
+        const player = this.player;
+        const magnet = BASE_MAGNET * (1 + this.stats.magnet);
+        // For bones and coins on their way to a bigger pile
+        const pilesByUid = this.pickups.some((p) => p.pileUid !== 0)
+            ? new Map(this.pickups.map((p) => [p.uid, p]))
+            : undefined;
+        for (const pickup of this.pickups) {
+            pickup.prevX = pickup.x;
+            pickup.prevY = pickup.y;
+            if (
+                pickup.kind === "powerUp" &&
+                !pickup.attracted &&
+                this.tick - pickup.spawnTick >= POWER_UP_LIFETIME * TICKS_PER_SECOND
+            ) {
+                pickup.value = -1;
+                continue;
+            }
+            const dx = player.x - pickup.x;
+            const dy = player.y - pickup.y;
+            const distance = Math.hypot(dx, dy);
+            // Caskets and power-ups need walking over
+            const magnetic = pickup.kind !== "casket" && pickup.kind !== "powerUp";
+            if (!pickup.attracted && magnetic && distance < magnet) {
+                pickup.attracted = true;
+                pickup.speed = 0.05;
+            }
+            if (pickup.attracted) {
+                pickup.pileUid = 0;
+                if (distance > 0.001) {
+                    pickup.speed = Math.min(pickup.speed + 0.02, 0.6);
+                    const move = Math.min(pickup.speed, distance);
+                    pickup.x += (dx / distance) * move;
+                    pickup.y += (dy / distance) * move;
+                }
+            } else if (pickup.pileUid !== 0) {
+                this.slideIntoPile(pickup, pilesByUid?.get(pickup.pileUid));
+                if (pickup.value < 0) {
+                    continue;
+                }
+            }
+            if (distance < 0.6) {
+                this.collect(pickup);
+                pickup.value = -1;
+            }
+        }
+        if (this.tick % PILE_INTERVAL === 0) {
+            this.gatherPiles();
+        }
+        this.pickups = this.pickups.filter((p) => p.value >= 0);
+    }
+
+    // Bones lying near a bigger pile go over to join it, so a crowd's bones
+    // end up as a few piles worth all of theirs instead of littering the map.
+    // Coins do the same. The biggest piles stay where they are, and nothing
+    // goes further from the player to join one: bones the player's about to
+    // walk over would be dragged away, and the run would level slower.
+    private gatherPiles(): void {
+        const player = this.player;
+        const away = (p: Pickup) => Math.hypot(p.x - player.x, p.y - player.y);
+        const loose = this.pickups.filter(
+            (p) =>
+                (p.kind === "bones" || p.kind === "coins") &&
+                p.value >= 0 &&
+                !p.attracted &&
+                p.pileUid === 0,
+        );
+        // Biggest first (ties to the oldest: the sort keeps their order)
+        loose.sort((a, b) => b.value - a.value);
+        const hash = this.pileHash;
+        hash.clear();
+        for (const pickup of loose) {
+            hash.insert(pickup);
+        }
+        // Piles that have taken others on, or are going to one
+        const placed = new Set<Pickup>();
+        for (const pile of loose) {
+            if (placed.has(pile)) {
+                continue;
+            }
+            placed.add(pile);
+            const pileAway = away(pile);
+            hash.query(pile.x, pile.y, PILE_RADIUS, (other) => {
+                if (
+                    other.kind === pile.kind &&
+                    !placed.has(other) &&
+                    away(other) >= pileAway &&
+                    Math.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
+                ) {
+                    other.pileUid = pile.uid;
+                    other.speed = 0;
+                    placed.add(other);
+                }
+            });
+        }
+    }
+
+    // Slides a little pile towards the one it's joining, and adds what it's
+    // worth to that one when it gets there
+    private slideIntoPile(pickup: Pickup, pile: Pickup | undefined): void {
+        if (!pile || pile.value < 0) {
+            // That one's been picked up already: this one stays put
+            pickup.pileUid = 0;
+            return;
+        }
+        const dx = pile.x - pickup.x;
+        const dy = pile.y - pickup.y;
+        const distance = Math.hypot(dx, dy);
+        pickup.speed = Math.min(pickup.speed + 0.02, 0.3);
+        if (distance <= pickup.speed) {
+            pile.value += pickup.value;
+            pickup.value = -1;
+            return;
+        }
+        pickup.x += (dx / distance) * pickup.speed;
+        pickup.y += (dy / distance) * pickup.speed;
+    }
+
+    private collect(pickup: Pickup): void {
+        this.events.push({ type: "pickup", kind: pickup.kind, value: pickup.value });
+        switch (pickup.kind) {
+            case "bones":
+                this.xp += pickup.value * (1 + this.stats.growth);
+                break;
+            case "coins":
+                this.coins += Math.round(pickup.value * (1 + this.stats.greed) * this.coinScale);
+                break;
+            case "food":
+                this.heal(pickup.value);
+                break;
+            case "casket":
+                this.openCasket(pickup.tier ?? "medium");
+                break;
+            case "powerUp":
+                this.usePowerUp(getPowerUp(pickup.powerUp ?? ""));
+                break;
+        }
+    }
+
+    // ---- Power-ups ----
+
+    // A kill is likelier to drop a power-up the longer it's been since the last
+    private rollPowerUp(x: number, y: number): void {
+        const seconds = (this.tick - this.lastPowerUpTick) / TICKS_PER_SECOND;
+        if (seconds < POWER_UP_MIN_GAP) {
+            return;
+        }
+        const minutes = seconds / 60;
+        const chance = POWER_UP_CHANCE * minutes * minutes * (1 + this.stats.luck);
+        if (this.rng.chance(chance)) {
+            const index = this.rng.weightedIndex(POWER_UPS.map((p) => p.weight));
+            this.dropPowerUp(POWER_UPS[index].id, x, y);
+        }
+    }
+
+    dropPowerUp(id: string, x: number, y: number): void {
+        this.lastPowerUpTick = this.tick;
+        this.dropPickup("powerUp", x, y, 1, { powerUp: id });
+    }
+
+    // Power-ups' damage keeps up with the enemies' hitpoints
+    private powerUpDamageScale(): number {
+        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp;
+    }
+
+    private powerUpTicks(seconds: number): number {
+        return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
+    }
+
+    // Does what a power-up does, there and then
+    usePowerUp(def: PowerUpDef): void {
+        const player = this.player;
+        const effect = def.effect;
+        let message: string;
+        let endTick = 0;
+        switch (effect.kind) {
+            case "cannon":
+                this.placeCannon(effect);
+                endTick = this.turrets[this.turrets.length - 1].endTick;
+                message = "You set up a dwarf multicannon!";
+                break;
+            case "thrall": {
+                const thrall = this.raiseThrall(effect.seconds);
+                endTick = thrall.endTick;
+                message = `A ${thrall.def.name.toLowerCase()} rises to fight for you!`;
+                break;
+            }
+            case "nuke": {
+                const banned = this.nuke(effect.bossDamage);
+                message = `Bot nuke! ${banned} ${banned === 1 ? "bot" : "bots"} banned.`;
+                break;
+            }
+            case "magnet":
+                for (const pickup of this.pickups) {
+                    pickup.attracted = true;
+                    pickup.speed = Math.max(pickup.speed, 0.15);
+                }
+                message = "Everything on the ground flies to you!";
+                break;
+            case "freeze":
+                endTick = Math.max(
+                    this.freezeEndTick,
+                    this.tick + this.powerUpTicks(effect.seconds),
+                );
+                this.freezeEndTick = endTick;
+                for (const enemy of this.enemies) {
+                    if (!enemy.dead && !enemy.boss) {
+                        enemy.frozen = Math.max(enemy.frozen, endTick - this.tick);
+                    }
+                }
+                message = "Time stands still!";
+                break;
+        }
+        if (endTick > this.tick) {
+            this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
+        }
+        this.events.push({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+    }
+
+    // Kills everything that isn't a boss; bosses lose a share of their
+    // hitpoints. Returns how many it killed.
+    private nuke(bossDamage: number): number {
+        const player = this.player;
+        let killed = 0;
+        for (const enemy of [...this.enemies]) {
+            if (enemy.dead) {
+                continue;
+            }
+            if (enemy.boss) {
+                // A share of its hitpoints, whatever the damage bonus
+                this.damageEnemy(enemy, enemy.maxHp * bossDamage, 0, player.x, player.y, 0);
+                continue;
+            }
+            if (enemy.shieldEnd > this.tick) {
+                this.showBlocked(enemy);
+                continue;
+            }
+            if (killed < MAX_NUKE_EFFECTS) {
+                this.addEffect(NUKE_SPOTANIM, enemy.x, enemy.y, 0, 30);
+            }
+            this.killEnemy(enemy, "nuke");
+            killed++;
+        }
+        return killed;
+    }
+
+    // A casket always has some coins and one item; the run waits while the
+    // player decides what to do with the item
+    openCasket(tier: CasketTier): void {
+        const [min, max] = CASKETS[tier].coins;
+        const coins = Math.round(
+            (min + this.rng.int(max - min + 1)) * (1 + this.stats.greed) * this.coinScale,
+        );
+        this.coins += coins;
+        this.casketsOpened++;
+        const { itemId, upgradedFrom } = this.rollChestItem(tier);
+        const upgrades = this.offeredUpgrades(itemId);
+        this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
+        this.events.push({ type: "chest", tier, itemId, coins });
+        if (this.state === "playing") {
+            this.state = "chest";
+        }
+    }
+
+    // A casket's item, gear as the Armoury has upgraded it (and noted as
+    // found); a reroll's is never the one it replaces
+    private rollChestItem(
+        tier: CasketTier,
+        replaces?: string,
+    ): { itemId: string; upgradedFrom?: string } {
+        const found = rollCasketItem(
+            this.rng,
+            tier,
+            this.stats.luck,
+            this.gear,
+            hasPoison(this.map),
+            replaces,
+            this.unlockedItems,
+            { offered: this.gearUpgradesFound, worn: this.gearUpgrades },
+            this.armoury,
+        );
+        if (getItem(found).kind !== "gear") {
+            return { itemId: found };
+        }
+        this.gearFound.add(found);
+        const itemId = getUpgradedGear(found, this.armoury);
+        return { itemId, upgradedFrom: itemId !== found ? found : undefined };
+    }
+
+    // Gear in an endless run's casket comes upgraded once for each round
+    // after the first
+    private get gearUpgradesFound(): number {
+        return this.endless ? this.round - 1 : 0;
+    }
+
+    private offeredUpgrades(itemId: string): number {
+        return getItem(itemId).kind === "gear" ? this.gearUpgradesFound : 0;
+    }
+
+    private checkLevelUp(): void {
+        const level = this.endless
+            ? endlessLevelForXp(this.xp, this.level)
+            : runLevelForXp(this.xp);
+        if (level > this.level) {
+            this.pendingLevelUps += level - this.level;
+            this.level = level;
+            if (this.stats.levelMight !== 0) {
+                this.updateStats();
+            }
+            this.events.push({ type: "levelUp", level });
+            this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
+        }
+        if (this.pendingLevelUps > 0 && this.state === "playing") {
+            this.state = "levelUp";
+            this.choices = this.roll();
+        }
+    }
+
+    // ---- Housekeeping ----
+
+    private cleanUp(): void {
+        const tick = this.tick;
+        this.enemies = this.enemies.filter((e) => !e.dead || tick - e.deathTick < CORPSE_TICKS);
+        this.projectiles = this.projectiles.filter((p) => p.life > 0);
+        this.enemyProjectiles = this.enemyProjectiles.filter((p) => p.life > 0);
+        this.effects = this.effects.filter((e) => tick < e.endTick);
+        if (this.effects.some((e) => e.enemyUid !== 0)) {
+            const enemiesByUid = new Map<number, Enemy>();
+            for (const enemy of this.enemies) {
+                enemiesByUid.set(enemy.uid, enemy);
+            }
+            for (const effect of this.effects) {
+                if (effect.enemyUid === 0) {
+                    continue;
+                }
+                const enemy = enemiesByUid.get(effect.enemyUid);
+                if (enemy) {
+                    effect.x = enemy.x;
+                    effect.y = enemy.y;
+                }
+                if (!enemy || enemy.dead) {
+                    effect.enemyUid = 0;
+                }
+            }
+        }
+    }
+
+    takeEvents(): SimEvent[] {
+        const events = this.events;
+        this.events = [];
+        return events;
+    }
+
+    get runOver(): boolean {
+        return this.state === "dead" || this.state === "victory";
+    }
+
+    // Until this round's final boss
+    get timeLeftForBoss(): number {
+        return Math.max(0, RUN_LENGTH - this.mapSeconds);
+    }
+}
+
+function addStats(stats: Stats, add: Partial<Stats>): void {
+    for (const [key, value] of Object.entries(add)) {
+        stats[key as keyof Stats] += value ?? 0;
+    }
+}
+
+// Whether an enemy is any of these (a vampyre, undead)
+function hasTag(enemy: Enemy, tags: readonly EnemyTag[]): boolean {
+    return enemy.def.tags?.some((tag) => tags.includes(tag)) ?? false;
+}
+
+function secondsToTicks(seconds: number): number {
+    return Math.round(seconds * TICKS_PER_SECOND);
+}
+
+// Timers for what an enemy does besides walking up and hitting, undefined if
+// its def gives it nothing. The first spawn, heal and revive come one
+// interval after it turns up; the first blink somewhere in its first
+// interval, so a crowd of them don't all go at once.
+function getAbilities(def: EnemyDef, tick: number, rng: Rng): EnemyAbilities | undefined {
+    if (!def.spawns && !def.heals && !def.revives && !def.blinks) {
+        return undefined;
+    }
+    return {
+        nextSpawn: tick + secondsToTicks(def.spawns?.interval ?? 0),
+        nextHeal: tick + secondsToTicks(def.heals?.interval ?? 0),
+        nextRevive: tick + secondsToTicks(def.revives?.interval ?? 0),
+        nextBlink: def.blinks ? tick + secondsToTicks(def.blinks.interval * rng.range(0.5, 1)) : 0,
+        blinkLand: -1,
+    };
+}
+
+// Back and forth between -half and half at a steady speed, from 0 heading
+// up: where it is after going distance
+function pingPong(distance: number, half: number): number {
+    if (half <= 0) {
+        return 0;
+    }
+    const p = (distance + half) % (half * 4);
+    return p < half * 2 ? p - half : half * 3 - p;
+}
+
+// RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
+export function yawFromVector(dx: number, dy: number): number {
+    return Math.round((Math.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
+}
+
+export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };
+
+// A shot as the boss-attack shape enemy projectiles carry (its damage is the
+// enemy's own, set when it's fired)
+const SHOT_ATTACKS = new WeakMap<EnemyShotDef, BossAttackDef>();
+function shotAttack(shot: EnemyShotDef): BossAttackDef {
+    let attack = SHOT_ATTACKS.get(shot);
+    if (!attack) {
+        attack = {
+            name: "Shot",
+            kind: "projectile",
+            damage: 0,
+            windup: 0,
+            cooldown: 0,
+            range: shot.range,
+            weight: 1,
+            speed: shot.speed,
+            spotAnim: shot.spotAnim,
+            impactSpotAnim: shot.impactSpotAnim,
+            hitSound: shot.hitSound,
+        };
+        SHOT_ATTACKS.set(shot, attack);
+    }
+    return attack;
+}

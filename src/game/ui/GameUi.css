@@ -1,0 +1,1335 @@
+:root {
+    --ui-orange: #ff981f;
+    --ui-yellow: #ffff00;
+    --ui-white: #ffffff;
+    --ui-cyan: #00ffff;
+    --ui-green: #0dc10d;
+    --ui-red: #ff0000;
+    --ui-text: #e0d6c0;
+    --ui-panel-dark: rgba(30, 24, 16, 0.92);
+    --ui-card: rgba(62, 53, 41, 0.95);
+    --ui-card-hover: rgba(90, 76, 58, 0.98);
+    --ui-edge: #000000;
+    --ui-edge-light: #6b5e4a;
+    /* How much bigger the UI is drawn, for the window's size (set on
+       .ui-contents). Zoom scales viewport units too, so ones inside the UI
+       are divided by it to stay a share of the window. */
+    --ui-scale: 1;
+}
+
+.ui-fill {
+    position: absolute;
+    inset: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+}
+
+.ui-fill button,
+.ui-panel,
+.ui-modal {
+    pointer-events: auto;
+}
+
+.ui-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ui-loading {
+    background: #000;
+    pointer-events: auto;
+}
+
+.ui-icon {
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+.ui-icon-smooth {
+    image-rendering: auto;
+}
+
+/* Scrollbars: the client's own, a bevelled brown thumb in a dark track */
+.ui-contents ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.ui-contents ::-webkit-scrollbar-track {
+    background: #23201b;
+    box-shadow: inset 0 0 0 1px #000;
+}
+
+.ui-contents ::-webkit-scrollbar-thumb {
+    min-height: 24px;
+    background: #4d4233;
+    border: 1px solid #000;
+    box-shadow:
+        inset 1px 1px 0 #766654,
+        inset -1px -1px 0 #332d25;
+}
+
+.ui-contents ::-webkit-scrollbar-thumb:hover {
+    background: #5c4f3d;
+}
+
+.ui-contents ::-webkit-scrollbar-thumb:active {
+    background: #665846;
+}
+
+.ui-contents ::-webkit-scrollbar-corner {
+    background: #23201b;
+}
+
+/* Firefox has no scrollbar parts to style, only the two colours */
+@supports not selector(::-webkit-scrollbar) {
+    .ui-contents,
+    .ui-contents * {
+        scrollbar-width: thin;
+        scrollbar-color: #6b5e4a #23201b;
+    }
+}
+
+.ui-panel {
+    padding: 14px 18px;
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+}
+
+.ui-panel h2 {
+    margin: 0 0 8px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 22px;
+    color: var(--ui-orange);
+    text-align: center;
+}
+
+.ui-subtle {
+    color: #b8aa8a;
+    margin: 0 0 10px;
+    text-align: center;
+}
+
+.ui-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+/* Buttons and cards */
+
+.ui-button {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+    background: var(--ui-card);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    padding: 7px 16px;
+    cursor: pointer;
+}
+
+.ui-button:hover:not(:disabled) {
+    background: var(--ui-card-hover);
+    color: var(--ui-yellow);
+}
+
+.ui-button:disabled {
+    color: #7d705b;
+    cursor: default;
+}
+
+.ui-button-big {
+    font-size: 22px;
+    padding: 10px 40px;
+    width: 100%;
+}
+
+.ui-button-small {
+    font-size: 14px;
+    padding: 4px 10px;
+}
+
+/* Everything but the loading screen, zoomed by --ui-scale */
+.ui-contents {
+    position: absolute;
+    inset: 0;
+    zoom: var(--ui-scale);
+    pointer-events: none;
+}
+
+.ui-button-go {
+    color: var(--ui-green);
+}
+
+.ui-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    background: var(--ui-card);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.ui-card:hover:not(:disabled) {
+    background: var(--ui-card-hover);
+}
+
+.ui-card-selected {
+    box-shadow: inset 0 0 0 2px var(--ui-yellow);
+}
+
+/* Still there to point at, to see what it takes */
+.ui-card-locked {
+    color: #8a7f6a;
+    cursor: default;
+}
+
+.ui-card-locked .ui-icon {
+    filter: grayscale(1) brightness(0.6);
+}
+
+.ui-card-dim {
+    opacity: 0.7;
+}
+
+.ui-card:disabled {
+    cursor: default;
+}
+
+/* A win opened up the next map */
+.ui-unlocked {
+    margin: 0 0 10px;
+    text-align: center;
+    color: var(--ui-yellow);
+}
+
+.ui-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ui-card-title {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
+.ui-card-text {
+    color: var(--ui-text);
+}
+
+.ui-card-cost {
+    color: var(--ui-yellow);
+}
+
+.ui-card-style {
+    color: #b8aa8a;
+}
+
+.ui-coins {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--ui-yellow);
+}
+
+.ui-tag {
+    margin-left: 8px;
+    color: var(--ui-yellow);
+}
+
+.ui-tag-evolve {
+    color: var(--ui-cyan);
+}
+
+/* Title */
+
+.ui-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(6vh / var(--ui-scale)) 16px calc(4vh / var(--ui-scale));
+    box-sizing: border-box;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.55));
+}
+
+.ui-title-logo {
+    text-align: center;
+}
+
+.ui-title-logo h1 {
+    margin: 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: clamp(40px, calc(8vw / var(--ui-scale)), 84px);
+    color: var(--ui-orange);
+    text-shadow:
+        3px 3px 0 #000,
+        0 0 24px rgba(255, 120, 0, 0.45);
+    letter-spacing: 2px;
+}
+
+.ui-title-logo p {
+    margin: 4px 0 0;
+    font-size: 18px;
+    color: var(--ui-white);
+}
+
+.ui-title-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.ui-title-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: min(360px, calc(90vw / var(--ui-scale)));
+}
+
+/* Settings: behind the title screen's button, and in the pause menu */
+
+.ui-settings {
+    width: min(500px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-settings > h2,
+.ui-settings > .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-settings-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ui-settings-section + .ui-settings-section {
+    margin-top: 12px;
+}
+
+.ui-settings-section h3 {
+    margin: 0 0 2px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--ui-edge-light);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 18px;
+    color: var(--ui-orange);
+}
+
+.ui-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 0;
+}
+
+.ui-setting-name {
+    color: var(--ui-white);
+}
+
+.ui-setting-text {
+    font-size: 14px;
+    color: #b8aa8a;
+}
+
+.ui-setting-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.ui-toggle {
+    min-width: 52px;
+    color: #e04040;
+}
+
+.ui-toggle-on {
+    color: var(--ui-green);
+}
+
+.ui-volume {
+    width: 140px;
+    accent-color: var(--ui-orange);
+}
+
+.ui-volume-muted {
+    opacity: 0.5;
+}
+
+.ui-volume-value {
+    width: 36px;
+    text-align: right;
+}
+
+/* In the title screen's bottom left corner: Discord's icon in its own blurple,
+   with a slow glow so it catches the eye */
+.ui-discord {
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+    pointer-events: auto;
+    color: var(--ui-white);
+    background: #5865f2;
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px #8b93ff;
+    cursor: pointer;
+    animation: ui-discord-glow 2.4s ease-in-out infinite;
+}
+
+.ui-discord:hover {
+    background: #6d78f5;
+    color: var(--ui-yellow);
+}
+
+.ui-discord-logo {
+    width: 26px;
+    height: 26px;
+    fill: currentColor;
+    filter: drop-shadow(1px 1px 0 #000);
+}
+
+@keyframes ui-discord-glow {
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 0 1px #8b93ff,
+            0 0 4px rgba(88, 101, 242, 0.4);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 1px #8b93ff,
+            0 0 14px rgba(120, 132, 255, 0.9);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-discord {
+        animation: none;
+        box-shadow:
+            inset 0 0 0 1px #8b93ff,
+            0 0 10px rgba(120, 132, 255, 0.7);
+    }
+}
+
+.ui-title-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    text-align: center;
+}
+
+.ui-hint {
+    color: var(--ui-white);
+    opacity: 0.8;
+}
+
+/* In the title screen's corner; it opens the changelog */
+.ui-version {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    padding: 2px 4px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    background: none;
+    border: none;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+.ui-version:hover {
+    color: var(--ui-yellow);
+    opacity: 1;
+}
+
+/* Adventurer and map select: a panel down each side, so the adventurer picked
+   stands in view between them, and a bar along the bottom. In each panel the
+   list scrolls on its own if the window's too short for it, and the details
+   stay in view below it. */
+
+.ui-select {
+    display: grid;
+    grid-template-columns: minmax(0, 400px) 1fr minmax(0, 400px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.ui-select-panel {
+    align-self: start;
+    max-height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ui-select-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.ui-select-panel > .ui-select-details {
+    flex-shrink: 0;
+}
+
+.ui-select-maps {
+    grid-column: 3;
+}
+
+.ui-panel .ui-select-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0;
+    text-align: left;
+}
+
+.ui-select-count {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: #b8aa8a;
+}
+
+.ui-select-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+}
+
+.ui-select-go {
+    font-size: 20px;
+    padding: 8px 28px;
+}
+
+/* The endless switch, by the start button */
+.ui-endless {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.ui-endless-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-endless-locked .ui-endless-name {
+    color: #8a7e66;
+}
+
+.ui-endless-hint {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: #8a7e66;
+}
+
+/* Under each list: the one pointed at, or the one picked */
+.ui-select-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.35);
+}
+
+/* Room for the longest, so it doesn't jump about between them */
+.ui-select-adventurers .ui-select-details {
+    min-height: 118px;
+    box-sizing: border-box;
+}
+
+.ui-select-details-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+
+.ui-style-group + .ui-style-group {
+    margin-top: 8px;
+}
+
+.ui-style-name {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-white);
+}
+
+.ui-style-treasure {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: #b8aa8a;
+}
+
+.ui-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* Seven to a row */
+.ui-tile {
+    position: relative;
+    justify-content: center;
+    width: 46px;
+    height: 44px;
+    padding: 0;
+}
+
+.ui-tile-badge {
+    position: absolute;
+    right: 1px;
+    bottom: 0;
+    display: flex;
+}
+
+.ui-map-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+
+.ui-map-tile {
+    gap: 6px;
+    min-width: 0;
+    padding: 2px 8px 2px 4px;
+    font-size: 15px;
+}
+
+.ui-map-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A tick for a map that's been beaten */
+.ui-beaten {
+    flex-shrink: 0;
+    width: 4px;
+    height: 9px;
+    margin: 0 3px 3px 0;
+    border: solid var(--ui-green);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    filter: drop-shadow(1px 1px 0 #000);
+}
+
+/* What a map's tasks bring in, faded until it's earned */
+.ui-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(107, 94, 74, 0.6);
+}
+
+.ui-task {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+}
+
+.ui-task-name {
+    color: var(--ui-yellow);
+}
+
+.ui-task-done .ui-task-name {
+    color: var(--ui-green);
+}
+
+.ui-reward {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 15px;
+    color: var(--ui-white);
+}
+
+.ui-reward-locked {
+    color: #8a7f6a;
+}
+
+.ui-reward-locked .ui-icon {
+    filter: grayscale(1) brightness(0.7);
+}
+
+/* Narrow windows: the panels one above the other, scrolling, with the bar
+   kept at the bottom */
+@media (max-width: 759px) {
+    .ui-select {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px 10px 0;
+        overflow-y: auto;
+        pointer-events: auto;
+    }
+
+    .ui-select-panel {
+        flex-shrink: 0;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .ui-select-scroll {
+        overflow-y: visible;
+    }
+
+    .ui-select-bar {
+        position: sticky;
+        bottom: 0;
+        flex-shrink: 0;
+        margin-top: auto;
+    }
+
+    /* Room for the longest map's name on the button */
+    .ui-select-bar .ui-coins {
+        display: none;
+    }
+
+    .ui-select-go {
+        font-size: 17px;
+        padding: 8px 14px;
+    }
+}
+
+/* Skills */
+
+.ui-shop {
+    width: min(760px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
+}
+
+.ui-shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
+}
+
+.ui-shop-card {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.ui-shop-card:disabled {
+    cursor: default;
+}
+
+.ui-pips {
+    display: flex;
+    gap: 3px;
+}
+
+.ui-pip {
+    width: 12px;
+    height: 8px;
+    background: #2a231a;
+    border: 1px solid #000;
+}
+
+.ui-pip-on {
+    background: var(--ui-orange);
+}
+
+/* Run HUD */
+
+.ui-run {
+    pointer-events: none;
+}
+
+.ui-xp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 18px;
+    background: rgba(0, 0, 0, 0.75);
+    border-bottom: 1px solid #000;
+}
+
+.ui-xp-fill {
+    height: 100%;
+    background: linear-gradient(#3fa7ff, #1550c0);
+    transition: width 0.1s linear;
+}
+
+.ui-xp-level {
+    position: absolute;
+    right: 8px;
+    top: 0;
+    line-height: 18px;
+    color: var(--ui-white);
+}
+
+.ui-hud-top {
+    position: absolute;
+    top: 24px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.ui-hud-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-hud-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    font-size: 18px;
+    color: var(--ui-white);
+}
+
+/* The client's minimap frame (181x165), its map circle 77px round about
+   (99, 83) and the compass in the small circle at its top left */
+.ui-minimap {
+    position: relative;
+    width: 181px;
+    height: 165px;
+}
+
+.ui-minimap-map {
+    position: absolute;
+    left: 22px;
+    top: 6px;
+    width: 154px;
+    height: 154px;
+    border-radius: 50%;
+    background: #000;
+}
+
+.ui-minimap-frame {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.ui-minimap-compass {
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    clip-path: circle(18px);
+}
+
+.ui-skull {
+    color: #d0d0d0;
+}
+
+.ui-timer {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 30px;
+    color: var(--ui-white);
+    text-shadow: 2px 2px 0 #000;
+}
+
+/* The quest tracker, at the bottom of the right-hand column: names coloured
+   like the quest tab, with how far each has got */
+.ui-quest-tracker {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    max-width: 230px;
+    font-size: 15px;
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: auto;
+}
+
+.ui-quest-tracker-title {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-orange);
+    background: none;
+    border: none;
+    padding: 0;
+    text-shadow: 1px 1px 0 #000;
+    cursor: pointer;
+}
+
+.ui-quest-track {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.ui-quest-track-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ui-quest-track-progress {
+    color: var(--ui-white);
+}
+
+.ui-quest-new .ui-quest-track-name {
+    color: var(--ui-red);
+}
+
+.ui-quest-started .ui-quest-track-name {
+    color: var(--ui-yellow);
+}
+
+.ui-quest-done .ui-quest-track-name,
+.ui-quest-done .ui-quest-track-progress {
+    color: var(--ui-green);
+}
+
+/* A quest in the pause menu's list: its name, what it asks and how far */
+.ui-pause-quest {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.ui-pause-quest .ui-pause-detail {
+    flex: 1;
+}
+
+/* An endless run's round, under the coins */
+.ui-round {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-slots {
+    display: flex;
+    gap: 2px;
+}
+
+.ui-slot {
+    position: relative;
+    width: 38px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(40, 33, 24, 0.85);
+    border: 1px solid #000;
+    pointer-events: auto;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-slot-level {
+    position: absolute;
+    left: 2px;
+    top: 0;
+    font-size: 13px;
+    color: var(--ui-yellow);
+}
+
+.ui-gear-slot {
+    width: 28px;
+    height: 26px;
+}
+
+.ui-gear-empty {
+    font-size: 12px;
+    color: rgba(184, 170, 138, 0.35);
+}
+
+/* Buffs, inventory and hitpoints, bottom middle */
+
+.ui-hud-bottom {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-buffs {
+    display: flex;
+    gap: 6px;
+}
+
+.ui-buff {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px 4px 3px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid #000;
+    color: var(--ui-white);
+    font-size: 14px;
+}
+
+.ui-buff-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--ui-cyan);
+}
+
+/* Drained by a boss */
+.ui-buff-harmful {
+    border-color: #b01c1c;
+}
+
+.ui-buff-harmful .ui-buff-bar {
+    background: #e04040;
+}
+
+.ui-inventory {
+    display: flex;
+    gap: 3px;
+}
+
+.ui-inv-slot {
+    position: relative;
+    width: 46px;
+    height: 42px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(62, 53, 41, 0.9);
+    border: 2px solid #000;
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    cursor: pointer;
+}
+
+.ui-inv-slot:hover:not(:disabled) {
+    background: var(--ui-card-hover);
+}
+
+.ui-inv-slot:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.ui-inv-key {
+    position: absolute;
+    left: 3px;
+    top: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 13px;
+    color: #b8aa8a;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-inv-count {
+    position: absolute;
+    right: 3px;
+    bottom: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-hp {
+    position: relative;
+    width: min(280px, calc(60vw / var(--ui-scale)));
+    height: 20px;
+    background: var(--ui-red);
+    border: 2px solid #000;
+}
+
+.ui-hp-fill {
+    height: 100%;
+    background: #00c800;
+}
+
+/* Poisoned: a sicker green, like the client's hitpoints orb */
+.ui-hp-poisoned {
+    border-color: #2f5f00;
+}
+
+.ui-hp-poisoned .ui-hp-fill {
+    background: #8fb800;
+}
+
+.ui-hp span {
+    position: absolute;
+    inset: 0;
+    text-align: center;
+    line-height: 20px;
+    color: var(--ui-white);
+}
+
+.ui-boss {
+    position: absolute;
+    top: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(520px, calc(80vw / var(--ui-scale)));
+    text-align: center;
+}
+
+.ui-boss-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 20px;
+    color: var(--ui-orange);
+}
+
+.ui-boss-enraged {
+    color: var(--ui-red);
+}
+
+.ui-boss-bar {
+    height: 14px;
+    background: #400000;
+    border: 2px solid #000;
+}
+
+.ui-boss-fill {
+    height: 100%;
+    background: linear-gradient(#e01010, #800000);
+}
+
+.ui-boss-warning {
+    position: absolute;
+    top: 70px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 20px;
+    color: var(--ui-red);
+}
+
+.ui-toasts {
+    position: absolute;
+    top: 110px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.ui-toast {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+    background: rgba(0, 0, 0, 0.55);
+    padding: 3px 12px;
+}
+
+/* Modals */
+
+.ui-modal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.ui-levelup {
+    width: min(560px, calc(94vw / var(--ui-scale)));
+}
+
+.ui-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ui-choice {
+    min-height: 62px;
+    border-width: 2px;
+}
+
+.ui-choice .ui-card-body {
+    flex: 1;
+}
+
+.ui-choice-evolve {
+    border-color: var(--ui-cyan);
+    box-shadow:
+        inset 0 0 0 1px var(--ui-edge-light),
+        0 0 12px rgba(0, 255, 255, 0.35);
+}
+
+.ui-rarity {
+    align-self: flex-start;
+    font-family: "OSRS Bold", sans-serif;
+    white-space: nowrap;
+}
+
+.ui-choice-key {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+    width: 14px;
+}
+
+/* Under a level up's rewards or a casket's choices */
+.ui-reroll {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.ui-reroll .ui-choice-key {
+    display: inline-block;
+}
+
+.ui-pause {
+    width: min(920px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
+}
+
+/* The run (weapons, passives and worn equipment) on the left, the quests and
+   settings on the right, so a full run still fits; one column on a narrow
+   window */
+.ui-pause-columns {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.ui-pause-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.ui-pause-column > .ui-pause-heading:first-child {
+    margin-top: 0;
+}
+
+@media (max-width: 760px) {
+    .ui-pause-columns {
+        flex-direction: column;
+        gap: 0;
+    }
+}
+
+.ui-pause-heading {
+    margin: 12px 0 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 18px;
+    color: var(--ui-orange);
+    text-align: center;
+}
+
+.ui-pause-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-pause-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ui-pause-item span:nth-child(2) {
+    flex: 1;
+}
+
+.ui-pause-detail {
+    color: var(--ui-white);
+}
+
+/* A worn set piece's progress, under its stats; green once the bonus is on */
+.ui-pause-set {
+    display: block;
+    color: var(--ui-cyan);
+}
+
+.ui-pause-set-on {
+    color: var(--ui-green);
+}
+
+.ui-result {
+    width: min(420px, calc(94vw / var(--ui-scale)));
+}
+
+.ui-victory {
+    color: var(--ui-green) !important;
+}
+
+.ui-defeat {
+    color: var(--ui-red) !important;
+}
+
+.ui-result-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ui-result-table td {
+    padding: 4px 6px;
+}
+
+.ui-result-table td:first-child {
+    color: var(--ui-orange);
+}
+
+.ui-result-table td:last-child {
+    text-align: right;
+    color: var(--ui-white);
+}
