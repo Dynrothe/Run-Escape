@@ -39,6 +39,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 [docs/GAMEPLAY.md](docs/GAMEPLAY.md) goes through all of it, map by map. [CHANGELOG.md](CHANGELOG.md)
 has what changed in each version.
 
+## You can play the game at https://jere.io/run-escape
+
 ## Cache version
 
 The game is built on one Old School RuneScape cache, and only runs on that one: every NPC, item,
