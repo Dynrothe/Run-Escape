@@ -5,6 +5,8 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.17.2 - 2026-10-30
+
 ### Fixed
 
 - Caskets no longer land inside Pest Control's portals or other spots you can't walk to, where you
