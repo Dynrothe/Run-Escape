@@ -92,6 +92,12 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
   Treat its numbers as a comparison, not as how a player would do.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
+- **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
+  use `MAP=x ... "" 3` rather than a process per run.
+- Sims don't need the game cache after the first run on a map: `scripts/game/collision-snapshot.ts`
+  saves that map's collision to `caches/collision/` (gitignored). A snapshot rebuilds by itself when
+  the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
+  else, delete that folder.
 
 After a content change, also run the checks that apply:
 

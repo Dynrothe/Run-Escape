@@ -1,5 +1,5 @@
-// Plays runs with a simple bot on the real arena (collision from the cache)
-// and prints how they go, for balancing waves, weapons and the XP curve.
+// Plays runs with a simple bot on the real arena (collision from a snapshot of
+// the cache, see collision-snapshot.ts) and prints how they go, for balancing waves, weapons and the XP curve.
 //
 //   npx tsx scripts/game/simulate-run.ts                 # every character once
 //   npx tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
@@ -13,7 +13,7 @@
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
-import { getArenaRegion, getMap } from "../../src/game/content/maps";
+import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
@@ -23,8 +23,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
-import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
-import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
+import { loadRegionData } from "./collision-snapshot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
 const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
@@ -51,10 +50,7 @@ const armoury =
         : undefined;
 const ARENA = map.arena;
 console.time(`${map.name} arena`);
-const cache = loadGameCache();
-const grid = new ArenaGrid(
-    buildRegionData(createSceneBuilder(cache), createVarManager(cache), getArenaRegion(map)),
-);
+const grid = new ArenaGrid(loadRegionData(map));
 console.timeEnd(`${map.name} arena`);
 
 // Like a person might: take evolutions, fill the weapon slots, then upgrade;
