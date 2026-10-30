@@ -83,6 +83,7 @@ import {
     Enemy,
     EnemyAbilities,
     EnemyProjectile,
+    FairyRing,
     FallingRock,
     Glyph,
     GroundFire,
@@ -131,6 +132,10 @@ const RAMPAGE_START_DISTANCE = 14;
 const RAMPAGE_CROWD_RANGE = 14;
 const RAMPAGE_OVERSHOOT = 7;
 export const RAMPAGE_FADE_TICKS = 25;
+// A fairy ring looks for what's walked in this often, and shows the warp on
+// only so many at a time
+const RING_PULSE_TICKS = 5;
+const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // Ticks a fallen rock lies there before it's gone
@@ -378,6 +383,7 @@ export class Sim {
     powerUps: ActivePowerUp[] = [];
     rocks: FallingRock[] = [];
     rampages: Rampage[] = [];
+    rings: FairyRing[] = [];
     // Bosses' glyphs (BossDef.glyph)
     glyphs: Glyph[] = [];
     // Burning ground left by weapons
@@ -1159,6 +1165,7 @@ export class Sim {
         this.stepThralls();
         this.stepRocks();
         this.stepRampages();
+        this.stepRings();
         this.stepProjectiles();
         this.stepFires();
         this.stepEnemyProjectiles();
@@ -1947,10 +1954,14 @@ export class Sim {
         }
     }
 
-    private relocate(enemy: Enemy): void {
+    // Ahead of the player if they're moving, so they keep running into things,
+    // or behind them
+    private relocate(enemy: Enemy, behind = false): void {
         const player = this.player;
-        // Ahead of the player if they're moving, so they keep running into things
-        const angle = player.moving ? Math.atan2(player.facingY, player.facingX) : undefined;
+        const side = behind ? -1 : 1;
+        const angle = player.moving
+            ? Math.atan2(player.facingY * side, player.facingX * side)
+            : undefined;
         const pos = this.findSpawnPoint(enemy.def, SPAWN_MIN_DISTANCE, SPAWN_MAX_DISTANCE, angle);
         if (pos) {
             enemy.x = enemy.prevX = pos.x;
@@ -4983,6 +4994,22 @@ export class Sim {
                 endTick = this.startRampage(def, effect).endTick;
                 message = "Evil Bob has come for his revenge!";
                 break;
+            case "ring":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                this.rings.push({
+                    uid: this.nextUid++,
+                    x: player.x,
+                    y: player.y,
+                    startTick: this.tick,
+                    endTick,
+                    nextPulse: this.tick,
+                    radius: effect.radius,
+                    locId: effect.locId,
+                    spotAnim: effect.spotAnim,
+                    scale: effect.scale,
+                });
+                message = "A fairy ring opens at your feet!";
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
@@ -5168,6 +5195,40 @@ export class Sim {
         const active = this.powerUps.find((p) => p.id === rampage.powerUpId);
         if (active) {
             active.endTick = this.tick + 1;
+        }
+    }
+
+    private stepRings(): void {
+        for (const ring of this.rings) {
+            if (this.tick >= ring.nextPulse) {
+                ring.nextPulse = this.tick + RING_PULSE_TICKS;
+                this.pulseRing(ring);
+            }
+        }
+        this.rings = this.rings.filter((ring) => ring.endTick > this.tick);
+    }
+
+    // Behind the player, or they'd land right in their path
+    private pulseRing(ring: FairyRing): void {
+        const { x, y, radius } = ring;
+        const caught: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (
+                !enemy.boss &&
+                !enemy.def.stationary &&
+                !enemy.jump &&
+                Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
+            ) {
+                caught.push(enemy);
+            }
+        });
+        let effects = 0;
+        for (const enemy of caught) {
+            if (effects < MAX_RING_EFFECTS) {
+                this.addEffect(ring.spotAnim, enemy.x, enemy.y, 0, 40);
+                effects++;
+            }
+            this.relocate(enemy, true);
         }
     }
 

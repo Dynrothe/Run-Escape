@@ -195,6 +195,9 @@ version and how to run it.
       survivors back, and bosses lose 8% of their hitpoints. It can't hurt you.
     - **Evil Bob**: a giant Evil Bob charges through the thickest crowd three times, over walls and
       all. Everything in his way is hit once a pass and thrown aside.
+    - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
+      within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
+      opened, and shots still come through.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Each map's monsters are from its part of the world:

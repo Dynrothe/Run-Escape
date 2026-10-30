@@ -691,6 +691,89 @@ describe("power-ups", () => {
         });
     });
 
+    describe("the fairy ring", () => {
+        const ring = () => getPowerUp("fairy_ring");
+
+        test("warps away what walks into it, far from the player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            sim.usePowerUp(ring());
+            const walker = goblin(sim, x + 4, y);
+            const warpedFrom: number[] = [];
+            for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                const before = { x: walker.x, y: walker.y };
+                sim.step(0, 0);
+                if (Math.hypot(walker.x - before.x, walker.y - before.y) > 5) {
+                    warpedFrom.push(Math.hypot(before.x - x, before.y - y));
+                }
+            }
+            expect(warpedFrom).toHaveLength(1);
+            expect(warpedFrom[0]).toBeLessThan(4);
+            expect(Math.hypot(walker.x - x, walker.y - y)).toBeGreaterThan(8);
+            expect(walker.hp).toBe(walker.maxHp);
+        });
+
+        test("stays where it opened while the player walks off, for its time", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.usePowerUp(ring());
+            const { x, y } = sim.rings[0];
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["fairy_ring"]);
+            sim.player.invulnerable = 100000;
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                sim.step(1, 0);
+            }
+            expect(sim.rings[0]).toMatchObject({ x, y });
+            runFor(sim, 11, "still");
+            expect(sim.rings).toHaveLength(0);
+        });
+
+        test("leaves bosses and what can't move alone", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x + 1, y })!;
+            boss.frozen = 10000;
+            const portal = sim.spawnEnemy({ ...getEnemy("goblin"), stationary: true }, "normal", {
+                x: x - 1,
+                y,
+            })!;
+            const bossX = boss.x;
+            sim.usePowerUp(ring());
+            runFor(sim, 1, "still");
+            expect(Math.abs(boss.x - bossX)).toBeLessThan(1);
+            expect(portal.x).toBeCloseTo(x - 1);
+        });
+
+        test("puts what it warps behind a moving player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            sim.usePowerUp(ring());
+            const { x, y } = sim.rings[0];
+            let ahead = 0;
+            let behind = 0;
+            for (let i = 0; i < 60; i++) {
+                const enemy = goblin(sim, x, y);
+                sim.step(1, 0);
+                sim.step(1, 0);
+                if (Math.abs(enemy.x - x) > 5) {
+                    if (enemy.x > sim.player.x) {
+                        ahead++;
+                    } else {
+                        behind++;
+                    }
+                }
+                sim.enemies = [];
+                sim.player.x = sim.player.prevX = x + 3;
+            }
+            expect(behind).toBeGreaterThan(ahead * 3);
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];

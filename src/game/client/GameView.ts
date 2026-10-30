@@ -14,7 +14,16 @@ import {
     TICKS_PER_SECOND,
     yawFromVector,
 } from "../core/Sim";
-import { Enemy, FallingRock, Glyph, Pickup, Rampage, SimEvent, Thrall } from "../core/entities";
+import {
+    Enemy,
+    FairyRing,
+    FallingRock,
+    Glyph,
+    Pickup,
+    Rampage,
+    SimEvent,
+    Thrall,
+} from "../core/entities";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -94,6 +103,8 @@ const FLASH_MS = 700;
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// How long a fairy ring takes to open
+const RING_OPEN_TICKS = 20;
 const RAMPAGE_FLASH = 0.25;
 // A charging NPC's legs go this much faster than its walk
 const RAMPAGE_ANIM_SPEED = 2;
@@ -383,6 +394,10 @@ export class GameView {
             this.drawRampage(actors, sim, rampage, alpha);
         }
 
+        for (const ring of sim.rings) {
+            this.drawRing(actors, sim, ring);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -442,6 +457,20 @@ export class GameView {
                 flash: RAMPAGE_FLASH,
             },
         );
+    }
+
+    // Opening and closing quickly, at either end of its time
+    private drawRing(actors: ActorRenderer, sim: Sim, ring: FairyRing): void {
+        const model = this.assets.get("loc:" + ring.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= ring.endTick) {
+            return;
+        }
+        const open = Math.min(sim.tick - ring.startTick, ring.endTick - sim.tick);
+        const height = this.ground(sim, ring.x, ring.y);
+        actors.draw(model, model.anims[0], 0, ring.x, height, ring.y, 0, {
+            scale: ring.scale * Math.min(1, 0.4 + open / RING_OPEN_TICKS),
+        });
     }
 
     // A boss's glyph, idling as it slides, facing the boss
@@ -620,6 +649,7 @@ export class GameView {
         this.drawAuras(overlay, sim, now);
         this.drawBlasts(overlay, sim, now, scale);
         this.drawRockTargets(overlay, sim, now, scale);
+        this.drawRingReach(overlay, sim, now, scale);
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
@@ -1037,6 +1067,17 @@ export class GameView {
             ctx.fill();
             ctx.lineWidth = 3 * scale;
             ctx.strokeStyle = withAlpha(POWER_UP_COLOR, 0.9 * pulse);
+            ctx.stroke();
+        }
+    }
+
+    // How far a fairy ring reaches
+    private drawRingReach(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const ring of sim.rings) {
+            this.traceGroundCircle(overlay, sim, ring.x, ring.y, ring.radius);
+            ctx.lineWidth = 2 * scale;
+            ctx.strokeStyle = withAlpha(POWER_UP_COLOR, 0.45 + 0.15 * Math.sin(now / 200));
             ctx.stroke();
         }
     }

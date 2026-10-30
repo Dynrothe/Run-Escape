@@ -135,6 +135,25 @@ export const POWER_UPS: PowerUpDef[] = [
             scale: 4,
         },
     },
+    {
+        id: "fairy_ring",
+        name: "Fairy ring",
+        description: "A ring opens at your feet for 12 seconds and warps away whatever comes near.",
+        // Dramen staff, what it takes to use one
+        objId: 772,
+        weight: 2,
+        // lotg_fairy_teleport
+        sound: 5324,
+        effect: {
+            kind: "ring",
+            seconds: 12,
+            radius: 2.5,
+            // lotg_fairy_ring_portal_open, teleport_other_impact
+            locId: 43117,
+            spotAnim: 342,
+            scale: 1.5,
+        },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They

@@ -380,6 +380,20 @@ export type Rampage = {
     scale: number;
 };
 
+// A ring from a power-up, warping away what comes near until endTick
+export type FairyRing = {
+    uid: number;
+    x: number;
+    y: number;
+    startTick: number;
+    endTick: number;
+    nextPulse: number;
+    radius: number;
+    locId: number;
+    spotAnim: number;
+    scale: number;
+};
+
 // A power-up that lasts a while, for the timers on screen
 export type ActivePowerUp = {
     uid: number;

@@ -11,6 +11,8 @@ the version in the corner).
   with nothing able to hurt you.
 - New power-up: the Giant rune essence. A huge rock lands on the thickest crowd nearby.
 - New power-up: Evil Bob. A giant cat charges through the crowd three times, throwing it aside.
+- New power-up: the Fairy ring. A ring opens at your feet for 12 seconds and warps away whatever
+  walks into it.
 
 ### Changed
 

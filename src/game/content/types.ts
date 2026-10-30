@@ -900,6 +900,16 @@ export type PowerUpEffect =
           npcId: number;
           walkSeq: number;
           scale: number;
+      }
+    // A ring (locId, drawn at scale) opens at the player's feet and warps
+    // whatever walks within radius far away, showing spotAnim where it was
+    | {
+          kind: "ring";
+          seconds: number;
+          radius: number;
+          locId: number;
+          spotAnim: number;
+          scale: number;
       };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
