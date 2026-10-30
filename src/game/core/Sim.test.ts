@@ -2088,6 +2088,54 @@ describe("enemy mechanics", () => {
             );
         });
 
+        test("open ground doesn't count, however long it's been", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            // A long walk off for something this slow, with nothing in the way
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", speed: 0.1 });
+            const bandos = sim.spawnEnemy(def, "normal", { x: 1040.5, y: 1060.5 })!;
+            bandos.hp = bandos.maxHp = 1e6;
+            const zamorak = acrossTheWall(sim, "zamorak", 1046.5);
+            zamorak.y = zamorak.prevY = 1060.5;
+            zamorak.frozen = 1e6;
+            play(sim, 6);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            expect(bandos.foeWait).toBe(0);
+        });
+
+        test("nor does a crowd of its own side in the way", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const at = (faction: string, x: number, y: number) => {
+                const enemy = acrossTheWall(sim, faction, x);
+                enemy.y = enemy.prevY = y;
+                return enemy;
+            };
+            const zamorak = at("zamorak", 1046.5, 1060.5);
+            zamorak.frozen = 1e6;
+            // A wall of bandos between it and the foe, that can't move
+            for (let y = 1056.5; y <= 1064.5; y += 0.6) {
+                at("bandos", 1043.5, y).frozen = 1e6;
+            }
+            const behind = at("bandos", 1041.5, 1060.5);
+            play(sim, 6);
+            expect(behind.foe).toBe(zamorak);
+            expect(behind.aggro).toBe(false);
+        });
+
+        test("nor does a wall to a ghost, which walks through it", () => {
+            const sim = setUp();
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", ghost: true });
+            const bandos = sim.spawnEnemy(def, "normal", { x: 1029, y: 1036.5 })!;
+            bandos.hp = bandos.maxHp = 1e6;
+            const zamorak = acrossTheWall(sim, "zamorak", 1032);
+            zamorak.frozen = 1e6;
+            play(sim, 4);
+            expect(bandos.aggro).toBe(false);
+            expect(zamorak.hp).toBeLessThan(zamorak.maxHp);
+        });
+
         test("landing hits keeps it at the fight", () => {
             const sim = createSim();
             sim.weapons = [];

@@ -44,6 +44,45 @@ export function canStep(grid: ArenaGrid, x: number, y: number, dx: number, dy: n
     return (from & CollisionFlag.WALL_SOUTH) === 0 && (to & CollisionFlag.WALL_NORTH) === 0;
 }
 
+// Whether a straight walk from one point to another stays on open ground: each
+// tile the line goes through is a step that's allowed from the one before.
+export function canWalkStraight(
+    grid: ArenaGrid,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+): boolean {
+    let tileX = Math.floor(fromX);
+    let tileY = Math.floor(fromY);
+    const stepX = Math.sign(toX - fromX);
+    const stepY = Math.sign(toY - fromY);
+    const lengthX = Math.abs(toX - fromX);
+    const lengthY = Math.abs(toY - fromY);
+    // How far along the line, 0 to 1, it next crosses into a new column or row
+    let nextX = lengthX > 0 ? (stepX > 0 ? tileX + 1 - fromX : fromX - tileX) / lengthX : Infinity;
+    let nextY = lengthY > 0 ? (stepY > 0 ? tileY + 1 - fromY : fromY - tileY) / lengthY : Infinity;
+    let left = Math.abs(Math.floor(toX) - tileX) + Math.abs(Math.floor(toY) - tileY);
+    while (left > 0) {
+        const dx = nextX <= nextY ? stepX : 0;
+        const dy = nextY <= nextX ? stepY : 0;
+        if (!canStep(grid, tileX, tileY, dx, dy)) {
+            return false;
+        }
+        if (dx !== 0) {
+            tileX += dx;
+            nextX += 1 / lengthX;
+            left--;
+        }
+        if (dy !== 0) {
+            tileY += dy;
+            nextY += 1 / lengthY;
+            left--;
+        }
+    }
+    return true;
+}
+
 // Walking distance to one target tile from every tile in a square window
 // around it (Dijkstra), so any number of enemies can find their way to the
 // player around walls and rivers for the cost of one search.

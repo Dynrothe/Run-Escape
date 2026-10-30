@@ -106,7 +106,7 @@ import {
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
-import { FlowField } from "./world/FlowField";
+import { FlowField, canWalkStraight } from "./world/FlowField";
 import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
 
 export const TICKS_PER_SECOND = 50;
@@ -247,8 +247,8 @@ const FACTION_TURN = 0.02;
 const FOE_RANGE = 8;
 const FOE_IGNORE_PLAYER = 2.5;
 const FOE_LOOK_TICKS = TICKS_PER_SECOND / 2;
-// An enemy after a foe this long without landing a hit gives up and goes for
-// the player for good: a wall can be all that's between them
+// An enemy with no way to the foe it's after for this long, and no hit landed,
+// gives up and goes for the player for good
 const FOE_GIVE_UP_TICKS = 3 * TICKS_PER_SECOND;
 // Revivers bring back what died lately: the last this many deaths, no older
 // than this
@@ -2095,8 +2095,8 @@ export class Sim {
     // close, otherwise the nearest it finds when it looks round. None for
     // bosses and elites (they'd lose their caskets), for one the player's hit,
     // or with the player close. Going from one foe that's still up to another
-    // keeps the time it's spent without landing a hit, so it can't put off
-    // giving up by flipping between ones it can't reach.
+    // keeps the time it's had no way to them, so it can't put off giving up by
+    // flipping between ones it can't reach.
     private findFoe(enemy: Enemy, playerDistance: number): Enemy | undefined {
         const faction = enemy.def.faction;
         if (
@@ -2153,10 +2153,17 @@ export class Sim {
         return this.chaseFoe(enemy, enemy.foe);
     }
 
-    // The foe it's still after, or nothing if it's been too long without
-    // landing a hit, when it goes for the player as if they'd hit it
+    // The foe it's still after, or nothing once it's had too long with no way
+    // to it, when it goes for the player as if they'd hit it. Enemies walk
+    // straight at a foe, so a wall in the way stops them even if there's a way
+    // round. Only walls count: a crowd in the way or a foe a long walk off
+    // doesn't, and the time stays as it was until the way's blocked again.
     private chaseFoe(enemy: Enemy, foe: Enemy): Enemy | undefined {
-        if (++enemy.foeWait < FOE_GIVE_UP_TICKS) {
+        if (
+            enemy.def.ghost ||
+            canWalkStraight(this.grid, enemy.x, enemy.y, foe.x, foe.y) ||
+            ++enemy.foeWait < FOE_GIVE_UP_TICKS
+        ) {
             return foe;
         }
         enemy.aggro = true;

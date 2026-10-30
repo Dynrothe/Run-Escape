@@ -140,12 +140,12 @@ export type Enemy = {
     noDrops: boolean;
     // An enemy of another faction it's gone to fight (EnemyDef.faction)
     // instead of the player, the tick it next looks for one, and how many
-    // ticks it's been after foes without landing a hit
+    // ticks it's been after foes with no way to them and no hit landed
     foe?: Enemy;
     nextFoeLook: number;
     foeWait: number;
-    // The player's hit it, or it's given up on reaching a foe: it's after the
-    // player from now on, not the other factions
+    // The player's hit it, or it's given up on a foe it had no way to: it's
+    // after the player from now on, not the other factions
     aggro: boolean;
     // Called in by a spawner that says so (EnemySpawnsDef.bonesOnly): it
     // drops its bones and nothing else

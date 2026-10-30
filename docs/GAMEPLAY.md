@@ -237,8 +237,8 @@ version and how to run it.
     - **God Wars Dungeon**: the armies of Bandos, Armadyl, Saradomin and Zamorak, who march in
       from their own sides and fight each other as much as you: goblins, orks and cyclopes,
       aviansies, knights and priests, imps, hellhounds and bloodvelds, and the gods' spiritual
-      warriors. Anything that goes 3 seconds after another army without landing a hit gives up
-      and comes for you for good.
+      warriors. Anything with a wall between it and the army it's after for 3 seconds gives up
+      and comes for you for good; a crowd in the way or a long walk doesn't count.
     - **Prifddinas**: the Gauntlet's crystalline rats, bats, spiders, scorpions, wolves, bears
       and dark beasts, the city's guards, the Iorwerth's warriors and archers and Zulrah's
       snakelings, and the corrupted ones late on.
