@@ -561,15 +561,15 @@ function MayhemScreen({ ui, client }: ScreenProps): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-select-panel ui-mayhem-panel">
                 <h2 className="ui-select-heading">Mayhem</h2>
                 <p className="ui-mayhem-intro">
-                    A world of its own, with no end and nothing to take home. How long can you last?
+                    A mode of its own, with no end and nothing to take home. How long can you last?
                 </p>
                 <ul className="ui-mayhem-rules">
                     <li>Any adventurer, and every weapon, passive and item</li>
                     <li>A random map, with enemies and bosses from the whole game</li>
-                    <li>Levels come three times as fast, with 6 weapons and 6 passives</li>
+                    <li>Level up three times as fast, with room for 6 weapons and 6 passives</li>
                     <li>6 Modifiers: pick one now, then one for each of the first 5 bosses</li>
-                    <li>A Mayhem event every minute and a half</li>
-                    <li>It only gets harder. Your skills and Armoury stay at home</li>
+                    <li>A Mayhem event every 90 seconds</li>
+                    <li>It only gets harder, and skills and the Armoury don't count</li>
                 </ul>
             </div>
             <div className="ui-panel rs-border rs-background ui-select-bar">
