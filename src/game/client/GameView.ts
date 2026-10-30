@@ -13,7 +13,7 @@ import {
     TICKS_PER_SECOND,
     yawFromVector,
 } from "../core/Sim";
-import { Enemy, Glyph, Pickup, SimEvent, Thrall } from "../core/entities";
+import { Enemy, FallingRock, Glyph, Pickup, SimEvent, Thrall } from "../core/entities";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -89,6 +89,10 @@ const POWER_UP_BOB = 0.15;
 const FLASH_MS = 700;
 // Thralls are small next to a top-down player; they fade out over their last
 // second
+// A rock's size, and how far up it starts (tiles)
+const ROCK_SCALE = 5;
+const ROCK_FALL_HEIGHT = 14;
+const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 
@@ -367,6 +371,10 @@ export class GameView {
             actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
         }
 
+        for (const rock of sim.rocks) {
+            this.drawRock(actors, sim, rock);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -381,6 +389,21 @@ export class GameView {
             const height = this.ground(sim, effect.x, effect.y) - effect.height;
             actors.draw(model, anim, frame, effect.x, height, effect.y, 0);
         }
+    }
+
+    // Falling faster and faster, then fading away where it landed
+    private drawRock(actors: ActorRenderer, sim: Sim, rock: FallingRock): void {
+        const model = this.assets.get("loc:" + rock.locId);
+        if (!model) {
+            return;
+        }
+        const t = Math.min(1, (sim.tick - rock.startTick) / (rock.landTick - rock.startTick));
+        const height = this.ground(sim, rock.x, rock.y) - ROCK_FALL_HEIGHT * (1 - t * t);
+        const fade = Math.min(1, (rock.endTick - sim.tick) / ROCK_FADE_TICKS);
+        actors.draw(model, model.anims[0], 0, rock.x, height, rock.y, (rock.uid * 331) & 2047, {
+            scale: ROCK_SCALE,
+            alpha: Math.max(0, fade),
+        });
     }
 
     // A boss's glyph, idling as it slides, facing the boss
@@ -558,6 +581,7 @@ export class GameView {
         this.drawBossWindups(overlay, sim, alpha);
         this.drawAuras(overlay, sim, now);
         this.drawBlasts(overlay, sim, now, scale);
+        this.drawRockTargets(overlay, sim, now, scale);
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
@@ -957,6 +981,24 @@ export class GameView {
             ctx.fill();
             ctx.lineWidth = 10 * scale * (1 - t) + 2;
             ctx.strokeStyle = `rgba(255, 220, 120, ${0.9 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // Where a rock's coming down, in the power-up colour so it doesn't read as
+    // something to run from
+    private drawRockTargets(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const rock of sim.rocks) {
+            if (rock.landTick <= sim.tick) {
+                continue;
+            }
+            const pulse = 0.75 + 0.25 * Math.sin(now / 60);
+            this.traceGroundCircle(overlay, sim, rock.x, rock.y, rock.radius);
+            ctx.fillStyle = withAlpha(POWER_UP_COLOR, 0.15 * pulse);
+            ctx.fill();
+            ctx.lineWidth = 3 * scale;
+            ctx.strokeStyle = withAlpha(POWER_UP_COLOR, 0.9 * pulse);
             ctx.stroke();
         }
     }

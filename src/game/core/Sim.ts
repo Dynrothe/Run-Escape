@@ -83,6 +83,7 @@ import {
     Enemy,
     EnemyAbilities,
     EnemyProjectile,
+    FallingRock,
     Glyph,
     GroundFire,
     PassiveState,
@@ -122,6 +123,10 @@ const FOOD_HEAL = 10;
 // more than one enemy but can't melt them instantly
 const HIT_INVULNERABLE_TICKS = 12;
 
+// How many enemies are looked at for the thickest crowd
+const MAX_CROWD_CHECKS = 60;
+// Ticks a fallen rock lies there before it's gone
+const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
 const SPAWN_MAX_DISTANCE = 24;
 // Bosses turn up a little closer, so the fight starts soon
@@ -363,6 +368,7 @@ export class Sim {
     thralls: Thrall[] = [];
     // Power-ups that last a while, for their timers
     powerUps: ActivePowerUp[] = [];
+    rocks: FallingRock[] = [];
     // Bosses' glyphs (BossDef.glyph)
     glyphs: Glyph[] = [];
     // Burning ground left by weapons
@@ -1142,6 +1148,7 @@ export class Sim {
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
+        this.stepRocks();
         this.stepProjectiles();
         this.stepFires();
         this.stepEnemyProjectiles();
@@ -4958,11 +4965,89 @@ export class Sim {
                 player.frozen = 0;
                 message = "You jump on the sled!";
                 break;
+            case "rock":
+                this.dropRock(def, effect);
+                message = "Something huge is coming down...";
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
         }
         this.events.push({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+    }
+
+    // The middle of the thickest crowd within range of the player, going by
+    // who has the most others within radius; a little ahead of the player if
+    // there's no one about
+    private thickestCrowd(range: number, radius: number): Vec2 {
+        const player = this.player;
+        this.rebuildEnemyHash();
+        let best = { x: player.x + player.facingX * 3, y: player.y + player.facingY * 3 };
+        let most = 0;
+        for (const enemy of this.nearestEnemies(player.x, player.y, range, MAX_CROWD_CHECKS)) {
+            let count = 0;
+            this.enemyHash.query(enemy.x, enemy.y, radius, (other) => {
+                if (Math.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
+                    count++;
+                }
+            });
+            if (count > most) {
+                most = count;
+                best = { x: enemy.x, y: enemy.y };
+            }
+        }
+        return best;
+    }
+
+    private dropRock(def: PowerUpDef, effect: Extract<PowerUpEffect, { kind: "rock" }>): void {
+        const { x, y } = this.thickestCrowd(effect.range, effect.radius);
+        const landTick = this.tick + Math.round(effect.delay * TICKS_PER_SECOND);
+        this.rocks.push({
+            uid: this.nextUid++,
+            powerUpId: def.id,
+            x,
+            y,
+            startTick: this.tick,
+            landTick,
+            endTick: landTick + ROCK_LINGER_TICKS,
+            locId: effect.locId,
+            spotAnim: effect.spotAnim,
+            radius: effect.radius,
+            damage: effect.damage * this.powerUpDamageScale(),
+            knockback: effect.knockback,
+            bossDamage: effect.bossDamage,
+        });
+    }
+
+    private stepRocks(): void {
+        for (const rock of this.rocks) {
+            if (rock.landTick === this.tick) {
+                this.landRock(rock);
+            }
+        }
+        this.rocks = this.rocks.filter((rock) => rock.endTick > this.tick);
+    }
+
+    private landRock(rock: FallingRock): void {
+        const { x, y, radius } = rock;
+        this.events.push({ type: "blast", x, y, radius });
+        this.events.push({ type: "powerUpHit", id: rock.powerUpId, x, y });
+        this.addEffect(rock.spotAnim, x, y, 0, 60);
+        const hit: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
+                hit.push(enemy);
+            }
+        });
+        this.damageSource = `powerUp:${rock.powerUpId}`;
+        for (const enemy of hit) {
+            if (enemy.boss) {
+                // A share of its hitpoints, whatever the damage bonus
+                this.damageEnemy(enemy, enemy.maxHp * rock.bossDamage, 0, x, y, 0);
+            } else {
+                this.damageEnemy(enemy, rock.damage, rock.knockback, x, y);
+            }
+        }
     }
 
     // Kills everything that isn't a boss; bosses lose a share of their

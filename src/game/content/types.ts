@@ -871,7 +871,21 @@ export type PowerUpEffect =
     | { kind: "freeze"; seconds: number }
     // Rides off at this many times the speed with nothing able to hurt them,
     // for a set time: Effect duration doesn't stretch it
-    | { kind: "sled"; seconds: number; speed: number };
+    | { kind: "sled"; seconds: number; speed: number }
+    // A rock (locId) falls on the thickest crowd within range of the player,
+    // delay seconds later, hitting everything within radius and throwing what
+    // lives back this many tiles. Bosses lose bossDamage of their hitpoints.
+    | {
+          kind: "rock";
+          delay: number;
+          range: number;
+          radius: number;
+          damage: number;
+          knockback: number;
+          bossDamage: number;
+          locId: number;
+          spotAnim: number;
+      };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.
@@ -895,6 +909,8 @@ export type PowerUpDef = {
     sound: number;
     // Cache sound effect when it wears off
     endSound?: number;
+    // Cache sound effect each time it lands a blow
+    hitSound?: number;
     // Worn while it lasts
     look?: PowerUpLook;
     effect: PowerUpEffect;

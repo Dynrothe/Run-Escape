@@ -129,6 +129,9 @@ function getSpotAnimIds(): number[] {
     for (const thrall of THRALLS) {
         add(thrall.projectileSpotAnim, thrall.impactSpotAnim);
     }
+    for (const { effect } of POWER_UPS) {
+        add("spotAnim" in effect ? effect.spotAnim : undefined);
+    }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
@@ -337,6 +340,9 @@ export class GameAssets {
                 locIds.add(powerUp.locId);
             } else {
                 objIds.add(powerUp.objId);
+            }
+            if ("locId" in powerUp.effect) {
+                locIds.add(powerUp.effect.locId);
             }
         }
         for (const objId of objIds) {

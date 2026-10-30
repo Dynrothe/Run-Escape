@@ -89,6 +89,29 @@ export const POWER_UPS: PowerUpDef[] = [
         look: { objId: 4084, idleSeq: 1461, moveSeq: 1462 },
         effect: { kind: "sled", seconds: 8, speed: 2.2 },
     },
+    {
+        id: "giant_essence",
+        name: "Giant rune essence",
+        description:
+            "A huge rock falls on the thickest crowd nearby. Bosses lose 8% of their hitpoints.",
+        objId: 1436,
+        weight: 2,
+        // star_meteor_landing, toa_human_boulder_impact_01
+        sound: 4930,
+        hitSound: 6033,
+        effect: {
+            kind: "rock",
+            delay: 1.2,
+            range: 12,
+            radius: 5,
+            damage: 150,
+            knockback: 3,
+            bossDamage: 0.08,
+            // big_essence_rock, wild_falloff_meteor_blast
+            locId: 16687,
+            spotAnim: 659,
+        },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They

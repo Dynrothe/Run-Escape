@@ -540,6 +540,88 @@ describe("power-ups", () => {
         });
     });
 
+    describe("the giant rune essence", () => {
+        const rock = () => getPowerUp("giant_essence");
+
+        test("lands on the thickest crowd after a moment, hitting all of it", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.player.invulnerable = 10000;
+            const alone = goblin(sim, x - 6, y);
+            const crowd = [0, 1, 2, 3].map((i) => goblin(sim, x + 7 + i * 0.3, y + i * 0.3));
+            const outOfReach = goblin(sim, x + 20, y);
+            for (const enemy of [alone, ...crowd, outOfReach]) {
+                enemy.frozen = 1000;
+            }
+            sim.usePowerUp(rock());
+            expect(sim.rocks[0].x).toBeCloseTo(crowd[0].x, 0);
+            sim.takeEvents();
+
+            for (let i = 1; i < 1.2 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(crowd[0].hp).toBe(crowd[0].maxHp);
+            sim.step(0, 0);
+            const events = sim.takeEvents();
+            expect(events.some((e) => e.type === "powerUpHit")).toBe(true);
+            expect(events.filter((e) => e.type === "blast")).toHaveLength(1);
+            for (const enemy of crowd) {
+                expect(enemy.hp).toBeLessThan(enemy.maxHp);
+            }
+            expect(alone.hp).toBe(alone.maxHp);
+            expect(outOfReach.hp).toBe(outOfReach.maxHp);
+        });
+
+        test("kills what it can, throws survivors back and takes a share of a boss", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            const { x, y } = sim.player;
+            const weak = goblin(sim, x + 8, y, 10);
+            const tough = goblin(sim, x + 9, y, 1e5);
+            weak.frozen = 1000;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x + 10, y })!;
+            boss.frozen = 1000;
+            boss.hp = boss.maxHp = 10000;
+            const toughX = tough.x;
+            sim.usePowerUp(rock());
+            runFor(sim, 2, "still");
+            expect(weak.dead).toBe(true);
+            expect(tough.hp).toBeLessThan(tough.maxHp);
+            expect(Math.abs(tough.x - toughX)).toBeGreaterThan(0.5);
+            expect(boss.maxHp - boss.hp).toBeGreaterThan(10000 * 0.08 * 0.8);
+            expect(boss.maxHp - boss.hp).toBeLessThan(10000 * 0.08 * 1.2);
+        });
+
+        test("never hurts the player, and comes down nearby with no one about", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.enemies = [];
+            const { x, y } = sim.player;
+            const hp = sim.player.hp;
+            sim.usePowerUp(rock());
+            expect(Math.hypot(sim.rocks[0].x - x, sim.rocks[0].y - y)).toBeLessThan(5);
+            for (let i = 0; i < 4 * TICKS_PER_SECOND; i++) {
+                sim.enemies = [];
+                sim.step(0, 0);
+            }
+            expect(sim.rocks).toHaveLength(0);
+            expect(sim.player.hp).toBe(hp);
+        });
+
+        test("its damage counts for the run's stats", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            const enemy = goblin(sim, sim.player.x + 6, sim.player.y);
+            enemy.frozen = 1000;
+            sim.usePowerUp(rock());
+            runFor(sim, 2, "still");
+            expect(sim.damageBySource["powerUp:giant_essence"]).toBeGreaterThan(0);
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];
