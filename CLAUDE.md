@@ -37,6 +37,7 @@ go stale. Add anything that cost you time to work out.
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
+| ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`          |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.

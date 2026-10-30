@@ -1,4 +1,5 @@
-import { TERRAIN_TEST_ARENA, terrainTestWorld } from "../custom/terrainTest";
+import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { MapDef } from "./types";
@@ -291,31 +292,26 @@ export const MAPS: MapDef[] = [
 // campaign's chain
 export { FUN_MAPS };
 
-// Dev server only (or DEV_MAPS=1 in a script): ground of our own, not a slice of
-// the real world (custom/terrainTest.ts)
+// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
+// own rather than a slice of the real world (scaperune/CLAUDE.md)
 const showDevMaps =
     (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
     (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
 const DEV_MAPS: MapDef[] = showDevMaps
-    ? [
-          {
-              id: "terrain_test",
-              name: "Terrain test",
-              description: "Custom ground, for development.",
-              iconObjId: 1351,
-              arena: TERRAIN_TEST_ARENA,
-              spawn: (() => {
-                  const { x, y } = terrainTestWorld(124, 127);
-                  return { x: x + 0.5, y: y + 0.5 };
-              })(),
-              difficulty: { hp: 1, damage: 1 },
-              waves: LUMBRIDGE_WAVES,
-              events: [],
-              finalBossWarning: "",
-              victoryText: "",
-              fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
-          },
-      ]
+    ? SCAPERUNE_DEV_MAPS.map((recipe) => ({
+          id: recipe.id,
+          name: recipe.id,
+          description: "ScapeRune test map, for development.",
+          iconObjId: 1351,
+          arena: getRecipeArena(recipe),
+          spawn: getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y),
+          difficulty: { hp: 1, damage: 1 },
+          waves: LUMBRIDGE_WAVES,
+          events: [],
+          finalBossWarning: "",
+          victoryText: "",
+          fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
+      }))
     : [];
 
 // Every map, the campaign's and the fun ones

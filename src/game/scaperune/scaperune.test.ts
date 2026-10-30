@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Ground } from "./Ground";
-import { createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./mapFormat";
+import { createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./format";
 import { rotatePrefab } from "./prefab";
 
 describe("map file formats", () => {
@@ -48,7 +48,7 @@ describe("rotatePrefab", () => {
     prefab.levels[0].overlays[0] = 7;
     prefab.levels[0].rotations[0] = 1;
     prefab.locs.push({ id: 1, type: 10, rotation: 0, level: 0, x: 0, y: 0 });
-    const sizes = () => [2, 1] as [number, number];
+    const sizes = () => ({ sizeX: 2, sizeY: 1 });
 
     it("turns tiles clockwise", () => {
         const turned = rotatePrefab(prefab, 1, sizes);

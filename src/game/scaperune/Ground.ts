@@ -1,4 +1,4 @@
-import { PlacedLoc, TILE_BLOCKED, TileGrid, TileLevel, createTileGrid } from "./mapFormat";
+import { PlacedLoc, TILE_BLOCKED, TileGrid, TileLevel, createTileGrid } from "./format";
 
 // Overlay shapes, as the shores in the cache use them: a triangle whose rotation
 // is the corner it fills (south-west, north-west, north-east, south-east), and
@@ -15,8 +15,17 @@ export type StampOptions = {
     feather: number;
     // Ignore the prefab's own heights and stand it on flat ground
     flatten: boolean;
-    // Height of the prefab's edge; the ground's there when unset
+    // The height to stand it at; the ground's around it when unset
     height?: number;
+    // Which of the prefab's own heights that means; its edge's when unset
+    anchor?: number;
+    // Leaves a loc out (doors, so you can walk in)
+    skipLoc?: (loc: PlacedLoc) => boolean;
+    // Keeps our underlays under the prefab, for one from other ground: a Lumbridge
+    // bridge's grass would show as a green halo in the snow
+    keepUnderlays?: boolean;
+    // Swaps its overlays, for the same reason (its water for ours)
+    mapOverlay?: (overlay: number) => number;
 };
 
 function smoothstep(t: number): number {
@@ -156,7 +165,7 @@ export class Ground {
                 }
             }
         }
-        const prefabEdge = edgeSum / edgeCount;
+        const prefabEdge = options.anchor ?? edgeSum / edgeCount;
 
         // Heights: the corners under it, then a ring easing back to the ground
         for (let cy = 0; cy <= sizeY; cy++) {
@@ -200,8 +209,10 @@ export class Ground {
                         to.flags[j] |= from.flags[i] & ~TILE_BLOCKED;
                         continue;
                     }
-                    to.underlays[j] = from.underlays[i] || to.underlays[j];
-                    to.overlays[j] = from.overlays[i];
+                    if (!options.keepUnderlays) {
+                        to.underlays[j] = from.underlays[i] || to.underlays[j];
+                    }
+                    to.overlays[j] = options.mapOverlay?.(from.overlays[i]) ?? from.overlays[i];
                     to.shapes[j] = from.shapes[i];
                     to.rotations[j] = from.rotations[i];
                     to.flags[j] = from.flags[i];
@@ -219,6 +230,9 @@ export class Ground {
 
         // Locs, but in footprint mode not the ground's own bits around it
         for (const loc of prefab.locs) {
+            if (options.skipLoc?.(loc)) {
+                continue;
+            }
             if (
                 options.floor === "footprint" &&
                 loc.type === 22 &&

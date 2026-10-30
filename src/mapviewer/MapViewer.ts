@@ -11,7 +11,9 @@ import { NpcTypeLoader } from "../rs/config/npctype/NpcTypeLoader";
 import { ObjTypeLoader } from "../rs/config/objtype/ObjTypeLoader";
 import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
+import { CustomMapSquares, addCustomMapSquares } from "../rs/map/CustomMapFileLoader";
 import { MapFileIndex, getMapSquareId } from "../rs/map/MapFileIndex";
+import { MapFileLoader } from "../rs/map/MapFileLoader";
 import { SeqFrameLoader } from "../rs/model/seq/SeqFrameLoader";
 import { Pathfinder } from "../rs/pathfinder/Pathfinder";
 import { TextureLoader } from "../rs/texture/TextureLoader";
@@ -55,6 +57,7 @@ export class MapViewer {
 
     varManager!: VarManager;
 
+    mapFileLoader!: MapFileLoader;
     mapFileIndex!: MapFileIndex;
 
     isNewTextureAnim: boolean = false;
@@ -85,6 +88,7 @@ export class MapViewer {
 
     mapImageUrls: Map<number, string> = new Map();
     minimapImageUrls: Map<number, string> = new Map();
+    customMapSquareIds: Set<number> = new Set();
     loadingMapImageIds: Set<number> = new Set();
 
     cameraSpeed: number = 1;
@@ -203,8 +207,8 @@ export class MapViewer {
             this.varManager.setQuestsCompleted(questTypeLoader);
         }
 
-        const mapFileLoader = this.loaderFactory.getMapFileLoader();
-        this.mapFileIndex = mapFileLoader.mapFileIndex;
+        this.mapFileLoader = this.loaderFactory.getMapFileLoader();
+        this.mapFileIndex = this.mapFileLoader.mapFileIndex;
 
         this.isNewTextureAnim = cache.info.game === "runescape" && cache.info.revision >= 681;
 
@@ -307,7 +311,10 @@ export class MapViewer {
             const minimapData = await this.workerPool.queueMapImage(mapX, mapY, 0, true);
             if (minimapData) {
                 const url = URL.createObjectURL(minimapData.minimapBlob);
-                this.setMapImageUrl(mapX, mapY, url, false);
+                // Saved images are found by square alone, so a custom square's
+                // would outlive a change to it
+                const custom = this.customMapSquareIds.has(mapId);
+                this.setMapImageUrl(mapX, mapY, url, false, !custom);
             } else {
                 mapManager.invalidMapIds.add(mapId);
             }
@@ -317,6 +324,22 @@ export class MapViewer {
             // A failed one can be asked for again, instead of the square
             // staying "loading" (and blank) for good
             this.loadingMapImageIds.delete(mapId);
+        }
+    }
+
+    // Adds map squares the cache doesn't have, here and in the workers. Any
+    // image saved for one of them is left behind.
+    async addCustomMapSquares(squares: CustomMapSquares): Promise<void> {
+        addCustomMapSquares(this.mapFileLoader, squares);
+        await this.workerPool.addCustomMapSquares(squares);
+        for (const id of squares.keys()) {
+            this.customMapSquareIds.add(id);
+            this.renderer.mapManager.invalidMapIds.delete(id);
+            const url = this.mapImageUrls.get(id);
+            if (url) {
+                URL.revokeObjectURL(url);
+                this.mapImageUrls.delete(id);
+            }
         }
     }
 

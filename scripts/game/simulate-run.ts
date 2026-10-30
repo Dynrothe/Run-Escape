@@ -23,6 +23,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
 
@@ -52,8 +53,10 @@ const armoury =
 const ARENA = map.arena;
 console.time(`${map.name} arena`);
 const cache = loadGameCache();
+const sceneBuilder = createSceneBuilder(cache);
+installRecipeInSceneBuilder(sceneBuilder, map.id);
 const grid = new ArenaGrid(
-    buildRegionData(createSceneBuilder(cache), createVarManager(cache), getArenaRegion(map)),
+    buildRegionData(sceneBuilder, createVarManager(cache), getArenaRegion(map)),
 );
 console.timeEnd(`${map.name} arena`);
 

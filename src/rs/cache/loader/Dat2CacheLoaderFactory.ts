@@ -1,4 +1,3 @@
-import { createCustomMapSquares } from "../../../game/custom/customSquares";
 import {
     ArchiveBasTypeLoader,
     BasTypeLoader,
@@ -224,11 +223,7 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
         const mapIndex = this.cacheSystem.getIndex(IndexType.DAT2.maps);
         if (this.cacheInfo.game === "oldschool" && this.cacheInfo.revision >= 237) {
             const mapFileIndex = new ModernMapFileIndex(mapIndex);
-            const loader = new ModernMapFileLoader(mapIndex, mapFileIndex);
-            return new CustomMapFileLoader(
-                loader,
-                createCustomMapSquares(loader, this.getLocTypeLoader()),
-            );
+            return new CustomMapFileLoader(new ModernMapFileLoader(mapIndex, mapFileIndex));
         }
         const mapFileIndex = new Dat2MapIndex(mapIndex);
         return new MapFileLoader(mapIndex, mapFileIndex);

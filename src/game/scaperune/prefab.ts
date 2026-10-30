@@ -1,4 +1,3 @@
-import { MapFileLoader } from "../../rs/map/MapFileLoader";
 import {
     MAP_SQUARE_SIZE,
     PlacedLoc,
@@ -6,15 +5,13 @@ import {
     createTileGrid,
     readLocs,
     readTerrain,
-} from "./mapFormat";
-
-// A loc's tiles, unrotated
-export type LocSizes = (id: number) => [number, number];
+} from "./format";
+import type { BuildContext, LocInfo } from "./recipe";
 
 // Cuts a rectangle out of the real world, every level of it: there's no
 // building entity in the cache, a building is its locs and floor tiles.
 export function cutPrefab(
-    maps: MapFileLoader,
+    maps: BuildContext["maps"],
     worldX: number,
     worldY: number,
     sizeX: number,
@@ -46,7 +43,11 @@ export function cutPrefab(
 // Turns a prefab clockwise, rotation quarter turns, the way the client turns
 // the chunks of an instance: the overlay shapes and locs turn with it, and
 // locs of more than one tile stay on the tiles they filled.
-export function rotatePrefab(prefab: TileGrid, rotation: number, locSizes: LocSizes): TileGrid {
+export function rotatePrefab(
+    prefab: TileGrid,
+    rotation: number,
+    locs: (id: number) => Pick<LocInfo, "sizeX" | "sizeY">,
+): TileGrid {
     const turns = rotation & 3;
     if (turns === 0) {
         return prefab;
@@ -81,9 +82,9 @@ export function rotatePrefab(prefab: TileGrid, rotation: number, locSizes: LocSi
         }
     }
     out.locs = prefab.locs.map((loc): PlacedLoc => {
-        const [locX, locY] = locSizes(loc.id);
-        const w = loc.rotation & 1 ? locY : locX;
-        const h = loc.rotation & 1 ? locX : locY;
+        const info = locs(loc.id);
+        const w = loc.rotation & 1 ? info.sizeY : info.sizeX;
+        const h = loc.rotation & 1 ? info.sizeX : info.sizeY;
         return {
             ...loc,
             rotation: (loc.rotation + turns) & 3,

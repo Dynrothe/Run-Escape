@@ -3,6 +3,7 @@ import { QueuedTask } from "threads/dist/master/pool";
 import { WorkerDescriptor } from "threads/dist/master/pool-types";
 import { ObservablePromise } from "threads/dist/observable-promise";
 
+import { CustomMapSquares } from "../../rs/map/CustomMapFileLoader";
 import { LoadedCache } from "../Caches";
 import { NpcSpawn } from "../data/npc/NpcSpawn";
 import { ObjSpawn } from "../data/obj/ObjSpawn";
@@ -78,6 +79,10 @@ export class RenderDataWorkerPool {
         drawMapFunctions: boolean,
     ): QueuedTask<RenderDataWorkerThread, MinimapData | undefined> {
         return this.pool.queue((w) => w.loadMapImage(mapX, mapY, level, drawMapFunctions));
+    }
+
+    addCustomMapSquares(squares: CustomMapSquares): Promise<void> {
+        return this.runAll((w) => w.addCustomMapSquares(squares));
     }
 
     setVars(vars: Int32Array): Promise<void> {

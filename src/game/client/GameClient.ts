@@ -40,6 +40,7 @@ import {
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig } from "../render/CameraRig";
 import { GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { installRecipe } from "../scaperune/squares";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import {
     GameAssets,
@@ -421,6 +422,7 @@ export class GameClient implements GameFrameHandler {
     private async loadGrid(mapId: string): Promise<ArenaGrid> {
         let grid = this.grids.get(mapId);
         if (!grid) {
+            await installRecipe(this.mapViewer, mapId);
             const region = await this.mapViewer.workerPool.queueLoad<
                 RegionDataInput,
                 RegionData,

@@ -1,30 +1,18 @@
-import { Ground } from "./Ground";
-import type { CustomMapBuildContext } from "./customSquares";
-import { TileGrid } from "./mapFormat";
-import { cutPrefab, rotatePrefab } from "./prefab";
+import { Ground } from "../Ground";
+import { TileGrid } from "../format";
+import { createNoise, distanceTo } from "../noise";
+import { cutPrefab, rotatePrefab } from "../prefab";
+import { BuildContext, MapRecipe } from "../recipe";
 
 // A dev-only proof of custom ground: an island of our own, two map squares by
 // two of playable ground in a ring of sea, with a river down it, a road, a
 // plateau, cache trees and rocks, and real buildings and a bridge stamped on.
 
-// Map squares the cache doesn't have, far from anything that does. The arena's
-// the middle two squares each way.
-export const TERRAIN_TEST_MAP = { mapX: 79, mapY: 119, squaresX: 4, squaresY: 4 };
-const SIZE = TERRAIN_TEST_MAP.squaresX * 64;
+// The arena's the middle two squares each way
+const SQUARES = 4;
+const SIZE = SQUARES * 64;
 const ARENA_MIN = 64;
 const ARENA_MAX = 191;
-
-export const TERRAIN_TEST_ARENA = {
-    baseX: (TERRAIN_TEST_MAP.mapX + 1) * 64,
-    baseY: (TERRAIN_TEST_MAP.mapY + 1) * 64,
-    sizeX: 2 * 64,
-    sizeY: 2 * 64,
-};
-
-// Grid tiles to world tiles
-export function terrainTestWorld(x: number, y: number): { x: number; y: number } {
-    return { x: TERRAIN_TEST_MAP.mapX * 64 + x, y: TERRAIN_TEST_MAP.mapY * 64 + y };
-}
 
 // Floor ids, as the map files store them (the cache's id plus one), from the
 // surface around Lumbridge
@@ -50,28 +38,6 @@ const ROCKS: [number, number][] = [
 ];
 const TUFTS = [4735, 4736, 4737, 4738];
 
-// Noise that's the same each time: a mix of smoothed random grids
-function createNoise(seed: number): (x: number, y: number) => number {
-    const hash = (x: number, y: number): number => {
-        let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1274126177);
-        h = Math.imul(h ^ (h >>> 13), 1274126177);
-        return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
-    };
-    const smooth = (t: number) => t * t * (3 - 2 * t);
-    const layer = (x: number, y: number): number => {
-        const ix = Math.floor(x);
-        const iy = Math.floor(y);
-        const fx = smooth(x - ix);
-        const fy = smooth(y - iy);
-        const south = hash(ix, iy) + (hash(ix + 1, iy) - hash(ix, iy)) * fx;
-        const north = hash(ix, iy + 1) + (hash(ix + 1, iy + 1) - hash(ix, iy + 1)) * fx;
-        return south + (north - south) * fy;
-    };
-    return (x, y) =>
-        (layer(x, y) * 4 + layer(x * 2.1 + 7, y * 2.1 + 3) * 2 + layer(x * 4.3 + 1, y * 4.3 + 9)) /
-        7;
-}
-
 // Where the river runs, for a row: straight at the bridge
 const RIVER_X = 150;
 const BRIDGE_Y = 128;
@@ -82,30 +48,7 @@ function riverCentre(y: number, wiggle: (x: number, y: number) => number): numbe
 
 const RIVER_HALF_WIDTH = 4.5;
 
-// Tiles to the nearest set tile of a mask, out to a limit
-function distanceTo(ground: Ground, mask: Uint8Array, limit: number): Float32Array {
-    const distances = new Float32Array(mask.length).fill(limit);
-    for (let y = 0; y < ground.sizeY; y++) {
-        for (let x = 0; x < ground.sizeX; x++) {
-            if (!mask[ground.tile(x, y)]) {
-                continue;
-            }
-            for (let dy = -limit; dy <= limit; dy++) {
-                for (let dx = -limit; dx <= limit; dx++) {
-                    const tx = x + dx;
-                    const ty = y + dy;
-                    if (ground.inside(tx, ty)) {
-                        const i = ground.tile(tx, ty);
-                        distances[i] = Math.min(distances[i], Math.hypot(dx, dy));
-                    }
-                }
-            }
-        }
-    }
-    return distances;
-}
-
-export function buildTerrainTest({ maps, locSizes }: CustomMapBuildContext): TileGrid {
+function build({ maps, locs }: BuildContext): TileGrid {
     const ground = new Ground(SIZE, SIZE);
     const hills = createNoise(1);
     const patches = createNoise(2);
@@ -136,8 +79,8 @@ export function buildTerrainTest({ maps, locSizes }: CustomMapBuildContext): Til
     }
 
     // Hills, falling away to the water
-    const toSea = distanceTo(ground, sea, 8);
-    const toFresh = distanceTo(ground, fresh, 6);
+    const toSea = distanceTo(sea, SIZE, SIZE, 8);
+    const toFresh = distanceTo(fresh, SIZE, SIZE, 6);
     const SEA_BED = 6;
     const RIVER_BED = 8;
     for (let y = 0; y <= SIZE; y++) {
@@ -225,25 +168,25 @@ export function buildTerrainTest({ maps, locSizes }: CustomMapBuildContext): Til
     // keeps only its floor; the first house brings its whole rectangle, to see
     // the seam.
     const house = cutPrefab(maps, 3242, 3243, 9, 7);
-    ground.stamp(rotatePrefab(house, 0, locSizes), 108, 134, {
+    ground.stamp(rotatePrefab(house, 0, locs), 108, 134, {
         floor: "all",
         feather: 4,
         flatten: true,
     });
-    ground.stamp(rotatePrefab(house, 2, locSizes), 118, 112, {
+    ground.stamp(rotatePrefab(house, 2, locs), 118, 112, {
         floor: "footprint",
         feather: 4,
         flatten: true,
     });
     const church = cutPrefab(maps, 3238, 3203, 12, 14);
-    ground.stamp(rotatePrefab(church, 1, locSizes), 78, 108, {
+    ground.stamp(rotatePrefab(church, 1, locs), 78, 108, {
         floor: "footprint",
         feather: 5,
         flatten: true,
     });
     // A shop from Varrock, from another map square
     const varrockHouse = cutPrefab(maps, 3245, 3402, 9, 10);
-    ground.stamp(rotatePrefab(varrockHouse, 3, locSizes), 170, 150, {
+    ground.stamp(rotatePrefab(varrockHouse, 3, locs), 170, 150, {
         floor: "footprint",
         feather: 4,
         flatten: true,
@@ -307,3 +250,14 @@ export function buildTerrainTest({ maps, locSizes }: CustomMapBuildContext): Til
 
     return ground.grid;
 }
+
+export const TERRAIN_TEST: MapRecipe = {
+    id: "terrain_test",
+    mapX: 79,
+    mapY: 119,
+    squaresX: SQUARES,
+    squaresY: SQUARES,
+    margin: 1,
+    spawn: { x: 124, y: 127 },
+    build,
+};
