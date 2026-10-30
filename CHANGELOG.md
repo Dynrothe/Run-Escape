@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Fixed
+
+- Caskets no longer land inside Pest Control's portals or other spots you can't walk to, where you
+  couldn't pick them up. Power-ups are fixed the same way.
+
 ## 0.17.1 - 2026-10-30
 
 ### Changed

@@ -99,7 +99,7 @@ import {
     projectileSource,
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
-import { findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
+import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlowField } from "./world/FlowField";
 import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
 
@@ -4648,8 +4648,24 @@ export class Sim {
     }
 
     private dropCasketOfTier(tier: CasketTier, x: number, y: number): void {
-        this.dropPickup("casket", x, y, 1, { tier });
-        this.events.push({ type: "casketDropped", tier, x, y });
+        const spot = this.walkableSpot(x, y);
+        this.dropPickup("casket", spot.x, spot.y, 1, { tier });
+        this.events.push({ type: "casketDropped", tier, x: spot.x, y: spot.y });
+    }
+
+    // Where to put something that needs walking over: what dropped it can be
+    // somewhere the player can't get to (a portal stands on solid tiles, ghosts
+    // go through walls), and its drop can land past a wall. Beyond the flow
+    // field there's no telling, so any free spot will do.
+    private walkableSpot(x: number, y: number): Vec2 {
+        const field = this.flowField;
+        return findFreeSpot(
+            this.grid,
+            x,
+            y,
+            PLAYER_RADIUS,
+            (tileX, tileY) => !field.contains(tileX, tileY) || field.isReachable(tileX, tileY),
+        );
     }
 
     dropPickup(
@@ -4858,7 +4874,8 @@ export class Sim {
 
     dropPowerUp(id: string, x: number, y: number): void {
         this.lastPowerUpTick = this.tick;
-        this.dropPickup("powerUp", x, y, 1, { powerUp: id });
+        const spot = this.walkableSpot(x, y);
+        this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id });
     }
 
     // Power-ups' damage keeps up with the enemies' hitpoints

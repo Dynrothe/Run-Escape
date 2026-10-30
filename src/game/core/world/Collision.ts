@@ -149,20 +149,24 @@ export function isCircleFree(grid: ArenaGrid, x: number, y: number, radius: numb
 
 // The free spot nearest (x, y) for a circle this size: (x, y) itself if it's
 // free, otherwise the nearest free tile centre, searching outwards a ring of
-// tiles at a time. (x, y) when there's nothing free within maxDistance tiles.
+// tiles at a time from its own. (x, y) when there's nothing free within
+// maxDistance tiles. Tiles that allowed turns down don't count as free.
 export function findFreeSpot(
     grid: ArenaGrid,
     x: number,
     y: number,
     radius: number,
+    allowed?: (tileX: number, tileY: number) => boolean,
     maxDistance = 32,
 ): Vec2 {
-    if (isCircleFree(grid, x, y, radius)) {
+    const isFree = (px: number, py: number) =>
+        isCircleFree(grid, px, py, radius) && (!allowed || allowed(Math.floor(px), Math.floor(py)));
+    if (isFree(x, y)) {
         return { x, y };
     }
     const cx = Math.floor(x);
     const cy = Math.floor(y);
-    for (let d = 1; d <= maxDistance; d++) {
+    for (let d = 0; d <= maxDistance; d++) {
         let best: Vec2 | undefined;
         let bestDistSq = Infinity;
         for (let ty = cy - d; ty <= cy + d; ty++) {
@@ -172,7 +176,7 @@ export function findFreeSpot(
                 }
                 const px = tx + 0.5;
                 const py = ty + 0.5;
-                if (!grid.contains(tx, ty) || !isCircleFree(grid, px, py, radius)) {
+                if (!grid.contains(tx, ty) || !isFree(px, py)) {
                     continue;
                 }
                 const distSq = (px - x) * (px - x) + (py - y) * (py - y);
