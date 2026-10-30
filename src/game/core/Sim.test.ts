@@ -632,6 +632,35 @@ describe("caskets and items", () => {
         expect(sim.buffs.map((b) => b.itemId)).toEqual(["stamina_potion"]);
     });
 
+    test("turning down a started set's piece stops caskets bringing that set", () => {
+        const offer = (sim: Sim, itemId: string) => {
+            sim.chests.push({ uid: -1, tier: "elite", itemId, upgrades: 0, coins: 0 });
+            sim.state = "chest";
+        };
+        const alched = createSim();
+        // Not started yet, so there's nothing to turn down
+        offer(alched, "torva_platebody");
+        alched.resolveChest("alch");
+        expect(alched.declinedSets.size).toBe(0);
+        alched.gear.head = "torva_full_helm";
+        offer(alched, "torva_platebody");
+        alched.resolveChest("alch");
+        expect([...alched.declinedSets]).toEqual(["torva"]);
+
+        const rerolled = createSim();
+        rerolled.gear.head = "torva_full_helm";
+        rerolled.rerollsLeft = 1;
+        offer(rerolled, "torva_platebody");
+        expect(rerolled.reroll()).toBe(true);
+        expect([...rerolled.declinedSets]).toEqual(["torva"]);
+
+        const taken = createSim();
+        taken.gear.head = "torva_full_helm";
+        offer(taken, "torva_platebody");
+        taken.resolveChest("take");
+        expect(taken.declinedSets.size).toBe(0);
+    });
+
     test("a chinchompa blows up what's around you", () => {
         const sim = createSim();
         const goblins = [0, 1, 2, 3].map(

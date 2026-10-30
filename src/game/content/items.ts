@@ -57,6 +57,8 @@ function setPiece(set: string, ...args: Parameters<typeof gear>): GearDef {
 // Nex's own gear (Torva, Virtus and the Zaryte vambraces) comes in once she's
 // been beaten: killed in her last form
 const NEX_KILL: UnlockTask = { kind: "killBoss", mapId: "god_wars", enemyId: "nex_ice" };
+// Crystal armour comes in once Prifddinas has been beaten
+const PRIFDDINAS_BEATEN: UnlockTask = { kind: "beatMap", mapId: "prifddinas" };
 
 // The gear that turns up in caskets
 export const CASKET_GEAR: GearDef[] = [
@@ -426,22 +428,31 @@ export const CASKET_GEAR: GearDef[] = [
         "rare",
         { might: 0.05, armor: 0.5 },
     ),
-    // Prifddinas's
-    setPiece("crystal_armour", "crystal_helm", "Crystal helm", 23971, "head", "rare", {
-        might: 0.04,
-        speed: 0.15,
-        cooldown: 0.02,
-    }),
-    setPiece("crystal_armour", "crystal_body", "Crystal body", 23975, "body", "rare", {
-        might: 0.05,
-        speed: 0.15,
-        moveSpeed: 0.03,
-    }),
-    setPiece("crystal_armour", "crystal_legs", "Crystal legs", 23979, "legs", "rare", {
-        might: 0.04,
-        speed: 0.1,
-        moveSpeed: 0.04,
-    }),
+    // Prifddinas's, brought in by beating it
+    {
+        ...setPiece("crystal_armour", "crystal_helm", "Crystal helm", 23971, "head", "rare", {
+            might: 0.04,
+            speed: 0.15,
+            cooldown: 0.02,
+        }),
+        unlock: PRIFDDINAS_BEATEN,
+    },
+    {
+        ...setPiece("crystal_armour", "crystal_body", "Crystal body", 23975, "body", "rare", {
+            might: 0.05,
+            speed: 0.15,
+            moveSpeed: 0.03,
+        }),
+        unlock: PRIFDDINAS_BEATEN,
+    },
+    {
+        ...setPiece("crystal_armour", "crystal_legs", "Crystal legs", 23979, "legs", "rare", {
+            might: 0.04,
+            speed: 0.1,
+            moveSpeed: 0.04,
+        }),
+        unlock: PRIFDDINAS_BEATEN,
+    },
     // Nex's, brought in by beating her: every piece of a set at once, so the
     // casket that offers a set's missing piece always has one to offer
     {

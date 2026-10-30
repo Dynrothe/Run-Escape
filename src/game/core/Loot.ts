@@ -12,7 +12,7 @@ import {
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
 import { formatStats } from "../content/stats";
-import { CasketTier, GearSlot, ItemDef } from "../content/types";
+import { CasketTier, GearSlot, ItemDef, SetDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
 
@@ -32,12 +32,14 @@ const UTILITY_WEIGHT = 1.2;
 // Gear no better than what's already worn in its slot turns up less
 const SIDEGRADE_WEIGHT = 0.35;
 // Chance a casket's item is one of the missing pieces of a set the player has
-// started (has a piece of, but not the bonus yet), so a set found early in a
-// run can usually be finished in it: most of the time with this, by
-// simulate-run's count of caskets in a run. Only a piece the casket's tier
-// could hold (no very rare piece from an easy casket), and none commoner than
-// the rarity it rolled.
-export const SET_PIECE_CHANCE = 0.3;
+// started (has a piece of, but not the bonus yet), so those pieces are a little
+// likelier than other items. Only a piece the casket's tier could hold (no very
+// rare piece from an easy casket), none commoner than the rarity it rolled, and
+// none from a set the player's turned a piece of down.
+export const SET_PIECE_CHANCE = 0.15;
+// How many rarities above the casket's roll that piece can be, so a very rare
+// set stays rare in the caskets that seldom hold one
+export const SET_PIECE_REACH = 1;
 
 // What a casket's item is picked from (the Armoury's variants are only made
 // there)
@@ -160,20 +162,35 @@ export function shouldWear(
     );
 }
 
-// The missing pieces of the sets the player has started (a piece but not the
-// bonus yet) that a casket of this tier could hold, as caskets give them
-// (before the Armoury's upgrades)
+// The set this item is a piece of, if the player has started it (a piece but
+// not the bonus yet)
+export function getStartedSet(
+    gear: Partial<Record<GearSlot, string>>,
+    item: ItemDef,
+): SetDef | undefined {
+    const set = getItemSet(item);
+    if (!set) {
+        return undefined;
+    }
+    const count = countSetPieces(gear, set.id);
+    return count > 0 && count < set.needed ? set : undefined;
+}
+
+// The missing pieces of the sets the player has started and hasn't turned down
+// that a casket of this tier could hold, as caskets give them (before the
+// Armoury's upgrades)
 function missingSetPieces(
     tier: CasketTier,
     gear: Partial<Record<GearSlot, string>>,
     exclude: string | undefined,
     unlocked: ReadonlySet<string> | undefined,
     armoury: ArmouryUpgrades | undefined,
+    declinedSets: ReadonlySet<string> | undefined,
 ): ItemDef[] {
     const weights = CASKETS[tier].rarityWeights;
     return SETS.flatMap((set) => {
         const count = countSetPieces(gear, set.id);
-        if (count === 0 || count >= set.needed) {
+        if (count === 0 || count >= set.needed || declinedSets?.has(set.id)) {
             return [];
         }
         return getSetPieces(set.id).filter((piece) => {
@@ -230,13 +247,16 @@ function itemWeight(
 // Rolls the casket's rarity from its tier, then an item of that rarity. If
 // nothing of that rarity can be given, the nearest rarity below (then above)
 // that can. Now and then it's a missing piece of a set the player has
-// started instead (SET_PIECE_CHANCE), one at least that rare. poison: whether anything on the map
-// poisons (see hasPoison).
+// started instead (SET_PIECE_CHANCE), one that rare or a little rarer
+// (SET_PIECE_REACH). poison: whether anything on the map poisons (see
+// hasPoison).
 // exclude: an item it mustn't come out as (the one a reroll replaces).
 // unlocked: the items brought in by map tasks (everything when unset).
 // upgrades: what gear comes with and what's worn has (none when unset).
-// armoury: the pieces upgraded in the Armoury (none when unset). Returns the
-// item as it's found, before the Armoury's upgrades (see getUpgradedGear).
+// armoury: the pieces upgraded in the Armoury (none when unset).
+// declinedSets: sets the player has turned a piece of down this run (see
+// getStartedSet), which stop being brought (none when unset). Returns the item
+// as it's found, before the Armoury's upgrades (see getUpgradedGear).
 export function rollCasketItem(
     rng: Rng,
     tier: CasketTier,
@@ -247,14 +267,18 @@ export function rollCasketItem(
     unlocked?: ReadonlySet<string>,
     upgrades?: GearUpgrades,
     armoury?: ArmouryUpgrades,
+    declinedSets?: ReadonlySet<string>,
 ): string {
     const rarity = rollRarityFrom(CASKETS[tier].rarityWeights, () => rng.next(), luck);
     const index = RARITY_ORDER.indexOf(rarity);
     // The rarity is rolled first, so a set piece never takes the place of a
     // rarer item (a master casket's very rare roll isn't an uncommon Void
-    // piece), though it can stand in for a commoner one
-    const missing = missingSetPieces(tier, gear, exclude, unlocked, armoury).filter(
-        (piece) => RARITY_ORDER.indexOf(piece.rarity) >= index,
+    // piece), though it can stand in for one a little commoner
+    const missing = missingSetPieces(tier, gear, exclude, unlocked, armoury, declinedSets).filter(
+        (piece) => {
+            const above = RARITY_ORDER.indexOf(piece.rarity) - index;
+            return above >= 0 && above <= SET_PIECE_REACH;
+        },
     );
     if (missing.length > 0 && rng.chance(SET_PIECE_CHANCE)) {
         return missing[rng.int(missing.length)].id;

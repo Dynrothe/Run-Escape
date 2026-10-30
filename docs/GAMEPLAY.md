@@ -157,7 +157,7 @@ version and how to run it.
     | Varlamore  | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania  | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas | Crystal bow                                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Prifddinas | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
     | Inferno    |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
@@ -288,7 +288,9 @@ version and how to run it.
   replaces (and alchs) the old.
 - **Gear sets**: the Void knight's equipment (3 of its 4 pieces), Inquisitor's, Crystal armour,
   Torva and Virtus (2 of their 3 each) give a bonus when enough pieces are worn, and once you
-  wear one piece, caskets often bring the set's missing ones.
+  wear one piece, caskets can bring the set's missing ones: 15% of the time, if the piece is no
+  more than one rarity above what the casket rolled. Alch or reroll a piece of a set you've started
+  and caskets stop bringing that set for the rest of the run.
 - **Utility** items go in a 4 slot inventory and are used with **1-4** (or a click): sharks and
   anglerfish, potions (Super attack, strength and defence, Stamina, Magic, Ranging, Super
   combat, Bastion, Battlemage, Overload, Divine super combat) with a timer, brews (a Saradomin

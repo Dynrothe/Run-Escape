@@ -62,6 +62,13 @@ describe("save", () => {
         expect(migrateSave("garbage")).toEqual(createSave());
     });
 
+    test("Crystal armour comes in with beating Prifddinas, on old saves too", () => {
+        const pieces = ["crystal_helm", "crystal_body", "crystal_legs"];
+        expect(createSave().unlockedItems).not.toEqual(expect.arrayContaining(pieces));
+        const beaten = migrateSave({ ...createSave(), mapVictories: { prifddinas: 1 } });
+        expect(beaten.unlockedItems).toEqual(expect.arrayContaining(pieces));
+    });
+
     test("buying upgrades costs coins and raises later prices", () => {
         const save = createSave();
         save.coins = 10000;

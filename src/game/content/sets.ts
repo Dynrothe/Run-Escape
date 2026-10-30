@@ -3,9 +3,10 @@ import { GearDef, GearSlot, ItemDef, SetDef } from "./types";
 
 // Gear sets: pieces that give a bonus when enough of them are worn together.
 // The bonus comes before the whole set (3 of the Void knight's 4 pieces, 2 of
-// the others' 3), and once a piece is worn, caskets often bring the set's
-// missing pieces (see Loot's SET_PIECE_CHANCE), so a set started in a run can
-// usually be finished in it. Which piece is in which set is in items.ts.
+// the others' 3), and once a piece is worn, caskets can bring the set's
+// missing pieces (see Loot's SET_PIECE_CHANCE), so a set started in a run is a
+// little likelier to be finished in it. Which piece is in which set is in
+// items.ts.
 export const SETS: SetDef[] = [
     {
         id: "void_knight",
