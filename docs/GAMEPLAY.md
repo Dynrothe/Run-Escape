@@ -288,7 +288,7 @@ version and how to run it.
   replaces (and alchs) the old.
 - **Gear sets**: the Void knight's equipment (3 of its 4 pieces), Inquisitor's, Crystal armour,
   Torva and Virtus (2 of their 3 each) give a bonus when enough pieces are worn, and once you
-  wear one piece, caskets can bring the set's missing ones: 30% of the time, if the piece is no
+  wear one piece, caskets can bring the set's missing ones: 15% of the time, if the piece is no
   more than one rarity above what the casket rolled. Alch or reroll a piece of a set you've started
   and caskets stop bringing that set for the rest of the run.
 - **Utility** items go in a 4 slot inventory and are used with **1-4** (or a click): sharks and

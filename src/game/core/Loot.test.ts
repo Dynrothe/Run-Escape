@@ -413,10 +413,10 @@ describe("sets", () => {
         const worn = { head: "torva_full_helm" };
         // Torva is very rare, so it takes a rare or very rare roll
         const medium = setPieces("torva", "medium", worn);
-        expect(medium).toBeGreaterThan(0.03);
-        expect(medium).toBeLessThan(0.08);
+        expect(medium).toBeGreaterThan(0.015);
+        expect(medium).toBeLessThan(0.05);
         const elite = setPieces("torva", "elite", worn);
-        expect(elite).toBeGreaterThan(0.15);
+        expect(elite).toBeGreaterThan(0.08);
         expect(elite).toBeLessThan(SET_PIECE_CHANCE);
     });
 

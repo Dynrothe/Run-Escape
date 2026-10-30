@@ -32,12 +32,11 @@ const UTILITY_WEIGHT = 1.2;
 // Gear no better than what's already worn in its slot turns up less
 const SIDEGRADE_WEIGHT = 0.35;
 // Chance a casket's item is one of the missing pieces of a set the player has
-// started (has a piece of, but not the bonus yet), so a set found early in a
-// run can usually be finished in it: most of the time with this, by
-// simulate-run's count of caskets in a run. Only a piece the casket's tier
-// could hold (no very rare piece from an easy casket), none commoner than the
-// rarity it rolled, and none from a set the player's turned a piece of down.
-export const SET_PIECE_CHANCE = 0.3;
+// started (has a piece of, but not the bonus yet), so those pieces are a little
+// likelier than other items. Only a piece the casket's tier could hold (no very
+// rare piece from an easy casket), none commoner than the rarity it rolled, and
+// none from a set the player's turned a piece of down.
+export const SET_PIECE_CHANCE = 0.15;
 // How many rarities above the casket's roll that piece can be, so a very rare
 // set stays rare in the caskets that seldom hold one
 export const SET_PIECE_REACH = 1;
