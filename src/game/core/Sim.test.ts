@@ -14,6 +14,7 @@ import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
 import {
     MAYHEM_BOSSES,
+    MAYHEM_ENEMIES,
     MAYHEM_EVENTS,
     MAYHEM_MODIFIERS,
     MAYHEM_STAT_CAPS,
@@ -3487,7 +3488,8 @@ describe("Mayhem", () => {
         return sim;
     }
 
-    // Plays on, picking whatever comes up, for this long
+    // Plays on, picking whatever comes up, for this long, with the player
+    // kept alive (standing still would be the end of them)
     function play(sim: Sim, seconds: number): void {
         const ticks = seconds * TICKS_PER_SECOND;
         for (let i = 0; i < ticks && !sim.runOver; i++) {
@@ -3497,6 +3499,7 @@ describe("Mayhem", () => {
             } else if (sim.state === "chest") {
                 sim.resolveChest("alch");
             }
+            sim.player.hp = sim.player.maxHp;
             sim.step(0, 0);
         }
     }
@@ -3548,14 +3551,30 @@ describe("Mayhem", () => {
         expect(sim.mayhem!.bossIn).toBeGreaterThanOrEqual(0);
     });
 
-    test("difficulty keeps climbing", () => {
+    test("difficulty keeps climbing, with hitpoints going by level at first", () => {
         for (let minutes = 1; minutes < 60; minutes++) {
             const now = mayhemDifficulty(minutes * 60);
             const before = mayhemDifficulty((minutes - 1) * 60);
-            expect(now.hp).toBeGreaterThan(before.hp);
             expect(now.damage).toBeGreaterThan(before.damage);
-            expect(mayhemBossHp(minutes * 60)).toBeGreaterThan(mayhemBossHp((minutes - 1) * 60));
         }
+        // Early on only levels raise it, so falling behind doesn't make it worse
+        expect(mayhemDifficulty(5 * 60, 10).hp).toBe(mayhemDifficulty(0, 10).hp);
+        expect(mayhemDifficulty(0, 20).hp).toBeGreaterThan(mayhemDifficulty(0, 10).hp);
+        // Late on time does too, to bring strong runs to an end
+        expect(mayhemDifficulty(10 * 60, 30).hp).toBeGreaterThan(mayhemDifficulty(6 * 60, 30).hp);
+        expect(mayhemBossHp(0, 20)).toBeGreaterThan(mayhemBossHp(0, 10));
+    });
+
+    test("enemies' hitpoints aren't scaled twice, and bosses stay well above them", () => {
+        const sim = mayhemSim();
+        sim.tick = 5 * 60 * TICKS_PER_SECOND;
+        sim.level = 12;
+        const scale = mayhemDifficulty(sim.seconds, sim.level).hp;
+        const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal")!;
+        expect(goblin.maxHp).toBeCloseTo(getEnemy("goblin").hp * scale, 0);
+        expect(mayhemBossHp(sim.seconds, sim.level)).toBeGreaterThan(
+            Math.max(...MAYHEM_ENEMIES.map((def) => def.hp)) * scale,
+        );
     });
 
     test("every boss it can bring fights, wherever it turns up", () => {

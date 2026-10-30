@@ -50,20 +50,29 @@ export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDe
     return {
         start: 0,
         enemies,
-        spawnRate: Math.min(1.5 + minutes * 2.5, 30),
+        spawnRate: Math.min(1.5 + minutes * 2, 24),
         minAlive: Math.min(Math.round(12 + minutes * 10), 120),
-        maxAlive: Math.min(Math.round(40 + minutes * 45), 380),
+        maxAlive: Math.min(Math.round(30 + minutes * 25), 300),
     };
+}
+
+// How much tougher enemies are for the player's level: a hit or two a kill to
+// begin with, more as the player gains power. It goes by level and not the
+// clock so a run that's struggling to kill isn't made worse by it. Time only
+// comes in late, to bring strong runs to an end.
+function hitpointScale(seconds: number, level: number): number {
+    const late = Math.max(0, seconds / 60 - 6);
+    return (1 + (level / 24) ** 4) * (1 + late * late * late * 0.02);
 }
 
 // What enemies' hitpoints and damage are multiplied by, in place of a map's
 // difficulty. Damage starts around what enemies are made to do, so a hit is
 // always worth dodging, rather than nothing at first and everything later.
-export function mayhemDifficulty(seconds: number): { hp: number; damage: number } {
+export function mayhemDifficulty(seconds: number, level = 1): { hp: number; damage: number } {
     const minutes = seconds / 60;
     const cubed = minutes * minutes * minutes;
     return {
-        hp: 1 + minutes * 0.3 + minutes * minutes * 0.1 + cubed * 0.008,
+        hp: hitpointScale(seconds, level),
         damage: 0.6 + minutes * 0.05 + minutes * minutes * 0.012 + cubed * 0.0015,
     };
 }
@@ -78,10 +87,9 @@ export function mayhemEnemySpeed(seconds: number): number {
 export const MAYHEM_BOSS_DAMAGE = 0.4;
 
 // A boss's hitpoints: the same for every boss, as they're made for maps of very
-// different strengths
-export function mayhemBossHp(seconds: number): number {
-    const minutes = seconds / 60;
-    return Math.round(400 + minutes * 200 + minutes * minutes * 40);
+// different strengths, and always well above the crowd's
+export function mayhemBossHp(seconds: number, level = 1): number {
+    return Math.round(600 * hitpointScale(seconds, level));
 }
 
 // What a stat stops at in a run, whatever's been stacked on it: more does

@@ -1593,6 +1593,10 @@ export class Sim {
     // Enemies get tougher faster as the run (or round) goes on: gently for the
     // first few minutes, then 1.9x hitpoints at 10 minutes and 2.65x at 15
     private enemyHpScale(): number {
+        // Mayhem's difficulty has it all
+        if (this.mayhem) {
+            return 1;
+        }
         const minutes = this.mapSeconds / 60;
         return 1 + minutes * 0.05 + minutes * minutes * 0.004;
     }

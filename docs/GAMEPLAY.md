@@ -348,9 +348,11 @@ from it goes in your save: no coins, quests, unlocks, gear, Collection log entri
   turn up, with 6 weapon slots and 6 passive slots for everyone. Skills and the Armoury stay at
   home.
 - It never ends: enemies come in a stream that keeps growing, so a strong build clears the screen
-  and a weak one is swamped. They get tougher and faster with time until you fall. Everyone has
-  double hitpoints and heals a little over time, and bones are worth half as much, so power comes
-  from Modifiers as much as levels. Caskets, power-ups and food are more common.
+  and a weak one is swamped. Enemies' hitpoints rise with your level, so they take a hit or two to
+  begin with and more as you gain power, and from six minutes they climb with time as well. They
+  also hit harder and move faster as time goes on, until you fall. Everyone has double hitpoints
+  and heals a little over time, and bones are worth half as much, so power comes from Modifiers as
+  much as levels. Caskets, power-ups and food are more common.
 - Enemies come from the whole game, weakest first, in a new mix every 45 seconds. Those that shoot
   stay away for the first three minutes and are few after that, and those that explode come later
   than their hitpoints would suggest. A boss from anywhere turns up a minute in and then every

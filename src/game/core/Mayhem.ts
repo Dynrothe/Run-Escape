@@ -224,7 +224,7 @@ export class MayhemRun {
     // ---- What the sim asks ----
 
     get difficulty(): { hp: number; damage: number } {
-        return mayhemDifficulty(this.sim.seconds);
+        return mayhemDifficulty(this.sim.seconds, this.sim.level);
     }
 
     // The next lot of bosses, in seconds
@@ -406,7 +406,9 @@ export class MayhemRun {
 
     // A boss's hitpoints when it's one of several
     private bossHp(group: number): number {
-        return Math.round(mayhemBossHp(this.sim.seconds) * (group > 1 ? BOSS_GROUP_HP : 1));
+        return Math.round(
+            mayhemBossHp(this.sim.seconds, this.sim.level) * (group > 1 ? BOSS_GROUP_HP : 1),
+        );
     }
 
     // ---- Every tick ----
