@@ -25,6 +25,7 @@ import {
     describeItem,
     findInventorySlot,
     getAlchValue,
+    getStartedSet,
     isBetterGear,
     rollBossCasketTier,
     rollCasketItem,
@@ -406,9 +407,41 @@ describe("sets", () => {
         expect(done).toBeLessThan(0.08);
         // Never a piece rarer than the casket could hold
         expect(setPieces("torva", "easy", { head: "torva_full_helm" })).toBe(0);
-        expect(setPieces("torva", "elite", { head: "torva_full_helm" })).toBeGreaterThan(
-            SET_PIECE_CHANCE,
-        );
+    });
+
+    test("a set's missing piece is at most a rarity above the casket's roll", () => {
+        const worn = { head: "torva_full_helm" };
+        // Torva is very rare, so it takes a rare or very rare roll
+        const medium = setPieces("torva", "medium", worn);
+        expect(medium).toBeGreaterThan(0.015);
+        expect(medium).toBeLessThan(0.05);
+        const elite = setPieces("torva", "elite", worn);
+        expect(elite).toBeGreaterThan(0.08);
+        expect(elite).toBeLessThan(SET_PIECE_CHANCE);
+    });
+
+    test("a set the player has turned down stops being brought", () => {
+        const worn = { head: "torva_full_helm" };
+        const rng = new Rng(7);
+        let count = 0;
+        for (let i = 0; i < 3000; i++) {
+            const id = rollCasketItem(
+                rng,
+                "elite",
+                0,
+                worn,
+                false,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                new Set(["torva"]),
+            );
+            if (getStartedSet(worn, getItem(id))) {
+                count++;
+            }
+        }
+        expect(count / 3000).toBeLessThan(0.03);
     });
 
     test("a set piece never takes the place of a rarer item", () => {

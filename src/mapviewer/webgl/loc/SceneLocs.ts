@@ -130,6 +130,28 @@ export function createSceneLocEntity(
     };
 }
 
+// Whether a tile's locs are drawn when looking at floors up to maxLevel. What
+// belongs to those floors always is, even stored a level up (the Grand
+// Exchange's walls are). Upper floors only there because the ground floor is
+// flagged to show them (Prifddinas) are left out over a tile that's under a
+// roof, so you can see into buildings.
+export function isTileDrawn(
+    scene: Scene,
+    tileMinLevel: number,
+    level: number,
+    tileX: number,
+    tileY: number,
+    maxLevel: number,
+): boolean {
+    if (tileMinLevel <= maxLevel) {
+        return true;
+    }
+    return (
+        scene.isPlayerLevel(level, tileX, tileY, maxLevel) &&
+        !scene.isInside(maxLevel, tileX, tileY)
+    );
+}
+
 export function getSceneLocs(
     locTypeLoader: LocTypeLoader,
     scene: Scene,
@@ -154,17 +176,7 @@ export function getSceneLocs(
                 // if (!tile || tile.minLevel > maxLevel) {
                 //     continue;
                 // }
-                if (
-                    !tile ||
-                    (tile.minLevel > maxLevel &&
-                        !scene.isPlayerLevel(level, tileX, tileY, maxLevel))
-                ) {
-                    continue;
-                }
-                // Nothing from the floors above over a tile that's
-                // under a roof, so you can see into buildings where the upper
-                // floors are otherwise drawn (Prifddinas)
-                if (level > maxLevel && scene.isInside(maxLevel, tileX, tileY)) {
+                if (!tile || !isTileDrawn(scene, tile.minLevel, level, tileX, tileY, maxLevel)) {
                     continue;
                 }
 
