@@ -20,9 +20,9 @@ npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation p
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
 
-Whatever you add, follow the checklist in `CLAUDE.md`: tests, simulations, slim cache if it uses
-anything new from the cache, changelog and docs. `docs/GAMEPLAY.md` lists most content, so add new
-entries to its tables and lists.
+Whatever you add, follow the checklist in `CLAUDE.md`: tests, simulations, changelog and docs, and
+say in the pull request if it uses anything new from the cache. `docs/GAMEPLAY.md` lists most
+content, so add new entries to its tables and lists.
 
 ## Weapon
 
@@ -34,7 +34,9 @@ Add it to `WEAPONS` in `weapons.ts`.
 - `style` makes it a class weapon, only offered to adventurers who fight that way. Set
   `damageStyle` only for exceptions (see its comment).
 - `unlock` brings it in through a task on a map. Without one it's there from the start.
-- `evolution` needs a passive, and the weapon it becomes needs `evolved: true`.
+- `evolution` needs a passive, and the weapon it becomes needs `evolved: true`, `evolvedLevels` for
+  its 3 levels, and `style`/`family` kept from what it evolves from. Recipes in `evolutions.ts` and
+  the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after

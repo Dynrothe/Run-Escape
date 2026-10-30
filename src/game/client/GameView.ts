@@ -65,6 +65,10 @@ const SLASH_COLORS: Record<string, string> = {
     scythe_of_vitur: "150, 20, 40",
     thunder_khopesh: "150, 200, 255",
     dinhs_bulwark: "210, 180, 110",
+    sanguine_scythe: "150, 20, 40",
+    ancient_godsword: "150, 20, 40",
+    burning_claws: "240, 130, 40",
+    dinhs_blazing_bulwark: "240, 130, 40",
 };
 const AURA_MS = 320;
 const BLAST_MS = 480;

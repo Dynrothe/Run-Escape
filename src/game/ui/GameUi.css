@@ -974,6 +974,40 @@
     box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
 }
 
+/* A weapon ready to evolve, on the next level up */
+.ui-slot-evolve {
+    border-color: #ffd700 !important;
+    box-shadow:
+        inset 0 0 0 1px rgba(107, 94, 74, 0.6),
+        0 0 8px 2px rgba(255, 215, 0, 0.8);
+    animation: ui-slot-evolve 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes ui-slot-evolve {
+    from {
+        box-shadow:
+            inset 0 0 0 1px rgba(107, 94, 74, 0.6),
+            0 0 4px 1px rgba(255, 215, 0, 0.5);
+    }
+    to {
+        box-shadow:
+            inset 0 0 0 1px rgba(107, 94, 74, 0.6),
+            0 0 10px 3px rgba(255, 215, 0, 0.9);
+    }
+}
+
+.ui-evolve-line {
+    color: #b8aa8a;
+}
+
+.ui-evolve-done {
+    color: var(--ui-green);
+}
+
+.ui-evolve-ready {
+    color: #ffd700;
+}
+
 .ui-slot-level {
     position: absolute;
     left: 2px;
@@ -1247,6 +1281,15 @@
 
 .ui-choice-stat-down {
     color: #ff5a5a;
+}
+
+/* What a card's weapon or passive evolves; bright once the other half's owned */
+.ui-card-evolves {
+    color: #b8aa8a;
+}
+
+.ui-card-evolves-held {
+    color: var(--ui-yellow);
 }
 
 .ui-choice-evolve {

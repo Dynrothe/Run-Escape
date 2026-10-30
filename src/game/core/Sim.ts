@@ -297,6 +297,8 @@ export type RunResult = {
     // The gear that came out of caskets (as found, before the Armoury's
     // upgrades), for the Armoury
     gearFound: string[];
+    // The weapons evolved into, for the Collection log
+    evolutionsMade: string[];
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills: Record<string, number>;
     caskets: number;
@@ -321,7 +323,7 @@ export class Sim {
     readonly map: MapDef;
     readonly rng: Rng;
     readonly characterId: string;
-    private readonly unlockedItems: ReadonlySet<string> | undefined;
+    readonly unlockedItems: ReadonlySet<string> | undefined;
     private readonly armoury: ArmouryUpgrades | undefined;
     readonly metaStats: Stats;
     readonly endless: boolean;
@@ -341,6 +343,8 @@ export class Sim {
     // The sets whose bonus the worn gear gives
     activeSets: string[] = [];
     gearUpgrades: Partial<Record<GearSlot, number>> = {};
+    // The weapons evolved into this run
+    evolutionsMade: string[] = [];
     // Utility items; slots keep their place (they're used with 1-4)
     inventory: (InventorySlot | null)[] = new Array(MAX_INVENTORY).fill(null);
     buffs: Buff[] = [];
@@ -560,6 +564,7 @@ export class Sim {
             coins: this.coins,
             bossesKilled: [...this.bossesKilled],
             gearFound: [...this.gearFound],
+            evolutionsMade: [...this.evolutionsMade],
             enemyKills: { ...this.enemyKills },
             caskets: this.casketsOpened,
             stats: this.getRunStats(),
@@ -798,6 +803,14 @@ export class Sim {
                 if (index !== -1) {
                     // Bonus damage from rare rolls carries over
                     this.weaponSince[choice.into] ??= this.tick;
+                    if (!this.evolutionsMade.includes(choice.into)) {
+                        this.evolutionsMade.push(choice.into);
+                    }
+                    this.events.push({ type: "evolved", weaponId: choice.into });
+                    this.events.push({
+                        type: "notice",
+                        message: `Evolved: ${getWeapon(choice.into).name}!`,
+                    });
                     this.weapons[index] = {
                         def: getWeapon(choice.into),
                         level: 1,
@@ -3572,6 +3585,12 @@ export class Sim {
                 }
             } else if (effect?.kind === "drain" && !enemy.dead) {
                 this.drainEnemy(enemy, effect.amount, effect.seconds);
+            } else if (effect?.kind === "burn" && !enemy.dead) {
+                this.envenom(
+                    enemy,
+                    enemyDamage * effect.damage,
+                    Math.round(effect.seconds * (1 + this.stats.duration) * TICKS_PER_SECOND),
+                );
             }
         }
         if (special?.effect?.kind === "heal" && dealt > 0) {

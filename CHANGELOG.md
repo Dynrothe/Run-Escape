@@ -5,6 +5,21 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.17.0 - 2026-10-30
+
+### Added
+
+- Collection log: every evolution's recipe, and what it makes once you've made it.
+- Nine new evolutions for the Scythe of Vitur, godswords, Dragon claws, Dragon warhammer, Dinh's
+  bulwark, Twisted bow, Tumeken's shadow, Sanguinesti staff and Harmonised nightmare staff.
+
+### Changed
+
+- Level up cards say what evolves with what.
+- The HUD and pause menu show what a weapon needs to evolve, and its slot glows when it's ready.
+- Evolved weapons have 3 levels.
+- A notice and a sound when a weapon evolves.
+
 ## 0.16.0 - 2026-10-30
 
 ### Added

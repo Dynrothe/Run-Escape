@@ -482,6 +482,7 @@ export type SimEvent =
     // Something the player should know about, on screen for a moment (a
     // shield dropping, a boss's big attack coming)
     | { type: "notice"; message: string }
+    | { type: "evolved"; weaponId: string }
     | { type: "revive" }
     | { type: "casketDropped"; tier: CasketTier; x: number; y: number }
     // A casket was picked up and opened; the run waits for a decision

@@ -14,12 +14,13 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { formatStats } from "../content/stats";
-import { LOCKABLE_ITEMS, describeUnlockTask } from "../content/unlocks";
+import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { getWeapon } from "../content/weapons";
 import { ChestAction } from "../core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { describeChoice } from "../core/Upgrades";
-import { SimEvent } from "../core/entities";
+import { canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
+import { SimEvent, WeaponState } from "../core/entities";
 import {
     SaveData,
     SaveStore,
@@ -50,7 +51,7 @@ import {
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
-import { ChoiceView, GameStore, HudView, QuestTrackView, Screen } from "./GameStore";
+import { ChoiceView, GameStore, HudView, QuestTrackView, Screen, SlotView } from "./GameStore";
 import { GameView } from "./GameView";
 import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./ItemViews";
 import { Minimap } from "./Minimap";
@@ -115,7 +116,23 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
     });
 }
 
+// How far a weapon has got towards its evolution, for the HUD and pause menu
+function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
+    const evolution = weapon.def.evolution;
+    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+        return undefined;
+    }
+    const owned = new Set(sim.passives.map((p) => p.id));
+    return {
+        passive: getPassive(evolution.requiresPassive).name,
+        maxed: weapon.level >= weapon.def.levels.length,
+        hasPassive: owned.has(evolution.requiresPassive),
+        ready: canEvolve(weapon, owned, sim.unlockedItems),
+    };
+}
+
 function getChoiceViews(sim: Sim): ChoiceView[] {
+    const style = getCharacter(sim.characterId).style;
     return sim.choices.map((choice) => {
         const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(choice);
         const rarity = quality ? RARITIES[quality] : undefined;
@@ -129,6 +146,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isHilt: choice.kind === "hilt",
             rarity: rarity && { name: rarity.name, color: rarity.color },
             stats,
+            evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
         };
     });
 }
@@ -934,6 +952,7 @@ export class GameClient implements GameFrameHandler {
                     iconObjId: level.objId ?? w.def.iconObjId,
                     detail: w.bonus > 0 ? `+${Math.round(w.bonus * 100)}% damage` : "",
                     stats: weaponStats(w.def, level).map(formatWeaponStat),
+                    evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
             }),

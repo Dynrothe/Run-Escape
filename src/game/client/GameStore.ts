@@ -7,7 +7,15 @@ import { SaveData } from "../core/save";
 import { DisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 
-export type Screen = "loading" | "title" | "characters" | "shop" | "armoury" | "quests" | "run";
+export type Screen =
+    | "loading"
+    | "title"
+    | "characters"
+    | "shop"
+    | "armoury"
+    | "quests"
+    | "collectionLog"
+    | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "paused" | "dead" | "victory";
 
@@ -22,6 +30,8 @@ export type SlotView = {
     detail: string;
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
     stats?: string[];
+    // Weapons that evolve: the passive it takes, and what's done of it
+    evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
     rarityColor: string;
 };
@@ -158,6 +168,8 @@ export type ChoiceView = {
     rarity?: { name: string; color: string };
     // Weapons: what this level changes, or a new weapon's stats
     stats?: WeaponStatLine[];
+    // What it evolves or evolves with; held when the other half's owned
+    evolves?: { text: string; held: boolean };
 };
 
 export type Toast = { id: number; text: string; until: number };

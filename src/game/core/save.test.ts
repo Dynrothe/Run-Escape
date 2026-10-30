@@ -390,6 +390,37 @@ describe("the Armoury", () => {
     });
 });
 
+describe("evolutions made", () => {
+    test("runs add to them once each, and they survive a save", () => {
+        const save = createSave();
+        const run = {
+            mapId: "lumbridge",
+            victory: false,
+            seconds: 60,
+            level: 2,
+            kills: 1,
+            coins: 0,
+            bossesKilled: [],
+            evolutionsMade: ["abyssal_whip"],
+        };
+        recordRun(save, run);
+        recordRun(save, run);
+        expect(save.evolutionsMade).toEqual(["abyssal_whip"]);
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).evolutionsMade).toEqual([
+            "abyssal_whip",
+        ]);
+    });
+
+    test("older saves start with none, and unknown ids are dropped", () => {
+        const { evolutionsMade: _, ...old } = createSave();
+        expect(migrateSave({ ...old, version: 6 }).evolutionsMade).toEqual([]);
+        expect(
+            migrateSave({ ...old, evolutionsMade: ["abyssal_whip", "no_such_weapon"] })
+                .evolutionsMade,
+        ).toEqual(["abyssal_whip"]);
+    });
+});
+
 describe("quests", () => {
     test("count kills over runs, and pay out once when finished", () => {
         const save = createSave();

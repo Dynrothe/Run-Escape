@@ -37,12 +37,27 @@ version and how to run it.
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
   Book of the dead becomes **Undead Grasp**, whose hands hold what they hit; and a maxed dragon 2h
   sword with Dizana's quiver becomes the **Colossal blade**, which hits bosses and elites again.
-  Every weapon that can be offered evolves (but the Thunder khopesh and Dinh's bulwark): the shortbow with **Rigour** into the **Dark
-  bow**, the fire spells with **Augury** into **Flames of Zamorak**, the thrownaxes with the Tome
-  of fire into **Chain-hit axes**, Blood Burst with Rapid Heal into **Blood Barrage**, Smoke and
-  Shadow Burst with the **Ancient sceptre** into **Smoke** and **Shadow Barrage**, the Ivandis
-  flail with the Book of the dead into the **Blisterwood flail** and the Crystal bow with the
-  Graceful outfit into the **Corrupted bow**.
+  The shortbow with **Rigour** becomes the **Dark bow**, the fire spells with **Augury**
+  **Flames of Zamorak**, the thrownaxes with the Tome of fire **Chain-hit axes**, Blood Burst with
+  Rapid Heal **Blood Barrage**, Smoke and Shadow Burst with the **Ancient sceptre** **Smoke** and
+  **Shadow Barrage**, the Ivandis flail with the Book of the dead the **Blisterwood flail** and the
+  Crystal bow with the Graceful outfit the **Corrupted bow**.
+- **Class weapon evolutions**: the Scythe of Vitur with **Chivalry** becomes the **Sanguine Scythe
+  of Vitur**, which sweeps wider and heals every fourth sweep; a godsword with **Piety** becomes the
+  **Ancient godsword**, whose Blood Sacrifice hits all round and heals; the Dragon claws with the
+  Tome of fire become the **Burning claws**; the Dragon warhammer with Protect from Melee becomes the
+  **Elder maul**, whose Shockwave weakens everything around you; Dinh's bulwark with Vengeance becomes
+  **Dinh's blazing bulwark**, whose Shield Bash reaches further and burns; the Twisted bow with Rigour
+  becomes the **Corrupted twisted bow**; Tumeken's shadow with Augury becomes the **Corrupted
+  tumeken's shadow**; the Sanguinesti staff with Rapid Heal becomes the **Holy sanguinesti staff**;
+  and the Harmonised nightmare staff with the Amulet of glory becomes the **Eldritch nightmare staff**,
+  whose surges split where they hit.
+- **Evolving**: a weapon at its last level with its passive (at any level) offers its evolution first
+  on every level up. An evolved weapon has three levels of its own and keeps the weapon's bonus
+  damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
+  Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
+  its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
+  recipe, keeping what it makes as ??? until you've made it.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.

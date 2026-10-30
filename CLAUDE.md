@@ -26,7 +26,8 @@ go stale. Add anything that cost you time to work out.
 | How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`       |
 | Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                     |
 | The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                  |
-| Level up choices                                      | `src/game/core/Upgrades.ts`             |
+| Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
+| Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
 | Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
 | Save data and migrations                              | `src/game/core/save.ts`                 |
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
@@ -49,7 +50,7 @@ npm start                  # dev server on http://localhost:5173
 npm test                   # vitest
 npx tsc --noEmit -p .      # type check
 npx prettier --write <files>
-npm run build && npm run slim-cache    # build for hosting, and check the content is in the cache
+npm run build && npm run slim-cache    # build for hosting (only when deploying)
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.
@@ -58,10 +59,10 @@ There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the
 
 1. Run the tests and the type check, and format what you changed.
 2. **Run a simulation if the change can affect gameplay or balance** (see below).
-3. **Run `npm run build && npm run slim-cache` if you added anything from the cache** (an item,
-   enemy, map, animation or sprite). It fails if something is missing. A deployed game with an old
-   slim cache stops on a "missing from the cache" error, so say in the pull request that it needs a
-   new one.
+3. **If you added anything from the cache** (an item, enemy, map, animation or sprite), say so in the
+   pull request. Don't run `npm run slim-cache` as part of a change: it's slow and heavy on memory, and
+   it's done when deploying. A deployed game with an old slim cache stops on a "missing from the
+   cache" error.
 4. Try UI and visual changes in the browser. Tests don't cover how things look.
 5. Note the change in `CHANGELOG.md` under Unreleased.
 6. Update the docs (see [Keep these files up to date](#keep-these-files-up-to-date)).

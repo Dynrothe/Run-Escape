@@ -1,4 +1,5 @@
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
+import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
 import {
     PASSIVES,
     canLevelPassive,
@@ -51,6 +52,61 @@ export type ChoiceDescription = {
     // Weapons: what this level changes, or a new weapon's stats
     stats?: WeaponStatLine[];
 };
+
+// A weapon that's ready to evolve: at its last level, with its passive, and
+// what it evolves into not locked behind a map task
+export function canEvolve(
+    weapon: WeaponState,
+    ownedPassives: ReadonlySet<string>,
+    unlocked?: ReadonlySet<string>,
+): boolean {
+    const evolution = weapon.def.evolution;
+    return (
+        evolution !== undefined &&
+        weapon.level >= weapon.def.levels.length &&
+        ownedPassives.has(evolution.requiresPassive) &&
+        isAvailable(getWeapon(evolution.into), unlocked)
+    );
+}
+
+// What a level up card says about evolutions: the passive a weapon needs, or
+// what a passive evolves. Results stay hidden, for the Collection log. held:
+// the player already has the other half.
+export function getEvolutionHint(
+    choice: UpgradeChoice,
+    weapons: readonly WeaponState[],
+    passives: readonly PassiveState[],
+    style: CombatStyle,
+    unlocked?: ReadonlySet<string>,
+): { text: string; held: boolean } | undefined {
+    if (choice.kind === "newWeapon" || choice.kind === "weaponLevel") {
+        const evolution = EVOLUTIONS.find((e) => e.weapons.some((w) => w.id === choice.weaponId));
+        if (!evolution || !isAvailable(evolution.into, unlocked)) {
+            return undefined;
+        }
+        return {
+            text: `Evolves with ${evolution.passive.name}`,
+            held: passives.some((p) => p.id === evolution.passive.id),
+        };
+    }
+    if (choice.kind === "newPassive" || choice.kind === "passiveLevel") {
+        const usable = getEvolutionsWith(choice.passiveId).filter(
+            (e) =>
+                isAvailable(e.into, unlocked) &&
+                e.weapons.some((w) => !w.style || w.style === style),
+        );
+        const held = usable.filter((e) => weapons.some((w) => e.weapons.includes(w.def)));
+        const shown = held.length > 0 ? held : usable;
+        if (shown.length === 0) {
+            return undefined;
+        }
+        const names = shown.map((e) =>
+            e.weapons.length > 1 ? e.name.toLowerCase() : `the ${e.name}`,
+        );
+        return { text: `Evolves ${names.join(" and ")}`, held: held.length > 0 };
+    }
+    return undefined;
+}
 
 // The extra damage text for a weapon pick of this quality, if any
 function weaponBonusText(quality: Rarity): string {
@@ -243,16 +299,11 @@ export function rollChoices(
                 weight: WEAPON_LEVEL_WEIGHT,
             });
         }
-        if (
-            weapon.level >= weapon.def.levels.length &&
-            weapon.def.evolution &&
-            ownedPassives.has(weapon.def.evolution.requiresPassive) &&
-            isAvailable(getWeapon(weapon.def.evolution.into), unlocked)
-        ) {
+        if (canEvolve(weapon, ownedPassives, unlocked)) {
             evolutions.push({
                 kind: "evolve",
                 weaponId: weapon.def.id,
-                into: weapon.def.evolution.into,
+                into: weapon.def.evolution!.into,
             });
         }
     }

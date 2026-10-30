@@ -1,3 +1,4 @@
+import { EVOLUTIONS } from "../content/evolutions";
 import { PASSIVES, canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarity } from "../content/rarity";
 import { CombatStyle } from "../content/types";
@@ -8,6 +9,7 @@ import {
     MAX_WEAPONS,
     UpgradeChoice,
     describeChoice,
+    getEvolutionHint,
     hiltChoices,
     rollChoices,
 } from "./Upgrades";
@@ -127,6 +129,75 @@ describe("rollChoices", () => {
 });
 
 describe("evolutions", () => {
+    test("an evolution never pushes less than the maxed weapon it came from", () => {
+        for (const def of WEAPONS) {
+            if (def.evolution) {
+                const into = getWeapon(def.evolution.into);
+                const maxed = def.levels[def.levels.length - 1].knockback;
+                expect(into.levels[0].knockback).toBeGreaterThanOrEqual(maxed - 0.001);
+            }
+        }
+    });
+
+    test("every evolved weapon has three levels, and comes from something", () => {
+        for (const def of WEAPONS.filter((w) => w.evolved)) {
+            expect(def.levels.length).toBe(3);
+            expect(EVOLUTIONS.some((e) => e.into === def)).toBe(true);
+        }
+    });
+
+    test("every recipe names what it evolves", () => {
+        const names = EVOLUTIONS.map((e) => e.name);
+        expect(names).toContain("Dragon scimitar");
+        expect(names).toContain("Any godsword");
+        // Each result is listed once, even with several weapons behind it
+        expect(new Set(EVOLUTIONS.map((e) => e.into.id)).size).toBe(EVOLUTIONS.length);
+    });
+
+    test("level up cards say what evolves with what", () => {
+        const scimitar = weapon("scimitar");
+        const offer: UpgradeChoice = {
+            kind: "weaponLevel",
+            weaponId: "scimitar",
+            level: 2,
+            quality: "common",
+        };
+        expect(getEvolutionHint(offer, [scimitar], [], "melee")).toEqual({
+            text: "Evolves with Piety",
+            held: false,
+        });
+        expect(getEvolutionHint(offer, [scimitar], [passive("piety")], "melee")?.held).toBe(true);
+        const piety: UpgradeChoice = { kind: "newPassive", passiveId: "piety", quality: "common" };
+        expect(getEvolutionHint(piety, [scimitar], [], "melee")).toEqual({
+            text: "Evolves the Dragon scimitar",
+            held: true,
+        });
+        // A ranged adventurer can't get the godsword, so it isn't mentioned
+        expect(getEvolutionHint(piety, [], [], "ranged")).toEqual({
+            text: "Evolves the Dragon scimitar",
+            held: false,
+        });
+        expect(getEvolutionHint(piety, [], [], "melee")?.text).toBe(
+            "Evolves the Dragon scimitar and any godsword",
+        );
+    });
+
+    test("an evolved weapon has no hint, and a locked evolution isn't mentioned", () => {
+        const whip: UpgradeChoice = {
+            kind: "weaponLevel",
+            weaponId: "abyssal_whip",
+            level: 2,
+            quality: "common",
+        };
+        expect(getEvolutionHint(whip, [weapon("abyssal_whip")], [], "melee")).toBeUndefined();
+        const knives: UpgradeChoice = {
+            kind: "newWeapon",
+            weaponId: "throwing_knives",
+            quality: "common",
+        };
+        expect(getEvolutionHint(knives, [], [], "melee", new Set())).toBeUndefined();
+    });
+
     test("every evolution becomes an evolved weapon, with a passive that exists", () => {
         for (const def of WEAPONS) {
             if (def.evolution) {
@@ -283,7 +354,7 @@ describe("class weapons", () => {
     test("are only offered to their own class", () => {
         for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
             const offered = newWeaponOffers(style, [weapon("throwing_knives")]);
-            for (const def of WEAPONS.filter((w) => w.style)) {
+            for (const def of WEAPONS.filter((w) => w.style && !w.evolved)) {
                 if (def.style === style) {
                     expect(offered.get(def.id) ?? 0).toBeGreaterThan(0);
                 } else {
@@ -303,7 +374,9 @@ describe("class weapons", () => {
     test("the godswords share one weapon's chance, and only one is carried", () => {
         const offered = newWeaponOffers("melee", [weapon("throwing_knives")]);
         // The four, and the blade that takes the hilt picked
-        const godswords = WEAPONS.filter((w) => w.family === "godsword").map((w) => w.id);
+        const godswords = WEAPONS.filter((w) => w.family === "godsword" && !w.evolved).map(
+            (w) => w.id,
+        );
         expect(godswords.length).toBe(5);
         const anyGodsword = godswords.reduce((sum, id) => sum + (offered.get(id) ?? 0), 0);
         // About as often as Ranged adventurers are offered the Bow of

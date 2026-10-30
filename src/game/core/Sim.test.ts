@@ -304,6 +304,36 @@ describe("melee", () => {
         expect(push("throwing_knives", 1)).toBe(push("throwing_knives", 0));
     });
 
+    test("evolving swaps the weapon, keeps its bonus and shows a notice", () => {
+        const sim = armed("scimitar");
+        sim.weapons[0].bonus = 0.2;
+        sim.takeEvents();
+        sim.apply({ kind: "evolve", weaponId: "scimitar", into: "abyssal_whip" });
+        expect(sim.weapons[0].def.id).toBe("abyssal_whip");
+        expect(sim.weapons[0].level).toBe(1);
+        expect(sim.weapons[0].bonus).toBe(0.2);
+        expect(sim.evolutionsMade).toEqual(["abyssal_whip"]);
+        expect(sim.getResult().evolutionsMade).toEqual(["abyssal_whip"]);
+        const events = sim.takeEvents();
+        expect(events.some((e) => e.type === "evolved")).toBe(true);
+        expect(events.some((e) => e.type === "notice")).toBe(true);
+    });
+
+    test("Dinh's blazing bulwark's Shield Bash burns what it hits", () => {
+        const sim = armed("dinhs_blazing_bulwark");
+        dummy(sim, 3, 0);
+        // Out of a normal bash's reach
+        const near = dummy(sim, -6, 0);
+        const weapon = sim.weapons[0];
+        weapon.uses = 2;
+        weapon.cooldown = 0;
+        sim.step(0, 0);
+        expect(near.hp).toBeLessThan(near.maxHp);
+        const hit = near.hp;
+        runFor(sim, 1, "still");
+        expect(near.hp).toBeLessThan(hit);
+    });
+
     test("Chivalry adds melee damage and max hitpoints", () => {
         const sim = createSim();
         const hp = sim.player.maxHp;

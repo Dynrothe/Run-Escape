@@ -33,6 +33,7 @@ export const SOUNDS = {
     bonecrusher: 2738, // bury_bones
     chinchompa: 163, // firewave_hit
     lamp: 200, // teleport_vwoop
+    evolve: 3813, // town_crier_bell_ding
     // A level up's rewards rolled again
     reroll: 200, // teleport_vwoop
     // A task done that brings in an adventurer

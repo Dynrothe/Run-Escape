@@ -1,82 +1,82 @@
 {
-  "name": "run-escape",
-  "version": "0.16.0",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@foxglove/wasm-bz2": "^0.3.0",
-    "bzip2": "^0.1.1",
-    "denque": "^2.1.0",
-    "fast-memoize": "^2.5.2",
-    "file-saver": "^2.0.5",
-    "gl-matrix": "^3.4.4",
-    "java-random": "^0.4.0",
-    "js-xxhash": "^5.0.1",
-    "jszip": "^3.10.1",
-    "leva": "^0.10.1",
-    "pako": "^2.1.0",
-    "picogl": "^0.17.9",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "react-joystick-component": "^6.2.1",
-    "react-modal": "^3.16.3",
-    "react-router-dom": "^7.18.0",
-    "react-select": "^5.10.2",
-    "threads": "^1.7.0",
-    "wasm-gzip": "^2.1.0",
-    "web-vitals": "^5.3.0",
-    "webfontloader": "^1.6.28",
-    "xxhash-wasm": "^1.1.0"
-  },
-  "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "test": "vitest run",
-    "preview": "vite preview",
-    "lint": "prettier --write \"./**/*.{js,ts,jsx,tsx,css,md}\"",
-    "download-caches": "node scripts/download-caches.cjs",
-    "export-textures": "npx tsx scripts/cache/export-textures.ts",
-    "export-height-map": "npx tsx scripts/cache/export-height-map.ts",
-    "slim-cache": "npx tsx scripts/cache/slim-cache.ts"
-  },
-  "browserslist": {
-    "production": [
-      "chrome >= 67",
-      "edge >= 79",
-      "firefox >= 68",
-      "opera >= 54",
-      "safari >= 14"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "@types/file-saver": "^2.0.7",
-    "@types/node": "^24.0.0",
-    "@types/pako": "^2.0.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@types/react-modal": "^3.16.3",
-    "@types/webfontloader": "^1.6.35",
-    "@vitejs/plugin-react": "^4.7.0",
-    "@webgpu/types": "^0.1.70",
-    "adm-zip": "^0.5.17",
-    "jsdom": "^25.0.1",
-    "prettier": "^3.8.4",
-    "sharp": "^0.35.1",
-    "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
-    "vite": "^6.4.5",
-    "vitest": "^3.2.7"
-  }
+    "name": "run-escape",
+    "version": "0.17.0",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=20"
+    },
+    "dependencies": {
+        "@foxglove/wasm-bz2": "^0.3.0",
+        "bzip2": "^0.1.1",
+        "denque": "^2.1.0",
+        "fast-memoize": "^2.5.2",
+        "file-saver": "^2.0.5",
+        "gl-matrix": "^3.4.4",
+        "java-random": "^0.4.0",
+        "js-xxhash": "^5.0.1",
+        "jszip": "^3.10.1",
+        "leva": "^0.10.1",
+        "pako": "^2.1.0",
+        "picogl": "^0.17.9",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "react-joystick-component": "^6.2.1",
+        "react-modal": "^3.16.3",
+        "react-router-dom": "^7.18.0",
+        "react-select": "^5.10.2",
+        "threads": "^1.7.0",
+        "wasm-gzip": "^2.1.0",
+        "web-vitals": "^5.3.0",
+        "webfontloader": "^1.6.28",
+        "xxhash-wasm": "^1.1.0"
+    },
+    "scripts": {
+        "start": "vite",
+        "build": "vite build",
+        "test": "vitest run",
+        "preview": "vite preview",
+        "lint": "prettier --write \"./**/*.{js,ts,jsx,tsx,css,md}\"",
+        "download-caches": "node scripts/download-caches.cjs",
+        "export-textures": "npx tsx scripts/cache/export-textures.ts",
+        "export-height-map": "npx tsx scripts/cache/export-height-map.ts",
+        "slim-cache": "npx tsx scripts/cache/slim-cache.ts"
+    },
+    "browserslist": {
+        "production": [
+            "chrome >= 67",
+            "edge >= 79",
+            "firefox >= 68",
+            "opera >= 54",
+            "safari >= 14"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "devDependencies": {
+        "@testing-library/jest-dom": "^6.9.1",
+        "@testing-library/react": "^16.3.2",
+        "@testing-library/user-event": "^14.6.1",
+        "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+        "@types/file-saver": "^2.0.7",
+        "@types/node": "^24.0.0",
+        "@types/pako": "^2.0.3",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@types/react-modal": "^3.16.3",
+        "@types/webfontloader": "^1.6.35",
+        "@vitejs/plugin-react": "^4.7.0",
+        "@webgpu/types": "^0.1.70",
+        "adm-zip": "^0.5.17",
+        "jsdom": "^25.0.1",
+        "prettier": "^3.8.4",
+        "sharp": "^0.35.1",
+        "tsx": "^4.23.15",
+        "typescript": "^6.0.3",
+        "vite": "^6.4.5",
+        "vitest": "^3.2.7"
+    }
 }

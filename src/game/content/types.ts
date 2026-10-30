@@ -574,7 +574,10 @@ export type SpecialAttackDef = {
         | { kind: "heal"; fraction: number; max: number }
         // What it hits takes this much more damage from everything for a while
         // (0.25 = +25%)
-        | { kind: "drain"; amount: number; seconds: number };
+        | { kind: "drain"; amount: number; seconds: number }
+        // Sets what it hits burning: this fraction of the hit's damage every
+        // second for seconds
+        | { kind: "burn"; damage: number; seconds: number };
 };
 
 export type PassiveDef = {

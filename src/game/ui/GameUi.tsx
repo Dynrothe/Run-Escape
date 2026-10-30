@@ -43,6 +43,7 @@ import { ArmouryScreen } from "./ArmouryScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
+import { CollectionLogScreen } from "./CollectionLogScreen";
 import "./GameUi.css";
 import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
@@ -114,6 +115,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
+            break;
+        case "collectionLog":
+            screen = <CollectionLogScreen ui={ui} client={client} />;
             break;
         case "run":
             screen = <RunScreen ui={ui} client={client} />;
@@ -462,6 +466,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         onClick={() => client.showScreen("quests")}
                     >
                         Quests
+                    </button>
+                    <button
+                        className="ui-button ui-button-big"
+                        onClick={() => client.showScreen("collectionLog")}
+                    >
+                        Collection log
                     </button>
                     <button
                         className="ui-button ui-button-big"
@@ -906,7 +916,7 @@ function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element 
                 return (
                     <div
                         key={i}
-                        className="ui-slot"
+                        className={"ui-slot" + (slot?.evolution?.ready ? " ui-slot-evolve" : "")}
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
                     >
                         {slot && (
@@ -928,12 +938,36 @@ function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element 
                                         <div key={line}>{line}</div>
                                     ))}
                                     {slot.detail && <div>{slot.detail}</div>}
+                                    {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                 </div>
                             </>
                         )}
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+// How far a weapon has got towards its evolution, each half ticked off
+function EvolutionLine({
+    passive,
+    maxed,
+    hasPassive,
+    ready,
+}: NonNullable<SlotView["evolution"]>): JSX.Element {
+    return ready ? (
+        <div className="ui-evolve-ready">Ready to evolve</div>
+    ) : (
+        <div className="ui-evolve-line">
+            Evolves with:{" "}
+            <span className={maxed ? "ui-evolve-done" : undefined}>
+                {maxed ? "✓" : "✗"} Max level
+            </span>
+            ,{" "}
+            <span className={hasPassive ? "ui-evolve-done" : undefined}>
+                {hasPassive ? "✓" : "✗"} {passive}
+            </span>
         </div>
     );
 }
@@ -1174,6 +1208,16 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                     )}
                                 </div>
                                 <div className="ui-card-text">{choice.text}</div>
+                                {choice.evolves && (
+                                    <div
+                                        className={
+                                            "ui-card-evolves" +
+                                            (choice.evolves.held ? " ui-card-evolves-held" : "")
+                                        }
+                                    >
+                                        {choice.evolves.text}
+                                    </div>
+                                )}
                                 {choice.stats && choice.stats.length > 0 && (
                                     <ChoiceStats stats={choice.stats} />
                                 )}
@@ -1286,6 +1330,7 @@ function PauseModal({
                                                 .filter((text) => text)
                                                 .join(", ")}
                                         </span>
+                                        {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
                                     <span className="ui-pause-level">
                                         {slot.level >= slot.maxLevel
