@@ -2,10 +2,10 @@ import { Ground } from "./Ground";
 import { BIOMES, BiomeDef, BiomeId } from "./biomes";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
 import { MAP_SQUARE_SIZE, PlacedLoc, TILE_BLOCKED, TileGrid } from "./format";
-import { Noise, Rng, createNoise, createRng, distanceTo } from "./noise";
-import { findPath } from "./paths";
+import { Noise, Rng, createNoise, createRng, distanceTo, smoothField } from "./noise";
+import { Point, addPathToField, findPath, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
-import { BRIDGE, BRIDGE_BANK_HEIGHT, BRIDGE_WATER, PREFABS, loadPrefab } from "./prefabs";
+import { BRIDGE, BRIDGE_BANK_HEIGHT, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
 
 // Makes a whole map from a seed and settings. The same seed and settings give
@@ -89,6 +89,10 @@ export function getSettingsError(settings: GeneratorSettings): string | undefine
 // One square of scenery round the arena
 const MARGIN = 1;
 const RIVER_HALF_WIDTH = 4.5;
+const ROAD_HALF_WIDTH = 1.3;
+const FORD_HALF_WIDTH = 2;
+// How far, either way from a bridge's middle, its deck starts
+const BRIDGE_DECK_REACH = 5;
 // Crossings are at most this far apart, so that wherever you are one's inside
 // the flow field's window (48 tiles each way)
 const CROSSING_SPACING = 60;
@@ -108,6 +112,9 @@ const LOC_NORMAL = 10;
 const LOC_FLOOR_DECORATION = 22;
 
 const DOOR_NAME = /\b(door|gate)\b/i;
+
+// The water as painted: repainted when a ford cuts through it
+type WaterPaint = { field: Float32Array; tiles: Uint8Array };
 
 type River = {
     // Runs north to south, or west to east
@@ -148,7 +155,7 @@ function riverCentre(river: River, along: number): number {
         away = Math.min(away, Math.abs(along - crossing));
     }
     const straight = Math.min(Math.max(away - 10, 0) / 12, 1);
-    return river.line + (river.wiggle(along / 24, 3.5) - 0.5) * 2 * river.amount * straight;
+    return river.line + (river.wiggle(along / 30, 3.5) - 0.5) * 2 * river.amount * straight;
 }
 
 // The arena's edge, rounded off: tiles in from it, negative outside
@@ -187,21 +194,24 @@ function createRivers(settings: GeneratorSettings, rng: Rng, spawn: number): Riv
             vertical: i % 2 === 0 ? firstVertical : !firstVertical,
             line: Math.round(spawn + side * Math.max(half * (0.35 + rng() * 0.25), 13)),
             crossings,
-            wiggle: createNoise(settings.seed + 100 + i),
+            wiggle: createNoise(settings.seed + 100 + i, 1),
             amount: half * 0.2,
         });
     }
     return rivers;
 }
 
-function paintMasks(settings: GeneratorSettings, ground: Ground, rivers: River[], rng: Rng) {
+// Where the water goes, as fields per tile corner: above 0 is water. Fields rather
+// than tiles so that its edges can be smooth lines.
+function createWaterFields(settings: GeneratorSettings, ground: Ground, rivers: River[], rng: Rng) {
     const size = ground.sizeX;
+    const corners = size + 1;
     const spawn = size >> 1;
     const half = (settings.squares * MAP_SQUARE_SIZE) / 2;
-    const coast = createNoise(settings.seed + 1);
-    const shape = createNoise(settings.seed + 2);
-    const sea = new Uint8Array(size * size);
-    const fresh = new Uint8Array(size * size);
+    const coast = createNoise(settings.seed + 1, 2);
+    const shape = createNoise(settings.seed + 2, 1);
+    const sea = new Float32Array(corners * corners);
+    const fresh = new Float32Array(corners * corners);
 
     const ponds: { x: number; y: number; radius: number }[] = [];
     for (let i = 0; i < settings.ponds; i++) {
@@ -214,33 +224,56 @@ function paintMasks(settings: GeneratorSettings, ground: Ground, rivers: River[]
         });
     }
 
-    const depth = settings.island > 0 ? getCoastDepth(settings) : -Infinity;
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const i = ground.tile(x, y);
-            if (Math.hypot(x - spawn, y - spawn) <= SPAWN_CLEAR) {
-                continue;
-            }
-            const wobble = (coast(x / 16, y / 16) - 0.5) * 18;
-            if (toRoundedEdge(x, y, spawn, half) + wobble < depth) {
-                sea[i] = 1;
-                continue;
-            }
+    const depth = getCoastDepth(settings);
+    for (let y = 0; y < corners; y++) {
+        for (let x = 0; x < corners; x++) {
+            const i = x + y * corners;
+            const wobble = (coast(x / 24, y / 24) - 0.5) * 22;
+            sea[i] = settings.island > 0 ? depth - toRoundedEdge(x, y, spawn, half) - wobble : -100;
+            let water = -100;
             for (const river of rivers) {
                 const [along, across] = river.vertical ? [y, x] : [x, y];
-                if (Math.abs(across - riverCentre(river, along)) <= RIVER_HALF_WIDTH) {
-                    fresh[i] = 1;
-                }
+                const distance = Math.abs(across - riverCentre(river, along));
+                water = Math.max(water, RIVER_HALF_WIDTH - distance);
             }
             for (const pond of ponds) {
-                const edge = pond.radius + (shape(x / 6, y / 6) - 0.5) * 5;
-                if (Math.hypot(x - pond.x, y - pond.y) < edge) {
-                    fresh[i] = 1;
-                }
+                const edge = pond.radius + (shape(x / 12, y / 12) - 0.5) * 6;
+                water = Math.max(water, edge - Math.hypot(x - pond.x, y - pond.y));
             }
+            fresh[i] = water;
         }
     }
-    return { sea, fresh };
+    const smooth = (field: Float32Array) => {
+        const out = smoothField(field, corners, corners, 3);
+        // Nothing round the spawn
+        for (let y = 0; y < corners; y++) {
+            for (let x = 0; x < corners; x++) {
+                const away = Math.hypot(x - spawn, y - spawn) - SPAWN_CLEAR;
+                out[x + y * corners] = Math.min(out[x + y * corners], away);
+            }
+        }
+        return out;
+    };
+    return { sea: smooth(sea), fresh: smooth(fresh) };
+}
+
+// The tiles a corner field has anything of
+function getTouchedTiles(field: Float32Array, size: number): Uint8Array {
+    const corners = size + 1;
+    const tiles = new Uint8Array(size * size);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const at = x + y * corners;
+            tiles[x + y * size] =
+                field[at] > 0 ||
+                field[at + 1] > 0 ||
+                field[at + corners] > 0 ||
+                field[at + corners + 1] > 0
+                    ? 1
+                    : 0;
+        }
+    }
+    return tiles;
 }
 
 function paintHeights(
@@ -283,32 +316,40 @@ function paintFloors(
     }
 }
 
-// Bridges where rivers can take one. Returns where roads can meet them: both
-// ends of each.
+// The tiles that only hide the ground under the bridge's ends, which is the one
+// floor it needs at ground level: the rest is ours, river and road
+const BRIDGE_HIDDEN_FLOOR = 61;
+
+type BridgeEnd = {
+    // Where a road can start from, off the stamp
+    outside: Point;
+    // Where it meets the deck
+    deck: Point;
+};
+
+// Bridges where rivers can take one. Returns both ends of each.
 function placeBridges(
-    biome: BiomeDef,
     context: BuildContext,
     ground: Ground,
     rivers: River[],
     water: Uint8Array,
     arena: TileRect,
-): { x: number; y: number }[] {
-    const ends: { x: number; y: number }[] = [];
+): BridgeEnd[] {
+    const ends: BridgeEnd[] = [];
     const prefab = loadPrefab(context, BRIDGE);
     const turned = rotatePrefab(prefab, 1, context.locs);
     const reach = (BRIDGE.sizeX >> 1) + 1;
     for (const river of rivers) {
         for (const crossing of river.crossings) {
-            const a = river.vertical
-                ? { x: river.line - reach, y: crossing }
-                : { x: crossing, y: river.line - reach };
-            const b = river.vertical
-                ? { x: river.line + reach, y: crossing }
-                : { x: crossing, y: river.line + reach };
-            const inArena = (p: { x: number; y: number }) =>
+            const across = (distance: number): Point =>
+                river.vertical
+                    ? { x: river.line + distance, y: crossing }
+                    : { x: crossing, y: river.line + distance };
+            const a = across(-reach);
+            const b = across(reach);
+            const inArena = (p: Point) =>
                 p.x >= arena.x0 && p.y >= arena.y0 && p.x <= arena.x1 && p.y <= arena.y1;
-            const onLand = (p: { x: number; y: number }) =>
-                inArena(p) && !water[ground.tile(p.x, p.y)];
+            const onLand = (p: Point) => inArena(p) && !water[ground.tile(p.x, p.y)];
             const crossesOther = rivers.some(
                 (other) =>
                     other !== river && Math.abs(crossing - riverCentre(other, river.line)) < 16,
@@ -321,20 +362,22 @@ function placeBridges(
                 BRIDGE_BANK_HEIGHT,
             );
             const options = {
-                floor: "all",
+                floor: (overlay: number) => overlay === BRIDGE_HIDDEN_FLOOR,
                 feather: 5,
                 flatten: false,
                 height,
                 anchor: BRIDGE_BANK_HEIGHT,
                 keepUnderlays: true,
-                mapOverlay: (overlay: number) => (overlay === BRIDGE_WATER ? biome.water : overlay),
-            } as const;
+            };
             if (river.vertical) {
                 ground.stamp(prefab, river.line - (BRIDGE.sizeX >> 1), crossing - 3, options);
             } else {
                 ground.stamp(turned, crossing - 3, river.line - (BRIDGE.sizeX >> 1), options);
             }
-            ends.push(a, b);
+            ends.push(
+                { outside: a, deck: across(-BRIDGE_DECK_REACH) },
+                { outside: b, deck: across(BRIDGE_DECK_REACH) },
+            );
         }
     }
     return ends;
@@ -398,27 +441,34 @@ function placeRoads(
     ground: Ground,
     rng: Rng,
     water: Uint8Array,
-    bridgeEnds: { x: number; y: number }[],
+    buildings: Uint8Array,
+    bridgeEnds: BridgeEnd[],
     plots: Plot[],
     spawn: number,
 ): void {
     if (settings.roads <= 0) {
         return;
     }
+    const size = ground.sizeX;
     const roads = new Uint8Array(water.length);
-    const wiggle = createNoise(settings.seed + 5);
+    const wiggle = createNoise(settings.seed + 5, 1);
     roads[ground.tile(spawn, spawn)] = 1;
-    const targets = [...bridgeEnds];
+    const targets: { from: Point; last?: Point }[] = bridgeEnds.map((end) => ({
+        from: end.outside,
+        last: end.deck,
+    }));
     for (const plot of plots) {
         if (rng() < settings.roads) {
             // The nearest tile of the plot's edge to the spawn
             const x = Math.min(Math.max(spawn, plot.x - 1), plot.x + plot.sizeX);
             const y = Math.min(Math.max(spawn, plot.y - 1), plot.y + plot.sizeY);
-            targets.push({ x, y });
+            targets.push({ from: { x, y } });
         }
     }
     targets.sort(
-        (a, b) => Math.hypot(a.x - spawn, a.y - spawn) - Math.hypot(b.x - spawn, b.y - spawn),
+        (a, b) =>
+            Math.hypot(a.from.x - spawn, a.from.y - spawn) -
+            Math.hypot(b.from.x - spawn, b.from.y - spawn),
     );
     // Roads go round water and buildings, and join up where they meet
     const cost = (x: number, y: number) => {
@@ -426,20 +476,41 @@ function placeRoads(
         if (water[i] || ground.reserved[i]) {
             return Infinity;
         }
-        return roads[i] ? 0.2 : 1 + wiggle(x / 7, y / 7) * 4;
+        return roads[i] ? 0.2 : 1 + wiggle(x / 12, y / 12) * 3;
     };
-    const mask = new Uint8Array(water.length);
+    const field = new Float32Array((size + 1) * (size + 1)).fill(-4);
     for (const target of targets) {
-        const path = findPath(ground.sizeX, ground.sizeY, target, cost, (i) => roads[i] !== 0);
-        for (const i of path) {
+        const tiles = findPath(size, size, target.from, cost, (i) => roads[i] !== 0);
+        const points = tiles.map((i) => ({ x: i % size, y: Math.floor(i / size) }));
+        for (const i of tiles) {
             roads[i] = 1;
-            // paintOverlay rounds it off, which makes it about two tiles wide
-            if (!ground.reserved[i] && !water[i]) {
-                mask[i] = 1;
-            }
         }
+        if (points.length === 0) {
+            // The far bank of a bridge, with nothing to lead to: a stub off the end
+            if (target.last) {
+                addPathToField(
+                    field,
+                    size + 1,
+                    size + 1,
+                    [target.last, target.from],
+                    ROAD_HALF_WIDTH,
+                );
+            }
+            continue;
+        }
+        // Tile corners to tile middles, then the last stretch onto the bridge
+        const middles = points.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 }));
+        const smooth = smoothPath(middles, 3, 3);
+        const line = target.last
+            ? [{ x: target.last.x + 0.5, y: target.last.y + 0.5 }, ...smooth]
+            : smooth;
+        addPathToField(field, size + 1, size + 1, line, ROAD_HALF_WIDTH);
     }
-    ground.paintOverlay(mask, biome.road, false);
+    const skip = new Uint8Array(water.length);
+    for (let i = 0; i < skip.length; i++) {
+        skip[i] = water[i] | buildings[i];
+    }
+    ground.paintField(smoothField(field, size + 1, size + 1, 1), biome.road, false, skip);
 }
 
 function scatter(
@@ -518,31 +589,36 @@ function groupTiles(tiles: number[], sizeX: number): number[][] {
     return pieces.sort((a, b) => b.length - a.length);
 }
 
-// Makes dry land 3 tiles wide along a path, taking off anything on it
-function layFord(biome: BiomeDef, ground: Ground, path: number[], buildings: Uint8Array): void {
-    const ford = new Set<number>();
-    for (const i of path) {
-        const x = i % ground.sizeX;
-        const y = Math.floor(i / ground.sizeX);
-        for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-                if (ground.inside(x + dx, y + dy) && !buildings[ground.tile(x + dx, y + dy)]) {
-                    ford.add(ground.tile(x + dx, y + dy));
-                }
-            }
+// Dries a band along a path, taking off anything standing there
+function layFord(
+    biome: BiomeDef,
+    ground: Ground,
+    path: number[],
+    water: WaterPaint,
+    buildings: Uint8Array,
+): void {
+    const size = ground.sizeX;
+    const points = path.map((i) => ({ x: (i % size) + 0.5, y: Math.floor(i / size) + 0.5 }));
+    const line = smoothPath(points, 3, 3);
+    const band = new Float32Array((size + 1) * (size + 1)).fill(-4);
+    addPathToField(band, size + 1, size + 1, line, FORD_HALF_WIDTH);
+    for (let i = 0; i < band.length; i++) {
+        water.field[i] = Math.min(water.field[i], -band[i]);
+    }
+    const ford = getTouchedTiles(band, size);
+    for (let i = 0; i < ford.length; i++) {
+        if (ford[i] && !buildings[i]) {
+            ground.level0.underlays[i] = biome.shore;
+            ground.reserved[i] = 1;
         }
     }
-    const tiles = ground.level0;
-    for (const i of ford) {
-        tiles.overlays[i] = 0;
-        tiles.shapes[i] = 0;
-        tiles.rotations[i] = 0;
-        tiles.flags[i] &= ~TILE_BLOCKED;
-        tiles.underlays[i] = biome.shore;
-        ground.reserved[i] = 1;
-    }
+    ground.clearOverlay(water.tiles);
+    water.tiles = ground.paintField(water.field, biome.water, true);
     ground.grid.locs = ground.grid.locs.filter(
-        (loc) => !ford.has(ground.tile(loc.x, loc.y)) || loc.level !== 0,
+        (loc) =>
+            !ford[ground.tile(loc.x, loc.y)] ||
+            loc.level !== 0 ||
+            buildings[ground.tile(loc.x, loc.y)],
     );
 }
 
@@ -555,6 +631,7 @@ function connectGround(
     ground: Ground,
     arena: TileRect,
     spawn: number,
+    water: WaterPaint,
     buildings: Uint8Array,
 ): void {
     const { grid, sizeX, sizeY } = ground;
@@ -576,7 +653,7 @@ function connectGround(
         if (path.length === 0) {
             break;
         }
-        layFord(biome, ground, path, buildings);
+        layFord(biome, ground, path, water, buildings);
         flags = getCollisionFlags(grid, context.locs);
         reached = findReachable(flags, sizeX, sizeY, arena, spawn, spawn);
     }
@@ -601,24 +678,25 @@ export function generateMap(settings: GeneratorSettings, context: BuildContext):
     const ground = new Ground(size, size);
 
     const rivers = createRivers(settings, rng, spawn);
-    const { sea, fresh } = paintMasks(settings, ground, rivers, rng);
-    const water = new Uint8Array(sea.length);
-    for (let i = 0; i < water.length; i++) {
-        water[i] = sea[i] | fresh[i];
-    }
-    const toSea = distanceTo(sea, size, size, 8);
-    const toFresh = distanceTo(fresh, size, size, 6);
+    const fields = createWaterFields(settings, ground, rivers, rng);
+    const seaTiles = getTouchedTiles(fields.sea, size);
+    const freshTiles = getTouchedTiles(fields.fresh, size);
+    const toSea = distanceTo(seaTiles, size, size, 8);
+    const toFresh = distanceTo(freshTiles, size, size, 6);
     paintHeights(settings, ground, toSea, toFresh);
     paintFloors(settings, biome, ground, toSea);
-    ground.paintOverlay(water, biome.water, true);
 
-    const bridgeEnds = placeBridges(biome, context, ground, rivers, water, arena);
+    const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
+    const waterTiles = ground.paintField(waterField, biome.water, true);
+    const water: WaterPaint = { field: waterField, tiles: waterTiles };
+
+    const bridgeEnds = placeBridges(context, ground, rivers, waterTiles, arena);
     const beforeBuildings = ground.reserved.slice();
-    const plots = placeBuildings(settings, biome, context, ground, rng, water, spawn);
+    const plots = placeBuildings(settings, biome, context, ground, rng, waterTiles, spawn);
     const buildings = ground.reserved.map((v, i) => v & ~beforeBuildings[i]);
-    placeRoads(settings, biome, ground, rng, water, bridgeEnds, plots, spawn);
-    scatter(settings, biome, context, ground, rng, water, arena, spawn);
-    connectGround(biome, context, ground, arena, spawn, buildings);
+    placeRoads(settings, biome, ground, rng, waterTiles, buildings, bridgeEnds, plots, spawn);
+    scatter(settings, biome, context, ground, rng, waterTiles, arena, spawn);
+    connectGround(biome, context, ground, arena, spawn, water, buildings);
     return ground.grid;
 }
 

@@ -16,8 +16,9 @@ export function createRng(seed: number): Rng {
 
 export type Noise = (x: number, y: number) => number;
 
-// Smooth noise, about 0 to 1, a mix of three scales. Features are about 1 apart.
-export function createNoise(seed: number): Noise {
+// Smooth noise, about 0 to 1, a mix of up to three scales. Features are about 1
+// apart; fewer scales means fewer small ones, for edges that should be smooth.
+export function createNoise(seed: number, scales: 1 | 2 | 3 = 3): Noise {
     const hash = (x: number, y: number): number => {
         let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1274126177);
         h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -33,9 +34,42 @@ export function createNoise(seed: number): Noise {
         const north = hash(ix, iy + 1) + (hash(ix + 1, iy + 1) - hash(ix, iy + 1)) * fx;
         return south + (north - south) * fy;
     };
-    return (x, y) =>
-        (layer(x, y) * 4 + layer(x * 2.1 + 7, y * 2.1 + 3) * 2 + layer(x * 4.3 + 1, y * 4.3 + 9)) /
-        7;
+    return (x, y) => {
+        if (scales === 1) {
+            return layer(x, y);
+        }
+        const two = layer(x, y) * 4 + layer(x * 2.1 + 7, y * 2.1 + 3) * 2;
+        return scales === 2 ? two / 6 : (two + layer(x * 4.3 + 1, y * 4.3 + 9)) / 7;
+    };
+}
+
+// Evens out a field, per grid point (3 by 3, a few times over), which takes off
+// bumps too small to draw
+export function smoothField(
+    field: Float32Array,
+    sizeX: number,
+    sizeY: number,
+    passes: number,
+): Float32Array {
+    let from = field;
+    for (let pass = 0; pass < passes; pass++) {
+        const to = new Float32Array(field.length);
+        for (let y = 0; y < sizeY; y++) {
+            for (let x = 0; x < sizeX; x++) {
+                let sum = 0;
+                let count = 0;
+                for (let ny = Math.max(y - 1, 0); ny <= Math.min(y + 1, sizeY - 1); ny++) {
+                    for (let nx = Math.max(x - 1, 0); nx <= Math.min(x + 1, sizeX - 1); nx++) {
+                        sum += from[nx + ny * sizeX];
+                        count++;
+                    }
+                }
+                to[x + y * sizeX] = sum / count;
+            }
+        }
+        from = to;
+    }
+    return from;
 }
 
 // Tiles to the nearest set tile of a mask, out to a limit: two passes of a

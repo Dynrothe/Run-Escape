@@ -87,7 +87,7 @@ describe("generateMap", () => {
     });
 
     it("refuses to make a map with too little ground to play on", () => {
-        const allPonds = settings({ squares: 1, island: 1, ponds: 12, buildings: 0, seed: 2 });
+        const allPonds = settings({ squares: 1, island: 1, ponds: 12, buildings: 0, seed: 3 });
         expect(() => generateMap(allPonds, context)).toThrow(/too little ground/);
     });
 

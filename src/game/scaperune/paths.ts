@@ -93,3 +93,58 @@ export function findPath(
     }
     return [];
 }
+
+export type Point = { x: number; y: number };
+
+// Rounds a path off: each point moves to the average of those around it, a few
+// times over, and it's walked in small steps. The ends stay where they are.
+export function smoothPath(path: Point[], reach: number, passes: number): Point[] {
+    let points = path;
+    for (let pass = 0; pass < passes; pass++) {
+        points = points.map((point, i) => {
+            if (i === 0 || i === points.length - 1) {
+                return point;
+            }
+            const span = Math.min(reach, i, points.length - 1 - i);
+            let x = 0;
+            let y = 0;
+            for (let j = i - span; j <= i + span; j++) {
+                x += points[j].x;
+                y += points[j].y;
+            }
+            return { x: x / (span * 2 + 1), y: y / (span * 2 + 1) };
+        });
+    }
+    return points;
+}
+
+// Raises a corner field along a path: above 0 within halfWidth of it, as a band
+// of steady width
+export function addPathToField(
+    field: Float32Array,
+    sizeX: number,
+    sizeY: number,
+    path: Point[],
+    halfWidth: number,
+): void {
+    const reach = Math.ceil(halfWidth) + 2;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const steps = Math.max(Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 2), 1);
+        for (let step = 0; step <= steps; step++) {
+            const x = a.x + ((b.x - a.x) * step) / steps;
+            const y = a.y + ((b.y - a.y) * step) / steps;
+            const x0 = Math.max(Math.floor(x) - reach, 0);
+            const y0 = Math.max(Math.floor(y) - reach, 0);
+            const x1 = Math.min(Math.ceil(x) + reach, sizeX - 1);
+            const y1 = Math.min(Math.ceil(y) + reach, sizeY - 1);
+            for (let cy = y0; cy <= y1; cy++) {
+                for (let cx = x0; cx <= x1; cx++) {
+                    const value = halfWidth - Math.hypot(cx - x, cy - y);
+                    field[cx + cy * sizeX] = Math.max(field[cx + cy * sizeX], value);
+                }
+            }
+        }
+    }
+}

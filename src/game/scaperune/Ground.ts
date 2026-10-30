@@ -1,16 +1,13 @@
 import { PlacedLoc, TILE_BLOCKED, TileGrid, TileLevel, createTileGrid } from "./format";
-
-// Overlay shapes, as the shores in the cache use them: a triangle whose rotation
-// is the corner it fills (south-west, north-west, north-east, south-east), and
-// a sliver along one side (west, north, east, south)
-const SHAPE_CORNER = 1;
-const SHAPE_SLIVER = 6;
+import { smoothField } from "./noise";
+import { getCoveredShare, getCoveredSides, getOverlayShape } from "./shapes";
 
 export type StampOptions = {
     // "all" takes the prefab's floor too, the whole rectangle. "footprint"
     // keeps our ground and takes only the tiles with an overlay (the building's
-    // floor), so there's no edge to see.
-    floor: "all" | "footprint";
+    // floor), so there's no edge to see. A function says which overlays to take,
+    // and keeps our ground everywhere else (a bridge, over our own river).
+    floor: "all" | "footprint" | ((overlay: number) => boolean);
     // Over how many tiles the ground eases into it
     feather: number;
     // Ignore the prefab's own heights and stand it on flat ground
@@ -24,8 +21,6 @@ export type StampOptions = {
     // Keeps our underlays under the prefab, for one from other ground: a Lumbridge
     // bridge's grass would show as a green halo in the snow
     keepUnderlays?: boolean;
-    // Swaps its overlays, for the same reason (its water for ours)
-    mapOverlay?: (overlay: number) => number;
 };
 
 function smoothstep(t: number): number {
@@ -67,45 +62,79 @@ export class Ground {
         this.level0.heights[x + y * (this.sizeX + 1)] = clamped;
     }
 
-    // Sets the overlay on every tile of the mask, and rounds the mask's edge
-    // off with the shapes the cache's own shores and paths use. Blocked also
-    // blocks those edge tiles, as shores do.
-    paintOverlay(mask: Uint8Array, overlay: number, blocked: boolean): void {
+    // Paints an overlay where a field is above 0. The field's per tile corner,
+    // x + y * (sizeX + 1), so edges come out as lines rather than steps of whole
+    // tiles (shapes.ts). Blocked also blocks tiles at least half covered, so that
+    // collision follows what's drawn. skip leaves tiles alone. Returns the tiles
+    // it touched.
+    paintField(
+        field: Float32Array,
+        overlay: number,
+        blocked: boolean,
+        skip?: Uint8Array,
+    ): Uint8Array {
         const { overlays, shapes, rotations, flags } = this.level0;
-        const on = (x: number, y: number) => this.inside(x, y) && mask[this.tile(x, y)] !== 0;
+        const cornersX = this.sizeX + 1;
+        const touched = new Uint8Array(this.sizeX * this.sizeY);
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
                 const i = this.tile(x, y);
-                let shape = -1;
-                let rotation = 0;
-                if (mask[i]) {
-                    shape = 0;
-                } else {
-                    const n = on(x, y + 1);
-                    const e = on(x + 1, y);
-                    const s = on(x, y - 1);
-                    const w = on(x - 1, y);
-                    const count = Number(n) + Number(e) + Number(s) + Number(w);
-                    if (count >= 3 || (n && s) || (e && w)) {
-                        shape = 0;
-                    } else if (count === 2) {
-                        shape = SHAPE_CORNER;
-                        rotation = s && w ? 0 : n && w ? 1 : n && e ? 2 : 3;
-                    } else if (count === 1) {
-                        shape = SHAPE_SLIVER;
-                        rotation = w ? 0 : n ? 1 : e ? 2 : 3;
-                    }
-                }
-                if (shape === -1) {
+                const at = x + y * cornersX;
+                const sw = field[at];
+                const se = field[at + 1];
+                const ne = field[at + cornersX + 1];
+                const nw = field[at + cornersX];
+                const sides = getCoveredSides(sw, se, ne, nw);
+                const shape = getOverlayShape(sides, sw + se + ne + nw);
+                if (!shape || skip?.[i]) {
                     continue;
                 }
                 overlays[i] = overlay;
-                shapes[i] = shape;
-                rotations[i] = rotation;
+                shapes[i] = shape[0];
+                rotations[i] = shape[1];
+                touched[i] = 1;
                 this.reserved[i] = 1;
-                if (blocked) {
+                if (blocked && getCoveredShare(sides) >= 0.5) {
                     flags[i] |= TILE_BLOCKED;
                 }
+            }
+        }
+        return touched;
+    }
+
+    // Paints an overlay on the tiles of a mask, for hand-made maps. Its corners
+    // are smoothed, so a mask of whole tiles gets edges like a real shore's.
+    paintOverlay(mask: Uint8Array, overlay: number, blocked: boolean): Uint8Array {
+        const cornersX = this.sizeX + 1;
+        const field = new Float32Array(cornersX * (this.sizeY + 1));
+        for (let y = 0; y <= this.sizeY; y++) {
+            for (let x = 0; x <= this.sizeX; x++) {
+                let count = 0;
+                for (const [tx, ty] of [
+                    [x - 1, y - 1],
+                    [x, y - 1],
+                    [x - 1, y],
+                    [x, y],
+                ]) {
+                    if (this.inside(tx, ty) && mask[this.tile(tx, ty)]) {
+                        count++;
+                    }
+                }
+                field[x + y * cornersX] = count / 4 - 0.4;
+            }
+        }
+        return this.paintField(smoothField(field, cornersX, this.sizeY + 1, 1), overlay, blocked);
+    }
+
+    // Takes an overlay off tiles, and what blocked them
+    clearOverlay(tiles: Uint8Array): void {
+        const { overlays, shapes, rotations, flags } = this.level0;
+        for (let i = 0; i < tiles.length; i++) {
+            if (tiles[i]) {
+                overlays[i] = 0;
+                shapes[i] = 0;
+                rotations[i] = 0;
+                flags[i] &= ~TILE_BLOCKED;
             }
         }
     }
@@ -203,16 +232,18 @@ export class Ground {
                     const i = tx + ty * sizeX;
                     const j = this.tile(x + tx, y + ty);
                     this.reserved[j] = 1;
-                    if (options.floor === "footprint" && from.overlays[i] === 0) {
-                        // Our ground stays, but a bridge's flags are needed
-                        // whatever's on the tile
-                        to.flags[j] |= from.flags[i] & ~TILE_BLOCKED;
+                    const take =
+                        level > 0 ||
+                        (typeof options.floor === "function"
+                            ? options.floor(from.overlays[i])
+                            : options.floor === "all" || from.overlays[i] !== 0);
+                    if (!take) {
                         continue;
                     }
                     if (!options.keepUnderlays) {
                         to.underlays[j] = from.underlays[i] || to.underlays[j];
                     }
-                    to.overlays[j] = options.mapOverlay?.(from.overlays[i]) ?? from.overlays[i];
+                    to.overlays[j] = from.overlays[i];
                     to.shapes[j] = from.shapes[i];
                     to.rotations[j] = from.rotations[i];
                     to.flags[j] = from.flags[i];
@@ -234,7 +265,7 @@ export class Ground {
                 continue;
             }
             if (
-                options.floor === "footprint" &&
+                options.floor !== "all" &&
                 loc.type === 22 &&
                 from0.overlays[loc.x + loc.y * sizeX] === 0
             ) {

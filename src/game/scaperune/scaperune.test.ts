@@ -1,8 +1,106 @@
 import { describe, expect, it } from "vitest";
 
+import { SceneTileModel } from "../../rs/scene/SceneTileModel";
 import { Ground } from "./Ground";
 import { createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./format";
 import { rotatePrefab } from "./prefab";
+import { OVERLAY_SHAPES, getCoveredSides, getOverlayShape } from "./shapes";
+
+// Which half sides a shape really covers, from what the renderer builds, in the
+// order shapes.ts counts them
+function drawnSides(shape: number, rotation: number): number {
+    const overlay = 0x1234;
+    const underlay = 0x4321;
+    const model = new SceneTileModel(
+        shape + 1,
+        rotation,
+        -1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        96,
+        96,
+        96,
+        96,
+        underlay,
+        underlay,
+        underlay,
+        underlay,
+        overlay,
+        overlay,
+        0,
+        0,
+    );
+    const full = new SceneTileModel(
+        1,
+        0,
+        -1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        96,
+        96,
+        96,
+        96,
+        0,
+        0,
+        0,
+        0,
+        overlay,
+        overlay,
+        0,
+        0,
+    );
+    const overlayColor = full.faceColorsA[0];
+    const inset = 3;
+    const points = [
+        [inset, 32],
+        [inset, 96],
+        [32, 128 - inset],
+        [96, 128 - inset],
+        [128 - inset, 96],
+        [128 - inset, 32],
+        [96, inset],
+        [32, inset],
+    ];
+    let sides = 0;
+    points.forEach(([x, z], bit) => {
+        for (let face = 0; face < model.facesA.length; face++) {
+            const corners = [model.facesA[face], model.facesB[face], model.facesC[face]].map(
+                (v) => [model.vertexX[v], model.vertexZ[v]],
+            );
+            const signs = corners.map(([ax, az], i) => {
+                const [bx, bz] = corners[(i + 1) % 3];
+                return Math.sign((bx - ax) * (z - az) - (bz - az) * (x - ax));
+            });
+            const inside = signs.every((s) => s >= 0) || signs.every((s) => s <= 0);
+            if (inside && model.faceColorsA[face] === overlayColor) {
+                sides |= 1 << bit;
+            }
+        }
+    });
+    return sides;
+}
+
+describe("overlay shapes", () => {
+    it("are what the renderer draws", () => {
+        for (const [sides, [shape, rotation]] of OVERLAY_SHAPES) {
+            expect(drawnSides(shape, rotation), `shape ${shape}.${rotation}`).toBe(sides);
+        }
+    });
+
+    it("reads half sides off a field", () => {
+        // West side in, east side out: the line's down the middle of the tile
+        expect(getCoveredSides(1, -1, -1, 1)).toBe(0b10000111);
+        expect(getOverlayShape(getCoveredSides(1, -1, -1, 1), 0)).toEqual([6, 0]);
+    });
+});
 
 describe("map file formats", () => {
     it("reads back what it writes", () => {
@@ -77,21 +175,66 @@ describe("rotatePrefab", () => {
 });
 
 describe("Ground", () => {
-    it("rounds an overlay's corners off with the shapes shores use", () => {
-        const ground = new Ground(8, 8);
-        const mask = new Uint8Array(64);
-        for (let y = 0; y < 4; y++) {
-            for (let x = 0; x < 4; x++) {
-                mask[ground.tile(x, y)] = 1;
+    it("draws a straight shore as one straight line, wherever it falls in a tile", () => {
+        for (const offset of [0, 0.1, 0.2, 0.25, 0.3, 0.5, 0.7, 0.75, 0.8, 0.9]) {
+            const ground = new Ground(20, 20);
+            const field = new Float32Array(21 * 21);
+            for (let y = 0; y <= 20; y++) {
+                for (let x = 0; x <= 20; x++) {
+                    field[x + y * 21] = 10 + offset - y;
+                }
+            }
+            ground.paintField(field, 6, true);
+            const { overlays, shapes, rotations } = ground.level0;
+            for (let y = 0; y < 20; y++) {
+                const looks = new Set<string>();
+                for (let x = 0; x < 20; x++) {
+                    const i = ground.tile(x, y);
+                    looks.add(`${overlays[i]}:${shapes[i]}:${rotations[i]}`);
+                }
+                expect(looks.size, `offset ${offset}, row ${y}`).toBe(1);
             }
         }
-        ground.paintOverlay(mask, 6, true);
-        const { overlays, shapes, rotations, flags } = ground.level0;
-        // Water to the south-west of the corner tile's neighbours only: a sliver
-        expect(shapes[ground.tile(4, 2)]).toBe(6);
-        expect(rotations[ground.tile(4, 2)]).toBe(0);
-        expect(flags[ground.tile(4, 2)] & 1).toBe(1);
-        expect(overlays[ground.tile(6, 6)]).toBe(0);
+    });
+
+    it("turns a shallow slope into a few clean steps, not teeth", () => {
+        const ground = new Ground(60, 20);
+        const field = new Float32Array(61 * 21);
+        for (let y = 0; y <= 20; y++) {
+            for (let x = 0; x <= 60; x++) {
+                field[x + y * 61] = 5 + x * 0.1 - y;
+            }
+        }
+        ground.paintField(field, 6, true);
+        const { shapes, rotations } = ground.level0;
+        // A rising line goes through each row's shapes once, so per row the shapes
+        // make one run each, and never come back
+        for (let y = 0; y < 20; y++) {
+            const runs: string[] = [];
+            for (let x = 0; x < 60; x++) {
+                const i = ground.tile(x, y);
+                const look = `${ground.level0.overlays[i]}:${shapes[i]}:${rotations[i]}`;
+                if (runs[runs.length - 1] !== look) {
+                    runs.push(look);
+                }
+            }
+            expect(new Set(runs).size, `row ${y}`).toBe(runs.length);
+        }
+    });
+
+    it("blocks tiles at least half covered, and leaves the rest to walk on", () => {
+        const ground = new Ground(8, 8);
+        const field = new Float32Array(81).fill(-1);
+        // One corner, then a half tile
+        field[2 + 2 * 9] = 1;
+        field[6 + 2 * 9] = 1;
+        field[6 + 3 * 9] = 1;
+        ground.paintField(field, 6, true);
+        const { flags, overlays } = ground.level0;
+        expect(overlays[ground.tile(2, 2)]).toBe(6);
+        expect(flags[ground.tile(2, 2)] & 1).toBe(0);
+        expect(overlays[ground.tile(6, 2)]).toBe(6);
+        expect(flags[ground.tile(6, 2)] & 1).toBe(1);
     });
 
     it("eases the ground into a flattened stamp", () => {

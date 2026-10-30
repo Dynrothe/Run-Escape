@@ -162,9 +162,16 @@ into world tiles.
 
 - **Underlays** are the ground. They're blended over 11 tiles by the renderer, so colours soften on
   their own.
-- **Overlays** sit on top, with hard edges: paths, water, floors. `paintOverlay(mask, id, blocked)`
-  rounds a mask's edges with the shapes real shores use: a triangle where two sides are outside the mask
-  and a sliver where one is.
+- **Overlays** sit on top, with hard edges: paths, water, floors. Give `paintField(field, id, blocked)` a
+  field with a value per tile corner, above 0 inside: distance to a river's centre less its half width, a
+  radius less the distance from a pond's middle. Anything smooth. `addPathToField` makes one from a path,
+  and `smoothField` evens one out. `paintOverlay(mask, id, blocked)` does the same from a mask of tiles,
+  for hand-made shapes, but the edges follow the tiles more.
+- **Why fields:** an edge can only cross a tile side at a corner or at its middle, and adjacent tiles share
+  those points. So `shapes.ts` picks each tile's shape from which of its eight half sides are covered, and
+  edges join up. Picking shapes from whole tiles can't do that: a line ending at a corner next to one
+  ending at a side's middle makes a tooth. Don't use shape 11: it dips to both corners, so a row of them is
+  a row of teeth.
 - **Ids are as the map files store them, the cache's id plus one.** `find-prefabs.ts` prints them this way,
   so copy from there.
 - **Heights** are one byte per tile corner, going up, 8 scene units each. A tile is 128 units across, so 16
@@ -191,14 +198,14 @@ rectangle of the real world.
 `stamp` options:
 
 - `floor`: `"footprint"` keeps our ground and takes only the tiles with an overlay. Use this for buildings:
-  there's no edge to see. `"all"` takes the whole rectangle, for things that need it, like bridges.
+  there's no edge to see. `"all"` takes the whole rectangle, which rarely looks right. A function picks which
+  overlays to take: the bridge takes almost none, so that it stands on our river and our road runs onto it.
 - `flatten`: stands it on flat ground. Use this for buildings.
 - `feather`: how many tiles the ground takes to ease back. 4 is about right.
 - `keepUnderlays`: keeps our ground's colour under it. Use this whenever the prefab's from other ground, or a
   Lumbridge house gets a green halo in the snow.
 - `skipLoc`: leaves locs out. The generator drops doors: closed ones block, like walls.
 - `height` and `anchor`: stand it at a height, and say which of its own heights that means.
-- `mapOverlay`: swaps overlays, such as a bridge's river for your water.
 
 Only rotation is possible. The format has no mirror.
 
@@ -237,8 +244,10 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   building's collision came through.
 - **Cliffs are weak.** Steep blocked tiles with a rock overlay collide, but look like a grey ramp. Real
   mountains use wall-type rock locs along their edges (14622-14626 and others).
-- **Coasts are jagged when zoomed out.** Noise at one tile a step looks rough. Lower the noise before adding
-  more shapes.
+- **Keep noise big on edges.** A field's edge is only as smooth as the field: use `createNoise(seed, 1)` or
+  `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
+- **Shallow edges still step.** A line a tile side can't hold has to jump a corner or a middle at a time, so a
+  nearly straight shore has small kinks a few tiles apart. Real shores have them too.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 100-130, and the map manager stops at x 100,
   y 200. Each recipe needs its own.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand

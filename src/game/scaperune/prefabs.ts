@@ -23,8 +23,6 @@ export const PREFABS: Record<string, PrefabDef> = {
 export const BRIDGE: PrefabDef = { worldX: 3236, worldY: 3223, sizeX: 18, sizeY: 6 };
 // How high the bridge's own banks are, to set it on ours
 export const BRIDGE_BANK_HEIGHT = 30;
-// The River Lum's overlay, to swap for the biome's water
-export const BRIDGE_WATER = 6;
 
 export function loadPrefab(context: BuildContext, def: PrefabDef): TileGrid {
     return cutPrefab(context.maps, def.worldX, def.worldY, def.sizeX, def.sizeY);
