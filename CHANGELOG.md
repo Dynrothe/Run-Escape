@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Crystal armour now comes in with beating Prifddinas. Saves that have already beaten it keep it.
+
 ## 0.17.0 - 2026-10-30
 
 ### Added
