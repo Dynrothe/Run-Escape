@@ -18,7 +18,7 @@ import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
-import { makeGrid } from "./world/testGrid";
+import { TestLoc, makeGrid } from "./world/testGrid";
 import { endlessXpForLevel, runXpForLevel } from "./xp";
 
 // An open field with a few walls, big enough for enemies to spawn off screen
@@ -3182,10 +3182,10 @@ describe("Castle Wars and Pest Control", () => {
 
     // An open field round the Pest Control island, so the portals' spots are
     // on it
-    function pestControl(seed = 1): Sim {
+    function pestControl(seed = 1, locs: TestLoc[] = []): Sim {
         const map = getMap("pest_control");
         return new Sim({
-            grid: makeGrid(openField(), 2620, 2560),
+            grid: makeGrid(openField(), 2620, 2560, locs),
             mapId: map.id,
             characterId: "warrior",
             metaStats: emptyStats(),
@@ -3285,6 +3285,78 @@ describe("Castle Wars and Pest Control", () => {
         sim.step(0, 0);
         expect(alive()).toBe(4);
         expect(sim.bossesKilled).toContain("purple_portal");
+    });
+
+    test("a portal's caskets land where the player can walk over them", () => {
+        // Each portal stands in the middle of three tiles by three of solid map
+        const spots = getMap("pest_control").fun!.bosses.pool.map((id) => getEnemy(id).spawnAt![0]);
+        const sim = pestControl(
+            2,
+            spots.map(({ x, y }) => ({
+                x: Math.floor(x) - 1,
+                y: Math.floor(y) - 1,
+                sizeX: 3,
+                sizeY: 3,
+            })),
+        );
+        sim.weapons = [];
+        sim.player.invulnerable = 1e6;
+        sim.tick = sim.map.fun!.bosses.firstAt * TICKS_PER_SECOND;
+        sim.step(0, 0);
+        const portals = sim.enemies.filter((e) => e.boss && !e.dead);
+        expect(portals).toHaveLength(4);
+        for (const portal of portals) {
+            portal.shieldEnd = 0;
+            sim.damageEnemy(portal, 1e9, 0, sim.player.x, sim.player.y);
+        }
+        const caskets = sim.pickups.filter((p) => p.kind === "casket");
+        expect(caskets).toHaveLength(5);
+        for (const casket of caskets) {
+            // Walk at it from the far side of it from the nearest portal
+            const portal = [...portals].sort(
+                (a, b) =>
+                    Math.hypot(a.x - casket.x, a.y - casket.y) -
+                    Math.hypot(b.x - casket.x, b.y - casket.y),
+            )[0];
+            const angle = Math.atan2(casket.y - portal.y, casket.x - portal.x);
+            sim.player.x = sim.player.prevX = casket.x + Math.cos(angle) * 3;
+            sim.player.y = sim.player.prevY = casket.y + Math.sin(angle) * 3;
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                if (sim.state === "levelUp") {
+                    sim.choose(0);
+                }
+                if (sim.state === "chest") {
+                    sim.resolveChest("alch");
+                }
+                sim.step(-Math.cos(angle), -Math.sin(angle));
+            }
+            expect(sim.pickups).not.toContain(casket);
+        }
+    });
+
+    test("what needs walking over doesn't land somewhere walled off", () => {
+        // A one tile room with no way in, at (1040, 1040)
+        const grid = makeGrid(openField(), 1000, 1000, [
+            { x: 1039, y: 1041, sizeX: 3, sizeY: 1 },
+            { x: 1039, y: 1039, sizeX: 3, sizeY: 1 },
+            { x: 1039, y: 1040, sizeX: 1, sizeY: 1 },
+            { x: 1041, y: 1040, sizeX: 1, sizeY: 1 },
+        ]);
+        const sim = new Sim({
+            grid,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+        });
+        // In the room's east wall, nearest the room
+        sim.dropCasket(1041.1, 1040.5, false);
+        sim.dropPowerUp("magnet", 1041.1, 1040.5);
+        for (const pickup of sim.pickups) {
+            expect({ x: pickup.x, y: pickup.y }).toEqual({ x: 1042.5, y: 1040.5 });
+        }
+        expect(sim.pickups).toHaveLength(2);
     });
 
     test("spinners go and heal a hurt portal", () => {
