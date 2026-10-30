@@ -5,6 +5,12 @@ the version in the corner).
 
 ## Unreleased
 
+### Fixed
+
+- Prifddinas's walkways and bridges are whole again instead of leaving pieces floating in the air.
+  Only the buildings' roofs and the towers' domes are gone. A few stray roof edges went from
+  Barrows too.
+
 ## 0.17.2 - 2026-10-30
 
 ### Fixed
