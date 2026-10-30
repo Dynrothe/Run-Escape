@@ -119,7 +119,8 @@ scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also valid
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
-scripts/scaperune/check-maps.ts          every open tile of the generated maps reaches the spawn
+scripts/scaperune/check-maps.ts          generated maps: every open tile reaches the spawn, roads off bridges
+scripts/scaperune/check-prefabs.ts       every prefab, in every rotation: its whole floor, a way out
 scripts/scaperune/check-palette.ts       the palette map reads all that generated maps read
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,

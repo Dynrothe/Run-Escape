@@ -1,6 +1,7 @@
 import { generatedRecipe } from "../generator";
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
+import { PREFAB_GALLERY } from "./prefabGallery";
 import { TERRAIN_TEST } from "./terrainTest";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
@@ -43,4 +44,5 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
         hills: 0.8,
     }),
     PALETTE_RECIPE,
+    PREFAB_GALLERY,
 ];

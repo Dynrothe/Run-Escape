@@ -134,4 +134,12 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () =
         });
         expect(output).toContain("All open tiles reach the spawn");
     }, 130000);
+
+    it("have every prefab's floor, in every rotation", () => {
+        const output = execFileSync("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
+            encoding: "utf8",
+            timeout: 60000,
+        });
+        expect(output).toContain("check out in all 4 rotations");
+    }, 70000);
 });

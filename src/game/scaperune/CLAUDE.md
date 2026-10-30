@@ -193,8 +193,15 @@ rectangle of the real world.
 
 1. **Find one.** `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with
    world coordinates down the side. Pick a rectangle that holds the whole building and nothing else.
-2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles.
-3. **Stamp it**: `ground.stamp(rotatePrefab(loadPrefab(context, def), turns, locs), x, y, options)`.
+2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles. The rectangle must
+   take in every wall of the building, with nothing else in it. A rectangle a row short loses that wall, and the
+   floor behind it with it.
+3. **Check it**: `npx tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every prefab in every
+   rotation and fails if a wall's cut off, floor is lost indoors, or there's no way out. Then look at it:
+   `scaperune_prefabs` is a dev map with all of them in all 4 rotations.
+4. **Stamp it**: `stampBuilding(ground, context, def, turns, x, y, towardX, towardY)` stands it on flat ground with
+   its doors off, and returns its way out nearest a tile. For anything else,
+   `ground.stamp(rotatePrefab(loadPrefab(context, def), turns, locs), x, y, options)`.
 
 `stamp` options:
 
@@ -240,9 +247,18 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   so does the map.
 - **One plane is drawn.** The game hides everything above the arena's plane, so roofs and upper floors vanish,
   as on real maps. Bridges still draw: their deck is on level 1 with a flag on level 1's tiles.
-- **Doors are closed.** A stamped building with a door has a sealed inside unless you drop the door.
-- **Cuts clip things.** A wall on a rectangle's edge can belong to the tile outside it. Check the
-  building's collision came through.
+- **Doors are closed, or open and turned.** A stamped building with a door has a sealed inside unless you drop
+  the door. An open door stands on another side of its tile, off the wall, so don't read a way out from a door's
+  rotation: `findExits` goes by the gap. Curtains are doors too.
+- **"Indoors" means walls on at least 3 of 4 sides**, straight lines out from the tile (`getInsideTiles`), so
+  that a doorway doesn't let the outside in.
+- **Cuts clip things.** A wall on a rectangle's edge can belong to the tile outside it. `check-prefabs.ts` finds
+  that. Bits of fence or a neighbouring building in the rectangle come along as stray walls, which it doesn't
+  find, so look at the gallery.
+- **A bridge's deck and fence gap are 2 tiles wide, centred on a line of tile corners**, not on a tile's middle.
+  Run a road down that line with a half width of 1 to 1.3 and it fills the gap with its edges on the tiles.
+  `check-maps.ts` holds generated bridges to this. A river where the road can't run straight off both ends for
+  6 tiles past the stamp gets a ford instead.
 - **Cliffs are weak.** Steep blocked tiles with a rock overlay collide, but look like a grey ramp. Real
   mountains use wall-type rock locs along their edges (14622-14626 and others).
 - **Roads have an overlay down the middle of a soft underlay.** Underlays blend over 11 tiles, which hides the

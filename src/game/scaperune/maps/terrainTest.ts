@@ -2,6 +2,7 @@ import { Ground } from "../Ground";
 import { TileGrid } from "../format";
 import { createNoise, distanceTo } from "../noise";
 import { cutPrefab, rotatePrefab } from "../prefab";
+import { PREFABS, loadPrefab } from "../prefabs";
 import { BuildContext, MapRecipe } from "../recipe";
 
 // A dev-only proof of custom ground: an island of our own, two map squares by
@@ -167,7 +168,8 @@ function build({ maps, locs }: BuildContext): TileGrid {
     // Houses from Lumbridge, on our grass, turned different ways. The church
     // keeps only its floor; the first house brings its whole rectangle, to see
     // the seam.
-    const house = cutPrefab(maps, 3242, 3243, 9, 7);
+    const context = { maps, locs };
+    const house = loadPrefab(context, PREFABS.lumbridge_house);
     ground.stamp(rotatePrefab(house, 0, locs), 108, 134, {
         floor: "all",
         feather: 4,
@@ -178,14 +180,14 @@ function build({ maps, locs }: BuildContext): TileGrid {
         feather: 4,
         flatten: true,
     });
-    const church = cutPrefab(maps, 3238, 3203, 12, 14);
+    const church = loadPrefab(context, PREFABS.lumbridge_church);
     ground.stamp(rotatePrefab(church, 1, locs), 78, 108, {
         floor: "footprint",
         feather: 5,
         flatten: true,
     });
     // A shop from Varrock, from another map square
-    const varrockHouse = cutPrefab(maps, 3245, 3402, 9, 10);
+    const varrockHouse = loadPrefab(context, PREFABS.varrock_shop);
     ground.stamp(rotatePrefab(varrockHouse, 3, locs), 170, 150, {
         floor: "footprint",
         feather: 4,

@@ -1,11 +1,21 @@
 import { Ground } from "./Ground";
 import { BIOMES, BiomeDef, BiomeId } from "./biomes";
+import type { Exit } from "./building";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
-import { MAP_SQUARE_SIZE, PlacedLoc, TILE_BLOCKED, TileGrid } from "./format";
+import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
 import { Noise, Rng, createNoise, createRng, distanceTo, smoothField } from "./noise";
 import { Point, addPathToField, findPath, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
-import { BRIDGE, BRIDGE_BANK_HEIGHT, PREFABS, loadPrefab } from "./prefabs";
+import {
+    BRIDGE,
+    BRIDGE_BANK_HEIGHT,
+    BRIDGE_DECK_EAST,
+    BRIDGE_DECK_ROW,
+    BRIDGE_DECK_WEST,
+    PREFABS,
+    loadPrefab,
+    stampBuilding,
+} from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
 
 // Makes a whole map from a seed and settings. The same seed and settings give
@@ -92,6 +102,8 @@ const RIVER_HALF_WIDTH = 4.5;
 // A road's overlay, down its middle, and the underlay under it. The renderer blends
 // underlays over 11 tiles, so that's a soft stain that takes the contrast out of the
 // overlay's edge. On its own it's too wide and faint to read as a road.
+// A half width of 1 to 1.3 on a line of tile corners fills exactly the 2 rows beside
+// it (the gap in a bridge's fences), with its edges along the tiles
 const ROAD_HALF_WIDTH = 1.2;
 const TRAIL_HALF_WIDTH = 2;
 // Tiles either side of a road that scatter keeps off
@@ -99,9 +111,16 @@ const ROAD_CLEAR_HALF_WIDTH = 1.5;
 // Roads keep off walls by this many tiles, but for the door they're going to
 const WALL_CLEARANCE = 3;
 const ROAD_START_FROM_DOOR = 3;
+// Tiles a road that leads nowhere takes to narrow away
+const ROAD_TAPER = 7;
+// The tightest a road can turn after a straight stretch, in tiles
+const ROAD_TURN_RADIUS = 8;
 const FORD_HALF_WIDTH = 2;
-// How far, either way from a bridge's middle, its deck starts
-const BRIDGE_DECK_REACH = 5;
+// How far a road runs dead straight off the end of a bridge's stamp, down the middle
+// of the gap between its fences and on, before it can curve
+const BRIDGE_ROAD_STRAIGHT = 6;
+// Rows kept clear either side of a bridge's road
+const BRIDGE_ROAD_CLEAR = 3;
 // Crossings are at most this far apart, so that wherever you are one's inside
 // the flow field's window (48 tiles each way)
 const CROSSING_SPACING = 60;
@@ -115,12 +134,9 @@ const MIN_PLAYABLE_TILES = 300;
 const SEA_BED = 6;
 const RIVER_BED = 8;
 const LAND_FLOOR = 34;
-const BUILDING_FEATHER = 4;
 
 const LOC_NORMAL = 10;
 const LOC_FLOOR_DECORATION = 22;
-
-const DOOR_NAME = /\b(door|gate)\b/i;
 
 // The water as painted: repainted when a ford cuts through it
 type WaterPaint = { field: Float32Array; tiles: Uint8Array };
@@ -329,45 +345,65 @@ function paintFloors(
 // floor it needs at ground level: the rest is ours, river and road
 const BRIDGE_HIDDEN_FLOOR = 61;
 
-type BridgeEnd = {
-    // Where a road can start from, off the stamp
-    outside: Point;
-    // Where it meets the deck
-    deck: Point;
-};
+// How a road leaves something: dead straight along these points, in tile corners, to
+// where it's free to find its way from (from, a tile)
+type RoadStart = { from: Point; lead: Point[] };
 
-// Bridges where rivers can take one. Returns both ends of each.
+// Bridges where rivers can take one. Returns a road start for each end of each.
 function placeBridges(
     context: BuildContext,
     ground: Ground,
     rivers: River[],
     water: Uint8Array,
     arena: TileRect,
-): BridgeEnd[] {
-    const ends: BridgeEnd[] = [];
+): RoadStart[] {
+    const starts: RoadStart[] = [];
     const prefab = loadPrefab(context, BRIDGE);
     const turned = rotatePrefab(prefab, 1, context.locs);
-    const reach = (BRIDGE.sizeX >> 1) + 1;
+    const middle = BRIDGE.sizeX >> 1;
+    const straight = middle + BRIDGE_ROAD_STRAIGHT;
     for (const river of rivers) {
         for (const crossing of river.crossings) {
+            // Tile corners along the bridge's middle line, by distance from the river's
+            // middle. Turning a prefab mirrors it along its length.
             const across = (distance: number): Point =>
                 river.vertical
                     ? { x: river.line + distance, y: crossing }
                     : { x: crossing, y: river.line + distance };
-            const a = across(-reach);
-            const b = across(reach);
+            const deckNear = river.vertical ? BRIDGE_DECK_WEST - middle : middle - BRIDGE_DECK_EAST;
+            const deckFar = river.vertical ? BRIDGE_DECK_EAST - middle : middle - BRIDGE_DECK_WEST;
+
+            // The straight runs must be on land in the arena, both rows of them
             const inArena = (p: Point) =>
                 p.x >= arena.x0 && p.y >= arena.y0 && p.x <= arena.x1 && p.y <= arena.y1;
-            const onLand = (p: Point) => inArena(p) && !water[ground.tile(p.x, p.y)];
+            const onLand = (distance: number) => {
+                const p = across(distance);
+                const q = river.vertical ? { x: p.x, y: p.y - 1 } : { x: p.x - 1, y: p.y };
+                return (
+                    inArena(p) &&
+                    inArena(q) &&
+                    !water[ground.tile(p.x, p.y)] &&
+                    !water[ground.tile(q.x, q.y)]
+                );
+            };
+            let fits = true;
+            for (let distance = deckFar + 1; distance <= straight + 1; distance++) {
+                fits &&= onLand(distance);
+            }
+            for (let distance = deckNear - 2; distance >= -straight - 2; distance--) {
+                fits &&= onLand(distance);
+            }
             const crossesOther = rivers.some(
                 (other) =>
-                    other !== river && Math.abs(crossing - riverCentre(other, river.line)) < 16,
+                    other !== river && Math.abs(crossing - riverCentre(other, river.line)) < 26,
             );
-            if (!onLand(a) || !onLand(b) || crossesOther) {
+            if (!fits || crossesOther) {
                 continue;
             }
+            const near = across(deckNear - 3);
+            const far = across(deckFar + 3);
             const height = Math.max(
-                (ground.getHeight(a.x, a.y) + ground.getHeight(b.x, b.y)) / 2,
+                (ground.getHeight(near.x, near.y) + ground.getHeight(far.x, far.y)) / 2,
                 BRIDGE_BANK_HEIGHT,
             );
             const options = {
@@ -378,67 +414,36 @@ function placeBridges(
                 anchor: BRIDGE_BANK_HEIGHT,
                 keepUnderlays: true,
             };
+            const stampAt = crossing - BRIDGE_DECK_ROW;
             if (river.vertical) {
-                ground.stamp(prefab, river.line - (BRIDGE.sizeX >> 1), crossing - 3, options);
+                ground.stamp(prefab, river.line - middle, stampAt, options);
             } else {
-                ground.stamp(turned, crossing - 3, river.line - (BRIDGE.sizeX >> 1), options);
+                ground.stamp(turned, stampAt, river.line - middle, options);
             }
-            ends.push(
-                { outside: a, deck: across(-BRIDGE_DECK_REACH) },
-                { outside: b, deck: across(BRIDGE_DECK_REACH) },
-            );
+            for (const [deck, end, way] of [
+                [deckNear, -straight, -1],
+                [deckFar, straight, 1],
+            ]) {
+                const lead: Point[] = [];
+                for (let distance = deck; distance !== end + way; distance += way) {
+                    const p = across(distance);
+                    lead.push(p);
+                    // Nothing goes on the road's rows or close by: no buildings or
+                    // trees, nor roads doubling back beside it
+                    for (let row = -BRIDGE_ROAD_CLEAR - 1; row <= BRIDGE_ROAD_CLEAR; row++) {
+                        const x = river.vertical ? p.x : p.x + row;
+                        const y = river.vertical ? p.y + row : p.y;
+                        ground.reserved[ground.tile(x, y)] = 1;
+                    }
+                }
+                starts.push({ from: across(end + way), lead });
+            }
         }
     }
-    return ends;
+    return starts;
 }
 
-// A building's way in: the tile in its doorway, and which way is out
-type Door = { x: number; y: number; outX: number; outY: number };
-
-type Plot = { x: number; y: number; sizeX: number; sizeY: number; door: Door };
-
-const SIDE_X = [-1, 0, 1, 0];
-const SIDE_Y = [0, 1, 0, -1];
-
-// The door of a prefab nearest a point, in the prefab's tiles, or the middle of the
-// side facing it if it hasn't got one
-function findDoor(
-    prefab: TileGrid,
-    isDoor: (loc: PlacedLoc) => boolean,
-    towardX: number,
-    towardY: number,
-): Door {
-    const middleX = (prefab.sizeX - 1) / 2;
-    const middleY = (prefab.sizeY - 1) / 2;
-    const doors = prefab.locs
-        .filter((loc) => loc.level === 0 && isDoor(loc))
-        .map((loc) => {
-            // A door stands on one side of its tile; out's away from the middle
-            let outX = SIDE_X[loc.rotation];
-            let outY = SIDE_Y[loc.rotation];
-            if (outX * (loc.x - middleX) + outY * (loc.y - middleY) < 0) {
-                outX = -outX;
-                outY = -outY;
-            }
-            return { x: loc.x, y: loc.y, outX, outY };
-        })
-        .sort(
-            (a, b) =>
-                Math.hypot(a.x - towardX, a.y - towardY) - Math.hypot(b.x - towardX, b.y - towardY),
-        );
-    if (doors.length > 0) {
-        return doors[0];
-    }
-    const horizontal = Math.abs(towardX - middleX) > Math.abs(towardY - middleY);
-    const outX = horizontal ? Math.sign(towardX - middleX) || 1 : 0;
-    const outY = horizontal ? 0 : Math.sign(towardY - middleY) || 1;
-    return {
-        x: Math.round(middleX + (outX * prefab.sizeX) / 2),
-        y: Math.round(middleY + (outY * prefab.sizeY) / 2),
-        outX,
-        outY,
-    };
-}
+type Plot = { x: number; y: number; sizeX: number; sizeY: number; exit?: Exit };
 
 function placeBuildings(
     settings: GeneratorSettings,
@@ -452,7 +457,6 @@ function placeBuildings(
     const half = (settings.squares * MAP_SQUARE_SIZE) / 2;
     const wanted = Math.round(settings.buildings * settings.squares * settings.squares * 3);
     const plots: Plot[] = [];
-    const isDoor = (loc: PlacedLoc) => loc.type <= 3 && DOOR_NAME.test(context.locs(loc.id).name);
     for (let attempt = 0; attempt < wanted * 40 && plots.length < wanted; attempt++) {
         const def = PREFABS[pick(rng, biome.buildings)];
         const turns = Math.floor(rng() * 4);
@@ -477,21 +481,47 @@ function placeBuildings(
         if (!fits) {
             continue;
         }
-        const prefab = rotatePrefab(loadPrefab(context, def), turns, context.locs);
-        ground.stamp(prefab, x, y, {
-            floor: "footprint",
-            feather: BUILDING_FEATHER,
-            flatten: true,
-            keepUnderlays: true,
-            skipLoc: isDoor,
-        });
-        const door = findDoor(prefab, isDoor, spawn - x, spawn - y);
-        plots.push({ x, y, sizeX, sizeY, door: { ...door, x: door.x + x, y: door.y + y } });
+        const exit = stampBuilding(ground, context, def, turns, x, y, spawn, spawn);
+        plots.push({ x, y, sizeX, sizeY, exit });
     }
     return plots;
 }
 
-type RoadTarget = { from: Point; last: Point };
+// The tiles a road can't use just past a straight stretch: a circle either side of its
+// end, so that it can only swing away in a wide arc. Left to itself, a road whose way
+// lies back past the stretch doubles back on it in a sharp point.
+function getTurningCircles(lead: Point[]): (x: number, y: number) => boolean {
+    const end = lead[lead.length - 1];
+    const before = lead[lead.length - 2];
+    const length = Math.hypot(end.x - before.x, end.y - before.y);
+    const sideX = (before.y - end.y) / length;
+    const sideY = (end.x - before.x) / length;
+    const radius = Math.min(lead.length, ROAD_TURN_RADIUS);
+    const centres = [1, -1].map((side) => ({
+        x: end.x + sideX * side * radius,
+        y: end.y + sideY * side * radius,
+    }));
+    return (x, y) =>
+        centres.some((centre) => Math.hypot(x + 0.5 - centre.x, y + 0.5 - centre.y) < radius - 0.7);
+}
+
+// Runs a road that leads nowhere on past its end, narrowing away to nothing, so that it
+// fades into the ground instead of stopping square
+function taperRoad(trail: Float32Array, corners: number, line: Point[]): void {
+    const end = line[line.length - 1];
+    const before = line[line.length - 2];
+    const length = Math.hypot(end.x - before.x, end.y - before.y);
+    const wayX = (end.x - before.x) / length;
+    const wayY = (end.y - before.y) / length;
+    // The trail's half width where the road's overlay has narrowed to nothing
+    const tip = TRAIL_HALF_WIDTH - ROAD_HALF_WIDTH;
+    for (let step = 0; step < ROAD_TAPER; step++) {
+        const halfWidth = TRAIL_HALF_WIDTH + ((tip - TRAIL_HALF_WIDTH) * (step + 1)) / ROAD_TAPER;
+        const from = { x: end.x + wayX * step, y: end.y + wayY * step };
+        const to = { x: from.x + wayX, y: from.y + wayY };
+        addPathToField(trail, corners, corners, [from, to], halfWidth);
+    }
+}
 
 function placeRoads(
     settings: GeneratorSettings,
@@ -500,7 +530,7 @@ function placeRoads(
     rng: Rng,
     water: Uint8Array,
     buildings: Uint8Array,
-    bridgeEnds: BridgeEnd[],
+    bridgeStarts: RoadStart[],
     plots: Plot[],
     spawn: number,
 ): void {
@@ -515,24 +545,22 @@ function placeRoads(
     roads[ground.tile(spawn, spawn)] = 1;
     // Nearest first, bridges before doors, so doors over a river can join the road
     // at the bridge
-    const byDistance = (a: RoadTarget, b: RoadTarget) =>
+    const byDistance = (a: RoadStart, b: RoadStart) =>
         Math.hypot(a.from.x - spawn, a.from.y - spawn) -
         Math.hypot(b.from.x - spawn, b.from.y - spawn);
-    const bridges: RoadTarget[] = bridgeEnds.map((end) => ({ from: end.outside, last: end.deck }));
-    const doors: RoadTarget[] = [];
-    for (const { door } of plots) {
-        if (rng() < settings.roads) {
+    const doors: RoadStart[] = [];
+    for (const { exit } of plots) {
+        if (exit && rng() < settings.roads) {
             // Straight out of the door, so that's how the road arrives
-            doors.push({
-                from: {
-                    x: door.x + door.outX * ROAD_START_FROM_DOOR,
-                    y: door.y + door.outY * ROAD_START_FROM_DOOR,
-                },
-                last: { x: door.x, y: door.y },
-            });
+            const lead: Point[] = [];
+            for (let step = 0; step <= ROAD_START_FROM_DOOR; step++) {
+                lead.push({ x: exit.x + exit.outX * step, y: exit.y + exit.outY * step });
+            }
+            const end = lead[lead.length - 1];
+            doors.push({ from: { x: Math.floor(end.x), y: Math.floor(end.y) }, lead });
         }
     }
-    const targets = [...bridges.sort(byDistance), ...doors.sort(byDistance)];
+    const starts = [...[...bridgeStarts].sort(byDistance), ...doors.sort(byDistance)];
     // Roads go round water and buildings, keep off walls, and join up where they meet
     const cost = (x: number, y: number) => {
         const i = ground.tile(x, y);
@@ -543,27 +571,29 @@ function placeRoads(
         return (roads[i] ? 0.2 : 1 + wiggle(x / 14, y / 14) * 2) + nearWall;
     };
     const trail = new Float32Array(corners * corners).fill(-4);
-    for (const target of targets) {
-        const tiles = findPath(size, size, target.from, cost, (i) => roads[i] !== 0);
+    for (const { from, lead } of starts) {
+        const isRoad = (i: number) => roads[i] !== 0;
+        const inTurn = getTurningCircles(lead);
+        const turning = (x: number, y: number) => (inTurn(x, y) ? Infinity : cost(x, y));
+        // Somewhere too tight for a wide turn makes do with a sharp one
+        let tiles = findPath(size, size, from, turning, isRoad);
+        if (tiles.length === 0) {
+            tiles = findPath(size, size, from, cost, isRoad);
+        }
         for (const i of tiles) {
             roads[i] = 1;
         }
-        // Found from the far end back, so it comes out from the road network to the door
-        const middles = tiles
+        // Found from the far end back. With nothing to join, as on a bridge's far bank,
+        // it's a stub for others to join.
+        roads[ground.tile(from.x, from.y)] = 1;
+        const onward = tiles
             .map((i) => ({ x: (i % size) + 0.5, y: Math.floor(i / size) + 0.5 }))
             .reverse();
-        const last = { x: target.last.x + 0.5, y: target.last.y + 0.5 };
-        // Nothing to join, as on a bridge's far bank: a stub, for others to join
-        roads[ground.tile(target.from.x, target.from.y)] = 1;
-        const line =
-            middles.length > 0 ? middles : [{ x: target.from.x + 0.5, y: target.from.y + 0.5 }];
-        addPathToField(
-            trail,
-            corners,
-            corners,
-            smoothPath([last, ...line], 5, 4),
-            TRAIL_HALF_WIDTH,
-        );
+        const line = smoothPath([...lead, ...onward], 7, 7, lead.length);
+        addPathToField(trail, corners, corners, line, TRAIL_HALF_WIDTH);
+        if (onward.length === 0) {
+            taperRoad(trail, corners, line);
+        }
     }
     const road = trail.map((value) => value - TRAIL_HALF_WIDTH + ROAD_HALF_WIDTH);
     const clearing = trail.map((value) => value - TRAIL_HALF_WIDTH + ROAD_CLEAR_HALF_WIDTH);
@@ -761,11 +791,11 @@ export function generateMap(settings: GeneratorSettings, context: BuildContext):
     const waterTiles = ground.paintField(waterField, biome.water, true);
     const water: WaterPaint = { field: waterField, tiles: waterTiles };
 
-    const bridgeEnds = placeBridges(context, ground, rivers, waterTiles, arena);
+    const bridgeStarts = placeBridges(context, ground, rivers, waterTiles, arena);
     const beforeBuildings = ground.reserved.slice();
     const plots = placeBuildings(settings, biome, context, ground, rng, waterTiles, spawn);
     const buildings = ground.reserved.map((v, i) => v & ~beforeBuildings[i]);
-    placeRoads(settings, biome, ground, rng, waterTiles, buildings, bridgeEnds, plots, spawn);
+    placeRoads(settings, biome, ground, rng, waterTiles, buildings, bridgeStarts, plots, spawn);
     scatter(settings, biome, context, ground, rng, waterTiles, arena, spawn);
     connectGround(biome, context, ground, arena, spawn, water, buildings);
     return ground.grid;

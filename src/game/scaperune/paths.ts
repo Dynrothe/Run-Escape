@@ -97,12 +97,13 @@ export function findPath(
 export type Point = { x: number; y: number };
 
 // Rounds a path off: each point moves to the average of those around it, a few
-// times over, and it's walked in small steps. The ends stay where they are.
-export function smoothPath(path: Point[], reach: number, passes: number): Point[] {
+// times over. The end stays where it is, and so do the first pinned points, a stretch
+// that has to stay straight, which the rest then curves away from.
+export function smoothPath(path: Point[], reach: number, passes: number, pinned = 1): Point[] {
     let points = path;
     for (let pass = 0; pass < passes; pass++) {
         points = points.map((point, i) => {
-            if (i === 0 || i === points.length - 1) {
+            if (i < pinned || i === points.length - 1) {
                 return point;
             }
             const span = Math.min(reach, i, points.length - 1 - i);
