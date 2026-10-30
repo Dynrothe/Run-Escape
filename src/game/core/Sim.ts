@@ -2,6 +2,9 @@ import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { getCharacter } from "../content/characters";
 import {
     LATER_ROUND_START,
+    LATE_CASKET_CHANCE,
+    LATE_CASKET_LIMIT,
+    LATE_CASKET_SECONDS,
     ROUND_DAMAGE,
     ROUND_HP,
     ROUND_XP,
@@ -3292,12 +3295,12 @@ export class Sim {
         } else if (enemy.boss && (!enemy.finalBoss || this.endless)) {
             // An endless round's final boss always drops a master casket (the
             // last of them, where there are several)
+            const master = enemy.finalBoss && !this.finalBossLeft();
             this.dropCasketOfTier(
-                enemy.finalBoss && !this.finalBossLeft()
-                    ? "master"
-                    : rollBossCasketTier(this.rng, this.stats.luck),
+                master ? "master" : rollBossCasketTier(this.rng, this.stats.luck),
                 enemy.x + 0.4,
                 enemy.y,
+                master,
             );
         } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
@@ -4739,7 +4742,21 @@ export class Sim {
         this.dropCasketOfTier(rollCasketTier(this.rng, this.seconds, elite, this.stats.luck), x, y);
     }
 
-    private dropCasketOfTier(tier: CasketTier, x: number, y: number): void {
+    // guaranteed: past the chance of a late endless casket, though not its limit
+    private dropCasketOfTier(tier: CasketTier, x: number, y: number, guaranteed = false): void {
+        if (this.endless && this.seconds >= LATE_CASKET_SECONDS) {
+            if (!guaranteed && !this.rng.chance(LATE_CASKET_CHANCE)) {
+                return;
+            }
+            const onGround = this.pickups.filter((pickup) => pickup.kind === "casket").length;
+            if (onGround >= LATE_CASKET_LIMIT) {
+                this.events.push({
+                    type: "notice",
+                    message: "You have a funny feeling there would've been a chest",
+                });
+                return;
+            }
+        }
         const spot = this.walkableSpot(x, y);
         this.dropPickup("casket", spot.x, spot.y, 1, { tier });
         this.events.push({ type: "casketDropped", tier, x: spot.x, y: spot.y });

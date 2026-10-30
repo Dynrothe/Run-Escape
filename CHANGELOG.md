@@ -23,6 +23,9 @@ the version in the corner).
 - The player now stands and runs the way their weapon does in OSRS: a two-handed run with 2h swords
   and godswords, staves held out, crossbows at the ready, and so on.
 - The same power-up no longer drops twice in a row.
+- Past 15 minutes in an endless run, a chest that would drop only has a 5% chance to, and only 10
+  can lie on the ground at once. A round's master casket always rolls through, though not past the
+  limit.
 
 ### Fixed
 

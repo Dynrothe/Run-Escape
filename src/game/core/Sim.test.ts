@@ -3,6 +3,9 @@ import { CHARACTERS } from "../content/characters";
 import {
     ENDLESS_COINS,
     LATER_ROUND_START,
+    LATE_CASKET_CHANCE,
+    LATE_CASKET_LIMIT,
+    LATE_CASKET_SECONDS,
     ROUND_DAMAGE,
     ROUND_HP,
     ROUND_XP,
@@ -3313,6 +3316,72 @@ describe("endless runs", () => {
         })!;
         sim.damageEnemy(boss, 1e12, 0, sim.player.x, sim.player.y);
     }
+
+    describe("past fifteen minutes", () => {
+        const countCaskets = (sim: Sim) => sim.pickups.filter((p) => p.kind === "casket").length;
+
+        function lateRun(endless = true): Sim {
+            const sim = createSim("warrior", 1, "lumbridge", emptyStats(), endless);
+            sim.tick = LATE_CASKET_SECONDS * TICKS_PER_SECOND;
+            return sim;
+        }
+
+        test("a casket only has a small chance to drop", () => {
+            const sim = lateRun();
+            let dropped = 0;
+            for (let i = 0; i < 2000; i++) {
+                sim.dropCasket(1040.5, 1036.5, true);
+                dropped += countCaskets(sim);
+                sim.pickups.length = 0;
+            }
+            expect(dropped / 2000).toBeCloseTo(LATE_CASKET_CHANCE, 1);
+            expect(dropped).toBeGreaterThan(0);
+        });
+
+        test("drop as usual before then, and outside endless runs", () => {
+            const early = createEndless();
+            early.tick = (LATE_CASKET_SECONDS - 1) * TICKS_PER_SECOND;
+            const normal = lateRun(false);
+            for (const sim of [early, normal]) {
+                for (let i = 0; i < 20; i++) {
+                    sim.dropCasket(1040.5, 1036.5, true);
+                }
+                expect(countCaskets(sim)).toBe(20);
+            }
+        });
+
+        test("no more than the limit lie on the ground, and the rest raise an alert", () => {
+            const sim = lateRun();
+            sim.rng.chance = () => true;
+            for (let i = 0; i < LATE_CASKET_LIMIT + 2; i++) {
+                sim.dropCasket(1040.5, 1036.5, true);
+            }
+            expect(countCaskets(sim)).toBe(LATE_CASKET_LIMIT);
+            const alerts = sim.takeEvents().filter((e) => e.type === "notice");
+            expect(alerts).toEqual(
+                Array(2).fill({
+                    type: "notice",
+                    message: "You have a funny feeling there would've been a chest",
+                }),
+            );
+        });
+
+        test("a round's master casket doesn't roll for it, but keeps to the limit", () => {
+            const sim = lateRun();
+            sim.rng.chance = () => false;
+            beatRound(sim);
+            expect(sim.pickups.some((p) => p.kind === "casket" && p.tier === "master")).toBe(true);
+
+            const full = lateRun();
+            full.rng.chance = () => true;
+            for (let i = 0; i < LATE_CASKET_LIMIT; i++) {
+                full.dropCasket(1040.5, 1036.5, true);
+            }
+            beatRound(full);
+            expect(countCaskets(full)).toBe(LATE_CASKET_LIMIT);
+            expect(full.pickups.some((p) => p.tier === "master")).toBe(false);
+        });
+    });
 
     test("killing the final boss starts the next round instead of winning", () => {
         const sim = createEndless();

@@ -169,6 +169,10 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
+- **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
+  would drop only has a 5% chance to, and only 10 can lie on the ground at once. A round's master
+  casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
+  would've been a chest".
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
