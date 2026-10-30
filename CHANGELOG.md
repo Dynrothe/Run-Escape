@@ -13,6 +13,8 @@ the version in the corner).
 - New power-up: Evil Bob. A giant cat charges through the crowd three times, throwing it aside.
 - New power-up: the Fairy ring. A ring opens at your feet for 12 seconds and warps away whatever
   walks into it.
+- New power-up: the Drill Demon. Everything nearby runs laps around you for 9 seconds and can't
+  attack.
 
 ### Changed
 

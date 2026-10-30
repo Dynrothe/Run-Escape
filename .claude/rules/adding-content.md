@@ -75,9 +75,9 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
 - `look` is an item held and two player animations for as long as it lasts. It's baked with the
   player, and `slim-cache.ts` picks it up from there (`getPowerUpLookRequests`). Only player
   skeleton animations work, and the item's worn model matters: a look needs both.
-- `sound` and `endSound` are collected for you. Other sounds need adding to `getGameSoundIds`, and
-  spot animations and locs to `getSpotAnimIds` and `getBaseRequests`, or the deployed game won't
-  have them.
+- `sound`, `endSound`, `hitSound` and an effect's `locId` and `spotAnim` are collected for you, and
+  a `rampage` effect's NPC too. Anything else from the cache needs adding to `getGameSoundIds`,
+  `getSpotAnimIds` or `getBaseRequests`, or the deployed game won't have it.
 - Anything meant to stop all damage has to hold `player.invulnerable` above
   `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
   boss hits and poison through near the end.

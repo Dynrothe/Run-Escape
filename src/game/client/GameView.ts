@@ -97,17 +97,18 @@ const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
-// Thralls are small next to a top-down player; they fade out over their last
-// second
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 // How long a fairy ring takes to open
 const RING_OPEN_TICKS = 20;
-const RAMPAGE_FLASH = 0.25;
-// A charging NPC's legs go this much faster than its walk
+// A charging NPC's legs go this much faster than its walk, and it's lit up so
+// a black cat shows on the darker maps
 const RAMPAGE_ANIM_SPEED = 2;
+const RAMPAGE_FLASH = 0.25;
+// Thralls are small next to a top-down player; they fade out over their last
+// second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 

@@ -132,6 +132,8 @@ const RAMPAGE_START_DISTANCE = 14;
 const RAMPAGE_CROWD_RANGE = 14;
 const RAMPAGE_OVERSHOOT = 7;
 export const RAMPAGE_FADE_TICKS = 25;
+// How far off the ring a Drill Demon's runner heads straight for it
+const LAP_PULL_TILES = 3;
 // A fairy ring looks for what's walked in this often, and shows the warp on
 // only so many at a time
 const RING_PULSE_TICKS = 5;
@@ -457,6 +459,9 @@ export class Sim {
     // While the sled lasts: how much faster the player goes, and until when
     private sledEndTick = 0;
     private sledSpeed = 1;
+    // While a Drill Demon lasts
+    private lapsEndTick = 0;
+    private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
     // Fun maps: run second the next random boss is due, the last one picked
     // (not picked twice running), and when the next chat lines are due
     private nextFunBossSeconds = Infinity;
@@ -1750,9 +1755,12 @@ export class Sim {
                         dirX = dirY = 0;
                     }
                 }
+                const lapping = this.isLapping(enemy, distance);
                 const healTarget = abilities?.healTarget;
                 const fighting =
-                    stationary || healTarget || fleeing ? undefined : this.findFoe(enemy, distance);
+                    stationary || healTarget || fleeing || lapping
+                        ? undefined
+                        : this.findFoe(enemy, distance);
                 if (fighting) {
                     // Off to fight another god's army, stopping once it's in
                     // reach (the hit itself is the touch below)
@@ -1777,6 +1785,12 @@ export class Sim {
                         dirX = hx / length;
                         dirY = hy / length;
                     }
+                }
+
+                if (lapping) {
+                    this.lapDirection(enemy, dx, dy, distance, step);
+                    dirX = step.x;
+                    dirY = step.y;
                 }
 
                 // Keep apart from each other, and bump into other factions
@@ -1814,14 +1828,17 @@ export class Sim {
                 });
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
-                if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
+                if (lapping) {
+                    moveX += dirX * enemy.speed * this.laps!.speed;
+                    moveY += dirY * enemy.speed * this.laps!.speed;
+                } else if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
                     moveX += dirX * enemy.speed;
                     moveY += dirY * enemy.speed;
                 }
                 moveX += sepX * 0.25;
                 moveY += sepY * 0.25;
 
-                if (fleeing) {
+                if (fleeing || lapping) {
                     // Looking where it's running, not back at the player
                     enemy.yaw = yawFromVector(dirX, dirY);
                 } else if (fighting) {
@@ -1831,7 +1848,8 @@ export class Sim {
                 }
 
                 // Bosses hit with their own attacks instead
-                const canHit = enemy.attackCooldown === 0 && !bossState && enemy.damage > 0;
+                const canHit =
+                    enemy.attackCooldown === 0 && !bossState && enemy.damage > 0 && !lapping;
                 if (touching && canHit) {
                     this.enemyAttack(enemy);
                 } else if (foe && canHit && !enemy.boss) {
@@ -1839,6 +1857,7 @@ export class Sim {
                 } else if (
                     enemy.def.shot &&
                     !bossState &&
+                    !lapping &&
                     enemy.attackCooldown === 0 &&
                     distance <= enemy.def.shot.range
                 ) {
@@ -1952,6 +1971,35 @@ export class Sim {
             enemy.anim = "walk";
             enemy.animStart = this.tick;
         }
+    }
+
+    // Running a Drill Demon's laps. Bosses, what can't move and flag carriers
+    // carry on as they were.
+    private isLapping(enemy: Enemy, distance: number): boolean {
+        return (
+            this.tick < this.lapsEndTick &&
+            distance < this.laps!.range &&
+            !enemy.boss &&
+            !enemy.def.stationary &&
+            !enemy.def.flees
+        );
+    }
+
+    // Round the player, drifting in or out onto the ring. dx, dy: to the player.
+    private lapDirection(enemy: Enemy, dx: number, dy: number, distance: number, out: Vec2): void {
+        if (distance < 0.01) {
+            // Right on top of the player: any way out will do
+            out.x = 1;
+            out.y = 0;
+            return;
+        }
+        const length = distance;
+        const toward = Math.max(-1, Math.min(1, (distance - this.laps!.radius) / LAP_PULL_TILES));
+        const x = -dy / length + (dx / length) * toward;
+        const y = dx / length + (dy / length) * toward;
+        const size = Math.hypot(x, y);
+        out.x = x / size;
+        out.y = y / size;
     }
 
     // Ahead of the player if they're moving, so they keep running into things,
@@ -5009,6 +5057,13 @@ export class Sim {
                     scale: effect.scale,
                 });
                 message = "A fairy ring opens at your feet!";
+                break;
+            case "laps":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                this.lapsEndTick = endTick;
+                this.laps = effect;
+                this.events.push({ type: "playerShout", text: effect.shout });
+                message = effect.shout;
                 break;
         }
         if (endTick > this.tick) {

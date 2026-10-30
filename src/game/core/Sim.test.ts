@@ -774,6 +774,114 @@ describe("power-ups", () => {
         });
     });
 
+    describe("the Drill Demon", () => {
+        const drill = () => getPowerUp("drill_demon");
+
+        test("the crowd runs round the player instead of attacking", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const enemies = [0, 1, 2, 3, 4, 5].map((i) => {
+                const angle = (i / 6) * Math.PI * 2;
+                const x = player.x + Math.cos(angle) * 2;
+                return goblin(sim, x, player.y + Math.sin(angle) * 2);
+            });
+            sim.usePowerUp(drill());
+            const hp = player.hp;
+            const angleOf = (e: Enemy) => Math.atan2(e.y - player.y, e.x - player.x);
+            let turned = 0;
+            let angle = angleOf(enemies[0]);
+            for (let i = 0; i < 8 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                const now = angleOf(enemies[0]);
+                turned += Math.atan2(Math.sin(now - angle), Math.cos(now - angle));
+                angle = now;
+            }
+            expect(player.hp).toBe(hp);
+            // Well round the ring, not just standing back
+            expect(Math.abs(turned)).toBeGreaterThan(Math.PI);
+            for (const enemy of enemies) {
+                const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+                expect(distance).toBeGreaterThan(4);
+                expect(distance).toBeLessThan(8);
+            }
+        });
+
+        test("what's right on top of the player runs out too", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            const onTop = goblin(sim, x, y);
+            onTop.x = x;
+            onTop.y = y;
+            sim.usePowerUp(drill());
+            runFor(sim, 4, "still");
+            expect(Math.hypot(onTop.x - x, onTop.y - y)).toBeGreaterThan(3);
+        });
+
+        test("shooters hold their fire", () => {
+            const sim = createSim("warrior", 1, "east_varrock");
+            sim.weapons = [];
+            const ranger = sim.spawnEnemy(getEnemy("f2p_ranger"), "normal", {
+                x: sim.player.x + 5,
+                y: sim.player.y,
+            })!;
+            expect(ranger).toBeDefined();
+            sim.usePowerUp(drill());
+            for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(sim.enemyProjectiles).toHaveLength(0);
+        });
+
+        test("bosses, what can't move and what's far off carry on", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const post = sim.spawnEnemy({ ...getEnemy("goblin"), stationary: true }, "normal", {
+                x: x + 3,
+                y,
+            })!;
+            const far = goblin(sim, x + 16, y);
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x - 6, y })!;
+            sim.usePowerUp(drill());
+            const bossDistance = Math.hypot(boss.x - x, boss.y - y);
+            const farDistance = Math.hypot(far.x - x, far.y - y);
+            for (let i = 0; i < 20; i++) {
+                sim.step(0, 0);
+            }
+            expect(post.x).toBeCloseTo(x + 3);
+            expect(Math.hypot(far.x - x, far.y - y)).toBeLessThan(farDistance);
+            expect(Math.hypot(boss.x - x, boss.y - y)).toBeLessThanOrEqual(bossDistance);
+        });
+
+        test("what turns up meanwhile joins in, and it all stops when it's over", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.usePowerUp(drill());
+            sim.takeEvents();
+            sim.step(0, 0);
+            const late = goblin(sim, sim.player.x + 3, sim.player.y);
+            for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(Math.hypot(late.x - sim.player.x, late.y - sim.player.y)).toBeGreaterThan(5);
+            const hp = sim.player.hp;
+            runFor(sim, 16, "still");
+            expect(sim.player.hp).toBeLessThan(hp);
+        });
+
+        test("shouts its line", () => {
+            const sim = createSim();
+            sim.usePowerUp(drill());
+            expect(sim.takeEvents()).toContainEqual({
+                type: "playerShout",
+                text: "Run laps, maggots!",
+            });
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];

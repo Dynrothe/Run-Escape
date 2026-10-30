@@ -910,6 +910,17 @@ export type PowerUpEffect =
           locId: number;
           spotAnim: number;
           scale: number;
+      }
+    // Everything within range runs laps around the player at this many times
+    // its speed, radius tiles out, and can't attack; a line for the player to
+    // shout
+    | {
+          kind: "laps";
+          seconds: number;
+          range: number;
+          radius: number;
+          speed: number;
+          shout: string;
       };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked

@@ -154,6 +154,25 @@ export const POWER_UPS: PowerUpDef[] = [
             scale: 1.5,
         },
     },
+    {
+        id: "drill_demon",
+        name: "Drill Demon",
+        description: "For 9 seconds everything nearby runs laps around you and can't attack.",
+        // Camo helmet, from Sergeant Damien's random event
+        objId: 6656,
+        weight: 2,
+        // whistle
+        sound: 1569,
+        effect: {
+            kind: "laps",
+            seconds: 9,
+            range: 12,
+            // Close enough to stay on screen all the way round
+            radius: 6,
+            speed: 1.5,
+            shout: "Run laps, maggots!",
+        },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They
