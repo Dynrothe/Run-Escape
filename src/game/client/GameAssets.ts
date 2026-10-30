@@ -22,6 +22,7 @@ import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getPassive } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { PlayerStance, getPlayerStance } from "../content/stances";
 import { EnemyDef, EnemyOutfit, GearSlot } from "../content/types";
 import { WEAPONS } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
@@ -123,11 +124,14 @@ function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim, weapon.burns?.spotAnim);
+        add(weapon.chain?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
         add(thrall.projectileSpotAnim, thrall.impactSpotAnim);
+    }
+    for (const { effect } of POWER_UPS) {
+        add("spotAnim" in effect ? effect.spotAnim : undefined);
     }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
@@ -195,6 +199,27 @@ export function getRunAppearance(sim: Sim): PlayerAppearance {
     return appearance;
 }
 
+// The player's look in each power-up that has one, baked alongside them. The
+// shield comes off by hand: wearing an item only hides body parts.
+export function getPowerUpLookRequests(appearance: PlayerAppearance): BakeRequest[] {
+    return POWER_UPS.flatMap(({ id, look }): BakeRequest[] => {
+        if (!look) {
+            return [];
+        }
+        const equipment = appearance.equipment.slice();
+        equipment[EquipSlot.WEAPON] = look.objId;
+        equipment[EquipSlot.SHIELD] = -1;
+        return [
+            {
+                kind: "player",
+                key: "player:" + id,
+                appearance: { ...appearance, equipment },
+                seqIds: [look.idleSeq, look.moveSeq],
+            },
+        ];
+    });
+}
+
 // The baked model for an enemy: its NPC, or the outfit it wears (the fun
 // maps' players, one model per outfit)
 export function getEnemyModelKey(def: EnemyDef, variant: number): string {
@@ -236,6 +261,9 @@ export class GameAssets {
 
     private playerKey?: string;
     private playerModel?: ActorModel;
+    private playerStance: PlayerStance = PLAYER_SEQS;
+    // The player's power-up looks, from the same bake
+    private playerLooks = new Map<string, ActorModel>();
     private pendingPlayerKey?: string;
 
     constructor(
@@ -307,6 +335,16 @@ export class GameAssets {
                 seqIds: [thrall.idleSeq, thrall.walkSeq, thrall.attackSeq],
             });
         }
+        for (const { id, effect } of POWER_UPS) {
+            if (effect.kind === "rampage") {
+                requests.push({
+                    kind: "npc",
+                    key: "rampage:" + id,
+                    npcId: effect.npcId,
+                    seqIds: [effect.walkSeq],
+                });
+            }
+        }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
         for (const powerUp of POWER_UPS) {
@@ -315,12 +353,26 @@ export class GameAssets {
             } else {
                 objIds.add(powerUp.objId);
             }
+            if ("locId" in powerUp.effect) {
+                locIds.add(powerUp.effect.locId);
+            }
         }
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
+        }
+        // Fire flickers, so it's baked on its own animation
+        for (const { burns } of WEAPONS) {
+            if (burns) {
+                requests.push({
+                    kind: "loc",
+                    key: "loc:" + burns.locId,
+                    locId: burns.locId,
+                    animated: true,
+                });
+            }
         }
         return requests;
     }
@@ -396,6 +448,16 @@ export class GameAssets {
         return this.playerModel;
     }
 
+    // The stance the current player model was baked with. Only the seqs of the
+    // weapon in hand are in a bake, so this changes along with the model.
+    getPlayerStance(): PlayerStance {
+        return this.playerStance;
+    }
+
+    getPlayerLook(powerUpId: string): ActorModel | undefined {
+        return this.playerLooks.get("player:" + powerUpId);
+    }
+
     // Bakes a player model for this look unless it's already the current one.
     // The old model keeps drawing until the new one is ready.
     async setPlayerAppearance(appearance: PlayerAppearance): Promise<void> {
@@ -404,14 +466,20 @@ export class GameAssets {
             return;
         }
         this.pendingPlayerKey = key;
+        const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
+        // Walk goes first: a model's height comes from its first seq, and a
+        // stance that raises the weapon shouldn't lift the health bar with it
         const seqIds = [
-            PLAYER_SEQS.idle,
             PLAYER_SEQS.walk,
-            PLAYER_SEQS.run,
+            stance.idle,
+            stance.run,
             PLAYER_SEQS.death,
             ...getPlayerAttackSeqs(),
         ];
-        const bake = await this.bake([{ kind: "player", key: "player", appearance, seqIds }]);
+        const bake = await this.bake([
+            { kind: "player", key: "player", appearance, seqIds },
+            ...getPowerUpLookRequests(appearance),
+        ]);
         if (this.pendingPlayerKey !== key) {
             // A newer look was asked for while this one baked
             return;
@@ -419,8 +487,10 @@ export class GameAssets {
         this.pendingPlayerKey = undefined;
         const previous = this.playerModel;
         this.renderer.updateTextureArray(bake.loadedTextures);
-        const model = this.actors.addBake(bake).get("player");
-        this.playerModel = model;
+        const models = this.actors.addBake(bake);
+        this.playerModel = models.get("player");
+        this.playerLooks = models;
+        this.playerStance = stance;
         this.playerKey = key;
         if (previous) {
             this.actors.removePage(previous.page);

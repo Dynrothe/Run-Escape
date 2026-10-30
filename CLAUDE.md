@@ -34,6 +34,7 @@ go stale. Add anything that cost you time to work out.
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
 | React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
 | Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
+| How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |

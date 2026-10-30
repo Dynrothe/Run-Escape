@@ -41,9 +41,14 @@ Add it to `WEAPONS` in `weapons.ts`.
   a slash or sweep, and `special.aoe` hits all round.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after
   `WEAPONS`. Don't add those steps by hand.
+- `burns.locId` is scenery for the flames on burning ground. `getBaseRequests` bakes it with the
+  loc's own animation (`animated` on a loc request); other locs are baked static. Not every loc's
+  model moves with its animation: `scripts/cache/find-locs.ts` gives the seq, but check it flickers.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
+- If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
+  doesn't say which stance an item has, so the file says where to look it up.
 
 ## Passive
 
@@ -67,6 +72,21 @@ refunds come from `getUpgradeCost` and the save code. New ones don't need a save
 `items.ts`: gear goes in `CASKET_GEAR`, and utility items in `UTILITY`. `armoury.ts` says what each
 piece upgrades into, and `sets.ts` has the set bonuses. Run `scripts/cache/check-items.ts` afterwards.
 
+## Power-up
+
+Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts` and a case in
+`Sim.usePowerUp`. `objId` is the icon, and what lies on the ground unless `locId` is set.
+
+- `look` is an item held and two player animations for as long as it lasts. It's baked with the
+  player, and `slim-cache.ts` picks it up from there (`getPowerUpLookRequests`). Only player
+  skeleton animations work, and the item's worn model matters: a look needs both.
+- `sound`, `endSound`, `hitSound` and an effect's `locId` and `spotAnim` are collected for you, and
+  a `rampage` effect's NPC too. Anything else from the cache needs adding to `getGameSoundIds`,
+  `getSpotAnimIds` or `getBaseRequests`, or the deployed game won't have it.
+- Anything meant to stop all damage has to hold `player.invulnerable` above
+  `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
+  boss hits and poison through near the end.
+
 ## Enemy or boss
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
@@ -79,6 +99,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 
 - `arena` is in world tiles and is what collision is built for. `spawn` must be inside it.
 - Set `plane` for dungeons above the ground floor.
+- The game draws one plane, and hides roofs. If a map's roofs are plain scenery rather than the
+  roof loc types, or something floats, see `src/mapviewer/webgl/loc/UpperLevels.ts`.
 - Campaign maps unlock in the order of `MAPS`. Rewards come from `unlock` tasks on weapons,
   passives, items and adventurers.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
