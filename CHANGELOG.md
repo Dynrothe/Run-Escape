@@ -10,6 +10,13 @@ the version in the corner).
 - Mayhem: a new endless mode on the title screen, with any adventurer, every item, enemies and
   bosses from the whole game, 12 Modifiers and Mayhem events. Nothing from it is saved.
 
+## 0.17.2 - 2026-10-30
+
+### Fixed
+
+- Caskets no longer land inside Pest Control's portals or other spots you can't walk to, where you
+  couldn't pick them up. Power-ups are fixed the same way.
+
 ## 0.17.1 - 2026-10-30
 
 ### Changed

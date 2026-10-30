@@ -1,5 +1,5 @@
 import { OBJECT_INSET } from "./ArenaGrid";
-import { isCircleFree, moveCircle } from "./Collision";
+import { findFreeSpot, isCircleFree, moveCircle } from "./Collision";
 import { makeGrid } from "./testGrid";
 
 const R = 0.35;
@@ -163,5 +163,34 @@ describe("isCircleFree", () => {
         // Objects on (101, 201) and (102, 201): no gap where they meet
         const grid = makeGrid(["....", ".##.", "...."]);
         expect(isCircleFree(grid, 102, 201 + OBJECT_INSET - R + 0.05, R)).toBe(false);
+    });
+});
+
+describe("findFreeSpot", () => {
+    test("leaves a free spot alone", () => {
+        const grid = makeGrid(["...", ".#.", "..."]);
+        expect(findFreeSpot(grid, 100.6, 200.5, R)).toEqual({ x: 100.6, y: 200.5 });
+    });
+
+    test("out of something solid to the nearest tile centre", () => {
+        const grid = makeGrid(["...", ".#.", "..."]);
+        expect(findFreeSpot(grid, 101.9, 201.5, R)).toEqual({ x: 102.5, y: 201.5 });
+    });
+
+    test("stays on its own side of a wall", () => {
+        // Too close to the wall between the tiles, on the east side of it
+        const grid = makeGrid(["|.."]);
+        expect(findFreeSpot(grid, 101.1, 200.5, R)).toEqual({ x: 101.5, y: 200.5 });
+    });
+
+    test("skips tiles it's told to", () => {
+        const grid = makeGrid(["...", ".#.", "..."]);
+        const spot = findFreeSpot(grid, 101.9, 201.5, R, (tileX) => tileX !== 102);
+        expect(spot).toEqual({ x: 101.5, y: 200.5 });
+    });
+
+    test("stays put if there's nowhere to go", () => {
+        const grid = makeGrid(["###"]);
+        expect(findFreeSpot(grid, 101.5, 200.5, R)).toEqual({ x: 101.5, y: 200.5 });
     });
 });
