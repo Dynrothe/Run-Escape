@@ -41,6 +41,9 @@ Add it to `WEAPONS` in `weapons.ts`.
   a slash or sweep, and `special.aoe` hits all round.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after
   `WEAPONS`. Don't add those steps by hand.
+- `burns.locId` is scenery for the flames on burning ground. `getBaseRequests` bakes it with the
+  loc's own animation (`animated` on a loc request); other locs are baked static. Not every loc's
+  model moves with its animation: `scripts/cache/find-locs.ts` gives the seq, but check it flickers.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.

@@ -124,7 +124,7 @@ function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim, weapon.burns?.spotAnim);
+        add(weapon.chain?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -362,6 +362,17 @@ export class GameAssets {
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
+        }
+        // Fire flickers, so it's baked on its own animation
+        for (const { burns } of WEAPONS) {
+            if (burns) {
+                requests.push({
+                    kind: "loc",
+                    key: "loc:" + burns.locId,
+                    locId: burns.locId,
+                    animated: true,
+                });
+            }
         }
         return requests;
     }

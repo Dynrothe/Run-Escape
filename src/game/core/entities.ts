@@ -445,8 +445,9 @@ export type GroundFire = {
     damage: number;
     nextTick: number;
     endTick: number;
-    // Its flames' effects
-    effectUids: number[];
+    // Scenery for its flames, and where they stand
+    locId: number;
+    flames: { x: number; y: number }[];
 };
 
 // A hit still to land, a moment after the swing (the Dragon claws' later

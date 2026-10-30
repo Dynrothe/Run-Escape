@@ -220,7 +220,16 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                 }
                 case "loc": {
                     const locType = state.locTypeLoader.load(request.locId);
-                    const getModel: ModelSource = () => {
+                    const getModel: ModelSource = (seqId, frame) => {
+                        if (seqId !== -1) {
+                            return state.locModelLoader.getModelAnimated(
+                                locType,
+                                LocModelType.NORMAL,
+                                0,
+                                seqId,
+                                frame,
+                            );
+                        }
                         const model = state.locModelLoader.getModel(
                             locType,
                             LocModelType.NORMAL,
@@ -238,7 +247,8 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         }
                         return model;
                     };
-                    sets.push(bakeSet(state, sceneBuf, request.key, getModel, []));
+                    const seqIds = request.animated ? [locType.seqId] : [];
+                    sets.push(bakeSet(state, sceneBuf, request.key, getModel, seqIds));
                     break;
                 }
             }

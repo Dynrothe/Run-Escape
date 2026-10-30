@@ -527,9 +527,10 @@ export type WeaponDef = {
     boltProcs?: { chance: number; procs: BoltProcDef[] };
     // Auras: each pulse leaves the ground around the player burning for the
     // level's duration, hurting what stands in it every half second for this
-    // fraction of the level's damage (Toktz-mej-tal's obsidian), with
-    // spotAnim looping on it. radius: a fraction of the aura's radius.
-    burns?: { damage: number; radius: number; spotAnim: number };
+    // fraction of the level's damage (Toktz-mej-tal's obsidian), with flames
+    // of locId (scenery, on its own animation) on it. radius: a fraction of
+    // the aura's radius.
+    burns?: { damage: number; radius: number; locId: number };
     // At this level the player picks one of these weapons to become, at the
     // same level (the godsword's blade takes a hilt): the level up's next
     // choice is the pick, each shown as its hilt

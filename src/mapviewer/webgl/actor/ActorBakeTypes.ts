@@ -40,11 +40,13 @@ export type ObjBakeRequest = {
     count: number;
 };
 
-// A static scenery model (e.g. the dwarf multicannon)
+// A scenery model (e.g. the dwarf multicannon), static unless animated asks for
+// its own animation (e.g. a fire's flicker), which it then has as its one anim
 export type LocBakeRequest = {
     kind: "loc";
     key: string;
     locId: number;
+    animated?: boolean;
 };
 
 export type BakeRequest =

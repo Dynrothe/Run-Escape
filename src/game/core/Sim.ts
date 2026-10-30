@@ -269,10 +269,10 @@ const FOLLOW_UP_HIT_TICKS = 4;
 // Damage a level (CharacterDef bonus levelMight) grows for this many levels,
 // to level 41
 export const LEVEL_MIGHT_LEVELS = 40;
-// Burning ground hurts what's in it this often, and shows its flames on this
-// many spots across it
+// Burning ground hurts what's in it this often, and shows this many flames
+// across it
 const FIRE_INTERVAL = 25;
-const FIRE_SPOTS = 4;
+const FIRE_FLAMES = 7;
 // At most this many patches of burning ground at once; a pulse this close to
 // one (a share of its radius) keeps it burning rather than lighting another
 const MAX_FIRES = 3;
@@ -4372,10 +4372,9 @@ export class Sim {
     }
 
     // Leaves the ground around the player burning for the level's duration
-    // (Toktz-mej-tal), its flames on a few spots across it. A pulse where the
-    // ground's already burning keeps that fire going instead, and only a few
-    // burn at once (the oldest goes out), so a fast-pulsing staff doesn't
-    // fill the effect slots with flames and starve everything else.
+    // (Toktz-mej-tal), with flames across it. A pulse where the ground's
+    // already burning keeps that fire going instead, and only a few burn at
+    // once (the oldest goes out).
     private burnGround(
         burns: NonNullable<WeaponDef["burns"]>,
         level: WeaponDef["levels"][number],
@@ -4392,33 +4391,17 @@ export class Sim {
         if (same) {
             same.endTick = Math.max(same.endTick, endTick);
             same.damage = Math.max(same.damage, damage);
-            for (const effect of this.effects) {
-                if (same.effectUids.includes(effect.uid)) {
-                    effect.endTick = same.endTick;
-                }
-            }
             return;
         }
         if (this.fires.length >= MAX_FIRES) {
-            this.putOut(this.fires.shift()!);
+            this.fires.shift();
         }
-        const effectUids: number[] = [];
-        for (let i = 0; i < FIRE_SPOTS; i++) {
+        const flames: Vec2[] = [];
+        for (let i = 0; i < FIRE_FLAMES; i++) {
             // One in the middle, the rest around it
-            const angle = (i / (FIRE_SPOTS - 1)) * Math.PI * 2;
+            const angle = (i / (FIRE_FLAMES - 1)) * Math.PI * 2;
             const r = i === 0 ? 0 : radius * 0.6;
-            const effect = this.addEffect(
-                burns.spotAnim,
-                x + Math.cos(angle) * r,
-                y + Math.sin(angle) * r,
-                0,
-                ticks,
-                0,
-                true,
-            );
-            if (effect) {
-                effectUids.push(effect.uid);
-            }
+            flames.push({ x: x + Math.cos(angle) * r, y: y + Math.sin(angle) * r });
         }
         this.fires.push({
             uid: this.nextUid++,
@@ -4429,17 +4412,9 @@ export class Sim {
             damage,
             nextTick: this.tick + FIRE_INTERVAL,
             endTick,
-            effectUids,
+            locId: burns.locId,
+            flames,
         });
-    }
-
-    // A fire goes out early, its flames with it
-    private putOut(fire: GroundFire): void {
-        for (const effect of this.effects) {
-            if (fire.effectUids.includes(effect.uid)) {
-                effect.endTick = this.tick;
-            }
-        }
     }
 
     // Burning ground hurts whatever's standing in it every so often

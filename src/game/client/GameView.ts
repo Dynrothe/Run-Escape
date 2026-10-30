@@ -19,6 +19,7 @@ import {
     FairyRing,
     FallingRock,
     Glyph,
+    GroundFire,
     Pickup,
     Rampage,
     SimEvent,
@@ -47,6 +48,12 @@ const CANNON_SCALE = 0.75;
 // north in its model, so it's turned half a turn to aim where it shoots
 const CANNON_YAW_OFFSET = 1024;
 const PLAYER_HIT_TINT = 0xff9090;
+// Burning ground's flames are drawn this much bigger than a camp fire's, to
+// read as a patch of fire from the game's camera, and are this far out of step
+// and turned this far from each other (of 2048)
+const FLAME_SCALE = 2;
+const FLAME_STEP_TICKS = 7;
+const FLAME_TURN = 683;
 
 // Heights above the ground, in tiles
 const PROJECTILE_HEIGHT = 0.9;
@@ -399,6 +406,10 @@ export class GameView {
             this.drawRing(actors, sim, ring);
         }
 
+        for (const fire of sim.fires) {
+            this.drawFire(actors, sim, fire);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -471,6 +482,23 @@ export class GameView {
         const height = this.ground(sim, ring.x, ring.y);
         actors.draw(model, model.anims[0], 0, ring.x, height, ring.y, 0, {
             scale: ring.scale * Math.min(1, 0.4 + open / RING_OPEN_TICKS),
+        });
+    }
+
+    // Each flame turned and a little out of step with the next, so they don't
+    // flicker as one
+    private drawFire(actors: ActorRenderer, sim: Sim, fire: GroundFire): void {
+        const model = this.assets.get("loc:" + fire.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= fire.endTick) {
+            return;
+        }
+        const anim = model.anims[0];
+        fire.flames.forEach(({ x, y }, i) => {
+            const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
+                scale: FLAME_SCALE,
+            });
         });
     }
 

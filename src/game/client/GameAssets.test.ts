@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { EquipSlot, createAppearance } from "../../rs/model/player/PlayerModelLoader";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
+import { getWeapon } from "../content/weapons";
 import { GameAssets, getPowerUpLookRequests } from "./GameAssets";
 import { getGameSoundIds } from "./GameSounds";
 
@@ -41,6 +42,17 @@ describe("power-ups in the cache", () => {
                 expect(keys).toContain("rampage:" + id);
             }
         }
+    });
+
+    test("Toktz-mej-tal's fire is baked with its animation", () => {
+        const { burns } = getWeapon("toktz_mej_tal");
+        const request = GameAssets.getBaseRequests().find((r) => r.key === "loc:" + burns!.locId);
+        expect(request).toEqual({
+            kind: "loc",
+            key: "loc:" + burns!.locId,
+            locId: burns!.locId,
+            animated: true,
+        });
     });
 
     test("their sounds are all loaded", () => {

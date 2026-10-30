@@ -3484,7 +3484,11 @@ describe("the new weapons", () => {
         const events = attackOnce(sim, 2);
         // The pulse, then the fire every half second while it burns
         expect(hitsOn(events, goblin).length).toBeGreaterThanOrEqual(4);
-        expect(sim.effects.some((e) => e.spotAnim === 1347 && e.loop)).toBe(true);
+        expect(sim.fires.length).toBeGreaterThan(0);
+        expect(sim.fires[0].locId).toBe(getWeapon("toktz_mej_tal").burns!.locId);
+        expect(sim.fires[0].flames.length).toBeGreaterThan(4);
+        // It takes up no effect slots, so it can't crowd out anything else
+        expect(sim.effects.filter((e) => e.loop)).toEqual([]);
         // Then it goes out
         for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
             sim.player.invulnerable = 100;
