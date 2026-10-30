@@ -81,6 +81,7 @@ MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    
 ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 MAYHEM=1 MAP=desert npx tsx scripts/game/simulate-run.ts wizard 3   # Mayhem, random Modifiers
+BOT=skilled npx tsx scripts/game/simulate-run.ts wizard 3           # a bot that kites
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real

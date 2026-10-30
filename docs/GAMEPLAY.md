@@ -347,14 +347,16 @@ from it goes in your save: no coins, quests, unlocks, gear, Collection log entri
 - Any adventurer, unlocked or not, on a random campaign map. Every weapon, passive and item can
   turn up, with 6 weapon slots and 6 passive slots for everyone. Skills and the Armoury stay at
   home.
-- It never ends: big crowds come from the start, and enemies get tougher with time until you fall.
-  Bones are worth half as much here, so power comes from Modifiers as much as levels. Caskets,
-  power-ups and food are more common, and everyone heals a little over time.
-- Enemies come from the whole game, weakest first, in a new mix every 45 seconds, with few that
-  shoot. A boss from anywhere turns up 45 seconds in and then every minute, waiting a little if the
-  last one's still up. From four minutes they come in twos, and from eight in threes. An elite comes
-  every 20 seconds. What only works on its own map is left
-  out: anything that never moves, like Zulrah and Pest Control's portals, and the Castle Wars flag
+- It never ends: enemies come in a stream that keeps growing, so a strong build clears the screen
+  and a weak one is swamped. They get tougher and faster with time until you fall. Everyone has
+  double hitpoints and heals a little over time, and bones are worth half as much, so power comes
+  from Modifiers as much as levels. Caskets, power-ups and food are more common.
+- Enemies come from the whole game, weakest first, in a new mix every 45 seconds. Those that shoot
+  stay away for the first three minutes and are few after that, and those that explode come later
+  than their hitpoints would suggest. A boss from anywhere turns up a minute in and then every
+  minute, waiting a little if the last one's still up. From six minutes they come in twos, and from
+  ten in threes. An elite comes every 20 seconds. What only works on its own map is left out:
+  anything that never moves, like Zulrah and Pest Control's portals, and the Castle Wars flag
   carrier, who only runs away. Armies don't fight each other here.
 - **Modifiers** are picked from three cards, Silver, Gold or Prismatic, with one reroll for each
   pick: one before the first enemy, and one for each boss killed, up to 12 in all. They bend the

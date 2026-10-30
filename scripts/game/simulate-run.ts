@@ -11,6 +11,7 @@
 //   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
 //   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   MAYHEM=1 MAP=desert npx tsx scripts/game/simulate-run.ts wizard 3  # Mayhem, Modifiers at random
+//   BOT=skilled npx tsx scripts/game/simulate-run.ts     # a bot that kites, and picks the rarest Modifier
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
@@ -25,6 +26,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { isCircleFree } from "../../src/game/core/world/Collision";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
 
@@ -37,6 +39,7 @@ const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 const map = getMap(process.env.MAP ?? "lumbridge");
 const mayhem = process.env.MAYHEM === "1";
 const endless = process.env.ENDLESS === "1" || mayhem;
+const skilled = process.env.BOT === "skilled";
 // The weapons, passives and items brought in by map tasks: all of them, or none
 const unlockedItems = process.env.UNLOCKS === "none" ? new Set<string>() : undefined;
 // The shop's permanent upgrades: none, or all of them, as a player has by the
@@ -128,6 +131,69 @@ function useItems(sim: Sim): void {
 
 // Steers away from nearby enemies (closer counts more) and towards bones when
 // nothing is close; slides along walls by trying a few nearby directions.
+// Closer to a good player than botMove: tries each way it could go, and goes
+// where the crowd will be thinnest, away from walls that would trap it, with
+// bones as a tiebreak. It kites, which botMove barely does.
+const SKILLED_DIRECTIONS = Array.from({ length: 16 }, (_, i) => {
+    const angle = (i / 16) * Math.PI * 2;
+    return { x: Math.cos(angle), y: Math.sin(angle) };
+});
+
+function skilledMove(sim: Sim, last: { x: number; y: number }): { x: number; y: number } {
+    const player = sim.player;
+    const near = sim.enemies.filter(
+        (e) => !e.dead && Math.hypot(e.x - player.x, e.y - player.y) < 14,
+    );
+    const shots = sim.enemyProjectiles.filter(
+        (p) => Math.hypot(p.x - player.x, p.y - player.y) < 7,
+    );
+    let pickup: { x: number; y: number } | undefined;
+    let pickupDist = 12;
+    for (const candidate of sim.pickups) {
+        const d = Math.hypot(candidate.x - player.x, candidate.y - player.y);
+        if (d < pickupDist) {
+            pickupDist = d;
+            pickup = candidate;
+        }
+    }
+    let best = { x: 0, y: 0 };
+    let bestScore = Infinity;
+    for (const dir of SKILLED_DIRECTIONS) {
+        const x1 = player.x + dir.x * 1.5;
+        const y1 = player.y + dir.y * 1.5;
+        const x2 = player.x + dir.x * 3.5;
+        const y2 = player.y + dir.y * 3.5;
+        if (!isCircleFree(grid, x1, y1, player.radius)) {
+            continue;
+        }
+        let score = isCircleFree(grid, x2, y2, player.radius) ? 0 : 2;
+        for (const enemy of near) {
+            const weight = enemy.boss ? 6 : 1;
+            score += weight / Math.max((enemy.x - x1) ** 2 + (enemy.y - y1) ** 2, 0.2);
+            score += (0.5 * weight) / Math.max((enemy.x - x2) ** 2 + (enemy.y - y2) ** 2, 0.2);
+        }
+        for (const shot of shots) {
+            score += 3 / Math.max((shot.x - x1) ** 2 + (shot.y - y1) ** 2, 0.2);
+        }
+        if (pickup) {
+            score -=
+                (0.4 * (dir.x * (pickup.x - player.x) + dir.y * (pickup.y - player.y))) /
+                pickupDist;
+        }
+        // Keeps going the way it's going, rather than dithering
+        score -= 0.15 * (dir.x * last.x + dir.y * last.y);
+        // Away from the arena's edge
+        score +=
+            0.002 *
+            Math.hypot(x1 - (ARENA.baseX + ARENA.sizeX / 2), y1 - (ARENA.baseY + ARENA.sizeY / 2));
+        if (score < bestScore) {
+            bestScore = score;
+            best = dir;
+        }
+    }
+    return best;
+}
+
 function botMove(sim: Sim): { x: number; y: number } {
     const player = sim.player;
     let ax = 0;
@@ -217,7 +283,14 @@ function runOnce(characterId: string, seed: number) {
     const startTime = performance.now();
     while (sim.tick < maxTicks && !sim.runOver) {
         if (sim.state === "modifier") {
-            sim.mayhem!.choose(sim.rng.int(sim.mayhem!.choices.length));
+            const choices = sim.mayhem!.choices;
+            const order = ["silver", "gold", "prismatic"];
+            const rarest = choices.reduce(
+                (best, card, i) =>
+                    order.indexOf(card.tier) > order.indexOf(choices[best].tier) ? i : best,
+                0,
+            );
+            sim.mayhem!.choose(skilled ? rarest : sim.rng.int(choices.length));
             continue;
         }
         if (sim.state === "levelUp") {
@@ -245,7 +318,7 @@ function runOnce(characterId: string, seed: number) {
             useItems(sim);
         }
         if (sim.tick % 5 === 0) {
-            move = botMove(sim);
+            move = skilled ? skilledMove(sim, move) : botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
             if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
                 stuckTicks += 5;
@@ -281,7 +354,7 @@ function runOnce(characterId: string, seed: number) {
                     `hp ${String(Math.max(0, Math.round(sim.player.hp))).padStart(3)}/${sim.player.maxHp}  ` +
                     `kills ${String(sim.kills).padStart(5)}  alive ${String(alive).padStart(3)}  ` +
                     `coins ${String(sim.coins).padStart(4)}  ` +
-                    `${mayhem ? `mods ${sim.mayhem!.modifiers.length}  ` : ""}` +
+                    `${mayhem ? `mods ${sim.mayhem!.modifiers.length}  taken ${sim.damageTaken}  ` : ""}` +
                     `${weapons} | ${passives} | ${gear}`,
             );
         }

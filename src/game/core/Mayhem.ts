@@ -12,6 +12,7 @@ import {
     MAYHEM_BOSSES,
     MAYHEM_ENEMIES,
     MAYHEM_EVENTS,
+    MAYHEM_HITPOINTS,
     MAYHEM_MODIFIERS,
     MAYHEM_REGEN,
     MAYHEM_STAT_CAPS,
@@ -26,6 +27,7 @@ import {
     getTierWeights,
     mayhemBossHp,
     mayhemDifficulty,
+    mayhemEnemySpeed,
     mayhemWave,
 } from "../content/mayhem";
 import { canLevelPassive, getPassive } from "../content/passives";
@@ -71,6 +73,7 @@ const BLAST_SPOTANIM = 559;
 // How many of a shooter come for each of anything else, as a crowd of them
 // kills from out of reach
 const SHOOTER_SHARE = 0.25;
+const SHOOTERS_FROM = 3 * 60;
 
 const GOBLIN_RAID_COUNT = 40;
 const GIANTS_COUNT = 10;
@@ -240,7 +243,7 @@ export class MayhemRun {
     }
 
     get enemySpeed(): number {
-        return this.eventIs("speedrun") ? 1.5 : 1;
+        return mayhemEnemySpeed(this.sim.seconds) * (this.eventIs("speedrun") ? 1.5 : 1);
     }
 
     get evolvesAtAnyLevel(): boolean {
@@ -257,6 +260,7 @@ export class MayhemRun {
 
     // Stats from Modifiers and what's running now
     addStats(stats: Stats): void {
+        stats.maxHp += MAYHEM_HITPOINTS;
         stats.regen += MAYHEM_REGEN;
         for (const def of this.modifiers) {
             for (const [key, value] of Object.entries(def.stats ?? {})) {
@@ -441,8 +445,10 @@ export class MayhemRun {
     private pickRoster(seconds: number): void {
         const rng = this.sim.rng;
         const tiers = getTierWeights(seconds);
-        // Shooters wear you down from afar, so a mix has few of them
-        const weight = (def: EnemyDef) => tiers[getEnemyTier(def)] * (def.shot ? 0.2 : 1);
+        // Shooters reach you however well you move, so a mix has few of them,
+        // and none until you've had time to build up
+        const shooters = seconds < SHOOTERS_FROM ? 0 : 0.2;
+        const weight = (def: EnemyDef) => tiers[getEnemyTier(def)] * (def.shot ? shooters : 1);
         const pool = MAYHEM_ENEMIES.filter((def) => weight(def) > 0);
         const roster: WaveDef["enemies"] = [];
         for (let i = 0; i < ROSTER_SIZE && pool.length > 0; i++) {

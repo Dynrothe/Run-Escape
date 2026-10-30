@@ -119,7 +119,8 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything
                                                         bought, MAYHEM=1 for Mayhem with Modifiers
-                                                        picked at random)
+                                                        picked at random, BOT=skilled for a bot
+                                                        that kites)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 ```
 

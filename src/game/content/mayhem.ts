@@ -15,22 +15,23 @@ export const MAYHEM_XP = 0.5;
 export const MAYHEM_CASKETS = 1.5;
 export const MAYHEM_POWER_UPS = 2;
 export const MAYHEM_FOOD = 2;
-// Everyone heals this many hitpoints a minute: the crowds never let up, and
-// with no shop there's no armour to take the edge off
-export const MAYHEM_REGEN = 45;
+// Everyone has this much more hitpoints, and heals this many a minute, as
+// there's no shop: hits count from the start, on a pool that can take a few
+export const MAYHEM_HITPOINTS = 1;
+export const MAYHEM_REGEN = 15;
 // Slots everyone has here, as the shop's don't count
 export const MAYHEM_WEAPON_SLOTS = 2;
 export const MAYHEM_PASSIVE_SLOTS = 2;
 
 // When the first boss comes, and how long between them
-export const FIRST_BOSS_AT = 45;
+export const FIRST_BOSS_AT = 60;
 export const BOSS_EVERY = 60;
 // One that's due waits this long for those still up to be killed
 export const BOSS_PATIENCE = 20;
 // From these many seconds, bosses come in twos, then threes, each with this
 // fraction of the hitpoints a boss alone would have
-export const BOSS_PAIRS_AT = 4 * 60;
-export const BOSS_TRIOS_AT = 8 * 60;
+export const BOSS_PAIRS_AT = 6 * 60;
+export const BOSS_TRIOS_AT = 10 * 60;
 export const BOSS_GROUP_HP = 0.8;
 // An elite turns up this often
 export const ELITE_EVERY = 20;
@@ -41,27 +42,36 @@ export const ROSTER_SIZE = 8;
 export const FIRST_EVENT_AT = 30;
 export const EVENT_EVERY = 60;
 
-// Bigger waves as time goes on, up to what the game can take
+// A stream of enemies that grows with time, so a build that can keep up clears
+// the screen and one that can't is swamped. minAlive only stops the screen
+// emptying: refilling a high floor would make the stream as fast as you kill.
 export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDef {
     const minutes = seconds / 60;
     return {
         start: 0,
         enemies,
-        spawnRate: Math.min(6 + minutes * 1, 14),
-        minAlive: Math.min(Math.round(50 + minutes * 12), 260),
-        maxAlive: Math.min(Math.round(100 + minutes * 16), 380),
+        spawnRate: Math.min(1.5 + minutes * 2.5, 30),
+        minAlive: Math.min(Math.round(12 + minutes * 10), 120),
+        maxAlive: Math.min(Math.round(40 + minutes * 45), 380),
     };
 }
 
 // What enemies' hitpoints and damage are multiplied by, in place of a map's
-// difficulty
+// difficulty. Damage starts around what enemies are made to do, so a hit is
+// always worth dodging, rather than nothing at first and everything later.
 export function mayhemDifficulty(seconds: number): { hp: number; damage: number } {
     const minutes = seconds / 60;
     const cubed = minutes * minutes * minutes;
     return {
-        hp: 1 + minutes * 0.3 + minutes * minutes * 0.1 + cubed * 0.004,
-        damage: 0.25 + minutes * 0.02 + minutes * minutes * 0.02 + cubed * 0.0008,
+        hp: 1 + minutes * 0.3 + minutes * minutes * 0.1 + cubed * 0.008,
+        damage: 0.6 + minutes * 0.05 + minutes * minutes * 0.012 + cubed * 0.0015,
     };
+}
+
+// Enemies speed up, so walking away stops being safe: the player moves about
+// half as fast again as most of them to begin with
+export function mayhemEnemySpeed(seconds: number): number {
+    return Math.min(1 + (seconds / 60) * 0.03, 1.6);
 }
 
 // Bosses' hits, as they're made for players with a shop's worth of hitpoints
@@ -158,16 +168,19 @@ export const MAYHEM_BOSSES: EnemyDef[] = ENEMIES.filter(
 // are all made on the same scale)
 const TIER_HP = [10, 20, 36, 56];
 export const TOP_TIER = TIER_HP.length;
+const EXPLODER_TIER = 2;
 
 export function getEnemyTier(def: EnemyDef): number {
-    const tier = TIER_HP.findIndex((hp) => def.hp <= hp);
-    return tier === -1 ? TOP_TIER : tier;
+    const index = TIER_HP.findIndex((hp) => def.hp <= hp);
+    const tier = index === -1 ? TOP_TIER : index;
+    // Weak, but they can take a third of your hitpoints with them
+    return def.explodes ? Math.max(tier, EXPLODER_TIER) : tier;
 }
 
 // How much of each tier comes at this point in a run: it starts with the
-// weakest, and has moved on to the top ones by the tenth minute
+// weakest, and has moved on to the top ones by the twelfth minute
 export function getTierWeights(seconds: number): number[] {
-    const reached = Math.min(seconds / 150, TOP_TIER);
+    const reached = Math.min(seconds / 180, TOP_TIER);
     return Array.from({ length: TOP_TIER + 1 }, (_, tier) =>
         Math.max(0, 1 - Math.abs(tier - reached) / 1.5),
     );

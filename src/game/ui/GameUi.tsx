@@ -566,9 +566,9 @@ function MayhemScreen({ ui, client }: ScreenProps): JSX.Element {
                 <ul className="ui-mayhem-rules">
                     <li>Any adventurer, and every weapon, passive and item</li>
                     <li>A random map, with enemies and bosses from the whole game</li>
-                    <li>Big crowds from the start, with room for 6 weapons and 6 passives</li>
+                    <li>A crowd that keeps growing, with room for 6 weapons and 6 passives</li>
                     <li>12 Modifiers: pick one now, then one for each boss you kill</li>
-                    <li>A boss every minute, in twos from 4 minutes and threes from 8</li>
+                    <li>A boss every minute, in twos from 6 minutes and threes from 10</li>
                     <li>A Mayhem event every minute</li>
                     <li>It only gets harder, and skills and the Armoury don't count</li>
                 </ul>
