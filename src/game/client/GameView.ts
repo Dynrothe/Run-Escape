@@ -451,7 +451,8 @@ export class GameView {
             anim = attack;
             frame = anim.getFrame(tick - player.attackStart, false);
         } else {
-            anim = model.getAnim(player.moving ? PLAYER_SEQS.run : PLAYER_SEQS.idle);
+            const stance = this.assets.getPlayerStance();
+            anim = model.getAnim(player.moving ? stance.run : stance.idle);
             frame = anim.getFrame(tick - player.moveStart);
         }
         const x = lerp(player.prevX, player.x, alpha);

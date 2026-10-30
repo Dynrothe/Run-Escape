@@ -22,6 +22,7 @@ import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getPassive } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { PlayerStance, getPlayerStance } from "../content/stances";
 import { EnemyDef, EnemyOutfit, GearSlot } from "../content/types";
 import { WEAPONS } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
@@ -236,6 +237,7 @@ export class GameAssets {
 
     private playerKey?: string;
     private playerModel?: ActorModel;
+    private playerStance: PlayerStance = PLAYER_SEQS;
     private pendingPlayerKey?: string;
 
     constructor(
@@ -396,6 +398,12 @@ export class GameAssets {
         return this.playerModel;
     }
 
+    // The stance the current player model was baked with. Only the seqs of the
+    // weapon in hand are in a bake, so this changes along with the model.
+    getPlayerStance(): PlayerStance {
+        return this.playerStance;
+    }
+
     // Bakes a player model for this look unless it's already the current one.
     // The old model keeps drawing until the new one is ready.
     async setPlayerAppearance(appearance: PlayerAppearance): Promise<void> {
@@ -404,10 +412,13 @@ export class GameAssets {
             return;
         }
         this.pendingPlayerKey = key;
+        const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
+        // Walk goes first: a model's height comes from its first seq, and a
+        // stance that raises the weapon shouldn't lift the health bar with it
         const seqIds = [
-            PLAYER_SEQS.idle,
             PLAYER_SEQS.walk,
-            PLAYER_SEQS.run,
+            stance.idle,
+            stance.run,
             PLAYER_SEQS.death,
             ...getPlayerAttackSeqs(),
         ];
@@ -421,6 +432,7 @@ export class GameAssets {
         this.renderer.updateTextureArray(bake.loadedTextures);
         const model = this.actors.addBake(bake).get("player");
         this.playerModel = model;
+        this.playerStance = stance;
         this.playerKey = key;
         if (previous) {
             this.actors.removePage(previous.page);

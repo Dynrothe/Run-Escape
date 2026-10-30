@@ -35,6 +35,7 @@ import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
+import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { WEAPONS } from "../../src/game/content/weapons";
 import { LoadedCache } from "../../src/mapviewer/Caches";
 import { ActorBakeLoader } from "../../src/mapviewer/webgl/actor/ActorBakeLoader";
@@ -229,6 +230,8 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
     const playerRequests: BakeRequest[] = [
         // Every body kit
         playerRequest("bare", createAppearance(), playerSeqs),
+        // Only the look holding the weapon plays these, so one bake reads them
+        playerRequest("stances", createAppearance(), getPlayerStanceSeqs()),
         ...CHARACTERS.map((character) =>
             playerRequest(character.id, getCharacterAppearance(character.id), playerSeqs),
         ),

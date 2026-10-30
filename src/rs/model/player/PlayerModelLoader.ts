@@ -213,6 +213,11 @@ export class PlayerModelLoader {
 
         const parts: ModelData[] = [];
         for (let slot = 0; slot < EQUIP_SLOT_COUNT; slot++) {
+            // A two-handed weapon leaves no hand for a shield. OSRS takes the
+            // shield off when you wield one, but a look here can have both.
+            if (slot === EquipSlot.SHIELD && hidden.has(slot)) {
+                continue;
+            }
             const objType = worn[slot];
             let part: ModelData | undefined;
             if (objType) {
