@@ -429,6 +429,8 @@ export class Sim {
     private bloodFuryRollTick = 0;
     // When the last power-up dropped; the longer ago, the likelier the next
     private lastPowerUpTick = 0;
+    // What dropped last, which doesn't drop twice in a row
+    private lastPowerUpId?: string;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
     // While the sled lasts: how much faster the player goes, and until when
@@ -4881,13 +4883,16 @@ export class Sim {
         const minutes = seconds / 60;
         const chance = POWER_UP_CHANCE * minutes * minutes * (1 + this.stats.luck);
         if (this.rng.chance(chance)) {
-            const index = this.rng.weightedIndex(POWER_UPS.map((p) => p.weight));
+            const index = this.rng.weightedIndex(
+                POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            );
             this.dropPowerUp(POWER_UPS[index].id, x, y);
         }
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
         this.lastPowerUpTick = this.tick;
+        this.lastPowerUpId = id;
         const spot = this.walkableSpot(x, y);
         this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id });
     }

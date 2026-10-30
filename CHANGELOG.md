@@ -10,6 +10,10 @@ the version in the corner).
 - New power-up: the Sled. Ride for 8 seconds at more than twice the speed, shoving the crowd aside
   with nothing able to hurt you.
 
+### Changed
+
+- The same power-up no longer drops twice in a row.
+
 ## 0.17.2 - 2026-10-30
 
 ### Fixed

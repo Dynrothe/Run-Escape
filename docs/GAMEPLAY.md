@@ -177,7 +177,8 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. Their damage keeps up with the enemies' hitpoints.
+  after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
+  drops twice in a row.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.

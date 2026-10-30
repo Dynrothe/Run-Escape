@@ -12,7 +12,7 @@ import {
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
-import { POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -366,6 +366,23 @@ describe("power-ups", () => {
         sim.tick += 3 * 60 * TICKS_PER_SECOND;
         killGoblins(300);
         expect(dropped()).toBe(1);
+    });
+
+    test("the same one never drops twice in a row", () => {
+        const sim = createSim();
+        sim.weapons = [];
+        const seen: string[] = [];
+        // A kill with the odds of a drop nearly certain, over and over
+        sim.stats.luck = 1e6;
+        for (let i = 0; i < 300; i++) {
+            sim.tick += 60 * TICKS_PER_SECOND;
+            sim.damageEnemy(goblin(sim, 1040.5, 1036.5, 1), 1e9, 0, 0, 0);
+            const pickup = sim.pickups.filter((p) => p.kind === "powerUp").pop();
+            seen.push(pickup!.powerUp!);
+            sim.pickups.length = 0;
+        }
+        expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
+        expect(new Set(seen).size).toBe(POWER_UPS.length);
     });
 
     test("are walked over to use them, and don't wait around", () => {
