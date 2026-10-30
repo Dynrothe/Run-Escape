@@ -186,6 +186,9 @@ version and how to run it.
     - **Magnet**: every drop on the ground flies to you, caskets and power-ups included.
     - **Giant stopwatch**: everything but bosses stands still for 8 seconds, even what turns up
       meanwhile.
+    - **Sled**: you ride at 2.2 times your speed for 8 seconds and nothing can hurt you, poison and
+      bosses included. It shoves enemies aside without hurting them, your weapons keep firing, and
+      it frees you if you're frozen. Effect duration doesn't stretch it.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Each map's monsters are from its part of the world:

@@ -429,7 +429,11 @@ export class GameView {
     }
 
     private drawPlayer(actors: ActorRenderer, sim: Sim, alpha: number): void {
-        const model = this.assets.getPlayer();
+        // A power-up's look replaces the player's usual model and everything it does
+        const powerUp = sim.wornPowerUp;
+        const look = powerUp?.look;
+        const lookModel = powerUp && this.assets.getPlayerLook(powerUp.id);
+        const model = lookModel ?? this.assets.getPlayer();
         if (!model) {
             return;
         }
@@ -438,7 +442,10 @@ export class GameView {
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
-        if (player.deathTick !== -1) {
+        if (look && lookModel) {
+            anim = model.getAnim(player.moving ? look.moveSeq : look.idleSeq);
+            frame = anim.getFrame(tick - player.moveStart);
+        } else if (player.deathTick !== -1) {
             // The death animation holds its last frame (lying down)
             anim = model.getAnim(PLAYER_SEQS.death);
             frame = anim.getFrame(Math.min(tick - player.deathTick, MAX_DEATH_ANIM_TICKS), false);

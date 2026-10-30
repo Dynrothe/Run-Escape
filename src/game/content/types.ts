@@ -868,7 +868,14 @@ export type PowerUpEffect =
     | { kind: "magnet" }
     // Everything that isn't a boss stands still, and so does whatever turns up
     // meanwhile
-    | { kind: "freeze"; seconds: number };
+    | { kind: "freeze"; seconds: number }
+    // Rides off at this many times the speed with nothing able to hurt them,
+    // for a set time: Effect duration doesn't stretch it
+    | { kind: "sled"; seconds: number; speed: number };
+
+// What the player has in hand and how they stand while a power-up lasts. Baked
+// with the player (GameAssets.getPowerUpLookRequests), so it's on at once.
+export type PowerUpLook = { objId: number; idleSeq: number; moveSeq: number };
 
 // Dropped now and then by enemies, picked up by walking over it and used there
 // and then
@@ -886,6 +893,10 @@ export type PowerUpDef = {
     flash?: string;
     // Cache sound effect when it's picked up (-1 for none)
     sound: number;
+    // Cache sound effect when it wears off
+    endSound?: number;
+    // Worn while it lasts
+    look?: PowerUpLook;
     effect: PowerUpEffect;
 };
 

@@ -385,6 +385,144 @@ describe("power-ups", () => {
         expect(used).toMatchObject({ id: "stopwatch", message: "Time stands still!" });
     });
 
+    describe("the sled", () => {
+        const SECONDS = 8;
+        const TICKS = SECONDS * TICKS_PER_SECOND;
+
+        function ride(sim: Sim): void {
+            sim.usePowerUp(getPowerUp("sled"));
+        }
+
+        test("is more than twice as fast, then back to normal", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const distance = (ticks: number) => {
+                const start = sim.player.x;
+                for (let i = 0; i < ticks; i++) {
+                    sim.step(1, 0);
+                }
+                return sim.player.x - start;
+            };
+            const walking = distance(20);
+            ride(sim);
+            expect(distance(20) / walking).toBeCloseTo(2.2);
+            runFor(sim, SECONDS, "still");
+            expect(distance(20) / walking).toBeCloseTo(1);
+        });
+
+        test("lasts 8 seconds whatever Effect duration says", () => {
+            const sim = createSim();
+            sim.stats.duration = 2;
+            ride(sim);
+            expect(sim.powerUps[0].endTick - sim.tick).toBe(TICKS);
+        });
+
+        test("nothing hurts the player: crowds, poison, bosses, any of it", () => {
+            const sim = createSim("warrior");
+            sim.weapons = [];
+            const { player } = sim;
+            player.poisonDamage = 3;
+            player.poisonEnd = sim.tick + 20 * TICKS_PER_SECOND;
+            for (let i = 0; i < 40; i++) {
+                const angle = (i / 40) * Math.PI * 2;
+                goblin(sim, player.x + Math.cos(angle), player.y + Math.sin(angle));
+            }
+            sim.spawnEnemy(getEnemy("kalphite_queen"), "boss", { x: player.x + 2, y: player.y });
+            ride(sim);
+            const hp = player.hp;
+            for (let i = 1; i < TICKS; i++) {
+                sim.step(0, 0);
+                // Bosses and poison stop at more than a hit's worth, and more
+                // than 30 would blink the player the whole ride
+                expect(player.invulnerable).toBeGreaterThan(12);
+                expect(player.invulnerable).toBeLessThanOrEqual(30);
+            }
+            expect(player.hp).toBe(hp);
+            expect(sim.takeEvents().some((e) => e.type === "playerHit")).toBe(false);
+        });
+
+        test("doesn't cut a ring of life's longer protection short", () => {
+            const sim = createSim();
+            sim.player.invulnerable = TICKS * 2;
+            ride(sim);
+            sim.step(0, 0);
+            expect(sim.player.invulnerable).toBe(TICKS * 2 - 1);
+        });
+
+        test("the player can be hurt again once it's over", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            ride(sim);
+            runFor(sim, SECONDS, "still");
+            const hp = sim.player.hp;
+            goblin(sim, sim.player.x + 1, sim.player.y);
+            runFor(sim, 3, "still");
+            expect(sim.player.hp).toBeLessThan(hp);
+        });
+
+        test("frees a frozen player", () => {
+            const sim = createSim();
+            sim.player.frozen = 500;
+            ride(sim);
+            expect(sim.player.frozen).toBe(0);
+            const x = sim.player.x;
+            sim.step(1, 0);
+            expect(sim.player.x).toBeGreaterThan(x);
+        });
+
+        test("shoves the crowd aside without hurting it", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            // Just off the line it rides, so it goes to one side
+            const inTheWay = goblin(sim, player.x + 4, player.y + 0.2);
+            ride(sim);
+            for (let i = 0; i < 80; i++) {
+                sim.step(1, 0);
+            }
+            expect(player.x).toBeGreaterThan(inTheWay.x);
+            expect(inTheWay.hp).toBe(inTheWay.maxHp);
+        });
+
+        test("wearing it lasts as long as the ride, with one sound at the end", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            ride(sim);
+            expect(sim.wornPowerUp?.id).toBe("sled");
+            sim.takeEvents();
+            for (let i = 1; i < TICKS; i++) {
+                sim.step(0, 0);
+            }
+            expect(sim.wornPowerUp?.id).toBe("sled");
+            expect(sim.takeEvents().some((e) => e.type === "powerUpEnded")).toBe(false);
+            sim.step(0, 0);
+            expect(sim.wornPowerUp).toBeUndefined();
+            expect(sim.takeEvents().filter((e) => e.type === "powerUpEnded")).toEqual([
+                { type: "powerUpEnded", id: "sled" },
+            ]);
+        });
+
+        test("comes off when the player dies or the run ends, and ends silently", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            ride(sim);
+            sim.takeEvents();
+            // Only a run's end can get past it, like the final boss falling
+            (sim as unknown as { playerDied(): void }).playerDied();
+            expect(sim.runOver).toBe(true);
+            expect(sim.wornPowerUp).toBeUndefined();
+            runFor(sim, SECONDS + 1, "still");
+            sim.step(0, 0);
+            expect(sim.takeEvents().some((e) => e.type === "powerUpEnded")).toBe(false);
+
+            const won = createSim();
+            ride(won);
+            won.state = "victory";
+            expect(won.wornPowerUp).toBeUndefined();
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];

@@ -74,6 +74,21 @@ export const POWER_UPS: PowerUpDef[] = [
         sound: 168,
         effect: { kind: "freeze", seconds: 8 },
     },
+    {
+        id: "sled",
+        name: "Sled",
+        description: "Ride for 8 seconds, far faster and with nothing able to hurt you.",
+        // The waxed sled from Troll Romance, which both sits on the ground and
+        // is ridden
+        objId: 4084,
+        weight: 2,
+        // sled_start, sled_stop
+        sound: 1868,
+        endSound: 1869,
+        // trollromance_toboggan_ready, trollromance_toboggan_moving
+        look: { objId: 4084, idleSeq: 1461, moveSeq: 1462 },
+        effect: { kind: "sled", seconds: 8, speed: 2.2 },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They

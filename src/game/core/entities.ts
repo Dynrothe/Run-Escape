@@ -444,6 +444,7 @@ export type SimEvent =
     | { type: "cannonFire"; x: number; y: number }
     // A power-up was picked up and used; message says what it did
     | { type: "powerUp"; id: string; message: string; x: number; y: number }
+    | { type: "powerUpEnded"; id: string }
     | { type: "thrallAttack"; sound: number; x: number; y: number }
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }

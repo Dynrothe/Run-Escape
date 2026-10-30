@@ -195,6 +195,27 @@ export function getRunAppearance(sim: Sim): PlayerAppearance {
     return appearance;
 }
 
+// The player's look in each power-up that has one, baked alongside them. The
+// shield comes off by hand: wearing an item only hides body parts.
+export function getPowerUpLookRequests(appearance: PlayerAppearance): BakeRequest[] {
+    return POWER_UPS.flatMap(({ id, look }): BakeRequest[] => {
+        if (!look) {
+            return [];
+        }
+        const equipment = appearance.equipment.slice();
+        equipment[EquipSlot.WEAPON] = look.objId;
+        equipment[EquipSlot.SHIELD] = -1;
+        return [
+            {
+                kind: "player",
+                key: "player:" + id,
+                appearance: { ...appearance, equipment },
+                seqIds: [look.idleSeq, look.moveSeq],
+            },
+        ];
+    });
+}
+
 // The baked model for an enemy: its NPC, or the outfit it wears (the fun
 // maps' players, one model per outfit)
 export function getEnemyModelKey(def: EnemyDef, variant: number): string {
@@ -236,6 +257,8 @@ export class GameAssets {
 
     private playerKey?: string;
     private playerModel?: ActorModel;
+    // The player's power-up looks, from the same bake
+    private playerLooks = new Map<string, ActorModel>();
     private pendingPlayerKey?: string;
 
     constructor(
@@ -396,6 +419,10 @@ export class GameAssets {
         return this.playerModel;
     }
 
+    getPlayerLook(powerUpId: string): ActorModel | undefined {
+        return this.playerLooks.get("player:" + powerUpId);
+    }
+
     // Bakes a player model for this look unless it's already the current one.
     // The old model keeps drawing until the new one is ready.
     async setPlayerAppearance(appearance: PlayerAppearance): Promise<void> {
@@ -411,7 +438,10 @@ export class GameAssets {
             PLAYER_SEQS.death,
             ...getPlayerAttackSeqs(),
         ];
-        const bake = await this.bake([{ kind: "player", key: "player", appearance, seqIds }]);
+        const bake = await this.bake([
+            { kind: "player", key: "player", appearance, seqIds },
+            ...getPowerUpLookRequests(appearance),
+        ]);
         if (this.pendingPlayerKey !== key) {
             // A newer look was asked for while this one baked
             return;
@@ -419,8 +449,9 @@ export class GameAssets {
         this.pendingPlayerKey = undefined;
         const previous = this.playerModel;
         this.renderer.updateTextureArray(bake.loadedTextures);
-        const model = this.actors.addBake(bake).get("player");
-        this.playerModel = model;
+        const models = this.actors.addBake(bake);
+        this.playerModel = models.get("player");
+        this.playerLooks = models;
         this.playerKey = key;
         if (previous) {
             this.actors.removePage(previous.page);

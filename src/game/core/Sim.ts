@@ -431,6 +431,9 @@ export class Sim {
     private lastPowerUpTick = 0;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
+    // While the sled lasts: how much faster the player goes, and until when
+    private sledEndTick = 0;
+    private sledSpeed = 1;
     // Fun maps: run second the next random boss is due, the last one picked
     // (not picked twice running), and when the next chat lines are due
     private nextFunBossSeconds = Infinity;
@@ -1155,6 +1158,11 @@ export class Sim {
             this.debuffs = this.debuffs.filter((d) => d.endTick > tick);
             this.updateStats();
         }
+        for (const active of this.powerUps) {
+            if (active.endTick <= tick) {
+                this.events.push({ type: "powerUpEnded", id: active.id });
+            }
+        }
         this.powerUps = this.powerUps.filter((p) => p.endTick > tick);
     }
 
@@ -1168,7 +1176,8 @@ export class Sim {
         }
         const moving = !frozen && (moveX !== 0 || moveY !== 0);
         if (moving) {
-            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed);
+            const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
+            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
             moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
             const len = Math.hypot(moveX, moveY);
             player.facingX = moveX / len;
@@ -1181,6 +1190,11 @@ export class Sim {
         }
         if (player.invulnerable > 0) {
             player.invulnerable--;
+        }
+        // Held above what a hit gives, or boss hits and poison get through as
+        // it runs down (see reviving), and below the > 30 that makes them blink
+        if (this.tick < this.sledEndTick) {
+            player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS + 1);
         }
         if (player.flash > 0) {
             player.flash--;
@@ -1218,7 +1232,7 @@ export class Sim {
         }
     }
 
-    // Just brought back by a ring of life, so nothing can hurt them
+    // Just brought back by a ring of life, or on a sled, so nothing can hurt them
     private get reviving(): boolean {
         return this.player.invulnerable > HIT_INVULNERABLE_TICKS;
     }
@@ -4931,6 +4945,14 @@ export class Sim {
                 }
                 message = "Time stands still!";
                 break;
+            case "sled":
+                endTick = this.tick + effect.seconds * TICKS_PER_SECOND;
+                this.sledEndTick = endTick;
+                this.sledSpeed = effect.speed;
+                // Whatever had them stuck, they're off
+                player.frozen = 0;
+                message = "You jump on the sled!";
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
@@ -5075,6 +5097,14 @@ export class Sim {
 
     get runOver(): boolean {
         return this.state === "dead" || this.state === "victory";
+    }
+
+    // The power-up whose look the player has on; it's off when the run ends
+    get wornPowerUp(): PowerUpDef | undefined {
+        if (this.runOver) {
+            return undefined;
+        }
+        return this.powerUps.map((p) => getPowerUp(p.id)).find((p) => p.look);
     }
 
     // Until this round's final boss

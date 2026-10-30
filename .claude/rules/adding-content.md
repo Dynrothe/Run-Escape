@@ -67,6 +67,21 @@ refunds come from `getUpgradeCost` and the save code. New ones don't need a save
 `items.ts`: gear goes in `CASKET_GEAR`, and utility items in `UTILITY`. `armoury.ts` says what each
 piece upgrades into, and `sets.ts` has the set bonuses. Run `scripts/cache/check-items.ts` afterwards.
 
+## Power-up
+
+Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts` and a case in
+`Sim.usePowerUp`. `objId` is the icon, and what lies on the ground unless `locId` is set.
+
+- `look` is an item held and two player animations for as long as it lasts. It's baked with the
+  player, and `slim-cache.ts` picks it up from there (`getPowerUpLookRequests`). Only player
+  skeleton animations work, and the item's worn model matters: a look needs both.
+- `sound` and `endSound` are collected for you. Other sounds need adding to `getGameSoundIds`, and
+  spot animations and locs to `getSpotAnimIds` and `getBaseRequests`, or the deployed game won't
+  have them.
+- Anything meant to stop all damage has to hold `player.invulnerable` above
+  `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
+  boss hits and poison through near the end.
+
 ## Enemy or boss
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
