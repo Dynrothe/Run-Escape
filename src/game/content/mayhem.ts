@@ -1,0 +1,474 @@
+import { ENEMIES } from "./enemies";
+import { ALL_MAPS, MAPS } from "./maps";
+import { EnemyDef, MapDef, StatKey, Stats, WaveDef, emptyStats } from "./types";
+
+// Mayhem: a run of its own, outside the campaign and the fun maps. Everything
+// is open, the whole game's enemies and bosses come at you on a random map, and
+// Modifiers bend how you play. It never ends: difficulty climbs with time until
+// you fall, and nothing from it goes in the save.
+
+// Modifiers in a run: one to start with, and one each for the first bosses
+export const MAYHEM_MODIFIERS = 6;
+// Bones are worth this much more, and caskets and power-ups this much likelier
+export const MAYHEM_XP = 3;
+export const MAYHEM_CASKETS = 4;
+export const MAYHEM_POWER_UPS = 3;
+export const MAYHEM_FOOD = 3;
+// Everyone heals this many hitpoints a minute: the crowds never let up, and
+// with no shop there's no armour to take the edge off
+export const MAYHEM_REGEN = 30;
+// Slots everyone has here, as the shop's don't count
+export const MAYHEM_WEAPON_SLOTS = 2;
+export const MAYHEM_PASSIVE_SLOTS = 2;
+
+// When the first boss comes, and how long between them
+export const FIRST_BOSS_AT = 120;
+export const BOSS_EVERY = 120;
+// One that's due waits this long for those still up to be killed
+export const BOSS_PATIENCE = 45;
+// From these many seconds, bosses come in twos, then threes, each with this
+// fraction of the hitpoints a boss alone would have
+export const BOSS_PAIRS_AT = 9 * 60;
+export const BOSS_TRIOS_AT = 16 * 60;
+export const BOSS_GROUP_HP = 0.8;
+// An elite turns up this often
+export const ELITE_EVERY = 40;
+// The enemies on the field change this often, for a new mix
+export const ROSTER_EVERY = 45;
+export const ROSTER_SIZE = 8;
+// Seconds between Mayhem events, the first one this far in
+export const FIRST_EVENT_AT = 60;
+export const EVENT_EVERY = 90;
+
+// Bigger waves as time goes on, up to what the game can take
+export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDef {
+    const minutes = seconds / 60;
+    return {
+        start: 0,
+        enemies,
+        spawnRate: Math.min(1.2 + minutes * 0.45, 9),
+        minAlive: Math.min(Math.round(8 + minutes * 9), 240),
+        maxAlive: Math.min(Math.round(30 + minutes * 18), 360),
+    };
+}
+
+// What enemies' hitpoints and damage are multiplied by, in place of a map's
+// difficulty
+export function mayhemDifficulty(seconds: number): { hp: number; damage: number } {
+    const minutes = seconds / 60;
+    return {
+        hp: 0.8 + minutes * 0.25 + minutes * minutes * 0.05,
+        damage: 0.3 + minutes * 0.05 + minutes * minutes * 0.012,
+    };
+}
+
+// Bosses' hits, as they're made for players with a shop's worth of hitpoints
+export const MAYHEM_BOSS_DAMAGE = 0.5;
+
+// A boss's hitpoints: the same for every boss, as they're made for maps of very
+// different strengths
+export function mayhemBossHp(seconds: number): number {
+    const minutes = seconds / 60;
+    return Math.round(400 + minutes * 200 + minutes * minutes * 40);
+}
+
+// What a stat stops at in a run, whatever's been stacked on it: more does
+// nothing or breaks the game (see endless.ts). Weapon speed has its own cap.
+export const MAYHEM_STAT_CAPS: Partial<Record<StatKey, number>> = {
+    amount: 4,
+    luck: 2,
+    moveSpeed: 1,
+    duration: 2,
+    greed: 3,
+    healChance: 0.5,
+};
+
+export function getMayhemMetaStats(): Stats {
+    return {
+        ...emptyStats(),
+        weaponSlots: MAYHEM_WEAPON_SLOTS,
+        passiveSlots: MAYHEM_PASSIVE_SLOTS,
+    };
+}
+
+export function pickMayhemMap(random: () => number): MapDef {
+    return MAPS[Math.floor(random() * MAPS.length)];
+}
+
+// ---- Who can turn up ----
+
+const WAVE_ENEMY_IDS: ReadonlySet<string> = new Set(
+    ALL_MAPS.flatMap((map) => map.waves.flatMap((wave) => wave.enemies.map((e) => e.id))),
+);
+
+// The same boss as another one, there only for how its own map uses it
+const DUPLICATE_BOSSES: ReadonlySet<string> = new Set(["jaltok_jad_finale"]);
+
+// Why an enemy can't come in Mayhem, when it can't: these all need their own
+// map or something else in the fight to make sense
+export function getMayhemExclusion(def: EnemyDef): string | undefined {
+    if (def.stationary) {
+        return "never moves, so it only works where its map puts it";
+    }
+    if (def.spawnAt) {
+        return "turns up at spots on its own map";
+    }
+    if (def.flees) {
+        return "runs from you, so it needs its own map's objective";
+    }
+    if (DUPLICATE_BOSSES.has(def.id)) {
+        return "the same boss as another one";
+    }
+    if (def.boss && !def.spawnMessage) {
+        return "a later form of another boss, which it turns into";
+    }
+    if (!def.boss && !WAVE_ENEMY_IDS.has(def.id)) {
+        return "only turns up with something else, like a boss's summons";
+    }
+    return undefined;
+}
+
+// Enemies of different factions fight each other (the God Wars Dungeon's
+// armies). Nothing here has a side, so they all just come for the player.
+const SIDELESS = new Map<string, EnemyDef>();
+
+export function withoutFaction(def: EnemyDef): EnemyDef {
+    if (def.faction === undefined) {
+        return def;
+    }
+    let sideless = SIDELESS.get(def.id);
+    if (!sideless) {
+        sideless = { ...def, faction: undefined };
+        SIDELESS.set(def.id, sideless);
+    }
+    return sideless;
+}
+
+export const MAYHEM_ENEMIES: EnemyDef[] = ENEMIES.filter(
+    (def) => !def.boss && !getMayhemExclusion(def),
+);
+
+export const MAYHEM_BOSSES: EnemyDef[] = ENEMIES.filter(
+    (def) => def.boss && !getMayhemExclusion(def),
+);
+
+// How tough an enemy is, from 0 to 4 (going by hitpoints, as maps' enemies
+// are all made on the same scale)
+const TIER_HP = [10, 20, 36, 56];
+export const TOP_TIER = TIER_HP.length;
+
+export function getEnemyTier(def: EnemyDef): number {
+    const tier = TIER_HP.findIndex((hp) => def.hp <= hp);
+    return tier === -1 ? TOP_TIER : tier;
+}
+
+// How much of each tier comes at this point in a run: it starts with the
+// weakest, and has moved on to the top ones by the tenth minute
+export function getTierWeights(seconds: number): number[] {
+    const reached = Math.min(seconds / 150, TOP_TIER);
+    return Array.from({ length: TOP_TIER + 1 }, (_, tier) =>
+        Math.max(0, 1 - Math.abs(tier - reached) / 1.5),
+    );
+}
+
+// ---- Modifiers ----
+
+export type ModifierTier = "silver" | "gold" | "prismatic";
+
+export const MODIFIER_TIERS: Record<ModifierTier, { name: string; color: string }> = {
+    silver: { name: "Silver", color: "#c9d1d9" },
+    gold: { name: "Gold", color: "#ffcb45" },
+    prismatic: { name: "Prismatic", color: "#ee82ff" },
+};
+
+export type ModifierDef = {
+    id: string;
+    name: string;
+    tier: ModifierTier;
+    text: string;
+    iconObjId: number;
+    // Added to the player's stats for good. What else one does is in
+    // MayhemRun, by its id.
+    stats?: Partial<Stats>;
+};
+
+export const MODIFIERS: ModifierDef[] = [
+    {
+        id: "dharoks_set",
+        name: "Dharok's set",
+        tier: "silver",
+        text: "The lower your hitpoints, the harder you hit: up to double near death.",
+        iconObjId: 4716,
+    },
+    {
+        id: "dragon_pickaxe",
+        name: "Dragon pickaxe",
+        tier: "silver",
+        text: "Bones, coins and food fly to you from three times as far.",
+        iconObjId: 11920,
+        stats: { magnet: 2 },
+    },
+    {
+        id: "prayer_flick",
+        name: "Prayer flick",
+        tier: "silver",
+        text: "Every 10 seconds, the next hit you take does nothing.",
+        iconObjId: 2434,
+    },
+    {
+        id: "stamina_potion",
+        name: "Stamina potion",
+        tier: "silver",
+        text: "Move 20% faster, and take 20% less damage while moving.",
+        iconObjId: 12625,
+        stats: { moveSpeed: 0.2 },
+    },
+    {
+        id: "guthans_set",
+        name: "Guthan's set",
+        tier: "silver",
+        text: "Every 25th kill heals a tenth of your hitpoints.",
+        iconObjId: 4724,
+    },
+    {
+        id: "torags_set",
+        name: "Torag's set",
+        tier: "silver",
+        text: "Take 25% less damage, but move 15% slower.",
+        iconObjId: 4745,
+        stats: { moveSpeed: -0.15 },
+    },
+    {
+        id: "veracs_set",
+        name: "Verac's set",
+        tier: "silver",
+        text: "One hit in four does double damage.",
+        iconObjId: 4753,
+    },
+    {
+        id: "bonecrusher",
+        name: "Bonecrusher",
+        tier: "silver",
+        text: "Bones are worth 50% more.",
+        iconObjId: 13116,
+        stats: { growth: 0.5 },
+    },
+    {
+        id: "super_antifire",
+        name: "Super antifire",
+        tier: "silver",
+        text: "Bosses do 40% less damage to you.",
+        iconObjId: 21978,
+    },
+    {
+        id: "rune_pouch",
+        name: "Rune pouch",
+        tier: "silver",
+        text: "Effects last 50% longer, and weapons reach 20% further.",
+        iconObjId: 12791,
+        stats: { duration: 0.5, area: 0.2 },
+    },
+    {
+        id: "dwarven_rock_cake",
+        name: "Dwarven rock cake",
+        tier: "silver",
+        text: "Double your hitpoints, but do 20% less damage.",
+        iconObjId: 7509,
+        stats: { maxHp: 1, might: -0.2 },
+    },
+    {
+        id: "karils_bolt_rack",
+        name: "Karil's bolt rack",
+        tier: "gold",
+        text: "Weapons fire one more projectile, but do 20% less damage.",
+        iconObjId: 4732,
+        stats: { amount: 1, might: -0.2 },
+    },
+    {
+        id: "ancient_magicks",
+        name: "Ancient magicks",
+        tier: "gold",
+        text: "One kill in six freezes what's around it for 2 seconds.",
+        iconObjId: 4675,
+    },
+    {
+        id: "bandos_fury",
+        name: "Bandos' fury",
+        tier: "gold",
+        text: "Melee hits burst, doing 40% of their damage to what's next to them.",
+        iconObjId: 11832,
+    },
+    {
+        id: "slayer_helmet",
+        name: "Slayer helmet",
+        tier: "gold",
+        text: "Do 50% more damage to bosses and elites.",
+        iconObjId: 11864,
+        stats: { bossMight: 0.5 },
+    },
+    {
+        id: "vengeance",
+        name: "Vengeance",
+        tier: "gold",
+        text: "Hits you take blast what's around you for a third of its hitpoints.",
+        iconObjId: 2550,
+    },
+    {
+        id: "saradomins_wrath",
+        name: "Saradomin's wrath",
+        tier: "gold",
+        text: "Every 3 seconds, lightning hits the 3 nearest enemies for a fifth of their hitpoints.",
+        iconObjId: 11838,
+    },
+    {
+        id: "dwarf_cannon",
+        name: "Dwarf multicannon",
+        tier: "gold",
+        text: "Sets up a cannon where you stand every 45 seconds.",
+        iconObjId: 6,
+    },
+    {
+        id: "book_of_the_dead",
+        name: "Book of the dead",
+        tier: "gold",
+        text: "Raises a thrall to fight for you every 40 seconds.",
+        iconObjId: 25818,
+    },
+    {
+        id: "overload",
+        name: "Overload",
+        tier: "gold",
+        text: "Every 30 seconds, lose a tenth of your hitpoints for 10 seconds of +60% damage.",
+        iconObjId: 11730,
+    },
+    {
+        id: "blood_fury",
+        name: "Amulet of blood fury",
+        tier: "gold",
+        text: "Hits have a 15% chance to heal you.",
+        iconObjId: 24780,
+        stats: { healChance: 0.15 },
+    },
+    {
+        id: "pk_skull",
+        name: "PK skull",
+        tier: "gold",
+        text: "Do 40% more damage, and take 40% more.",
+        iconObjId: 9013,
+        stats: { might: 0.4 },
+    },
+    {
+        id: "lure",
+        name: "Lure",
+        tier: "gold",
+        text: "Half as many enemies again come at you, and bones are worth 50% more.",
+        iconObjId: 2883,
+        stats: { growth: 0.5 },
+    },
+    {
+        id: "phoenix_necklace",
+        name: "Phoenix necklace",
+        tier: "gold",
+        text: "Once a minute, a hit that would kill you leaves you on half your hitpoints.",
+        iconObjId: 11090,
+    },
+    {
+        id: "max_cape",
+        name: "Max cape",
+        tier: "prismatic",
+        text: "Every weapon and passive you own now goes up a level.",
+        iconObjId: 13280,
+    },
+    {
+        id: "double_agent",
+        name: "Double agent",
+        tier: "prismatic",
+        text: "Every weapon fires twice, but enemies hit 50% harder.",
+        iconObjId: 12954,
+    },
+    {
+        id: "blood_money",
+        name: "Blood money",
+        tier: "prismatic",
+        text: "Coins drop more often and heal you, but you no longer regenerate.",
+        iconObjId: 995,
+    },
+    {
+        id: "power_surge",
+        name: "Power surge",
+        tier: "prismatic",
+        text: "Every 30 seconds, weapons fire much faster for 8 seconds.",
+        iconObjId: 5698,
+    },
+    {
+        id: "evolution_chamber",
+        name: "Evolution chamber",
+        tier: "prismatic",
+        text: "Weapons can evolve at any level: all they need is their passive.",
+        iconObjId: 1712,
+    },
+    {
+        id: "infernal_cape",
+        name: "Infernal cape",
+        tier: "prismatic",
+        text: "Everything you kill explodes, taking a quarter of the hitpoints of what's next to it.",
+        iconObjId: 21295,
+    },
+    {
+        id: "glass_cannon",
+        name: "Berserker ring",
+        tier: "prismatic",
+        text: "Double your damage, but halve your hitpoints.",
+        iconObjId: 6737,
+        stats: { might: 1, maxHp: -0.5 },
+    },
+    {
+        id: "clue_hunter",
+        name: "Clue hunter",
+        tier: "prismatic",
+        text: "A casket drops next to you every 40 seconds.",
+        iconObjId: 405,
+    },
+    {
+        id: "time_stands_still",
+        name: "Time stands still",
+        tier: "prismatic",
+        text: "Every 40 seconds, enemies freeze for a few seconds.",
+        iconObjId: 2575,
+    },
+    {
+        id: "ring_of_life",
+        name: "Ring of life",
+        tier: "prismatic",
+        text: "Get back up twice when you die, but lose 30% of your hitpoints.",
+        iconObjId: 2570,
+        stats: { maxHp: -0.3 },
+    },
+];
+
+export const MODIFIER_BY_ID: Map<string, ModifierDef> = new Map(MODIFIERS.map((m) => [m.id, m]));
+
+// How likely a card is to be Prismatic and Gold on each pick of a run (the
+// rest are Silver): the later the pick, the wilder it gets
+export function getTierChances(pick: number): { prismatic: number; gold: number } {
+    return { prismatic: Math.min(0.08 + pick * 0.05, 0.35), gold: 0.4 };
+}
+
+// ---- Mayhem events ----
+
+export type MayhemEventDef = {
+    id: string;
+    name: string;
+    text: string;
+    seconds: number;
+};
+
+export const MAYHEM_EVENTS: MayhemEventDef[] = [
+    { id: "goblin_raid", name: "Goblin raid", text: "Goblins everywhere!", seconds: 15 },
+    { id: "double_bones", name: "Double bones", text: "Bones are worth double.", seconds: 25 },
+    { id: "rain_of_caskets", name: "Rain of caskets", text: "Caskets from above!", seconds: 15 },
+    { id: "speedrun", name: "Speedrun", text: "Everything's 50% faster, you too.", seconds: 20 },
+    { id: "giant_mode", name: "Giant mode", text: "Huge, slow and worth more.", seconds: 25 },
+    { id: "boss_rush", name: "Boss rush", text: "The next boss is here early!", seconds: 15 },
+    { id: "power_hour", name: "Power hour", text: "Everything hits twice as hard.", seconds: 15 },
+];

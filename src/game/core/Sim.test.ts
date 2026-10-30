@@ -12,6 +12,16 @@ import {
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
+import {
+    MAYHEM_BOSSES,
+    MAYHEM_MODIFIERS,
+    MAYHEM_STAT_CAPS,
+    MODIFIERS,
+    MODIFIER_BY_ID,
+    getMayhemMetaStats,
+    mayhemBossHp,
+    mayhemDifficulty,
+} from "../content/mayhem";
 import { POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
@@ -3346,5 +3356,224 @@ describe("extra slots from the shop", () => {
         expect(sim.passives.length).toBe(5);
         const offers = Array.from({ length: 50 }, () => sim["roll"]()).flat();
         expect(offers.some((choice) => choice.kind === "newPassive")).toBe(true);
+    });
+});
+
+describe("Mayhem", () => {
+    function mayhemSim(seed = 1, characterId = "warrior"): Sim {
+        return new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            characterId,
+            metaStats: getMayhemMetaStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            mayhem: true,
+        });
+    }
+
+    function pickFirst(sim: Sim): void {
+        while (sim.state === "modifier") {
+            sim.mayhem!.choose(0);
+        }
+    }
+
+    function withModifier(id: string): Sim {
+        const sim = mayhemSim();
+        sim.mayhem!.choices = [MODIFIER_BY_ID.get(id)!];
+        sim.mayhem!.choose(0);
+        return sim;
+    }
+
+    // Plays on, picking whatever comes up, for this long
+    function play(sim: Sim, seconds: number): void {
+        const ticks = seconds * TICKS_PER_SECOND;
+        for (let i = 0; i < ticks && !sim.runOver; i++) {
+            pickFirst(sim);
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            } else if (sim.state === "chest") {
+                sim.resolveChest("alch");
+            }
+            sim.step(0, 0);
+        }
+    }
+
+    test("opens on a Modifier, and nothing moves until it's picked", () => {
+        const sim = mayhemSim();
+        expect(sim.state).toBe("modifier");
+        expect(sim.mayhem!.choices.length).toBe(3);
+        sim.step(0, 0);
+        expect(sim.tick).toBe(0);
+        sim.mayhem!.choose(1);
+        expect(sim.state).toBe("playing");
+        expect(sim.mayhem!.modifiers.length).toBe(1);
+    });
+
+    test("a pick can be rerolled once", () => {
+        const sim = mayhemSim();
+        expect(sim.reroll()).toBe(true);
+        expect(sim.reroll()).toBe(false);
+    });
+
+    test("is endless, with the slots of its own and no unlocks", () => {
+        const sim = mayhemSim();
+        expect(sim.endless).toBe(true);
+        expect(sim.maxWeapons).toBe(6);
+        expect(sim.maxPassives).toBe(6);
+        expect(sim.unlockedItems).toBeUndefined();
+    });
+
+    test("the first 5 bosses killed give a Modifier, and no more after that", () => {
+        const sim = mayhemSim();
+        pickFirst(sim);
+        for (let i = 0; i < 7; i++) {
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss")!;
+            sim.damageEnemy(boss, 1e9, 0, boss.x, boss.y);
+            sim.step(0, 0);
+            pickFirst(sim);
+        }
+        expect(sim.mayhem!.modifiers.length).toBe(MAYHEM_MODIFIERS);
+    });
+
+    test("bosses keep coming, and it never ends in a win", () => {
+        const sim = mayhemSim();
+        sim.player.hp = sim.player.maxHp = 1e9;
+        play(sim, 300);
+        expect(sim.state).not.toBe("victory");
+        expect(sim.enemies.some((e) => e.boss)).toBe(true);
+        expect(sim.mayhem!.bossIn).toBeGreaterThanOrEqual(0);
+    });
+
+    test("difficulty keeps climbing", () => {
+        for (let minutes = 1; minutes < 60; minutes++) {
+            const now = mayhemDifficulty(minutes * 60);
+            const before = mayhemDifficulty((minutes - 1) * 60);
+            expect(now.hp).toBeGreaterThan(before.hp);
+            expect(now.damage).toBeGreaterThan(before.damage);
+            expect(mayhemBossHp(minutes * 60)).toBeGreaterThan(mayhemBossHp((minutes - 1) * 60));
+        }
+    });
+
+    test("every boss it can bring fights, wherever it turns up", () => {
+        for (const def of MAYHEM_BOSSES) {
+            const sim = mayhemSim();
+            pickFirst(sim);
+            sim.enemies = [];
+            const boss = sim.spawnEnemy(def, "boss")!;
+            expect(boss.def.faction).toBeUndefined();
+            sim.player.hp = sim.player.maxHp = 1e9;
+            for (let i = 0; i < 12 * TICKS_PER_SECOND; i++) {
+                sim.state = "playing";
+                sim.step(0, 0);
+            }
+            // Some only call in help
+            expect(sim.damageTaken + sim.enemies.length - 1, def.id).toBeGreaterThan(0);
+        }
+    }, 60000);
+
+    test("its enemies have no sides: they all come for the player", () => {
+        const sim = mayhemSim();
+        const ork = sim.spawnEnemy(getEnemy("gwd_ork"), "normal")!;
+        expect(ork.def.faction).toBeUndefined();
+        expect(getEnemy("gwd_ork").faction).toBeDefined();
+    });
+
+    test("stats that would break the game stop at their cap", () => {
+        const sim = mayhemSim();
+        sim.passives.push({ id: "piety", level: 1, value: 0 });
+        sim.metaStats.amount = 50;
+        sim.metaStats.luck = 50;
+        sim.updateStats();
+        expect(sim.stats.amount).toBe(MAYHEM_STAT_CAPS.amount);
+        expect(sim.stats.luck).toBe(MAYHEM_STAT_CAPS.luck);
+    });
+
+    test("Dharok's set hits harder the lower your hitpoints", () => {
+        const sim = withModifier("dharoks_set");
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal")!;
+        expect(sim.mayhem!.hitScale(enemy)).toBe(1);
+        sim.player.hp = 0;
+        expect(sim.mayhem!.hitScale(enemy)).toBe(2);
+    });
+
+    test("Prayer flick takes a hit now and then", () => {
+        const sim = withModifier("prayer_flick");
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(0);
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(10);
+    });
+
+    test("the Phoenix necklace saves you once a minute", () => {
+        const sim = withModifier("phoenix_necklace");
+        sim.player.hp = 1;
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(0);
+        expect(sim.player.hp).toBe(Math.ceil(sim.player.maxHp / 2));
+        sim.player.hp = 1;
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(10);
+    });
+
+    test("the Infernal cape's explosions take what's next to them", () => {
+        const sim = withModifier("infernal_cape");
+        const { x, y } = sim.player;
+        const dead = sim.spawnEnemy(getEnemy("goblin"), "normal", { x: x + 5, y })!;
+        const next = sim.spawnEnemy(getEnemy("goblin"), "normal", { x: x + 6, y })!;
+        next.hp = next.maxHp = 1000;
+        sim.step(0, 0);
+        sim.damageEnemy(dead, 1e9, 0, dead.x, dead.y);
+        sim.step(0, 0);
+        expect(next.hp).toBeLessThan(1000);
+    });
+
+    test("Double agent fires every weapon twice", () => {
+        const sim = withModifier("double_agent");
+        sim.weapons = [];
+        sim.addWeapon("shortbow");
+        sim.weapons[0].cooldown = 0;
+        sim.spawnEnemy(getEnemy("goblin"), "normal", { x: sim.player.x + 4, y: sim.player.y });
+        sim.step(0, 0);
+        expect(sim.projectiles.length).toBe(2);
+    });
+
+    test("the Evolution chamber evolves at any level", () => {
+        const sim = withModifier("evolution_chamber");
+        sim.weapons = [];
+        sim.addWeapon("scimitar");
+        sim.passives.push({ id: "piety", level: 1, value: 0.05 });
+        expect(sim["roll"]().some((choice) => choice.kind === "evolve")).toBe(true);
+    });
+
+    test("the Max cape levels everything you own", () => {
+        const sim = mayhemSim();
+        sim.mayhem!.choose(0);
+        sim.apply({ kind: "newPassive", passiveId: "piety", quality: "common" });
+        const weaponLevel = sim.weapons[0].level;
+        sim.mayhem!.choices = [MODIFIER_BY_ID.get("max_cape")!];
+        sim.mayhem!.choose(0);
+        expect(sim.weapons[0].level).toBe(weaponLevel + 1);
+        expect(sim.passives[0].level).toBe(2);
+    });
+
+    test("every Modifier and every event runs without trouble", () => {
+        const sim = mayhemSim(7);
+        pickFirst(sim);
+        sim.player.hp = sim.player.maxHp = 1e9;
+        for (const def of MODIFIERS) {
+            sim.mayhem!.choices = [def];
+            sim.state = "modifier";
+            sim.mayhem!.choose(0);
+        }
+        play(sim, 240);
+        expect(sim.state).not.toBe("dead");
+    }, 60000);
+
+    test("a normal run has no Mayhem in it", () => {
+        const sim = createSim();
+        expect(sim.mayhem).toBeUndefined();
+        expect(sim.state).toBe("playing");
+        expect(sim.getResult().mayhem).toBe(false);
+        expect(sim.timeLeftForBoss).toBe(RUN_LENGTH);
+        const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal")!;
+        expect(goblin.hp).toBe(getEnemy("goblin").hp);
+        expect(goblin.xp).toBe(getEnemy("goblin").xp);
     });
 });

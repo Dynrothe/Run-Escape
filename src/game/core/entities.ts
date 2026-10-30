@@ -349,6 +349,7 @@ export type DamageSource =
     | `item:${string}`
     | `powerUp:${string}`
     | "recoil"
+    | "modifier"
     | "other";
 
 // A projectile's weapon, or else the power-up that fired it: a cannon's
@@ -482,6 +483,7 @@ export type SimEvent =
     // Something the player should know about, on screen for a moment (a
     // shield dropping, a boss's big attack coming)
     | { type: "notice"; message: string }
+    | { type: "mayhemEvent"; name: string; text: string }
     | { type: "evolved"; weaponId: string }
     | { type: "revive" }
     | { type: "casketDropped"; tier: CasketTier; x: number; y: number }

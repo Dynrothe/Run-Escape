@@ -10,10 +10,12 @@
 //   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
 //   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
 //   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
+//   MAYHEM=1 MAP=desert npx tsx scripts/game/simulate-run.ts wizard 3  # Mayhem, Modifiers at random
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
 import { getArenaRegion, getMap } from "../../src/game/content/maps";
+import { getMayhemMetaStats } from "../../src/game/content/mayhem";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
@@ -33,7 +35,8 @@ const seeds = parseInt(seedsArg ?? "1");
 const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 
 const map = getMap(process.env.MAP ?? "lumbridge");
-const endless = process.env.ENDLESS === "1";
+const mayhem = process.env.MAYHEM === "1";
+const endless = process.env.ENDLESS === "1" || mayhem;
 // The weapons, passives and items brought in by map tasks: all of them, or none
 const unlockedItems = process.env.UNLOCKS === "none" ? new Set<string>() : undefined;
 // The shop's permanent upgrades: none, or all of them, as a player has by the
@@ -183,14 +186,15 @@ function runOnce(characterId: string, seed: number) {
     const sim = new Sim({
         grid,
         characterId,
-        metaStats,
+        metaStats: mayhem ? getMayhemMetaStats() : metaStats,
         seed,
         mapId: map.id,
         spawnX: map.spawn.x,
         spawnY: map.spawn.y,
-        unlockedItems,
+        unlockedItems: mayhem ? undefined : unlockedItems,
         endless,
-        armoury,
+        armoury: mayhem ? undefined : armoury,
+        mayhem,
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -212,6 +216,10 @@ function runOnce(characterId: string, seed: number) {
     const recentHits: { tick: number; event: SimEvent }[] = [];
     const startTime = performance.now();
     while (sim.tick < maxTicks && !sim.runOver) {
+        if (sim.state === "modifier") {
+            sim.mayhem!.choose(sim.rng.int(sim.mayhem!.choices.length));
+            continue;
+        }
         if (sim.state === "levelUp") {
             const ranked = sim.choices
                 .map((choice, index) => ({ choice, index }))
@@ -307,7 +315,7 @@ function runOnce(characterId: string, seed: number) {
     console.log(
         `${characterId} seed ${seed}: ${result.victory ? "VICTORY" : sim.state === "dead" ? "died" : "timed out"} at ` +
             `${Math.floor(result.seconds / 60)}:${String(Math.floor(result.seconds % 60)).padStart(2, "0")}, ` +
-            (endless ? `round ${result.round}, ` : "") +
+            (endless && !mayhem ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
             `${powerUps} power-ups ` +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,

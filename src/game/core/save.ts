@@ -261,6 +261,7 @@ export type RunSummary = {
     mapId: string;
     // An endless run, and the round it got to
     endless?: boolean;
+    mayhem?: boolean;
     round?: number;
     victory: boolean;
     seconds: number;
@@ -279,6 +280,10 @@ export type RunSummary = {
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
+    // Mayhem is a world of its own: nothing from it counts for anything
+    if (run.mayhem) {
+        return [];
+    }
     const quests = getFinishedQuests(save, run);
     save.coins += run.coins;
     save.totalCoins += run.coins;

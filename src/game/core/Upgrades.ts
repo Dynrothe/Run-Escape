@@ -59,11 +59,13 @@ export function canEvolve(
     weapon: WeaponState,
     ownedPassives: ReadonlySet<string>,
     unlocked?: ReadonlySet<string>,
+    // Mayhem's Evolution chamber: it needn't be at its last level
+    anyLevel = false,
 ): boolean {
     const evolution = weapon.def.evolution;
     return (
         evolution !== undefined &&
-        weapon.level >= weapon.def.levels.length &&
+        (anyLevel || weapon.level >= weapon.def.levels.length) &&
         ownedPassives.has(evolution.requiresPassive) &&
         isAvailable(getWeapon(evolution.into), unlocked)
     );
@@ -269,6 +271,7 @@ export function rollChoices(
     endless = false,
     maxWeapons = MAX_WEAPONS,
     maxPassives = MAX_PASSIVES,
+    evolveAnyLevel = false,
 ): UpgradeChoice[] {
     const random = () => rng.next();
     const pool: { choice: () => UpgradeChoice; weight: number }[] = [];
@@ -299,7 +302,7 @@ export function rollChoices(
                 weight: WEAPON_LEVEL_WEIGHT,
             });
         }
-        if (canEvolve(weapon, ownedPassives, unlocked)) {
+        if (canEvolve(weapon, ownedPassives, unlocked, evolveAnyLevel)) {
             evolutions.push({
                 kind: "evolve",
                 weaponId: weapon.def.id,

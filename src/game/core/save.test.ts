@@ -546,3 +546,28 @@ describe("quests", () => {
         expect(migrateSave({ version: 5, coins: 5 }).questsDone).toEqual([]);
     });
 });
+
+describe("Mayhem", () => {
+    test("a Mayhem run leaves the save exactly as it found it", () => {
+        const save = createSave();
+        const before = JSON.stringify(save);
+        const quests = recordRun(save, {
+            mapId: "inferno",
+            endless: true,
+            mayhem: true,
+            round: 1,
+            victory: false,
+            seconds: 1200,
+            level: 80,
+            kills: 9000,
+            coins: 5000,
+            bossesKilled: ["vorkath", "nex"],
+            gearFound: ["armadyl_helmet"],
+            evolutionsMade: ["abyssal_whip"],
+            enemyKills: { goblin: 9000 },
+            caskets: 40,
+        });
+        expect(quests).toEqual([]);
+        expect(JSON.stringify(save)).toBe(before);
+    });
+});

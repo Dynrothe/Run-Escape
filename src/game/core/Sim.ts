@@ -10,9 +10,17 @@ import {
     roundCrowd,
     roundScale,
 } from "../content/endless";
-import { getEnemy } from "../content/enemies";
+import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasPoison } from "../content/maps";
+import {
+    MAYHEM_BOSS_DAMAGE,
+    MAYHEM_CASKETS,
+    MAYHEM_FOOD,
+    MAYHEM_POWER_UPS,
+    MAYHEM_XP,
+    withoutFaction,
+} from "../content/mayhem";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
     POWER_UPS,
@@ -61,6 +69,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
+import { MayhemRun } from "./Mayhem";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -258,7 +267,7 @@ const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
 // levelUp and chest wait for the player to choose
-export type SimState = "playing" | "levelUp" | "chest" | "dead" | "victory";
+export type SimState = "playing" | "levelUp" | "modifier" | "chest" | "dead" | "victory";
 
 export type SimOptions = {
     grid: ArenaGrid;
@@ -280,11 +289,15 @@ export type SimOptions = {
     // The pieces upgraded in the Armoury, which caskets give as what they've
     // become (none when unset)
     armoury?: ArmouryUpgrades;
+    // A Mayhem run (see core/Mayhem.ts): endless, on rules of its own
+    mayhem?: boolean;
 };
 
 export type RunResult = {
     mapId: string;
     endless: boolean;
+    // Nothing from a Mayhem run goes in the save
+    mayhem: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -327,6 +340,7 @@ export class Sim {
     private readonly armoury: ArmouryUpgrades | undefined;
     readonly metaStats: Stats;
     readonly endless: boolean;
+    readonly mayhem?: MayhemRun;
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -451,8 +465,9 @@ export class Sim {
         this.unlockedItems = options.unlockedItems;
         this.armoury = options.armoury;
         this.metaStats = options.metaStats;
-        // Fun maps are endless from the start
-        this.endless = (options.endless ?? false) || this.map.fun !== undefined;
+        // Fun maps and Mayhem are endless from the start
+        this.endless =
+            (options.endless ?? false) || this.map.fun !== undefined || options.mayhem === true;
         this.flowField.ditchY = this.map.ditch?.y;
         const fun = this.map.fun;
         if (fun) {
@@ -492,6 +507,11 @@ export class Sim {
         this.rerollsLeft = BASE_REROLLS + this.stats.reroll;
         this.rerollsAtStart = this.rerollsLeft;
         this.updateFlowField();
+        if (options.mayhem) {
+            this.mayhem = new MayhemRun(this);
+            this.updateStats();
+            this.mayhem.openPick();
+        }
     }
 
     // Enemies find their way to the player's tile, or when they're standing on
@@ -556,6 +576,7 @@ export class Sim {
         return {
             mapId: this.map.id,
             endless: this.endless,
+            mayhem: this.mayhem !== undefined,
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -640,6 +661,7 @@ export class Sim {
         // Grows with every level gained (the Gauntlet runner starts weak), up
         // to about where a normal run ends, so it doesn't run away in endless
         stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
+        this.mayhem?.addStats(stats);
         this.stats = stats;
         const player = this.player;
         const maxHp = Math.round(PLAYER_BASE_HP * (1 + stats.maxHp));
@@ -657,6 +679,10 @@ export class Sim {
 
     get maxPassives(): number {
         return MAX_PASSIVES + this.metaStats.passiveSlots;
+    }
+
+    secondsToTicks(seconds: number): number {
+        return Math.round(seconds * TICKS_PER_SECOND);
     }
 
     addWeapon(weaponId: string, bonus = 0): void {
@@ -746,6 +772,7 @@ export class Sim {
             this.endless,
             this.maxWeapons,
             this.maxPassives,
+            this.mayhem?.evolvesAtAnyLevel,
         );
     }
 
@@ -758,6 +785,9 @@ export class Sim {
     // up's rewards, or the open casket's item (another one, its rarity rolled
     // again too). False when there's no reroll left or nothing on offer.
     reroll(): boolean {
+        if (this.mayhem && this.state === "modifier") {
+            return this.mayhem.reroll();
+        }
         const chest = this.chest;
         if (this.rerollsLeft <= 0 || this.choosingHilt) {
             return false;
@@ -1062,8 +1092,8 @@ export class Sim {
     }
 
     // Healing keeps up with how hard enemies hit
-    private get healScale(): number {
-        return this.roundDamage;
+    get healScale(): number {
+        return this.mayhem ? Math.max(1, this.mayhem.difficulty.damage) : this.roundDamage;
     }
 
     // An antidote is keeping poison and drains off
@@ -1127,8 +1157,13 @@ export class Sim {
         this.stepFires();
         this.stepEnemyProjectiles();
         this.stepPickups();
+        this.mayhem?.step();
         this.cleanUp();
         this.checkLevelUp();
+        // After any level ups' rewards
+        if (this.mayhem?.pendingPicks && this.state === "playing") {
+            this.mayhem.openPick();
+        }
     }
 
     private stepBuffs(): void {
@@ -1224,8 +1259,9 @@ export class Sim {
     }
 
     private stepDirector(): void {
+        this.mayhem?.direct();
         const seconds = this.mapSeconds;
-        const events = this.map.events;
+        const events = this.mayhem ? [] : this.map.events;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
             if (event.kind === "elite") {
@@ -1260,7 +1296,7 @@ export class Sim {
             }
         }
 
-        const wave = this.currentWave();
+        const wave = this.mayhem?.wave ?? this.currentWave();
         // Endless runs' later rounds bring bigger crowds
         const crowd = roundCrowd(this.round);
         const alive = this.countAlive();
@@ -1365,7 +1401,7 @@ export class Sim {
         return undefined;
     }
 
-    private spawnBoss(
+    spawnBoss(
         def: EnemyDef,
         type: "boss" | "finalBoss",
         hp: number | undefined,
@@ -1399,6 +1435,7 @@ export class Sim {
         at?: { x: number; y: number },
         bossHp?: number,
     ): Enemy | undefined {
+        def = this.mayhem ? withoutFaction(def) : def;
         const boss = type === "boss" || type === "finalBoss";
         let pos = at;
         if (!pos && def.spawnAt) {
@@ -1422,8 +1459,9 @@ export class Sim {
         const damageScale = 1 + Math.max(0, minutes - 5) * 0.03;
         // Bosses are tuned as they are (or for the map they're on); later maps
         // are tougher all round, and so are endless runs' later rounds
-        const difficulty = this.map.difficulty;
-        const bossDamage = difficulty.damage * this.roundDamage;
+        const difficulty = this.difficulty;
+        const bossDamage =
+            difficulty.damage * this.roundDamage * (this.mayhem ? MAYHEM_BOSS_DAMAGE : 1);
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp;
@@ -1432,7 +1470,7 @@ export class Sim {
         let hitScale = bossDamage * (boss ? 1 : damageScale);
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
-        let xp = def.xp * roundScale(ROUND_XP, this.round);
+        let xp = def.xp * roundScale(ROUND_XP, this.round) * (this.mayhem ? MAYHEM_XP : 1);
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -1545,7 +1583,12 @@ export class Sim {
         return 1 + minutes * 0.05 + minutes * minutes * 0.004;
     }
 
-    private spawnRing(def: EnemyDef, count: number): void {
+    // How tough enemies are here: the map's, or Mayhem's for the time
+    private get difficulty(): { hp: number; damage: number } {
+        return this.mayhem?.difficulty ?? this.map.difficulty;
+    }
+
+    spawnRing(def: EnemyDef, count: number): void {
         const player = this.player;
         const radius = 12;
         for (let i = 0; i < count; i++) {
@@ -1761,8 +1804,9 @@ export class Sim {
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
                 if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
-                    moveX += dirX * enemy.speed;
-                    moveY += dirY * enemy.speed;
+                    const speed = enemy.speed * (this.mayhem?.enemySpeed ?? 1);
+                    moveX += dirX * speed;
+                    moveY += dirY * speed;
                 }
                 moveX += sepX * 0.25;
                 moveY += sepY * 0.25;
@@ -1957,7 +2001,14 @@ export class Sim {
     ): number {
         const player = this.player;
         const armor = ignoreArmor ? 0 : this.stats.armor;
-        const amount = Math.max(1, Math.round(damage - armor));
+        let amount = Math.max(1, Math.round(damage - armor));
+        if (this.mayhem) {
+            amount = this.mayhem.onPlayerHit(amount, !!ENEMY_BY_ID.get(enemyId)?.boss);
+            if (amount === 0) {
+                player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+                return 0;
+            }
+        }
         player.hp -= amount;
         this.damageTaken += amount;
         player.flash = 6;
@@ -2988,12 +3039,14 @@ export class Sim {
                     (1 + this.stats.might * mightScale) *
                     (1 + bossMight) *
                     (1 + drain) *
+                    (this.mayhem && mightScale > 0 ? this.mayhem.hitScale(enemy) : 1) *
                     this.rng.range(0.85, 1.15),
             ),
         );
         enemy.hp -= damage;
         enemy.flash = 5;
         const source = this.damageSource;
+        this.mayhem?.onHit(enemy, damage, source);
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
         this.highestHit = Math.max(this.highestHit, damage);
         this.events.push({
@@ -3063,6 +3116,9 @@ export class Sim {
         }
         if (enemy.boss) {
             this.funBossDown(enemy);
+        }
+        if (!byEnemy) {
+            this.mayhem?.onKill(enemy);
         }
         if (!enemy.boss && !enemy.elite && !enemy.noDrops) {
             // For revivers
@@ -3193,11 +3249,14 @@ export class Sim {
                 enemy.x + 0.4,
                 enemy.y,
             );
-        } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
+        } else if (
+            !enemy.boss &&
+            this.rng.chance(CASKET_DROP_CHANCE * luck * (this.mayhem ? MAYHEM_CASKETS : 1))
+        ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
-        } else if (this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+        } else if (this.rng.chance(FOOD_DROP_CHANCE * luck * (this.mayhem ? MAYHEM_FOOD : 1))) {
             this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
         if (!enemy.boss) {
@@ -3306,6 +3365,9 @@ export class Sim {
             const special = this.takeSpecial(weapon, level);
             this.damageSource = `weapon:${weapon.def.id}`;
             const fired = this.fireWeapon(weapon.def, level, special);
+            if (fired && this.mayhem?.firesTwice) {
+                this.fireWeapon(weapon.def, level);
+            }
             // Nothing to shoot at: try again soon rather than wasting the cooldown
             weapon.cooldown = fired
                 ? this.cooldownTicks(level.cooldown, this.setBoosts(weapon.def).speed)
@@ -3780,7 +3842,7 @@ export class Sim {
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
-    private nearestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
+    nearestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
         for (const enemy of this.enemies) {
@@ -4813,6 +4875,7 @@ export class Sim {
                 break;
             case "coins":
                 this.coins += Math.round(pickup.value * (1 + this.stats.greed) * this.coinScale);
+                this.mayhem?.onCoins(pickup.value);
                 break;
             case "food":
                 this.heal(pickup.value);
@@ -4835,7 +4898,12 @@ export class Sim {
             return;
         }
         const minutes = seconds / 60;
-        const chance = POWER_UP_CHANCE * minutes * minutes * (1 + this.stats.luck);
+        const chance =
+            POWER_UP_CHANCE *
+            minutes *
+            minutes *
+            (1 + this.stats.luck) *
+            (this.mayhem ? MAYHEM_POWER_UPS : 1);
         if (this.rng.chance(chance)) {
             const index = this.rng.weightedIndex(POWER_UPS.map((p) => p.weight));
             this.dropPowerUp(POWER_UPS[index].id, x, y);
@@ -4849,7 +4917,7 @@ export class Sim {
 
     // Power-ups' damage keeps up with the enemies' hitpoints
     private powerUpDamageScale(): number {
-        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp;
+        return this.enemyHpScale() * this.difficulty.hp * this.roundHp;
     }
 
     private powerUpTicks(seconds: number): number {
@@ -5047,7 +5115,29 @@ export class Sim {
 
     // Until this round's final boss
     get timeLeftForBoss(): number {
-        return Math.max(0, RUN_LENGTH - this.mapSeconds);
+        return this.mayhem?.bossIn ?? Math.max(0, RUN_LENGTH - this.mapSeconds);
+    }
+
+    // ---- For Mayhem's Modifiers ----
+
+    pushNotice(message: string): void {
+        this.events.push({ type: "notice", message });
+    }
+
+    enemiesWithin(x: number, y: number, radius: number): Enemy[] {
+        const found: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (!enemy.dead && Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
+                found.push(enemy);
+            }
+        });
+        return found;
+    }
+
+    // No damage bonuses on it: these go by a share of hitpoints
+    damageFromModifier(enemy: Enemy, amount: number): void {
+        this.damageSource = "modifier";
+        this.damageEnemy(enemy, amount, 0, enemy.x, enemy.y, 0);
     }
 }
 
