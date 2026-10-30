@@ -32,6 +32,7 @@ import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
+import { MODIFIERS } from "../../src/game/content/mayhem";
 import { PASSIVES } from "../../src/game/content/passives";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
@@ -185,6 +186,7 @@ function getContentObjIds(): number[] {
             THRALLS,
             ALL_MAPS,
             SHOP_UPGRADES,
+            MODIFIERS,
         },
         "",
     );

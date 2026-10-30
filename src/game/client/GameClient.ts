@@ -135,7 +135,8 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
     const owned = new Set(sim.passives.map((p) => p.id));
     return {
         passive: getPassive(evolution.requiresPassive).name,
-        maxed: weapon.level >= weapon.def.levels.length,
+        // Mayhem's Evolution chamber doesn't need it maxed
+        maxed: weapon.level >= weapon.def.levels.length || sim.mayhem?.evolvesAtAnyLevel === true,
         hasPassive: owned.has(evolution.requiresPassive),
         ready: canEvolve(weapon, owned, sim.unlockedItems, sim.mayhem?.evolvesAtAnyLevel),
     };
