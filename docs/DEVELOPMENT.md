@@ -116,7 +116,9 @@ scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run sli
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything
-                                                        bought)
+                                                        bought; uses a collision snapshot per
+                                                        map in caches/collision, built on the
+                                                        first run)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 ```
 
