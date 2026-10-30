@@ -10,6 +10,7 @@ import { InteractType } from "../InteractType";
 import { LocAnimatedData } from "../loc/LocAnimatedData";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
+import { isTileDrawn } from "../loc/UpperLevels";
 import { VertexBuffer } from "./VertexBuffer";
 
 export enum ContourGroundType {
@@ -128,7 +129,7 @@ export class SceneBuffer {
             for (let x = startX; x < endX; x++) {
                 for (let y = startY; y < endY; y++) {
                     const tile = scene.tiles[level][x][y];
-                    if (!tile || tile.minLevel > maxLevel) {
+                    if (!tile || !isTileDrawn(scene, tile.minLevel, level, x, y, maxLevel)) {
                         continue;
                     }
                     this.addTerrainTile(tile, vertexOffset, vertexOffset);

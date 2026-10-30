@@ -14,6 +14,9 @@ the version in the corner).
 
 - Two-handed weapons no longer leave a shield strapped to your arm. The shield still counts, it's
   just not shown while you hold one.
+- Prifddinas's walkways and bridges are whole again instead of leaving pieces floating in the air.
+  Only the buildings' roofs and the towers' domes are gone. A few stray roof edges went from
+  Barrows too.
 
 ## 0.17.2 - 2026-10-30
 

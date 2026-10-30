@@ -81,6 +81,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 
 - `arena` is in world tiles and is what collision is built for. `spawn` must be inside it.
 - Set `plane` for dungeons above the ground floor.
+- The game draws one plane, and hides roofs. If a map's roofs are plain scenery rather than the
+  roof loc types, or something floats, see `src/mapviewer/webgl/loc/UpperLevels.ts`.
 - Campaign maps unlock in the order of `MAPS`. Rewards come from `unlock` tasks on weapons,
   passives, items and adventurers.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
