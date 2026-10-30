@@ -103,7 +103,7 @@ export type EnemyDef = {
     knockbackResist?: number;
     // Render scale on top of the NPC's own
     scale?: number;
-    // Walks through walls and water
+    // Walks through walls and water (though it turns up where the rest do)
     ghost?: boolean;
     // Cache sound effect ids
     sounds: { attack: number; hit: number; death: number };

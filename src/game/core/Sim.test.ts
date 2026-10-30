@@ -2053,6 +2053,109 @@ describe("enemy mechanics", () => {
         expect(bandos.foe).toBeUndefined();
     });
 
+    describe("where they turn up", () => {
+        // A sealed room to the east of the player's spot, in reach of a ring
+        // of enemies (12 tiles off) on one side and of the waves (19 to 24
+        // off) on the other
+        const ROOM = { x0: 1045, y0: 1026, x1: 1062, y1: 1046 };
+        const inRoom = ({ x, y }: { x: number; y: number }) =>
+            x >= ROOM.x0 && x <= ROOM.x1 + 1 && y >= ROOM.y0 && y <= ROOM.y1 + 1;
+        function walledIn(): Sim {
+            const { x0, y0, x1, y1 } = ROOM;
+            const grid = makeGrid(openField(), 1000, 1000, [
+                { x: x0 - 1, y: y0 - 1, sizeX: x1 - x0 + 3, sizeY: 1 },
+                { x: x0 - 1, y: y1 + 1, sizeX: x1 - x0 + 3, sizeY: 1 },
+                { x: x0 - 1, y: y0, sizeX: 1, sizeY: y1 - y0 + 1 },
+                { x: x1 + 1, y: y0, sizeX: 1, sizeY: y1 - y0 + 1 },
+            ]);
+            const sim = new Sim({
+                grid,
+                characterId: "warrior",
+                metaStats: emptyStats(),
+                seed: 1,
+                spawnX: 1036.5,
+                spawnY: 1036.5,
+            });
+            sim.weapons = [];
+            return sim;
+        }
+        const ghost = variant("goblin", { id: "test_ghost", ghost: true });
+
+        test("a ring round the player leaves out what's walled off", () => {
+            for (const def of [getEnemy("goblin"), ghost]) {
+                const sim = walledIn();
+                sim["spawnRing"](def, 40);
+                expect(sim.enemies.length).toBeGreaterThan(20);
+                expect(sim.enemies.length).toBeLessThan(40);
+                expect(sim.enemies.filter(inRoom)).toEqual([]);
+            }
+        });
+
+        test("a wave never lands there, ghosts included", () => {
+            for (const def of [getEnemy("goblin"), ghost]) {
+                const sim = walledIn();
+                for (let i = 0; i < 300; i++) {
+                    sim.spawnEnemy(def, "normal");
+                }
+                expect(sim.enemies.length).toBeGreaterThan(200);
+                expect(sim.enemies.filter(inRoom)).toEqual([]);
+                for (const enemy of sim.enemies) {
+                    const tile = [Math.floor(enemy.x), Math.floor(enemy.y)] as const;
+                    expect(sim.grid.isSolid(...tile)).toBe(false);
+                }
+            }
+        });
+
+        test("nor does what something calls in beside the wall", () => {
+            const sim = walledIn();
+            const caller = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                x: ROOM.x0 - 2.5,
+                y: 1036.5,
+            })!;
+            for (let i = 0; i < 100; i++) {
+                sim["spawnNear"](caller, getEnemy("goblin"), 5, i, 100, 3);
+            }
+            expect(sim.enemies.length).toBeGreaterThan(30);
+            expect(sim.enemies.filter(inRoom)).toEqual([]);
+        });
+
+        test("nothing's brought back behind the wall", () => {
+            const sim = walledIn();
+            const reviver = variant("goblin", {
+                revives: { interval: 1, range: 50 },
+            });
+            const caller = sim.spawnEnemy(reviver, "normal", { x: ROOM.x0 - 2.5, y: 1036.5 })!;
+            sim["deaths"].push({ def: ghost, x: 1050.5, y: 1036.5, variant: 0, tick: sim.tick });
+            expect(sim["revive"](caller, reviver.revives!)).toBe(false);
+        });
+
+        test("the far side of a ditch counts where enemies can jump it, and only there", () => {
+            const map = getMap("east_varrock");
+            const ditchY = map.ditch!.y;
+            const baseX = map.spawn.x - 36.5;
+            const baseY = ditchY - 31;
+            const rows = openField().map((row, i) => {
+                const y = baseY + 71 - i;
+                return y === ditchY || y === ditchY + 1 ? row.replace(/\./g, "#") : row;
+            });
+            const ring = (mapId: string) => {
+                const sim = new Sim({
+                    grid: makeGrid(rows, baseX, baseY),
+                    mapId,
+                    characterId: "warrior",
+                    metaStats: emptyStats(),
+                    seed: 1,
+                    spawnX: map.spawn.x,
+                    spawnY: map.spawn.y,
+                });
+                sim["spawnRing"](getEnemy("clan_noob"), 40);
+                return sim.enemies.filter((enemy) => enemy.y < ditchY).length;
+            };
+            expect(ring("east_varrock")).toBeGreaterThan(0);
+            expect(ring("lumbridge")).toBe(0);
+        });
+    });
+
     test("each faction's army comes from its own side", () => {
         const sim = createSim();
         const player = sim.player;

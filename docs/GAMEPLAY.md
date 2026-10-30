@@ -207,7 +207,9 @@ version and how to run it.
       land. Bosses, what can't move and flag carriers carry on.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
-  adventurers. Each map's monsters are from its part of the world:
+  adventurers. Enemies only turn up where you could stand and walk to, never behind a wall or in
+  rock, ghosts included (East Varrock's come from both sides of the ditch, which they jump). Each
+  map's monsters are from its part of the world:
     - **Lumbridge**: chickens, rats, goblins, cows and imps, the swamp's giant rats and frogs,
       Draynor's dark wizards, and the zombies, skeletons, ghosts, spiders and bats of Draynor
       Manor.

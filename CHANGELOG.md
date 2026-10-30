@@ -34,6 +34,9 @@ the version in the corner).
 - Prifddinas's walkways and bridges are whole again instead of leaving pieces floating in the air.
   Only the buildings' roofs and the towers' domes are gone. A few stray roof edges went from
   Barrows too.
+- Enemies only turn up where you could stand and walk to, so rings of enemies, summons and ghosts
+  no longer appear behind walls or inside rock. East Varrock's enemies still come from both sides
+  of the ditch, since they jump it.
 
 ## 0.17.2 - 2026-10-30
 

@@ -1409,22 +1409,25 @@ export class Sim {
             const distance = this.rng.range(minDistance, maxDistance);
             const x = Math.floor(player.x + Math.cos(a) * distance) + 0.5;
             const y = Math.floor(player.y + Math.sin(a) * distance) + 0.5;
-            const tileX = Math.floor(x);
-            const tileY = Math.floor(y);
-            if (!this.grid.contains(tileX, tileY)) {
-                continue;
+            if (this.canTurnUpAt(def, x, y)) {
+                return { x, y };
             }
-            if (!def.ghost) {
-                if (!this.flowField.isReachable(tileX, tileY)) {
-                    continue;
-                }
-                if (!isCircleFree(this.grid, x, y, def.radius)) {
-                    continue;
-                }
-            }
-            return { x, y };
         }
         return undefined;
+    }
+
+    // Whether an enemy can turn up here: only where the player could stand and
+    // get to from where they are, or it's stuck behind a wall. Ghosts too, so
+    // nothing rises out of a mountain. The flow field goes over a ditch
+    // (MapDef.ditch), so either side of one will do: enemies jump it.
+    private canTurnUpAt(def: EnemyDef, x: number, y: number): boolean {
+        const tileX = Math.floor(x);
+        const tileY = Math.floor(y);
+        return (
+            this.grid.contains(tileX, tileY) &&
+            this.isWalkableTile(tileX, tileY) &&
+            isCircleFree(this.grid, x, y, Math.max(def.radius, PLAYER_RADIUS))
+        );
     }
 
     private spawnBoss(
@@ -1590,12 +1593,12 @@ export class Sim {
     // One of the spots an enemy turns up at (EnemyDef.spawnAt) with room for
     // it, undefined if none has
     private pickSpawnSpot(def: EnemyDef): { x: number; y: number } | undefined {
-        const free = def.spawnAt!.filter(
-            ({ x, y }) =>
-                this.grid.contains(Math.floor(x), Math.floor(y)) &&
-                // What never moves can stand on its own spot, solid or not (a
-                // portal's is in the map's collision)
-                (def.ghost || def.stationary || isCircleFree(this.grid, x, y, def.radius)),
+        const free = def.spawnAt!.filter(({ x, y }) =>
+            // What never moves can stand on its own spot, solid or not (a
+            // portal's is in the map's collision)
+            def.stationary
+                ? this.grid.contains(Math.floor(x), Math.floor(y))
+                : this.canTurnUpAt(def, x, y),
         );
         return free.length > 0 ? free[this.rng.int(free.length)] : undefined;
     }
@@ -1614,13 +1617,9 @@ export class Sim {
             const angle = (i / count) * Math.PI * 2;
             const x = player.x + Math.cos(angle) * radius;
             const y = player.y + Math.sin(angle) * radius;
-            if (!this.grid.contains(Math.floor(x), Math.floor(y))) {
-                continue;
+            if (this.canTurnUpAt(def, x, y)) {
+                this.spawnEnemy(def, "normal", { x, y });
             }
-            if (!def.ghost && !isCircleFree(this.grid, x, y, def.radius)) {
-                continue;
-            }
-            this.spawnEnemy(def, "normal", { x, y });
         }
     }
 
@@ -2245,13 +2244,9 @@ export class Sim {
                     : this.rng.range(0, Math.PI * 2);
             const x = enemy.x + Math.cos(angle) * radius;
             const y = enemy.y + Math.sin(angle) * radius;
-            if (!this.grid.contains(Math.floor(x), Math.floor(y))) {
-                continue;
+            if (this.canTurnUpAt(def, x, y)) {
+                return this.spawnEnemy(def, "normal", { x, y });
             }
-            if (!def.ghost && !isCircleFree(this.grid, x, y, def.radius)) {
-                continue;
-            }
-            return this.spawnEnemy(def, "normal", { x, y });
         }
         return undefined;
     }
@@ -2335,10 +2330,7 @@ export class Sim {
             }
             const dx = death.x - enemy.x;
             const dy = death.y - enemy.y;
-            if (
-                dx * dx + dy * dy > rangeSq ||
-                (!death.def.ghost && !isCircleFree(this.grid, death.x, death.y, death.def.radius))
-            ) {
+            if (dx * dx + dy * dy > rangeSq || !this.canTurnUpAt(death.def, death.x, death.y)) {
                 continue;
             }
             this.deaths.splice(i, 1);
@@ -4764,17 +4756,19 @@ export class Sim {
 
     // Where to put something that needs walking over: what dropped it can be
     // somewhere the player can't get to (a portal stands on solid tiles, ghosts
-    // go through walls), and its drop can land past a wall. Beyond the flow
-    // field there's no telling, so any free spot will do.
+    // go through walls), and its drop can land past a wall
     private walkableSpot(x: number, y: number): Vec2 {
-        const field = this.flowField;
-        return findFreeSpot(
-            this.grid,
-            x,
-            y,
-            PLAYER_RADIUS,
-            (tileX, tileY) => !field.contains(tileX, tileY) || field.isReachable(tileX, tileY),
+        return findFreeSpot(this.grid, x, y, PLAYER_RADIUS, (tileX, tileY) =>
+            this.isWalkableTile(tileX, tileY),
         );
+    }
+
+    // Whether there's a way to the player from this tile. Beyond the flow field
+    // there's no telling, so it's taken as a yes. It says yes to solid tiles
+    // beside open ground too, so check there's room as well.
+    private isWalkableTile(tileX: number, tileY: number): boolean {
+        const field = this.flowField;
+        return !field.contains(tileX, tileY) || field.isReachable(tileX, tileY);
     }
 
     dropPickup(
