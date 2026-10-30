@@ -482,6 +482,7 @@ export class GameClient implements GameFrameHandler {
         }
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(map.dev === true);
         this.minimap.setMap(map);
         const music = map.music && MUSIC[map.music];
         if (music) {
@@ -621,6 +622,7 @@ export class GameClient implements GameFrameHandler {
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(false);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;

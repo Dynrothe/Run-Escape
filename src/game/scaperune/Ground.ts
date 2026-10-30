@@ -4,9 +4,10 @@ import { getCoveredShare, getCoveredSides, getOverlayShape } from "./shapes";
 
 export type StampOptions = {
     // "all" takes the prefab's floor too, the whole rectangle. "footprint"
-    // keeps our ground and takes only the tiles with an overlay (the building's
-    // floor), so there's no edge to see. A function says which overlays to take,
-    // and keeps our ground everywhere else (a bridge, over our own river).
+    // keeps our ground and takes only the floor inside the walls, so there's no
+    // edge to see and the ground runs right up to them. A function says which
+    // overlays to take, and keeps our ground everywhere else (a bridge, over our
+    // own river).
     floor: "all" | "footprint" | ((overlay: number) => boolean);
     // Over how many tiles the ground eases into it
     feather: number;
@@ -22,6 +23,93 @@ export type StampOptions = {
     // bridge's grass would show as a green halo in the snow
     keepUnderlays?: boolean;
 };
+
+// Gives lines with no span the span of the nearest ones on both sides, if they
+// have them both
+function fillGaps(low: Int32Array, high: Int32Array): void {
+    const spanned = (i: number) => low[i] < high[i];
+    for (let i = 0; i < low.length; i++) {
+        if (spanned(i)) {
+            continue;
+        }
+        let before = i - 1;
+        let after = i + 1;
+        while (before >= 0 && !spanned(before)) {
+            before--;
+        }
+        while (after < low.length && !spanned(after)) {
+            after++;
+        }
+        if (before >= 0 && after < low.length) {
+            low[i] = Math.max(low[before], low[after]);
+            high[i] = Math.min(high[before], high[after]);
+        }
+    }
+}
+
+// A building's tiles: those inside its walls, going by the side of each tile the
+// walls stand on. Row by row and column by column, so a doorway doesn't let the
+// outside in. All of a prefab's tiles if it has no walls.
+export function getInsideTiles(prefab: TileGrid): Uint8Array {
+    const { sizeX, sizeY } = prefab;
+    const west = new Int32Array(sizeY).fill(sizeX);
+    const east = new Int32Array(sizeY).fill(0);
+    const south = new Int32Array(sizeX).fill(sizeY);
+    const north = new Int32Array(sizeX).fill(0);
+    let walled = false;
+    const addColumnEdge = (y: number, x: number) => {
+        west[y] = Math.min(west[y], x);
+        east[y] = Math.max(east[y], x);
+    };
+    const addRowEdge = (x: number, y: number) => {
+        south[x] = Math.min(south[x], y);
+        north[x] = Math.max(north[x], y);
+    };
+    for (const loc of prefab.locs) {
+        if (loc.level !== 0) {
+            continue;
+        }
+        // Rotation is the side: west, north, east, south. An L corner takes the
+        // next side too.
+        const sides =
+            loc.type === 0
+                ? [loc.rotation]
+                : loc.type === 2
+                  ? [loc.rotation, (loc.rotation + 1) & 3]
+                  : [];
+        for (const side of sides) {
+            walled = true;
+            if (side === 0) {
+                addColumnEdge(loc.y, loc.x);
+            } else if (side === 2) {
+                addColumnEdge(loc.y, loc.x + 1);
+            } else if (side === 1) {
+                addRowEdge(loc.x, loc.y + 1);
+            } else {
+                addRowEdge(loc.x, loc.y);
+            }
+        }
+        if (loc.type === 9) {
+            walled = true;
+            addColumnEdge(loc.y, loc.x);
+            addColumnEdge(loc.y, loc.x + 1);
+            addRowEdge(loc.x, loc.y);
+            addRowEdge(loc.x, loc.y + 1);
+        }
+    }
+    // A doorway with no door leaves a row or column with one wall, or none: it
+    // spans what the ones either side of it span
+    fillGaps(west, east);
+    fillGaps(south, north);
+    const inside = new Uint8Array(sizeX * sizeY);
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const within = x >= west[y] && x < east[y] && y >= south[x] && y < north[x];
+            inside[x + y * sizeX] = !walled || within ? 1 : 0;
+        }
+    }
+    return inside;
+}
 
 function smoothstep(t: number): number {
     return t * t * (3 - 2 * t);
@@ -224,6 +312,7 @@ export class Ground {
         }
 
         // Floors
+        const inside = options.floor === "footprint" ? getInsideTiles(prefab) : undefined;
         for (let level = 0; level < prefab.levels.length; level++) {
             const from = prefab.levels[level];
             const to = this.grid.levels[level];
@@ -231,12 +320,15 @@ export class Ground {
                 for (let tx = 0; tx < sizeX; tx++) {
                     const i = tx + ty * sizeX;
                     const j = this.tile(x + tx, y + ty);
-                    this.reserved[j] = 1;
+                    if (!inside || inside[i]) {
+                        this.reserved[j] = 1;
+                    }
                     const take =
-                        level > 0 ||
-                        (typeof options.floor === "function"
-                            ? options.floor(from.overlays[i])
-                            : options.floor === "all" || from.overlays[i] !== 0);
+                        level > 0
+                            ? !inside || inside[i]
+                            : typeof options.floor === "function"
+                              ? options.floor(from.overlays[i])
+                              : options.floor === "all" || (inside![i] && from.overlays[i] !== 0);
                     if (!take) {
                         continue;
                     }
@@ -264,10 +356,11 @@ export class Ground {
             if (options.skipLoc?.(loc)) {
                 continue;
             }
+            // Nor the ground's own bits outside the walls
+            const at = loc.x + loc.y * sizeX;
             if (
-                options.floor !== "all" &&
                 loc.type === 22 &&
-                from0.overlays[loc.x + loc.y * sizeX] === 0
+                ((inside && !inside[at]) || (options.floor !== "all" && from0.overlays[at] === 0))
             ) {
                 continue;
             }

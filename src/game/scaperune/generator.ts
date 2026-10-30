@@ -89,7 +89,16 @@ export function getSettingsError(settings: GeneratorSettings): string | undefine
 // One square of scenery round the arena
 const MARGIN = 1;
 const RIVER_HALF_WIDTH = 4.5;
-const ROAD_HALF_WIDTH = 1.3;
+// A road's overlay, down its middle, and the underlay under it. The renderer blends
+// underlays over 11 tiles, so that's a soft stain that takes the contrast out of the
+// overlay's edge. On its own it's too wide and faint to read as a road.
+const ROAD_HALF_WIDTH = 1.2;
+const TRAIL_HALF_WIDTH = 2;
+// Tiles either side of a road that scatter keeps off
+const ROAD_CLEAR_HALF_WIDTH = 1.5;
+// Roads keep off walls by this many tiles, but for the door they're going to
+const WALL_CLEARANCE = 3;
+const ROAD_START_FROM_DOOR = 3;
 const FORD_HALF_WIDTH = 2;
 // How far, either way from a bridge's middle, its deck starts
 const BRIDGE_DECK_REACH = 5;
@@ -383,7 +392,53 @@ function placeBridges(
     return ends;
 }
 
-type Plot = { x: number; y: number; sizeX: number; sizeY: number };
+// A building's way in: the tile in its doorway, and which way is out
+type Door = { x: number; y: number; outX: number; outY: number };
+
+type Plot = { x: number; y: number; sizeX: number; sizeY: number; door: Door };
+
+const SIDE_X = [-1, 0, 1, 0];
+const SIDE_Y = [0, 1, 0, -1];
+
+// The door of a prefab nearest a point, in the prefab's tiles, or the middle of the
+// side facing it if it hasn't got one
+function findDoor(
+    prefab: TileGrid,
+    isDoor: (loc: PlacedLoc) => boolean,
+    towardX: number,
+    towardY: number,
+): Door {
+    const middleX = (prefab.sizeX - 1) / 2;
+    const middleY = (prefab.sizeY - 1) / 2;
+    const doors = prefab.locs
+        .filter((loc) => loc.level === 0 && isDoor(loc))
+        .map((loc) => {
+            // A door stands on one side of its tile; out's away from the middle
+            let outX = SIDE_X[loc.rotation];
+            let outY = SIDE_Y[loc.rotation];
+            if (outX * (loc.x - middleX) + outY * (loc.y - middleY) < 0) {
+                outX = -outX;
+                outY = -outY;
+            }
+            return { x: loc.x, y: loc.y, outX, outY };
+        })
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - towardX, a.y - towardY) - Math.hypot(b.x - towardX, b.y - towardY),
+        );
+    if (doors.length > 0) {
+        return doors[0];
+    }
+    const horizontal = Math.abs(towardX - middleX) > Math.abs(towardY - middleY);
+    const outX = horizontal ? Math.sign(towardX - middleX) || 1 : 0;
+    const outY = horizontal ? 0 : Math.sign(towardY - middleY) || 1;
+    return {
+        x: Math.round(middleX + (outX * prefab.sizeX) / 2),
+        y: Math.round(middleY + (outY * prefab.sizeY) / 2),
+        outX,
+        outY,
+    };
+}
 
 function placeBuildings(
     settings: GeneratorSettings,
@@ -397,7 +452,7 @@ function placeBuildings(
     const half = (settings.squares * MAP_SQUARE_SIZE) / 2;
     const wanted = Math.round(settings.buildings * settings.squares * settings.squares * 3);
     const plots: Plot[] = [];
-    const skipLoc = (loc: PlacedLoc) => loc.type <= 3 && DOOR_NAME.test(context.locs(loc.id).name);
+    const isDoor = (loc: PlacedLoc) => loc.type <= 3 && DOOR_NAME.test(context.locs(loc.id).name);
     for (let attempt = 0; attempt < wanted * 40 && plots.length < wanted; attempt++) {
         const def = PREFABS[pick(rng, biome.buildings)];
         const turns = Math.floor(rng() * 4);
@@ -428,12 +483,15 @@ function placeBuildings(
             feather: BUILDING_FEATHER,
             flatten: true,
             keepUnderlays: true,
-            skipLoc,
+            skipLoc: isDoor,
         });
-        plots.push({ x, y, sizeX, sizeY });
+        const door = findDoor(prefab, isDoor, spawn - x, spawn - y);
+        plots.push({ x, y, sizeX, sizeY, door: { ...door, x: door.x + x, y: door.y + y } });
     }
     return plots;
 }
+
+type RoadTarget = { from: Point; last: Point };
 
 function placeRoads(
     settings: GeneratorSettings,
@@ -450,67 +508,80 @@ function placeRoads(
         return;
     }
     const size = ground.sizeX;
+    const corners = size + 1;
     const roads = new Uint8Array(water.length);
     const wiggle = createNoise(settings.seed + 5, 1);
+    const toWalls = distanceTo(buildings, size, size, WALL_CLEARANCE + 1);
     roads[ground.tile(spawn, spawn)] = 1;
-    const targets: { from: Point; last?: Point }[] = bridgeEnds.map((end) => ({
-        from: end.outside,
-        last: end.deck,
-    }));
-    for (const plot of plots) {
+    // Nearest first, bridges before doors, so doors over a river can join the road
+    // at the bridge
+    const byDistance = (a: RoadTarget, b: RoadTarget) =>
+        Math.hypot(a.from.x - spawn, a.from.y - spawn) -
+        Math.hypot(b.from.x - spawn, b.from.y - spawn);
+    const bridges: RoadTarget[] = bridgeEnds.map((end) => ({ from: end.outside, last: end.deck }));
+    const doors: RoadTarget[] = [];
+    for (const { door } of plots) {
         if (rng() < settings.roads) {
-            // The nearest tile of the plot's edge to the spawn
-            const x = Math.min(Math.max(spawn, plot.x - 1), plot.x + plot.sizeX);
-            const y = Math.min(Math.max(spawn, plot.y - 1), plot.y + plot.sizeY);
-            targets.push({ from: { x, y } });
+            // Straight out of the door, so that's how the road arrives
+            doors.push({
+                from: {
+                    x: door.x + door.outX * ROAD_START_FROM_DOOR,
+                    y: door.y + door.outY * ROAD_START_FROM_DOOR,
+                },
+                last: { x: door.x, y: door.y },
+            });
         }
     }
-    targets.sort(
-        (a, b) =>
-            Math.hypot(a.from.x - spawn, a.from.y - spawn) -
-            Math.hypot(b.from.x - spawn, b.from.y - spawn),
-    );
-    // Roads go round water and buildings, and join up where they meet
+    const targets = [...bridges.sort(byDistance), ...doors.sort(byDistance)];
+    // Roads go round water and buildings, keep off walls, and join up where they meet
     const cost = (x: number, y: number) => {
         const i = ground.tile(x, y);
         if (water[i] || ground.reserved[i]) {
             return Infinity;
         }
-        return roads[i] ? 0.2 : 1 + wiggle(x / 12, y / 12) * 3;
+        const nearWall = Math.max(WALL_CLEARANCE - toWalls[i], 0) * 3;
+        return (roads[i] ? 0.2 : 1 + wiggle(x / 14, y / 14) * 2) + nearWall;
     };
-    const field = new Float32Array((size + 1) * (size + 1)).fill(-4);
+    const trail = new Float32Array(corners * corners).fill(-4);
     for (const target of targets) {
         const tiles = findPath(size, size, target.from, cost, (i) => roads[i] !== 0);
-        const points = tiles.map((i) => ({ x: i % size, y: Math.floor(i / size) }));
         for (const i of tiles) {
             roads[i] = 1;
         }
-        if (points.length === 0) {
-            // The far bank of a bridge, with nothing to lead to: a stub off the end
-            if (target.last) {
-                addPathToField(
-                    field,
-                    size + 1,
-                    size + 1,
-                    [target.last, target.from],
-                    ROAD_HALF_WIDTH,
-                );
-            }
-            continue;
-        }
-        // Tile corners to tile middles, then the last stretch onto the bridge
-        const middles = points.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 }));
-        const smooth = smoothPath(middles, 3, 3);
-        const line = target.last
-            ? [{ x: target.last.x + 0.5, y: target.last.y + 0.5 }, ...smooth]
-            : smooth;
-        addPathToField(field, size + 1, size + 1, line, ROAD_HALF_WIDTH);
+        // Found from the far end back, so it comes out from the road network to the door
+        const middles = tiles
+            .map((i) => ({ x: (i % size) + 0.5, y: Math.floor(i / size) + 0.5 }))
+            .reverse();
+        const last = { x: target.last.x + 0.5, y: target.last.y + 0.5 };
+        // Nothing to join, as on a bridge's far bank: a stub, for others to join
+        roads[ground.tile(target.from.x, target.from.y)] = 1;
+        const line =
+            middles.length > 0 ? middles : [{ x: target.from.x + 0.5, y: target.from.y + 0.5 }];
+        addPathToField(
+            trail,
+            corners,
+            corners,
+            smoothPath([last, ...line], 5, 4),
+            TRAIL_HALF_WIDTH,
+        );
     }
+    const road = trail.map((value) => value - TRAIL_HALF_WIDTH + ROAD_HALF_WIDTH);
+    const clearing = trail.map((value) => value - TRAIL_HALF_WIDTH + ROAD_CLEAR_HALF_WIDTH);
     const skip = new Uint8Array(water.length);
     for (let i = 0; i < skip.length; i++) {
         skip[i] = water[i] | buildings[i];
     }
-    ground.paintField(smoothField(field, size + 1, size + 1, 1), biome.road, false, skip);
+    const band = getTouchedTiles(trail, size);
+    const clear = getTouchedTiles(clearing, size);
+    for (let i = 0; i < band.length; i++) {
+        if (band[i] && !skip[i]) {
+            ground.level0.underlays[i] = biome.trail;
+        }
+        if (clear[i]) {
+            ground.reserved[i] = 1;
+        }
+    }
+    ground.paintField(smoothField(road, corners, corners, 1), biome.road, false, skip);
 }
 
 function scatter(

@@ -72,8 +72,8 @@ generatedRecipe("scaperune_oasis", 71, 110, {
 The same seed and settings always give the same map. It's generated at load from a fixed palette
 (`BIOMES`, `PREFABS` and `BRIDGE`); nothing is baked to a file.
 
-What it does, in order: rivers, sea and ponds, heights, floors, bridges, buildings, roads, scatter, then
-reachability. Anything it can't connect gets blocked (see below).
+What it does, in order: rivers, sea and ponds, heights, floors, bridges, buildings, roads (out of each
+door, joining up), scatter, then reachability. Anything it can't connect gets blocked (see below).
 
 Preview it from above, without a browser. This draws it with the game's own minimap renderer and checks
 it with the game's real collision:
@@ -166,7 +166,8 @@ into world tiles.
   field with a value per tile corner, above 0 inside: distance to a river's centre less its half width, a
   radius less the distance from a pond's middle. Anything smooth. `addPathToField` makes one from a path,
   and `smoothField` evens one out. `paintOverlay(mask, id, blocked)` does the same from a mask of tiles,
-  for hand-made shapes, but the edges follow the tiles more.
+  for hand-made shapes, but the edges follow the tiles more, and it smooths away anything a tile or two
+  across.
 - **Why fields:** an edge can only cross a tile side at a corner or at its middle, and adjacent tiles share
   those points. So `shapes.ts` picks each tile's shape from which of its eight half sides are covered, and
   edges join up. Picking shapes from whole tiles can't do that: a line ending at a corner next to one
@@ -197,8 +198,8 @@ rectangle of the real world.
 
 `stamp` options:
 
-- `floor`: `"footprint"` keeps our ground and takes only the tiles with an overlay. Use this for buildings:
-  there's no edge to see. `"all"` takes the whole rectangle, which rarely looks right. A function picks which
+- `floor`: `"footprint"` keeps our ground and takes only the floor inside the walls, so the ground runs up to
+  them and no stray steps or paths come along. Use this for buildings. `"all"` takes the whole rectangle, which rarely looks right. A function picks which
   overlays to take: the bridge takes almost none, so that it stands on our river and our road runs onto it.
 - `flatten`: stands it on flat ground. Use this for buildings.
 - `feather`: how many tiles the ground takes to ease back. 4 is about right.
@@ -244,6 +245,14 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   building's collision came through.
 - **Cliffs are weak.** Steep blocked tiles with a rock overlay collide, but look like a grey ramp. Real
   mountains use wall-type rock locs along their edges (14622-14626 and others).
+- **Roads have an overlay down the middle of a soft underlay.** Underlays blend over 11 tiles, which hides the
+  tile grid but can't be narrow, so an underlay alone is a wide faint stain, not a road. An overlay alone has
+  a hard edge. Together the stain takes the contrast out of the edge. It needs ground with some colour in it:
+  on grey or white snow any tint blends into a pastel halo, so snow's trail is the snow, with no stain.
+- **Overlay edges are always faceted.** They can only bend at corners and side middles, so a curve is a
+  chain of short straight lines. Keep curves big and contrast low. Nothing makes them truly round.
+- **Dev maps draw smooth ground** (`setSmoothTerrain`, in `GameClient`): colours run across tiles rather than
+  filling each one flat. Real maps don't, so a dev map's ground looks softer than theirs.
 - **Keep noise big on edges.** A field's edge is only as smooth as the field: use `createNoise(seed, 1)` or
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Shallow edges still step.** A line a tile side can't hold has to jump a corner or a middle at a time, so a

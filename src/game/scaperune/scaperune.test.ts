@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { SceneTileModel } from "../../rs/scene/SceneTileModel";
-import { Ground } from "./Ground";
+import { Ground, getInsideTiles } from "./Ground";
 import { createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./format";
+import { Point, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
 import { OVERLAY_SHAPES, getCoveredSides, getOverlayShape } from "./shapes";
 
@@ -171,6 +172,70 @@ describe("rotatePrefab", () => {
         expect(turned.levels[0].overlays).toEqual(prefab.levels[0].overlays);
         expect(turned.levels[0].rotations).toEqual(prefab.levels[0].rotations);
         expect(turned.locs[0]).toMatchObject({ x: 0, y: 0, rotation: 0 });
+    });
+});
+
+describe("getInsideTiles", () => {
+    it("is what's inside the walls, doorway included, and not what's outside them", () => {
+        // A room from x 2 to 6, y 2 to 5, with a gap in its south wall for a door
+        const prefab = createTileGrid(9, 8);
+        const wall = (x: number, y: number, rotation: number) =>
+            prefab.locs.push({ id: 1, type: 0, rotation, level: 0, x, y });
+        for (let y = 2; y <= 5; y++) {
+            wall(2, y, 0);
+            wall(6, y, 2);
+        }
+        for (let x = 2; x <= 6; x++) {
+            wall(x, 5, 1);
+            if (x !== 4) {
+                wall(x, 2, 3);
+            }
+        }
+        const inside = getInsideTiles(prefab);
+        const at = (x: number, y: number) => inside[x + y * 9];
+        expect(at(2, 2)).toBe(1);
+        expect(at(6, 5)).toBe(1);
+        // The doorway, and the step outside it
+        expect(at(4, 2)).toBe(1);
+        expect(at(4, 1)).toBe(0);
+        expect(at(1, 3)).toBe(0);
+        expect(at(7, 3)).toBe(0);
+        expect(at(4, 6)).toBe(0);
+    });
+
+    it("takes a stamp's floor only inside the walls, and leaves the ground round it free", () => {
+        const prefab = createTileGrid(5, 5);
+        for (let i = 1; i <= 3; i++) {
+            prefab.locs.push({ id: 1, type: 0, rotation: 0, level: 0, x: 1, y: i });
+            prefab.locs.push({ id: 1, type: 0, rotation: 2, level: 0, x: 3, y: i });
+            prefab.locs.push({ id: 1, type: 0, rotation: 3, level: 0, x: i, y: 1 });
+            prefab.locs.push({ id: 1, type: 0, rotation: 1, level: 0, x: i, y: 3 });
+        }
+        // Floor everywhere: the outer ring's a stray step or path
+        prefab.levels[0].overlays.fill(5);
+        const ground = new Ground(16, 16);
+        ground.stamp(prefab, 5, 5, { floor: "footprint", feather: 0, flatten: true, height: 10 });
+        expect(ground.level0.overlays[ground.tile(7, 7)]).toBe(5);
+        expect(ground.level0.overlays[ground.tile(5, 5)]).toBe(0);
+        expect(ground.reserved[ground.tile(7, 7)]).toBe(1);
+        expect(ground.reserved[ground.tile(5, 5)]).toBe(0);
+    });
+});
+
+describe("smoothPath", () => {
+    it("rounds a corner off and leaves the ends where they are", () => {
+        const path: Point[] = [];
+        for (let i = 0; i <= 10; i++) {
+            path.push({ x: i, y: 0 });
+        }
+        for (let i = 1; i <= 10; i++) {
+            path.push({ x: 10, y: i });
+        }
+        const smooth = smoothPath(path, 3, 3);
+        expect(smooth[0]).toEqual(path[0]);
+        expect(smooth[smooth.length - 1]).toEqual(path[path.length - 1]);
+        // Pulled in from the corner
+        expect(Math.hypot(smooth[10].x - 10, smooth[10].y)).toBeGreaterThan(1);
     });
 });
 

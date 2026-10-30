@@ -9,6 +9,9 @@ export type BiomeDef = {
     ground: number[];
     // Underlay by the sea and on fords
     shore: number;
+    // Underlay under a road, which the renderer blends softly into the ground. Real
+    // roads have one under them too.
+    trail: number;
     // Overlays
     road: number;
     water: number;
@@ -26,6 +29,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     meadow: {
         ground: [48, 50, 49],
         shore: 62,
+        trail: 63,
         road: 22,
         water: 6,
         trees: [
@@ -44,6 +48,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     desert: {
         ground: [62, 61],
         shore: 129,
+        trail: 68,
         road: 25,
         water: 442,
         trees: [
@@ -64,6 +69,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     swamp: {
         ground: [54, 64, 49],
         shore: 64,
+        trail: 63,
         road: 81,
         water: 7,
         trees: [
@@ -80,6 +86,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     snow: {
         ground: [58],
         shore: 59,
+        // The snow itself: any tint in it shows as a coloured halo round the road
+        trail: 58,
         road: 82,
         water: 6,
         trees: [
