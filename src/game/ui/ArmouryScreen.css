@@ -135,9 +135,26 @@
 }
 
 .ui-armoury-changes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    color: var(--ui-white);
+}
+
+.ui-armoury-changes li {
     display: flex;
-    flex-wrap: wrap;
-    gap: 2px 12px;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 1px 0;
+}
+
+.ui-armoury-changes li + li {
+    border-top: 1px solid var(--ui-divider);
+}
+
+.ui-armoury-stat-label {
+    color: #b8aa8a;
 }
 
 .ui-armoury-buy {

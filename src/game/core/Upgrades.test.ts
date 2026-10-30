@@ -171,7 +171,7 @@ describe("hilts", () => {
         expect(hiltChoices(weapon("godsword", 1))).toEqual([]);
         const choices = hiltChoices(weapon("godsword", 2));
         expect(choices.length).toBe(4);
-        expect(describeChoice(choices[0])).toEqual({
+        expect(describeChoice(choices[0])).toMatchObject({
             title: "Armadyl godsword",
             text: "Every third swing is The Judgement, a huge hit.",
             iconObjId: 11810,
@@ -422,6 +422,14 @@ describe("endless runs", () => {
             currentValue: 0.25,
         });
         expect(piety.title).toBe("Piety +1");
-        expect(piety.text).toBe("+5% damage, +30% damage in all.");
+        expect(piety.stats).toEqual([
+            { label: "Damage", value: "+30%", from: "+25%", better: true },
+        ]);
+        const newPiety = describeChoice({
+            kind: "newPassive",
+            passiveId: "piety",
+            quality: "common",
+        });
+        expect(newPiety.stats).toEqual([{ label: "Damage", value: "+5%" }]);
     });
 });

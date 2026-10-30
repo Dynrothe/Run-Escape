@@ -26,6 +26,9 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
     reroll: { label: "rerolls", unit: "flat" },
     thorns: { label: "recoil damage", unit: "flat" },
     healChance: { label: "chance to heal on hit", unit: "percent" },
+    meleeKnockback: { label: "melee knockback", unit: "percent" },
+    weaponSlots: { label: "weapon slots", unit: "flat" },
+    passiveSlots: { label: "passive slots", unit: "flat" },
 };
 
 // The order stats are listed in
@@ -49,6 +52,41 @@ export function formatStats(stats: Partial<Stats>): string[] {
         if (value) {
             lines.push(formatStat(key, value));
         }
+    }
+    return lines;
+}
+
+// A stat's value on its own: "+10%", "-1"
+export function formatStatValue(key: StatKey, value: number): string {
+    const sign = value < 0 ? "-" : "+";
+    const abs = Math.abs(value);
+    return STAT_INFO[key].unit === "percent"
+        ? `${sign}${Math.round(abs * 100)}%`
+        : `${sign}${Math.round(abs * 10) / 10}`;
+}
+
+// Every stat a piece has after an upgrade, with what it had before: for the
+// Armoury's "Damage +10% → +15%". from is undefined when it's unchanged, and
+// "+0" for a stat the upgrade adds.
+export function compareStats(
+    before: Partial<Stats>,
+    after: Partial<Stats>,
+): { key: StatKey; label: string; from?: string; to: string; better: boolean }[] {
+    const lines: { key: StatKey; label: string; from?: string; to: string; better: boolean }[] = [];
+    for (const key of STAT_ORDER) {
+        const was = before[key] ?? 0;
+        const now = after[key] ?? 0;
+        if (!was && !now) {
+            continue;
+        }
+        const label = STAT_INFO[key].label;
+        lines.push({
+            key,
+            label: label[0].toUpperCase() + label.slice(1),
+            ...(Math.abs(now - was) > 1e-9 && { from: formatStatValue(key, was) }),
+            to: formatStatValue(key, now),
+            better: now >= was,
+        });
     }
     return lines;
 }

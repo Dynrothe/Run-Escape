@@ -30,8 +30,8 @@ import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
+import { WeaponStatLine } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import { MAX_PASSIVES, MAX_WEAPONS } from "../core/Upgrades";
 import {
     SaveData,
     getNextUpgradeCost,
@@ -48,6 +48,7 @@ import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
+import { SkipButton } from "./SkipButton";
 import { GAME_VERSION } from "./changelog";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 
@@ -177,28 +178,62 @@ function Toggle({
     );
 }
 
-function SoundSettings({ ui, client }: ScreenProps): JSX.Element {
+// music: the run's map has music, so it gets its own volume
+function SoundSettings({
+    ui,
+    client,
+    music = false,
+}: ScreenProps & { music?: boolean }): JSX.Element {
     const { muted, volume } = ui.audio;
     return (
         <>
             <Setting name="Sound" text="M turns it on and off at any time">
                 <Toggle on={!muted} label="Sound" onToggle={() => client.toggleMute()} />
             </Setting>
-            <Setting name="Volume">
-                <input
-                    className={"ui-volume" + (muted ? " ui-volume-muted" : "")}
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(volume * 100)}
-                    onChange={(e) => client.setVolume(parseInt(e.target.value) / 100)}
-                    // Give the keys back to the game once it's set
-                    onPointerUp={(e) => e.currentTarget.blur()}
-                    aria-label="Volume"
+            <VolumeSetting
+                name="Volume"
+                value={volume}
+                muted={muted}
+                onChange={(value) => client.setVolume(value)}
+            />
+            {music && (
+                <VolumeSetting
+                    name="Music"
+                    value={ui.audio.music}
+                    muted={muted}
+                    onChange={(value) => client.setMusicVolume(value)}
                 />
-                <span className="ui-volume-value">{Math.round(volume * 100)}%</span>
-            </Setting>
+            )}
         </>
+    );
+}
+
+function VolumeSetting({
+    name,
+    value,
+    muted,
+    onChange,
+}: {
+    name: string;
+    value: number;
+    muted: boolean;
+    onChange: (value: number) => void;
+}): JSX.Element {
+    return (
+        <Setting name={name}>
+            <input
+                className={"ui-volume" + (muted ? " ui-volume-muted" : "")}
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(value * 100)}
+                onChange={(e) => onChange(parseInt(e.target.value) / 100)}
+                // Give the keys back to the game once it's set
+                onPointerUp={(e) => e.currentTarget.blur()}
+                aria-label={name}
+            />
+            <span className="ui-volume-value">{Math.round(value * 100)}%</span>
+        </Setting>
     );
 }
 
@@ -861,6 +896,8 @@ function formatSlotLevel(slot: SlotView): string {
     return slot.level === slot.maxLevel ? "max" : String(slot.level);
 }
 
+// A weapon or passive in the HUD, with what it does on a card shown while
+// it's pointed at
 function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element {
     return (
         <div className="ui-slots">
@@ -871,16 +908,29 @@ function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element 
                         key={i}
                         className="ui-slot"
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
-                        title={slot ? `${slot.name} (level ${slot.level}) ${slot.detail}` : ""}
                     >
                         {slot && (
-                            <ItemIcon
-                                objId={slot.iconObjId}
-                                spriteId={slot.iconSpriteId}
-                                size={30}
-                            />
+                            <>
+                                <ItemIcon
+                                    objId={slot.iconObjId}
+                                    spriteId={slot.iconSpriteId}
+                                    size={30}
+                                />
+                                <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
+                                <div className="ui-slot-tip rs-border rs-background">
+                                    <div style={{ color: slot.rarityColor }}>{slot.name}</div>
+                                    <div className="ui-slot-tip-level">
+                                        {slot.level >= slot.maxLevel
+                                            ? "Max level"
+                                            : `Level ${slot.level} of ${slot.maxLevel}`}
+                                    </div>
+                                    {slot.stats?.map((line) => (
+                                        <div key={line}>{line}</div>
+                                    ))}
+                                    {slot.detail && <div>{slot.detail}</div>}
+                                </div>
+                            </>
                         )}
-                        {slot && <span className="ui-slot-level">{formatSlotLevel(slot)}</span>}
                     </div>
                 );
             })}
@@ -982,8 +1032,8 @@ function Hud({
             </div>
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={MAX_WEAPONS} />
-                    <Slots slots={hud.passives} max={MAX_PASSIVES} />
+                    <Slots slots={hud.weapons} max={hud.maxWeapons} />
+                    <Slots slots={hud.passives} max={hud.maxPassives} />
                     <GearSlots gear={hud.gear} />
                 </div>
                 <div className="ui-timer">{formatTime(hud.seconds)}</div>
@@ -1052,6 +1102,32 @@ function Minimap({ client }: { client: GameClient }): JSX.Element {
     );
 }
 
+// A weapon's stats on a level up card: "Damage 10 → 13", the new value green
+// when it's better
+function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
+    return (
+        <div className="ui-choice-stats">
+            {stats.map((line) => (
+                <span key={line.label} className="ui-choice-stat">
+                    <span className="ui-choice-stat-label">{line.label}</span>{" "}
+                    {line.from !== undefined && <>{line.from} → </>}
+                    <span
+                        className={
+                            line.from === undefined
+                                ? undefined
+                                : line.better
+                                  ? "ui-choice-stat-up"
+                                  : "ui-choice-stat-down"
+                        }
+                    >
+                        {line.value}
+                    </span>
+                </span>
+            ))}
+        </div>
+    );
+}
+
 function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // The godsword's hilt is picked as the rest of the level up that took it
     // to its hilt level
@@ -1098,6 +1174,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                     )}
                                 </div>
                                 <div className="ui-card-text">{choice.text}</div>
+                                {choice.stats && choice.stats.length > 0 && (
+                                    <ChoiceStats stats={choice.stats} />
+                                )}
                             </div>
                             {choice.rarity && (
                                 <span className="ui-rarity" style={{ color: choice.rarity.color }}>
@@ -1108,7 +1187,19 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                     ))}
                 </div>
                 {!hilt && (
-                    <RerollButton rerolls={ui.hud?.rerolls ?? 0} onReroll={() => client.reroll()} />
+                    <div className="ui-levelup-actions">
+                        <RerollButton
+                            rerolls={ui.hud?.rerolls ?? 0}
+                            onReroll={() => client.reroll()}
+                        />
+                        {ui.hud?.skip && (
+                            <SkipButton
+                                cost={ui.hud.skip.cost}
+                                affordable={ui.hud.skip.affordable}
+                                onSkip={() => client.skip()}
+                            />
+                        )}
+                    </div>
                 )}
             </div>
         </div>
@@ -1187,9 +1278,16 @@ function PauseModal({
                                         spriteId={slot.iconSpriteId}
                                         size={28}
                                     />
-                                    <span style={{ color: slot.rarityColor }}>{slot.name}</span>
-                                    <span className="ui-pause-detail">{slot.detail}</span>
-                                    <span className="ui-subtle">
+                                    {/* The name, and what it does under it */}
+                                    <span className="ui-pause-name">
+                                        <span style={{ color: slot.rarityColor }}>{slot.name}</span>
+                                        <span className="ui-pause-detail">
+                                            {[...(slot.stats ?? []), slot.detail]
+                                                .filter((text) => text)
+                                                .join(", ")}
+                                        </span>
+                                    </span>
+                                    <span className="ui-pause-level">
                                         {slot.level >= slot.maxLevel
                                             ? "max"
                                             : `level ${slot.level}`}
@@ -1197,6 +1295,16 @@ function PauseModal({
                                 </div>
                             ))}
                         </div>
+                        {hud.stats.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">Your stats</h3>
+                                <div className="ui-pause-stats">
+                                    {hud.stats.map((line) => (
+                                        <span key={line}>{line}</span>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                         {hud.gear.some((slot) => slot.item) && (
                             <>
                                 <h3 className="ui-pause-heading">Worn equipment</h3>
@@ -1252,7 +1360,11 @@ function PauseModal({
                             </>
                         )}
                         <h3 className="ui-pause-heading">Settings</h3>
-                        <SoundSettings ui={ui} client={client} />
+                        <SoundSettings
+                            ui={ui}
+                            client={client}
+                            music={getMap(ui.mapId).music !== undefined}
+                        />
                         <AutoPauseSetting ui={ui} client={client} />
                     </div>
                 </div>
@@ -1278,6 +1390,32 @@ function listNames(names: string[], most = 3): string {
     const rest =
         names.length > most ? `${names.length - shown.length} more` : names[names.length - 1];
     return `${shown.join(", ")} and ${rest}`;
+}
+
+// Damage a second, with a decimal while it's small
+function formatPerSecond(perSecond: number): string {
+    return perSecond < 100_000
+        ? perSecond.toLocaleString(undefined, { maximumFractionDigits: perSecond < 10 ? 1 : 0 })
+        : formatBig(perSecond);
+}
+
+// Big numbers the way OSRS shows a stack: in full up to 99,999, then 100K,
+// then 10M, so an endless run's totals still fit
+function formatBig(value: number): string {
+    const n = Math.round(value);
+    if (n < 100_000) {
+        return n.toLocaleString();
+    }
+    if (n < 10_000_000) {
+        return `${Math.floor(n / 1000).toLocaleString()}K`;
+    }
+    return `${Math.floor(n / 1_000_000).toLocaleString()}M`;
+}
+
+// A stat's number, shortened when it's big, in full when pointed at
+function Big({ value }: { value: number }): JSX.Element {
+    const n = Math.round(value);
+    return <span title={n >= 100_000 ? n.toLocaleString() : undefined}>{formatBig(n)}</span>;
 }
 
 function ResultModal({ ui, client }: ScreenProps): JSX.Element {
@@ -1318,38 +1456,138 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </p>
                 ))}
                 {result && (
-                    <table className="ui-result-table">
-                        <tbody>
-                            <tr>
-                                <td>Adventurer</td>
-                                <td>{result.characterName}</td>
-                            </tr>
-                            {result.endless && (
-                                <tr>
-                                    <td>Endless round</td>
-                                    <td>{result.round}</td>
-                                </tr>
+                    <div className="ui-result-columns">
+                        <div className="ui-result-column">
+                            <table className="ui-result-table">
+                                <tbody>
+                                    <tr>
+                                        <td>Adventurer</td>
+                                        <td>{result.characterName}</td>
+                                    </tr>
+                                    {result.endless && (
+                                        <tr>
+                                            <td>Endless round</td>
+                                            <td>{result.round}</td>
+                                        </tr>
+                                    )}
+                                    <tr>
+                                        <td>Survived</td>
+                                        <td>{formatTime(result.seconds)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Level</td>
+                                        <td>{result.level}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Kills</td>
+                                        <td>
+                                            <Big value={result.kills} />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Biggest hit</td>
+                                        <td>
+                                            <Big value={result.stats.highestHit} />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Damage taken</td>
+                                        <td>
+                                            <Big value={result.stats.damageTaken} />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Hitpoints healed</td>
+                                        <td>
+                                            <Big value={result.stats.healed} />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Caskets opened</td>
+                                        <td>{result.caskets}</td>
+                                    </tr>
+                                    {(result.stats.rerollsUsed > 0 || result.stats.skips > 0) && (
+                                        <tr>
+                                            <td>Rerolls / skips</td>
+                                            <td>
+                                                {result.stats.rerollsUsed} / {result.stats.skips}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    <tr>
+                                        <td>Coins banked</td>
+                                        <td>
+                                            <Coins amount={result.coins} />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            {result.bossKills.length > 0 && (
+                                <>
+                                    <h3 className="ui-pause-heading">Bosses</h3>
+                                    <table className="ui-result-table">
+                                        <tbody>
+                                            {result.bossKills.map((boss, i) => (
+                                                <tr key={i}>
+                                                    <td>{boss.name}</td>
+                                                    <td>{formatTime(boss.seconds)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
                             )}
-                            <tr>
-                                <td>Survived</td>
-                                <td>{formatTime(result.seconds)}</td>
-                            </tr>
-                            <tr>
-                                <td>Level</td>
-                                <td>{result.level}</td>
-                            </tr>
-                            <tr>
-                                <td>Kills</td>
-                                <td>{result.kills.toLocaleString()}</td>
-                            </tr>
-                            <tr>
-                                <td>Coins banked</td>
-                                <td>
-                                    <Coins amount={result.coins} />
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                        </div>
+                        {result.damage.length > 0 && (
+                            <div className="ui-result-column">
+                                <table className="ui-result-damage">
+                                    <thead>
+                                        <tr>
+                                            <th />
+                                            <th>Damage</th>
+                                            <th>Kills</th>
+                                            <th>DPS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {result.damage.map((row, i) => (
+                                            <tr key={i}>
+                                                <td>
+                                                    <span className="ui-result-source">
+                                                        {row.iconObjId !== undefined && (
+                                                            <ItemIcon
+                                                                objId={row.iconObjId}
+                                                                spriteId={row.iconSpriteId}
+                                                                size={24}
+                                                            />
+                                                        )}
+                                                        <span
+                                                            className="ui-result-name"
+                                                            style={{ color: row.color }}
+                                                            title={row.name}
+                                                        >
+                                                            {row.name}
+                                                        </span>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <Big value={row.damage} />
+                                                </td>
+                                                <td>
+                                                    <Big value={row.kills} />
+                                                </td>
+                                                <td>
+                                                    {row.perSecond !== undefined
+                                                        ? formatPerSecond(row.perSecond)
+                                                        : ""}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 )}
                 <div className="ui-row">
                     <button className="ui-button ui-button-go" onClick={() => client.leaveRun()}>

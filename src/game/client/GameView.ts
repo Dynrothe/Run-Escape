@@ -63,6 +63,8 @@ const SLASH_MS = 180;
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
     scythe_of_vitur: "150, 20, 40",
+    thunder_khopesh: "150, 200, 255",
+    dinhs_bulwark: "210, 180, 110",
 };
 const AURA_MS = 320;
 const BLAST_MS = 480;

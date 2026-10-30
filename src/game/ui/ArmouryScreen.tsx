@@ -6,7 +6,7 @@ import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
 import { RARITIES } from "../content/rarity";
 import { describeSetProgress, getItemSet } from "../content/sets";
-import { diffStats, formatStats } from "../content/stats";
+import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { SaveData, getArmouryStep } from "../core/save";
 import "./ArmouryScreen.css";
@@ -152,13 +152,28 @@ function ArmouryDetails({
                     <ItemIcon objId={next.objId} size={22} />
                     <span style={{ color: RARITIES[next.rarity].color }}>{next.name}</span>
                 </div>
-                <div className="ui-armoury-changes">
-                    {diffStats(piece.stats, next.stats).map((change) => (
-                        <span key={change.key} className={change.delta > 0 ? "ui-good" : "ui-bad"}>
-                            {change.text}
-                        </span>
+                {/* Its stats once upgraded, with what they are now */}
+                <ul className="ui-armoury-changes">
+                    {compareStats(piece.stats, next.stats).map((line) => (
+                        <li key={line.key}>
+                            <span className="ui-armoury-stat-label">{line.label}</span>
+                            <span>
+                                {line.from !== undefined && <>{line.from} → </>}
+                                <span
+                                    className={
+                                        line.from === undefined
+                                            ? undefined
+                                            : line.better
+                                              ? "ui-good"
+                                              : "ui-bad"
+                                    }
+                                >
+                                    {line.to}
+                                </span>
+                            </span>
+                        </li>
                     ))}
-                </div>
+                </ul>
                 {step.locked ? (
                     <div className="ui-card-cost">{describeUnlockTask(step.locked)} to unlock</div>
                 ) : (

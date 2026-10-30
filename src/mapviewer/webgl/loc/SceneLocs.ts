@@ -161,6 +161,12 @@ export function getSceneLocs(
                 ) {
                     continue;
                 }
+                // Nothing from the floors above over a tile that's
+                // under a roof, so you can see into buildings where the upper
+                // floors are otherwise drawn (Prifddinas)
+                if (level > maxLevel && scene.isInside(maxLevel, tileX, tileY)) {
+                    continue;
+                }
 
                 if (tile.floorDecoration) {
                     if (tile.floorDecoration.entity instanceof Model) {

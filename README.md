@@ -39,8 +39,6 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 [docs/GAMEPLAY.md](docs/GAMEPLAY.md) goes through all of it, map by map. [CHANGELOG.md](CHANGELOG.md)
 has what changed in each version.
 
-## You can play the game at https://jere.io/run-escape
-
 ## Cache version
 
 The game is built on one Old School RuneScape cache, and only runs on that one: every NPC, item,
@@ -75,7 +73,7 @@ the browser's cache storage, so later loads are quick.
 ### Controls
 
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
-pick on a level up), **Esc** pauses, **Q** shows or hides the quest tracker, **M** mutes and the
+pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or hides the quest tracker, **M** mutes and the
 mouse wheel zooms.
 
 ### Tests and tools

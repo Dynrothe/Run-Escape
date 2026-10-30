@@ -101,7 +101,7 @@ const GODSWORD_SOUND = 2500;
 function godswordLevels(objId?: number): WeaponLevel[] {
     return levels(
         {
-            damage: 20,
+            damage: 44,
             cooldown: 1.9,
             amount: 1,
             area: 2.8,
@@ -112,10 +112,10 @@ function godswordLevels(objId?: number): WeaponLevel[] {
             knockback: 1,
             objId,
         },
-        { damage: 24, description: "+4 damage." },
+        { damage: 53, description: "+9 damage." },
         { area: 3.1, description: "+11% reach." },
         { cooldown: 1.7, description: "Swings a little faster." },
-        { damage: 30, description: "+6 damage." },
+        { damage: 66, description: "+13 damage." },
     );
 }
 
@@ -162,7 +162,7 @@ export const WEAPONS: WeaponDef[] = [
         levels: levels(
             {
                 name: "Bronze scimitar",
-                damage: 10,
+                damage: 16,
                 cooldown: 1.35,
                 amount: 1,
                 area: 2.2,
@@ -178,13 +178,13 @@ export const WEAPONS: WeaponDef[] = [
                 amount: 2,
                 description: "Also slashes behind you.",
             },
-            { name: "Steel scimitar", objId: SCIMITARS[2], damage: 13, description: "+3 damage." },
+            { name: "Steel scimitar", objId: SCIMITARS[2], damage: 21, description: "+5 damage." },
             { name: "Black scimitar", objId: SCIMITARS[3], area: 2.4, description: "+10% reach." },
             {
                 name: "Mithril scimitar",
                 objId: SCIMITARS[4],
-                damage: 15,
-                description: "+2 damage.",
+                damage: 24,
+                description: "+3 damage.",
             },
             {
                 name: "Adamant scimitar",
@@ -195,16 +195,16 @@ export const WEAPONS: WeaponDef[] = [
             {
                 name: "Rune scimitar",
                 objId: SCIMITARS[6],
-                damage: 17,
+                damage: 27,
                 area: 2.6,
-                description: "+2 damage, +8% reach.",
+                description: "+3 damage, +8% reach.",
             },
             {
                 name: "Dragon scimitar",
                 objId: SCIMITARS[7],
-                damage: 20,
+                damage: 32,
                 cooldown: 1.15,
-                description: "+3 damage, slashes a little faster.",
+                description: "+5 damage, slashes a little faster.",
             },
         ),
         evolution: { into: "abyssal_whip", requiresPassive: "piety" },
@@ -223,7 +223,7 @@ export const WEAPONS: WeaponDef[] = [
         evolved: true,
         levels: levels({
             name: "Abyssal whip",
-            damage: 28,
+            damage: 42,
             cooldown: 0.95,
             amount: 2,
             area: 3.1,
@@ -746,7 +746,7 @@ export const WEAPONS: WeaponDef[] = [
         levels: levels(
             {
                 name: "Bronze 2h sword",
-                damage: 14,
+                damage: 19,
                 cooldown: 1.6,
                 amount: 1,
                 area: 2.5,
@@ -766,8 +766,8 @@ export const WEAPONS: WeaponDef[] = [
             {
                 name: "Steel 2h sword",
                 objId: TWO_HANDED_SWORDS[2],
-                damage: 17,
-                description: "+3 damage.",
+                damage: 23,
+                description: "+4 damage.",
             },
             {
                 name: "Black 2h sword",
@@ -778,8 +778,8 @@ export const WEAPONS: WeaponDef[] = [
             {
                 name: "Mithril 2h sword",
                 objId: TWO_HANDED_SWORDS[4],
-                damage: 20,
-                description: "+3 damage.",
+                damage: 27,
+                description: "+4 damage.",
             },
             {
                 name: "Adamant 2h sword",
@@ -796,8 +796,8 @@ export const WEAPONS: WeaponDef[] = [
             {
                 name: "Dragon 2h sword",
                 objId: TWO_HANDED_SWORDS[7],
-                damage: 24,
-                description: "+4 damage.",
+                damage: 32,
+                description: "+5 damage.",
             },
         ),
         evolution: { into: "colossal_blade", requiresPassive: "dizanas_quiver" },
@@ -817,7 +817,7 @@ export const WEAPONS: WeaponDef[] = [
         bigHits: [0.5],
         unlock: { kind: "beatMap", mapId: "varlamore" },
         levels: levels({
-            damage: 34,
+            damage: 54,
             cooldown: 1.5,
             amount: 2,
             area: 3.6,
@@ -1126,7 +1126,7 @@ export const WEAPONS: WeaponDef[] = [
         bigHits: [0.5, 0.25],
         levels: levels(
             {
-                damage: 21,
+                damage: 38,
                 cooldown: 1.25,
                 amount: 1,
                 area: 2.9,
@@ -1137,10 +1137,10 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.6,
                 objId: 22325,
             },
-            { damage: 25, description: "+4 damage." },
+            { damage: 45, description: "+7 damage." },
             { area: 3.3, description: "+14% reach." },
             { cooldown: 1.1, description: "Sweeps a little faster." },
-            { damage: 30, description: "+5 damage." },
+            { damage: 54, description: "+9 damage." },
         ),
     },
     godsword(
@@ -1242,7 +1242,7 @@ export const WEAPONS: WeaponDef[] = [
         hits: [0.4, 0.5, 0.6, 1],
         levels: levels(
             {
-                damage: 9,
+                damage: 11,
                 cooldown: 1.2,
                 amount: 1,
                 area: 2.3,
@@ -1252,10 +1252,10 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.2,
                 objId: 13652,
             },
-            { damage: 11, description: "+2 damage a slash." },
+            { damage: 14, description: "+3 damage a slash." },
             { area: 2.6, description: "+13% reach." },
             { cooldown: 1.05, description: "Slashes a little faster." },
-            { damage: 13, amount: 2, description: "+2 damage a slash; also slashes behind you." },
+            { damage: 16, amount: 2, description: "+2 damage a slash; also slashes behind you." },
         ),
         unlock: { kind: "killBoss", mapId: "morytania", enemyId: "pestilent_bloat" },
     },
@@ -1274,7 +1274,7 @@ export const WEAPONS: WeaponDef[] = [
         slayer: VAMPYRES_AND_UNDEAD,
         levels: levels(
             {
-                damage: 16,
+                damage: 20,
                 cooldown: 1.1,
                 amount: 1,
                 area: 2.5,
@@ -1284,10 +1284,10 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.5,
                 objId: 22398,
             },
-            { damage: 19, description: "+3 damage." },
+            { damage: 24, description: "+4 damage." },
             { amount: 2, description: "Also flails behind you." },
             { cooldown: 1, area: 2.8, description: "Flails a little faster and further." },
-            { damage: 23, description: "+4 damage." },
+            { damage: 29, description: "+5 damage." },
         ),
         evolution: { into: "blisterwood_flail", requiresPassive: "book_of_the_dead" },
         unlock: { kind: "beatMap", mapId: "morytania" },
@@ -1337,7 +1337,7 @@ export const WEAPONS: WeaponDef[] = [
         unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
-                damage: 15,
+                damage: 24,
                 cooldown: 0.85,
                 amount: 1,
                 area: 2.3,
@@ -1347,10 +1347,10 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.3,
                 objId: 26219,
             },
-            { damage: 18, description: "+3 damage." },
+            { damage: 29, description: "+5 damage." },
             { area: 2.6, description: "+13% reach." },
             { cooldown: 0.75, description: "Stabs a little faster." },
-            { damage: 22, description: "+4 damage." },
+            { damage: 35, description: "+6 damage." },
         ),
     },
     {
@@ -1378,7 +1378,7 @@ export const WEAPONS: WeaponDef[] = [
         },
         levels: levels(
             {
-                damage: 24,
+                damage: 53,
                 cooldown: 2.1,
                 amount: 1,
                 area: 2.7,
@@ -1389,10 +1389,10 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 2,
                 objId: 6528,
             },
-            { damage: 28, description: "+4 damage." },
+            { damage: 62, description: "+9 damage." },
             { area: 3, description: "+11% reach." },
             { cooldown: 1.9, description: "Swings a little faster." },
-            { damage: 34, description: "+6 damage." },
+            { damage: 75, description: "+13 damage." },
         ),
     },
     {
@@ -1419,7 +1419,7 @@ export const WEAPONS: WeaponDef[] = [
         },
         levels: levels(
             {
-                damage: 18,
+                damage: 36,
                 cooldown: 1.4,
                 amount: 1,
                 area: 2.3,
@@ -1429,10 +1429,43 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.8,
                 objId: 13576,
             },
-            { damage: 21, description: "+3 damage." },
+            { damage: 42, description: "+6 damage." },
             { area: 2.6, description: "+13% reach." },
             { cooldown: 1.25, description: "Swings a little faster." },
-            { damage: 26, description: "+5 damage." },
+            { damage: 52, description: "+10 damage." },
+        ),
+    },
+    {
+        id: "dinhs_bulwark",
+        name: "Dinh's bulwark",
+        kind: "sweep",
+        description: "A slow, heavy bash that hits everything around you, far out.",
+        iconObjId: 21015,
+        playerSeq: 7511,
+        // hacksword_slash stands in for its sound
+        sound: 2500,
+        hitSound: -1,
+        rarity: "rare",
+        style: "melee",
+        unlock: { kind: "beatMap", mapId: "kourend" },
+        levels: levels(
+            {
+                damage: 60,
+                cooldown: 3.4,
+                amount: 1,
+                area: 4,
+                // All the way round
+                arc: Math.PI,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 1.2,
+                objId: 21015,
+            },
+            { damage: 78, description: "+18 damage." },
+            { area: 4.6, description: "+15% reach." },
+            { cooldown: 3, description: "Bashes a little faster." },
+            { damage: 96, description: "+18 damage." },
         ),
     },
     {
@@ -1450,7 +1483,7 @@ export const WEAPONS: WeaponDef[] = [
         unlock: { kind: "killBoss", mapId: "varlamore", enemyId: "manticore" },
         levels: levels(
             {
-                damage: 11,
+                damage: 14,
                 cooldown: 0.75,
                 amount: 2,
                 area: 2.1,
@@ -1460,10 +1493,53 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.4,
                 objId: 28997,
             },
-            { damage: 13, description: "+2 damage." },
+            { damage: 16, description: "+2 damage." },
             { cooldown: 0.65, description: "Slashes a little faster." },
             { area: 2.4, description: "+14% reach." },
-            { damage: 16, description: "+3 damage." },
+            { damage: 20, description: "+4 damage." },
+        ),
+    },
+
+    {
+        id: "thunder_khopesh",
+        name: "Thunder khopesh",
+        kind: "slash",
+        description:
+            "Quick slashes at the closest enemy. Every third is Thunderclap: it hits everything around you.",
+        iconObjId: 30388,
+        playerSeq: 390,
+        // hacksword_slash
+        sound: 2500,
+        hitSound: -1,
+        rarity: "rare",
+        style: "melee",
+        unlock: { kind: "beatMap", mapId: "varlamore" },
+        special: {
+            name: "Thunderclap",
+            every: 3,
+            damage: 1.6,
+            // The Dragon 2h sword's Powerstab, which hits all round too
+            playerSeq: 3157,
+            spotAnim: 559,
+            // Saradomin Strike's lightning on what it hits
+            aoe: { radius: 3.5, impactSpotAnim: 76 },
+        },
+        levels: levels(
+            {
+                damage: 26,
+                cooldown: 1.05,
+                amount: 1,
+                area: 2.4,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 0.6,
+                objId: 30388,
+            },
+            { damage: 30, description: "+4 damage." },
+            { area: 2.7, description: "+13% reach." },
+            { cooldown: 0.9, description: "Slashes a little faster." },
+            { damage: 38, description: "+8 damage." },
         ),
     },
 
@@ -1915,7 +1991,7 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.3,
                 objId: 23898,
             },
-            { damage: 11, description: "+2 damage." },
+            { damage: 11, description: "+1 damage." },
             { amount: 2, description: "Casts one more spell." },
             {
                 name: "Crystal staff (attuned)",
@@ -2012,6 +2088,21 @@ export const WEAPONS: WeaponDef[] = [
         ),
     },
 ];
+
+// Every other level of a melee weapon pushes harder
+const KNOCKBACK_STEP = 0.2;
+for (const weapon of WEAPONS) {
+    if (weapon.kind === "slash" || weapon.kind === "sweep") {
+        weapon.levels = weapon.levels.map((level, i) => ({
+            ...level,
+            knockback: level.knockback + KNOCKBACK_STEP * Math.floor(i / 2),
+            description:
+                i > 0 && i % 2 === 0
+                    ? `${level.description} +${KNOCKBACK_STEP} knockback.`
+                    : level.description,
+        }));
+    }
+}
 
 export const WEAPON_BY_ID: Map<string, WeaponDef> = new Map(WEAPONS.map((w) => [w.id, w]));
 

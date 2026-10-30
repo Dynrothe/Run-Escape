@@ -2,19 +2,20 @@ import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import {
     PASSIVES,
     canLevelPassive,
-    formatPassiveValue,
+    formatPassiveNumber,
     getPassive,
     getPassiveGain,
 } from "../content/passives";
 import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
-import { CombatStyle } from "../content/types";
+import { CombatStyle, PassiveDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
+import { WeaponStatLine, weaponStatChanges, weaponStats } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Rng } from "./Rng";
 import { PassiveState, WeaponState } from "./entities";
 
-// Slots for a run's build. Kept small so a run is about what you choose, not
-// collecting everything.
+// Slots for a run's build, before the shop's. Kept small so a run is about
+// what you choose, not collecting everything.
 export const MAX_WEAPONS = 4;
 export const MAX_PASSIVES = 4;
 
@@ -47,6 +48,8 @@ export type ChoiceDescription = {
     iconSpriteId?: number;
     // undefined for evolutions and fallbacks
     quality?: Rarity;
+    // Weapons: what this level changes, or a new weapon's stats
+    stats?: WeaponStatLine[];
 };
 
 // The extra damage text for a weapon pick of this quality, if any
@@ -61,6 +64,19 @@ export function getOverlevelDamage(quality: Rarity): number {
     return OVERLEVEL_DAMAGE * RARITIES[quality].power;
 }
 
+// A passive's stat on a level up card, like a weapon's: "Damage +5%", or
+// with what it was before, "Damage +25% → +30%"
+function passiveStat(passive: PassiveDef, value: number, before?: number): WeaponStatLine {
+    return {
+        label: passive.effect[0].toUpperCase() + passive.effect.slice(1),
+        value: formatPassiveNumber(passive, value),
+        ...(before !== undefined && {
+            from: formatPassiveNumber(passive, before),
+            better: value >= before,
+        }),
+    };
+}
+
 export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
     switch (choice.kind) {
         case "newWeapon": {
@@ -70,6 +86,7 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
                 text: weapon.description + weaponBonusText(choice.quality),
                 iconObjId: weapon.iconObjId,
                 quality: choice.quality,
+                stats: weaponStats(weapon, weapon.levels[0]),
             };
         }
         case "weaponLevel": {
@@ -92,15 +109,25 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
                 text: level.description + weaponBonusText(choice.quality),
                 iconObjId: level.objId ?? weapon.iconObjId,
                 quality: choice.quality,
+                stats:
+                    choice.level > 1
+                        ? weaponStatChanges(weapon, weapon.levels[choice.level - 2], level)
+                        : undefined,
             };
         }
         case "evolve": {
             const into = getWeapon(choice.into);
-            return { title: into.name, text: into.description, iconObjId: into.iconObjId };
+            return {
+                title: into.name,
+                text: into.description,
+                iconObjId: into.iconObjId,
+                stats: weaponStats(into, into.levels[0]),
+            };
         }
         case "hilt": {
             // The hilted weapon's description, without the sweep it shares
             // with the blade: "Every third swing is The Judgement..."
+            // (no stats: the hilts all share the blade's)
             const into = getWeapon(choice.into);
             return {
                 title: into.name,
@@ -113,26 +140,28 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             const gain = getPassiveGain(passive, choice.quality);
             return {
                 title: passive.name,
-                text: `${passive.description} ${formatPassiveValue(passive, gain)}.`,
+                text: passive.description,
                 iconObjId: passive.iconObjId,
                 iconSpriteId: passive.iconSpriteId,
                 quality: choice.quality,
+                stats: [passiveStat(passive, gain)],
             };
         }
         case "passiveLevel": {
             const passive = getPassive(choice.passiveId);
             const gain = getPassiveGain(passive, choice.quality);
-            const total = formatPassiveValue(passive, choice.currentValue + gain);
             const past = choice.level - passive.maxLevel;
             return {
                 title:
                     past > 0
                         ? upgradedName(passive.name, past)
                         : `${passive.name} (level ${choice.level})`,
-                text: `${formatPassiveValue(passive, gain)}, ${total} in all.`,
+                text: passive.description,
                 iconObjId: passive.iconObjId,
                 iconSpriteId: passive.iconSpriteId,
                 quality: choice.quality,
+                // What it adds up to once taken: "Damage +25% → +30%"
+                stats: [passiveStat(passive, choice.currentValue + gain, choice.currentValue)],
             };
         }
         case "coins":
@@ -182,6 +211,8 @@ export function rollChoices(
     style: CombatStyle,
     unlocked?: ReadonlySet<string>,
     endless = false,
+    maxWeapons = MAX_WEAPONS,
+    maxPassives = MAX_PASSIVES,
 ): UpgradeChoice[] {
     const random = () => rng.next();
     const pool: { choice: () => UpgradeChoice; weight: number }[] = [];
@@ -225,7 +256,7 @@ export function rollChoices(
             });
         }
     }
-    if (weapons.length < MAX_WEAPONS) {
+    if (weapons.length < maxWeapons) {
         for (const weapon of WEAPONS) {
             if (weapon.evolved || ownedWeapons.has(weapon.id) || !isAvailable(weapon, unlocked)) {
                 continue;
@@ -269,7 +300,7 @@ export function rollChoices(
             });
         }
     }
-    if (passives.length < MAX_PASSIVES) {
+    if (passives.length < maxPassives) {
         for (const passive of PASSIVES) {
             if (!ownedPassives.has(passive.id) && isAvailable(passive, unlocked)) {
                 pool.push({

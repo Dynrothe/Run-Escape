@@ -13,7 +13,9 @@ import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
+import { formatStats } from "../content/stats";
 import { LOCKABLE_ITEMS, describeUnlockTask } from "../content/unlocks";
+import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { describeChoice } from "../core/Upgrades";
@@ -53,6 +55,7 @@ import { GameView } from "./GameView";
 import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -114,7 +117,7 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
 
 function getChoiceViews(sim: Sim): ChoiceView[] {
     return sim.choices.map((choice) => {
-        const { title, text, iconObjId, iconSpriteId, quality } = describeChoice(choice);
+        const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(choice);
         const rarity = quality ? RARITIES[quality] : undefined;
         return {
             title,
@@ -125,6 +128,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             rarity: rarity && { name: rarity.name, color: rarity.color },
+            stats,
         };
     });
 }
@@ -326,6 +330,11 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ audio: this.audio.settings });
     }
 
+    setMusicVolume(music: number): void {
+        this.audio.setSettings({ music, muted: false });
+        this.store.set({ audio: this.audio.settings });
+    }
+
     toggleMute(): void {
         this.audio.setSettings({ muted: !this.audio.settings.muted });
         this.store.set({ audio: this.audio.settings });
@@ -524,6 +533,23 @@ export class GameClient implements GameFrameHandler {
         return true;
     }
 
+    // Takes none of the level up's rewards, for coins from the run. False when
+    // it can't be skipped or there aren't the coins.
+    skip(): boolean {
+        const sim = this.sim;
+        if (!sim || sim.state !== "levelUp") {
+            return false;
+        }
+        if (!sim.skip()) {
+            this.sounds.denied();
+            return false;
+        }
+        this.sounds.buy();
+        this.syncOverlay();
+        this.updateHud(true);
+        return true;
+    }
+
     // Uses the utility item in an inventory slot (0-3)
     useItem(index: number): void {
         const sim = this.sim;
@@ -616,6 +642,8 @@ export class GameClient implements GameFrameHandler {
             result: {
                 ...result,
                 characterName: getCharacter(sim.characterId).name,
+                damage: getDamageViews(sim, result.stats),
+                bossKills: getBossKillViews(result.stats),
                 endlessRecord,
                 unlockedMap: unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
@@ -699,6 +727,8 @@ export class GameClient implements GameFrameHandler {
             }
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
+        } else if (overlay === "levelUp" && code === "KeyX") {
+            this.skip();
         } else if (overlay === "none" && code.startsWith("Digit")) {
             // The casket screen has its own keys (it knows when its animation
             // is done)
@@ -891,6 +921,8 @@ export class GameClient implements GameFrameHandler {
             seconds: sim.seconds,
             kills: sim.kills,
             coins: sim.coins,
+            maxWeapons: sim.maxWeapons,
+            maxPassives: sim.maxPassives,
             weapons: sim.weapons.map((w) => {
                 const last = w.def.levels.length;
                 const level = w.def.levels[Math.min(w.level, last) - 1];
@@ -901,6 +933,7 @@ export class GameClient implements GameFrameHandler {
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
                     detail: w.bonus > 0 ? `+${Math.round(w.bonus * 100)}% damage` : "",
+                    stats: weaponStats(w.def, level).map(formatWeaponStat),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
             }),
@@ -917,10 +950,14 @@ export class GameClient implements GameFrameHandler {
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
+            stats: formatStats(sim.stats),
             gear: getGearViews(sim),
             inventory: getInventoryViews(sim),
             buffs: getBuffViews(sim),
             rerolls: sim.rerollsLeft,
+            skip: sim.canSkip
+                ? { cost: sim.skipCost, affordable: sim.coins >= sim.skipCost }
+                : undefined,
             boss,
             quests: getQuestTrackViews(this.save, sim),
         };

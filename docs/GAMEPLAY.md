@@ -10,7 +10,12 @@ version and how to run it.
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
   into bigger stacks the same way. Levels follow the OSRS experience table (stretched for the
   later levels), and each one offers a choice of three: a new weapon, a weapon upgrade or a
-  passive. **1-4** pick with the keyboard.
+  passive. **1-4** pick with the keyboard. **R** rerolls the offer (one reroll a run, more from
+  the Pirate and the shop), and **X** skips it for coins from the run: 25 the first time, then
+  50, 100, 200 and 400, doubling each time.
+- When a run ends, the results screen shows its stats: damage, kills and damage a second for
+  each weapon (and the utility items and power-ups that did damage), the biggest hit, damage
+  taken, hitpoints healed and when each boss went down.
 - You carry at most **4 weapons and 4 passives**, so a build is about what you leave out.
 - **Rarity**, in OSRS drop table terms: every weapon and passive is Common, Uncommon, Rare or
   Very rare, which sets how often it's offered. Every offer also rolls its own rarity: a Common
@@ -32,12 +37,15 @@ version and how to run it.
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
   Book of the dead becomes **Undead Grasp**, whose hands hold what they hit; and a maxed dragon 2h
   sword with Dizana's quiver becomes the **Colossal blade**, which hits bosses and elites again.
-  Every weapon that can be offered evolves now: the shortbow with **Rigour** into the **Dark
+  Every weapon that can be offered evolves (but the Thunder khopesh and Dinh's bulwark): the shortbow with **Rigour** into the **Dark
   bow**, the fire spells with **Augury** into **Flames of Zamorak**, the thrownaxes with the Tome
   of fire into **Chain-hit axes**, Blood Burst with Rapid Heal into **Blood Barrage**, Smoke and
   Shadow Burst with the **Ancient sceptre** into **Smoke** and **Shadow Barrage**, the Ivandis
   flail with the Book of the dead into the **Blisterwood flail** and the Crystal bow with the
   Graceful outfit into the **Corrupted bow**.
+- **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
+  fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
+  **Augury** makes spells hit harder and their effects last longer.
 - **Adventurers**: three to start with, each with their own starting weapon, outfit and bonus.
   The rest join for beating a map or for a task done on one (in a single run, however it ends);
   the adventurer screen says what each one wants, and a task done mid-run rings the town
@@ -93,7 +101,10 @@ version and how to run it.
       new maps: **Osmumten's fang**, fast stabs that hit bosses and elites again; the
       **Tzhaar-ket-om**, a slow sweep with huge knockback whose every fourth swing is a Quake
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
-      hits take 30% more damage; and the **Dual macuahuitl**, very fast slashes on both sides.
+      hits take 30% more damage; the **Dual macuahuitl**, very fast slashes on both sides; and
+      the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
+      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -127,8 +138,8 @@ version and how to run it.
     | Desert     | Osmumten's fang                                  | Smoke Burst (Fareed), Blood Burst (Dessous), Shadow Burst (Damis)                                    |
     | Fremennik  | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja    | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend    | Kodai wand                                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
-    | Varlamore  | Dizana's quiver and Colossal blade               | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
+    | Kourend    | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Varlamore  | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania  | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
     | Prifddinas | Crystal bow                                      | Crystal staff (surviving 10 minutes)                                                                 |
@@ -279,6 +290,9 @@ version and how to run it.
   power-ups in their colours. Bosses, caskets and power-ups out of range sit on the rim.
 - **Hitsplats** are the client's own sprites: red for damage (on you too), green for poison.
 - **Coins** are banked when a run ends. Spend them on **Skills** (permanent bonuses, refundable).
+  **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.
+  **Smithing** and **Crafting** are the dear ones: up to 2 more weapon slots and 2 more passive
+  slots.
   (The Dwarf engineer is out of the game for now; its cannon is a power-up. Saves keep it
   unlocked.)
 - The **Armoury** (on the title screen) upgrades gear for good, with banked coins. Every piece

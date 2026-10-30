@@ -227,6 +227,92 @@ describe("Sim", () => {
     });
 });
 
+describe("melee", () => {
+    test("a slash waits for something in reach rather than swinging at air", () => {
+        const sim = createSim();
+        sim.enemies = [];
+        const scimitar = sim.weapons[0];
+        scimitar.cooldown = 0;
+        sim.step(0, 0);
+        expect(sim.takeEvents().some((e) => e.type === "slash")).toBe(false);
+        // Tries again in a moment, rather than after a whole swing's cooldown
+        expect(scimitar.cooldown).toBeLessThanOrEqual(10);
+        sim.spawnEnemy(getEnemy("chicken"), "normal", { x: sim.player.x + 1, y: sim.player.y });
+        scimitar.cooldown = 0;
+        sim.step(0, 0);
+        expect(sim.takeEvents().some((e) => e.type === "slash")).toBe(true);
+        expect(scimitar.cooldown).toBeGreaterThan(10);
+    });
+
+    test("the Thunder khopesh's Thunderclap hits everything around you", () => {
+        const sim = createSim();
+        sim.enemies = [];
+        sim.weapons.length = 0;
+        sim.addWeapon("thunder_khopesh");
+        const khopesh = sim.weapons[0];
+        const { x, y } = sim.player;
+        // One in front, one behind, one beside, and one out of reach
+        const near = [
+            { x: x + 1.5, y },
+            { x: x - 2, y },
+            { x, y: y + 2.5 },
+        ].map((at) => sim.spawnEnemy(getEnemy("chicken"), "normal", at)!);
+        const far = sim.spawnEnemy(getEnemy("chicken"), "normal", { x: x + 8, y })!;
+        for (const enemy of [...near, far]) {
+            enemy.hp = enemy.maxHp = 1e6;
+        }
+        // The third swing is the special
+        khopesh.uses = 2;
+        khopesh.cooldown = 0;
+        sim.step(0, 0);
+        for (const enemy of near) {
+            expect(enemy.hp).toBeLessThan(1e6);
+        }
+        expect(far.hp).toBe(1e6);
+    });
+
+    test("Dinh's bulwark hits everything around you, far out", () => {
+        const sim = armed("dinhs_bulwark");
+        const near = [
+            dummy(sim, 3.5, 0),
+            dummy(sim, -3.5, 0),
+            dummy(sim, 0, 3.5),
+            dummy(sim, 0, -3.5),
+        ];
+        const far = dummy(sim, 8, 0);
+        sim.weapons[0].cooldown = 0;
+        sim.step(0, 0);
+        for (const enemy of near) {
+            expect(enemy.hp).toBeLessThan(enemy.maxHp);
+        }
+        expect(far.hp).toBe(far.maxHp);
+    });
+
+    test("the shop's melee knockback pushes melee hits, not ranged ones", () => {
+        const push = (weaponId: string, meleeKnockback: number): number => {
+            const sim = armed(weaponId, "warrior", { ...emptyStats(), meleeKnockback });
+            const enemy = dummy(sim, 2, 0);
+            sim.weapons[0].cooldown = 0;
+            let most = 0;
+            for (let i = 0; i < 20; i++) {
+                sim.step(0, 0);
+                most = Math.max(most, Math.abs(enemy.vx));
+            }
+            return most;
+        };
+        expect(push("scimitar", 1)).toBeGreaterThan(push("scimitar", 0));
+        expect(push("throwing_knives", 1)).toBe(push("throwing_knives", 0));
+    });
+
+    test("Chivalry adds melee damage and max hitpoints", () => {
+        const sim = createSim();
+        const hp = sim.player.maxHp;
+        sim.apply({ kind: "newPassive", passiveId: "chivalry", quality: "common" });
+        expect(sim.stats.meleeMight).toBeCloseTo(0.08);
+        expect(sim.player.maxHp).toBe(Math.round(hp * 1.08));
+    });
+});
+
 describe("power-ups", () => {
     function goblin(sim: Sim, x: number, y: number, hp = 1000): Enemy {
         const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", { x, y })!;
@@ -551,6 +637,104 @@ describe("caskets and items", () => {
         expect(sim.choices.length).toBeGreaterThan(0);
         expect(sim.rerollsLeft).toBe(0);
         expect(sim.reroll()).toBe(false);
+    });
+
+    test("a level up can be skipped for coins, dearer each time", () => {
+        const sim = createSim();
+        // Nothing on offer while playing, so nothing to skip
+        expect(sim.canSkip).toBe(false);
+        expect(sim.skip()).toBe(false);
+        sim.stash("antique_lamp");
+        sim.useItem(0);
+        expect(sim.state).toBe("levelUp");
+        expect(sim.canSkip).toBe(true);
+        // Not without the coins
+        sim.coins = 24;
+        expect(sim.skip()).toBe(false);
+        expect(sim.state).toBe("levelUp");
+        expect(sim.coins).toBe(24);
+        sim.coins = 1000;
+        const level = sim.level;
+        const passives = sim.passives.length;
+        expect(sim.skip()).toBe(true);
+        expect(sim.state).toBe("playing");
+        expect(sim.coins).toBe(975);
+        // Still levelled up, with nothing taken
+        expect(sim.level).toBe(level);
+        expect(sim.weapons.length).toBe(1);
+        expect(sim.passives.length).toBe(passives);
+        const costs = [];
+        for (let i = 0; i < 5; i++) {
+            costs.push(sim.skipCost);
+            sim.skips++;
+        }
+        expect(costs).toEqual([50, 100, 200, 400, 800]);
+    });
+
+    test("a skip takes one level up of several, and not the fallback or a hilt", () => {
+        const sim = createSim();
+        sim.coins = 1000;
+        sim.stash("antique_lamp");
+        sim.useItem(0);
+        // Two levels at once
+        sim.pendingLevelUps++;
+        expect(sim.skip()).toBe(true);
+        expect(sim.state).toBe("levelUp");
+        expect(sim.pendingLevelUps).toBe(1);
+        // Only the coins and shark left on offer: nothing to skip
+        sim.choices = [
+            { kind: "coins", amount: 25 },
+            { kind: "food", amount: 10 },
+        ];
+        expect(sim.canSkip).toBe(false);
+        expect(sim.skip()).toBe(false);
+        // A godsword's hilt is picked, not skipped
+        sim.choices = [
+            { kind: "hilt", weaponId: "godsword", into: "armadyl_godsword", hiltObjId: 11810 },
+        ];
+        expect(sim.skip()).toBe(false);
+        expect(sim.coins).toBe(975);
+    });
+
+    test("the run's stats credit damage and kills to what dealt them", () => {
+        const sim = createSim();
+        runFor(sim, 60);
+        const stats = sim.getResult().stats;
+        expect(sim.kills).toBeGreaterThan(0);
+        // Every kill is somebody's, and the starting scimitar did most of it
+        expect(stats.sources.reduce((sum, s) => sum + s.kills, 0)).toBe(sim.kills);
+        const scimitar = stats.sources.find((s) => s.source === "weapon:scimitar")!;
+        expect(scimitar.damage).toBeGreaterThan(0);
+        expect(scimitar.seconds).toBeCloseTo(sim.seconds, 5);
+        expect(stats.sources.every((s) => s.source !== "other")).toBe(true);
+        // Most damage first
+        const damages = stats.sources.map((s) => s.damage);
+        expect(damages).toEqual([...damages].sort((a, b) => b - a));
+        expect(stats.highestHit).toBeGreaterThan(0);
+        expect(stats.highestHit).toBeLessThanOrEqual(scimitar.damage);
+    });
+
+    test("the run's stats count damage taken, healing, rerolls, skips and bosses", () => {
+        const sim = createSim();
+        sim.player.hp = 10;
+        sim.heal(50);
+        // Only what it actually healed
+        expect(sim.healed).toBe(sim.player.maxHp - 10);
+        sim.stash("antique_lamp");
+        sim.useItem(0);
+        sim.reroll();
+        sim.coins = 100;
+        sim.skip();
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", { x: 1040, y: 1036 })!;
+        // He gets back up once
+        for (let i = 0; i < 5 && !boss.dead; i++) {
+            sim.damageEnemy(boss, boss.hp * 10, 0, 1036, 1036);
+        }
+        const stats = sim.getResult().stats;
+        expect(stats.rerollsUsed).toBe(1);
+        expect(stats.skips).toBe(1);
+        expect(stats.bossKills).toEqual([{ enemyId: "count_draynor", seconds: sim.seconds }]);
+        expect(stats.damageTaken).toBe(0);
     });
 
     test("a casket's reroll is another item, and the shop adds rerolls", () => {
@@ -3091,5 +3275,46 @@ describe("Castle Wars and Pest Control", () => {
         sim.damageEnemy(hunllef, 1e9, 0, sim.player.x, sim.player.y);
         expect(sim.state).toBe("victory");
         expect(sim.shownBoss).toBe(hunllef);
+    });
+});
+
+describe("extra slots from the shop", () => {
+    const slots = (weaponSlots: number, passiveSlots: number) =>
+        createSim("warrior", 1, "lumbridge", { ...emptyStats(), weaponSlots, passiveSlots });
+    const PASSIVES = ["piety", "graceful", "rapid_heal", "amulet_of_glory", "chivalry"];
+    const takePassives = (sim: Sim) => {
+        for (const passiveId of PASSIVES) {
+            sim.apply({ kind: "newPassive", passiveId, quality: "common" });
+        }
+    };
+
+    test("weapons stop at the usual 4 without them", () => {
+        const sim = slots(0, 0);
+        sim.weapons = [];
+        for (const id of ["scimitar", "fire_spells", "throwing_knives", "ice_burst", "shortbow"]) {
+            sim.addWeapon(id);
+        }
+        expect(sim.weapons.length).toBe(4);
+        takePassives(sim);
+        expect(sim.passives.length).toBe(4);
+    });
+
+    test("they add weapon slots, and level ups offer new weapons for them", () => {
+        const sim = slots(2, 0);
+        sim.weapons = [];
+        for (const id of ["scimitar", "fire_spells", "throwing_knives", "ice_burst", "shortbow"]) {
+            sim.addWeapon(id);
+        }
+        expect(sim.weapons.length).toBe(5);
+        const offers = Array.from({ length: 50 }, () => sim["roll"]()).flat();
+        expect(offers.some((choice) => choice.kind === "newWeapon")).toBe(true);
+    });
+
+    test("they add passive slots, and level ups offer new passives for them", () => {
+        const sim = slots(0, 2);
+        takePassives(sim);
+        expect(sim.passives.length).toBe(5);
+        const offers = Array.from({ length: 50 }, () => sim["roll"]()).flat();
+        expect(offers.some((choice) => choice.kind === "newPassive")).toBe(true);
     });
 });

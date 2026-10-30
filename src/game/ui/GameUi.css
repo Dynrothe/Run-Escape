@@ -11,6 +11,8 @@
     --ui-card-hover: rgba(90, 76, 58, 0.98);
     --ui-edge: #000000;
     --ui-edge-light: #6b5e4a;
+    /* Lines between rows and columns of a table */
+    --ui-divider: rgba(107, 94, 74, 0.55);
     /* How much bigger the UI is drawn, for the window's size (set on
        .ui-contents). Zoom scales viewport units too, so ones inside the UI
        are divided by it to stay a share of the window. */
@@ -980,6 +982,28 @@
     color: var(--ui-yellow);
 }
 
+/* What a weapon or passive does, on a card under it while it's pointed at */
+.ui-slot-tip {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 5;
+    padding: 6px 8px;
+    font-size: 14px;
+    color: var(--ui-white);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ui-slot:hover .ui-slot-tip {
+    display: block;
+}
+
+.ui-slot-tip-level {
+    color: #b8aa8a;
+}
+
 .ui-gear-slot {
     width: 28px;
     height: 26px;
@@ -1204,6 +1228,27 @@
     flex: 1;
 }
 
+/* A weapon's stats or what its level changes, small under the card's text */
+.ui-choice-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    font-size: 14px;
+    color: var(--ui-white);
+}
+
+.ui-choice-stat-label {
+    color: #b8aa8a;
+}
+
+.ui-choice-stat-up {
+    color: #3fe03f;
+}
+
+.ui-choice-stat-down {
+    color: #ff5a5a;
+}
+
 .ui-choice-evolve {
     border-color: var(--ui-cyan);
     box-shadow:
@@ -1234,6 +1279,12 @@
     display: inline-block;
 }
 
+.ui-levelup-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
 .ui-pause {
     width: min(920px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
@@ -1246,7 +1297,17 @@
 .ui-pause-columns {
     display: flex;
     gap: 24px;
-    align-items: flex-start;
+}
+
+/* A line between the columns, and between the sections in them */
+.ui-pause-column + .ui-pause-column {
+    border-left: 1px solid var(--ui-divider);
+    padding-left: 24px;
+}
+
+.ui-pause-column > .ui-pause-heading:not(:first-child) {
+    border-top: 1px solid var(--ui-divider);
+    padding-top: 10px;
 }
 
 .ui-pause-column {
@@ -1262,6 +1323,14 @@
     .ui-pause-columns {
         flex-direction: column;
         gap: 0;
+    }
+
+    .ui-pause-column + .ui-pause-column {
+        border-left: none;
+        padding-left: 0;
+        border-top: 1px solid var(--ui-divider);
+        margin-top: 12px;
+        padding-top: 10px;
     }
 }
 
@@ -1294,6 +1363,31 @@
     color: var(--ui-white);
 }
 
+.ui-pause-level {
+    color: #b8aa8a;
+    white-space: nowrap;
+}
+
+.ui-pause-name {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Lines between a list's rows */
+.ui-pause-list > * + * {
+    border-top: 1px solid var(--ui-divider);
+    padding-top: 4px;
+}
+
+/* The player's own stats, wrapped to fit */
+.ui-pause-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    color: var(--ui-white);
+}
+
 /* A worn set piece's progress, under its stats; green once the bonus is on */
 .ui-pause-set {
     display: block;
@@ -1305,7 +1399,79 @@
 }
 
 .ui-result {
-    width: min(420px, calc(94vw / var(--ui-scale)));
+    width: min(820px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
+}
+
+.ui-result-columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+}
+
+.ui-result-column {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+/* A line between the columns while they're side by side */
+.ui-result-column + .ui-result-column {
+    border-left: 1px solid var(--ui-divider);
+    padding-left: 18px;
+}
+
+/* Faint lines between the rows */
+.ui-result-table tr + tr td,
+.ui-result-damage tbody tr td {
+    border-top: 1px solid var(--ui-divider);
+}
+
+.ui-result-damage {
+    width: 100%;
+    border-collapse: collapse;
+    /* The name gives way to the numbers, rather than the table growing */
+    table-layout: fixed;
+}
+
+.ui-result-damage th {
+    color: var(--ui-orange);
+    font-weight: normal;
+    text-align: right;
+    padding: 2px 6px;
+    width: 64px;
+}
+
+.ui-result-damage th:first-child {
+    width: auto;
+}
+
+.ui-result-damage td {
+    padding: 2px 6px;
+    text-align: right;
+    color: var(--ui-white);
+    white-space: nowrap;
+}
+
+.ui-result-damage td:first-child {
+    text-align: left;
+}
+
+.ui-result-source {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ui-result-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-result-table td:last-child {
+    white-space: nowrap;
 }
 
 .ui-victory {
@@ -1332,4 +1498,8 @@
 .ui-result-table td:last-child {
     text-align: right;
     color: var(--ui-white);
+}
+
+.ui-result .ui-row {
+    justify-content: center;
 }

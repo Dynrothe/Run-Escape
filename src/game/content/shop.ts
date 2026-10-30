@@ -147,6 +147,33 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         maxRank: 1,
         baseCost: 10000,
     },
+    {
+        id: "woodcutting",
+        name: "Woodcutting",
+        description: "+15% melee knockback",
+        stat: "meleeKnockback",
+        perRank: 0.15,
+        maxRank: 3,
+        baseCost: 400,
+    },
+    {
+        id: "smithing",
+        name: "Smithing",
+        description: "One more weapon slot",
+        stat: "weaponSlots",
+        perRank: 1,
+        maxRank: 2,
+        baseCost: 10000,
+    },
+    {
+        id: "crafting",
+        name: "Crafting",
+        description: "One more passive slot",
+        stat: "passiveSlots",
+        perRank: 1,
+        maxRank: 2,
+        baseCost: 7500,
+    },
 ];
 
 export const SHOP_UPGRADE_BY_ID: Map<string, ShopUpgradeDef> = new Map(

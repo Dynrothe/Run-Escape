@@ -162,6 +162,22 @@ export const PASSIVES: PassiveDef[] = [
         equipment: [{ slot: EquipSlot.CAPE, objIds: [28951, 28951] }],
         unlock: { kind: "beatMap", mapId: "varlamore" },
     },
+    // Melee's prayer, for being in the thick of it
+    {
+        id: "chivalry",
+        name: "Chivalry",
+        description: "Slashes and sweeps hit harder, and you can take more hits up close.",
+        stat: "meleeMight",
+        perLevel: 0.08,
+        effect: "melee damage and max hitpoints",
+        unit: "percent",
+        maxLevel: 5,
+        rarity: "uncommon",
+        iconObjId: 1718,
+        // The prayer's own icon
+        iconSpriteId: 945,
+        alsoAdds: ["maxHp"],
+    },
     // The prayers from the raids' scrolls, and the Ancient sceptre for the
     // Ancient spells. Each one's weapons evolve with it.
     {
@@ -229,8 +245,13 @@ export function getPassiveGain(passive: PassiveDef, quality: Rarity): number {
 
 // "+12% damage", "+1.5 armour"
 export function formatPassiveValue(passive: PassiveDef, value: number): string {
+    return `${formatPassiveNumber(passive, value)} ${passive.effect}`;
+}
+
+// Just the number: "+12%", "+1.5"
+export function formatPassiveNumber(passive: PassiveDef, value: number): string {
     if (passive.unit === "percent") {
-        return `+${Math.round(value * 100)}% ${passive.effect}`;
+        return `+${Math.round(value * 100)}%`;
     }
-    return `+${Math.round(value * 10) / 10} ${passive.effect}`;
+    return `+${Math.round(value * 10) / 10}`;
 }

@@ -75,6 +75,7 @@ import {
     ActivePowerUp,
     BossWindup,
     Buff,
+    DamageSource,
     Death,
     Debuff,
     Effect,
@@ -94,6 +95,7 @@ import {
     Thrall,
     Turret,
     WeaponState,
+    projectileSource,
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -108,6 +110,9 @@ const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // Rerolls every run has, before the shop's
 const BASE_REROLLS = 1;
+// Skipping a level up's rewards costs coins from the run, doubling each time:
+// 25, 50, 100, 200, 400, so about five a run
+export const SKIP_BASE_COST = 25;
 const BASE_MAGNET = 2.2;
 // Chance a kill drops food (luck makes it likelier), and what it heals
 const FOOD_DROP_CHANCE = 0.003;
@@ -168,6 +173,8 @@ const CHAT_RANGE = 14;
 const MAX_BLAST_EFFECTS = 14;
 // Slashes' swooshes cover this much either side of where they aim, radians
 const SLASH_ARC = 1.1;
+// How wide a slash's strip is, in tiles
+const SLASH_WIDTH = 1.5;
 // Special attacks' glows stay on the player this long
 const SPECIAL_SPOTANIM_TICKS = 60;
 // Cannonballs and thralls' projectiles, tiles per second
@@ -293,6 +300,20 @@ export type RunResult = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills: Record<string, number>;
     caskets: number;
+    stats: RunStats;
+};
+
+// The stats screen's numbers: damage and kills by what dealt them, most
+// damage first (seconds: how long a weapon was had, for its damage a second)
+export type RunStats = {
+    sources: { source: DamageSource; damage: number; kills: number; seconds?: number }[];
+    damageTaken: number;
+    healed: number;
+    highestHit: number;
+    rerollsUsed: number;
+    skips: number;
+    // The bosses killed, with the run second each went down
+    bossKills: { enemyId: string; seconds: number }[];
 };
 
 export class Sim {
@@ -361,6 +382,23 @@ export class Sim {
     revivesLeft = 0;
     // For a level up's rewards or a casket's item, shared
     rerollsLeft = 0;
+    // Level ups skipped this run, which make the next skip dearer
+    skips = 0;
+    // For the run's stats: damage dealt and kills by what did it (a
+    // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
+    // each weapon was taken up
+    readonly damageBySource: Record<string, number> = {};
+    readonly killsBySource: Record<string, number> = {};
+    damageTaken = 0;
+    healed = 0;
+    highestHit = 0;
+    readonly weaponSince: Record<string, number> = {};
+    readonly bossKills: { enemyId: string; seconds: number }[] = [];
+    // Rerolls the run started with, for how many were used
+    private readonly rerollsAtStart: number;
+    // What's dealing damage now, for damageBySource: set before each source
+    // gets its turn
+    private damageSource: DamageSource = "other";
     // The final boss is up
     bossSpawned = false;
     // Endless runs' round, and the tick it started; killing the final boss
@@ -448,6 +486,7 @@ export class Sim {
         this.player.hp = this.player.maxHp;
         this.revivesLeft = this.stats.revival;
         this.rerollsLeft = BASE_REROLLS + this.stats.reroll;
+        this.rerollsAtStart = this.rerollsLeft;
         this.updateFlowField();
     }
 
@@ -523,6 +562,40 @@ export class Sim {
             gearFound: [...this.gearFound],
             enemyKills: { ...this.enemyKills },
             caskets: this.casketsOpened,
+            stats: this.getRunStats(),
+        };
+    }
+
+    getRunStats(): RunStats {
+        // Every weapon that was had, even one that never landed a hit
+        const sources = new Set([
+            ...Object.keys(this.damageBySource),
+            ...Object.keys(this.killsBySource),
+            ...Object.keys(this.weaponSince).map((id) => `weapon:${id}`),
+        ]) as Set<DamageSource>;
+        const end = this.endTick >= 0 ? this.endTick : this.tick;
+        return {
+            sources: [...sources]
+                .map((source) => {
+                    const since = source.startsWith("weapon:")
+                        ? this.weaponSince[source.slice("weapon:".length)]
+                        : undefined;
+                    return {
+                        source,
+                        damage: this.damageBySource[source] ?? 0,
+                        kills: this.killsBySource[source] ?? 0,
+                        ...(since !== undefined && {
+                            seconds: (end - since) / TICKS_PER_SECOND,
+                        }),
+                    };
+                })
+                .sort((a, b) => b.damage - a.damage || b.kills - a.kills),
+            damageTaken: this.damageTaken,
+            healed: this.healed,
+            highestHit: this.highestHit,
+            rerollsUsed: Math.max(0, this.rerollsAtStart - this.rerollsLeft),
+            skips: this.skips,
+            bossKills: [...this.bossKills],
         };
     }
 
@@ -572,8 +645,17 @@ export class Sim {
         }
     }
 
+    // Weapons and passives carried at once, with the shop's extra slots
+    get maxWeapons(): number {
+        return MAX_WEAPONS + this.metaStats.weaponSlots;
+    }
+
+    get maxPassives(): number {
+        return MAX_PASSIVES + this.metaStats.passiveSlots;
+    }
+
     addWeapon(weaponId: string, bonus = 0): void {
-        if (this.weapons.length >= MAX_WEAPONS) {
+        if (this.weapons.length >= this.maxWeapons) {
             return;
         }
         this.weapons.push({
@@ -583,6 +665,7 @@ export class Sim {
             bonus,
             uses: 0,
         });
+        this.weaponSince[weaponId] ??= this.tick;
         this.appearanceVersion++;
     }
 
@@ -605,6 +688,11 @@ export class Sim {
             this.choices = hilts;
             return;
         }
+        this.nextLevelUp();
+    }
+
+    // On to the next level up's rewards, or back to the run
+    private nextLevelUp(): void {
         this.pendingLevelUps--;
         this.choices = [];
         if (this.pendingLevelUps > 0) {
@@ -612,6 +700,34 @@ export class Sim {
         } else {
             this.state = this.chests.length > 0 ? "chest" : "playing";
         }
+    }
+
+    // What skipping the level up's rewards costs now (coins are worth less in
+    // endless runs, so skips cost less too)
+    get skipCost(): number {
+        return Math.round(SKIP_BASE_COST * 2 ** this.skips * this.coinScale);
+    }
+
+    // A level up's rewards can be skipped for coins, but not a godsword's
+    // hilt, or the coins and shark offered when there's nothing else
+    get canSkip(): boolean {
+        return (
+            this.state === "levelUp" &&
+            !this.choosingHilt &&
+            this.choices.some((c) => c.kind !== "coins" && c.kind !== "food")
+        );
+    }
+
+    // Takes none of the level up's rewards, for skipCost coins. False when it
+    // can't be skipped or there aren't the coins.
+    skip(): boolean {
+        if (!this.canSkip || this.coins < this.skipCost) {
+            return false;
+        }
+        this.coins -= this.skipCost;
+        this.skips++;
+        this.nextLevelUp();
+        return true;
     }
 
     private roll(): UpgradeChoice[] {
@@ -623,6 +739,8 @@ export class Sim {
             getCharacter(this.characterId).style,
             this.unlockedItems,
             this.endless,
+            this.maxWeapons,
+            this.maxPassives,
         );
     }
 
@@ -679,6 +797,7 @@ export class Sim {
                 const index = this.weapons.findIndex((w) => w.def.id === choice.weaponId);
                 if (index !== -1) {
                     // Bonus damage from rare rolls carries over
+                    this.weaponSince[choice.into] ??= this.tick;
                     this.weapons[index] = {
                         def: getWeapon(choice.into),
                         level: 1,
@@ -696,13 +815,14 @@ export class Sim {
                 const weapon = this.weapons.find((w) => w.def.id === choice.weaponId);
                 if (weapon) {
                     weapon.def = getWeapon(choice.into);
+                    this.weaponSince[choice.into] ??= this.tick;
                     this.appearanceVersion++;
                 }
                 break;
             }
             case "newPassive": {
                 const def = getPassive(choice.passiveId);
-                if (this.passives.length < MAX_PASSIVES) {
+                if (this.passives.length < this.maxPassives) {
                     this.passives.push({
                         id: choice.passiveId,
                         level: 1,
@@ -736,7 +856,9 @@ export class Sim {
     }
 
     heal(amount: number): void {
+        const hp = this.player.hp;
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
+        this.healed += Math.max(0, this.player.hp - hp);
     }
 
     // ---- Caskets and items ----
@@ -840,6 +962,7 @@ export class Sim {
         const player = this.player;
         const use = item.use;
         this.events.push({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
+        this.damageSource = `item:${item.id}`;
         switch (use.kind) {
             case "heal":
                 this.heal(use.amount * this.healScale);
@@ -1056,6 +1179,7 @@ export class Sim {
         if ((player.poisonEnd - this.tick) % TICKS_PER_SECOND === 0 && !this.reviving) {
             const amount = player.poisonDamage;
             player.hp -= amount;
+            this.damageTaken += amount;
             this.events.push({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
@@ -1457,6 +1581,7 @@ export class Sim {
             }
             if (enemy.venomEnd >= this.tick && this.tick >= enemy.venomNext) {
                 enemy.venomNext += TICKS_PER_SECOND;
+                this.damageSource = enemy.venomSource ?? "other";
                 this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
                 if (enemy.dead) {
                     continue;
@@ -1821,6 +1946,7 @@ export class Sim {
         const armor = ignoreArmor ? 0 : this.stats.armor;
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
+        this.damageTaken += amount;
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
         this.events.push({ type: "playerHit", amount, enemyId, elite, sound });
@@ -1834,6 +1960,7 @@ export class Sim {
     private recoil(enemy: Enemy | undefined): void {
         if (this.stats.thorns > 0 && enemy && !enemy.dead && !this.runOver) {
             const player = this.player;
+            this.damageSource = "recoil";
             this.damageEnemy(enemy, this.stats.thorns, 0.5, player.x, player.y);
         }
     }
@@ -2853,6 +2980,9 @@ export class Sim {
         );
         enemy.hp -= damage;
         enemy.flash = 5;
+        const source = this.damageSource;
+        this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
+        this.highestHit = Math.max(this.highestHit, damage);
         this.events.push({
             type: "damage",
             x: enemy.x,
@@ -2895,9 +3025,12 @@ export class Sim {
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
             this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
+            const source = this.damageSource;
+            this.killsBySource[source] = (this.killsBySource[source] ?? 0) + 1;
         }
         if (enemy.boss) {
             this.bossesKilled.push(enemy.def.id);
+            this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
             // A boss's glyph goes with it, rather than hanging about on the
             // victory screen
             this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
@@ -3148,7 +3281,17 @@ export class Sim {
                 continue;
             }
             const level = this.getEffectiveLevel(weapon);
+            // A slash or sweep waits for something in reach, like a missile
+            // waits for a target, rather than spending its cooldown on air
+            if (
+                (weapon.def.kind === "slash" || weapon.def.kind === "sweep") &&
+                !this.meleeInReach(level)
+            ) {
+                weapon.cooldown = 10;
+                continue;
+            }
             const special = this.takeSpecial(weapon, level);
+            this.damageSource = `weapon:${weapon.def.id}`;
             const fired = this.fireWeapon(weapon.def, level, special);
             // Nothing to shoot at: try again soon rather than wasting the cooldown
             weapon.cooldown = fired
@@ -3185,13 +3328,18 @@ export class Sim {
             weapon.uses++;
             return undefined;
         }
-        const reach = level.area * (1 + this.stats.area);
-        const player = this.player;
-        if (this.nearestEnemies(player.x, player.y, reach + 0.5, 1).length === 0) {
+        if (!this.meleeInReach(level)) {
             return undefined;
         }
         weapon.uses++;
         return special;
+    }
+
+    // Something a melee weapon at this level would hit
+    private meleeInReach(level: WeaponDef["levels"][number]): boolean {
+        const reach = level.area * (1 + this.stats.area);
+        const player = this.player;
+        return this.nearestEnemies(player.x, player.y, reach + 0.5, 1).length > 0;
     }
 
     private fireWeapon(
@@ -3245,9 +3393,13 @@ export class Sim {
         level: WeaponDef["levels"][number],
         special?: SpecialAttackDef,
     ): void {
+        if (special?.aoe) {
+            this.fireAoeSpecial(def, level, special, special.aoe);
+            return;
+        }
         const player = this.player;
         const reach = level.area * (1 + this.stats.area);
-        const width = 1.1 * (1 + this.stats.area);
+        const width = SLASH_WIDTH * (1 + this.stats.area);
         const sides = Math.min(level.amount, 2);
         const aim = this.aimMelee(reach);
         // Each side hits what's in it, so something right on top of the
@@ -3292,6 +3444,10 @@ export class Sim {
         level: WeaponDef["levels"][number],
         special?: SpecialAttackDef,
     ): void {
+        if (special?.aoe) {
+            this.fireAoeSpecial(def, level, special, special.aoe);
+            return;
+        }
         const player = this.player;
         const reach = level.area * (1 + this.stats.area);
         const arc = level.arc ?? SLASH_ARC;
@@ -3332,6 +3488,44 @@ export class Sim {
         this.meleeHits(def, level, hit, special);
     }
 
+    // A special attack that hits everything all round the player (the Thunder
+    // khopesh's Thunderclap): a full circle swing, lightning on what it hits
+    private fireAoeSpecial(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        special: SpecialAttackDef,
+        aoe: NonNullable<SpecialAttackDef["aoe"]>,
+    ): void {
+        const player = this.player;
+        const radius = aoe.radius * (1 + this.stats.area);
+        this.events.push({
+            type: "slash",
+            x: player.x,
+            y: player.y,
+            dirX: player.facingX,
+            dirY: player.facingY,
+            reach: radius,
+            width: 0,
+            arc: Math.PI,
+            weaponId: def.id,
+        });
+        const hit: Enemy[] = [];
+        this.enemyHash.query(player.x, player.y, radius + 1, (enemy) => {
+            if (
+                !enemy.dead &&
+                Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
+            ) {
+                hit.push(enemy);
+            }
+        });
+        if (aoe.impactSpotAnim !== undefined) {
+            for (const enemy of hit.slice(0, 10)) {
+                this.addEffect(aoe.impactSpotAnim, enemy.x, enemy.y, 0, 60, enemy.uid);
+            }
+        }
+        this.meleeHits(def, level, hit, special);
+    }
+
     // A slash or sweep landing on what it caught. Bosses and elites take the
     // weapon's extra hits; a special attack hits harder and does its effect.
     private meleeHits(
@@ -3354,7 +3548,7 @@ export class Sim {
                 this.damageEnemy(
                     enemy,
                     enemyDamage * hits[0],
-                    level.knockback,
+                    level.knockback * (1 + this.stats.meleeKnockback),
                     player.x,
                     player.y,
                 ) + this.bigHits(def, enemy, enemyDamage, player.x, player.y);
@@ -3447,6 +3641,7 @@ export class Sim {
             if (hit.tick > this.tick) {
                 return true;
             }
+            this.damageSource = `weapon:${hit.weapon.id}`;
             const dealt = this.damageEnemy(
                 hit.enemy,
                 hit.damage,
@@ -3510,6 +3705,7 @@ export class Sim {
         }
         enemy.venom = Math.max(enemy.venom, venom);
         enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
+        enemy.venomSource = this.damageSource;
     }
 
     // A hit's chance of healing the player: the weapon's (the Sanguinesti
@@ -3977,6 +4173,7 @@ export class Sim {
             thrall.yaw = yawFromVector(tx, ty);
             this.events.push({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
             if (melee) {
+                this.damageSource = "powerUp:thrall";
                 this.damageEnemy(target, thrall.damage, def.knockback, thrall.x, thrall.y);
             } else {
                 this.shootAt(
@@ -4078,6 +4275,7 @@ export class Sim {
         }
         this.fires.push({
             uid: this.nextUid++,
+            source: this.damageSource,
             x,
             y,
             radius,
@@ -4108,6 +4306,7 @@ export class Sim {
                 continue;
             }
             fire.nextTick += FIRE_INTERVAL;
+            this.damageSource = fire.source;
             this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
                 if (Math.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
@@ -4235,6 +4434,7 @@ export class Sim {
                 return;
             }
             orbit.nextHit.set(enemy.uid, this.tick + orbit.rehitTicks);
+            this.damageSource = projectileSource(projectile);
             const dealt = this.damageEnemy(
                 enemy,
                 projectile.damage,
@@ -4262,6 +4462,7 @@ export class Sim {
         }
         const weapon = projectile.weapon;
         const mightScale = weapon?.mightScale ?? 1;
+        this.damageSource = projectileSource(projectile);
         let damage = projectile.damage;
         if (weapon?.toughTargets) {
             damage *= 1 + (weapon.toughTargets * enemy.maxHp) / (enemy.maxHp + TOUGH_TARGET_HP);
@@ -4655,6 +4856,7 @@ export class Sim {
                 break;
             }
             case "nuke": {
+                this.damageSource = `powerUp:${def.id}`;
                 const banned = this.nuke(effect.bossDamage);
                 message = `Bot nuke! ${banned} ${banned === 1 ? "bot" : "bots"} banned.`;
                 break;
