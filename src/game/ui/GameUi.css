@@ -961,6 +961,12 @@
     gap: 2px;
 }
 
+/* Two rows of six, for Mayhem's Modifiers */
+.ui-slots-wrap {
+    display: grid;
+    grid-template-columns: repeat(6, min-content);
+}
+
 .ui-slot {
     position: relative;
     width: 38px;

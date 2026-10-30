@@ -3425,10 +3425,10 @@ describe("Mayhem", () => {
         expect(sim.unlockedItems).toBeUndefined();
     });
 
-    test("the first 5 bosses killed give a Modifier, and no more after that", () => {
+    test("bosses killed give a Modifier, up to the most a run can have", () => {
         const sim = mayhemSim();
         pickFirst(sim);
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < MAYHEM_MODIFIERS + 1; i++) {
             const boss = sim.spawnEnemy(getEnemy("dharok"), "boss")!;
             sim.damageEnemy(boss, 1e9, 0, boss.x, boss.y);
             sim.step(0, 0);

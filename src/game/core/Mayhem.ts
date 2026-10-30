@@ -68,7 +68,11 @@ const BLASTS_A_TICK = 30;
 const LIGHTNING_SPOTANIM = 76;
 const BLAST_SPOTANIM = 559;
 
-const GOBLIN_RAID_COUNT = 24;
+// How many of a shooter come for each of anything else, as a crowd of them
+// kills from out of reach
+const SHOOTER_SHARE = 0.25;
+
+const GOBLIN_RAID_COUNT = 40;
 const GIANTS_COUNT = 10;
 const GIANT_SCALE = 1.9;
 const CASKET_RAIN = 3;
@@ -443,7 +447,7 @@ export class MayhemRun {
         const roster: WaveDef["enemies"] = [];
         for (let i = 0; i < ROSTER_SIZE && pool.length > 0; i++) {
             const index = rng.weightedIndex(pool.map(weight));
-            roster.push({ id: pool[index].id, weight: 1 });
+            roster.push({ id: pool[index].id, weight: pool[index].shot ? SHOOTER_SHARE : 1 });
             pool.splice(index, 1);
         }
         this.roster = roster;

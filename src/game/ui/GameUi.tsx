@@ -566,9 +566,10 @@ function MayhemScreen({ ui, client }: ScreenProps): JSX.Element {
                 <ul className="ui-mayhem-rules">
                     <li>Any adventurer, and every weapon, passive and item</li>
                     <li>A random map, with enemies and bosses from the whole game</li>
-                    <li>Level up three times as fast, with room for 6 weapons and 6 passives</li>
-                    <li>6 Modifiers: pick one now, then one for each of the first 5 bosses</li>
-                    <li>A Mayhem event every 90 seconds</li>
+                    <li>Big crowds from the start, with room for 6 weapons and 6 passives</li>
+                    <li>12 Modifiers: pick one now, then one for each boss you kill</li>
+                    <li>A boss every minute, in twos from 4 minutes and threes from 8</li>
+                    <li>A Mayhem event every minute</li>
                     <li>It only gets harder, and skills and the Armoury don't count</li>
                 </ul>
             </div>
@@ -959,9 +960,17 @@ function formatSlotLevel(slot: SlotView): string {
 
 // A weapon or passive in the HUD, with what it does on a card shown while
 // it's pointed at
-function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element {
+function Slots({
+    slots,
+    max,
+    wrap = false,
+}: {
+    slots: SlotView[];
+    max: number;
+    wrap?: boolean;
+}): JSX.Element {
     return (
-        <div className="ui-slots">
+        <div className={"ui-slots" + (wrap ? " ui-slots-wrap" : "")}>
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
@@ -1123,7 +1132,9 @@ function Hud({
                 <div className="ui-hud-left">
                     <Slots slots={hud.weapons} max={hud.maxWeapons} />
                     <Slots slots={hud.passives} max={hud.maxPassives} />
-                    {hud.mayhem && <Slots slots={hud.mayhem.modifiers} max={MAYHEM_MODIFIERS} />}
+                    {hud.mayhem && (
+                        <Slots slots={hud.mayhem.modifiers} max={MAYHEM_MODIFIERS} wrap />
+                    )}
                     <GearSlots gear={hud.gear} />
                 </div>
                 <div className="ui-timer">{formatTime(hud.seconds)}</div>

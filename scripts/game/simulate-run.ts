@@ -280,7 +280,9 @@ function runOnce(characterId: string, seed: number) {
                 `  ${formatClock(sim.seconds)}${endless ? ` r${sim.round}` : ""}  lvl ${String(sim.level).padStart(2)}  ` +
                     `hp ${String(Math.max(0, Math.round(sim.player.hp))).padStart(3)}/${sim.player.maxHp}  ` +
                     `kills ${String(sim.kills).padStart(5)}  alive ${String(alive).padStart(3)}  ` +
-                    `coins ${String(sim.coins).padStart(4)}  ${weapons} | ${passives} | ${gear}`,
+                    `coins ${String(sim.coins).padStart(4)}  ` +
+                    `${mayhem ? `mods ${sim.mayhem!.modifiers.length}  ` : ""}` +
+                    `${weapons} | ${passives} | ${gear}`,
             );
         }
     }

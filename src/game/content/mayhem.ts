@@ -7,13 +7,14 @@ import { EnemyDef, MapDef, StatKey, Stats, WaveDef, emptyStats } from "./types";
 // Modifiers bend how you play. It never ends: difficulty climbs with time until
 // you fall, and nothing from it goes in the save.
 
-// Modifiers in a run: one to start with, and one each for the first bosses
-export const MAYHEM_MODIFIERS = 6;
-// Bones are worth this much more, and caskets and power-ups this much likelier
-export const MAYHEM_XP = 3;
-export const MAYHEM_CASKETS = 4;
-export const MAYHEM_POWER_UPS = 3;
-export const MAYHEM_FOOD = 3;
+// Modifiers in a run: one to start with, and one each for the bosses killed
+export const MAYHEM_MODIFIERS = 12;
+// Bones are worth this much, as there are so many more of them, and caskets,
+// power-ups and food this much likelier
+export const MAYHEM_XP = 0.5;
+export const MAYHEM_CASKETS = 1.5;
+export const MAYHEM_POWER_UPS = 2;
+export const MAYHEM_FOOD = 2;
 // Everyone heals this many hitpoints a minute: the crowds never let up, and
 // with no shop there's no armour to take the edge off
 export const MAYHEM_REGEN = 45;
@@ -22,23 +23,23 @@ export const MAYHEM_WEAPON_SLOTS = 2;
 export const MAYHEM_PASSIVE_SLOTS = 2;
 
 // When the first boss comes, and how long between them
-export const FIRST_BOSS_AT = 120;
-export const BOSS_EVERY = 120;
+export const FIRST_BOSS_AT = 45;
+export const BOSS_EVERY = 60;
 // One that's due waits this long for those still up to be killed
-export const BOSS_PATIENCE = 45;
+export const BOSS_PATIENCE = 20;
 // From these many seconds, bosses come in twos, then threes, each with this
 // fraction of the hitpoints a boss alone would have
-export const BOSS_PAIRS_AT = 9 * 60;
-export const BOSS_TRIOS_AT = 16 * 60;
+export const BOSS_PAIRS_AT = 4 * 60;
+export const BOSS_TRIOS_AT = 8 * 60;
 export const BOSS_GROUP_HP = 0.8;
 // An elite turns up this often
-export const ELITE_EVERY = 40;
+export const ELITE_EVERY = 20;
 // The enemies on the field change this often, for a new mix
 export const ROSTER_EVERY = 45;
 export const ROSTER_SIZE = 8;
 // Seconds between Mayhem events, the first one this far in
-export const FIRST_EVENT_AT = 60;
-export const EVENT_EVERY = 90;
+export const FIRST_EVENT_AT = 30;
+export const EVENT_EVERY = 60;
 
 // Bigger waves as time goes on, up to what the game can take
 export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDef {
@@ -46,9 +47,9 @@ export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDe
     return {
         start: 0,
         enemies,
-        spawnRate: Math.min(1.2 + minutes * 0.45, 9),
-        minAlive: Math.min(Math.round(8 + minutes * 7), 240),
-        maxAlive: Math.min(Math.round(30 + minutes * 14), 360),
+        spawnRate: Math.min(6 + minutes * 1, 14),
+        minAlive: Math.min(Math.round(50 + minutes * 12), 260),
+        maxAlive: Math.min(Math.round(100 + minutes * 16), 380),
     };
 }
 
@@ -56,9 +57,10 @@ export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDe
 // difficulty
 export function mayhemDifficulty(seconds: number): { hp: number; damage: number } {
     const minutes = seconds / 60;
+    const cubed = minutes * minutes * minutes;
     return {
-        hp: 0.8 + minutes * 0.2 + minutes * minutes * 0.04,
-        damage: 0.3 + minutes * 0.04 + minutes * minutes * 0.009,
+        hp: 1 + minutes * 0.3 + minutes * minutes * 0.1 + cubed * 0.004,
+        damage: 0.25 + minutes * 0.02 + minutes * minutes * 0.02 + cubed * 0.0008,
     };
 }
 
