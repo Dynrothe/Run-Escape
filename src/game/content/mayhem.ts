@@ -16,7 +16,7 @@ export const MAYHEM_POWER_UPS = 3;
 export const MAYHEM_FOOD = 3;
 // Everyone heals this many hitpoints a minute: the crowds never let up, and
 // with no shop there's no armour to take the edge off
-export const MAYHEM_REGEN = 30;
+export const MAYHEM_REGEN = 45;
 // Slots everyone has here, as the shop's don't count
 export const MAYHEM_WEAPON_SLOTS = 2;
 export const MAYHEM_PASSIVE_SLOTS = 2;
@@ -47,8 +47,8 @@ export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDe
         start: 0,
         enemies,
         spawnRate: Math.min(1.2 + minutes * 0.45, 9),
-        minAlive: Math.min(Math.round(8 + minutes * 9), 240),
-        maxAlive: Math.min(Math.round(30 + minutes * 18), 360),
+        minAlive: Math.min(Math.round(8 + minutes * 7), 240),
+        maxAlive: Math.min(Math.round(30 + minutes * 14), 360),
     };
 }
 
@@ -57,13 +57,13 @@ export function mayhemWave(seconds: number, enemies: WaveDef["enemies"]): WaveDe
 export function mayhemDifficulty(seconds: number): { hp: number; damage: number } {
     const minutes = seconds / 60;
     return {
-        hp: 0.8 + minutes * 0.25 + minutes * minutes * 0.05,
-        damage: 0.3 + minutes * 0.05 + minutes * minutes * 0.012,
+        hp: 0.8 + minutes * 0.2 + minutes * minutes * 0.04,
+        damage: 0.3 + minutes * 0.04 + minutes * minutes * 0.009,
     };
 }
 
 // Bosses' hits, as they're made for players with a shop's worth of hitpoints
-export const MAYHEM_BOSS_DAMAGE = 0.5;
+export const MAYHEM_BOSS_DAMAGE = 0.4;
 
 // A boss's hitpoints: the same for every boss, as they're made for maps of very
 // different strengths

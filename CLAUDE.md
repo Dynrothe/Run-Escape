@@ -27,6 +27,7 @@ go stale. Add anything that cost you time to work out.
 | Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                     |
 | The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                  |
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
+| Mayhem: rules and Modifiers                           | `core/Mayhem.ts`, `content/mayhem.ts`   |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
 | Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
 | Save data and migrations                              | `src/game/core/save.ts`                 |
@@ -79,6 +80,7 @@ MAP=barrows npx tsx scripts/game/simulate-run.ts "" 3        # everyone on one m
 MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # everything bought
 ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
+MAYHEM=1 MAP=desert npx tsx scripts/game/simulate-run.ts wizard 3   # Mayhem, random Modifiers
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real

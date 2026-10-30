@@ -85,6 +85,14 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   uses the real collision, so a sim also shows whether a map plays at all.
 - Fun maps don't count towards quests.
 
+## Mayhem Modifier or event
+
+Add it to `MODIFIERS` or `MAYHEM_EVENTS` in `mayhem.ts`. `stats` covers plain stat changes, and
+anything else is a check on the id in `core/Mayhem.ts`. Keep logic out of `Sim.ts` beyond a small
+hook. New enemies and bosses join Mayhem by themselves, unless `getMayhemExclusion` leaves them
+out, so give a new boss a `spawnMessage` and check it works away from its map. Mayhem runs must
+leave the save untouched.
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`

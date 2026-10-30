@@ -33,6 +33,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
+- **Mayhem**, a mode of its own: any adventurer on a random map, with enemies and bosses from the
+  whole game, Modifiers that bend the rules, and no end.
 - **Endless mode** for every map you've beaten, **skills** to train with the coins you bank, and
   **quests** that pay out over many runs.
 

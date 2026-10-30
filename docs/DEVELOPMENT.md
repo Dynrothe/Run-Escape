@@ -71,6 +71,8 @@ src/game/
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
                       FlowField (Dijkstra from the player, how hundreds of enemies find a way)
     Upgrades.ts       level up choices
+    Mayhem.ts         a Mayhem run's own rules and Modifiers (their data is in content/mayhem.ts),
+                      with small hooks in Sim.ts; save.ts ignores Mayhem runs
     Loot.ts           what's in a casket, the inventory
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
@@ -116,7 +118,8 @@ scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run sli
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything
-                                                        bought)
+                                                        bought, MAYHEM=1 for Mayhem with Modifiers
+                                                        picked at random)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 ```
 

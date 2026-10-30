@@ -3441,7 +3441,8 @@ describe("Mayhem", () => {
         sim.player.hp = sim.player.maxHp = 1e9;
         play(sim, 300);
         expect(sim.state).not.toBe("victory");
-        expect(sim.enemies.some((e) => e.boss)).toBe(true);
+        const bossesUp = sim.enemies.filter((e) => e.boss && !e.dead).length;
+        expect(sim.bossKills.length + bossesUp).toBeGreaterThanOrEqual(2);
         expect(sim.mayhem!.bossIn).toBeGreaterThanOrEqual(0);
     });
 

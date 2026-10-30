@@ -336,3 +336,25 @@ version and how to run it.
   on the pause screen.
 - **Camera spin**: the camera circles your character on the title screen and the menus; the
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
+
+## Mayhem
+
+**Mayhem** on the title screen is a mode of its own, outside the campaign and the fun maps. Nothing
+from it goes in your save: no coins, quests, unlocks, gear, Collection log entries or records.
+
+- Any adventurer, unlocked or not, on a random campaign map. Every weapon, passive and item can
+  turn up, with 6 weapon slots and 6 passive slots for everyone. Skills and the Armoury stay at
+  home.
+- It never ends: enemies get tougher with time until you fall. Levels come three times as fast,
+  caskets, power-ups and food are more common, and everyone heals a little over time.
+- Enemies come from the whole game, weakest first, in a new mix every 45 seconds. A boss from
+  anywhere turns up about every two minutes, waiting a little if the last one's still up. From
+  nine minutes they come in twos, and from sixteen in threes. What only works on its own map is left
+  out: anything that never moves, like Zulrah and Pest Control's portals, and the Castle Wars flag
+  carrier, who only runs away. Armies don't fight each other here.
+- **Modifiers** are picked from three cards, Silver, Gold or Prismatic, with one reroll for each
+  pick: one before the first enemy, and one for each of the first five bosses killed. They bend the
+  rules, and some combine: Dharok's set with the Berserker ring, the Infernal cape with Ancient
+  magicks, or Karil's bolt rack with Double agent.
+- A **Mayhem event** comes every minute and a half: Goblin raid, Double bones, Rain of caskets,
+  Speedrun, Giant mode, Boss rush or Power hour.
