@@ -5,6 +5,12 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Caskets no longer flood you with a set's missing pieces: a piece can only be one rarity above
+  what the casket rolled, so very rare sets like Torva stay rare. Alch or reroll a piece of a set
+  you've started and caskets stop bringing that set for the rest of the run.
+
 ## 0.17.0 - 2026-10-30
 
 ### Added
