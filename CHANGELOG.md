@@ -5,6 +5,16 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- The player now stands and runs the way their weapon does in OSRS: a two-handed run with 2h swords
+  and godswords, staves held out, crossbows at the ready, and so on.
+
+### Fixed
+
+- Two-handed weapons no longer leave a shield strapped to your arm. The shield still counts, it's
+  just not shown while you hold one.
+
 ## 0.17.2 - 2026-10-30
 
 ### Fixed

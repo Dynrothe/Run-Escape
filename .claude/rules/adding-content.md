@@ -44,6 +44,8 @@ Add it to `WEAPONS` in `weapons.ts`.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
+- If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
+  doesn't say which stance an item has, so the file says where to look it up.
 
 ## Passive
 
