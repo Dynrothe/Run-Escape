@@ -11,6 +11,11 @@ the version in the corner).
   what the casket rolled, so very rare sets like Torva stay rare. Alch or reroll a piece of a set
   you've started and caskets stop bringing that set for the rest of the run.
 
+### Fixed
+
+- The Grand Exchange has its walls and booths back, and scenery that had gone missing from other
+  maps' buildings is back too.
+
 ## 0.17.0 - 2026-10-30
 
 ### Added
