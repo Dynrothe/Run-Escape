@@ -26,6 +26,7 @@ import {
     PLAYER_SEQS,
     getCharacterAppearance,
     getPlayerAttackSeqs,
+    getPowerUpLookRequests,
 } from "../../src/game/client/GameAssets";
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
@@ -235,6 +236,8 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
         ...CHARACTERS.map((character) =>
             playerRequest(character.id, getCharacterAppearance(character.id), playerSeqs),
         ),
+        // Power-ups' worn items and their animations
+        ...getPowerUpLookRequests(createAppearance()),
         ...getWornObjs().map(([slot, objId]) =>
             playerRequest(`${slot}:${objId}`, createAppearance({ [slot]: objId }), []),
         ),

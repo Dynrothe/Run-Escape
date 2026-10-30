@@ -5,10 +5,24 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.18.0 - 2026-10-30
+
+### Added
+
+- New power-up: the Sled. Ride for 8 seconds at more than twice the speed, shoving the crowd aside
+  with nothing able to hurt you.
+- New power-up: the Giant rune essence. A huge rock lands on the thickest crowd nearby.
+- New power-up: Evil Bob. A giant cat charges through the crowd three times, throwing it aside.
+- New power-up: the Fairy ring. A ring opens at your feet for 12 seconds and warps away whatever
+  walks into it.
+- New power-up: the Drill Demon. Everything nearby runs laps around you for 9 seconds and can't
+  attack.
+
 ### Changed
 
 - The player now stands and runs the way their weapon does in OSRS: a two-handed run with 2h swords
   and godswords, staves held out, crossbows at the ready, and so on.
+- The same power-up no longer drops twice in a row.
 
 ### Fixed
 

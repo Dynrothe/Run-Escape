@@ -83,6 +83,8 @@ import {
     Enemy,
     EnemyAbilities,
     EnemyProjectile,
+    FairyRing,
+    FallingRock,
     Glyph,
     GroundFire,
     PassiveState,
@@ -92,6 +94,7 @@ import {
     Player,
     Projectile,
     ProjectileKind,
+    Rampage,
     SimEvent,
     Thrall,
     Turret,
@@ -122,6 +125,23 @@ const FOOD_HEAL = 10;
 // more than one enemy but can't melt them instantly
 const HIT_INVULNERABLE_TICKS = 12;
 
+// A rampage: how far from the player it starts, how near the player a crowd
+// has to be to go for it, how far past it the charge runs (tiles), and how long
+// it takes to fade away
+const RAMPAGE_START_DISTANCE = 14;
+const RAMPAGE_CROWD_RANGE = 14;
+const RAMPAGE_OVERSHOOT = 7;
+export const RAMPAGE_FADE_TICKS = 25;
+// How far off the ring a Drill Demon's runner heads straight for it
+const LAP_PULL_TILES = 3;
+// A fairy ring looks for what's walked in this often, and shows the warp on
+// only so many at a time
+const RING_PULSE_TICKS = 5;
+const MAX_RING_EFFECTS = 10;
+// How many enemies are looked at for the thickest crowd
+const MAX_CROWD_CHECKS = 60;
+// Ticks a fallen rock lies there before it's gone
+const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
 const SPAWN_MAX_DISTANCE = 24;
 // Bosses turn up a little closer, so the fight starts soon
@@ -363,6 +383,9 @@ export class Sim {
     thralls: Thrall[] = [];
     // Power-ups that last a while, for their timers
     powerUps: ActivePowerUp[] = [];
+    rocks: FallingRock[] = [];
+    rampages: Rampage[] = [];
+    rings: FairyRing[] = [];
     // Bosses' glyphs (BossDef.glyph)
     glyphs: Glyph[] = [];
     // Burning ground left by weapons
@@ -429,8 +452,16 @@ export class Sim {
     private bloodFuryRollTick = 0;
     // When the last power-up dropped; the longer ago, the likelier the next
     private lastPowerUpTick = 0;
+    // What dropped last, which doesn't drop twice in a row
+    private lastPowerUpId?: string;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
+    // While the sled lasts: how much faster the player goes, and until when
+    private sledEndTick = 0;
+    private sledSpeed = 1;
+    // While a Drill Demon lasts
+    private lapsEndTick = 0;
+    private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
     // Fun maps: run second the next random boss is due, the last one picked
     // (not picked twice running), and when the next chat lines are due
     private nextFunBossSeconds = Infinity;
@@ -1137,6 +1168,9 @@ export class Sim {
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
+        this.stepRocks();
+        this.stepRampages();
+        this.stepRings();
         this.stepProjectiles();
         this.stepFires();
         this.stepEnemyProjectiles();
@@ -1155,6 +1189,11 @@ export class Sim {
             this.debuffs = this.debuffs.filter((d) => d.endTick > tick);
             this.updateStats();
         }
+        for (const active of this.powerUps) {
+            if (active.endTick <= tick) {
+                this.events.push({ type: "powerUpEnded", id: active.id });
+            }
+        }
         this.powerUps = this.powerUps.filter((p) => p.endTick > tick);
     }
 
@@ -1168,7 +1207,8 @@ export class Sim {
         }
         const moving = !frozen && (moveX !== 0 || moveY !== 0);
         if (moving) {
-            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed);
+            const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
+            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
             moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
             const len = Math.hypot(moveX, moveY);
             player.facingX = moveX / len;
@@ -1181,6 +1221,11 @@ export class Sim {
         }
         if (player.invulnerable > 0) {
             player.invulnerable--;
+        }
+        // Held above what a hit gives, or boss hits and poison get through as
+        // it runs down (see reviving), and below the > 30 that makes them blink
+        if (this.tick < this.sledEndTick) {
+            player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS + 1);
         }
         if (player.flash > 0) {
             player.flash--;
@@ -1218,7 +1263,7 @@ export class Sim {
         }
     }
 
-    // Just brought back by a ring of life, so nothing can hurt them
+    // Just brought back by a ring of life, or on a sled, so nothing can hurt them
     private get reviving(): boolean {
         return this.player.invulnerable > HIT_INVULNERABLE_TICKS;
     }
@@ -1710,9 +1755,12 @@ export class Sim {
                         dirX = dirY = 0;
                     }
                 }
+                const lapping = this.isLapping(enemy, distance);
                 const healTarget = abilities?.healTarget;
                 const fighting =
-                    stationary || healTarget || fleeing ? undefined : this.findFoe(enemy, distance);
+                    stationary || healTarget || fleeing || lapping
+                        ? undefined
+                        : this.findFoe(enemy, distance);
                 if (fighting) {
                     // Off to fight another god's army, stopping once it's in
                     // reach (the hit itself is the touch below)
@@ -1737,6 +1785,12 @@ export class Sim {
                         dirX = hx / length;
                         dirY = hy / length;
                     }
+                }
+
+                if (lapping) {
+                    this.lapDirection(enemy, dx, dy, distance, step);
+                    dirX = step.x;
+                    dirY = step.y;
                 }
 
                 // Keep apart from each other, and bump into other factions
@@ -1774,14 +1828,17 @@ export class Sim {
                 });
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
-                if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
+                if (lapping) {
+                    moveX += dirX * enemy.speed * this.laps!.speed;
+                    moveY += dirY * enemy.speed * this.laps!.speed;
+                } else if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
                     moveX += dirX * enemy.speed;
                     moveY += dirY * enemy.speed;
                 }
                 moveX += sepX * 0.25;
                 moveY += sepY * 0.25;
 
-                if (fleeing) {
+                if (fleeing || lapping) {
                     // Looking where it's running, not back at the player
                     enemy.yaw = yawFromVector(dirX, dirY);
                 } else if (fighting) {
@@ -1791,7 +1848,8 @@ export class Sim {
                 }
 
                 // Bosses hit with their own attacks instead
-                const canHit = enemy.attackCooldown === 0 && !bossState && enemy.damage > 0;
+                const canHit =
+                    enemy.attackCooldown === 0 && !bossState && enemy.damage > 0 && !lapping;
                 if (touching && canHit) {
                     this.enemyAttack(enemy);
                 } else if (foe && canHit && !enemy.boss) {
@@ -1799,6 +1857,7 @@ export class Sim {
                 } else if (
                     enemy.def.shot &&
                     !bossState &&
+                    !lapping &&
                     enemy.attackCooldown === 0 &&
                     distance <= enemy.def.shot.range
                 ) {
@@ -1914,10 +1973,43 @@ export class Sim {
         }
     }
 
-    private relocate(enemy: Enemy): void {
+    // Running a Drill Demon's laps. Bosses, what can't move and flag carriers
+    // carry on as they were.
+    private isLapping(enemy: Enemy, distance: number): boolean {
+        return (
+            this.tick < this.lapsEndTick &&
+            distance < this.laps!.range &&
+            !enemy.boss &&
+            !enemy.def.stationary &&
+            !enemy.def.flees
+        );
+    }
+
+    // Round the player, drifting in or out onto the ring. dx, dy: to the player.
+    private lapDirection(enemy: Enemy, dx: number, dy: number, distance: number, out: Vec2): void {
+        if (distance < 0.01) {
+            // Right on top of the player: any way out will do
+            out.x = 1;
+            out.y = 0;
+            return;
+        }
+        const length = distance;
+        const toward = Math.max(-1, Math.min(1, (distance - this.laps!.radius) / LAP_PULL_TILES));
+        const x = -dy / length + (dx / length) * toward;
+        const y = dx / length + (dy / length) * toward;
+        const size = Math.hypot(x, y);
+        out.x = x / size;
+        out.y = y / size;
+    }
+
+    // Ahead of the player if they're moving, so they keep running into things,
+    // or behind them
+    private relocate(enemy: Enemy, behind = false): void {
         const player = this.player;
-        // Ahead of the player if they're moving, so they keep running into things
-        const angle = player.moving ? Math.atan2(player.facingY, player.facingX) : undefined;
+        const side = behind ? -1 : 1;
+        const angle = player.moving
+            ? Math.atan2(player.facingY * side, player.facingX * side)
+            : undefined;
         const pos = this.findSpawnPoint(enemy.def, SPAWN_MIN_DISTANCE, SPAWN_MAX_DISTANCE, angle);
         if (pos) {
             enemy.x = enemy.prevX = pos.x;
@@ -4867,13 +4959,16 @@ export class Sim {
         const minutes = seconds / 60;
         const chance = POWER_UP_CHANCE * minutes * minutes * (1 + this.stats.luck);
         if (this.rng.chance(chance)) {
-            const index = this.rng.weightedIndex(POWER_UPS.map((p) => p.weight));
+            const index = this.rng.weightedIndex(
+                POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            );
             this.dropPowerUp(POWER_UPS[index].id, x, y);
         }
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
         this.lastPowerUpTick = this.tick;
+        this.lastPowerUpId = id;
         const spot = this.walkableSpot(x, y);
         this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id });
     }
@@ -4931,11 +5026,265 @@ export class Sim {
                 }
                 message = "Time stands still!";
                 break;
+            case "sled":
+                endTick = this.tick + effect.seconds * TICKS_PER_SECOND;
+                this.sledEndTick = endTick;
+                this.sledSpeed = effect.speed;
+                // Whatever had them stuck, they're off
+                player.frozen = 0;
+                message = "You jump on the sled!";
+                break;
+            case "rock":
+                this.dropRock(def, effect);
+                message = "Something huge is coming down...";
+                break;
+            case "rampage":
+                endTick = this.startRampage(def, effect).endTick;
+                message = "Evil Bob has come for his revenge!";
+                break;
+            case "ring":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                this.rings.push({
+                    uid: this.nextUid++,
+                    x: player.x,
+                    y: player.y,
+                    startTick: this.tick,
+                    endTick,
+                    nextPulse: this.tick,
+                    radius: effect.radius,
+                    locId: effect.locId,
+                    spotAnim: effect.spotAnim,
+                    scale: effect.scale,
+                });
+                message = "A fairy ring opens at your feet!";
+                break;
+            case "laps":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                this.lapsEndTick = endTick;
+                this.laps = effect;
+                this.events.push({ type: "playerShout", text: effect.shout });
+                message = effect.shout;
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
         }
         this.events.push({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+    }
+
+    // The middle of the thickest crowd within range of the player, going by
+    // who has the most others within radius; a little ahead of the player if
+    // there's no one about
+    private thickestCrowd(range: number, radius: number): Vec2 {
+        const player = this.player;
+        this.rebuildEnemyHash();
+        let best = { x: player.x + player.facingX * 3, y: player.y + player.facingY * 3 };
+        let most = 0;
+        for (const enemy of this.nearestEnemies(player.x, player.y, range, MAX_CROWD_CHECKS)) {
+            let count = 0;
+            this.enemyHash.query(enemy.x, enemy.y, radius, (other) => {
+                if (Math.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
+                    count++;
+                }
+            });
+            if (count > most) {
+                most = count;
+                best = { x: enemy.x, y: enemy.y };
+            }
+        }
+        return best;
+    }
+
+    private dropRock(def: PowerUpDef, effect: Extract<PowerUpEffect, { kind: "rock" }>): void {
+        const { x, y } = this.thickestCrowd(effect.range, effect.radius);
+        const landTick = this.tick + Math.round(effect.delay * TICKS_PER_SECOND);
+        this.rocks.push({
+            uid: this.nextUid++,
+            powerUpId: def.id,
+            x,
+            y,
+            startTick: this.tick,
+            landTick,
+            endTick: landTick + ROCK_LINGER_TICKS,
+            locId: effect.locId,
+            spotAnim: effect.spotAnim,
+            radius: effect.radius,
+            damage: effect.damage * this.powerUpDamageScale(),
+            knockback: effect.knockback,
+            bossDamage: effect.bossDamage,
+        });
+    }
+
+    private stepRocks(): void {
+        for (const rock of this.rocks) {
+            if (rock.landTick === this.tick) {
+                this.landRock(rock);
+            }
+        }
+        this.rocks = this.rocks.filter((rock) => rock.endTick > this.tick);
+    }
+
+    private landRock(rock: FallingRock): void {
+        const { x, y, radius } = rock;
+        this.events.push({ type: "blast", x, y, radius });
+        this.events.push({ type: "powerUpHit", id: rock.powerUpId, x, y });
+        this.addEffect(rock.spotAnim, x, y, 0, 60);
+        const hit: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
+                hit.push(enemy);
+            }
+        });
+        this.damageSource = `powerUp:${rock.powerUpId}`;
+        for (const enemy of hit) {
+            if (enemy.boss) {
+                // A share of its hitpoints, whatever the damage bonus
+                this.damageEnemy(enemy, enemy.maxHp * rock.bossDamage, 0, x, y, 0);
+            } else {
+                this.damageEnemy(enemy, rock.damage, rock.knockback, x, y);
+            }
+        }
+    }
+
+    // Comes in from behind the player, off the edge of the view
+    private startRampage(
+        def: PowerUpDef,
+        effect: Extract<PowerUpEffect, { kind: "rampage" }>,
+    ): Rampage {
+        const player = this.player;
+        const x = player.x - player.facingX * RAMPAGE_START_DISTANCE;
+        const y = player.y - player.facingY * RAMPAGE_START_DISTANCE;
+        const rampage: Rampage = {
+            uid: this.nextUid++,
+            powerUpId: def.id,
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            yaw: 0,
+            goalX: x,
+            goalY: y,
+            passesLeft: effect.passes,
+            hit: new Set(),
+            damage: effect.damage * this.powerUpDamageScale(),
+            speed: effect.speed / TICKS_PER_SECOND,
+            radius: effect.radius,
+            knockback: effect.knockback,
+            startTick: this.tick,
+            endTick: this.tick + effect.seconds * TICKS_PER_SECOND,
+            doneTick: -1,
+            walkSeq: effect.walkSeq,
+            scale: effect.scale,
+        };
+        this.nextPass(rampage);
+        this.rampages.push(rampage);
+        return rampage;
+    }
+
+    // Straight at the thickest crowd, or the player with none, and on past it
+    private nextPass(rampage: Rampage): void {
+        const player = this.player;
+        const crowd = this.thickestCrowd(RAMPAGE_CROWD_RANGE, rampage.radius * 2);
+        let dx = crowd.x - rampage.x;
+        let dy = crowd.y - rampage.y;
+        if (Math.hypot(dx, dy) < 1) {
+            dx = player.x - rampage.x;
+            dy = player.y - rampage.y;
+        }
+        const length = Math.hypot(dx, dy) || 1;
+        rampage.goalX = rampage.x + dx + (dx / length) * RAMPAGE_OVERSHOOT;
+        rampage.goalY = rampage.y + dy + (dy / length) * RAMPAGE_OVERSHOOT;
+        rampage.yaw = yawFromVector(dx, dy);
+        rampage.passesLeft--;
+        rampage.hit.clear();
+        this.events.push({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
+    }
+
+    private stepRampages(): void {
+        for (const rampage of this.rampages) {
+            rampage.prevX = rampage.x;
+            rampage.prevY = rampage.y;
+            if (rampage.doneTick !== -1) {
+                continue;
+            }
+            const dx = rampage.goalX - rampage.x;
+            const dy = rampage.goalY - rampage.y;
+            const distance = Math.hypot(dx, dy);
+            const move = Math.min(rampage.speed, distance);
+            if (distance > 0) {
+                rampage.x += (dx / distance) * move;
+                rampage.y += (dy / distance) * move;
+            }
+            this.rampageHits(rampage);
+            if (this.tick >= rampage.endTick || move >= distance) {
+                if (rampage.passesLeft > 0 && this.tick < rampage.endTick) {
+                    this.nextPass(rampage);
+                } else {
+                    this.endRampage(rampage);
+                }
+            }
+        }
+        this.rampages = this.rampages.filter(
+            (r) => r.doneTick === -1 || this.tick - r.doneTick < RAMPAGE_FADE_TICKS,
+        );
+    }
+
+    private rampageHits(rampage: Rampage): void {
+        const { x, y, radius, hit } = rampage;
+        const caught: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (!hit.has(enemy.uid) && Math.hypot(enemy.x - x, enemy.y - y) <= radius) {
+                caught.push(enemy);
+            }
+        });
+        this.damageSource = `powerUp:${rampage.powerUpId}`;
+        for (const enemy of caught) {
+            hit.add(enemy.uid);
+            this.damageEnemy(enemy, rampage.damage, rampage.knockback, x, y);
+        }
+    }
+
+    // Its timer on screen goes with it, which may be early
+    private endRampage(rampage: Rampage): void {
+        rampage.doneTick = this.tick;
+        const active = this.powerUps.find((p) => p.id === rampage.powerUpId);
+        if (active) {
+            active.endTick = this.tick + 1;
+        }
+    }
+
+    private stepRings(): void {
+        for (const ring of this.rings) {
+            if (this.tick >= ring.nextPulse) {
+                ring.nextPulse = this.tick + RING_PULSE_TICKS;
+                this.pulseRing(ring);
+            }
+        }
+        this.rings = this.rings.filter((ring) => ring.endTick > this.tick);
+    }
+
+    // Behind the player, or they'd land right in their path
+    private pulseRing(ring: FairyRing): void {
+        const { x, y, radius } = ring;
+        const caught: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (
+                !enemy.boss &&
+                !enemy.def.stationary &&
+                !enemy.jump &&
+                Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
+            ) {
+                caught.push(enemy);
+            }
+        });
+        let effects = 0;
+        for (const enemy of caught) {
+            if (effects < MAX_RING_EFFECTS) {
+                this.addEffect(ring.spotAnim, enemy.x, enemy.y, 0, 40);
+                effects++;
+            }
+            this.relocate(enemy, true);
+        }
     }
 
     // Kills everything that isn't a boss; bosses lose a share of their
@@ -5075,6 +5424,14 @@ export class Sim {
 
     get runOver(): boolean {
         return this.state === "dead" || this.state === "victory";
+    }
+
+    // The power-up whose look the player has on; it's off when the run ends
+    get wornPowerUp(): PowerUpDef | undefined {
+        if (this.runOver) {
+            return undefined;
+        }
+        return this.powerUps.map((p) => getPowerUp(p.id)).find((p) => p.look);
     }
 
     // Until this round's final boss

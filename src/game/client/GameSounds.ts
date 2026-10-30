@@ -46,7 +46,7 @@ export function getGameSoundIds(): number[] {
         }
     }
     for (const powerUp of POWER_UPS) {
-        ids.push(powerUp.sound);
+        ids.push(powerUp.sound, powerUp.endSound ?? -1, powerUp.hitSound ?? -1);
     }
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
@@ -89,6 +89,14 @@ export class GameSounds {
                     break;
                 case "powerUp":
                     audio.play(getPowerUp(event.id).sound, { volume: 1, minGap: 0 });
+                    break;
+                case "powerUpHit":
+                    audio.playAt(getPowerUp(event.id).hitSound ?? -1, event.x, event.y, px, py, {
+                        volume: 0.9,
+                    });
+                    break;
+                case "powerUpEnded":
+                    audio.play(getPowerUp(event.id).endSound ?? -1, { volume: 1, minGap: 0 });
                     break;
                 case "impact":
                     audio.playAt(event.sound, event.x, event.y, px, py, {

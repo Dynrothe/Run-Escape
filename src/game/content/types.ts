@@ -868,7 +868,64 @@ export type PowerUpEffect =
     | { kind: "magnet" }
     // Everything that isn't a boss stands still, and so does whatever turns up
     // meanwhile
-    | { kind: "freeze"; seconds: number };
+    | { kind: "freeze"; seconds: number }
+    // Rides off at this many times the speed with nothing able to hurt them,
+    // for a set time: Effect duration doesn't stretch it
+    | { kind: "sled"; seconds: number; speed: number }
+    // A rock (locId) falls on the thickest crowd within range of the player,
+    // delay seconds later, hitting everything within radius and throwing what
+    // lives back this many tiles. Bosses lose bossDamage of their hitpoints.
+    | {
+          kind: "rock";
+          delay: number;
+          range: number;
+          radius: number;
+          damage: number;
+          knockback: number;
+          bossDamage: number;
+          locId: number;
+          spotAnim: number;
+      }
+    // A giant NPC charges through the crowd this many times, ignoring walls.
+    // Each pass it hits everything within radius once, for damage, and throws
+    // it this many tiles aside. Drawn at scale, playing walkSeq.
+    | {
+          kind: "rampage";
+          seconds: number;
+          passes: number;
+          speed: number;
+          radius: number;
+          damage: number;
+          knockback: number;
+          npcId: number;
+          walkSeq: number;
+          scale: number;
+      }
+    // A ring (locId, drawn at scale) opens at the player's feet and warps
+    // whatever walks within radius far away, showing spotAnim where it was
+    | {
+          kind: "ring";
+          seconds: number;
+          radius: number;
+          locId: number;
+          spotAnim: number;
+          scale: number;
+      }
+    // Everything within range runs laps around the player at this many times
+    // its speed, radius tiles out, and can't attack; a line for the player to
+    // shout
+    | {
+          kind: "laps";
+          seconds: number;
+          range: number;
+          radius: number;
+          speed: number;
+          shout: string;
+      };
+
+// What the player has in hand and how they stand while a power-up lasts. Baked
+// with the player (GameAssets.getPowerUpLookRequests), so it's on at once.
+export type PowerUpLook = { objId: number; idleSeq: number; moveSeq: number };
 
 // Dropped now and then by enemies, picked up by walking over it and used there
 // and then
@@ -886,6 +943,12 @@ export type PowerUpDef = {
     flash?: string;
     // Cache sound effect when it's picked up (-1 for none)
     sound: number;
+    // Cache sound effect when it wears off
+    endSound?: number;
+    // Cache sound effect each time it lands a blow
+    hitSound?: number;
+    // Worn while it lasts
+    look?: PowerUpLook;
     effect: PowerUpEffect;
 };
 

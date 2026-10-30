@@ -177,7 +177,8 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. Their damage keeps up with the enemies' hitpoints.
+  after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
+  drops twice in a row.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
@@ -186,6 +187,20 @@ version and how to run it.
     - **Magnet**: every drop on the ground flies to you, caskets and power-ups included.
     - **Giant stopwatch**: everything but bosses stands still for 8 seconds, even what turns up
       meanwhile.
+    - **Sled**: you ride at 2.2 times your speed for 8 seconds and nothing can hurt you, poison and
+      bosses included. It shoves enemies aside without hurting them, your weapons keep firing, and
+      it frees you if you're frozen. Effect duration doesn't stretch it.
+    - **Giant rune essence**: a moment after you pick it up, a huge rock lands on the thickest
+      crowd within 12 tiles, marked in cyan. It hits everything within 5 tiles and throws
+      survivors back, and bosses lose 8% of their hitpoints. It can't hurt you.
+    - **Evil Bob**: a giant Evil Bob charges through the thickest crowd three times, over walls and
+      all. Everything in his way is hit once a pass and thrown aside.
+    - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
+      within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
+      opened, and shots still come through.
+    - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
+      in a big circle, faster than usual, and can't attack, though shots already on their way still
+      land. Bosses, what can't move and flag carriers carry on.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Each map's monsters are from its part of the world:
