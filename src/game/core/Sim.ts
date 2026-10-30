@@ -93,6 +93,7 @@ import {
     Player,
     Projectile,
     ProjectileKind,
+    Rampage,
     SimEvent,
     Thrall,
     Turret,
@@ -123,6 +124,13 @@ const FOOD_HEAL = 10;
 // more than one enemy but can't melt them instantly
 const HIT_INVULNERABLE_TICKS = 12;
 
+// A rampage: how far from the player it starts, how near the player a crowd
+// has to be to go for it, how far past it the charge runs (tiles), and how long
+// it takes to fade away
+const RAMPAGE_START_DISTANCE = 14;
+const RAMPAGE_CROWD_RANGE = 14;
+const RAMPAGE_OVERSHOOT = 7;
+export const RAMPAGE_FADE_TICKS = 25;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // Ticks a fallen rock lies there before it's gone
@@ -369,6 +377,7 @@ export class Sim {
     // Power-ups that last a while, for their timers
     powerUps: ActivePowerUp[] = [];
     rocks: FallingRock[] = [];
+    rampages: Rampage[] = [];
     // Bosses' glyphs (BossDef.glyph)
     glyphs: Glyph[] = [];
     // Burning ground left by weapons
@@ -1149,6 +1158,7 @@ export class Sim {
         this.stepTurrets();
         this.stepThralls();
         this.stepRocks();
+        this.stepRampages();
         this.stepProjectiles();
         this.stepFires();
         this.stepEnemyProjectiles();
@@ -4969,6 +4979,10 @@ export class Sim {
                 this.dropRock(def, effect);
                 message = "Something huge is coming down...";
                 break;
+            case "rampage":
+                endTick = this.startRampage(def, effect).endTick;
+                message = "Evil Bob has come for his revenge!";
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
@@ -5047,6 +5061,113 @@ export class Sim {
             } else {
                 this.damageEnemy(enemy, rock.damage, rock.knockback, x, y);
             }
+        }
+    }
+
+    // Comes in from behind the player, off the edge of the view
+    private startRampage(
+        def: PowerUpDef,
+        effect: Extract<PowerUpEffect, { kind: "rampage" }>,
+    ): Rampage {
+        const player = this.player;
+        const x = player.x - player.facingX * RAMPAGE_START_DISTANCE;
+        const y = player.y - player.facingY * RAMPAGE_START_DISTANCE;
+        const rampage: Rampage = {
+            uid: this.nextUid++,
+            powerUpId: def.id,
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            yaw: 0,
+            goalX: x,
+            goalY: y,
+            passesLeft: effect.passes,
+            hit: new Set(),
+            damage: effect.damage * this.powerUpDamageScale(),
+            speed: effect.speed / TICKS_PER_SECOND,
+            radius: effect.radius,
+            knockback: effect.knockback,
+            startTick: this.tick,
+            endTick: this.tick + effect.seconds * TICKS_PER_SECOND,
+            doneTick: -1,
+            walkSeq: effect.walkSeq,
+            scale: effect.scale,
+        };
+        this.nextPass(rampage);
+        this.rampages.push(rampage);
+        return rampage;
+    }
+
+    // Straight at the thickest crowd, or the player with none, and on past it
+    private nextPass(rampage: Rampage): void {
+        const player = this.player;
+        const crowd = this.thickestCrowd(RAMPAGE_CROWD_RANGE, rampage.radius * 2);
+        let dx = crowd.x - rampage.x;
+        let dy = crowd.y - rampage.y;
+        if (Math.hypot(dx, dy) < 1) {
+            dx = player.x - rampage.x;
+            dy = player.y - rampage.y;
+        }
+        const length = Math.hypot(dx, dy) || 1;
+        rampage.goalX = rampage.x + dx + (dx / length) * RAMPAGE_OVERSHOOT;
+        rampage.goalY = rampage.y + dy + (dy / length) * RAMPAGE_OVERSHOOT;
+        rampage.yaw = yawFromVector(dx, dy);
+        rampage.passesLeft--;
+        rampage.hit.clear();
+        this.events.push({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
+    }
+
+    private stepRampages(): void {
+        for (const rampage of this.rampages) {
+            rampage.prevX = rampage.x;
+            rampage.prevY = rampage.y;
+            if (rampage.doneTick !== -1) {
+                continue;
+            }
+            const dx = rampage.goalX - rampage.x;
+            const dy = rampage.goalY - rampage.y;
+            const distance = Math.hypot(dx, dy);
+            const move = Math.min(rampage.speed, distance);
+            if (distance > 0) {
+                rampage.x += (dx / distance) * move;
+                rampage.y += (dy / distance) * move;
+            }
+            this.rampageHits(rampage);
+            if (this.tick >= rampage.endTick || move >= distance) {
+                if (rampage.passesLeft > 0 && this.tick < rampage.endTick) {
+                    this.nextPass(rampage);
+                } else {
+                    this.endRampage(rampage);
+                }
+            }
+        }
+        this.rampages = this.rampages.filter(
+            (r) => r.doneTick === -1 || this.tick - r.doneTick < RAMPAGE_FADE_TICKS,
+        );
+    }
+
+    private rampageHits(rampage: Rampage): void {
+        const { x, y, radius, hit } = rampage;
+        const caught: Enemy[] = [];
+        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+            if (!hit.has(enemy.uid) && Math.hypot(enemy.x - x, enemy.y - y) <= radius) {
+                caught.push(enemy);
+            }
+        });
+        this.damageSource = `powerUp:${rampage.powerUpId}`;
+        for (const enemy of caught) {
+            hit.add(enemy.uid);
+            this.damageEnemy(enemy, rampage.damage, rampage.knockback, x, y);
+        }
+    }
+
+    // Its timer on screen goes with it, which may be early
+    private endRampage(rampage: Rampage): void {
+        rampage.doneTick = this.tick;
+        const active = this.powerUps.find((p) => p.id === rampage.powerUpId);
+        if (active) {
+            active.endTick = this.tick + 1;
         }
     }
 

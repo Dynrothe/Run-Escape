@@ -885,6 +885,21 @@ export type PowerUpEffect =
           bossDamage: number;
           locId: number;
           spotAnim: number;
+      }
+    // A giant NPC charges through the crowd this many times, ignoring walls.
+    // Each pass it hits everything within radius once, for damage, and throws
+    // it this many tiles aside. Drawn at scale, playing walkSeq.
+    | {
+          kind: "rampage";
+          seconds: number;
+          passes: number;
+          speed: number;
+          radius: number;
+          damage: number;
+          knockback: number;
+          npcId: number;
+          walkSeq: number;
+          scale: number;
       };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked

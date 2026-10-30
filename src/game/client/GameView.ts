@@ -9,11 +9,12 @@ import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from ".
 import {
     DEATH_SINK_TICKS,
     MAX_DEATH_ANIM_TICKS,
+    RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
     yawFromVector,
 } from "../core/Sim";
-import { Enemy, FallingRock, Glyph, Pickup, SimEvent, Thrall } from "../core/entities";
+import { Enemy, FallingRock, Glyph, Pickup, Rampage, SimEvent, Thrall } from "../core/entities";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -93,6 +94,9 @@ const FLASH_MS = 700;
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+const RAMPAGE_FLASH = 0.25;
+// A charging NPC's legs go this much faster than its walk
+const RAMPAGE_ANIM_SPEED = 2;
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 
@@ -375,6 +379,10 @@ export class GameView {
             this.drawRock(actors, sim, rock);
         }
 
+        for (const rampage of sim.rampages) {
+            this.drawRampage(actors, sim, rampage, alpha);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -404,6 +412,36 @@ export class GameView {
             scale: ROCK_SCALE,
             alpha: Math.max(0, fade),
         });
+    }
+
+    // Black cats are lost on the darker maps, so always with the silhouette and
+    // lit up a little
+    private drawRampage(actors: ActorRenderer, sim: Sim, rampage: Rampage, alpha: number): void {
+        const model = this.assets.get("rampage:" + rampage.powerUpId);
+        // The clock runs on when the run's over, but nothing moves
+        if (!model || sim.runOver) {
+            return;
+        }
+        const anim = model.getAnim(rampage.walkSeq);
+        const x = lerp(rampage.prevX, rampage.x, alpha);
+        const y = lerp(rampage.prevY, rampage.y, alpha);
+        const faded =
+            rampage.doneTick === -1 ? 0 : (sim.tick - rampage.doneTick) / RAMPAGE_FADE_TICKS;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame((sim.tick - rampage.startTick) * RAMPAGE_ANIM_SPEED),
+            x,
+            this.ground(sim, x, y),
+            y,
+            rampage.yaw,
+            {
+                scale: rampage.scale,
+                alpha: Math.max(0, 1 - faded),
+                silhouette: true,
+                flash: RAMPAGE_FLASH,
+            },
+        );
     }
 
     // A boss's glyph, idling as it slides, facing the boss

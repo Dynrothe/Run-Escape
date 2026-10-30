@@ -333,6 +333,16 @@ export class GameAssets {
                 seqIds: [thrall.idleSeq, thrall.walkSeq, thrall.attackSeq],
             });
         }
+        for (const { id, effect } of POWER_UPS) {
+            if (effect.kind === "rampage") {
+                requests.push({
+                    kind: "npc",
+                    key: "rampage:" + id,
+                    npcId: effect.npcId,
+                    seqIds: [effect.walkSeq],
+                });
+            }
+        }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
         for (const powerUp of POWER_UPS) {

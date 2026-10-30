@@ -622,6 +622,75 @@ describe("power-ups", () => {
         });
     });
 
+    describe("Evil Bob", () => {
+        const bob = () => getPowerUp("evil_bob");
+        const seconds = 7;
+
+        function crowd(sim: Sim, hp = 1e6): Enemy[] {
+            const { x, y } = sim.player;
+            return [0, 1, 2, 3, 4, 5].map((i) => {
+                const enemy = goblin(sim, x + 6 + i * 0.4, y + (i % 2) * 0.4, hp);
+                enemy.frozen = 10000;
+                return enemy;
+            });
+        }
+
+        test("charges through the crowd three times, hitting each one once a pass", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const enemies = crowd(sim);
+            sim.usePowerUp(bob());
+            const damages: number[] = [];
+            for (let i = 0; i < seconds * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                damages.push(
+                    ...sim
+                        .takeEvents()
+                        .filter((e) => e.type === "damage" && e.enemyUid === enemies[0].uid)
+                        .map((e) => (e as { amount: number }).amount),
+                );
+            }
+            expect(damages.length).toBeGreaterThanOrEqual(1);
+            expect(damages.length).toBeLessThanOrEqual(3);
+            expect(sim.damageBySource["powerUp:evil_bob"]).toBeGreaterThan(0);
+            for (const damage of damages) {
+                expect(damage).toBeGreaterThanOrEqual(60 * 0.8);
+            }
+            for (const enemy of enemies) {
+                expect(enemy.hp).toBeLessThan(enemy.maxHp);
+            }
+        });
+
+        test("is gone with its timer in the time it's given", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            crowd(sim);
+            sim.usePowerUp(bob());
+            expect(sim.rampages).toHaveLength(1);
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["evil_bob"]);
+            sim.takeEvents();
+            runFor(sim, seconds + 1, "still");
+            expect(sim.rampages).toHaveLength(0);
+            expect(sim.powerUps).toHaveLength(0);
+        });
+
+        test("makes the same passes with nothing there, and never hurts the player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.enemies = [];
+            const hp = sim.player.hp;
+            sim.usePowerUp(bob());
+            for (let i = 0; i < (seconds + 1) * TICKS_PER_SECOND; i++) {
+                sim.enemies = [];
+                sim.step(0, 0);
+            }
+            expect(sim.rampages).toHaveLength(0);
+            expect(sim.player.hp).toBe(hp);
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];

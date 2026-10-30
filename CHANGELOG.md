@@ -10,6 +10,7 @@ the version in the corner).
 - New power-up: the Sled. Ride for 8 seconds at more than twice the speed, shoving the crowd aside
   with nothing able to hurt you.
 - New power-up: the Giant rune essence. A huge rock lands on the thickest crowd nearby.
+- New power-up: Evil Bob. A giant cat charges through the crowd three times, throwing it aside.
 
 ### Changed
 

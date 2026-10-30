@@ -352,6 +352,34 @@ export type FallingRock = {
     bossDamage: number;
 };
 
+// A giant NPC from a power-up, charging through the crowd
+export type Rampage = {
+    uid: number;
+    powerUpId: string;
+    x: number;
+    y: number;
+    prevX: number;
+    prevY: number;
+    yaw: number;
+    // Where this pass ends
+    goalX: number;
+    goalY: number;
+    passesLeft: number;
+    // Uids of what this pass has hit
+    hit: Set<number>;
+    damage: number;
+    // Tiles a tick
+    speed: number;
+    radius: number;
+    knockback: number;
+    startTick: number;
+    endTick: number;
+    // The tick it left, -1 while it's still charging
+    doneTick: number;
+    walkSeq: number;
+    scale: number;
+};
+
 // A power-up that lasts a while, for the timers on screen
 export type ActivePowerUp = {
     uid: number;

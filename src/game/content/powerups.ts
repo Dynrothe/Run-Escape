@@ -112,6 +112,29 @@ export const POWER_UPS: PowerUpDef[] = [
             spotAnim: 659,
         },
     },
+    {
+        id: "evil_bob",
+        name: "Evil Bob",
+        description: "Evil Bob charges through the crowd three times, throwing it aside.",
+        // Pet cat: Evil Bob has no item of his own
+        objId: 1561,
+        weight: 2,
+        // cat_hiss, cat_angry
+        sound: 335,
+        hitSound: 1161,
+        effect: {
+            kind: "rampage",
+            seconds: 7,
+            passes: 3,
+            speed: 12,
+            radius: 2.5,
+            damage: 60,
+            knockback: 3,
+            npcId: 390,
+            walkSeq: 314,
+            scale: 4,
+        },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They

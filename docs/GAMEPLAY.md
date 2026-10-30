@@ -193,6 +193,8 @@ version and how to run it.
     - **Giant rune essence**: a moment after you pick it up, a huge rock lands on the thickest
       crowd within 12 tiles, marked in cyan. It hits everything within 5 tiles and throws
       survivors back, and bosses lose 8% of their hitpoints. It can't hurt you.
+    - **Evil Bob**: a giant Evil Bob charges through the thickest crowd three times, over walls and
+      all. Everything in his way is hit once a pass and thrown aside.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Each map's monsters are from its part of the world:
