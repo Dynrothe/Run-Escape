@@ -1,3 +1,4 @@
+import { createCustomMapSquares } from "../../../game/custom/customSquares";
 import {
     ArchiveBasTypeLoader,
     BasTypeLoader,
@@ -41,6 +42,7 @@ import {
     IndexVarBitTypeLoader,
     VarBitTypeLoader,
 } from "../../config/vartype/bit/VarBitTypeLoader";
+import { CustomMapFileLoader } from "../../map/CustomMapFileLoader";
 import { Dat2MapIndex, MapFileIndex, ModernMapFileIndex } from "../../map/MapFileIndex";
 import { MapFileLoader, ModernMapFileLoader } from "../../map/MapFileLoader";
 import { IndexModelLoader, ModelLoader } from "../../model/ModelLoader";
@@ -222,7 +224,11 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
         const mapIndex = this.cacheSystem.getIndex(IndexType.DAT2.maps);
         if (this.cacheInfo.game === "oldschool" && this.cacheInfo.revision >= 237) {
             const mapFileIndex = new ModernMapFileIndex(mapIndex);
-            return new ModernMapFileLoader(mapIndex, mapFileIndex);
+            const loader = new ModernMapFileLoader(mapIndex, mapFileIndex);
+            return new CustomMapFileLoader(
+                loader,
+                createCustomMapSquares(loader, this.getLocTypeLoader()),
+            );
         }
         const mapFileIndex = new Dat2MapIndex(mapIndex);
         return new MapFileLoader(mapIndex, mapFileIndex);

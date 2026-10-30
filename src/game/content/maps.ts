@@ -1,3 +1,4 @@
+import { TERRAIN_TEST_ARENA, terrainTestWorld } from "../custom/terrainTest";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { MapDef } from "./types";
@@ -290,8 +291,35 @@ export const MAPS: MapDef[] = [
 // campaign's chain
 export { FUN_MAPS };
 
+// Dev server only (or DEV_MAPS=1 in a script): ground of our own, not a slice of
+// the real world (custom/terrainTest.ts)
+const showDevMaps =
+    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
+    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
+const DEV_MAPS: MapDef[] = showDevMaps
+    ? [
+          {
+              id: "terrain_test",
+              name: "Terrain test",
+              description: "Custom ground, for development.",
+              iconObjId: 1351,
+              arena: TERRAIN_TEST_ARENA,
+              spawn: (() => {
+                  const { x, y } = terrainTestWorld(124, 127);
+                  return { x: x + 0.5, y: y + 0.5 };
+              })(),
+              difficulty: { hp: 1, damage: 1 },
+              waves: LUMBRIDGE_WAVES,
+              events: [],
+              finalBossWarning: "",
+              victoryText: "",
+              fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
+          },
+      ]
+    : [];
+
 // Every map, the campaign's and the fun ones
-export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS];
+export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
 
