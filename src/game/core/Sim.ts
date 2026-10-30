@@ -247,6 +247,9 @@ const FACTION_TURN = 0.02;
 const FOE_RANGE = 8;
 const FOE_IGNORE_PLAYER = 2.5;
 const FOE_LOOK_TICKS = TICKS_PER_SECOND / 2;
+// An enemy after a foe this long without landing a hit gives up and goes for
+// the player for good: a wall can be all that's between them
+const FOE_GIVE_UP_TICKS = 3 * TICKS_PER_SECOND;
 // Revivers bring back what died lately: the last this many deaths, no older
 // than this
 const MAX_DEATHS = 48;
@@ -1557,6 +1560,7 @@ export class Sim {
             blockedTick: -BLOCKED_SPLAT_TICKS,
             spawnedBy: 0,
             nextFoeLook: this.tick + (this.nextUid % FOE_LOOK_TICKS),
+            foeWait: 0,
             aggro: false,
             noDrops: false,
             bonesOnly: false,
@@ -2090,7 +2094,9 @@ export class Sim {
     // player (EnemyDef.faction): the one it's fighting while it's still up and
     // close, otherwise the nearest it finds when it looks round. None for
     // bosses and elites (they'd lose their caskets), for one the player's hit,
-    // or with the player close.
+    // or with the player close. Going from one foe that's still up to another
+    // keeps the time it's spent without landing a hit, so it can't put off
+    // giving up by flipping between ones it can't reach.
     private findFoe(enemy: Enemy, playerDistance: number): Enemy | undefined {
         const faction = enemy.def.faction;
         if (
@@ -2101,6 +2107,7 @@ export class Sim {
             playerDistance < FOE_IGNORE_PLAYER
         ) {
             enemy.foe = undefined;
+            enemy.foeWait = 0;
             return undefined;
         }
         const current = enemy.foe;
@@ -2109,7 +2116,11 @@ export class Sim {
             !current.dead &&
             Math.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
         ) {
-            return current;
+            return this.chaseFoe(enemy, current);
+        }
+        if (current?.dead) {
+            // That fight's over, so the next is a new one
+            enemy.foeWait = 0;
         }
         enemy.foe = undefined;
         if (this.tick < enemy.nextFoeLook) {
@@ -2135,12 +2146,28 @@ export class Sim {
                 enemy.foe = other;
             }
         });
-        return enemy.foe;
+        if (!enemy.foe) {
+            enemy.foeWait = 0;
+            return undefined;
+        }
+        return this.chaseFoe(enemy, enemy.foe);
+    }
+
+    // The foe it's still after, or nothing if it's been too long without
+    // landing a hit, when it goes for the player as if they'd hit it
+    private chaseFoe(enemy: Enemy, foe: Enemy): Enemy | undefined {
+        if (++enemy.foeWait < FOE_GIVE_UP_TICKS) {
+            return foe;
+        }
+        enemy.aggro = true;
+        enemy.foe = undefined;
+        return undefined;
     }
 
     // A touch from an enemy of another faction: a hit like the ones it gives
     // the player, only harder, and nobody's kill
     private enemyHitsEnemy(enemy: Enemy, foe: Enemy): void {
+        enemy.foeWait = 0;
         enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
         enemy.anim = "attack";
         enemy.animStart = this.tick;

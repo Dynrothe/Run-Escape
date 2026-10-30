@@ -2053,6 +2053,114 @@ describe("enemy mechanics", () => {
         expect(bandos.foe).toBeUndefined();
     });
 
+    describe("a foe it can't get at", () => {
+        // Two armies either side of the wall at x 1030: they can't touch, and
+        // the player's out of it
+        function acrossTheWall(sim: Sim, faction: string, x: number): Enemy {
+            const def = variant("goblin", { id: "test_" + faction, faction, damage: 1 });
+            const enemy = sim.spawnEnemy(def, "normal", { x, y: 1036.5 })!;
+            enemy.hp = enemy.maxHp = 1e6;
+            return enemy;
+        }
+        function setUp() {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.x = sim.player.prevX = 1015.5;
+            return sim;
+        }
+
+        test("after 3 seconds it goes for the player for good", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const zamorak = acrossTheWall(sim, "zamorak", 1032);
+            play(sim, 2.5);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            play(sim, 1);
+            expect(bandos.aggro).toBe(true);
+            expect(bandos.foe).toBeUndefined();
+            play(sim, 1);
+            // It stays that way with the foe still there
+            expect(bandos.aggro).toBe(true);
+            expect(bandos.foe).toBeUndefined();
+            expect(Math.hypot(bandos.x - sim.player.x, bandos.y - sim.player.y)).toBeLessThan(
+                Math.hypot(1029 - sim.player.x, 1036.5 - sim.player.y),
+            );
+        });
+
+        test("landing hits keeps it at the fight", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const at = (faction: string, x: number) => {
+                const enemy = acrossTheWall(sim, faction, x);
+                enemy.y = enemy.prevY = 1060.5;
+                return enemy;
+            };
+            const bandos = at("bandos", 1040.5);
+            const zamorak = at("zamorak", 1041.2);
+            play(sim, 8);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            expect(zamorak.aggro).toBe(false);
+        });
+
+        test("flipping between foes doesn't put it off", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const others = [
+                acrossTheWall(sim, "zamorak", 1032),
+                acrossTheWall(sim, "saradomin", 1032),
+            ];
+            for (const other of others) {
+                other.frozen = 1e6;
+            }
+            let swaps = 0;
+            for (let i = 0; i < 3.5 * TICKS_PER_SECOND; i++) {
+                if (sim.state === "levelUp") {
+                    sim.choose(0);
+                }
+                sim.player.invulnerable = 100;
+                // Whichever it's after moves out of its range, the other back in
+                const foe = bandos.foe;
+                if (foe && i % 30 === 29) {
+                    const other = foe === others[0] ? others[1] : others[0];
+                    foe.y = foe.prevY = 1046.5;
+                    other.y = other.prevY = bandos.y;
+                    bandos.nextFoeLook = 0;
+                    swaps++;
+                }
+                sim.step(0, 0);
+            }
+            expect(swaps).toBeGreaterThan(1);
+            expect(bandos.aggro).toBe(true);
+        });
+
+        test("a new foe gets the full 3 seconds once the last's dead", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const first = acrossTheWall(sim, "zamorak", 1032);
+            play(sim, 2.5);
+            expect(bandos.foe).toBe(first);
+            first.dead = true;
+            acrossTheWall(sim, "saradomin", 1032);
+            play(sim, 2.5);
+            expect(bandos.aggro).toBe(false);
+            expect(bandos.foe?.def.faction).toBe("saradomin");
+        });
+
+        test("a shooter's shots at the player don't count as hitting its foe", () => {
+            const sim = setUp();
+            const shot = { ...getEnemy("f2p_ranger").shot!, range: 40, interval: 0.5 };
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", shot });
+            const shooter = sim.spawnEnemy(def, "normal", { x: 1029, y: 1036.5 })!;
+            shooter.hp = shooter.maxHp = 1e6;
+            acrossTheWall(sim, "zamorak", 1032);
+            const shots = play(sim, 3.5).filter((event) => event.type === "bossAttack");
+            expect(shots.length).toBeGreaterThan(0);
+            expect(shooter.aggro).toBe(true);
+        });
+    });
+
     describe("where they turn up", () => {
         // A sealed room to the east of the player's spot, in reach of a ring
         // of enemies (12 tiles off) on one side and of the waves (19 to 24

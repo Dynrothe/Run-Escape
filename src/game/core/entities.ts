@@ -139,11 +139,13 @@ export type Enemy = {
     // Brought back by a reviver: it drops nothing when it dies again
     noDrops: boolean;
     // An enemy of another faction it's gone to fight (EnemyDef.faction)
-    // instead of the player, and the tick it next looks for one
+    // instead of the player, the tick it next looks for one, and how many
+    // ticks it's been after foes without landing a hit
     foe?: Enemy;
     nextFoeLook: number;
-    // The player's hit it: it's after the player from now on, not the other
-    // factions
+    foeWait: number;
+    // The player's hit it, or it's given up on reaching a foe: it's after the
+    // player from now on, not the other factions
     aggro: boolean;
     // Called in by a spawner that says so (EnemySpawnsDef.bonesOnly): it
     // drops its bones and nothing else

@@ -37,6 +37,8 @@ the version in the corner).
 - Enemies only turn up where you could stand and walk to, so rings of enemies, summons and ghosts
   no longer appear behind walls or inside rock. East Varrock's enemies still come from both sides
   of the ditch, since they jump it.
+- In the God Wars Dungeon and Castle Wars, an enemy that can't land a hit on the other side for 3
+  seconds gives up and comes for you for good, rather than standing at a wall.
 
 ## 0.17.2 - 2026-10-30
 
