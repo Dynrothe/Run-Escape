@@ -157,7 +157,7 @@ version and how to run it.
     | Varlamore  | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania  | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas | Crystal bow                                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Prifddinas | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
     | Inferno    |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest

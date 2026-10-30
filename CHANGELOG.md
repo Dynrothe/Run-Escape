@@ -5,11 +5,15 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.17.1 - 2026-10-30
+
 ### Changed
 
-- Caskets no longer flood you with a set's missing pieces: a piece can only be one rarity above
-  what the casket rolled, so very rare sets like Torva stay rare. Alch or reroll a piece of a set
-  you've started and caskets stop bringing that set for the rest of the run.
+- Caskets no longer flood you with a set's missing pieces: the odds of one are down from 30% to
+  15%, and a piece can only be one rarity above what the casket rolled, so very rare sets like
+  Torva stay rare. Alch or reroll a piece of a set you've started and caskets stop bringing that
+  set for the rest of the run.
+- Crystal armour now comes in with beating Prifddinas. Saves that have already beaten it keep it.
 
 ### Fixed
 
