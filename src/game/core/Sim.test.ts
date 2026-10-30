@@ -14,6 +14,7 @@ import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
 import {
     MAYHEM_BOSSES,
+    MAYHEM_EVENTS,
     MAYHEM_MODIFIERS,
     MAYHEM_STAT_CAPS,
     MODIFIERS,
@@ -3496,6 +3497,19 @@ describe("Mayhem", () => {
         expect(sim.mayhem!.hitScale(enemy)).toBe(1);
         sim.player.hp = 0;
         expect(sim.mayhem!.hitScale(enemy)).toBe(2);
+    });
+
+    test("Power hour doubles hits both ways, only while it lasts", () => {
+        const sim = mayhemSim();
+        pickFirst(sim);
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal")!;
+        const powerHour = MAYHEM_EVENTS.find((event) => event.id === "power_hour")!;
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(10);
+        sim.mayhem!.event = { def: powerHour, endTick: sim.tick + 100 };
+        expect(sim.mayhem!.hitScale(enemy)).toBe(2);
+        expect(sim.mayhem!.onPlayerHit(10, false)).toBe(20);
+        sim.mayhem!.event = undefined;
+        expect(sim.mayhem!.hitScale(enemy)).toBe(1);
     });
 
     test("Prayer flick takes a hit now and then", () => {

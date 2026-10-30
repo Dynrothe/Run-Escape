@@ -480,5 +480,10 @@ export const MAYHEM_EVENTS: MayhemEventDef[] = [
         seconds: 25,
     },
     { id: "boss_rush", name: "Boss rush", text: "The next boss is here early!", seconds: 15 },
-    { id: "power_hour", name: "Power hour", text: "Enemies hit twice as hard.", seconds: 15 },
+    {
+        id: "power_hour",
+        name: "Power hour",
+        text: "You and enemies hit twice as hard.",
+        seconds: 15,
+    },
 ];

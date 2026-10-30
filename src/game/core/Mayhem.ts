@@ -293,6 +293,9 @@ export class MayhemRun {
         if (this.has("slayer_helmet") && enemy.elite) {
             scale *= 1.5;
         }
+        if (this.eventIs("power_hour")) {
+            scale *= 2;
+        }
         return scale;
     }
 
