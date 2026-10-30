@@ -1,0 +1,64 @@
+.ui-mapgen-back {
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+.ui-mapgen {
+    width: min(880px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    outline: none;
+}
+
+.ui-mapgen-body {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.ui-mapgen-settings {
+    flex: 1;
+    min-width: 0;
+}
+
+.ui-mapgen-preview {
+    flex: 0 0 340px;
+}
+
+.ui-mapgen-preview img,
+.ui-mapgen-empty {
+    display: block;
+    width: 340px;
+    height: 340px;
+    background: #000;
+}
+
+.ui-mapgen-empty {
+    line-height: 340px;
+    text-align: center;
+}
+
+.ui-mapgen-status {
+    min-height: 40px;
+    margin-top: 6px;
+}
+
+.ui-mapgen-error {
+    color: #e04040;
+}
+
+.ui-mapgen-seed {
+    width: 90px;
+    font: inherit;
+    color: #000;
+}
+
+.ui-mapgen-value {
+    min-width: 36px;
+    text-align: right;
+}
+
+.ui-mapgen-picked {
+    color: var(--ui-orange);
+}

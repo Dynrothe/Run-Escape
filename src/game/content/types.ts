@@ -720,6 +720,8 @@ export type MapDef = {
     // Fun maps: endless from the start and outside the unlock chain (see
     // FunMapDef). Campaign maps leave it unset.
     fun?: FunMapDef;
+    // For development: a run here leaves the save alone
+    dev?: boolean;
 };
 
 // A fun map runs endless from the start: there's no final boss, and a new

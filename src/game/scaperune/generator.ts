@@ -47,6 +47,45 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     rocks: 0.4,
 };
 
+type NumberSetting = Exclude<keyof GeneratorSettings, "biome" | "seed">;
+
+// What each number can be, and what to call it: the map generator's screen is
+// built from this
+export const SETTING_LIMITS: Record<
+    NumberSetting,
+    { label: string; min: number; max: number; step: number }
+> = {
+    squares: { label: "Arena size (map squares)", min: 1, max: 3, step: 1 },
+    island: { label: "Island", min: 0, max: 1, step: 0.05 },
+    rivers: { label: "Rivers", min: 0, max: 2, step: 1 },
+    ponds: { label: "Ponds", min: 0, max: 12, step: 1 },
+    hills: { label: "Hills", min: 0, max: 1, step: 0.05 },
+    roads: { label: "Roads", min: 0, max: 1, step: 0.05 },
+    buildings: { label: "Buildings", min: 0, max: 1, step: 0.05 },
+    trees: { label: "Trees", min: 0, max: 1, step: 0.05 },
+    rocks: { label: "Rocks", min: 0, max: 1, step: 0.05 },
+};
+
+// What's wrong with some settings, or undefined
+export function getSettingsError(settings: GeneratorSettings): string | undefined {
+    if (!Number.isInteger(settings.seed) || settings.seed < 0) {
+        return "The seed must be a whole number, 0 or more.";
+    }
+    if (!(settings.biome in BIOMES)) {
+        return `There's no biome called ${settings.biome}.`;
+    }
+    for (const [name, limits] of Object.entries(SETTING_LIMITS)) {
+        const value = settings[name as NumberSetting];
+        if (!Number.isFinite(value) || value < limits.min || value > limits.max) {
+            return `${limits.label} must be from ${limits.min} to ${limits.max}.`;
+        }
+        if (limits.step === 1 && !Number.isInteger(value)) {
+            return `${limits.label} must be a whole number.`;
+        }
+    }
+    return undefined;
+}
+
 // One square of scenery round the arena
 const MARGIN = 1;
 const RIVER_HALF_WIDTH = 4.5;
@@ -58,6 +97,8 @@ const SPAWN_CLEAR = 7;
 // A stranded piece of ground this big gets a ford. Smaller ones get blocked.
 const MIN_STRANDED_PIECE = 150;
 const MAX_FORDS = 16;
+// Fewer reachable tiles than this isn't a map you can play
+const MIN_PLAYABLE_TILES = 300;
 const SEA_BED = 6;
 const RIVER_BED = 8;
 const LAND_FLOOR = 34;
@@ -542,9 +583,16 @@ function connectGround(
     for (const i of findStranded(flags, sizeX, arena, reached)) {
         blockTile(grid, i);
     }
+    if (reached.reduce((sum, tile) => sum + tile, 0) < MIN_PLAYABLE_TILES) {
+        throw new Error("These settings leave too little ground to play on.");
+    }
 }
 
 export function generateMap(settings: GeneratorSettings, context: BuildContext): TileGrid {
+    const error = getSettingsError(settings);
+    if (error) {
+        throw new Error(error);
+    }
     const size = getGeneratedSize(settings);
     const spawn = size >> 1;
     const arena = getGeneratedArena(settings);

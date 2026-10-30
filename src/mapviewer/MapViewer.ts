@@ -89,6 +89,7 @@ export class MapViewer {
     mapImageUrls: Map<number, string> = new Map();
     minimapImageUrls: Map<number, string> = new Map();
     customMapSquareIds: Set<number> = new Set();
+    customMapVersion: number = 0;
     loadingMapImageIds: Set<number> = new Set();
 
     cameraSpeed: number = 1;
@@ -306,9 +307,13 @@ export class MapViewer {
             return;
         }
         this.loadingMapImageIds.add(mapId);
+        const customMapVersion = this.customMapVersion;
 
         try {
             const minimapData = await this.workerPool.queueMapImage(mapX, mapY, 0, true);
+            if (customMapVersion !== this.customMapVersion) {
+                return;
+            }
             if (minimapData) {
                 const url = URL.createObjectURL(minimapData.minimapBlob);
                 // Saved images are found by square alone, so a custom square's
@@ -327,19 +332,29 @@ export class MapViewer {
         }
     }
 
-    // Adds map squares the cache doesn't have, here and in the workers. Any
-    // image saved for one of them is left behind.
-    async addCustomMapSquares(squares: CustomMapSquares): Promise<void> {
-        addCustomMapSquares(this.mapFileLoader, squares);
-        await this.workerPool.addCustomMapSquares(squares);
+    // Adds map squares the cache doesn't have, or replaces them, here and in the
+    // workers. Any image of one is left behind. Whatever was on its way for the
+    // old ones is dropped (customMapVersion), and the renderer's own copies are the
+    // caller's to clear.
+    async addCustomMapSquares(squares: CustomMapSquares, removedIds: number[] = []): Promise<void> {
+        this.customMapVersion++;
+        addCustomMapSquares(this.mapFileLoader, squares, removedIds);
+        await this.workerPool.addCustomMapSquares(squares, removedIds);
+        for (const id of [...squares.keys(), ...removedIds]) {
+            for (const urls of [this.mapImageUrls, this.minimapImageUrls]) {
+                const url = urls.get(id);
+                if (url) {
+                    URL.revokeObjectURL(url);
+                    urls.delete(id);
+                }
+            }
+        }
+        for (const id of removedIds) {
+            this.customMapSquareIds.delete(id);
+        }
         for (const id of squares.keys()) {
             this.customMapSquareIds.add(id);
             this.renderer.mapManager.invalidMapIds.delete(id);
-            const url = this.mapImageUrls.get(id);
-            if (url) {
-                URL.revokeObjectURL(url);
-                this.mapImageUrls.delete(id);
-            }
         }
     }
 

@@ -39,6 +39,7 @@ import {
     isEndlessUnlocked,
     isMapUnlocked,
 } from "../core/save";
+import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
@@ -479,6 +480,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                     >
                         Settings
                     </button>
+                    {import.meta.env.DEV && <MapGeneratorButton client={client} />}
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
                         <div>

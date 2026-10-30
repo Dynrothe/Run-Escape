@@ -7,7 +7,7 @@ import {
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
 import { ITEM_BY_ID, getGear } from "../content/items";
-import { ALL_MAPS, MAPS, isFunMap } from "../content/maps";
+import { ALL_MAPS, MAPS, isDevMap, isFunMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
 import { CharacterDef, QuestDef, Stats, UnlockTask, emptyStats } from "../content/types";
@@ -279,6 +279,10 @@ export type RunSummary = {
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
+    // Nothing from a development map, or its id would stay in the save for good
+    if (isDevMap(run.mapId)) {
+        return [];
+    }
     const quests = getFinishedQuests(save, run);
     save.coins += run.coins;
     save.totalCoins += run.coins;
@@ -376,6 +380,9 @@ export function getFinishedQuests(save: SaveData, run?: RunSummary): QuestDef[] 
 // Whether an endless run got further than any before it on its map: a later
 // round, or as far but longer
 export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
+    if (isDevMap(run.mapId)) {
+        return false;
+    }
     const best = save.endlessBest[run.mapId];
     const round = run.round ?? 1;
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);

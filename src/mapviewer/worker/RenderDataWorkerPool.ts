@@ -81,8 +81,8 @@ export class RenderDataWorkerPool {
         return this.pool.queue((w) => w.loadMapImage(mapX, mapY, level, drawMapFunctions));
     }
 
-    addCustomMapSquares(squares: CustomMapSquares): Promise<void> {
-        return this.runAll((w) => w.addCustomMapSquares(squares));
+    addCustomMapSquares(squares: CustomMapSquares, removedIds: number[]): Promise<void> {
+        return this.runAll((w) => w.addCustomMapSquares(squares, removedIds));
     }
 
     setVars(vars: Int32Array): Promise<void> {

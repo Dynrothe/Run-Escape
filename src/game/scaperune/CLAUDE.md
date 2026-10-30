@@ -5,7 +5,7 @@ cache objects and buildings on top. It's self-contained: everything is in this f
 outside it needs changing to make a map.
 
 **Nothing here ships to players yet.** Every map is in `maps/devMaps.ts`, and those only show on the
-dev server (or with `DEV_MAPS=1` in a script).
+dev server (or with `DEV_MAPS=1` in a script). A run on one doesn't touch the save.
 
 ## How it works
 
@@ -33,6 +33,20 @@ The recipe runs once, on the main thread, the first time the map's played. `Game
 | `palette.ts`   | everything the generator can use, on one map                           |
 | `squares.ts`   | turns a recipe into squares, and installs them                         |
 | `maps/`        | the maps: `devMaps.ts` lists them, `terrainTest.ts` is a hand-made one |
+
+## The map generator screen (temporary)
+
+On the dev server the title screen has a **Map generator** button: every `GeneratorSettings` property,
+Generate with a preview from above, and Play. It's temporary, there to try settings, so it's built to
+delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton`
+line in `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`. A production build never shows it.
+
+Every Generate replaces one map, `scaperune_generated`, at fixed map squares. `installGeneratedMap`
+replaces whatever kept the old one: the squares on the main thread and in the workers, the renderer's
+loaded squares, the map images and the cached collision. A load still on its way for the old squares is
+dropped (`MapViewer.customMapVersion`). If you add anything else that's kept per map, clear it there.
+
+**Runs on any map here, dev maps included, leave the save alone**: `MapDef.dev`, checked in `recordRun`.
 
 ## Making a map with the generator
 

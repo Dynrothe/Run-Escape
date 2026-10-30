@@ -106,12 +106,12 @@ const worker = {
         }
         workerState.varManager.set(values);
     },
-    async addCustomMapSquares(squares: CustomMapSquares): Promise<void> {
+    async addCustomMapSquares(squares: CustomMapSquares, removedIds: number[]): Promise<void> {
         const workerState = await workerStatePromise;
         if (!workerState) {
             throw new Error("Worker not initialized");
         }
-        addCustomMapSquares(workerState.sceneBuilder.mapFileLoader, squares);
+        addCustomMapSquares(workerState.sceneBuilder.mapFileLoader, squares, removedIds);
     },
     async loadCachedMapImages(): Promise<Map<number, string>> {
         const workerState = await workerStatePromise;

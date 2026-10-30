@@ -9,7 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
-import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { MAPS, getArenaRegion, getMap, isDevMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
@@ -434,8 +434,12 @@ export class GameClient implements GameFrameHandler {
         return grid;
     }
 
-    async startRun(): Promise<void> {
-        const { mapId } = this.store.getSnapshot();
+    // Forgets a map's collision, for a map that's changed
+    forgetGrid(mapId: string): void {
+        this.grids.delete(mapId);
+    }
+
+    async startRun(mapId: string = this.store.getSnapshot().mapId): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
@@ -646,7 +650,9 @@ export class GameClient implements GameFrameHandler {
         );
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
-        const newGear = result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newGear = isDevMap(sim.map.id)
+            ? []
+            : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
@@ -678,7 +684,7 @@ export class GameClient implements GameFrameHandler {
     // quest pays out, once the run is over, however it ends (beating the map
     // shows on the results instead)
     private announceTasks(sim: Sim): void {
-        if (sim.runOver) {
+        if (sim.runOver || isDevMap(sim.map.id)) {
             return;
         }
         const result = sim.getResult();

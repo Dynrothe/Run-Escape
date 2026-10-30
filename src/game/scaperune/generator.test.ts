@@ -3,14 +3,17 @@ import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
+import type { BiomeId } from "./biomes";
 import { findReachable, findStranded, getCollisionFlags } from "./collision";
 import { createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
+    SETTING_LIMITS,
     generateMap,
     getGeneratedArena,
     getGeneratedSpawn,
+    getSettingsError,
 } from "./generator";
 import type { BuildContext } from "./recipe";
 
@@ -56,6 +59,36 @@ describe("generateMap", () => {
         const a = generateMap(settings({ seed: 5 }), context);
         const b = generateMap(settings({ seed: 6 }), context);
         expect(writeTerrain(a, 64, 64)).not.toEqual(writeTerrain(b, 64, 64));
+    });
+
+    it("has limits for every number in the settings", () => {
+        const numbers = Object.keys(DEFAULT_SETTINGS).filter((key) => key !== "biome");
+        expect(Object.keys(SETTING_LIMITS).sort()).toEqual(numbers.sort());
+    });
+
+    it("says what's wrong with bad settings, and won't build them", () => {
+        expect(getSettingsError(settings({}))).toBeUndefined();
+        const bad: Partial<GeneratorSettings>[] = [
+            { seed: NaN },
+            { seed: -1 },
+            { seed: 1.5 },
+            { squares: 4 },
+            { squares: 1.5 },
+            { island: 2 },
+            { ponds: NaN },
+            { rivers: 3 },
+            { biome: "moon" as BiomeId },
+        ];
+        for (const overrides of bad) {
+            const full = settings(overrides);
+            expect(getSettingsError(full)).toBeDefined();
+            expect(() => generateMap(full, context)).toThrow();
+        }
+    });
+
+    it("refuses to make a map with too little ground to play on", () => {
+        const allPonds = settings({ squares: 1, island: 1, ponds: 12, buildings: 0, seed: 2 });
+        expect(() => generateMap(allPonds, context)).toThrow(/too little ground/);
     });
 
     it("listens to its settings", () => {

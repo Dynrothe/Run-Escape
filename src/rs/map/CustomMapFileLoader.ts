@@ -41,7 +41,11 @@ export class CustomMapFileLoader extends MapFileLoader {
         this.squares = squares;
     }
 
-    addSquares(squares: CustomMapSquares): void {
+    // Adds squares, or replaces those it has, and takes out the removed ones
+    addSquares(squares: CustomMapSquares, removedIds: number[] = []): void {
+        for (const id of removedIds) {
+            this.squares.delete(id);
+        }
         for (const [id, square] of squares) {
             this.squares.set(id, square);
         }
@@ -64,9 +68,13 @@ export class CustomMapFileLoader extends MapFileLoader {
     }
 }
 
-export function addCustomMapSquares(loader: MapFileLoader, squares: CustomMapSquares): void {
+export function addCustomMapSquares(
+    loader: MapFileLoader,
+    squares: CustomMapSquares,
+    removedIds: number[] = [],
+): void {
     if (!(loader instanceof CustomMapFileLoader)) {
         throw new Error("This cache's map loader can't take custom map squares");
     }
-    loader.addSquares(squares);
+    loader.addSquares(squares, removedIds);
 }
