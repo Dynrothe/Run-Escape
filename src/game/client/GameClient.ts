@@ -10,6 +10,7 @@ import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
 import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { MODIFIER_TIERS, getMayhemMetaStats, pickMayhemMap } from "../content/mayhem";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
@@ -51,7 +52,15 @@ import {
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
-import { ChoiceView, GameStore, HudView, QuestTrackView, Screen, SlotView } from "./GameStore";
+import {
+    ChoiceView,
+    GameStore,
+    HudView,
+    ModifierView,
+    QuestTrackView,
+    Screen,
+    SlotView,
+} from "./GameStore";
 import { GameView } from "./GameView";
 import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./ItemViews";
 import { Minimap } from "./Minimap";
@@ -92,8 +101,9 @@ function describeRound(sim: Sim): string {
 }
 
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
-    // Quests don't count on the fun maps, so there's nothing to track there
-    if (isFunMap(sim.map.id)) {
+    // Quests don't count on the fun maps or in Mayhem, so there's nothing to
+    // track there
+    if (isFunMap(sim.map.id) || sim.mayhem) {
         return [];
     }
     const run = sim.getResult();
@@ -127,7 +137,42 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
         passive: getPassive(evolution.requiresPassive).name,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
+        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.mayhem?.evolvesAtAnyLevel),
+    };
+}
+
+function getModifierViews(sim: Sim): ModifierView[] {
+    return (sim.mayhem?.choices ?? []).map((def) => ({
+        name: def.name,
+        text: def.text,
+        iconObjId: def.iconObjId,
+        tierName: MODIFIER_TIERS[def.tier].name,
+        color: MODIFIER_TIERS[def.tier].color,
+    }));
+}
+
+function getMayhemView(sim: Sim): HudView["mayhem"] {
+    const mayhem = sim.mayhem;
+    if (!mayhem) {
+        return undefined;
+    }
+    const event = mayhem.event;
+    return {
+        modifiers: mayhem.modifiers.map((def) => ({
+            id: def.id,
+            name: def.name,
+            level: 1,
+            maxLevel: 1,
+            noLevels: true,
+            iconObjId: def.iconObjId,
+            detail: def.text,
+            rarityColor: MODIFIER_TIERS[def.tier].color,
+        })),
+        event: event && {
+            name: event.def.name,
+            text: event.def.text,
+            secondsLeft: Math.ceil((event.endTick - sim.tick) / TICKS_PER_SECOND),
+        },
     };
 }
 
@@ -296,7 +341,11 @@ export class GameClient implements GameFrameHandler {
     }
 
     selectCharacter(characterId: string): void {
-        if (!this.save.unlockedCharacters.includes(characterId)) {
+        // Everyone's open in Mayhem
+        const open =
+            this.store.getSnapshot().screen === "mayhem" ||
+            this.save.unlockedCharacters.includes(characterId);
+        if (!open) {
             return;
         }
         this.store.set({ characterId });
@@ -432,9 +481,26 @@ export class GameClient implements GameFrameHandler {
         return grid;
     }
 
-    async startRun(): Promise<void> {
-        const { mapId } = this.store.getSnapshot();
-        if (!isMapUnlocked(this.save, mapId)) {
+    // Back from Mayhem, where anyone can be picked
+    private dropLockedCharacter(): void {
+        const { characterId } = this.store.getSnapshot();
+        if (!this.save.unlockedCharacters.includes(characterId)) {
+            this.store.set({ characterId: this.save.unlockedCharacters[0] ?? "warrior" });
+        }
+    }
+
+    leaveMayhem(): void {
+        this.dropLockedCharacter();
+        this.assets.setPlayerAppearance(
+            getCharacterAppearance(this.store.getSnapshot().characterId),
+        );
+        this.showScreen("title");
+    }
+
+    async startRun(mayhem = false): Promise<void> {
+        // Mayhem picks its own map, from all of them
+        const mapId = mayhem ? pickMayhemMap(Math.random).id : this.store.getSnapshot().mapId;
+        if (!mayhem && !isMapUnlocked(this.save, mapId)) {
             return;
         }
         const map = getMap(mapId);
@@ -455,7 +521,7 @@ export class GameClient implements GameFrameHandler {
             this.grid = await this.loadGrid(mapId);
         } catch (e) {
             console.error("Failed to load map", mapId, e);
-            this.store.set({ screen: "characters" });
+            this.store.set({ screen: mayhem ? "mayhem" : "characters" });
             this.store.toast(`Couldn't get to ${map.name}.`);
             return;
         }
@@ -463,13 +529,14 @@ export class GameClient implements GameFrameHandler {
             grid: this.grid,
             mapId,
             characterId,
-            metaStats: getMetaStats(this.save),
+            metaStats: mayhem ? getMayhemMetaStats() : getMetaStats(this.save),
             seed: (Math.random() * 0x7fffffff) | 0,
             spawnX: map.spawn.x,
             spawnY: map.spawn.y,
-            unlockedItems: new Set(this.save.unlockedItems),
+            unlockedItems: mayhem ? undefined : new Set(this.save.unlockedItems),
             endless,
-            armoury: { ...this.save.armoury },
+            armoury: mayhem ? undefined : { ...this.save.armoury },
+            mayhem,
         });
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
@@ -501,6 +568,8 @@ export class GameClient implements GameFrameHandler {
             toasts: [],
         });
         this.updateHud(true);
+        // Mayhem opens with a Modifier
+        this.syncOverlay();
     }
 
     choose(index: number): void {
@@ -509,6 +578,16 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         sim.choose(index);
+        this.syncOverlay();
+        this.updateHud(true);
+    }
+
+    chooseModifier(index: number): void {
+        const sim = this.sim;
+        if (!sim?.mayhem || sim.state !== "modifier") {
+            return;
+        }
+        sim.mayhem.choose(index);
         this.syncOverlay();
         this.updateHud(true);
     }
@@ -536,7 +615,10 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return false;
         }
-        if (sim.state === "chest") {
+        if (sim.state === "modifier") {
+            this.sounds.reroll();
+            this.store.set({ modifiers: getModifierViews(sim), modifierRerolled: true });
+        } else if (sim.state === "chest") {
             const chest = getChestView(sim);
             // The UI bursts the casket open again for the new item
             if (chest) {
@@ -618,6 +700,7 @@ export class GameClient implements GameFrameHandler {
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
+        this.dropLockedCharacter();
         this.assets.setPlayerAppearance(
             getCharacterAppearance(this.store.getSnapshot().characterId),
         );
@@ -638,6 +721,23 @@ export class GameClient implements GameFrameHandler {
         }
         this.runRecorded = true;
         const result = sim.getResult();
+        if (sim.mayhem) {
+            this.store.set({
+                result: {
+                    ...result,
+                    characterName: getCharacter(sim.characterId).name,
+                    modifiers: sim.mayhem.modifiers.map((m) => m.name),
+                    damage: getDamageViews(sim, result.stats),
+                    bossKills: getBossKillViews(result.stats),
+                    endlessRecord: false,
+                    unlockedCharacters: [],
+                    unlockedItems: [],
+                    newGear: [],
+                    quests: [],
+                },
+            });
+            return;
+        }
         const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !this.save.unlockedCharacters.includes(c.id),
@@ -660,6 +760,7 @@ export class GameClient implements GameFrameHandler {
             result: {
                 ...result,
                 characterName: getCharacter(sim.characterId).name,
+                modifiers: [],
                 damage: getDamageViews(sim, result.stats),
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
@@ -676,7 +777,7 @@ export class GameClient implements GameFrameHandler {
     // quest pays out, once the run is over, however it ends (beating the map
     // shows on the results instead)
     private announceTasks(sim: Sim): void {
-        if (sim.runOver) {
+        if (sim.runOver || sim.mayhem) {
             return;
         }
         const result = sim.getResult();
@@ -743,7 +844,9 @@ export class GameClient implements GameFrameHandler {
             if (index >= 0 && index < sim.choices.length) {
                 this.choose(index);
             }
-        } else if (overlay === "levelUp" && code === "KeyR") {
+        } else if (overlay === "modifier" && code.startsWith("Digit")) {
+            this.chooseModifier(parseInt(code.slice(5)) - 1);
+        } else if ((overlay === "levelUp" || overlay === "modifier") && code === "KeyR") {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
             this.skip();
@@ -878,6 +981,9 @@ export class GameClient implements GameFrameHandler {
                 case "notice":
                     this.store.toast(event.message);
                     break;
+                case "mayhemEvent":
+                    this.sounds.taskDone();
+                    break;
             }
         }
     }
@@ -900,6 +1006,16 @@ export class GameClient implements GameFrameHandler {
         } else if (sim.state === "levelUp") {
             this.sounds.levelUp();
             this.store.set({ overlay: "levelUp", choices: getChoiceViews(sim), chest: undefined });
+        } else if (sim.state === "modifier") {
+            this.sounds.levelUp();
+            this.store.set({
+                overlay: "modifier",
+                modifiers: getModifierViews(sim),
+                modifierPick: (sim.mayhem?.picksMade ?? 0) + 1,
+                modifierRerolled: false,
+                choices: [],
+                chest: undefined,
+            });
         } else if (this.paused) {
             this.store.set({ overlay: "paused", choices: [], chest: undefined });
         } else {
@@ -926,7 +1042,7 @@ export class GameClient implements GameFrameHandler {
         }
         const hud: HudView = {
             mapId: sim.map.id,
-            round: sim.endless ? sim.round : undefined,
+            round: sim.endless && !sim.mayhem ? sim.round : undefined,
             bossIn: sim.timeLeftForBoss,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
@@ -941,6 +1057,7 @@ export class GameClient implements GameFrameHandler {
             coins: sim.coins,
             maxWeapons: sim.maxWeapons,
             maxPassives: sim.maxPassives,
+            mayhem: getMayhemView(sim),
             weapons: sim.weapons.map((w) => {
                 const last = w.def.levels.length;
                 const level = w.def.levels[Math.min(w.level, last) - 1];

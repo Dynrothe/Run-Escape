@@ -26,6 +26,7 @@ import {
 import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { MAYHEM_MODIFIERS } from "../content/mayhem";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
@@ -112,6 +113,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "armoury":
             screen = <ArmouryScreen ui={ui} client={client} />;
+            break;
+        case "mayhem":
+            screen = <MayhemScreen ui={ui} client={client} />;
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
@@ -462,6 +466,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         Armoury
                     </button>
                     <button
+                        className="ui-button ui-button-big ui-button-mayhem"
+                        onClick={() => client.showScreen("mayhem")}
+                    >
+                        Mayhem
+                    </button>
+                    <button
                         className="ui-button ui-button-big"
                         onClick={() => client.showScreen("quests")}
                     >
@@ -543,6 +553,40 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// Mayhem: any adventurer, and what's in store. The map's a surprise.
+function MayhemScreen({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <div className="ui-fill ui-select">
+            <AdventurerPanel ui={ui} client={client} everyoneOpen />
+            <div className="ui-panel rs-border rs-background ui-select-panel ui-mayhem-panel">
+                <h2 className="ui-select-heading">Mayhem</h2>
+                <p className="ui-mayhem-intro">
+                    A world of its own, with no end and nothing to take home. How long can you last?
+                </p>
+                <ul className="ui-mayhem-rules">
+                    <li>Any adventurer, and every weapon, passive and item</li>
+                    <li>A random map, with enemies and bosses from the whole game</li>
+                    <li>Levels come three times as fast, with 6 weapons and 6 passives</li>
+                    <li>6 Modifiers: pick one now, then one for each of the first 5 bosses</li>
+                    <li>A Mayhem event every minute and a half</li>
+                    <li>It only gets harder. Your skills and Armoury stay at home</li>
+                </ul>
+            </div>
+            <div className="ui-panel rs-border rs-background ui-select-bar">
+                <button className="ui-button" onClick={() => client.leaveMayhem()}>
+                    Back
+                </button>
+                <button
+                    className="ui-button ui-button-go ui-select-go"
+                    onClick={() => client.startRun(true)}
+                >
+                    Start Mayhem
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // Endless runs for the map picked, once it's been beaten (fun maps are
 // always endless)
 function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
@@ -583,8 +627,12 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
 // pointed at (or tapped, so a locked one can say what it takes) until the
 // pointer leaves the panel, then the one picked. Only moving the pointer
 // changes it: the list scrolling under a still pointer doesn't.
-function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
-    const unlocked = ui.save.unlockedCharacters;
+function AdventurerPanel({
+    ui,
+    client,
+    everyoneOpen = false,
+}: ScreenProps & { everyoneOpen?: boolean }): JSX.Element {
+    const unlocked = everyoneOpen ? CHARACTERS.map((c) => c.id) : ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
     const opened = CHARACTERS.filter((c) => unlocked.includes(c.id)).length;
     return (
@@ -655,19 +703,21 @@ function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
                     );
                 })}
             </div>
-            <AdventurerDetails save={ui.save} character={getCharacter(peek ?? ui.characterId)} />
+            <AdventurerDetails
+                unlocked={unlocked.includes(peek ?? ui.characterId)}
+                character={getCharacter(peek ?? ui.characterId)}
+            />
         </div>
     );
 }
 
 function AdventurerDetails({
-    save,
+    unlocked,
     character,
 }: {
-    save: SaveData;
+    unlocked: boolean;
     character: CharacterDef;
 }): JSX.Element {
-    const unlocked = save.unlockedCharacters.includes(character.id);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -882,6 +932,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 ))}
             </div>
             {ui.overlay === "levelUp" && <LevelUpModal ui={ui} client={client} />}
+            {ui.overlay === "modifier" && <ModifierModal ui={ui} client={client} />}
             {ui.overlay === "chest" && ui.chest && (
                 <ChestModal
                     key={ui.chest.uid}
@@ -926,14 +977,18 @@ function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element 
                                     spriteId={slot.iconSpriteId}
                                     size={30}
                                 />
-                                <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
+                                {!slot.noLevels && (
+                                    <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
+                                )}
                                 <div className="ui-slot-tip rs-border rs-background">
                                     <div style={{ color: slot.rarityColor }}>{slot.name}</div>
-                                    <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? "Max level"
-                                            : `Level ${slot.level} of ${slot.maxLevel}`}
-                                    </div>
+                                    {!slot.noLevels && (
+                                        <div className="ui-slot-tip-level">
+                                            {slot.level >= slot.maxLevel
+                                                ? "Max level"
+                                                : `Level ${slot.level} of ${slot.maxLevel}`}
+                                        </div>
+                                    )}
                                     {slot.stats?.map((line) => (
                                         <div key={line}>{line}</div>
                                     ))}
@@ -1068,6 +1123,7 @@ function Hud({
                 <div className="ui-hud-left">
                     <Slots slots={hud.weapons} max={hud.maxWeapons} />
                     <Slots slots={hud.passives} max={hud.maxPassives} />
+                    {hud.mayhem && <Slots slots={hud.mayhem.modifiers} max={MAYHEM_MODIFIERS} />}
                     <GearSlots gear={hud.gear} />
                 </div>
                 <div className="ui-timer">{formatTime(hud.seconds)}</div>
@@ -1097,11 +1153,20 @@ function Hud({
                     </div>
                 </div>
             ) : (
-                bossIn <= 60 && (
+                bossIn <= (hud.mayhem ? 10 : 60) && (
                     <div className="ui-boss-warning">
-                        {getMap(hud.mapId).finalBossWarning} {Math.ceil(bossIn)}s
+                        {hud.mayhem ? "Boss incoming!" : getMap(hud.mapId).finalBossWarning}{" "}
+                        {Math.ceil(bossIn)}s
                     </div>
                 )
+            )}
+            {hud.mayhem?.event && (
+                <div className="ui-mayhem-event">
+                    <div className="ui-mayhem-event-name">{hud.mayhem.event.name}</div>
+                    <div>
+                        {hud.mayhem.event.text} {hud.mayhem.event.secondsLeft}s
+                    </div>
+                </div>
             )}
             <div className="ui-hud-bottom">
                 {hud.buffs.length > 0 && <Buffs buffs={hud.buffs} />}
@@ -1245,6 +1310,46 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                         )}
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+// A Mayhem pick: three cards, and one reroll
+function ModifierModal({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <div className="ui-modal">
+            <div className="ui-panel rs-border rs-background ui-levelup">
+                <h2>Choose a Modifier</h2>
+                <p className="ui-subtle">
+                    {ui.modifierPick} of {MAYHEM_MODIFIERS}
+                </p>
+                <div className="ui-choices">
+                    {ui.modifiers.map((modifier, i) => (
+                        <button
+                            key={modifier.name}
+                            className="ui-card ui-choice"
+                            style={{ borderColor: modifier.color }}
+                            onClick={() => client.chooseModifier(i)}
+                        >
+                            <span className="ui-choice-key">{i + 1}</span>
+                            <ItemIcon objId={modifier.iconObjId} size={44} />
+                            <div className="ui-card-body">
+                                <div className="ui-card-title">{modifier.name}</div>
+                                <div className="ui-card-text">{modifier.text}</div>
+                            </div>
+                            <span className="ui-rarity" style={{ color: modifier.color }}>
+                                {modifier.tierName}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+                <div className="ui-levelup-actions">
+                    <RerollButton
+                        rerolls={ui.modifierRerolled ? 0 : 1}
+                        onReroll={() => client.reroll()}
+                    />
+                </div>
             </div>
         </div>
     );
@@ -1404,11 +1509,31 @@ function PauseModal({
                                 </div>
                             </>
                         )}
+                        {hud.mayhem && hud.mayhem.modifiers.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">Modifiers</h3>
+                                <div className="ui-pause-list">
+                                    {hud.mayhem.modifiers.map((slot) => (
+                                        <div key={slot.id} className="ui-pause-item">
+                                            <ItemIcon objId={slot.iconObjId} size={28} />
+                                            <span className="ui-pause-name">
+                                                <span style={{ color: slot.rarityColor }}>
+                                                    {slot.name}
+                                                </span>
+                                                <span className="ui-pause-detail">
+                                                    {slot.detail}
+                                                </span>
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                         <h3 className="ui-pause-heading">Settings</h3>
                         <SoundSettings
                             ui={ui}
                             client={client}
-                            music={getMap(ui.mapId).music !== undefined}
+                            music={getMap(hud.mapId).music !== undefined}
                         />
                         <AutoPauseSetting ui={ui} client={client} />
                     </div>
@@ -1509,7 +1634,13 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                         <td>Adventurer</td>
                                         <td>{result.characterName}</td>
                                     </tr>
-                                    {result.endless && (
+                                    {result.mayhem && (
+                                        <tr>
+                                            <td>Map</td>
+                                            <td>{getMap(result.mapId).name}</td>
+                                        </tr>
+                                    )}
+                                    {result.endless && !result.mayhem && (
                                         <tr>
                                             <td>Endless round</td>
                                             <td>{result.round}</td>
@@ -1559,14 +1690,24 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                             </td>
                                         </tr>
                                     )}
-                                    <tr>
-                                        <td>Coins banked</td>
-                                        <td>
-                                            <Coins amount={result.coins} />
-                                        </td>
-                                    </tr>
+                                    {!result.mayhem && (
+                                        <tr>
+                                            <td>Coins banked</td>
+                                            <td>
+                                                <Coins amount={result.coins} />
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
+                            {result.modifiers.length > 0 && (
+                                <>
+                                    <h3 className="ui-pause-heading">Modifiers</h3>
+                                    <p className="ui-result-modifiers">
+                                        {result.modifiers.join(", ")}
+                                    </p>
+                                </>
+                            )}
                             {result.bossKills.length > 0 && (
                                 <>
                                     <h3 className="ui-pause-heading">Bosses</h3>

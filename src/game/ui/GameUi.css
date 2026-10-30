@@ -1546,3 +1546,48 @@
 .ui-result .ui-row {
     justify-content: center;
 }
+
+/* Mayhem */
+
+.ui-button-mayhem {
+    color: #ee82ff;
+}
+
+.ui-mayhem-panel {
+    justify-content: flex-start;
+}
+
+.ui-mayhem-intro {
+    margin: 4px 0;
+}
+
+.ui-mayhem-rules {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.ui-mayhem-rules li {
+    margin-bottom: 6px;
+}
+
+.ui-mayhem-event {
+    position: absolute;
+    top: 110px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+}
+
+.ui-mayhem-event-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 26px;
+    color: #ee82ff;
+}
+
+.ui-result-modifiers {
+    margin: 4px 0;
+    font-size: 14px;
+}

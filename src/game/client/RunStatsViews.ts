@@ -55,6 +55,8 @@ function describeSource(
         }
         case "recoil":
             return { name: "Recoil", iconObjId: getItem("ring_of_recoil").objId };
+        case "modifier":
+            return { name: "Modifiers", color: "#ee82ff" };
         default:
             return { name: "Other" };
     }

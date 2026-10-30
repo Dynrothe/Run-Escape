@@ -11,13 +11,14 @@ export type Screen =
     | "loading"
     | "title"
     | "characters"
+    | "mayhem"
     | "shop"
     | "armoury"
     | "quests"
     | "collectionLog"
     | "run";
 
-export type RunOverlay = "none" | "levelUp" | "chest" | "paused" | "dead" | "victory";
+export type RunOverlay = "none" | "levelUp" | "modifier" | "chest" | "paused" | "dead" | "victory";
 
 export type SlotView = {
     id: string;
@@ -26,6 +27,8 @@ export type SlotView = {
     maxLevel: number;
     iconObjId: number;
     iconSpriteId?: number;
+    // Has no levels to show (a Mayhem Modifier)
+    noLevels?: boolean;
     // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
     detail: string;
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
@@ -111,6 +114,11 @@ export type HudView = {
     coins: number;
     maxWeapons: number;
     maxPassives: number;
+    // A Mayhem run's Modifiers, and the event going on
+    mayhem?: {
+        modifiers: SlotView[];
+        event?: { name: string; text: string; secondsLeft: number };
+    };
     weapons: SlotView[];
     passives: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
@@ -172,6 +180,15 @@ export type ChoiceView = {
     evolves?: { text: string; held: boolean };
 };
 
+// A Modifier on offer
+export type ModifierView = {
+    name: string;
+    text: string;
+    iconObjId: number;
+    tierName: string;
+    color: string;
+};
+
 export type Toast = { id: number; text: string; until: number };
 
 export type UiSnapshot = {
@@ -187,6 +204,10 @@ export type UiSnapshot = {
     hud?: HudView;
     overlay: RunOverlay;
     choices: ChoiceView[];
+    // Which of a Mayhem run's Modifiers is being picked, and the cards
+    modifiers: ModifierView[];
+    modifierPick: number;
+    modifierRerolled: boolean;
     chest?: ChestView;
     // unlockedMap: the name of the map this run's win opened up;
     // unlockedCharacters / unlockedItems: the names of the adventurers and
@@ -197,6 +218,8 @@ export type UiSnapshot = {
     // damage / bossKills: the stats screen's rows
     result?: RunResult & {
         characterName: string;
+        // A Mayhem run's Modifiers
+        modifiers: string[];
         damage: DamageView[];
         bossKills: BossKillView[];
         endlessRecord: boolean;
@@ -230,6 +253,9 @@ export class GameStore {
             endless: false,
             overlay: "none",
             choices: [],
+            modifiers: [],
+            modifierPick: 0,
+            modifierRerolled: false,
             toasts: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
