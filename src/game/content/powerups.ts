@@ -148,10 +148,10 @@ export const POWER_UPS: PowerUpDef[] = [
             kind: "ring",
             seconds: 12,
             radius: 2.5,
-            // lotg_fairy_ring_portal_open, teleport_other_impact
-            locId: 43117,
+            // The ring of mushrooms in the game, then teleport_other_impact
+            locId: 12003,
             spotAnim: 342,
-            scale: 1.5,
+            scale: 5,
         },
     },
     {
