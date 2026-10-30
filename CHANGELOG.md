@@ -5,12 +5,15 @@ the version in the corner).
 
 ## Unreleased
 
-## 0.17.0 - 2026-10-30
-
 ### Added
 
 - Mayhem: a new endless mode on the title screen, with any adventurer, every item, enemies and
   bosses from the whole game, 6 Modifiers and Mayhem events. Nothing from it is saved.
+
+## 0.17.0 - 2026-10-30
+
+### Added
+
 - Collection log: every evolution's recipe, and what it makes once you've made it.
 - Nine new evolutions for the Scythe of Vitur, godswords, Dragon claws, Dragon warhammer, Dinh's
   bulwark, Twisted bow, Tumeken's shadow, Sanguinesti staff and Harmonised nightmare staff.
