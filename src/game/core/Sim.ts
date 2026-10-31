@@ -111,6 +111,10 @@ import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } fr
 
 export const TICKS_PER_SECOND = 50;
 
+// How far back the HUD's damage meter looks
+export const DPS_WINDOW_SECONDS = 8;
+const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
+
 // OSRS run speed: 2 tiles per 600ms tick
 const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
@@ -424,6 +428,9 @@ export class Sim {
     // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
     // each weapon was taken up
     readonly damageBySource: Record<string, number> = {};
+    // The same damage by the tick it was dealt, for dps: a ring of the last
+    // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
+    private readonly recentDamage = new Float64Array(DPS_WINDOW_TICKS);
     readonly killsBySource: Record<string, number> = {};
     damageTaken = 0;
     healed = 0;
@@ -609,6 +616,15 @@ export class Sim {
             caskets: this.casketsOpened,
             stats: this.getRunStats(),
         };
+    }
+
+    // The player's damage a second just now, from every source
+    get dps(): number {
+        let damage = 0;
+        for (const dealt of this.recentDamage) {
+            damage += dealt;
+        }
+        return damage / DPS_WINDOW_SECONDS;
     }
 
     getRunStats(): RunStats {
@@ -1151,6 +1167,7 @@ export class Sim {
             return;
         }
         this.tick++;
+        this.recentDamage[this.tick % DPS_WINDOW_TICKS] = 0;
         this.stepBuffs();
         this.stepPlayer(moveX, moveY);
         if (this.runOver) {
@@ -3130,6 +3147,7 @@ export class Sim {
         enemy.flash = 5;
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
+        this.recentDamage[this.tick % DPS_WINDOW_TICKS] += damage;
         this.highestHit = Math.max(this.highestHit, damage);
         this.events.push({
             type: "damage",

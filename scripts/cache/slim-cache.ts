@@ -244,7 +244,8 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
         ),
     ];
     const bakeLoader = new ActorBakeLoader();
-    for (const requests of [GameAssets.getBaseRequests(), playerRequests]) {
+    const enemyRequests = GameAssets.getEnemyRequests(ENEMIES);
+    for (const requests of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
         await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
     }
 

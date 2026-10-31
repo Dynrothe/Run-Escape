@@ -1,0 +1,763 @@
+/* Phones and tablets. Everything here is behind (pointer: coarse), so a mouse
+   never sees it. The second half is for a phone held sideways, about 844x390 or
+   667x375: the UI can't zoom below 1 (GameUi.tsx) without its pixel fonts going
+   unreadable, so at that size the screens are laid out again instead.
+
+   --safe-* are the notch's and home bar's margins; 0 on most screens. */
+
+:root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+}
+
+@keyframes ui-touch-guard {
+    from {
+        pointer-events: none;
+    }
+    to {
+        pointer-events: auto;
+    }
+}
+
+/* Not on anything but a touch screen */
+.ui-touch {
+    display: none;
+}
+
+.ui-rotate {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    /* The browser's bars come and go, which 100vh doesn't follow */
+    html,
+    body {
+        height: 100dvh;
+        overscroll-behavior: none;
+    }
+
+    /* No pinch, double tap or swipe does anything to the page: only the lists
+       below scroll. A browser goes by the element and its parents up to what's
+       scrolling, so these still can inside this. */
+    .game-root {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .ui-touch {
+        display: block;
+    }
+
+    /* The stick and buttons do what the HUD's would */
+    .ui-inventory {
+        display: none;
+    }
+
+    .ui-slot {
+        pointer-events: none;
+    }
+
+    /* Keys don't mean anything here */
+    .ui-choice-key,
+    .ui-inv-key,
+    .ui-reroll .ui-choice-key,
+    .ui-chest-actions .ui-choice-key {
+        display: none;
+    }
+
+    /* The screen's own wording can't reach a key that isn't there */
+    .ui-chest-hint {
+        font-size: 0;
+    }
+
+    .ui-chest-hint::after {
+        content: "Tap to open";
+        font-size: 18px;
+    }
+
+    /* The whole screen, under the buttons. Modals come later and cover it. */
+    .ui-touch-zone {
+        position: absolute;
+        inset: 0;
+        pointer-events: auto;
+        touch-action: none;
+    }
+
+    /* Still shown once the quest tracker's title is under the zone */
+    .ui-quest-tracker {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Rests in the corner, faint, to say what's there; it jumps to the thumb */
+    .ui-stick {
+        position: absolute;
+        left: calc(var(--safe-left) + 84px);
+        bottom: calc(var(--safe-bottom) + 84px);
+        width: 0;
+        height: 0;
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
+    .ui-stick-on {
+        bottom: auto;
+        opacity: 1;
+    }
+
+    .ui-stick::before,
+    .ui-stick-knob {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        box-sizing: border-box;
+    }
+
+    .ui-stick::before {
+        left: calc(var(--stick) * -1);
+        top: calc(var(--stick) * -1);
+        width: calc(var(--stick) * 2);
+        height: calc(var(--stick) * 2);
+        background: rgba(0, 0, 0, 0.28);
+        border: 2px solid rgba(255, 255, 255, 0.45);
+    }
+
+    .ui-stick-knob {
+        left: -24px;
+        top: -24px;
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 152, 31, 0.8);
+        border: 2px solid #000;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    }
+
+    .ui-touch-pause {
+        position: absolute;
+        right: calc(var(--safe-right) + 200px);
+        top: 24px;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        background: var(--ui-card);
+        border: 2px solid var(--ui-edge);
+        box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+        touch-action: none;
+    }
+
+    /* Two bars */
+    .ui-touch-pause::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 16px;
+        height: 18px;
+        transform: translate(-50%, -50%);
+        box-sizing: border-box;
+        border: solid var(--ui-orange);
+        border-width: 0 6px;
+        filter: drop-shadow(1px 1px 0 #000);
+    }
+
+    .ui-touch-items {
+        position: absolute;
+        right: calc(var(--safe-right) + 12px);
+        bottom: calc(var(--safe-bottom) + 12px);
+        display: flex;
+        flex-flow: row-reverse wrap-reverse;
+        gap: 6px;
+        width: calc(58px * 2 + 6px);
+        pointer-events: none;
+    }
+
+    /* The first item nearest the thumb, and an empty place is only game */
+    .ui-touch-item-place {
+        width: 58px;
+        height: 58px;
+    }
+
+    .ui-touch-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        background: rgba(62, 53, 41, 0.9);
+        border: 2px solid #000;
+        box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+        touch-action: none;
+    }
+
+    /* Everything that scrolls, at some size or other */
+    .ui-select,
+    .ui-select-scroll,
+    .ui-select-panel > .ui-select-details,
+    .ui-shop,
+    .ui-shop-grid,
+    .ui-armoury,
+    .ui-armoury-slots,
+    .ui-armoury-details,
+    .ui-log-list,
+    .ui-quest-list,
+    .ui-settings-body,
+    .ui-notice-body,
+    .ui-changelog-list,
+    .ui-pause,
+    .ui-pause-columns,
+    .ui-result,
+    .ui-result-columns,
+    .ui-choice,
+    .ui-chest-card {
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    /* A thumb still going for the world doesn't pick the first thing that comes
+       up, and a press that opened a menu can't land on it */
+    .ui-levelup,
+    .ui-pause,
+    .ui-result {
+        animation: ui-touch-guard 0.3s step-end both;
+    }
+
+    .ui-chest-card {
+        animation:
+            chest-card-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both,
+            ui-touch-guard 0.3s step-end both;
+    }
+
+    .ui-button {
+        min-height: 44px;
+    }
+
+    .ui-button-small {
+        min-height: 40px;
+        min-width: 44px;
+    }
+
+    .ui-volume {
+        height: 32px;
+    }
+}
+
+/* Held upright */
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 700px) {
+    .ui-rotate {
+        position: absolute;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        box-sizing: border-box;
+        font-family: "OSRS Bold", sans-serif;
+        font-size: 22px;
+        color: var(--ui-orange);
+        text-align: center;
+        text-shadow: 1px 1px 0 #000;
+        background: #000;
+        pointer-events: auto;
+    }
+
+    .ui-rotate p {
+        margin: 0;
+    }
+
+    .ui-rotate-phone {
+        width: 44px;
+        height: 76px;
+        box-sizing: border-box;
+        border: 3px solid var(--ui-orange);
+        border-radius: 6px;
+        animation: ui-rotate-phone 2.4s ease-in-out infinite;
+    }
+}
+
+@keyframes ui-rotate-phone {
+    0%,
+    25% {
+        transform: rotate(0);
+    }
+    60%,
+    100% {
+        transform: rotate(-90deg);
+    }
+}
+
+/* A phone held sideways: about 390 tall against the 720 the UI's laid out for */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-panel {
+        padding: 8px 12px;
+    }
+
+    .ui-panel h2 {
+        margin-bottom: 2px;
+        font-size: 20px;
+    }
+
+    .ui-subtle {
+        margin-bottom: 4px;
+    }
+
+    .ui-row {
+        margin-top: 6px;
+    }
+
+    /* Everything full size, kept clear of the notch, with what's in it to
+       scroll: the buttons along the bottom stay in view */
+    .ui-shop,
+    .ui-armoury,
+    .ui-quests,
+    .ui-log,
+    .ui-settings,
+    .ui-changelog,
+    .ui-notice,
+    .ui-pause,
+    .ui-result,
+    .ui-levelup {
+        width: calc(100vw - var(--safe-left) - var(--safe-right) - 12px);
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .ui-notice,
+    .ui-settings {
+        width: min(560px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+    }
+
+    /* Title: the name on the left, the menu on the right */
+
+    .ui-title {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 8px calc(var(--safe-right) + 12px) 8px calc(var(--safe-left) + 12px);
+    }
+
+    .ui-title-logo {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .ui-title-logo h1 {
+        font-size: clamp(40px, 8vw, 64px);
+    }
+
+    .ui-title-logo p {
+        font-size: 16px;
+    }
+
+    .ui-title-bottom {
+        flex: 0 0 auto;
+        gap: 4px;
+    }
+
+    .ui-title-menu {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        width: min(380px, 52vw);
+        box-sizing: border-box;
+    }
+
+    .ui-button-big {
+        min-height: 48px;
+        padding: 4px 6px;
+        font-size: 18px;
+    }
+
+    .ui-title-stats {
+        grid-column: 1 / -1;
+        gap: 0;
+        margin-top: 0;
+    }
+
+    .ui-discord {
+        left: calc(var(--safe-left) + 10px);
+    }
+
+    .ui-version {
+        right: calc(var(--safe-right) + 6px);
+        bottom: 2px;
+        min-height: 40px;
+    }
+
+    /* Adventurer and map select: side by side at any width, each with its list
+       above the details, sharing the height and scrolling on their own */
+
+    .ui-select {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 6px;
+        padding: 6px calc(var(--safe-right) + 6px) calc(var(--safe-bottom) + 6px)
+            calc(var(--safe-left) + 6px);
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .ui-select-panel {
+        align-self: stretch;
+        max-height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        gap: 4px;
+    }
+
+    .ui-select-maps {
+        grid-column: 2;
+    }
+
+    .ui-select-scroll {
+        flex: 1 1 0;
+        overflow-y: auto;
+    }
+
+    .ui-select-panel > .ui-select-details {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 4px 8px;
+    }
+
+    .ui-select-adventurers .ui-select-details {
+        min-height: 0;
+    }
+
+    .ui-style-name {
+        margin-bottom: 2px;
+    }
+
+    .ui-map-tile {
+        min-height: 40px;
+    }
+
+    .ui-select-bar {
+        position: static;
+        margin-top: 0;
+        padding: 4px 8px;
+    }
+
+    .ui-select-go {
+        min-height: 46px;
+        padding: 4px 16px;
+        font-size: 18px;
+    }
+
+    /* Skills */
+
+    .ui-shop > .ui-subtle {
+        display: none;
+    }
+
+    .ui-shop-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    }
+
+    /* Armoury: the slots and the piece picked scroll apart */
+
+    .ui-armoury > .ui-subtle {
+        display: none;
+    }
+
+    .ui-armoury-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-items: stretch;
+        grid-template-columns: minmax(0, 1fr) 270px;
+    }
+
+    .ui-armoury-slots,
+    .ui-armoury-details {
+        min-height: 0;
+        max-height: 100%;
+        overflow-y: auto;
+    }
+
+    .ui-armoury-tile {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Quests and the collection log */
+
+    .ui-quests > .ui-subtle,
+    .ui-log > .ui-subtle {
+        display: none;
+    }
+
+    .ui-log-card {
+        min-height: 44px;
+    }
+
+    /* Run HUD: everything at the edges, the middle left to the fight. What's
+       only a look at the run (gear, quests) is in the pause menu. */
+
+    .ui-xp {
+        height: calc(var(--safe-top) + 12px);
+    }
+
+    .ui-xp-level {
+        top: var(--safe-top);
+        right: calc(var(--safe-right) + 6px);
+        font-size: 14px;
+        line-height: 12px;
+    }
+
+    .ui-hud-top {
+        top: calc(var(--safe-top) + 16px);
+        left: calc(var(--safe-left) + 6px);
+        right: calc(var(--safe-right) + 6px);
+    }
+
+    .ui-hud-left {
+        zoom: 0.72;
+    }
+
+    .ui-gear-slots,
+    .ui-quest-tracker {
+        display: none;
+    }
+
+    .ui-timer {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        font-size: 24px;
+    }
+
+    .ui-hud-right {
+        gap: 0;
+        font-size: 15px;
+    }
+
+    .ui-minimap {
+        zoom: 0.56;
+    }
+
+    .ui-touch-pause {
+        right: calc(var(--safe-right) + 116px);
+        top: calc(var(--safe-top) + 18px);
+        width: 46px;
+        height: 46px;
+    }
+
+    .ui-touch-items {
+        right: calc(var(--safe-right) + 8px);
+        bottom: calc(var(--safe-bottom) + 8px);
+        gap: 4px;
+        width: calc(54px * 2 + 4px);
+    }
+
+    .ui-touch-item-place {
+        width: 54px;
+        height: 54px;
+    }
+
+    .ui-boss {
+        top: calc(var(--safe-top) + 42px);
+        width: min(340px, 44vw);
+    }
+
+    .ui-boss-name {
+        font-size: 15px;
+    }
+
+    .ui-boss-bar {
+        height: 10px;
+    }
+
+    .ui-boss-warning {
+        top: calc(var(--safe-top) + 42px);
+        font-size: 16px;
+    }
+
+    .ui-toasts {
+        top: calc(var(--safe-top) + 74px);
+        left: 24%;
+        right: 24%;
+    }
+
+    .ui-toast {
+        padding: 1px 8px;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    /* The newest two, or they'd reach the player */
+    .ui-toast:nth-last-child(n + 3) {
+        display: none;
+    }
+
+    .ui-hud-bottom {
+        bottom: calc(var(--safe-bottom) + 6px);
+        gap: 3px;
+    }
+
+    .ui-hp {
+        width: min(220px, 30vw);
+        height: 16px;
+    }
+
+    .ui-hp span {
+        font-size: 14px;
+        line-height: 16px;
+    }
+
+    .ui-buff {
+        font-size: 13px;
+    }
+
+    /* Level up: the rewards side by side, tall enough to hit with a thumb */
+
+    .ui-levelup {
+        padding: 6px 8px;
+    }
+
+    .ui-levelup h2 {
+        font-size: 17px;
+    }
+
+    .ui-levelup .ui-subtle {
+        display: none;
+    }
+
+    .ui-choices {
+        flex: 1 1 auto;
+        flex-direction: row;
+        min-height: 0;
+        gap: 6px;
+    }
+
+    .ui-choice {
+        flex: 1 1 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        min-width: 0;
+        padding: 6px 8px;
+        overflow-y: auto;
+    }
+
+    .ui-reroll {
+        margin-top: 4px;
+    }
+
+    /* The casket's card beside the casket once it's open */
+
+    .ui-chest-scene {
+        height: 170px;
+    }
+
+    .ui-chest[data-phase="reveal"] {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 520px);
+        grid-template-rows: 1fr auto auto 1fr;
+        justify-content: center;
+        column-gap: 8px;
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
+    }
+
+    .ui-chest[data-phase="reveal"] .ui-chest-scene {
+        grid-area: 2 / 1;
+        width: 230px;
+    }
+
+    .ui-chest[data-phase="reveal"] .ui-chest-caption {
+        grid-area: 3 / 1;
+    }
+
+    .ui-chest-name {
+        font-size: 22px;
+    }
+
+    .ui-chest-card {
+        grid-area: 1 / 2 / 5 / 2;
+        align-self: center;
+        width: 100%;
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+        overflow-y: auto;
+    }
+
+    .ui-chest-actions {
+        margin-top: 6px;
+    }
+
+    /* Pause and results: their columns scroll under the buttons */
+
+    .ui-pause-columns,
+    .ui-result-columns {
+        flex: 1 1 auto;
+        flex-wrap: nowrap;
+        flex-direction: row;
+        gap: 12px;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .ui-pause-column + .ui-pause-column,
+    .ui-result-column + .ui-result-column {
+        margin-top: 0;
+        padding-top: 0;
+        padding-left: 12px;
+        border-top: none;
+        border-left: 1px solid var(--ui-divider);
+    }
+
+    .ui-result-column {
+        flex: 2 1 0;
+    }
+
+    /* The weapons' names need the room more than the stats do */
+    .ui-result-column + .ui-result-column {
+        flex-grow: 3;
+    }
+
+    .ui-result-damage th {
+        width: 50px;
+    }
+
+    .ui-result-damage th,
+    .ui-result-damage td {
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    .ui-result-table td {
+        padding: 2px 6px;
+    }
+
+    .ui-unlocked {
+        margin-bottom: 2px;
+    }
+
+    .ui-setting {
+        gap: 10px;
+        padding: 2px 0;
+    }
+}
+
+/* Wide enough for the quests' columns, not the 190px name the desktop gives */
+@media (pointer: coarse) and (max-height: 520px) and (min-width: 760px) {
+    .ui-quest {
+        grid-template-columns: 170px minmax(0, 1fr) 80px 80px;
+    }
+}

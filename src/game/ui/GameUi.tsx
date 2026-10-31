@@ -12,6 +12,7 @@ import { OsrsLoadingBar } from "../../components/rs/loading/OsrsLoadingBar";
 import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { isCoarsePointer } from "../../util/DeviceUtil";
 import { GameClient } from "../client/GameClient";
 import {
     BuffView,
@@ -51,6 +52,7 @@ import { NoticePanel } from "./NoticePanel";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { SkipButton } from "./SkipButton";
+import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 
@@ -131,6 +133,7 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
+            {isCoarsePointer && <RotateNotice />}
         </div>
     );
 }
@@ -192,7 +195,10 @@ function SoundSettings({
     const { muted, volume } = ui.audio;
     return (
         <>
-            <Setting name="Sound" text="M turns it on and off at any time">
+            <Setting
+                name="Sound"
+                text={isCoarsePointer ? undefined : "M turns it on and off at any time"}
+            >
                 <Toggle on={!muted} label="Sound" onToggle={() => client.toggleMute()} />
             </Setting>
             <VolumeSetting
@@ -244,11 +250,26 @@ function VolumeSetting({
 
 function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting name="Auto-pause" text="Pause the run when you click away from the game">
+        <Setting
+            name="Auto-pause"
+            text={`Pause the run when you ${isCoarsePointer ? "leave" : "click away from"} the game`}
+        >
             <Toggle
                 on={ui.display.pauseOnBlur}
                 label="Auto-pause"
                 onToggle={() => client.toggleAutoPause()}
+            />
+        </Setting>
+    );
+}
+
+function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting name="Auto alch" text="High alch every casket as you open it, without stopping">
+            <Toggle
+                on={ui.display.autoAlch}
+                label="Auto alch"
+                onToggle={() => client.toggleAutoAlch()}
             />
         </Setting>
     );
@@ -363,6 +384,7 @@ function SettingsPanel({
                         />
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
+                    <AutoAlchSetting ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>Save</h3>
@@ -446,7 +468,10 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <div className="ui-panel rs-border rs-background ui-title-menu">
                     <button
                         className="ui-button ui-button-big"
-                        onClick={() => client.showScreen("characters")}
+                        onClick={() => {
+                            enterFullscreen();
+                            client.showScreen("characters");
+                        }}
                     >
                         Start
                     </button>
@@ -490,7 +515,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 </div>
                 <div className="ui-hint">
-                    WASD to move · weapons fire on their own · Esc to pause · M to mute
+                    {isCoarsePointer
+                        ? "Drag anywhere to move · weapons fire on their own"
+                        : "WASD to move · weapons fire on their own · Esc to pause · M to mute"}
                 </div>
             </div>
             <DiscordLink />
@@ -580,6 +607,12 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// A pointer leaving a panel goes back to what's picked. Not a finger: browsers
+// follow a tap with a mouse leaving, which would take away what was tapped.
+function stopPeeking(setPeek: (id: undefined) => void): (() => void) | undefined {
+    return isCoarsePointer ? undefined : () => setPeek(undefined);
+}
+
 // Adventurers by how they fight, each a tile of their outfit with the weapon
 // they start with in its corner. The details pinned below are for the one
 // pointed at (or tapped, so a locked one can say what it takes) until the
@@ -592,7 +625,7 @@ function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div
             className="ui-panel rs-border rs-background ui-select-panel ui-select-adventurers"
-            onMouseLeave={() => setPeek(undefined)}
+            onMouseLeave={stopPeeking(setPeek)}
         >
             <h2 className="ui-select-heading">
                 Adventurer
@@ -634,7 +667,10 @@ function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
                                             onMouseMove={() => setPeek(character.id)}
                                             onFocus={() => setPeek(character.id)}
                                             onBlur={() => setPeek(undefined)}
-                                            onClick={() => client.selectCharacter(character.id)}
+                                            onClick={() => {
+                                                setPeek(character.id);
+                                                client.selectCharacter(character.id);
+                                            }}
                                         >
                                             <ItemIcon
                                                 objId={
@@ -707,7 +743,10 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 onMouseMove={() => setPeek(map.id)}
                 onFocus={() => setPeek(map.id)}
                 onBlur={() => setPeek(undefined)}
-                onClick={() => client.selectMap(map.id)}
+                onClick={() => {
+                    setPeek(map.id);
+                    client.selectMap(map.id);
+                }}
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
                 <span className="ui-map-name">{map.name}</span>
@@ -720,7 +759,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div
             className="ui-panel rs-border rs-background ui-select-panel ui-select-maps"
-            onMouseLeave={() => setPeek(undefined)}
+            onMouseLeave={stopPeeking(setPeek)}
         >
             <h2 className="ui-select-heading">
                 Map
@@ -876,6 +915,9 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div className="ui-fill ui-run">
             {hud && <Hud hud={hud} client={client} questTracker={ui.display.questTracker} />}
+            {isCoarsePointer && hud && (
+                <TouchControls hud={hud} overlay={ui.overlay} client={client} />
+            )}
             <div className="ui-toasts">
                 {ui.toasts.map((toast) => (
                     <div key={toast.id} className="ui-toast">
@@ -1083,6 +1125,9 @@ function Hud({
                     {hud.quests.length > 0 && (
                         <QuestTracker quests={hud.quests} open={questTracker} client={client} />
                     )}
+                    <div className="ui-dps">
+                        <span className="ui-dps-label">DPS</span> {formatPerSecond(hud.dps)}
+                    </div>
                 </div>
             </div>
             {hud.boss ? (
@@ -1413,6 +1458,7 @@ function PauseModal({
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <AutoPauseSetting ui={ui} client={client} />
+                        <AutoAlchSetting ui={ui} client={client} />
                     </div>
                 </div>
                 <div className="ui-row">

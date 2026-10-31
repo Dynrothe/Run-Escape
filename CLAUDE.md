@@ -32,6 +32,7 @@ go stale. Add anything that cost you time to work out.
 | Save data and migrations                              | `src/game/core/save.ts`                 |
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
+| Touch screens: the stick, its buttons, phone layouts  | `docs/DEVELOPMENT.md`, Touch screens    |
 | React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
 | Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
 | How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
@@ -39,6 +40,7 @@ go stale. Add anything that cost you time to work out.
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
 | ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`          |
+| What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`   |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
@@ -111,9 +113,15 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
 
 ## Testing in the browser
 
+- Anything new on screen needs to work on a phone too: see Touch screens in `docs/DEVELOPMENT.md`.
+
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
+- `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
+  than the frame rate: headless runs on a software rasterizer.
+- Enemies are baked per map when a run starts, so an enemy from another map, spawned from the
+  console, takes a moment to show up.
 - Headless Chromium needs `--use-angle=swiftshader --enable-unsafe-swiftshader`, and a persistent
   profile, or the cache won't fit in its storage quota. The cache can take a while to load.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state

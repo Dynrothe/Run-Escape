@@ -11,6 +11,7 @@ import { LocAnimatedData } from "../loc/LocAnimatedData";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
 import { isTileDrawn } from "../loc/UpperLevels";
+import type { CullGrid } from "./CullGrid";
 import { VertexBuffer } from "./VertexBuffer";
 
 export enum ContourGroundType {
@@ -34,6 +35,8 @@ export type DrawCommand = {
     offset: number;
     elements: number;
     instances: ModelInfo[];
+    // Which of the CullGrid's boxes it's in
+    box?: number;
 };
 
 export type SceneModel = {
@@ -50,6 +53,16 @@ export type ModelMergeGroup = {
     priority: number;
     models: SceneModel[];
 };
+
+type FaceCallback = (
+    index0: number,
+    index1: number,
+    index2: number,
+    // x, y, z of each corner
+    corners: number[],
+) => void;
+
+const corners = new Array<number>(9).fill(0);
 
 export class SceneBuffer {
     vertexBuf: VertexBuffer;
@@ -73,6 +86,9 @@ export class SceneBuffer {
         readonly textureLoader: TextureLoader,
         readonly textureIdIndexMap: Map<number, number>,
         initVertexCount: number,
+        // Cuts draws up by where they are, for culling. Draws then only go in
+        // the normal lists: there's no LOD or interact lists to keep in step.
+        readonly grid?: CullGrid,
     ) {
         this.vertexBuf = new VertexBuffer(initVertexCount);
     }
@@ -115,7 +131,74 @@ export class SceneBuffer {
         }
     }
 
+    // A draw per cell, per level
+    private addTerrainCells(
+        grid: CullGrid,
+        scene: Scene,
+        borderSize: number,
+        minLevel: number,
+        maxLevel: number,
+    ): void {
+        const vertexOffset = borderSize * -128;
+        const size = grid.cellSize;
+        for (let level = minLevel; level < scene.levels; level++) {
+            for (let cellX = 0; cellX < grid.perSide; cellX++) {
+                for (let cellY = 0; cellY < grid.perSide; cellY++) {
+                    const indexOffset = this.indexByteOffset();
+                    const box = grid.cellBox(cellX * size * 128, cellY * size * 128);
+                    const endX = Math.min((cellX + 1) * size, Scene.MAP_SQUARE_SIZE) + borderSize;
+                    const endY = Math.min((cellY + 1) * size, Scene.MAP_SQUARE_SIZE) + borderSize;
+                    for (let x = cellX * size + borderSize; x < endX; x++) {
+                        for (let y = cellY * size + borderSize; y < endY; y++) {
+                            const tile = scene.tiles[level][x][y];
+                            if (
+                                !tile ||
+                                !isTileDrawn(scene, tile.minLevel, level, x, y, maxLevel)
+                            ) {
+                                continue;
+                            }
+                            this.addTerrainTile(tile, vertexOffset, vertexOffset);
+                            for (const face of tile.tileModel?.faces ?? []) {
+                                for (const vertex of face.vertices) {
+                                    const vx = vertex.x + vertexOffset;
+                                    const vz = vertex.z + vertexOffset;
+                                    grid.extend(box, vx, vertex.y, vz, vx, vertex.y, vz);
+                                }
+                            }
+                        }
+                    }
+                    const elements = (this.indexByteOffset() - indexOffset) / 4;
+                    if (elements > 0) {
+                        this.drawCommands.push({
+                            offset: indexOffset,
+                            elements,
+                            box,
+                            instances: [
+                                {
+                                    sceneX: 0,
+                                    sceneZ: 0,
+                                    heightOffset: 0,
+                                    level,
+                                    contourGround: ContourGroundType.NONE,
+                                    priority: 0,
+                                    interactType: InteractType.NONE,
+                                    interactId: 0xffff,
+                                },
+                            ],
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     addTerrain(scene: Scene, borderSize: number, minLevel: number, maxLevel: number): number {
+        const terrainStart = this.vertexCount();
+        if (this.grid) {
+            this.addTerrainCells(this.grid, scene, borderSize, minLevel, maxLevel);
+            return this.vertexCount() - terrainStart;
+        }
+
         const startX = borderSize;
         const startY = borderSize;
         const endX = borderSize + Scene.MAP_SQUARE_SIZE;
@@ -190,7 +273,43 @@ export class SceneBuffer {
         return locsAnimated;
     }
 
+    private addLocAnimatedCulled(
+        grid: CullGrid,
+        group: LocAnimatedGroup,
+        loc: SceneLocEntity,
+    ): LocAnimatedData {
+        const anim = group.anim;
+        const box = grid.addInstance(loc, anim.bounds!);
+        const drawRangeIndex = this.drawCommands.length;
+        this.drawCommands.push({ offset: 0, elements: 0, instances: [loc], box });
+        const drawRangeAlphaIndex = this.drawCommandsAlpha.length;
+        if (anim.framesAlpha) {
+            this.drawCommandsAlpha.push({ offset: 0, elements: 0, instances: [loc], box });
+        }
+        return {
+            drawRangeIndex,
+            drawRangeAlphaIndex,
+
+            drawRangeLodIndex: -1,
+            drawRangeLodAlphaIndex: -1,
+
+            drawRangeInteractIndex: -1,
+            drawRangeInteractAlphaIndex: -1,
+
+            drawRangeInteractLodIndex: -1,
+            drawRangeInteractLodAlphaIndex: -1,
+
+            anim,
+            seqId: loc.entity.seqId,
+            randomStart: loc.entity.seqRandomStart,
+        };
+    }
+
     addLocAnimated(group: LocAnimatedGroup, loc: SceneLocEntity): LocAnimatedData {
+        if (this.grid) {
+            return this.addLocAnimatedCulled(this.grid, group, loc);
+        }
+
         const anim = group.anim;
 
         // Normal (merged)
@@ -282,7 +401,75 @@ export class SceneBuffer {
         };
     }
 
+    // Merged models are plain triangles, so they're cut up by the triangle, and
+    // a model bigger than a cell doesn't stretch any box by more than a triangle.
+    private addModelGroupCells(grid: CullGrid, group: ModelMergeGroup): void {
+        const cells = new Map<number, number[]>();
+        for (const sceneModel of group.models) {
+            const model = sceneModel.model;
+            const faces = getModelFaces(model).filter(
+                (face) => isModelFaceTransparent(this.textureLoader, face) === group.transparent,
+            );
+            const vertexOffset: vec3 = [
+                sceneModel.sceneX,
+                sceneModel.sceneHeight,
+                sceneModel.sceneZ,
+            ];
+            if (sceneModel.heightOffset !== 0) {
+                vertexOffset[1] = -sceneModel.heightOffset;
+            }
+            this.addModel(model, faces, vertexOffset, true, (i0, i1, i2, p) => {
+                const box = grid.cellBox((p[0] + p[3] + p[6]) / 3, (p[2] + p[5] + p[8]) / 3);
+                grid.extend(
+                    box,
+                    Math.min(p[0], p[3], p[6]),
+                    Math.min(p[1], p[4], p[7]),
+                    Math.min(p[2], p[5], p[8]),
+                    Math.max(p[0], p[3], p[6]),
+                    Math.max(p[1], p[4], p[7]),
+                    Math.max(p[2], p[5], p[8]),
+                );
+                const cell = cells.get(box);
+                if (cell) {
+                    cell.push(i0, i1, i2);
+                } else {
+                    cells.set(box, [i0, i1, i2]);
+                }
+            });
+        }
+
+        const commands = group.transparent ? this.drawCommandsAlpha : this.drawCommands;
+        for (const [box, indices] of cells) {
+            const offset = this.indexByteOffset();
+            for (const index of indices) {
+                this.indices.push(index);
+            }
+            commands.push({
+                offset,
+                elements: indices.length,
+                box,
+                instances: [
+                    {
+                        sceneX: 0,
+                        sceneZ: 0,
+                        heightOffset: 0,
+                        level: group.level,
+                        contourGround: ContourGroundType.NONE,
+                        priority: group.priority,
+                        interactType: InteractType.NONE,
+                        interactId: 0xffff,
+                    },
+                ],
+            });
+        }
+    }
+
     addModelGroup(group: ModelMergeGroup): void {
+        if (this.grid) {
+            this.addModelGroupCells(this.grid, group);
+            return;
+        }
+
         const groupOffset = this.indexByteOffset();
 
         for (const sceneModel of group.models) {
@@ -367,7 +554,15 @@ export class SceneBuffer {
         }
     }
 
-    addModel(model: Model, faces: ModelFace[], offset?: vec3, reuseVertices: boolean = true): void {
+    // Takes each face's vertex indices and corners instead of adding it to the
+    // index buffer, when onFace is given
+    addModel(
+        model: Model,
+        faces: ModelFace[],
+        offset?: vec3,
+        reuseVertices: boolean = true,
+        onFace?: FaceCallback,
+    ): void {
         if (faces.length === 0) {
             return;
         }
@@ -493,7 +688,20 @@ export class SceneBuffer {
                 reuseVertices,
             );
 
-            this.indices.push(index0, index1, index2);
+            if (onFace) {
+                corners[0] = vxa;
+                corners[1] = vya;
+                corners[2] = vza;
+                corners[3] = vxb;
+                corners[4] = vyb;
+                corners[5] = vzb;
+                corners[6] = vxc;
+                corners[7] = vyc;
+                corners[8] = vzc;
+                onFace(index0, index1, index2, corners);
+            } else {
+                this.indices.push(index0, index1, index2);
+            }
         }
     }
 }

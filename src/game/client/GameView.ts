@@ -632,6 +632,7 @@ export class GameView {
             shielded ? getShieldedModelKey(def) : getEnemyModelKey(def, enemy.variant),
         );
         if (!model) {
+            this.assets.requestEnemy(def);
             return;
         }
         const x = lerp(enemy.prevX, enemy.x, alpha);

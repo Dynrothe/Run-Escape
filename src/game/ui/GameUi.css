@@ -937,6 +937,17 @@
     color: var(--ui-green);
 }
 
+/* The damage meter, under the quest tracker */
+.ui-dps {
+    font-size: 16px;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-dps-label {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
 /* A quest in the pause menu's list: its name, what it asks and how far */
 .ui-pause-quest {
     display: flex;
