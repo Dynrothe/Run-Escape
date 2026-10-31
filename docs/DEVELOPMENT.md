@@ -95,7 +95,8 @@ src/rs/model/player/         player models from identity kits and worn items
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 opcodes, the map loader can take extra map squares as plain data
-(`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), and two bugs were fixed (floor collision missing on the edge of every
+(`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), `src/rs/config/loctype/LocOverrides.ts`
+gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 

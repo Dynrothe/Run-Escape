@@ -56,9 +56,15 @@ const SOIL = 11;
 // Overlays
 const PATH = 278;
 const RITUAL = 194;
+const RIDGE = 14;
+const FURROW = 427;
 
-// One tile, four pumpkins to it
-const PUMPKINS = [55610, 55610, 55610, 55610, 55609, 55611, 55607, 55608, 55612];
+// Plain pumpkins, and now and then a carved one. Both are made big in LocOverrides.ts, and both
+// are ordinary locs (type 10) that block nothing.
+const FIELD_PUMPKINS = [46272, 46272, 46272, 46272, 46272, 46272, 46272, 46267];
+const FIELD_VINE = 55617;
+const FIELD_FENCE = 5153;
+const PLOUGH = 296;
 // Small ones you can walk through. Solid and two tiles across, for where nobody needs to go
 const LANTERNS = [46265, 46269, 46265, 46269, 46274];
 const BIG_LANTERNS = [55455, 55457, 55459, 55461, 55463];
@@ -181,6 +187,25 @@ const PATHS: Place[][] = [
         { x: 160, y: 226 },
         { x: 220, y: 218 },
     ],
+];
+
+type Field = { x0: number; y0: number; x1: number; y1: number };
+
+// Tiles of track round a field, tiles from one row to the next, from one pumpkin to the next
+// along a row, and half a gate in the fence
+const TRACK = 2;
+const ROW = 3;
+const SPOT = 3;
+const GATE = 3;
+// How high a ridge stands. Twelve a tile can't be walked, so this is nowhere near it.
+const RIDGE_HEIGHT = 3;
+
+const FIELDS: Field[] = [
+    // By the barn
+    { x0: 94, y0: 79, x1: 145, y1: 108 },
+    { x0: 152, y0: 79, x1: 196, y1: 108 },
+    { x0: 80, y0: 139, x1: 124, y1: 183 },
+    { x0: 197, y0: 139, x1: 241, y1: 183 },
 ];
 
 const HAMLET = { x: 100, y: 220 };
@@ -416,21 +441,16 @@ function placeFarm(night: Night): void {
     const { x, y } = FARM;
     night.stampFacing("hosidius_barn", x - 22, y - 10, FARM);
     for (const [hayX, hayY] of [
-        [-8, 4],
-        [-5, -10],
-        [-10, -13],
-        [4, -14],
+        [-20, 6],
+        [-16, 11],
+        [-12, 15],
+        [-20, -16],
     ]) {
         night.solid(HAY, 2, 2, x + hayX, y + hayY, Math.floor(rng() * 4), 1);
     }
-    night.solid(HAY_BALES, 1, 2, x - 3, y + 8);
-    night.solid(HAY_BALES, 1, 2, x + 10, y - 4);
-    // Scarecrows watch the rows
-    for (let i = 0; i < 10; i++) {
-        const tileX = x - 4 + Math.floor(rng() * 28);
-        const tileY = y - 18 + Math.floor(rng() * 36);
-        night.solid(SCARECROW, 1, 1, tileX, tileY, Math.floor(rng() * 4), 3);
-    }
+    night.solid(HAY_BALES, 1, 2, x - 21, y + 12);
+    night.solid(HAY_BALES, 1, 2, x - 11, y + 8);
+    night.solid(PLOUGH, 3, 2, x - 16, y - 16);
 }
 
 function placeHollow(night: Night): void {
@@ -461,33 +481,91 @@ function placeHollow(night: Night): void {
     night.solid(PALE_LANTERNS[1], 2, 2, x - 4, y + 1, 2);
 }
 
-// A pumpkin patch: its ground goes to soil, and pumpkins stand in rows
-function placePatches(night: Night): void {
+// A planted field: rows run east to west, each a ridge of tilled soil two tiles wide with a
+// pumpkin every few tiles, and a furrow between them. Everything's walked through, so a field
+// can lie across a lane; its fence can't, and stops short of one.
+function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
     const { rng, ground } = night;
-    const shape = createNoise(1035, 2);
-    const { underlays } = ground.level0;
-    const patches = [
-        { x: 104, y: 84, across: 36, deep: 18 },
-        { x: 124, y: 160, across: 20, deep: 30 },
-        { x: 170, y: 104, across: 24, deep: 16 },
-        { x: 196, y: 160, across: 22, deep: 26 },
-        { x: 160, y: 214, across: 24, deep: 12 },
-    ];
-    for (let y = ARENA_MIN; y <= ARENA_MAX; y++) {
-        for (let x = ARENA_MIN; x <= ARENA_MAX; x++) {
-            let inside = -1;
-            for (const patch of patches) {
-                const out = Math.hypot((x - patch.x) / patch.across, (y - patch.y) / patch.deep);
-                inside = Math.max(inside, 1 - out + (shape(x / 10, y / 10) - 0.5) * 0.5);
-            }
-            if (inside <= 0) {
-                continue;
-            }
-            underlays[ground.tile(x, y)] = SOIL;
-            if (y % 3 === 0 && x % 2 === 0 && rng() < 0.8) {
-                night.dress(pick(rng, PUMPKINS), LOC_FLOOR_DECORATION, x, y);
+    const { underlays, overlays, shapes, rotations } = ground.level0;
+    const paint = (x: number, y: number, overlay: number) => {
+        const i = ground.tile(x, y);
+        underlays[i] = SOIL;
+        overlays[i] = overlay;
+        shapes[i] = 0;
+        rotations[i] = 0;
+        ground.reserved[i] = 1;
+    };
+    for (let y = y0 - TRACK; y <= y1 + TRACK; y++) {
+        for (let x = x0 - TRACK; x <= x1 + TRACK; x++) {
+            const row = y - y0;
+            const inField = x >= x0 && x <= x1 && y >= y0 && y <= y1;
+            paint(x, y, !inField ? PATH : row % ROW === ROW - 1 ? FURROW : RIDGE);
+        }
+    }
+    // The ridges stand a little proud, which is what catches the light
+    for (let y = y0; y <= y1; y++) {
+        if ((y - y0) % ROW === 1) {
+            for (let x = x0; x <= x1 + 1; x++) {
+                ground.setHeight(x, y, ground.getHeight(x, y) + RIDGE_HEIGHT);
             }
         }
+    }
+    const midX = (x0 + x1) >> 1;
+    const midY = (y0 + y1) >> 1;
+    const scarecrows = [
+        [(x0 + midX) >> 1, midY],
+        [(midX + x1) >> 1, midY],
+    ];
+    for (let y = y0; y <= y1; y += ROW) {
+        for (let x = x0 + 1; x <= x1; x += SPOT) {
+            const standing = scarecrows.some(
+                ([sx, sy]) => Math.abs(sx - x) < 2 && sy - y >= 0 && sy - y < ROW,
+            );
+            if (!standing) {
+                ground.grid.locs.push({
+                    id: pick(rng, FIELD_PUMPKINS),
+                    type: LOC_NORMAL,
+                    rotation: Math.floor(rng() * 4),
+                    level: 0,
+                    x,
+                    y,
+                });
+            }
+            // Vines between them
+            if (x + 1 <= x1 && rng() < 0.7) {
+                ground.grid.locs.push({
+                    id: FIELD_VINE,
+                    type: LOC_FLOOR_DECORATION,
+                    rotation: Math.floor(rng() * 4),
+                    level: 0,
+                    x: x + 1,
+                    y,
+                });
+            }
+        }
+    }
+    for (const [sx, sy] of scarecrows) {
+        if (!isLane(sx, sy)) {
+            ground.place(
+                { id: SCARECROW, type: LOC_NORMAL, rotation: 0, level: 0, x: sx, y: sy },
+                1,
+                1,
+            );
+        }
+    }
+    // Fence round the track, with a gate's width left in the middle of each side
+    const fence = (x: number, y: number, rotation: number, along: number, mid: number) => {
+        if (!isLane(x, y) && Math.abs(along - mid) > GATE) {
+            ground.grid.locs.push({ id: FIELD_FENCE, type: LOC_WALL, rotation, level: 0, x, y });
+        }
+    };
+    for (let x = x0 - TRACK; x <= x1 + TRACK; x++) {
+        fence(x, y0 - TRACK, WALL_SOUTH, x, midX);
+        fence(x, y1 + TRACK, WALL_NORTH, x, midX);
+    }
+    for (let y = y0 - TRACK; y <= y1 + TRACK; y++) {
+        fence(x0 - TRACK, y, WALL_WEST, y, midY);
+        fence(x1 + TRACK, y, WALL_EAST, y, midY);
     }
 }
 
@@ -590,12 +668,12 @@ function buildDetail(context: BuildContext): GeneratedMap {
     const night = new Night(context);
     paintGround(night);
     paintLines(night);
+    FIELDS.forEach((field) => placeField(night, field));
     placeHamlet(night);
     placeGraveyard(night);
     placeFarm(night);
     placeHollow(night);
     placeCircle(night);
-    placePatches(night);
     placeBoundary(night);
     dressArena(night);
     finish(night);

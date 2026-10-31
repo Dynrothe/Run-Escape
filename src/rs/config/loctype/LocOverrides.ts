@@ -1,0 +1,16 @@
+// Locs a ScapeRune map needs that the cache doesn't quite have. A map places a loc by id and
+// nothing more, so the only way to get a bigger pumpkin onto one is to change the type. Every
+// thread reads this, which is why it's a constant and not sent to them. Only use ids that are
+// placed nowhere in the real world (world-index.ts), or that scenery changes too.
+export type LocOverride = {
+    models?: number[];
+    // 128 is as the model was made
+    size?: number;
+};
+
+export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
+    // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so 1.2 here
+    [46272, { models: [2591], size: 448 }],
+    // A carved one, 1.2 tiles
+    [46267, { models: [46664], size: 384 }],
+]);
