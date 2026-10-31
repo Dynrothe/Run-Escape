@@ -747,7 +747,23 @@ function createWaterLevels(
             }
         }
     }
-    // A pool's as high as its lowest shore, or as what runs into it
+    // A pool's as high as its lowest shore, or as what runs into it, and it's level all
+    // over: a step in water shows as a dark line across it
+    const forPoolCorners = (pool: Pool, visit: (i: number) => void) => {
+        const reach = pool.radius * 1.5 + 8;
+        const x0 = Math.max(Math.floor(pool.x - reach), 0);
+        const x1 = Math.min(Math.ceil(pool.x + reach), corners.x - 1);
+        const y0 = Math.max(Math.floor(pool.y - reach), 0);
+        const y1 = Math.min(Math.ceil(pool.y + reach), corners.y - 1);
+        for (let cy = y0; cy <= y1; cy++) {
+            for (let cx = x0; cx <= x1; cx++) {
+                const i = cx + cy * corners.x;
+                if (fresh[i] > -8) {
+                    visit(i);
+                }
+            }
+        }
+    };
     for (const pool of pools) {
         pool.level = Infinity;
         const reach = pool.radius * 1.5 + 8;
@@ -757,6 +773,9 @@ function createWaterLevels(
             const y = pool.y + Math.sin(angle) * reach;
             pool.level = Math.min(pool.level, terrain.getHeight(x, y) - WATER_DROP);
         }
+        forPoolCorners(pool, (i) => {
+            pool.level = Math.min(pool.level, levels[i]);
+        });
         pool.level = Math.max(pool.level, RIVER_BED);
     }
     const touches = (pool: Pool, other: Pool) =>
@@ -769,19 +788,9 @@ function createWaterLevels(
         }
     }
     for (const pool of pools) {
-        const reach = pool.radius * 1.5 + 8;
-        const x0 = Math.max(Math.floor(pool.x - reach), 0);
-        const x1 = Math.min(Math.ceil(pool.x + reach), corners.x - 1);
-        const y0 = Math.max(Math.floor(pool.y - reach), 0);
-        const y1 = Math.min(Math.ceil(pool.y + reach), corners.y - 1);
-        for (let cy = y0; cy <= y1; cy++) {
-            for (let cx = x0; cx <= x1; cx++) {
-                const i = cx + cy * corners.x;
-                if (fresh[i] > -8) {
-                    levels[i] = Math.min(levels[i], pool.level);
-                }
-            }
-        }
+        forPoolCorners(pool, (i) => {
+            levels[i] = pool.level;
+        });
     }
     for (let i = 0; i < levels.length; i++) {
         if (flood[i]) {
