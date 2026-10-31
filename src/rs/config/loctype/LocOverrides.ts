@@ -9,8 +9,12 @@ export type LocOverride = {
 };
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
-    // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so 1.2 here
+    // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5
+    // here, for a field that didn't all ripen at once
+    [46263, { models: [2591], size: 320 }],
+    [46264, { models: [2591], size: 384 }],
     [46272, { models: [2591], size: 448 }],
+    [46266, { models: [2591], size: 576 }],
     // A carved one, 1.2 tiles
     [46267, { models: [46664], size: 384 }],
 ]);

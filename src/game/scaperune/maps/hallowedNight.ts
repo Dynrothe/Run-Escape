@@ -61,7 +61,8 @@ const FURROW = 427;
 
 // Plain pumpkins, and now and then a carved one. Both are made big in LocOverrides.ts, and both
 // are ordinary locs (type 10) that block nothing.
-const FIELD_PUMPKINS = [46272, 46272, 46272, 46272, 46272, 46272, 46272, 46267];
+// Four sizes, the middle ones most often.
+const FIELD_PUMPKINS = [46263, 46263, 46264, 46264, 46264, 46272, 46272, 46266, 46267];
 const FIELD_VINE = 55617;
 const FIELD_FENCE = 5153;
 const PLOUGH = 296;
