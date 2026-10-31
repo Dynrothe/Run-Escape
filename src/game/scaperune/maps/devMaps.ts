@@ -9,6 +9,7 @@ import { MapRecipe } from "../recipe";
 import { CLIFF_GALLERY } from "./cliffGallery";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { TERRAIN_TEST } from "./terrainTest";
+import { VARDHELM } from "./vardhelm";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
 // needs its own squares: nothing in the cache lives at x 70-99, y 66-199, and the
@@ -122,4 +123,5 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     PALETTE_RECIPE,
     PREFAB_GALLERY,
     CLIFF_GALLERY,
+    VARDHELM,
 ];
