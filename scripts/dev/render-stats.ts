@@ -4,6 +4,11 @@
 //
 //   npx tsx scripts/dev/render-stats.ts prifddinas falador lumbridge
 //   npx tsx scripts/dev/render-stats.ts --bake        # memory for the baked actors
+//   npx tsx scripts/dev/render-stats.ts --cull=8 prifddinas
+//
+// With --cull (the size of the cull cells, in tiles) it bakes the way the game
+// does, checks that every vertex is inside the box its draw is culled by (that's
+// what makes culling safe at any camera angle), and counts what each spot draws.
 //
 // Run it through a memory cap on a small machine: a big map is a few hundred MB.
 import { mat4, vec3 } from "gl-matrix";
@@ -44,6 +49,7 @@ const RUN_PITCH = -400;
 const ASPECT = 16 / 9;
 const ZOOMS = [18, 44];
 const CHUNK_SIZES = [64, 32, 16, 8];
+const FLOATS_PER_BOX = 6;
 // Up is negative, in tiles
 const MODEL_HEIGHT_BOX = [-18.75, 5.625];
 
@@ -257,6 +263,144 @@ function collectTriangles(data: SdMapData): SquareTriangles {
     return result;
 }
 
+// World position of every vertex each range draws, against the range's box
+function checkBoxes(data: SdMapData): { vertices: number; outside: number; worst: number } {
+    const vertices = new Uint32Array(
+        data.vertices.buffer,
+        data.vertices.byteOffset,
+        data.vertices.byteLength / 4,
+    );
+    const baseX = data.mapX * 64;
+    const baseZ = data.mapY * 64;
+    const boxes = data.cullBoxes!;
+    const result = { vertices: 0, outside: 0, worst: 0 };
+
+    const check = (
+        info: Uint16Array,
+        drawId: number,
+        offset: number,
+        elements: number,
+        instances: number,
+        boxId: number,
+    ) => {
+        const instanceBase = info[drawId * 4];
+        const o = boxId * FLOATS_PER_BOX;
+        const first = offset / 4;
+        for (let instance = 0; instance < instances; instance++) {
+            const io = (instanceBase + instance) * 4;
+            const sceneX = info[io] & 0x3fff;
+            const sceneZ = info[io + 1] & 0x3fff;
+            const plane = info[io] >> 14;
+            const contour = info[io + 1] >> 14;
+            const height = (info[io + 2] >> 6) * 8;
+            for (let e = 0; e < elements; e++) {
+                const v = data.indices[first + e] * 3;
+                const x = decodeX(vertices[v]) + sceneX;
+                const z = decodeZ(vertices[v + 2]) + sceneZ;
+                let y = decodeY(vertices[v + 1]) - height;
+                if (contour === 0) {
+                    y -= getTerrainHeight(data, sceneX, sceneZ, plane);
+                } else if (contour === 1) {
+                    y -= getTerrainHeight(data, x, z, plane);
+                }
+                const wx = x / 128 + baseX;
+                const wy = y / 128;
+                const wz = z / 128 + baseZ;
+                result.vertices++;
+                const over = Math.max(
+                    boxes[o] - wx,
+                    boxes[o + 1] - wy,
+                    boxes[o + 2] - wz,
+                    wx - boxes[o + 3],
+                    wy - boxes[o + 4],
+                    wz - boxes[o + 5],
+                );
+                if (over > 0) {
+                    result.outside++;
+                    result.worst = Math.max(result.worst, over);
+                }
+            }
+        }
+    };
+
+    data.drawRanges.forEach(([offset, elements, instances], i) =>
+        check(data.modelTextureData, i, offset, elements, instances, data.drawRangeBoxes![i]),
+    );
+    data.drawRangesAlpha.forEach(([offset, elements, instances], i) =>
+        check(
+            data.modelTextureDataAlpha,
+            i,
+            offset,
+            elements,
+            instances,
+            data.drawRangeAlphaBoxes![i],
+        ),
+    );
+    // Animated locs have a range per frame, swapped in as they play
+    for (const loc of data.locsAnimated) {
+        for (const [offset, elements] of loc.anim.frames) {
+            check(
+                data.modelTextureData,
+                loc.drawRangeIndex,
+                offset,
+                elements,
+                1,
+                data.drawRangeBoxes![loc.drawRangeIndex],
+            );
+        }
+        for (const [offset, elements] of loc.anim.framesAlpha ?? []) {
+            check(
+                data.modelTextureDataAlpha,
+                loc.drawRangeAlphaIndex,
+                offset,
+                elements,
+                1,
+                data.drawRangeAlphaBoxes![loc.drawRangeAlphaIndex],
+            );
+        }
+    }
+    return result;
+}
+
+type CulledSquare = {
+    mapX: number;
+    mapY: number;
+    boxes: Float32Array;
+    // Triangles drawn per box, and sub draws
+    boxTriangles: Float64Array;
+    boxDraws: Uint32Array;
+};
+
+function makeCulledSquare(data: SdMapData): CulledSquare {
+    const boxes = data.cullBoxes!;
+    const count = boxes.length / FLOATS_PER_BOX;
+    const square: CulledSquare = {
+        mapX: data.mapX,
+        mapY: data.mapY,
+        boxes,
+        boxTriangles: new Float64Array(count),
+        boxDraws: new Uint32Array(count),
+    };
+    const add = (ranges: typeof data.drawRanges, ids: Uint16Array) => {
+        ranges.forEach(([, elements, instances], i) => {
+            square.boxTriangles[ids[i]] += (elements / 3) * instances;
+            square.boxDraws[ids[i]]++;
+        });
+    };
+    add(data.drawRanges, data.drawRangeBoxes!);
+    add(data.drawRangesAlpha, data.drawRangeAlphaBoxes!);
+    return square;
+}
+
+function isSquareInFrustum(frustum: Frustum, mapX: number, mapY: number): boolean {
+    const x = mapX * 64;
+    const z = mapY * 64;
+    return frustum.intersectsBox([
+        [x, MODEL_HEIGHT_BOX[0], z],
+        [x + 64, MODEL_HEIGHT_BOX[1], z + 64],
+    ]);
+}
+
 function makeFrustum(targetX: number, targetZ: number, zoom: number): Frustum {
     const pitch = RUN_PITCH * RS_TO_RADIANS;
     const yaw = -1024 * RS_TO_RADIANS;
@@ -344,6 +488,101 @@ function drawnWithChunks(
         }
     }
     return { triangles, chunks, total };
+}
+
+async function reportCulling(
+    mapId: string,
+    state: ReturnType<typeof createWorkerState>,
+    cellSize: number,
+): Promise<void> {
+    const map = ALL_MAPS.find((m) => m.id === mapId);
+    if (!map) {
+        throw new Error("No map " + mapId);
+    }
+    const { baseX, baseY, sizeX, sizeY, plane } = getArenaRegion(map);
+    const firstX = Math.floor(baseX / 64);
+    const firstY = Math.floor(baseY / 64);
+    const lastX = Math.ceil((baseX + sizeX) / 64) - 1;
+    const lastY = Math.ceil((baseY + sizeY) / 64) - 1;
+
+    const loader = new SdMapDataLoader();
+    loader.init();
+    const squares: CulledSquare[] = [];
+    let vertices = 0;
+    let outside = 0;
+    let worst = 0;
+    let ranges = 0;
+    let bytes = 0;
+    const load = async (mapX: number, mapY: number): Promise<void> => {
+        const result = await quietly(() =>
+            loader.load(state, {
+                mapX,
+                mapY,
+                minLevel: plane,
+                maxLevel: plane,
+                loadObjs: false,
+                loadNpcs: false,
+                smoothTerrain: false,
+                minimizeDrawCalls: false,
+                cullCellSize: cellSize,
+                loadedTextureIds: new Set<number>(),
+            }),
+        );
+        clearWorkerStateCaches(state);
+        const data = result.data;
+        if (!data) {
+            return;
+        }
+        const checked = checkBoxes(data);
+        vertices += checked.vertices;
+        outside += checked.outside;
+        worst = Math.max(worst, checked.worst);
+        ranges += data.drawRanges.length + data.drawRangesAlpha.length;
+        bytes += data.vertices.byteLength + data.indices.byteLength;
+        squares.push(makeCulledSquare(data));
+    };
+    for (let mapX = firstX - 1; mapX <= lastX + 1; mapX++) {
+        for (let mapY = firstY - 1; mapY <= lastY + 1; mapY++) {
+            await load(mapX, mapY);
+        }
+    }
+
+    console.log(`\n== ${map.name}, cells of ${cellSize} tiles, ${squares.length} squares`);
+    console.log(
+        `${count(vertices)} vertices checked, ${count(outside)} outside their box` +
+            (outside > 0 ? ` (by up to ${worst.toFixed(3)} tiles)` : "") +
+            `; ${count(ranges / squares.length)} draw ranges a square, ${mb(bytes)} of geometry`,
+    );
+
+    const spots = [
+        { name: "spawn", x: map.spawn.x, z: map.spawn.y },
+        { name: "middle", x: baseX + sizeX / 2 + 0.5, z: baseY + sizeY / 2 + 0.5 },
+        { name: "corner", x: baseX + 20.5, z: baseY + 20.5 },
+    ];
+    for (const spot of spots) {
+        for (const zoom of ZOOMS) {
+            const frustum = makeFrustum(spot.x, spot.z, zoom);
+            let whole = 0;
+            let drawn = 0;
+            let draws = 0;
+            for (const square of squares) {
+                if (!isSquareInFrustum(frustum, square.mapX, square.mapY)) {
+                    continue;
+                }
+                for (let box = 0; box < square.boxTriangles.length; box++) {
+                    whole += square.boxTriangles[box];
+                    if (frustum.intersectsBoxAt(square.boxes, box * FLOATS_PER_BOX)) {
+                        drawn += square.boxTriangles[box];
+                        draws += square.boxDraws[box];
+                    }
+                }
+            }
+            console.log(
+                `${spot.name} zoom ${zoom}: ${count(whole)} -> ${count(drawn)} triangles ` +
+                    `(${percent(drawn, whole)}), ${count(draws)} sub draws`,
+            );
+        }
+    }
 }
 
 async function reportMap(mapId: string, state: ReturnType<typeof createWorkerState>) {
@@ -472,8 +711,13 @@ async function main(): Promise<void> {
     if (args.includes("--bake")) {
         await reportBake(state);
     }
+    const cull = args.find((a) => a.startsWith("--cull="));
     for (const mapId of args.filter((a) => !a.startsWith("--"))) {
-        await reportMap(mapId, state);
+        if (cull) {
+            await reportCulling(mapId, state, parseInt(cull.slice("--cull=".length)));
+        } else {
+            await reportMap(mapId, state);
+        }
     }
 }
 

@@ -15,6 +15,7 @@ export type SdMapData = {
     loadNpcs: boolean;
 
     smoothTerrain: boolean;
+    cullCellSize: number;
 
     borderSize: number;
 
@@ -51,6 +52,12 @@ export type SdMapData = {
 
     drawRangesInteractLod: DrawRange[];
     drawRangesInteractLodAlpha: DrawRange[];
+
+    // With cullCellSize: bounding boxes (world tiles, FLOATS_PER_BOX each), and
+    // which one each of drawRanges and drawRangesAlpha is in
+    cullBoxes?: Float32Array;
+    drawRangeBoxes?: Uint16Array;
+    drawRangeAlphaBoxes?: Uint16Array;
 
     locsAnimated: LocAnimatedData[];
     npcs: NpcData[];

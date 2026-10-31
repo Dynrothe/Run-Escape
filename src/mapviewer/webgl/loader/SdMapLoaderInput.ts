@@ -14,5 +14,10 @@ export type SdMapLoaderInput = {
 
     minimizeDrawCalls: boolean;
 
+    // Tiles a side of the cells a square's draws are cut into so they can be
+    // culled one by one (leaves out the LOD and interact draws). 0 for one lot
+    // per square, what the map viewer needs.
+    cullCellSize?: number;
+
     loadedTextureIds: Set<number>;
 };

@@ -17,11 +17,13 @@ import { WorkerState } from "../../worker/RenderDataWorker";
 import { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
 import { InteractType } from "../InteractType";
+import { CullGrid, addModelBounds, getModelBounds, newBounds } from "../buffer/CullGrid";
 import { ModelHashBuffer, getModelHash } from "../buffer/ModelHashBuffer";
 import {
     ContourGroundType,
     DrawCommand,
     ModelFace,
+    ModelInfo,
     ModelMergeGroup,
     SceneBuffer,
     SceneModel,
@@ -136,15 +138,42 @@ function createObjSceneModel(
     });
 }
 
+// One draw of the model per box its instances are in, all on the same geometry
+function addCulledInstances(
+    grid: CullGrid,
+    commands: DrawCommand[],
+    model: Model,
+    offset: number,
+    elements: number,
+    instances: ModelInfo[],
+): void {
+    const bounds = getModelBounds(model);
+    const byBox = new Map<number, ModelInfo[]>();
+    for (const instance of instances) {
+        const box = grid.addInstance(instance, bounds);
+        const list = byBox.get(box);
+        if (list) {
+            list.push(instance);
+        } else {
+            byBox.set(box, [instance]);
+        }
+    }
+    for (const [box, list] of byBox) {
+        commands.push({ offset, elements, instances: list, box });
+    }
+}
+
 function createModelGroups(
     modelGroupMap: Map<number, ModelMergeGroup>,
     sceneModels: SceneModel[],
     transparent: boolean,
+    keepLowDetail: boolean,
 ): void {
     for (const sceneModel of sceneModels) {
+        const lowDetail = keepLowDetail && sceneModel.lowDetail;
         const key =
             Number(transparent) |
-            ((sceneModel.lowDetail ? 1 : 0) << 1) |
+            ((lowDetail ? 1 : 0) << 1) |
             (sceneModel.level << 2) |
             (sceneModel.priority << 4);
 
@@ -154,7 +183,7 @@ function createModelGroups(
         } else {
             modelGroupMap.set(key, {
                 transparent,
-                lowDetail: sceneModel.lowDetail,
+                lowDetail,
                 level: sceneModel.level,
                 priority: sceneModel.priority,
                 models: [sceneModel],
@@ -181,6 +210,10 @@ function addSceneModels(
             groupedModels.set(hash, [sceneModel]);
         }
     }
+
+    const grid = sceneBuf.grid;
+    // With a grid there's no LOD draws to tell low detail models apart for
+    const keepLowDetail = !grid;
 
     const modelGroupMap: Map<number, ModelMergeGroup> = new Map();
     for (const sceneModels of groupedModels.values()) {
@@ -211,9 +244,9 @@ function addSceneModels(
             }
         }
 
-        createModelGroups(modelGroupMap, mergeModels, false);
+        createModelGroups(modelGroupMap, mergeModels, false, keepLowDetail);
         if (transparentFaces.length > 0) {
-            createModelGroups(modelGroupMap, mergeModels, true);
+            createModelGroups(modelGroupMap, mergeModels, true, keepLowDetail);
         }
 
         const instanceCount = instancedModels.length;
@@ -228,54 +261,76 @@ function addSceneModels(
         // mergeTransparent = false;
 
         if (mergeOpaque) {
-            createModelGroups(modelGroupMap, instancedModels, false);
+            createModelGroups(modelGroupMap, instancedModels, false, keepLowDetail);
         } else if (opaqueFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
             sceneBuf.addModel(model, opaqueFaces);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
-            const drawCommand: DrawCommand = {
-                offset: indexOffset,
-                elements: elementCount,
-                instances: sceneModels,
-            };
-
-            sceneBuf.drawCommands.push(drawCommand);
-            sceneBuf.drawCommandsInteract.push(drawCommand);
-            if (lodModels.length > 0) {
-                const drawCommandLod: DrawCommand = {
+            if (grid) {
+                addCulledInstances(
+                    grid,
+                    sceneBuf.drawCommands,
+                    model,
+                    indexOffset,
+                    elementCount,
+                    sceneModels,
+                );
+            } else {
+                const drawCommand: DrawCommand = {
                     offset: indexOffset,
                     elements: elementCount,
-                    instances: lodModels,
+                    instances: sceneModels,
                 };
-                sceneBuf.drawCommandsLod.push(drawCommandLod);
-                sceneBuf.drawCommandsInteractLod.push(drawCommandLod);
+
+                sceneBuf.drawCommands.push(drawCommand);
+                sceneBuf.drawCommandsInteract.push(drawCommand);
+                if (lodModels.length > 0) {
+                    const drawCommandLod: DrawCommand = {
+                        offset: indexOffset,
+                        elements: elementCount,
+                        instances: lodModels,
+                    };
+                    sceneBuf.drawCommandsLod.push(drawCommandLod);
+                    sceneBuf.drawCommandsInteractLod.push(drawCommandLod);
+                }
             }
         }
 
         if (mergeTransparent && transparentFaces.length > 0) {
-            createModelGroups(modelGroupMap, instancedModels, true);
+            createModelGroups(modelGroupMap, instancedModels, true, keepLowDetail);
         } else if (transparentFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
             sceneBuf.addModel(model, transparentFaces);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
-            const drawCommand: DrawCommand = {
-                offset: indexOffset,
-                elements: elementCount,
-                instances: sceneModels,
-            };
-
-            sceneBuf.drawCommandsAlpha.push(drawCommand);
-            sceneBuf.drawCommandsInteractAlpha.push(drawCommand);
-            if (lodModels.length > 0) {
-                const drawCommandLod: DrawCommand = {
+            if (grid) {
+                addCulledInstances(
+                    grid,
+                    sceneBuf.drawCommandsAlpha,
+                    model,
+                    indexOffset,
+                    elementCount,
+                    sceneModels,
+                );
+            } else {
+                const drawCommand: DrawCommand = {
                     offset: indexOffset,
                     elements: elementCount,
-                    instances: lodModels,
+                    instances: sceneModels,
                 };
-                sceneBuf.drawCommandsLodAlpha.push(drawCommandLod);
-                sceneBuf.drawCommandsInteractLodAlpha.push(drawCommandLod);
+
+                sceneBuf.drawCommandsAlpha.push(drawCommand);
+                sceneBuf.drawCommandsInteractAlpha.push(drawCommand);
+                if (lodModels.length > 0) {
+                    const drawCommandLod: DrawCommand = {
+                        offset: indexOffset,
+                        elements: elementCount,
+                        instances: lodModels,
+                    };
+                    sceneBuf.drawCommandsLodAlpha.push(drawCommandLod);
+                    sceneBuf.drawCommandsInteractLodAlpha.push(drawCommandLod);
+                }
             }
         }
     }
@@ -306,6 +361,7 @@ function addLocAnimationFrames(
     }
     const frames = new Array<DrawRange>(frameCount);
     const framesAlpha = new Array<DrawRange>(frameCount);
+    const bounds = newBounds();
     let alphaFrameCount = 0;
     for (let i = 0; i < frameCount; i++) {
         const model = locModelLoader.getModelAnimated(
@@ -316,6 +372,7 @@ function addLocAnimationFrames(
             i,
         );
         if (model) {
+            addModelBounds(bounds, model);
             frames[i] = sceneBuf.addModelAnimFrame(model, false);
             framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true);
             if (framesAlpha[i][1] > 0) {
@@ -330,6 +387,7 @@ function addLocAnimationFrames(
     return {
         frames,
         framesAlpha: alphaFrameCount > 0 ? framesAlpha : undefined,
+        bounds,
     };
 }
 
@@ -570,6 +628,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             loadNpcs,
             smoothTerrain,
             minimizeDrawCalls,
+            cullCellSize = 0,
             loadedTextureIds,
         }: SdMapLoaderInput,
     ): Promise<RenderDataResult<SdMapData | undefined>> {
@@ -599,7 +658,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const scene = state.sceneBuilder.buildScene(baseX, baseY, mapSize, mapSize, smoothTerrain);
         console.timeEnd(`build scene ${mapX},${mapY}`);
 
-        const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 100000);
+        const grid = cullCellSize > 0 ? new CullGrid(cullCellSize, scene, borderSize) : undefined;
+        const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 100000, grid);
         sceneBuf.addTerrain(scene, borderSize, minLevel, maxLevel);
 
         const sceneLocs = getSceneLocs(locTypeLoader, scene, borderSize, minLevel, maxLevel);
@@ -728,6 +788,12 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         const heightMapTextureData = loadHeightMapTextureData(scene);
 
+        const cullBoxes = grid?.toWorldBoxes(mapX, mapY);
+        const getBoxes = (commands: DrawCommand[]) =>
+            Uint16Array.from(commands, (cmd) => cmd.box ?? 0);
+        const drawRangeBoxes = grid ? getBoxes(sceneBuf.drawCommands) : undefined;
+        const drawRangeAlphaBoxes = grid ? getBoxes(sceneBuf.drawCommandsAlpha) : undefined;
+
         const vertices = sceneBuf.vertexBuf.byteArray();
         const indices = new Int32Array(sceneBuf.indices);
 
@@ -752,6 +818,9 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         console.timeEnd(`load map ${mapX},${mapY}`);
 
         const transferables = [
+            ...(cullBoxes && drawRangeBoxes && drawRangeAlphaBoxes
+                ? [cullBoxes.buffer, drawRangeBoxes.buffer, drawRangeAlphaBoxes.buffer]
+                : []),
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
             ...scene.collisionMaps.map((map) => map.flags.buffer),
             ...Array.from(loadedTextures.values()).map((pixels) => pixels.buffer),
@@ -794,6 +863,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 loadNpcs,
 
                 smoothTerrain,
+                cullCellSize,
 
                 borderSize,
                 tileRenderFlags: scene.tileRenderFlags,
@@ -829,6 +899,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
                 drawRangesInteractLod,
                 drawRangesInteractLodAlpha,
+
+                cullBoxes,
+                drawRangeBoxes,
+                drawRangeAlphaBoxes,
 
                 locsAnimated,
                 npcs,
