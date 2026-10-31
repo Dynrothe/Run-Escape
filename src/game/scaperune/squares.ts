@@ -5,7 +5,7 @@ import { addCustomMapSquares } from "../../rs/map/CustomMapFileLoader";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import type { MapFileLoader } from "../../rs/map/MapFileLoader";
 import type { SceneBuilder } from "../../rs/scene/SceneBuilder";
-import { MAP_SQUARE_SIZE, writeLocs, writeTerrain } from "./format";
+import { MAP_SQUARE_SIZE, PlacedLoc, writeLocs, writeTerrain } from "./format";
 import { SCAPERUNE_DEV_MAPS } from "./maps/devMaps";
 import type { BuildContext, MapRecipe } from "./recipe";
 
@@ -33,12 +33,29 @@ export function createBuildContext(maps: MapFileLoader, locTypes: LocTypeLoader)
 // Builds a recipe and writes it in the cache's formats, square by square
 export function buildRecipeSquares(recipe: MapRecipe, context: BuildContext): CustomMapSquares {
     const grid = recipe.build(context);
+    const bySquare = new Map<number, PlacedLoc[]>();
+    for (const loc of grid.locs) {
+        const key = (loc.x >> 6) * recipe.squaresY + (loc.y >> 6);
+        const locs = bySquare.get(key);
+        if (locs) {
+            locs.push(loc);
+        } else {
+            bySquare.set(key, [loc]);
+        }
+    }
     const squares: CustomMapSquares = new Map();
     for (let x = 0; x < recipe.squaresX; x++) {
         for (let y = 0; y < recipe.squaresY; y++) {
+            const offsetX = x * MAP_SQUARE_SIZE;
+            const offsetY = y * MAP_SQUARE_SIZE;
             squares.set(getMapSquareId(recipe.mapX + x, recipe.mapY + y), {
-                terrain: writeTerrain(grid, x * MAP_SQUARE_SIZE, y * MAP_SQUARE_SIZE),
-                locs: writeLocs(grid, x * MAP_SQUARE_SIZE, y * MAP_SQUARE_SIZE),
+                terrain: writeTerrain(grid, offsetX, offsetY),
+                locs: writeLocs(
+                    grid,
+                    offsetX,
+                    offsetY,
+                    bySquare.get(x * recipe.squaresY + y) ?? [],
+                ),
             });
         }
     }

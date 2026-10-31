@@ -5,43 +5,78 @@
 }
 
 .ui-mapgen {
-    width: min(880px, calc(100% - 24px));
+    display: flex;
+    flex-direction: column;
+    width: min(900px, calc(100% - 24px));
     max-height: calc(100% - 24px);
-    overflow-y: auto;
     outline: none;
+}
+
+.ui-mapgen-presets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 6px;
 }
 
 .ui-mapgen-body {
     display: flex;
+    flex: 1;
+    min-height: 0;
     gap: 16px;
     margin-bottom: 8px;
 }
 
+/* Scrolls by itself, so the buttons stay in view */
 .ui-mapgen-settings {
     flex: 1;
     min-width: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.ui-mapgen-section h3 {
+    margin: 8px 0 2px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    color: var(--ui-orange);
 }
 
 .ui-mapgen-preview {
-    flex: 0 0 340px;
+    flex: 0 0 300px;
+    overflow-y: auto;
 }
 
 .ui-mapgen-preview img,
 .ui-mapgen-empty {
     display: block;
-    width: 340px;
-    height: 340px;
+    width: 300px;
+    height: 300px;
+    object-fit: contain;
     background: #000;
 }
 
 .ui-mapgen-empty {
-    line-height: 340px;
+    line-height: 300px;
     text-align: center;
 }
 
+.ui-mapgen-json {
+    box-sizing: border-box;
+    width: 100%;
+    height: 54px;
+    resize: none;
+    font: 11px monospace;
+}
+
+.ui-mapgen-select {
+    font: inherit;
+}
+
 .ui-mapgen-status {
-    min-height: 40px;
-    margin-top: 6px;
+    margin-bottom: 4px;
+    text-align: center;
 }
 
 .ui-mapgen-error {

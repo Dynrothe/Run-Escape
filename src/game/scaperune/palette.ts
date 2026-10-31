@@ -45,7 +45,10 @@ function build(context: BuildContext): TileGrid {
         for (const id of biome.decor) {
             put(id, 1, 22);
         }
-        for (const underlay of [...biome.ground, biome.shore, biome.trail]) {
+        for (const id of biome.flowers) {
+            put(id, 1, 10);
+        }
+        for (const underlay of [...biome.ground, biome.shore, biome.trail, biome.hillGround]) {
             ground.level0.underlays[ground.tile(x, y)] = underlay;
             x += 2;
         }

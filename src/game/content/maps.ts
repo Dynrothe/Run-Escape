@@ -298,6 +298,9 @@ const showDevMaps =
     (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
     (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
 function createDevMap(recipe: MapRecipe): MapDef {
+    const play = recipe.play;
+    const source = play && MAPS.find((map) => map.id === play.waveSet);
+    const density = play?.enemyDensity ?? 1;
     return {
         id: recipe.id,
         name: recipe.id,
@@ -305,8 +308,14 @@ function createDevMap(recipe: MapRecipe): MapDef {
         iconObjId: 1351,
         arena: getRecipeArena(recipe),
         spawn: getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y),
-        difficulty: { hp: 1, damage: 1 },
-        waves: LUMBRIDGE_WAVES,
+        difficulty: source?.difficulty ?? { hp: 1, damage: 1 },
+        waves: (source?.waves ?? LUMBRIDGE_WAVES).map((wave) => ({
+            ...wave,
+            spawnRate: wave.spawnRate * density,
+            minAlive: Math.round(wave.minAlive * density),
+            maxAlive: Math.round(wave.maxAlive * density),
+        })),
+        brightness: play?.brightness,
         events: [],
         finalBossWarning: "",
         victoryText: "",

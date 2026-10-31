@@ -80,6 +80,8 @@ const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
 const RUN_PITCH = -400;
+// Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
+const OPEN_WORLD_MARGIN = 56;
 const RUN_DISTANCE = 18;
 
 // The level up's rewards, as the UI shows them
@@ -483,6 +485,7 @@ export class GameClient implements GameFrameHandler {
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.dev === true);
+        this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
         const music = map.music && MUSIC[map.music];
         if (music) {
@@ -623,6 +626,7 @@ export class GameClient implements GameFrameHandler {
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(false);
+        this.renderer.setBrightness(1);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -776,11 +780,14 @@ export class GameClient implements GameFrameHandler {
 
         // The world fades out past the edge of the map
         const { baseX, baseY, sizeX, sizeY } = this.grid;
+        // The world fades out past the arena's edge. A dev map's world carries on: it has
+        // scenery there (scaperune/CLAUDE.md).
+        const open = this.sim?.map.dev === true ? OPEN_WORLD_MARGIN : 0;
         const playArea = this.renderer.playArea;
-        playArea[0] = baseX;
-        playArea[1] = baseY;
-        playArea[2] = baseX + sizeX;
-        playArea[3] = baseY + sizeY;
+        playArea[0] = baseX - open;
+        playArea[1] = baseY - open;
+        playArea[2] = baseX + sizeX + open;
+        playArea[3] = baseY + sizeY + open;
 
         const sim = this.sim;
         if (!sim) {

@@ -1,48 +1,67 @@
-import { generatedRecipe } from "../generator";
+import { DEFAULT_SETTINGS, GeneratorSettings, generatedRecipe } from "../generator";
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { TERRAIN_TEST } from "./terrainTest";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
-// needs its own squares: nothing in the cache lives at x 70-99, y 100-130.
+// needs its own squares: nothing in the cache lives at x 70-99, y 66-199, and the
+// map generator's screen has x 70-99 from y 134 on.
+const GENERATED: [id: string, mapX: number, settings: Partial<GeneratorSettings>][] = [
+    ["scaperune_meadow", 71, { seed: 1, biome: "meadow", island: 0.35, rivers: 1, ponds: 2 }],
+    [
+        "scaperune_desert",
+        76,
+        {
+            seed: 2,
+            biome: "desert",
+            boundary: "hills",
+            ponds: 1,
+            hills: 0.3,
+            trees: 0.25,
+            rocks: 0.6,
+        },
+    ],
+    [
+        "scaperune_swamp",
+        81,
+        {
+            seed: 3,
+            biome: "swamp",
+            island: 0.15,
+            rivers: 2,
+            ponds: 6,
+            hills: 0.1,
+            trees: 0.7,
+            buildings: 0.3,
+        },
+    ],
+    [
+        "scaperune_snow",
+        86,
+        {
+            seed: 4,
+            biome: "snow",
+            squaresX: 3,
+            squaresY: 3,
+            island: 0.5,
+            rivers: 1,
+            ponds: 1,
+            hills: 0.8,
+        },
+    ],
+];
+
+export const DEV_MAP_SETTINGS: Record<string, GeneratorSettings> = Object.fromEntries(
+    GENERATED.map(([id, , settings]) => [
+        id,
+        { seed: 1, ...DEFAULT_SETTINGS, ...settings } as GeneratorSettings,
+    ]),
+);
+
 export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     TERRAIN_TEST,
-    generatedRecipe("scaperune_meadow", 71, 104, {
-        seed: 1,
-        biome: "meadow",
-        island: 0.35,
-        rivers: 1,
-        ponds: 2,
-    }),
-    generatedRecipe("scaperune_desert", 76, 104, {
-        seed: 2,
-        biome: "desert",
-        island: 0,
-        ponds: 1,
-        hills: 0.3,
-        trees: 0.25,
-        rocks: 0.6,
-    }),
-    generatedRecipe("scaperune_swamp", 81, 104, {
-        seed: 3,
-        biome: "swamp",
-        island: 0.15,
-        rivers: 2,
-        ponds: 6,
-        hills: 0.1,
-        trees: 0.7,
-        buildings: 0.3,
-    }),
-    generatedRecipe("scaperune_snow", 86, 104, {
-        seed: 4,
-        biome: "snow",
-        squares: 3,
-        island: 0.5,
-        rivers: 1,
-        ponds: 1,
-        hills: 0.8,
-    }),
+    ...GENERATED.map(([id, mapX]) => generatedRecipe(id, mapX, 104, DEV_MAP_SETTINGS[id])),
     PALETTE_RECIPE,
     PREFAB_GALLERY,
 ];

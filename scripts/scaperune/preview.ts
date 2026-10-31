@@ -2,7 +2,7 @@
 // marked in white and the spawn in red, and checks it with the game's real
 // collision: every open tile must reach the spawn.
 //
-//   npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=desert island=0 rivers=1
+//   npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=desert boundary=forest rivers=1
 //   npx tsx scripts/scaperune/preview.ts out.png map=terrain_test
 //
 // Takes any GeneratorSettings as name=value. Heavy on memory: it loads the cache.
@@ -11,9 +11,15 @@ import zlib from "node:zlib";
 
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { countStranded } from "../../src/game/scaperune/collision";
-import { DEFAULT_SETTINGS, generatedRecipe } from "../../src/game/scaperune/generator";
+import { generatedRecipe } from "../../src/game/scaperune/generator";
 import { SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../../src/game/scaperune/recipe";
+import {
+    SETTINGS,
+    SettingKey,
+    formatSettings,
+    parseSettings,
+} from "../../src/game/scaperune/settings";
 import { buildRecipeSquares, createBuildContext } from "../../src/game/scaperune/squares";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { createWorkerState } from "../../src/mapviewer/worker/WorkerState";
@@ -65,8 +71,8 @@ function encodePng(width: number, height: number, rgb: Uint8Array): Buffer {
 }
 
 function parseRecipe(args: string[]): MapRecipe {
-    const values = new Map(args.map((arg) => arg.split("=") as [string, string]));
-    const mapId = values.get("map");
+    const values = args.map((arg) => arg.split("=") as [string, string]);
+    const mapId = new Map(values).get("map");
     if (mapId) {
         const recipe = SCAPERUNE_DEV_MAPS.find((map) => map.id === mapId);
         if (!recipe) {
@@ -74,15 +80,20 @@ function parseRecipe(args: string[]): MapRecipe {
         }
         return recipe;
     }
-    const settings: Record<string, unknown> = { seed: 1, ...DEFAULT_SETTINGS };
+    const given: Record<string, unknown> = {};
     for (const [name, value] of values) {
-        if (!(name in settings)) {
-            throw new Error(`No setting ${name}`);
-        }
-        settings[name] = name === "biome" ? value : Number(value);
+        const def = SETTINGS[name as SettingKey];
+        given[name] =
+            name !== "seed" && def?.kind === "choice"
+                ? value
+                : def?.kind === "flag"
+                  ? value === "true"
+                  : Number(value);
     }
-    console.log(JSON.stringify(settings));
-    return generatedRecipe("preview", 90, 110, settings as unknown as { seed: number });
+    // Checks them, too
+    const settings = parseSettings(JSON.stringify(given));
+    console.log(formatSettings(settings));
+    return generatedRecipe("preview", 70, 134, settings);
 }
 
 async function main(): Promise<void> {

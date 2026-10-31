@@ -34,6 +34,13 @@ export type MapRecipe = {
     // because the game needs it before it builds anything.
     spawn: { x: number; y: number };
     build(context: BuildContext): TileGrid;
+    // How a run here plays, if not like Lumbridge. Dev maps only.
+    play?: {
+        // The map to take waves and difficulty from
+        waveSet: string;
+        enemyDensity: number;
+        brightness: number;
+    };
 };
 
 // The rectangle the game plays on, in world tiles

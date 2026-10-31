@@ -7,8 +7,7 @@
 import { Ground } from "../../src/game/scaperune/Ground";
 import { Exit, findExits } from "../../src/game/scaperune/building";
 import { TileGrid } from "../../src/game/scaperune/format";
-import { rotatePrefab } from "../../src/game/scaperune/prefab";
-import { PREFABS, isDoor, loadPrefab, stampBuilding } from "../../src/game/scaperune/prefabs";
+import { PREFABS, PrefabKit, isDoor } from "../../src/game/scaperune/prefabs";
 import { BuildContext } from "../../src/game/scaperune/recipe";
 import { createBuildContext } from "../../src/game/scaperune/squares";
 import { createSceneBuilder, loadGameCache } from "../cache/scene-util";
@@ -87,8 +86,8 @@ function findEnclosed(prefab: TileGrid, exits: Exit[]): Set<number> {
 
 function checkPrefab(name: string, context: BuildContext, turns: number): string[] {
     const problems: string[] = [];
-    const def = PREFABS[name];
-    const prefab = rotatePrefab(loadPrefab(context, def), turns, context.locs);
+    const kit = new PrefabKit(context);
+    const { prefab } = kit.get(name, turns);
     const exits = findExits(prefab, (loc) => isDoor(context, loc));
     if (exits.length === 0) {
         problems.push("no way out");
@@ -97,7 +96,7 @@ function checkPrefab(name: string, context: BuildContext, turns: number): string
 
     const ground = new Ground(prefab.sizeX + MARGIN * 2, prefab.sizeY + MARGIN * 2);
     ground.level0.underlays.fill(GROUND);
-    stampBuilding(ground, context, def, turns, MARGIN, MARGIN, 0, 0);
+    kit.stamp(ground, name, turns, MARGIN, MARGIN);
 
     const from = prefab.levels[0];
     const to = ground.level0;

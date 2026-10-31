@@ -1,5 +1,5 @@
 import type { Ground } from "./Ground";
-import { Exit, findExits, getNearestExit } from "./building";
+import { Exit, findExits } from "./building";
 import type { PlacedLoc, TileGrid } from "./format";
 import { cutPrefab, rotatePrefab } from "./prefab";
 import type { BuildContext } from "./recipe";
@@ -43,27 +43,77 @@ export function isDoor(context: Pick<BuildContext, "locs">, loc: PlacedLoc): boo
     return loc.type <= 3 && DOOR_NAME.test(context.locs(loc.id).name);
 }
 
-// Stands a building on the ground, turned, with its doors off so that you can walk
-// in. Returns its way out nearest a tile, in ground tiles.
-export function stampBuilding(
-    ground: Ground,
-    context: BuildContext,
-    def: PrefabDef,
-    turns: number,
-    x: number,
-    y: number,
-    towardX: number,
-    towardY: number,
-): Exit | undefined {
-    const prefab = rotatePrefab(loadPrefab(context, def), turns, context.locs);
-    const skipLoc = (loc: PlacedLoc) => isDoor(context, loc);
-    ground.stamp(prefab, x, y, {
-        floor: "footprint",
-        feather: BUILDING_FEATHER,
-        flatten: true,
-        keepUnderlays: true,
-        skipLoc,
-    });
-    const exit = getNearestExit(findExits(prefab, skipLoc), towardX - x, towardY - y);
-    return exit && { ...exit, x: exit.x + x, y: exit.y + y };
+// What a building is, for the settings that turn them on and off
+const BUILDING_KINDS: Record<string, "house" | "shop" | "church"> = {
+    lumbridge_house: "house",
+    lumbridge_church: "church",
+    varrock_shop: "shop",
+    al_kharid_house: "house",
+    al_kharid_shop: "shop",
+    canifis_house: "shop",
+    rellekka_hut: "house",
+    rellekka_house: "house",
+};
+
+export function isBuildingKind(
+    name: string,
+    allowed: { houses: boolean; shops: boolean; churches: boolean },
+): boolean {
+    const kind = BUILDING_KINDS[name];
+    return kind === "house" ? allowed.houses : kind === "shop" ? allowed.shops : allowed.churches;
+}
+
+// Of a ruin's walls, this share still stands
+const RUIN_WALLS = 0.45;
+
+// Prefabs in each rotation, cut once: a big map has hundreds of buildings
+export class PrefabKit {
+    private readonly turned = new Map<string, { prefab: TileGrid; exits: Exit[] }>();
+
+    constructor(readonly context: BuildContext) {}
+
+    get(name: string, turns: number): { prefab: TileGrid; exits: Exit[] } {
+        const key = `${name}:${turns}`;
+        let entry = this.turned.get(key);
+        if (!entry) {
+            const prefab = rotatePrefab(
+                loadPrefab(this.context, PREFABS[name]),
+                turns,
+                this.context.locs,
+            );
+            const exits = findExits(prefab, (loc) => isDoor(this.context, loc));
+            entry = { prefab, exits };
+            this.turned.set(key, entry);
+        }
+        return entry;
+    }
+
+    // Stands a building on the ground, with its doors off so that you can walk in
+    stamp(ground: Ground, name: string, turns: number, x: number, y: number): void {
+        ground.stamp(this.get(name, turns).prefab, x, y, {
+            floor: "footprint",
+            feather: BUILDING_FEATHER,
+            flatten: true,
+            keepUnderlays: true,
+            skipLoc: (loc) => isDoor(this.context, loc),
+        });
+    }
+
+    // The same with most of it gone: no furniture, and some of its walls
+    stampRuin(
+        ground: Ground,
+        name: string,
+        turns: number,
+        x: number,
+        y: number,
+        roll: () => number,
+    ): void {
+        ground.stamp(this.get(name, turns).prefab, x, y, {
+            floor: "footprint",
+            feather: BUILDING_FEATHER,
+            flatten: true,
+            keepUnderlays: true,
+            skipLoc: (loc) => isDoor(this.context, loc) || loc.type > 3 || roll() > RUIN_WALLS,
+        });
+    }
 }

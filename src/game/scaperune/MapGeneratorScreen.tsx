@@ -4,9 +4,19 @@ import { createPortal } from "react-dom";
 import type { GameClient } from "../client/GameClient";
 import { getCharacter } from "../content/characters";
 import "./MapGeneratorScreen.css";
-import { BIOMES, BiomeId } from "./biomes";
 import { GENERATED_MAP_ID, drawGeneratedMap, installGeneratedMap } from "./generatedMap";
-import { DEFAULT_SETTINGS, GeneratorSettings, SETTING_LIMITS, getSettingsError } from "./generator";
+import {
+    DEFAULT_SETTINGS,
+    GeneratorSettings,
+    SETTINGS,
+    SETTING_PRESETS,
+    SETTING_SECTIONS,
+    SLOW_ARENA_SQUARES,
+    SettingKey,
+    formatSettings,
+    getSettingsError,
+    parseSettings,
+} from "./settings";
 
 // Temporary and dev-only: a screen to try the generator's settings. To remove it,
 // delete this file, its CSS and generatedMap.ts, and the MapGeneratorButton line
@@ -22,6 +32,84 @@ function randomSeed(): number {
 let lastSettings: GeneratorSettings = { seed: 1, ...DEFAULT_SETTINGS };
 let lastPreview: { url: string; settings: GeneratorSettings } | undefined;
 
+function SettingField({
+    name,
+    settings,
+    change,
+}: {
+    name: SettingKey;
+    settings: GeneratorSettings;
+    change: (changed: Partial<GeneratorSettings>) => void;
+}): JSX.Element | null {
+    const def = SETTINGS[name];
+    if (def.when && !def.when(settings)) {
+        return null;
+    }
+    const value = settings[name];
+    let control: JSX.Element;
+    if (def.kind === "number") {
+        control = (
+            <>
+                <input
+                    className="ui-volume"
+                    type="range"
+                    aria-label={def.label}
+                    min={def.min}
+                    max={def.max}
+                    step={def.step}
+                    value={value as number}
+                    onChange={(e) => change({ [name]: e.target.valueAsNumber })}
+                />
+                <span className="ui-mapgen-value">{Number((value as number).toFixed(2))}</span>
+            </>
+        );
+    } else if (def.kind === "flag") {
+        control = (
+            <button
+                className={"ui-button" + (value ? " ui-mapgen-picked" : "")}
+                aria-pressed={value as boolean}
+                aria-label={def.label}
+                onClick={() => change({ [name]: !value })}
+            >
+                {value ? "On" : "Off"}
+            </button>
+        );
+    } else if (def.options.length <= 5) {
+        control = (
+            <>
+                {def.options.map((option) => (
+                    <button
+                        key={option}
+                        className={"ui-button" + (option === value ? " ui-mapgen-picked" : "")}
+                        onClick={() => change({ [name]: option })}
+                    >
+                        {option}
+                    </button>
+                ))}
+            </>
+        );
+    } else {
+        control = (
+            <select
+                className="ui-mapgen-select"
+                aria-label={def.label}
+                value={value as string}
+                onChange={(e) => change({ [name]: e.target.value })}
+            >
+                {def.options.map((option) => (
+                    <option key={option}>{option}</option>
+                ))}
+            </select>
+        );
+    }
+    return (
+        <div className="ui-setting">
+            <span className="ui-setting-name">{def.label}</span>
+            <span className="ui-setting-control">{control}</span>
+        </div>
+    );
+}
+
 function MapGeneratorScreen({
     client,
     onClose,
@@ -31,9 +119,11 @@ function MapGeneratorScreen({
 }): JSX.Element {
     const [settings, setSettings] = useState(lastSettings);
     const [preview, setPreview] = useState(lastPreview);
-    const [busy, setBusy] = useState(false);
+    const [busy, setBusy] = useState<string>();
     const [error, setError] = useState<string>();
+    const [json, setJson] = useState<string>();
     const panel = useRef<HTMLDivElement>(null);
+    const jsonBox = useRef<HTMLTextAreaElement>(null);
     // Keys go to the fields here, not to the title screen behind
     useEffect(() => panel.current?.focus(), []);
 
@@ -41,6 +131,7 @@ function MapGeneratorScreen({
         const next = { ...settings, ...changed };
         lastSettings = next;
         setSettings(next);
+        setJson(undefined);
     };
 
     const generate = async () => {
@@ -49,11 +140,12 @@ function MapGeneratorScreen({
         if (problem) {
             return;
         }
-        setBusy(true);
+        setBusy("Generating...");
         // A frame for the button to show it's busy before the main thread's taken
         await new Promise((resolve) => requestAnimationFrame(resolve));
         try {
             const recipe = await installGeneratedMap(client, settings);
+            setBusy("Drawing the map...");
             const url = await drawGeneratedMap(client, recipe);
             lastPreview = { url, settings };
             setPreview(lastPreview);
@@ -61,12 +153,35 @@ function MapGeneratorScreen({
             console.error("Failed to generate a map", e);
             setError(e instanceof Error ? e.message : String(e));
         } finally {
-            setBusy(false);
+            setBusy(undefined);
+        }
+    };
+
+    const loadJson = () => {
+        try {
+            const loaded = parseSettings(jsonBox.current?.value ?? "");
+            lastSettings = loaded;
+            setSettings(loaded);
+            setJson(undefined);
+            setError(undefined);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    };
+
+    const copyJson = () => {
+        const box = jsonBox.current;
+        if (box) {
+            box.select();
+            // The clipboard API needs https, which a dev server often isn't
+            void navigator.clipboard?.writeText(box.value).catch(() => {});
+            document.execCommand("copy");
         }
     };
 
     const stale = preview !== undefined && preview.settings !== settings;
     const character = getCharacter(client.store.getSnapshot().characterId);
+    const slow = Math.max(settings.squaresX, settings.squaresY) > SLOW_ARENA_SQUARES;
 
     return (
         <div
@@ -81,6 +196,25 @@ function MapGeneratorScreen({
             }}
         >
             <h2>Map generator</h2>
+            <div className="ui-mapgen-presets">
+                {Object.entries(SETTING_PRESETS).map(([name, preset]) => (
+                    <button
+                        key={name}
+                        className="ui-button"
+                        onClick={() =>
+                            change({ seed: settings.seed, ...DEFAULT_SETTINGS, ...preset })
+                        }
+                    >
+                        {name}
+                    </button>
+                ))}
+                <button
+                    className="ui-button"
+                    onClick={() => change({ seed: settings.seed, ...DEFAULT_SETTINGS })}
+                >
+                    Reset to defaults
+                </button>
+            </div>
             <div className="ui-mapgen-body">
                 <div className="ui-mapgen-settings">
                     <div className="ui-setting">
@@ -101,52 +235,19 @@ function MapGeneratorScreen({
                             </button>
                         </span>
                     </div>
-                    <div className="ui-setting">
-                        <span className="ui-setting-name">Biome</span>
-                        <span className="ui-setting-control">
-                            {Object.keys(BIOMES).map((biome) => (
-                                <button
-                                    key={biome}
-                                    className={
-                                        "ui-button" +
-                                        (biome === settings.biome ? " ui-mapgen-picked" : "")
-                                    }
-                                    onClick={() => change({ biome: biome as BiomeId })}
-                                >
-                                    {biome}
-                                </button>
+                    {SETTING_SECTIONS.map((section) => (
+                        <section key={section.name} className="ui-mapgen-section">
+                            <h3>{section.name}</h3>
+                            {section.keys.map((key) => (
+                                <SettingField
+                                    key={key}
+                                    name={key}
+                                    settings={settings}
+                                    change={change}
+                                />
                             ))}
-                        </span>
-                    </div>
-                    {Object.entries(SETTING_LIMITS).map(([name, limits]) => {
-                        const key = name as keyof typeof SETTING_LIMITS;
-                        return (
-                            <div className="ui-setting" key={name}>
-                                <span className="ui-setting-name">{limits.label}</span>
-                                <span className="ui-setting-control">
-                                    <input
-                                        className="ui-volume"
-                                        type="range"
-                                        aria-label={limits.label}
-                                        min={limits.min}
-                                        max={limits.max}
-                                        step={limits.step}
-                                        value={settings[key]}
-                                        onChange={(e) => change({ [key]: e.target.valueAsNumber })}
-                                    />
-                                    <span className="ui-mapgen-value">{settings[key]}</span>
-                                </span>
-                            </div>
-                        );
-                    })}
-                    <div className="ui-row">
-                        <button
-                            className="ui-button"
-                            onClick={() => change({ ...DEFAULT_SETTINGS })}
-                        >
-                            Reset to defaults
-                        </button>
-                    </div>
+                        </section>
+                    ))}
                 </div>
                 <div className="ui-mapgen-preview">
                     {preview ? (
@@ -154,34 +255,50 @@ function MapGeneratorScreen({
                     ) : (
                         <div className="ui-mapgen-empty">Nothing generated yet</div>
                     )}
-                    <div className="ui-mapgen-status">
-                        {error ? (
-                            <span className="ui-mapgen-error" role="alert">
-                                {error}
-                            </span>
-                        ) : busy ? (
-                            "Generating..."
-                        ) : stale ? (
-                            "Settings changed: Generate to see them. Play uses the map shown."
-                        ) : preview ? (
-                            `Seed ${preview.settings.seed}, ${preview.settings.biome}. ` +
-                            `Playing as the ${character.name}.`
-                        ) : (
-                            `Playing as the ${character.name}.`
-                        )}
+                    <textarea
+                        ref={jsonBox}
+                        className="ui-mapgen-json"
+                        aria-label="Settings as JSON"
+                        spellCheck={false}
+                        value={json ?? formatSettings(settings)}
+                        onChange={(e) => setJson(e.target.value)}
+                    />
+                    <div className="ui-row">
+                        <button className="ui-button" onClick={copyJson}>
+                            Copy
+                        </button>
+                        <button className="ui-button" onClick={loadJson}>
+                            Load
+                        </button>
                     </div>
                 </div>
             </div>
+            <div className="ui-mapgen-status">
+                {error ? (
+                    <span className="ui-mapgen-error" role="alert">
+                        {error}
+                    </span>
+                ) : (
+                    (busy ??
+                    (stale
+                        ? "Settings changed: Generate to see them. Play uses the map shown."
+                        : preview
+                          ? `Seed ${preview.settings.seed}, ${preview.settings.biome}. ` +
+                            `Playing as the ${character.name}.`
+                          : `Playing as the ${character.name}.`))
+                )}
+                {slow && !error && !busy && " A map this big takes a while."}
+            </div>
             <div className="ui-row">
-                <button className="ui-button" disabled={busy} onClick={onClose}>
+                <button className="ui-button" disabled={busy !== undefined} onClick={onClose}>
                     Back
                 </button>
-                <button className="ui-button" disabled={busy} onClick={generate}>
+                <button className="ui-button" disabled={busy !== undefined} onClick={generate}>
                     Generate
                 </button>
                 <button
                     className="ui-button"
-                    disabled={busy || !preview}
+                    disabled={busy !== undefined || !preview}
                     onClick={() => client.startRun(GENERATED_MAP_ID)}
                 >
                     Play

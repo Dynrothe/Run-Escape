@@ -36,52 +36,106 @@ The recipe runs once, on the main thread, the first time the map's played. `Game
 
 ## The map generator screen (temporary)
 
-On the dev server the title screen has a **Map generator** button: every `GeneratorSettings` property,
-Generate with a preview from above, and Play. It's temporary, there to try settings, so it's built to
-delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton`
-line in `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`. A production build never shows it.
+On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random,
+Reset, copying and pasting the settings as JSON, Generate with a preview from above, and Play. It's temporary,
+there to try settings, so it's built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`,
+then the `MapGeneratorButton` line in `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`. A production
+build never shows it.
 
-Every Generate replaces one map, `scaperune_generated`, at fixed map squares. `installGeneratedMap`
-replaces whatever kept the old one: the squares on the main thread and in the workers, the renderer's
-loaded squares, the map images and the cached collision. A load still on its way for the old squares is
-dropped (`MapViewer.customMapVersion`). If you add anything else that's kept per map, clear it there.
+Every Generate replaces one map, `scaperune_generated`, at map squares from x 70, y 134. `installGeneratedMap`
+replaces whatever kept the old one: the squares on the main thread and in the workers, the renderer's loaded
+squares, the map images and the cached collision. A load still on its way for the old squares is dropped
+(`MapViewer.customMapVersion`). If you add anything else that's kept per map, clear it there.
 
 **Runs on any map here, dev maps included, leave the save alone**: `MapDef.dev`, checked in `recordRun`.
 
 ## Making a map with the generator
 
-Add a line to `SCAPERUNE_DEV_MAPS` in `maps/devMaps.ts`. Only `seed` is required; the rest come from
-`DEFAULT_SETTINGS` (`GeneratorSettings` in `generator.ts` says what each does):
+Add a line to `GENERATED` in `maps/devMaps.ts`. Only `seed` is required; the rest come from `DEFAULT_SETTINGS`.
+`settings.ts` has every setting, what it does and its limits (`SETTINGS`), which section it's in, and the presets.
+The screen, the error messages and the tests are all built from `SETTINGS`, so **adding a setting means adding it
+there, with a default and a section, and to `CHANGES` in `generator.test.ts`**, which fails if changing a setting
+doesn't change the map. A setting that only matters with another (`when`) hides until it does.
 
 ```ts
-generatedRecipe("scaperune_oasis", 71, 110, {
+["scaperune_oasis", 71, {
     seed: 42,
-    biome: "desert", // meadow, desert, swamp, snow
-    squares: 2, // arena size: 1, 2 or 3 map squares a side
-    island: 0, // 0 land past the edge; up to 1, a small island
-    rivers: 1, // 0, 1 or 2
-    ponds: 3,
-    hills: 0.3,
-    roads: 0.8,
-    buildings: 0.5,
+    biome: "desert",
+    squaresX: 4, // arena size in map squares, each way: 1 to 28
+    squaresY: 2,
+    boundary: "hills", // what stops you: sea, forest, hills, fence
+    rivers: 1,
+    lakes: 2,
     trees: 0.2,
-    rocks: 0.6,
-}),
+    roads: 1,
+    roadStyle: "ring", // branching, ring, spine
+}],
 ```
 
-The same seed and settings always give the same map. It's generated at load from a fixed palette
-(`BIOMES`, `PREFABS` and `BRIDGE`); nothing is baked to a file.
+The same seed and settings always give the same map. It's generated at load from a fixed palette (`BIOMES`,
+`PREFABS` and `BRIDGE`); nothing is baked to a file.
 
-What it does, in order: rivers, sea and ponds, heights, floors, bridges, buildings, roads (out of each
-door, joining up), scatter, then reachability. Anything it can't connect gets blocked (see below).
+What it does, in order: rivers, sea and lakes, heights, floors, bridges, main roads, buildings with their roads,
+ruins, the boundary, scatter, then reachability. Anything it can't connect gets blocked (see below).
 
-Preview it from above, without a browser. This draws it with the game's own minimap renderer and checks
-it with the game's real collision:
+**Boundaries.** Only `sea` makes an island. With the others, land runs on past the arena on all sides, scattered
+out to the edge of the margin, so the world looks like it carries on. The arena's edge is still what stops you,
+so each one puts something there: `forest` a thick belt of trees either side of it, `hills` ground rising away
+with a line of boulders on it, `fence` a fence `boundaryDepth` tiles in, with gaps where roads go through.
+
+**The game fades the world to black past the arena's edge**, over 6 tiles (`playAreaFog`). Real maps keep that. It
+would hide all of the above, so `GameClient` moves it out by `OPEN_WORLD_MARGIN` on dev maps. A map that ships
+needs its own flag for this. The minimap still only covers the arena, so it's black past the edge.
+
+Preview it from above, without a browser. This draws it with the game's own minimap renderer and checks it with
+the game's real collision. The minimap doesn't draw trees or rocks, so look at those in the browser.
 
 ```sh
 npx tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis
-npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=snow rivers=2 island=0.5
+npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=snow boundary=forest squaresX=3 rivers=2
 ```
+
+## Roads and buildings: the rules
+
+`check-maps.ts` fails on any of these, on the dev maps and on `SWEEP`, settings at their extremes:
+
+- **A road never goes through a building**, walls included, whichever was placed first. Buildings keep off road
+  tiles; roads and fords can't step within `RoadNetwork.wallGap` of a building (`offLimits`); smoothing that drifts
+  onto one is undone; and painting skips `Ground.footprint`.
+- **A building's door faces a road.** Main roads and bridges go down first, then buildings with roads, each turned
+  so a way out faces the nearest road, with its road running straight out of that door. One that can't reach the
+  roads goes somewhere else.
+- **A building without a road still faces the nearest road**: they're placed last, so they see all the roads. If
+  there are no roads at all they face the spawn. The `roads` setting is the share of buildings that get a road.
+- **A door's lead-in is its own.** Other roads join past it, not against the wall.
+
+## How big a map can be
+
+Numbers from a Node run, 400 enemies in the Sim, on this VM:
+
+| Squares a side | Tiles in the grid | Generate     | Start a run | Browser peak | Sim tick, 400 enemies |
+| -------------- | ----------------- | ------------ | ----------- | ------------ | --------------------- |
+| 4              | 147 k             | 1.1 s (Node) |             |              | 0.73 ms               |
+| 8              | 410 k             | 2.5 s        | 2.1 s       | 1.5 GB       | 0.76 ms               |
+| 16             | 1.3 M             | 7.1 s        | 3.1 s       | 1.9 GB       | 0.73 ms               |
+| 20             | 2 M               | 6.6 s        | 3.1 s       | 1.7 GB       |                       |
+| 24             | 2.8 M             | 8.4 s        | 5.0 s       | 2.2 GB       | 0.73 ms               |
+| 28             | 3.7 M             | 14.8 s       | 6.2 s       | 2.25 GB      | 0.75 ms               |
+
+Browser figures are with 2 workers, software rendering and no enemy or player models baked, of which about 1.4 GB
+is there before a map is built. Some of it is left from earlier runs in a session, so they're not exact.
+
+- **Cost per tick doesn't grow.** The flow field's a fixed 96 tile window round the player, enemies stay near the
+  player, and the renderer only loads the squares near the camera (4 to 8 of them). Frame rates were 8 to 18 here
+  at every size, which is software rendering, not the map.
+- **What grows is memory, with area**: the map grid while it's built on the main thread, and the collision scene
+  for a moment in one worker. In Node at 28 they each added about 400 MB.
+- **The hard limit is the world**: 28 is what fits at x 70 to 99, because `MapManager.MAX_MAP_X` is 100. Raising
+  that is one line, but past 28 this VM's 2.4 GB cap would stop it, so it hasn't been tried.
+- **Three things had to change to get here**: the collision build drew tile models it never read
+  (`buildScene`'s `tileModels`), the minimap kept a 205 MB canvas and asked for every square's image at once (big
+  arenas are coarser, and ask for what's near), and the preview drew every square (past 5 by 5 it draws the grid).
+- Over 8 squares a side the minimap's blurry, and blank away from where you've been.
 
 ## Writing a recipe by hand
 
@@ -237,11 +291,12 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
 - **Nothing outside the grid exists.** The game draws black past it. Keep a margin of a square of scenery
   round the arena. `margin: 1` does.
 - **The arena's edge is an invisible wall.** Water or trees just inside it hide that.
+- **The minimap doesn't draw trees or rocks**, so a preview shows neither.
 - **Enemies only path 48 tiles.** The flow field's window is 96 tiles across (`FLOW_FIELD_SIZE` in
   `Sim.ts`), so keep river crossings closer than that to wherever the fight is, or enemies on the far side
   stand at the bank.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
-  first. The generator keeps the middle of the arena clear for this.
+  first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
   `createRng` and `createNoise`. If you add a call to `rng()` early on, every later roll changes, and
   so does the map.

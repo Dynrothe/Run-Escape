@@ -722,6 +722,8 @@ export type MapDef = {
     fun?: FunMapDef;
     // For development: a run here leaves the save alone
     dev?: boolean;
+    // How the map's drawn, 1 as the game is and lower darker. Dev maps only.
+    brightness?: number;
 };
 
 // A fun map runs endless from the start: there's no final boss, and a new

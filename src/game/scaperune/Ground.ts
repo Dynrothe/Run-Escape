@@ -38,6 +38,8 @@ export class Ground {
     readonly sizeY: number;
     // Tiles nothing gets scattered on
     readonly reserved: Uint8Array;
+    // Tiles of buildings, walls included. Nothing else goes on these.
+    readonly footprint: Uint8Array;
 
     constructor(sizeX: number, sizeY: number) {
         this.sizeX = sizeX;
@@ -45,6 +47,7 @@ export class Ground {
         this.grid = createTileGrid(sizeX, sizeY);
         this.level0 = this.grid.levels[0];
         this.reserved = new Uint8Array(sizeX * sizeY);
+        this.footprint = new Uint8Array(sizeX * sizeY);
     }
 
     inside(x: number, y: number): boolean {
@@ -139,6 +142,11 @@ export class Ground {
                 flags[i] &= ~TILE_BLOCKED;
             }
         }
+    }
+
+    // Whether a tile's blocked water, as paintField leaves it
+    isWaterTile(x: number, y: number): boolean {
+        return (this.level0.flags[this.tile(x, y)] & TILE_BLOCKED) !== 0;
     }
 
     // Whether a loc of this many tiles fits with nothing else there
@@ -237,6 +245,9 @@ export class Ground {
                     if (!inside || inside[i]) {
                         this.reserved[j] = 1;
                     }
+                    if (inside && inside[i]) {
+                        this.footprint[j] = 1;
+                    }
                     const take =
                         typeof options.floor === "function" && level === 0
                             ? options.floor(from.overlays[i])
@@ -279,6 +290,10 @@ export class Ground {
                 continue;
             }
             this.grid.locs.push({ ...loc, x: loc.x + x, y: loc.y + y });
+            if (inside && loc.level === 0 && (loc.type <= 3 || loc.type === 9)) {
+                this.footprint[this.tile(loc.x + x, loc.y + y)] = 1;
+                this.reserved[this.tile(loc.x + x, loc.y + y)] = 1;
+            }
         }
     }
 }

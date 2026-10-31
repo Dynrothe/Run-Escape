@@ -137,8 +137,16 @@ export function readTerrain(
 
 // Writes one map square of a grid, the one starting at (offsetX, offsetY)
 export function writeTerrain(grid: TileGrid, offsetX: number, offsetY: number): Int8Array {
-    const out: number[] = [];
-    const short = (v: number) => out.push(v >> 8, v & 0xff);
+    // At most an overlay, flags, an underlay and a height, a tile
+    const bytes = new Int8Array(LEVELS * MAP_SQUARE_SIZE * MAP_SQUARE_SIZE * 11);
+    let size = 0;
+    const byte = (v: number) => {
+        bytes[size++] = v;
+    };
+    const short = (v: number) => {
+        byte(v >> 8);
+        byte(v & 0xff);
+    };
     const cornersX = grid.sizeX + 1;
     for (let level = 0; level < LEVELS; level++) {
         const tiles = grid.levels[level];
@@ -167,12 +175,12 @@ export function writeTerrain(grid: TileGrid, offsetX: number, offsetY: number): 
                 } else {
                     short(1);
                     // 1 would read as 0
-                    out.push(height === 1 ? 2 : height);
+                    byte(height === 1 ? 2 : height);
                 }
             }
         }
     }
-    return Int8Array.from(out);
+    return bytes.slice(0, size);
 }
 
 // A map square's locs, at (offsetX, offsetY) in the grid. Those off the grid
@@ -221,11 +229,17 @@ function writeSmart3(out: number[], v: number): void {
     writeSmart(out, v);
 }
 
-// Writes the locs on one map square of a grid
-export function writeLocs(grid: TileGrid, offsetX: number, offsetY: number): Int8Array {
+// Writes the locs on one map square of a grid. A big map can pass only that square's
+// locs, or going through all of them for every square takes a while.
+export function writeLocs(
+    grid: TileGrid,
+    offsetX: number,
+    offsetY: number,
+    locsOnSquare: PlacedLoc[] = grid.locs,
+): Int8Array {
     const pack = (loc: PlacedLoc) =>
         (loc.level << 12) | ((loc.x - offsetX) << 6) | (loc.y - offsetY);
-    const locs = grid.locs
+    const locs = locsOnSquare
         .filter(
             (loc) =>
                 loc.x >= offsetX &&
