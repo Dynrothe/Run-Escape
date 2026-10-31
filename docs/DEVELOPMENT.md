@@ -94,13 +94,19 @@ location /game/coop {
 }
 ```
 
-The relay limits each address (see below), so it has to know players' real ones behind a proxy.
-It takes the word of a proxy on the same machine or a private network (the last address in its
-`X-Forwarded-For`, which the proxy adds itself; Caddy does by default, nginx with the line above),
-and of Cloudflare (`CF-Connecting-IP`, believed only from Cloudflare's own addresses). Anyone else's
-headers are ignored, so they can't be made up to get round the limits. `TRUSTED_PROXIES`
-(`"10.1.2.3,10.9.0.0/16"`) adds proxies elsewhere, and `CLOUDFLARE_IPS` replaces the list of
-Cloudflare's addresses in `server/client-ip.mjs` if it changes.
+The relay limits each address (see below), so behind a proxy, where every player looks like the
+proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve:multiplayer --`):
+
+| `PROXY`        | For                                                                            | Whose word it takes for a player's address                                                                                       |
+| -------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| unset (`none`) | nothing in front, or a LAN                                                     | nobody's: the connection's own                                                                                                   |
+| `local`        | Caddy, nginx or a container in front, on the same machine or a private network | that proxy's: the last address in its `X-Forwarded-For`, which it adds itself (Caddy does by default, nginx with the line above) |
+| `cloudflare`   | Cloudflare in front, with or without a local proxy behind it                   | Cloudflare's `CF-Connecting-IP`, only from Cloudflare's own addresses (and a local proxy's, as `local`)                          |
+
+Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
+proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)
+adds proxies elsewhere, and `CLOUDFLARE_IPS` replaces the list of Cloudflare's addresses in
+`server/client-ip.mjs` if it changes.
 
 Its limits, at the top of `server/coop-relay.mjs`:
 

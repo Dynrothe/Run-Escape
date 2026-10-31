@@ -1,13 +1,63 @@
-import { addressList, clientAddress, plainAddress } from "./client-ip.mjs";
+import { addressList, clientAddress, plainAddress, proxyMode, viaProxy } from "./client-ip.mjs";
 
 const PROXIES = addressList(["127.0.0.0/8", "10.0.0.0/8", "::1/128"]);
 const CLOUDFLARE = addressList(["173.245.48.0/20", "2606:4700::/32"]);
 
-function from(remoteAddress: string, headers: Record<string, string> = {}): string {
-    return clientAddress({ headers }, { remoteAddress }, PROXIES, CLOUDFLARE);
+function from(
+    remoteAddress: string,
+    headers: Record<string, string> = {},
+    mode = "cloudflare",
+): string {
+    return clientAddress({ headers }, { remoteAddress }, mode, PROXIES, CLOUDFLARE);
 }
 
-describe("client addresses", () => {
+describe("proxy setting", () => {
+    it("is none unless it's set", () => {
+        expect(proxyMode({}, [])).toBe("none");
+        expect(proxyMode({ PROXY: "Local" }, [])).toBe("local");
+        expect(proxyMode({ PROXY: "local" }, ["--proxy=cloudflare"])).toBe("cloudflare");
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        expect(proxyMode({ PROXY: "nginx" }, [])).toBe("none");
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it("trusts no header with no proxy set", () => {
+        const headers = { "x-forwarded-for": "198.51.100.7", "cf-connecting-ip": "1.2.3.4" };
+        expect(from("127.0.0.1", headers, "none")).toBe("127.0.0.1");
+        expect(from("173.245.48.10", headers, "none")).toBe("173.245.48.10");
+    });
+
+    it("trusts only the local proxy's word with local", () => {
+        expect(from("127.0.0.1", { "x-forwarded-for": "198.51.100.7" }, "local")).toBe(
+            "198.51.100.7",
+        );
+        // Cloudflare's header counts for nothing without cloudflare
+        expect(from("173.245.48.10", { "cf-connecting-ip": "1.2.3.4" }, "local")).toBe(
+            "173.245.48.10",
+        );
+    });
+
+    it("notices players coming through a proxy, for a warning when none is set", () => {
+        expect(
+            viaProxy(
+                { headers: { "x-forwarded-for": "1.2.3.4" } },
+                { remoteAddress: "127.0.0.1" },
+                PROXIES,
+            ),
+        ).toBe(true);
+        expect(viaProxy({ headers: {} }, { remoteAddress: "127.0.0.1" }, PROXIES)).toBe(false);
+        expect(
+            viaProxy(
+                { headers: { "x-forwarded-for": "1.2.3.4" } },
+                { remoteAddress: "203.0.113.9" },
+                PROXIES,
+            ),
+        ).toBe(false);
+    });
+});
+
+describe("client addresses, with Cloudflare set", () => {
     it("are the connection's own with no proxy in front", () => {
         expect(from("203.0.113.9")).toBe("203.0.113.9");
         expect(from("::ffff:203.0.113.9")).toBe("203.0.113.9");

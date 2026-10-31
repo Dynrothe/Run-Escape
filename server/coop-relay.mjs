@@ -4,6 +4,7 @@
 // room's empty. Plain Node with no packages, so it runs anywhere Node 20 does:
 //
 //   node server/coop-relay.mjs            # on port 8787, or PORT
+//   PROXY=cloudflare node server/coop-relay.mjs    # behind a proxy (client-ip.mjs)
 //
 // The dev server and `vite preview` run one too, at /coop (vite.config.ts),
 // and so does server/serve.mjs, which serves a build along with it. A plain
@@ -14,7 +15,7 @@ import { createHash, randomInt } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
-import { clientAddress } from "./client-ip.mjs";
+import { clientAddress, proxyMode, viaProxy } from "./client-ip.mjs";
 import { DEFAULT_NAME, playerName } from "./names.mjs";
 
 export const RELAY_PATH = "/coop";
@@ -277,7 +278,10 @@ export function createRelay(limits = {}) {
         roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
         createsPerMinute = MAX_CREATES_PER_MINUTE,
         idleMs = IDLE_MS,
+        // The proxy in front (see client-ip.mjs), as the server's set it
+        proxy = proxyMode(),
     } = limits;
+    let warnedProxy = false;
     const rooms = new Map();
     const clients = new Set();
     let nextId = 1;
@@ -645,7 +649,14 @@ export function createRelay(limits = {}) {
             socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
             return;
         }
-        const address = clientAddress(req, socket);
+        const address = clientAddress(req, socket, proxy);
+        if (proxy === "none" && !warnedProxy && viaProxy(req, socket)) {
+            warnedProxy = true;
+            console.warn(
+                "Co-op players are coming through a proxy, so they all look like it to the " +
+                    "relay's limits. Set PROXY=local (or PROXY=cloudflare behind Cloudflare).",
+            );
+        }
         const connections = connectionsFrom.get(address) ?? 0;
         if (connections >= connectionsPerAddress) {
             socket.end("HTTP/1.1 429 Too Many Requests\r\n\r\n");

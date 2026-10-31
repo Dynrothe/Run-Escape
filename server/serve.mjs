@@ -4,6 +4,8 @@
 //
 //   npm run serve                          # single player, on port 8080 (or PORT)
 //   npm run serve:multiplayer              # with co-op too (or MULTIPLAYER=on)
+//   ... -- --proxy=cloudflare              # behind a proxy (or PROXY=local|cloudflare;
+//                                          # see client-ip.mjs)
 //
 // Without a slim cache in the build it serves the full one from caches/, like
 // `vite preview` does.
@@ -16,6 +18,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { proxyMode } from "./client-ip.mjs";
 import { RELAY_PATH, createRelay, isMultiplayerOn } from "./coop-relay.mjs";
 
 const REPO = resolve(fileURLToPath(import.meta.url), "../..");
@@ -138,7 +141,7 @@ server.listen(PORT, HOST, () => {
     console.log(`Cache from ${CACHES}`);
     console.log(
         MULTIPLAYER
-            ? `Multiplayer on: co-op relay at ${RELAY_PATH}`
+            ? `Multiplayer on: co-op relay at ${RELAY_PATH}, proxy in front: ${proxyMode()}`
             : "Multiplayer off (npm run serve:multiplayer, or MULTIPLAYER=on, turns it on)",
     );
 });
