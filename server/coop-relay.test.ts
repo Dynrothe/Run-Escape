@@ -62,14 +62,14 @@ class TestClient {
 }
 
 describe("multiplayer toggle", () => {
-    it("is off unless it's turned on", () => {
-        expect(isMultiplayerOn({}, [])).toBe(false);
-        expect(isMultiplayerOn({ MULTIPLAYER: "off" }, [])).toBe(false);
+    it("is on unless it's turned off", () => {
+        expect(isMultiplayerOn({}, [])).toBe(true);
         expect(isMultiplayerOn({ MULTIPLAYER: "on" }, [])).toBe(true);
-        expect(isMultiplayerOn({ MULTIPLAYER: "1" }, [])).toBe(true);
-        expect(isMultiplayerOn({ npm_lifecycle_event: "serve:multiplayer" }, [])).toBe(true);
-        expect(isMultiplayerOn({ npm_lifecycle_event: "serve" }, [])).toBe(false);
-        expect(isMultiplayerOn({}, ["node", "serve.mjs", "--multiplayer"])).toBe(true);
+        expect(isMultiplayerOn({ MULTIPLAYER: "off" }, [])).toBe(false);
+        expect(isMultiplayerOn({ MULTIPLAYER: "0" }, [])).toBe(false);
+        expect(isMultiplayerOn({ npm_lifecycle_event: "serve" }, [])).toBe(true);
+        expect(isMultiplayerOn({ npm_lifecycle_event: "serve:singleplayer" }, [])).toBe(false);
+        expect(isMultiplayerOn({}, ["node", "serve.mjs", "--no-multiplayer"])).toBe(false);
     });
 
     it("keeps rooms to players with their map unless MULTIPLAYER_ANY_MAP is on", () => {

@@ -2,8 +2,8 @@
 // with everything it needs, co-op's relay included, from one Node process
 // with no packages:
 //
-//   npm run serve                          # single player, on port 8080 (or PORT)
-//   npm run serve:multiplayer              # with co-op too (or MULTIPLAYER=on)
+//   npm run serve                          # on port 8080 (or PORT), co-op included
+//   npm run serve:singleplayer             # without co-op (or MULTIPLAYER=off)
 //   ... -- --proxy=cloudflare              # behind a proxy (or PROXY=local|cloudflare;
 //                                          # see client-ip.mjs)
 //   ... -- --any-map                       # rooms take players without their map
@@ -147,6 +147,6 @@ server.listen(PORT, HOST, () => {
                   (isAnyMapOn()
                       ? "rooms take anyone (MULTIPLAYER_ANY_MAP)"
                       : "rooms take only players with their map unlocked")
-            : "Multiplayer off (npm run serve:multiplayer, or MULTIPLAYER=on, turns it on)",
+            : "Multiplayer off (MULTIPLAYER=off or serve:singleplayer): the game hides co-op",
     );
 });

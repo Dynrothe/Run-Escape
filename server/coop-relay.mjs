@@ -20,14 +20,14 @@ import { DEFAULT_NAME, playerName } from "./names.mjs";
 
 export const RELAY_PATH = "/coop";
 
-// Whether multiplayer's been turned on for a server that has the relay in it
-// (serve.mjs, and the dev and preview servers): MULTIPLAYER=on, or the
-// :multiplayer npm scripts, or --multiplayer. Off, the game hides it.
+// Whether a server that has the relay in it (serve.mjs, and the dev and
+// preview servers) runs it. On unless it's turned off: MULTIPLAYER=off, the
+// :singleplayer npm scripts, or --no-multiplayer. Off, the game hides co-op.
 export function isMultiplayerOn(env = process.env, argv = process.argv) {
-    return (
-        ["on", "1", "true"].includes((env.MULTIPLAYER ?? "").toLowerCase()) ||
-        (env.npm_lifecycle_event ?? "").endsWith(":multiplayer") ||
-        argv.includes("--multiplayer")
+    return !(
+        ["off", "0", "false", "no"].includes((env.MULTIPLAYER ?? "").trim().toLowerCase()) ||
+        (env.npm_lifecycle_event ?? "").endsWith(":singleplayer") ||
+        argv.includes("--no-multiplayer")
     );
 }
 

@@ -106,7 +106,7 @@ reads, about 26 MB instead of 227 MB). The page has to be served with
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
 HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
 examples. `npm run serve` serves the build with those headers from one Node process with no
-packages, and `npm run serve:multiplayer` runs co-op's relay in it too. The game only offers
+packages, co-op's relay included (`npm run serve:singleplayer` leaves it out). The game only offers
 Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
 [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 

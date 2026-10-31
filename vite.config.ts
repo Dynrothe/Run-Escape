@@ -105,8 +105,8 @@ function serveCachesPlugin(): Plugin {
 }
 
 // Runs the co-op relay (server/coop-relay.mjs) at /coop on the dev server and
-// `vite preview` when multiplayer's turned on (npm run start:multiplayer, or
-// MULTIPLAYER=on). Off, the game hides co-op.
+// `vite preview`, unless multiplayer's turned off (npm run start:singleplayer,
+// or MULTIPLAYER=off). Off, the game hides co-op.
 function coopRelayPlugin(): Plugin {
     const start = (httpServer: HttpServer | null, middlewares: Connect.Server) => {
         if (!httpServer || !isMultiplayerOn()) {

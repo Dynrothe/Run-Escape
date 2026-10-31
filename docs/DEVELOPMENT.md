@@ -59,9 +59,10 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 ### Co-op relay
 
 The simplest way to host everything: `npm run serve` (`node server/serve.mjs`, no packages) serves
-`dist/` with the headers above on `PORT` (8080), and `npm run serve:multiplayer` (or
-`MULTIPLAYER=on npm run serve`) runs the co-op relay in the same process. Multiplayer is off unless
-it's turned on, and the game only offers it when a relay answers. Run `npm run build` first; with no
+`dist/` with the headers above on `PORT` (8080), and runs the co-op relay in the same process.
+Multiplayer is on unless it's turned off (`npm run serve:singleplayer`, `MULTIPLAYER=off` or
+`--no-multiplayer`), and either way the game only offers it when a relay answers: it asks once,
+in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds. Run `npm run build` first; with no
 slim cache in `dist/caches` it serves the full one from `caches/`, so it also works for trying a
 build locally (http://localhost:8080). Put something that does HTTPS in front of it, like Caddy
 (`caddy reverse-proxy --from game.example.com --to localhost:8080`).
@@ -95,7 +96,8 @@ location /game/coop {
 ```
 
 The relay limits each address (see below), so behind a proxy, where every player looks like the
-proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve:multiplayer --`):
+proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve --`). It's off
+(`none`) unless it's set:
 
 | `PROXY`        | For                                                                            | Whose word it takes for a player's address                                                                                       |
 | -------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -121,8 +123,8 @@ Its limits, at the top of `server/coop-relay.mjs`:
 | A message                     | 256 KB, and 400 a second from one connection                                |
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
-else. `npm run start:multiplayer` (and `npm run preview` with `MULTIPLAYER=on`) runs a relay of its
-own at `/coop`.
+else. `npm start` and `npm run preview` run a relay of their own at `/coop`
+(`npm run start:singleplayer`, or `MULTIPLAYER=off`, without).
 
 ## Code
 
@@ -293,7 +295,7 @@ The open rooms list comes a page at a time (8 rooms, the fullest first, then the
 longest), worked out once after each change rather than for every request; the menu asks for its
 page every 5 seconds, and again when joining fails (a room that filled up or started meanwhile).
 
-To try it locally, `npm run start:multiplayer` and open the game in two windows (one private, for a
+To try it locally, `npm start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other.
 
 ### Touch screens
