@@ -20,6 +20,8 @@ export type StampOptions = {
     anchor?: number;
     // Leaves a loc out (doors, so you can walk in)
     skipLoc?: (loc: PlacedLoc) => boolean;
+    // Leaves the ground's height alone. The generator does this, and pins it in Terrain.
+    keepHeights?: boolean;
     // Keeps our underlays under the prefab's overlays, for one from other ground: a
     // Lumbridge bridge's grass would show as a green halo in the snow
     keepUnderlays?: boolean;
@@ -108,8 +110,14 @@ export class Ground {
     }
 
     // Paints an overlay on the tiles of a mask, for hand-made maps. Its corners
-    // are smoothed, so a mask of whole tiles gets edges like a real shore's.
-    paintOverlay(mask: Uint8Array, overlay: number, blocked: boolean): Uint8Array {
+    // are smoothed, so a mask of whole tiles gets edges like a real shore's. skip leaves
+    // tiles alone.
+    paintOverlay(
+        mask: Uint8Array,
+        overlay: number,
+        blocked: boolean,
+        skip?: Uint8Array,
+    ): Uint8Array {
         const cornersX = this.sizeX + 1;
         const field = new Float32Array(cornersX * (this.sizeY + 1));
         for (let y = 0; y <= this.sizeY; y++) {
@@ -128,7 +136,8 @@ export class Ground {
                 field[x + y * cornersX] = count / 4 - 0.4;
             }
         }
-        return this.paintField(smoothField(field, cornersX, this.sizeY + 1, 1), overlay, blocked);
+        const smoothed = smoothField(field, cornersX, this.sizeY + 1, 1);
+        return this.paintField(smoothed, overlay, blocked, skip);
     }
 
     // Takes an overlay off tiles, and what blocked them
@@ -207,13 +216,13 @@ export class Ground {
         const prefabEdge = options.anchor ?? edgeSum / edgeCount;
 
         // Heights: the corners under it, then a ring easing back to the ground
-        for (let cy = 0; cy <= sizeY; cy++) {
+        for (let cy = 0; cy <= sizeY && !options.keepHeights; cy++) {
             for (let cx = 0; cx <= sizeX; cx++) {
                 const own = from0.heights[cx + cy * (sizeX + 1)];
                 this.setHeight(x + cx, y + cy, options.flatten ? base : base + own - prefabEdge);
             }
         }
-        const feather = options.feather;
+        const feather = options.keepHeights ? 0 : options.feather;
         for (let cy = -feather; cy <= sizeY + feather; cy++) {
             for (let cx = -feather; cx <= sizeX + feather; cx++) {
                 const nearX = Math.min(Math.max(cx, 0), sizeX);

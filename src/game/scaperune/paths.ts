@@ -18,12 +18,15 @@ export class PathFinder {
 
     // The cheapest path from a tile to any tile a test accepts (Dijkstra, eight ways
     // but never cutting a corner past a blocked tile). cost says what stepping onto a
-    // tile costs, Infinity if it can't be stepped on. Returns the tiles walked by index,
-    // the end tile first, or nothing if there's no way.
+    // tile costs, Infinity if it can't be stepped on, and climb (if given) what a step
+    // from one tile to the next multiplies that by, for when which way you go matters: a
+    // slope that's cheap to walk across and dear to walk up. Returns the tiles walked by
+    // index, the end tile first, or nothing if there's no way.
     find(
         start: { x: number; y: number },
         cost: (x: number, y: number) => number,
         isEnd: (i: number) => boolean,
+        climb?: (from: number, to: number) => number,
     ): number[] {
         const { sizeX, sizeY, best, from, seen } = this;
         const stamp = ++this.stamp;
@@ -97,9 +100,12 @@ export class PathFinder {
                     ) {
                         continue;
                     }
-                    const step = cost(nx, ny) * (dx !== 0 && dy !== 0 ? 1.41 : 1);
-                    const total = priority + step;
                     const j = nx + ny * sizeX;
+                    const step =
+                        cost(nx, ny) *
+                        (dx !== 0 && dy !== 0 ? 1.41 : 1) *
+                        (climb ? climb(i, j) : 1);
+                    const total = priority + step;
                     if (total !== Infinity && (seen[j] !== stamp || total < best[j])) {
                         seen[j] = stamp;
                         best[j] = total;
