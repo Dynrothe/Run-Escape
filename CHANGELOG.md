@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Fixed
+
+- The Mysterious Old Man's and Quiz Master's screens have room between their choices and buttons.
+- Random event visitors come and go in a puff of smoke, not a flash of purple on the ground.
+
 ## 0.19.1 - 2026-10-31
 
 ### Added

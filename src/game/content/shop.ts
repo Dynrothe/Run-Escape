@@ -177,7 +177,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
     {
         id: "runecraft",
         name: "Runecraft",
-        description: "Power-ups drop 15% more often",
+        description: "+15% power-up drops",
         stat: "powerUpRate",
         perRank: 0.15,
         maxRank: 3,

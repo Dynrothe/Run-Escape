@@ -123,6 +123,11 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
   console, takes a moment to show up.
 - Headless Chromium needs `--use-angle=swiftshader --enable-unsafe-swiftshader`, and a persistent
   profile, or the cache won't fit in its storage quota. The cache can take a while to load.
+- A small window isn't a phone: `Mobile.css` needs `(pointer: coarse)` too. Over DevTools,
+  `Emulation.setTouchEmulationEnabled` only lasts as long as the session that set it, so keep that
+  session open while you test.
+- The desktop app's browser pane can stop drawing while it's hidden, and the game then sits at
+  "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,

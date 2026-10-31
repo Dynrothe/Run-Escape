@@ -660,7 +660,8 @@
         overflow-y: auto;
     }
 
-    .ui-reroll {
+    .ui-reroll,
+    .ui-event-actions {
         margin-top: 4px;
     }
 
