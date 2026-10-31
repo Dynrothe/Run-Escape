@@ -7,7 +7,14 @@ import { diffStats } from "../content/stats";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { BuffView, ChestView, GearSlotView, InventorySlotView, ItemView } from "./GameStore";
+import {
+    BuffView,
+    ChestView,
+    EventView,
+    GearSlotView,
+    InventorySlotView,
+    ItemView,
+} from "./GameStore";
 
 // Items as the UI shows them
 
@@ -145,6 +152,36 @@ export function getInventoryViews(sim: Sim): InventorySlotView[] {
     );
 }
 
+// What a random event's visitor has on offer, for the screen they open
+export function getEventView(sim: Sim): EventView | undefined {
+    const offer = sim.offer;
+    const effect = offer?.def.effect;
+    if (!offer || !effect || (effect.kind !== "shop" && effect.kind !== "quiz")) {
+        return undefined;
+    }
+    return {
+        uid: offer.uid,
+        name: offer.def.name,
+        speech: offer.def.speech ?? "",
+        leaveLabel: effect.leaveLabel,
+        options: offer.options.map((option) => {
+            if (option.kind === "answer") {
+                const item = getItem(option.itemId);
+                return { title: item.name, iconObjId: item.objId, enabled: true };
+            }
+            const powerUp = getPowerUp(option.powerUpId);
+            return {
+                title: powerUp.name,
+                text: powerUp.description,
+                iconObjId: powerUp.objId,
+                price: option.price,
+                sold: option.sold,
+                enabled: !option.sold && sim.coins >= option.price,
+            };
+        }),
+    };
+}
+
 export function getBuffViews(sim: Sim): BuffView[] {
     const timer = (startTick: number, endTick: number) => {
         const ticksLeft = Math.max(0, endTick - sim.tick);
@@ -154,11 +191,11 @@ export function getBuffViews(sim: Sim): BuffView[] {
         };
     };
     const buffs: BuffView[] = sim.buffs.map((buff) => {
-        const item = getItem(buff.itemId);
+        const { name, objId } = buff.look ?? getItem(buff.itemId);
         return {
             id: buff.itemId,
-            name: item.name,
-            objId: item.objId,
+            name,
+            objId,
             ...timer(buff.startTick, buff.endTick),
             harmful: false,
         };

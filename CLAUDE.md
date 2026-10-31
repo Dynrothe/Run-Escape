@@ -29,6 +29,7 @@ go stale. Add anything that cost you time to work out.
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
 | Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
+| Random events: who turns up, what they do             | `src/game/content/randomEvents.ts`      |
 | Save data and migrations                              | `src/game/core/save.ts`                 |
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |

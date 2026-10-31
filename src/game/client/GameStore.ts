@@ -17,7 +17,7 @@ export type Screen =
     | "collectionLog"
     | "run";
 
-export type RunOverlay = "none" | "levelUp" | "chest" | "paused" | "dead" | "victory";
+export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
 
 export type SlotView = {
     id: string;
@@ -90,6 +90,23 @@ export type ChestView = {
     recommended: ChestAction;
     // Caskets waiting after this one
     queued: number;
+};
+
+// A random event's visitor with something on offer, the run waiting meanwhile
+export type EventView = {
+    uid: number;
+    name: string;
+    speech: string;
+    leaveLabel: string;
+    options: {
+        title: string;
+        text?: string;
+        iconObjId: number;
+        // For sale, and sold already
+        price?: number;
+        sold?: boolean;
+        enabled: boolean;
+    }[];
 };
 
 export type HudView = {
@@ -190,6 +207,7 @@ export type UiSnapshot = {
     overlay: RunOverlay;
     choices: ChoiceView[];
     chest?: ChestView;
+    event?: EventView;
     // unlockedMap: the name of the map this run's win opened up;
     // unlockedCharacters / unlockedItems: the names of the adventurers and
     // items it brought in; endlessRecord: an endless run that went further
