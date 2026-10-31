@@ -1,5 +1,5 @@
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
-import { Sim } from "../core/Sim";
+import { FREEZE_SPOTANIM, Sim, yawFromVector } from "../core/Sim";
 import {
     BossQuarters,
     BossWindup,
@@ -21,7 +21,17 @@ const BEAM_MS = 700;
 const VIEW_REACH = 44;
 // A long edge is split into pieces this long, to lie on the ground
 const GROUND_STEP = 3;
-const SPRITE_SIZE = 64;
+const BULLET_HEIGHT = 0.9;
+// Her flowers are all that says which quarter's safe, so they stand out
+const FLOWER_SCALE = 1.7;
+// Tiles from her that petals start gathering, and end up; radians a tick they turn
+const GATHER_FAR = 7;
+const GATHER_NEAR = 2;
+const GATHER_SPIN = 0.05;
+// A spore that's been stepped on, about to go
+const FUSE_FLASH = 0.7;
+// What she throws at the player, shown over them until it bursts, in tiles
+const PARASITE_HEIGHT = 2;
 const DARK = 0.78;
 const FADE_TICKS = 40;
 const LANE_CHEVRON_GAP = 4;
@@ -38,7 +48,6 @@ function clamp01(t: number): number {
 
 export class BossFightView {
     private beams: { x: number; y: number; toX: number; toY: number; start: number }[] = [];
-    private readonly sprites = new Map<string, HTMLCanvasElement>();
     private readonly a: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly b: ScreenPoint = { x: 0, y: 0, visible: false };
 
@@ -61,31 +70,148 @@ export class BossFightView {
 
     // ---- In the 3D view ----
 
-    submitActors(actors: ActorRenderer, sim: Sim): void {
+    submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
         const quarters = sim.quarters;
         if (quarters) {
             this.drawFlowers(actors, sim, quarters);
         }
+        this.drawBullets(actors, sim, alpha);
+        this.drawGathering(actors, sim);
+        this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
-            const locId = hazard.attack.ground?.locId;
-            const spotAnim = hazard.attack.ground?.spotAnim;
-            const model = this.assets.get(
-                locId !== undefined ? "loc:" + locId : "spot:" + spotAnim,
-            );
-            if (!model) {
-                continue;
-            }
-            const anim = model.anims[0];
-            const frame = anim.getFrame(sim.tick - hazard.startTick);
+            this.drawHazard(actors, sim, hazard);
+        }
+    }
+
+    // Her real portals and spores, at the size of what they do: nothing else marks
+    // them, and a real portal's fill is its countdown
+    private drawHazard(actors: ActorRenderer, sim: Sim, hazard: GroundHazard): void {
+        const ground = hazard.attack.ground!;
+        const model = this.assets.get(
+            ground.locId !== undefined ? "loc:" + ground.locId : "spot:" + ground.spotAnim,
+        );
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const frame = anim.getFrame(sim.tick - hazard.startTick, true);
+        const lit = hazard.fuseTick !== -1 ? FUSE_FLASH : 0;
+        const fit = ground.fit ?? 1;
+        actors.draw(
+            model,
+            anim,
+            frame,
+            hazard.x,
+            this.ground(sim, hazard.x, hazard.y),
+            hazard.y,
+            0,
+            { scale: (fit * hazard.radius * 128) / Math.max(1, model.radius), flash: lit },
+        );
+        const middle = this.assets.get("spot:" + ground.middleSpotAnim);
+        if (middle) {
+            const arm = middle.anims[0];
             actors.draw(
-                model,
-                anim,
-                frame,
+                middle,
+                arm,
+                arm.getFrame(sim.tick - hazard.startTick, false),
                 hazard.x,
                 this.ground(sim, hazard.x, hazard.y),
                 hazard.y,
                 0,
             );
+        }
+    }
+
+    // Her real shots, each pointing the way it's going. Drawn at their hit size.
+    private drawBullets(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const bullets = sim.bullets;
+        const { prevX, prevY, x, y, vx, vy, radius, source, startTick, order } = bullets;
+        const tick = sim.tick;
+        const options = { scale: 1, flash: 0 };
+        for (let i = 0; i < bullets.count; i++) {
+            const slot = order[i];
+            const attack = sim.bulletSources[source[slot]].attack;
+            const model = this.assets.get("spot:" + attack.spotAnim);
+            if (!model) {
+                continue;
+            }
+            const wx = lerp(prevX[slot], x[slot], alpha);
+            const wy = lerp(prevY[slot], y[slot], alpha);
+            const anim = model.anims[0];
+            const pattern = attack.pattern!;
+            options.scale =
+                pattern.scale ?? Math.max(1, (radius[slot] * 128) / Math.max(1, model.radius));
+            options.flash = pattern.bright ?? 0;
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(tick - startTick[slot]),
+                wx,
+                this.ground(sim, wx, wy) - BULLET_HEIGHT,
+                wy,
+                yawFromVector(vx[slot], vy[slot]),
+                options,
+            );
+        }
+    }
+
+    // Her petals drawing in on her before a spiral or a ring
+    private drawGathering(actors: ActorRenderer, sim: Sim): void {
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const attack = windup?.attack;
+            if (!windup || !attack?.pattern || enemy.dead || attack.pattern.shape === "spread") {
+                continue;
+            }
+            const model = this.assets.get("spot:" + attack.spotAnim);
+            if (!model) {
+                continue;
+            }
+            const t = clamp01(
+                (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick),
+            );
+            const anim = model.anims[0];
+            const frame = anim.getFrame(sim.tick);
+            const petals = attack.pattern.count * 3;
+            const reach = lerp(GATHER_FAR, GATHER_NEAR, t);
+            const options = { scale: (attack.pattern.radius * 128) / Math.max(1, model.radius) };
+            for (let i = 0; i < petals; i++) {
+                const angle = (i / petals) * Math.PI * 2 + sim.tick * GATHER_SPIN;
+                const wx = enemy.x + Math.cos(angle) * reach;
+                const wy = enemy.y + Math.sin(angle) * reach;
+                actors.draw(
+                    model,
+                    anim,
+                    frame,
+                    wx,
+                    this.ground(sim, wx, wy) - BULLET_HEIGHT,
+                    wy,
+                    yawFromVector(-Math.sin(angle), Math.cos(angle)),
+                    options,
+                );
+            }
+        }
+    }
+
+    // What's on the player: the ice of being held, or the parasite in them
+    private drawPlayerMarks(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const player = sim.player;
+        const x = lerp(player.prevX, player.x, alpha);
+        const y = lerp(player.prevY, player.y, alpha);
+        const height = this.ground(sim, x, y);
+        const mark = (key: string, up: number, loop: boolean, start: number) => {
+            const model = this.assets.get(key);
+            if (model) {
+                const anim = model.anims[0];
+                const frame = anim.getFrame(sim.tick - start, loop);
+                actors.draw(model, anim, frame, x, height - up, y, 0);
+            }
+        };
+        if (sim.hold) {
+            mark("spot:" + FREEZE_SPOTANIM, 0, true, 0);
+        }
+        if (sim.parasite) {
+            mark("spot:" + sim.parasite.attack.spotAnim, PARASITE_HEIGHT, true, 0);
         }
     }
 
@@ -105,15 +231,19 @@ export class BossFightView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(sim.tick - quarters.startTick);
-            for (let along = def.spacing; along <= VIEW_REACH; along += def.spacing) {
+            for (let along = 0; along <= VIEW_REACH; along += def.spacing) {
                 const x = cx + dx * along;
                 const y = cy + dy * along;
                 if (x < arena.minX || x > arena.maxX || y < arena.minY || y > arena.maxY) {
                     return;
                 }
-                actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0);
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, options);
             }
         };
+        const growth = clamp01(
+            (sim.tick - quarters.startTick) / Math.max(1, quarters.hurtTick - quarters.startTick),
+        );
+        const options = { scale: lerp(FLOWER_SCALE * 0.4, FLOWER_SCALE, growth) };
         line(1, 0, east);
         line(-1, 0, !east);
         line(0, 1, north);
@@ -124,13 +254,6 @@ export class BossFightView {
 
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawSquareEdge(overlay, sim, scale);
-        const quarters = sim.quarters;
-        if (quarters) {
-            this.drawQuarters(overlay, sim, quarters, alpha, scale);
-        }
-        for (const hazard of sim.hazards) {
-            this.drawHazard(overlay, sim, hazard, alpha);
-        }
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
             if (!state || enemy.dead) {
@@ -147,7 +270,7 @@ export class BossFightView {
                 } else if (windup.attack.cone !== undefined) {
                     this.drawCone(overlay, sim, enemy, windup, t, scale);
                 } else if (windup.attack.pattern) {
-                    this.drawGathering(overlay, sim, enemy, windup, t, now, scale);
+                    this.drawAim(overlay, sim, enemy, windup, t, scale);
                 }
             }
             const surge = state.surge;
@@ -155,7 +278,6 @@ export class BossFightView {
                 this.drawLane(overlay, sim, surge.lane, 1, now, scale);
             }
         }
-        this.drawPlayerMarks(overlay, sim, alpha, now, scale);
     }
 
     // Traces a shape on the ground, each edge split up to follow it. Corners
@@ -345,220 +467,43 @@ export class BossFightView {
         ctx.stroke();
     }
 
-    // Petals drawing in on her, or a fan's lines showing where it's aimed
-    private drawGathering(
+    // A fan's lines, showing where it's aimed: she's turned to it, but nothing real
+    // says how wide it'll go
+    private drawAim(
         overlay: Overlay,
         sim: Sim,
         enemy: Enemy,
         windup: BossWindup,
         t: number,
-        now: number,
         scale: number,
     ): void {
-        const ctx = overlay.ctx;
         const pattern = windup.attack.pattern!;
-        if (pattern.shape === "spread") {
-            const base = Math.atan2(windup.dirY, windup.dirX);
-            const arc = pattern.arc ?? 1;
-            ctx.strokeStyle = pattern.color;
-            ctx.globalAlpha = 0.3 + 0.5 * t;
-            ctx.lineWidth = Math.max(2, 3 * scale);
-            for (let i = 0; i < pattern.count; i++) {
-                const angle = base - arc / 2 + (arc * i) / Math.max(1, pattern.count - 1);
-                const from = overlay.project(
-                    enemy.x,
-                    this.ground(sim, enemy.x, enemy.y),
-                    enemy.y,
-                    this.a,
-                );
-                const x = enemy.x + Math.cos(angle) * 12;
-                const y = enemy.y + Math.sin(angle) * 12;
-                ctx.beginPath();
-                ctx.moveTo(from.x, from.y);
-                const to = overlay.project(x, this.ground(sim, x, y), y, this.b);
-                ctx.lineTo(to.x, to.y);
-                ctx.stroke();
-            }
-            ctx.globalAlpha = 1;
+        if (pattern.shape !== "spread") {
             return;
         }
-        const sprite = this.getSprite(pattern.color);
-        const petals = pattern.count * 3;
-        const size = 22 * scale;
-        const reach = lerp(7, 1.5, t);
-        const spin = (now / 1000) * 2.4;
-        for (let i = 0; i < petals; i++) {
-            const angle = (i / petals) * Math.PI * 2 + spin;
-            const x = enemy.x + Math.cos(angle) * reach;
-            const y = enemy.y + Math.sin(angle) * reach;
-            const p = overlay.project(x, this.ground(sim, x, y) - 1, y, this.a);
-            if (p.visible) {
-                ctx.drawImage(sprite, p.x - size / 2, p.y - size / 2, size, size);
-            }
-        }
-    }
-
-    private drawHazard(overlay: Overlay, sim: Sim, hazard: GroundHazard, alpha: number): void {
         const ctx = overlay.ctx;
-        const tick = sim.tick + alpha;
-        const { x, y, radius } = hazard;
-        const t = clamp01(
-            (tick - hazard.startTick) / Math.max(1, hazard.landTick - hazard.startTick),
-        );
-        this.traceCircle(overlay, sim, x, y, radius);
-        if (hazard.armed) {
-            // Sitting there, waiting to be walked into
-            const lit = hazard.fuseTick !== -1;
-            ctx.fillStyle = lit
-                ? "rgba(255, 150, 40, 0.5)"
-                : `rgba(190, 220, 70, ${0.1 + 0.14 * t})`;
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = lit
-                ? "rgba(255, 220, 120, 1)"
-                : `rgba(220, 255, 110, ${0.4 + 0.5 * t})`;
-            ctx.stroke();
-            return;
-        }
-        ctx.fillStyle = `rgba(20, 0, 40, ${0.15 + 0.25 * t})`;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = `rgba(230, 90, 255, ${0.7 + 0.3 * t})`;
-        ctx.stroke();
-        this.traceCircle(overlay, sim, x, y, radius * t);
-        ctx.fillStyle = `rgba(230, 60, 255, ${0.28 * t})`;
-        ctx.fill();
-    }
-
-    // Green for the quarter to be in; red for the rest, stronger once they hurt
-    private drawQuarters(
-        overlay: Overlay,
-        sim: Sim,
-        quarters: BossQuarters,
-        alpha: number,
-        scale: number,
-    ): void {
-        const ctx = overlay.ctx;
-        const player = sim.player;
-        const arena = sim.bossArena;
-        const left = Math.max(arena.minX, player.x - VIEW_REACH);
-        const right = Math.min(arena.maxX, player.x + VIEW_REACH);
-        const bottom = Math.max(arena.minY, player.y - VIEW_REACH);
-        const top = Math.min(arena.maxY, player.y + VIEW_REACH);
-        const hurting = sim.tick + alpha >= quarters.hurtTick;
-        for (let quarter = 0; quarter < 4; quarter++) {
-            const x0 = quarter & 1 ? quarters.x : left;
-            const x1 = quarter & 1 ? right : quarters.x;
-            const y0 = quarter & 2 ? quarters.y : bottom;
-            const y1 = quarter & 2 ? top : quarters.y;
-            this.traceGround(overlay, sim, [
-                { x: x0, y: y0 },
-                { x: x1, y: y0 },
-                { x: x1, y: y1 },
-                { x: x0, y: y1 },
-            ]);
-            if (quarter === quarters.safe) {
-                ctx.fillStyle = "rgba(90, 255, 140, 0.16)";
-                ctx.fill();
-                ctx.lineWidth = Math.max(2, 4 * scale);
-                ctx.strokeStyle = "rgba(170, 255, 190, 0.95)";
-                ctx.stroke();
-            } else {
-                ctx.fillStyle = `rgba(200, 10, 40, ${hurting ? 0.3 : 0.12})`;
-                ctx.fill();
-            }
-        }
-    }
-
-    // What's on the player: held, or a parasite counting down
-    private drawPlayerMarks(
-        overlay: Overlay,
-        sim: Sim,
-        alpha: number,
-        now: number,
-        scale: number,
-    ): void {
-        const ctx = overlay.ctx;
-        const player = sim.player;
-        const x = lerp(player.prevX, player.x, alpha);
-        const y = lerp(player.prevY, player.y, alpha);
-        if (sim.hold) {
-            this.traceCircle(overlay, sim, x, y, 1.1);
-            ctx.lineWidth = Math.max(2, 3 * scale);
-            ctx.strokeStyle = "rgba(120, 210, 255, 0.95)";
-            ctx.stroke();
-        }
-        const parasite = sim.parasite;
-        if (parasite) {
-            const t = clamp01(
-                (sim.tick + alpha - parasite.startTick) /
-                    Math.max(1, parasite.burstTick - parasite.startTick),
+        const base = Math.atan2(windup.dirY, windup.dirX);
+        const arc = pattern.arc ?? 1;
+        ctx.strokeStyle = "#ffb060";
+        ctx.globalAlpha = 0.3 + 0.5 * t;
+        ctx.lineWidth = Math.max(2, 3 * scale);
+        for (let i = 0; i < pattern.count; i++) {
+            const angle = base - arc / 2 + (arc * i) / Math.max(1, pattern.count - 1);
+            const from = overlay.project(
+                enemy.x,
+                this.ground(sim, enemy.x, enemy.y),
+                enemy.y,
+                this.a,
             );
-            const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * (4 + 14 * t));
-            this.traceCircle(overlay, sim, x, y, 1.4 - 0.6 * t);
-            ctx.lineWidth = Math.max(2, 3 * scale);
-            ctx.strokeStyle = `rgba(255, 110, 215, ${0.5 + 0.5 * pulse})`;
+            const x = enemy.x + Math.cos(angle) * 12;
+            const y = enemy.y + Math.sin(angle) * 12;
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            const to = overlay.project(x, this.ground(sim, x, y), y, this.b);
+            ctx.lineTo(to.x, to.y);
             ctx.stroke();
         }
-    }
-
-    // ---- Bullets ----
-
-    // A soft dot in the colour, with a white middle and a dark edge so it shows
-    // on any ground. One sprite each, as a gradient per bullet costs too much.
-    private getSprite(color: string): HTMLCanvasElement {
-        let sprite = this.sprites.get(color);
-        if (!sprite) {
-            sprite = document.createElement("canvas");
-            sprite.width = sprite.height = SPRITE_SIZE;
-            const ctx = sprite.getContext("2d")!;
-            const middle = SPRITE_SIZE / 2;
-            const glow = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
-            glow.addColorStop(0, "#ffffff");
-            glow.addColorStop(0.3, "#ffffff");
-            glow.addColorStop(0.45, color);
-            glow.addColorStop(0.72, color);
-            glow.addColorStop(0.8, "rgba(20, 0, 20, 0.9)");
-            glow.addColorStop(1, "rgba(20, 0, 20, 0)");
-            ctx.fillStyle = glow;
-            ctx.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
-            this.sprites.set(color, sprite);
-        }
-        return sprite;
-    }
-
-    drawBullets(overlay: Overlay, sim: Sim, alpha: number): void {
-        const bullets = sim.bullets;
-        if (bullets.count === 0) {
-            return;
-        }
-        const ctx = overlay.ctx;
-        const player = sim.player;
-        // Tiles to pixels at the player, near enough for everything on screen
-        const groundY = this.ground(sim, player.x, player.y);
-        const from = overlay.project(player.x, groundY, player.y, this.a);
-        const fromX = from.x;
-        const to = overlay.project(player.x + 1, groundY, player.y, this.b);
-        const pixels = Math.abs(to.x - fromX);
-        const { prevX, prevY, x, y, radius, source, order } = bullets;
-        for (let i = 0; i < bullets.count; i++) {
-            const slot = order[i];
-            const wx = lerp(prevX[slot], x[slot], alpha);
-            const wy = lerp(prevY[slot], y[slot], alpha);
-            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.5, wy, this.a);
-            if (!p.visible) {
-                continue;
-            }
-            const pattern = sim.bulletSources[source[slot]].attack.pattern!;
-            const size = Math.max(8, radius[slot] * 2.2 * pixels);
-            ctx.drawImage(
-                this.getSprite(pattern.color),
-                p.x - size / 2,
-                p.y - size / 2,
-                size,
-                size,
-            );
-        }
+        ctx.globalAlpha = 1;
     }
 
     // ---- Over the whole screen ----

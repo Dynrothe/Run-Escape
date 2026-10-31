@@ -25,8 +25,6 @@ const CURSE_SEQ = 8599;
 const SUMMON_SEQ = 8600;
 const FLOWERS_SEQ = 8601;
 const SPORES_SEQ = 8605;
-// Slumped, with her phase's symbols gone, as NPC 9431 stands: her shield's down
-const STUNNED_SEQ = 8603;
 // Curled up, as she throws a parasite
 const PARASITE_SEQ = 8606;
 // Wings out in a burst, as she takes in her sleepwalkers
@@ -41,6 +39,8 @@ const NIGHTMARE_HITPOINTS = 12000;
 const STANDARD_ATTACKS: BossAttackDef[] = [
     {
         name: "Ranged",
+        // Her real shot, and her real petal for the magic below
+        spotAnim: 1766,
         windupSound: 4230,
         sound: 4323,
         hitSound: 4219,
@@ -60,11 +60,13 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
             range: 20,
             radius: 0.4,
             arc: 1.1,
-            color: "#7dff9a",
+            scale: 2,
+            bright: 0.5,
         },
     },
     {
         name: "Magic",
+        spotAnim: 1764,
         windupSound: 4293,
         sound: 4297,
         hitSound: 4258,
@@ -85,7 +87,6 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
             radius: 0.4,
             turn: 0.2,
             curve: 0.2,
-            color: "#ff7ad9",
         },
     },
     {
@@ -122,7 +123,8 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
                 { shape: "ring", count: 12, distance: 8 },
             ],
             radius: 1.4,
-            spotAnim: 1761,
+            spotAnim: 1759,
+            middleSpotAnim: 1761,
         },
     },
     {
@@ -139,7 +141,8 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
         ground: {
             spots: [{ shape: "grid", size: 5, spacing: 3.5 }],
             radius: 1.3,
-            spotAnim: 1761,
+            spotAnim: 1759,
+            middleSpotAnim: 1761,
         },
     },
 ];
@@ -182,7 +185,7 @@ const PHASE_ONE_ATTACKS: BossAttackDef[] = [
             interval: 0.6,
             heal: 0.01,
             offset: 3,
-            spacing: 2,
+            spacing: 1.5,
             safeLocId: 37745,
             hurtLocId: 37742,
         },
@@ -227,6 +230,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
     },
     {
         name: "Parasites",
+        spotAnim: 1770,
         windupSound: 4233,
         hitSound: 4265,
         kind: "mark",
@@ -246,6 +250,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
     },
     {
         name: "Petal ring",
+        spotAnim: 1764,
         windupSound: 4293,
         sound: 4297,
         hitSound: 4258,
@@ -266,7 +271,6 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
             range: 18,
             radius: 0.4,
             turn: 0.13,
-            color: "#ff7ad9",
         },
     },
 ];
@@ -294,6 +298,7 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
     },
     {
         name: "Spores",
+        impactSpotAnim: 2542,
         windupSound: 4272,
         hitSound: 4273,
         kind: "ground",
@@ -309,6 +314,7 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
             radius: 1.5,
             armed: 12,
             locId: 37739,
+            fit: 2,
         },
         effect: {
             kind: "drowsy",
@@ -400,14 +406,16 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
         radius: 0.9,
         xp: 4000,
         knockbackResist: 1,
+        // Real size is five tiles a side; that's lost at the play camera
+        scale: 1.5,
         sounds: { attack: -1, hit: 4281, death: 4295 },
         spawnMessage: "The Nightmare rises!",
         boss: {
             attackInterval: 3.2,
-            keepDistance: 5,
+            keepDistance: 6,
             enrage: { message: "The Nightmare is furious!" },
             surgeSeq: MELEE_SEQ,
-            leash: { distance: 16, keep: 9 },
+            leash: { distance: 16, keep: 10 },
             attacks: [
                 ...STANDARD_ATTACKS,
                 ...PHASE_ONE_ATTACKS,
@@ -422,8 +430,8 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                 sound: 4262,
                 title: "The Nightmare",
                 subtitle: "of Ashihama",
-                // In view of a phone's closer camera too
-                distance: 5,
+                // Clear of her reach, and in view of a phone's closer camera too
+                distance: 7,
                 alone: true,
             },
             phases: {
@@ -432,7 +440,6 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                     { shield: 0.3, opener: "Sleepwalkers" },
                     { shield: 0.3, opener: "Sleepwalkers (more)" },
                 ],
-                stunnedSeq: STUNNED_SEQ,
                 blastHeal: 0.4,
                 totems: {
                     idleId: "nightmare_totem",
@@ -457,14 +464,14 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
         id: "husk_magic",
         name: "Husk",
         npcId: 9454,
-        shot: { range: 8, interval: 2, speed: 7, spotAnim: 1764, sound: 4302 },
+        shot: { range: 8, interval: 2, speed: 7, spotAnim: 1776, sound: 4302 },
     },
     {
         ...HUSK,
         id: "husk_ranged",
         name: "Husk",
         npcId: 9455,
-        shot: { range: 8, interval: 2, speed: 9, spotAnim: 1765, sound: 4264 },
+        shot: { range: 8, interval: 2, speed: 9, spotAnim: 1771, sound: 4264 },
     },
     {
         id: "sleepwalker",
