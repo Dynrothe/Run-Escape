@@ -292,6 +292,7 @@ export class GameAssets {
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
             enemy.boss?.intro?.seq ?? -1,
             enemy.boss?.surgeSeq ?? -1,
+            enemy.boss?.phases?.stunnedSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(

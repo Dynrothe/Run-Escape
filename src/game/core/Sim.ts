@@ -1969,7 +1969,11 @@ export class Sim {
                 if (lapping) {
                     moveX += dirX * enemy.speed * this.laps!.speed;
                     moveY += dirY * enemy.speed * this.laps!.speed;
-                } else if (!touching && !(fighting && dirX === 0 && dirY === 0)) {
+                } else if (
+                    // On its way to heal something, the player's just in the way
+                    (!touching || healTarget) &&
+                    !(fighting && dirX === 0 && dirY === 0)
+                ) {
                     moveX += dirX * enemy.speed;
                     moveY += dirY * enemy.speed;
                 }

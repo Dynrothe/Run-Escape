@@ -8,11 +8,31 @@ import { BossAttackDef, EnemyDef } from "./types";
 // Hits are out of the player's 25 base hitpoints, about a quarter of OSRS's.
 // Sounds are the wiki's noa_ ones.
 
+// Her animations, picked by eye: the classify script can't tell them apart, as she
+// floats in all of them
 const IDLE_SEQ = 8593;
 const WALK_SEQ = 8592;
-const MELEE_SEQ = 8594;
+// Claws out and red, the length of her melee warning
+const MELEE_SEQ = 8597;
+// Her petals spin out
 const MAGIC_SEQ = 8595;
+// Twisted about, as she contorts
 const RANGED_SEQ = 8596;
+// Reaching into the black portal that comes with it
+const CLAWS_SEQ = 8598;
+// A ring of petals on the ground
+const CURSE_SEQ = 8599;
+const SUMMON_SEQ = 8600;
+const FLOWERS_SEQ = 8601;
+const SPORES_SEQ = 8605;
+// Slumped, with her phase's symbols gone, as NPC 9431 stands: her shield's down
+const STUNNED_SEQ = 8603;
+// Curled up, as she throws a parasite
+const PARASITE_SEQ = 8606;
+// Wings out in a burst, as she takes in her sleepwalkers
+const ABSORB_SEQ = 8604;
+// Coming up out of a pit, wings out
+const SURGE_SEQ = 8610;
 const SPAWN_SEQ = 8611;
 const DEATH_SEQ = 8612;
 
@@ -94,7 +114,7 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
         cooldown: 9,
         range: 40,
         weight: 3,
-        seq: MELEE_SEQ,
+        seq: CLAWS_SEQ,
         ground: {
             spots: [
                 { shape: "under" },
@@ -102,6 +122,7 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
                 { shape: "ring", count: 12, distance: 8 },
             ],
             radius: 1.4,
+            spotAnim: 1761,
         },
     },
     {
@@ -114,8 +135,12 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
         cooldown: 12,
         range: 40,
         weight: 2,
-        seq: MELEE_SEQ,
-        ground: { spots: [{ shape: "grid", size: 5, spacing: 3.5 }], radius: 1.3 },
+        seq: CLAWS_SEQ,
+        ground: {
+            spots: [{ shape: "grid", size: 5, spacing: 3.5 }],
+            radius: 1.3,
+            spotAnim: 1761,
+        },
     },
 ];
 
@@ -129,6 +154,7 @@ const PHASE_ONE_ATTACKS: BossAttackDef[] = [
         cooldown: 24,
         range: 40,
         weight: 3,
+        seq: SUMMON_SEQ,
         phases: [1],
         message: "Husks hold you in place! Kill them!",
         summon: {
@@ -148,6 +174,7 @@ const PHASE_ONE_ATTACKS: BossAttackDef[] = [
         cooldown: 26,
         range: 40,
         weight: 3,
+        seq: FLOWERS_SEQ,
         phases: [1],
         message: "Flowers split the ground! Get to the white blossoms!",
         quarters: {
@@ -174,6 +201,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
         range: 999,
         weight: 0,
         // Only ever her opener
+        seq: ABSORB_SEQ,
         phases: [],
         ignoreArmor: true,
         message: "Sleepwalkers! Kill them before they reach her!",
@@ -192,6 +220,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
         cooldown: 24,
         range: 40,
         weight: 3,
+        seq: CURSE_SEQ,
         phases: [2],
         message: "The Nightmare curses you! Your feet won't obey!",
         effect: { kind: "curse", attacks: 5 },
@@ -206,6 +235,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
         cooldown: 22,
         range: 40,
         weight: 3,
+        seq: PARASITE_SEQ,
         phases: [2],
         message: "A parasite takes hold! It's going to burst!",
         parasite: {
@@ -252,6 +282,7 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
         cooldown: 0,
         range: 999,
         weight: 0,
+        seq: ABSORB_SEQ,
         phases: [],
         ignoreArmor: true,
         message: "More sleepwalkers! Kill them before they reach her!",
@@ -271,8 +302,14 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
         cooldown: 16,
         range: 40,
         weight: 3,
+        seq: SPORES_SEQ,
         phases: [3],
-        ground: { spots: [{ shape: "scatter", count: 12, spread: 10 }], radius: 1.5, armed: 12 },
+        ground: {
+            spots: [{ shape: "scatter", count: 12, spread: 10 }],
+            radius: 1.5,
+            armed: 12,
+            locId: 37738,
+        },
         effect: {
             kind: "drowsy",
             id: "spores",
@@ -294,6 +331,7 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
         cooldown: 11,
         range: 999,
         weight: 5,
+        seq: SURGE_SEQ,
         phases: [3],
         radius: 2.6,
         speed: 26,
@@ -344,7 +382,7 @@ const PARASITE = {
     knockbackResist: 1,
     sounds: { attack: -1, hit: 4296, death: 4261 },
     heals: { fraction: 0.03, interval: 3, range: 4, targets: ["the_nightmare"], seek: 30 },
-    shot: { range: 8, interval: 2.4, speed: 7, spotAnim: 1766 },
+    shot: { range: 8, interval: 2.4, speed: 7, spotAnim: 1771, sound: 4335 },
 };
 
 export const NIGHTMARE_ENEMIES: EnemyDef[] = [
@@ -368,6 +406,7 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
             attackInterval: 3.2,
             keepDistance: 5,
             enrage: { message: "The Nightmare is furious!" },
+            surgeSeq: MELEE_SEQ,
             leash: { distance: 16, keep: 9 },
             attacks: [
                 ...STANDARD_ATTACKS,
@@ -392,12 +431,14 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                     { shield: 0.3, opener: "Sleepwalkers" },
                     { shield: 0.3, opener: "Sleepwalkers (more)" },
                 ],
+                stunnedSeq: STUNNED_SEQ,
                 totems: {
                     idleId: "nightmare_totem",
                     chargingId: "nightmare_totem_charging",
                     chargedId: "nightmare_totem_charged",
                     charge: 0.05,
                     margin: 6,
+                    blastSpotAnim: 1782,
                     blastSound: 4321,
                     chargedSound: 4254,
                 },
@@ -414,14 +455,14 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
         id: "husk_magic",
         name: "Husk",
         npcId: 9454,
-        shot: { range: 8, interval: 2, speed: 7, spotAnim: 1766, sound: 4302 },
+        shot: { range: 8, interval: 2, speed: 7, spotAnim: 1764, sound: 4302 },
     },
     {
         ...HUSK,
         id: "husk_ranged",
         name: "Husk",
         npcId: 9455,
-        shot: { range: 8, interval: 2, speed: 9, spotAnim: 1766, sound: 4264 },
+        shot: { range: 8, interval: 2, speed: 9, spotAnim: 1765, sound: 4264 },
     },
     {
         id: "sleepwalker",

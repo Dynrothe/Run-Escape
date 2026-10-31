@@ -682,7 +682,13 @@ export class GameView {
         } else {
             const moving =
                 Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
-            anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
+            const stunned =
+                enemy.bossState?.phase?.stage === "totems"
+                    ? def.boss?.phases?.stunnedSeq
+                    : undefined;
+            anim = model.getAnim(
+                stunned ?? (moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq),
+            );
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }

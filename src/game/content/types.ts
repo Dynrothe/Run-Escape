@@ -515,6 +515,8 @@ export type BossPhasesDef = {
     };
     shieldMessage: string;
     blastMessage: string;
+    // Stands like this in place of its idle while its shield's down
+    stunnedSeq?: number;
 };
 
 // How a boss fights, after the real fight in OSRS
