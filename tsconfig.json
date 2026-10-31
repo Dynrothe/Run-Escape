@@ -26,6 +26,6 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "src", "scripts", "vite.config.ts"
+    "src", "scripts", "desktop", "vite.config.ts"
   ]
 }
