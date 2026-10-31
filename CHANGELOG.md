@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
+
 ## 0.20.0 - 2026-10-31
 
 ### Added

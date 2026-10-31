@@ -1,7 +1,7 @@
 # Developing Run Escape
 
-How the code is laid out, the tools that come with it, and how to host a build. The
-[README](../README.md) covers getting it running.
+How the code is laid out, the tools that come with it, how to host a build, and the desktop app.
+The [README](../README.md) covers getting it running.
 
 ## Hosting
 
@@ -55,6 +55,115 @@ Header set Cross-Origin-Embedder-Policy "require-corp"
 
 It needs HTTPS (or localhost) for the browser's cache storage, and a folder's address with its
 trailing slash (`/game/`, not `/game`), or the relative paths point at the parent folder.
+
+## Desktop
+
+The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
+the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
+`desktop/`, apart from the game, which doesn't know it's in an app.
+
+```
+npm run build && npm run slim-cache
+npm run desktop         # the app, on this build, with no update check
+npm run desktop:dist    # everything a release carries, in release/
+```
+
+`desktop:dist` stops if `dist/caches` isn't the slim cache. It needs Node 22.12 or later (Electron
+does), and Electron's binary downloads the first time it's run. Dev runs keep their saves in a
+`Run Escape Dev` folder, so they can't touch a real one.
+
+| File                   | What it does                                                      |
+| ---------------------- | ----------------------------------------------------------------- |
+| `main.ts`              | Windows, security settings, the order things happen at launch     |
+| `gameServer.ts`        | Serves a game folder at `GAME_ORIGIN`, with the headers and Range |
+| `gameUpdate.ts`        | Checks for, downloads, verifies and installs game updates         |
+| `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
+| `releaseSource.ts`     | The only place that says where updates come from                  |
+| `version.ts`           | `LAUNCHER_VERSION`                                                |
+| `release-files.ts`     | Makes the game zip, the manifest and the release notes            |
+| `electron-builder.yml` | What goes in the launcher's zip                                   |
+
+### Where things are kept
+
+Saves and updates are under the user data folder, `%APPDATA%\Run Escape`, never beside the exe, so
+they outlast the zip's folder being moved or deleted, and a new launcher zip finds them.
+
+**Three things decide where saves are, and changing any of them loses every player's save:**
+`GAME_ORIGIN` in `gameServer.ts`, the user data folder's name, and `GAME_PARTITION`, all but the
+first in `main.ts`. They don't depend on the game's version, or on which folder the game's served
+from.
+
+The saves on a website and in the app are separate, as they're different origins. The Settings
+screen's export and import carry one across.
+
+### How the game's served
+
+Nothing listens on a port. `gameServer.ts` answers the game's requests inside the app, at
+`https://run-escape.invalid`, by intercepting `https` in the game's session. That looks odd, and
+it's on purpose:
+
+- **It can't be a custom scheme.** `app://` gets cross-origin isolation and `fetch`, but the Cache
+  API's `put()` refuses anything but http(s) with `Request scheme 'app' is unsupported`, and
+  `CacheFiles.ts` waits on those puts, so the game fails on its first load.
+- `.invalid` can never resolve, so a request that somehow got out wouldn't reach anyone.
+- Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
+  right type.
+- `CacheFiles.ts` resumes with `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back
+  to what it has, so a server that ignores Range corrupts the cache. `gameServer.ts` clamps the
+  end and answers 206, with a `Content-Length` of what's left.
+
+Interception only works reliably for one session per process, so don't add a second.
+
+### Game updates
+
+The launcher updates the game's files by itself, not the launcher. At launch:
+
+1. It asks GitHub's API for the latest published release of Dynrothe/Run-Escape, with no token and
+   a 5 second limit. Drafts aren't returned, so publishing is what lets players have it.
+2. If the release's `game-manifest.json` has a newer version than the game it has, it shows a small
+   window, downloads `game-<version>.zip`, checks its sha256, extracts it to a temporary folder and
+   renames that to `game/<version>` in the user data folder. Then it removes older ones.
+3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
+   as they are after unzipping a newer launcher.
+
+Offline, rate limited (GitHub allows 60 requests an hour per address), a bad download, a skipped
+update: the game starts anyway with what it has, and `launcher.log` in the user data folder says
+why. The old game stays until the rename, so nothing partway through can break it. A folder only
+counts if it has the `verified.json` that's written just before that rename. The sha256 catches a
+damaged download, not a bad release: the manifest comes from the same place as the zip, so anyone
+who can publish a release can ship code to players.
+
+Downloads start only from this repository's release URLs, over https. GitHub then redirects to
+`release-assets.githubusercontent.com`, so redirects are checked one by one, which is why this uses
+Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
+Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
+checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+
+### When the launcher has to change
+
+`LAUNCHER_VERSION` in `desktop/version.ts` isn't the game's version. A release's manifest gives it
+as `minLauncher`. **Raise it only when the game can't run on launchers already out there**, like
+when it needs a newer Electron, or a change to how the game's served. Then old launchers keep the
+game they have, and show a message with a button to the release page, so every player has to
+download the new zip by hand. Changing `desktop/` without raising it is fine: new downloads get the
+new launcher, and existing players keep working.
+
+### Releases
+
+`.github/workflows/release.yml` runs on every push to `main`, and stops straight away unless
+`package.json`'s version has no release yet, drafts included. So a merge that doesn't change the
+version does nothing, and neither does one while a draft for this version is waiting. The Actions
+tab's Run workflow button (`workflow_dispatch`) does the same but rebuilds a waiting draft, and it
+only appears once the workflow's on `main`.
+
+It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
+`GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
+`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip` and
+`game-manifest.json`. **Publishing the draft by hand is what releases it to players**, and the tag
+only exists from then on. A version needs its own section in `CHANGELOG.md`, or the build fails.
+
+The app isn't signed, so Windows shows a SmartScreen warning the first time it's run (More info,
+then Run anyway). Unzip it first: running it from inside the zip fails.
 
 ## Code
 
