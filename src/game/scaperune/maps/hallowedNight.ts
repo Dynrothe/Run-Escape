@@ -1,7 +1,7 @@
 import { Ground } from "../Ground";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
-import { GeneratedMap } from "../generator";
+import type { GeneratedMap } from "../generator";
 import {
     LOC_FLOOR_DECORATION,
     LOC_NORMAL,

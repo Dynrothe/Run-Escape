@@ -5,7 +5,10 @@ cache objects and buildings on top. It's self-contained: everything is in this f
 outside it needs changing to make a map.
 
 **Most maps here are dev maps.** Those are in `maps/devMaps.ts`, and only show on the dev server (or with
-`DEV_MAPS=1` in a script). A run on one doesn't touch the save. A map that ships is listed in
+`DEV_MAPS=1` in a script). A run on one doesn't touch the save. A build leaves them and the map generator's screen
+out completely: `vite.config.ts` swaps `devMaps.ts` and `MapGeneratorScreen.tsx` for the `.build` stand-ins beside
+them, so the generator's code doesn't reach players. If the game starts importing something new from either file,
+add it to the stand-in too. A map that ships is listed in
 `maps/shippedMaps.ts` and has a real entry in `MAPS` with `scaperune: true`: see "Shipping a map" below.
 
 ## How it works
