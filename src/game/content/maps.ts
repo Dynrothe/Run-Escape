@@ -1,5 +1,5 @@
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
-import { HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
+import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
@@ -307,7 +307,7 @@ export const MAPS: MapDef[] = [
         finalBossWarning: "The pumpkins go dark... The Nightmare is waking!",
         victoryText: "The Nightmare is laid to rest!",
         // The ritual circle: all 192 tiles would put her totems a minute's walk apart
-        bossArena: { baseX: 4736, baseY: 4736, size: 64 },
+        bossArena: HALLOWED_BOSS_ARENA,
         scaperune: true,
         seasonal: true,
         brightness: 0.8,

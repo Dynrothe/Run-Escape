@@ -18,12 +18,11 @@ import { BuildContext, MapRecipe } from "../recipe";
 // Hallowed Night: a graveyard hamlet in a pumpkin patch, the night its dead won't lie still.
 // A simple map on purpose: flat dark ground, all of its looks in what stands on it.
 //
-// The Nightmare's fight needs the whole arena, so anything solid stays out of what isLane
-// says: the open middle, a lane round the edge, the four corners, and two lanes across the
-// map through the middle. That leaves four places, one in each quarter: the hamlet (north
-// west), the graveyard (north east), the farm (south west) and the witch's hollow (south
-// east). Everywhere else only what you can walk through: pumpkins, bones, lanterns, candles.
-// build throws if anything solid gets into a lane.
+// The Nightmare's fight is held to BOSS_SQUARE, round the ritual circle, and build throws if
+// anything solid gets in it or the margin round it. Past that, four places fill the quarters:
+// the hamlet (north west), the graveyard (north east), the farm (south west) and the witch's
+// hollow (south east), and planted fields lie between them. What's scattered also keeps out of
+// isOpenGround, which is only there to keep the map from closing in.
 
 const SQUARES = 5;
 const MARGIN = 1;
@@ -128,8 +127,31 @@ function inArena(x: number, y: number): boolean {
     return edgeX >= 0 && edgeY >= 0;
 }
 
+// Where she's fought, in grid tiles, and how far round it nothing solid goes
+const BOSS_SQUARE = { x: 128, y: 128, size: 64 };
+const BOSS_MARGIN = 4;
+
+// MapDef.bossArena, in world tiles
+export const HALLOWED_BOSS_ARENA = {
+    baseX: 72 * MAP_SQUARE_SIZE + BOSS_SQUARE.x,
+    baseY: 72 * MAP_SQUARE_SIZE + BOSS_SQUARE.y,
+    size: BOSS_SQUARE.size,
+};
+
 // Whether a tile must stay free of anything solid
-function isLane(x: number, y: number): boolean {
+function isBossGround(x: number, y: number): boolean {
+    const { x: baseX, y: baseY, size } = BOSS_SQUARE;
+    return (
+        x >= baseX - BOSS_MARGIN &&
+        x < baseX + size + BOSS_MARGIN &&
+        y >= baseY - BOSS_MARGIN &&
+        y < baseY + size + BOSS_MARGIN
+    );
+}
+
+// Where scatter leaves room: the open middle, a lane round the edge, the four corners, and two
+// lanes across the map
+function isOpenGround(x: number, y: number): boolean {
     if (!inArena(x, y)) {
         return false;
     }
@@ -215,8 +237,8 @@ const FIELDS: Field[] = [
     // By the barn
     { x0: 94, y0: 79, x1: 145, y1: 108 },
     { x0: 152, y0: 79, x1: 196, y1: 108 },
-    { x0: 80, y0: 139, x1: 124, y1: 183 },
-    { x0: 197, y0: 139, x1: 241, y1: 183 },
+    { x0: 80, y0: 139, x1: 121, y1: 183 },
+    { x0: 198, y0: 139, x1: 241, y1: 183 },
 ];
 
 const HAMLET = { x: 100, y: 220 };
@@ -235,12 +257,12 @@ class Night {
         this.kit = new PrefabKit(context);
     }
 
-    // Something solid: nothing that fits a lane goes in. Keeps a tile clear round it if asked,
+    // Something solid, kept off open ground. Keeps a tile clear round it if asked,
     // so nothing's jammed against it.
     solid(id: number, sizeX: number, sizeY: number, x: number, y: number, rotation = 0, gap = 0) {
         for (let ty = y; ty < y + sizeY; ty++) {
             for (let tx = x; tx < x + sizeX; tx++) {
-                if (isLane(tx, ty)) {
+                if (isOpenGround(tx, ty)) {
                     return false;
                 }
             }
@@ -493,8 +515,8 @@ function placeHollow(night: Night): void {
 }
 
 // A planted field: rows run east to west, each a ridge of tilled soil two tiles wide with a
-// pumpkin every few tiles, and a furrow between them. A field can lie across a lane, but what's
-// solid can't: its pumpkins and fence stop short of one.
+// pumpkin every few tiles, and a furrow between them. Pumpkins and scarecrows are solid, but
+// with room to walk between them.
 function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
     const { rng, ground } = night;
     const { underlays, overlays, shapes, rotations } = ground.level0;
@@ -532,8 +554,7 @@ function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
             const standing = scarecrows.some(
                 ([sx, sy]) => Math.abs(sx - x) < 2 && sy - y >= 0 && sy - y < ROW,
             );
-            // They're solid, and a lane has to stay free: it runs through as bare soil
-            if (!standing && !isLane(x, y)) {
+            if (!standing) {
                 ground.grid.locs.push({
                     id: pick(rng, FIELD_PUMPKINS),
                     type: LOC_NORMAL,
@@ -557,13 +578,11 @@ function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
         }
     }
     for (const [sx, sy] of scarecrows) {
-        if (!isLane(sx, sy)) {
-            ground.place(
-                { id: SCARECROW, type: LOC_NORMAL, rotation: 0, level: 0, x: sx, y: sy },
-                1,
-                1,
-            );
-        }
+        ground.place(
+            { id: SCARECROW, type: LOC_NORMAL, rotation: 0, level: 0, x: sx, y: sy },
+            1,
+            1,
+        );
     }
     placeFieldFence(night, { x0, y0, x1, y1 }, midX, midY);
 }
@@ -578,8 +597,8 @@ type FenceSide = {
     mid: number;
 };
 
-// Fence round the track, with a gate's width left in the middle of each side, and none in a
-// lane. Two runs that meet turn a corner, and any other end of a run is a post: a tile takes one
+// Fence round the track, with a gate's width left in the middle of each side. Two runs that
+// meet turn a corner, and any other end of a run is a post: a tile takes one
 // wall, so two straight pieces on a corner lose one, and a run that just stops looks sawn off.
 function placeFieldFence(night: Night, { x0, y0, x1, y1 }: Field, midX: number, midY: number) {
     const { locs } = night.ground.grid;
@@ -607,13 +626,10 @@ function placeFieldFence(night: Night, { x0, y0, x1, y1 }: Field, midX: number, 
     const north = across(top, WALL_NORTH, CORNER_NE, CORNER_NW);
     const west = upright(left, WALL_WEST, CORNER_NW, CORNER_SW);
     const east = upright(right, WALL_EAST, CORNER_NE, CORNER_SE);
-    const fenced = ({ tile, mid }: FenceSide, along: number) => {
-        const [x, y] = tile(along);
-        return !isLane(x, y) && Math.abs(along - mid) > GATE;
-    };
+    const fenced = ({ mid }: FenceSide, along: number) => Math.abs(along - mid) > GATE;
     // Each corner turns if both of the sides it joins reach it
     const corner = (x: number, y: number, a: boolean, b: boolean, rotation: number) => {
-        const turns = a && b && !isLane(x, y);
+        const turns = a && b;
         if (turns) {
             put(x, y, LOC_FENCE_CORNER, rotation);
         }
@@ -729,7 +745,7 @@ function placeBoundary(night: Night): void {
     }
 }
 
-// Blocks what's shut in, and holds the map to its lanes
+// Blocks what's shut in, and keeps her ground free
 function finish(night: Night): void {
     const { context, ground } = night;
     const rect = { x0: ARENA_MIN, y0: ARENA_MIN, x1: ARENA_MAX, y1: ARENA_MAX };
@@ -747,8 +763,8 @@ function finish(night: Night): void {
     for (let y = ARENA_MIN; y <= ARENA_MAX; y++) {
         for (let x = ARENA_MIN; x <= ARENA_MAX; x++) {
             const i = ground.tile(x, y);
-            if (isLane(x, y) && (!reached[i] || ground.level0.flags[i] & TILE_BLOCKED)) {
-                throw new Error(`Hallowed Night: something solid in a lane at ${x},${y}`);
+            if (isBossGround(x, y) && (!reached[i] || ground.level0.flags[i] & TILE_BLOCKED)) {
+                throw new Error(`Hallowed Night: something solid on her ground at ${x},${y}`);
             }
         }
     }
