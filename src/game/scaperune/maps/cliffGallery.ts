@@ -7,34 +7,51 @@ import { BuildContext, MapRecipe } from "../recipe";
 const CELL_X = 10;
 const CELL_Y = 11;
 const COLS = 6;
-const ROWS = 8;
+const ROWS = 6;
 const MARGIN = 64;
 const SIZE = 4 * 64;
 const LOW = 30;
 const RISE = 70;
 
 // [id, type, tiles a side, rotation]: a loc once in its cell's middle if it has a rotation,
-// or all over its band if not. Type -1 is an overlay.
+// or all over its band if not. Type -1 is an overlay. What biomes use, then what else there is.
 const KINDS: [number, number, number, number?][] = [
-    [5, -1, 1],
-    [174, -1, 1],
-    [329, -1, 1],
-    [1, -1, 1],
+    [34384, 10, 1],
+    [34372, 10, 1],
+    [42352, 10, 1],
+    [34388, 10, 1],
+    [34391, 10, 1],
+    [34392, 10, 1],
+    [42353, 10, 1],
+    [34373, 10, 1],
+    [11434, 10, 2],
+    [11922, 10, 2],
+    [18894, 10, 2],
+    [11933, 10, 2],
+    [3718, 10, 2],
+    [185, 22, 1],
+    [3703, 22, 1],
+    [11439, 22, 1],
+    [3614, 22, 1],
+    [321, 22, 1],
+    [2123, 10, 3, 0],
+    [30180, 10, 3, 0],
+    [17209, 10, 3, 0],
+    [14436, 10, 3, 0],
+    [19039, 10, 3, 0],
+    [30177, 10, 3, 0],
+    [26499, 10, 3, 0],
     [83, -1, 1],
+    [26, -1, 1],
+    [222, -1, 1],
     [3, -1, 1],
-    ...[14436, 17209, 2123, 19039, 30177, 30180, 20852, 26499].flatMap(
-        (id): [number, number, number, number][] => [
-            [id, 10, 3, 0],
-            [id, 10, 3, 1],
-            [id, 10, 3, 2],
-        ],
-    ),
-    [21509, 3, 1, 0],
-    [21509, 3, 1, 1],
-    [1797, 10, 1, 0],
-    [12683, 10, 1, 0],
-    [12684, 10, 1, 0],
-    [15487, 10, 4, 0],
+    [22, -1, 1],
+    [77, -1, 1],
+    [19, -1, 1],
+    [42097, 22, 1],
+    [6617, 22, 1],
+    [52795, 22, 1],
+    [57476, 22, 1],
 ];
 
 function build(_context: BuildContext) {

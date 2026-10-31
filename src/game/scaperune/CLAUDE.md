@@ -122,7 +122,7 @@ npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=snow boundary=forest s
 
 ## How big a map can be
 
-Numbers from a Node run, 400 enemies in the Sim, on this VM:
+Numbers from a Node run, 400 enemies in the Sim, on this VM, with no mountains:
 
 | Squares a side | Tiles in the grid | Generate     | Start a run | Browser peak | Sim tick, 400 enemies |
 | -------------- | ----------------- | ------------ | ----------- | ------------ | --------------------- |
@@ -143,6 +143,9 @@ is there before a map is built. Some of it is left from earlier runs in a sessio
   for a moment in one worker. In Node at 28 they each added about 400 MB.
 - **The hard limit is the world**: 28 is what fits at x 70 to 99, because `MapManager.MAX_MAP_X` is 100. Raising
   that is one line, but past 28 this VM's 2.4 GB cap would stop it, so it hasn't been tried.
+- **Mountains cost more to build**, in time, not at run time: with `mountains` at 0.75 it took 8.5 s at 8 squares, 22 s
+  at 16 and 65 s at 28, in Node with no cache behind it, peaking at 720 MB. It's noise on every corner, passes (nearly 600
+  at 28) and fords. A map's run time is the same: 0.12 ms a tick with 66 enemies on `scaperune_alpine`.
 - **Three things had to change to get here**: the collision build drew tile models it never read
   (`buildScene`'s `tileModels`), the minimap kept a 205 MB canvas and asked for every square's image at once (big
   arenas are coarser, and ask for what's near), and the preview drew every square (past 5 by 5 it draws the grid).
@@ -329,8 +332,24 @@ Those fill their tile and follow the ground (contour), which is what the old gre
 | Rockslide 11434 grey, 11922 white, 18894 amber, 11933 dark, 3718 mossy | heaps of rock, 2 by 2                                                      |
 | 185, 3703, 11439, 3614, 321, 3706 (type 22)                            | stones                                                                     |
 
+**Waterfalls** gather a river's fall into single drops at least `WATERFALL_SPACING` apart, with foam across the river. The
+foam's the only art there is: the cache's waterfall models are built for their own cliffs. Most rivers don't fall far in
+the arena, because they look for the low ground, so these are rare and mostly in the margin.
+
+**Caves** are decoration: a mouth 3 by 2 tiles at rotation 0 (facing south), set into the foot of a cliff that faces the
+camera. Nothing goes in them. They're on tiles that are blocked anyway.
+
+**Tried and dropped:** a rope bridge over a gorge. The cache's (21509, on Neitiznot) is a thin wall loc with no deck, so
+it'd need a walkable deck built from nothing, and from above it's a line. `53543` ice shards look terrible as a snow
+face, and no overlay's as white as the snow underlay, so snowy cliffs are bare underlay with dark faces.
+
+**A heightmap** replaces hills and ranges (`heightmap`): the screen shrinks an image to `HEIGHTMAP_SIZE` a side, and it
+travels in the settings as base64, so it's in the JSON too. Black is the floor of the land and white is `peakHeight`.
+Everything after that treats it as any other land.
+
 To add a landform, add a function to `landforms.ts` that adds to `terrain.height` and marks `mountain`, call it from
-`createRelief`, add its setting, and add a line to `SWEEP` at its extreme.
+`createRelief`, add its setting, say so in `hasRelief` (`mapBuild.ts`), and add a line to `SWEEP` at its extreme. To give
+a new biome its mountains, fill in `rock` in `biomes.ts`: the palette picks it up.
 
 `npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3` draws a map's height in a second or two without
 the cache, which is the quick way to work on shapes. Fake prefabs stand in, so buildings aren't right.
@@ -401,6 +420,12 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
 - **Two parallel roads merge if they're close.** Roads are smoothed as a field before they're painted, so one 4 rows
   from a bridge's road adds a third row beside it. `BRIDGE_ROAD_CLEAR` is what keeps them apart.
 - **A setting that adds rock must say so to `hasRelief`**, or rivers won't look for a valley and main roads won't route.
+- **Pins made before a pass are let go** (`cutPasses` clears them, having cut the ground), so anything pinned for good
+  comes after it.
+- **The camera's fixed, so faces aren't equal.** It only ever sees faces looking south. A rock face on a north-facing
+  cliff's mostly lost, and anything that has to be seen (a cave's mouth) has to look south.
+- **The map's seed order matters for water**: rivers come after the land's shape and before water's levels, and levels
+  need the sea sunk first, or a river's lowest point isn't known.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
   first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
