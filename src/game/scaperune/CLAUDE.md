@@ -4,8 +4,9 @@ ScapeRune makes maps that don't exist in OSRS: our own ground, heights, water an
 cache objects and buildings on top. It's self-contained: everything is in this folder, and nothing
 outside it needs changing to make a map.
 
-**Nothing here ships to players yet.** Every map is in `maps/devMaps.ts`, and those only show on the
-dev server (or with `DEV_MAPS=1` in a script). A run on one doesn't touch the save.
+**Most maps here are dev maps.** Those are in `maps/devMaps.ts`, and only show on the dev server (or with
+`DEV_MAPS=1` in a script). A run on one doesn't touch the save. A map that ships is listed in
+`maps/shippedMaps.ts` and has a real entry in `MAPS` with `scaperune: true`: see "Shipping a map" below.
 
 ## How it works
 
@@ -177,8 +178,8 @@ has them. `Walled city` is the preset.
 **Waymarkers** stand beside roads, turn about, every 16 tiles at 1.
 
 **The game fades the world to black past the arena's edge**, over 6 tiles (`playAreaFog`). Real maps keep that. It
-would hide all of the above, so `GameClient` moves it out by `OPEN_WORLD_MARGIN` on dev maps. A map that ships
-needs its own flag for this. The minimap still only covers the arena, so it's black past the edge.
+would hide all of the above, so `GameClient` moves it out by `OPEN_WORLD_MARGIN` on dev maps and on maps with
+`MapDef.scaperune`. The minimap still only covers the arena, so it's black past the edge.
 
 Preview it from above, without a browser. This draws it with the game's own minimap renderer and checks it with
 the game's real collision. The minimap doesn't draw trees or rocks, so look at those in the browser.
@@ -575,8 +576,8 @@ and a crossing of 9, so count what comes back.
   on grey or white snow any tint blends into a pastel halo, so snow's trail is the snow, with no stain.
 - **Overlay edges are always faceted.** They can only bend at corners and side middles, so a curve is a
   chain of short straight lines. Keep curves big and contrast low. Nothing makes them truly round.
-- **Dev maps draw smooth ground** (`setSmoothTerrain`, in `GameClient`): colours run across tiles rather than
-  filling each one flat. Real maps don't, so a dev map's ground looks softer than theirs.
+- **ScapeRune maps draw smooth ground** (`setSmoothTerrain`, in `GameClient`): colours run across tiles rather than
+  filling each one flat. Maps from the real world don't, so ours look softer than theirs.
 - **Keep noise big on edges.** A field's edge is only as smooth as the field: use `createNoise(seed, 1)` or
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Shallow edges still step.** A line a tile side can't hold has to jump a corner or a middle at a time, so a
@@ -595,6 +596,24 @@ and a crossing of 9, so count what comes back.
 - **Fields painted separately leave a seam along their join.** A tile holds one overlay: merge them into one field first.
 - **"Sector index id mismatch" in the browser** means an aborted cache download, usually Vite's first-run
   reload. Delete the browser profile and try again.
+
+## Shipping a map
+
+Hallowed Night (`maps/hallowedNight.ts`) is the worked example.
+
+- List the recipe in `maps/shippedMaps.ts`. `getRecipe` and `check-maps` read that list. `check-maps` only picks
+  up ids in it or starting `scaperune_`.
+- Add a real entry to `MAPS` with `scaperune: true`. That flag gives it what `dev` gives a dev map: smooth ground,
+  the open world, the camera ease and collision rebuilt each time.
+- `seasonal: true` keeps it out of the campaign chain and opens it from the start. Without that, adding to `MAPS`
+  trips the unlock chain, difficulty order and unique enemies tests.
+- A recipe only writes a loc's id, type and rotation. To scale a model, give a loc nothing else uses a new model
+  and size in `src/rs/config/loctype/LocOverrides.ts`. Check the world index first.
+- `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
+  can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
+- Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay
+  lines vanish through `smoothField`.
+- Editing `src` while a browser job runs reloads its page through Vite and kills the job.
 
 ## The slim cache
 

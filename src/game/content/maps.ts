@@ -361,11 +361,7 @@ function createDevMap(recipe: MapRecipe): MapDef {
 export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
 
 // Every map, the campaign's and the fun ones
-export const ALL_MAPS: MapDef[] = [
-    ...MAPS,
-    ...FUN_MAPS,
-    ...DEV_MAPS,
-];
+export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
 

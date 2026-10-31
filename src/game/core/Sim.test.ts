@@ -2538,12 +2538,19 @@ describe("maps", () => {
                     continue;
                 }
                 const sim = createSim("warrior", 1, map.id);
-                const boss = sim.spawnEnemy(getEnemy(event.enemyId), "boss", {
-                    x: sim.player.x + 3,
-                    y: sim.player.y,
-                })!;
+                const def = getEnemy(event.enemyId);
+                const intro = def.boss?.intro;
+                // Her square is on the real map, not this test's field
+                const square = map.bossArena;
+                map.bossArena = undefined;
+                if (intro) {
+                    sim.startIntro(def, "finalBoss");
+                } else {
+                    sim.spawnEnemy(def, "boss", { x: sim.player.x + 3, y: sim.player.y });
+                }
                 let attacked = false;
-                for (let i = 0; i < 10 * TICKS_PER_SECOND && !attacked; i++) {
+                const seconds = 10 + (intro?.seconds ?? 0);
+                for (let i = 0; i < seconds * TICKS_PER_SECOND && !attacked; i++) {
                     sim.player.invulnerable = 100;
                     if (sim.state === "levelUp") {
                         sim.choose(0);
@@ -2554,7 +2561,8 @@ describe("maps", () => {
                     sim.step(0, 0);
                     attacked = sim.takeEvents().some((e) => e.type === "bossAttack");
                 }
-                expect(attacked, `${boss.def.id} on ${map.id}`).toBe(true);
+                map.bossArena = square;
+                expect(attacked, `${def.id} on ${map.id}`).toBe(true);
             }
         }
     });

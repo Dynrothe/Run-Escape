@@ -217,7 +217,7 @@ describe("The Mimic", () => {
                 hits.push(hp - sim.player.hp);
             }
         }
-        expect(hits).toEqual([1, 2, 3, 3, 3].map((n) => n * boss.damageScale));
+        expect(hits).toEqual([1, 2, 3, 3, 3].map((n) => Math.round(n * boss.damageScale)));
 
         sim.player.x = boss.x + 6;
         hooks(sim).stepStomp(boss);

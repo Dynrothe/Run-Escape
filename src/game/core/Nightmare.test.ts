@@ -256,6 +256,23 @@ describe("her phases", () => {
         }
     });
 
+    test("a fight in a named square brings the player in and keeps them there", () => {
+        const sim = createSim(96);
+        sim.map.bossArena = { baseX: BASE + 20, baseY: BASE + 30, size: 40 };
+        try {
+            sim.player.x = sim.player.prevX = BASE + 5.5;
+            sim.player.y = sim.player.prevY = BASE + 5.5;
+            const boss = startFight(sim, 1e6);
+            expect(sim.player.x).toBeGreaterThan(BASE + 20);
+            expect(sim.player.y).toBeGreaterThan(BASE + 30);
+            run(sim, 30, -1, 0);
+            expect(boss.dead).toBe(false);
+            expect(sim.player.x).toBeGreaterThanOrEqual(BASE + 20);
+        } finally {
+            sim.map.bossArena = undefined;
+        }
+    });
+
     test("hits go to her shield, not her hitpoints", () => {
         const sim = createSim();
         const boss = startFight(sim);
