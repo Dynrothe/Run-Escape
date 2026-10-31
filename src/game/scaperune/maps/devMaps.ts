@@ -8,6 +8,7 @@ import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { CLIFF_GALLERY } from "./cliffGallery";
 import { PREFAB_GALLERY } from "./prefabGallery";
+import { SHATTERED_REALM } from "./shatteredRealm";
 import { TERRAIN_TEST } from "./terrainTest";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
@@ -116,6 +117,7 @@ export const DEV_MAP_SETTINGS: Record<string, GeneratorSettings> = Object.fromEn
 
 export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     TERRAIN_TEST,
+    SHATTERED_REALM,
     ...GENERATED.map(([id, mapX, , mapY]) =>
         generatedRecipe(id, mapX, mapY ?? 104, DEV_MAP_SETTINGS[id]),
     ),
