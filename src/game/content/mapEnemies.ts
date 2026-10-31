@@ -1,5 +1,6 @@
 import { ENEMY_BY_ID } from "./enemies";
 import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
+import { RANDOM_EVENTS } from "./randomEvents";
 import { EnemyDef, MapDef } from "./types";
 
 // Every enemy id anywhere in a piece of content. It goes by the values, not by
@@ -19,12 +20,15 @@ function collectEnemyIds(value: unknown, found: Set<string>, seen: Set<object>):
 }
 
 // The enemies a run on the map can bring on screen: its waves, events and
-// bosses, and whatever they summon, split into, rise as or spawn in turn.
+// bosses, random events' too, and whatever they summon, split into, rise as or
+// spawn in turn.
 export function getMapEnemies(map: MapDef): EnemyDef[] {
     const ids = new Set<string>();
     const seen = new Set<object>();
     const pumpkins = PUMPKIN_MAPS.includes(map.id) ? PUMPKIN_OUTCOMES : [];
-    collectEnemyIds([map.waves, map.events, map.fun?.bosses, pumpkins], ids, seen);
+    // Random events go by their effects: the rest is names and lines of chat
+    const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
+    collectEnemyIds([map.waves, map.events, map.fun?.bosses, pumpkins, randomEvents], ids, seen);
     // A Set visits what's added to it as it goes
     for (const id of ids) {
         collectEnemyIds(ENEMY_BY_ID.get(id), ids, seen);

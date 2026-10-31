@@ -273,6 +273,16 @@ describe("her phases", () => {
         }
     });
 
+    test("random events wait until she's dead", () => {
+        const sim = createSim();
+        startFight(sim, 1e6);
+        for (let i = 0; i < 200 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 100;
+            sim.step(0, 0);
+            expect(sim.visitor).toBeUndefined();
+        }
+    });
+
     test("hits go to her shield, not her hitpoints", () => {
         const sim = createSim();
         const boss = startFight(sim);

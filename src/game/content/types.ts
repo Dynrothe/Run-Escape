@@ -38,7 +38,9 @@ export type StatKey =
     | "meleeKnockback"
     // Slots on top of the usual ones, bought in the shop
     | "weaponSlots"
-    | "passiveSlots";
+    | "passiveSlots"
+    // How much more often power-ups drop
+    | "powerUpRate";
 
 export type Stats = Record<StatKey, number>;
 
@@ -71,6 +73,7 @@ export function emptyStats(): Stats {
         meleeKnockback: 0,
         weaponSlots: 0,
         passiveSlots: 0,
+        powerUpRate: 0,
     };
 }
 
@@ -1168,6 +1171,8 @@ export type PowerUpDef = {
     weight: number;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
     color?: string;
+    // Coins the Mysterious Old Man wants for it, at the start of a run
+    price: number;
     // Flashes the screen this colour ("#rrggbb") when it's used
     flash?: string;
     // Cache sound effect when it's picked up (-1 for none)
@@ -1179,6 +1184,56 @@ export type PowerUpDef = {
     // Worn while it lasts
     look?: PowerUpLook;
     effect: PowerUpEffect;
+};
+
+// What walking up to a random event's visitor does
+export type RandomEventEffect =
+    // Sells power-ups for the run's coins (the Mysterious Old Man)
+    | { kind: "shop"; leaveLabel: string }
+    // An odd one out to spot, for a free power-up
+    | { kind: "quiz"; options: number; right: string; wrong: string; leaveLabel: string }
+    // Experience, as a share of a level
+    | { kind: "xp"; levels: number; message: string; sound: number }
+    // Hitpoints, as a share of the maximum. ignoredHit: a share of the maximum
+    // taken when they're left waiting, which never kills.
+    | { kind: "heal"; fraction: number; ignoredHit?: number; message: string; sound: number }
+    // A casket on the ground, as good as an elite's
+    | { kind: "casket"; message: string; sound: number }
+    // A boost for a while; name and objId are for its timer
+    | {
+          kind: "buff";
+          name: string;
+          objId: number;
+          stats: Partial<Stats>;
+          seconds: number;
+          // Keeps poison and drains off, like an antidote
+          cures?: boolean;
+          message: string;
+          sound: number;
+      }
+    // No one to walk up to: this boss comes straight for the player, with
+    // hitpoints that keep up with the run. Not while another boss is out.
+    | { kind: "ambush"; enemyId: string };
+
+// Someone from OSRS's random events, turning up now and then during a run
+export type RandomEventDef = {
+    id: string;
+    name: string;
+    // Relative chance of being the one that turns up
+    weight: number;
+    // Not before this many seconds into the run
+    minSeconds?: number;
+    // Standing around to be walked up to; an ambush has none of these
+    npcId?: number;
+    idleSeq?: number;
+    // On screen when they turn up, and when they're left waiting too long
+    arrive?: string;
+    leave?: string;
+    // Said over their head while they wait
+    shouts?: string[];
+    // What they say on the screen they open (shop and quiz)
+    speech?: string;
+    effect: RandomEventEffect;
 };
 
 // An Arceuus thrall: follows the player and attacks what's near. Ranged and

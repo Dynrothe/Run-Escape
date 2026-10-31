@@ -2,6 +2,7 @@ import { MapViewer } from "../../mapviewer/MapViewer";
 import { pixelRatio } from "../../util/DeviceUtil";
 import { CASKETS } from "../content/items";
 import { POWER_UP_COLOR, getPowerUp } from "../content/powerups";
+import { VISITOR_COLOR } from "../content/randomEvents";
 import { MapDef } from "../content/types";
 import { Sim } from "../core/Sim";
 
@@ -254,6 +255,12 @@ export class Minimap {
             const marker = Math.round(dot * 1.6);
             const [x, y] = onRim(half, toX(pickup.x), toY(pickup.y), marker + outline * 2);
             drawDot(ctx, x, y, marker, outline, color);
+        }
+        if (sim.visitor) {
+            const marker = Math.round(dot * 1.6);
+            const { x: vx, y: vy } = sim.visitor;
+            const [x, y] = onRim(half, toX(vx), toY(vy), marker + outline * 2);
+            drawDot(ctx, x, y, marker, outline, VISITOR_COLOR);
         }
         for (const boss of bosses) {
             const marker = Math.round(dot * 2.4);

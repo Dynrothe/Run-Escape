@@ -46,6 +46,7 @@ import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
@@ -947,6 +948,14 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     key={ui.chest.uid}
                     chest={ui.chest}
                     rerolls={hud?.rerolls ?? 0}
+                    client={client}
+                />
+            )}
+            {ui.overlay === "event" && ui.event && (
+                <EventModal
+                    key={ui.event.uid}
+                    event={ui.event}
+                    coins={hud?.coins ?? 0}
                     client={client}
                 />
             )}

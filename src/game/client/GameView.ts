@@ -7,6 +7,7 @@ import {
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
+import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
 import {
     DEATH_SINK_TICKS,
     MAX_DEATH_ANIM_TICKS,
@@ -25,6 +26,7 @@ import {
     Rampage,
     SimEvent,
     Thrall,
+    Visitor,
 } from "../core/entities";
 import { BossFightView } from "./BossFightView";
 import {
@@ -163,9 +165,12 @@ type SlashFx = {
 type AuraFx = { x: number; y: number; radius: number; start: number };
 type BlastFx = { x: number; y: number; radius: number; start: number };
 type SwingFx = { x: number; y: number; radius: number; start: number };
-// enemyUid 0: the player (enemies' uids start at 1)
+// enemyUid 0: the player, -1: a random event's visitor (enemies' uids start at 1)
 type Shout = { enemyUid: number; text: string; start: number };
 const PLAYER_SHOUT = 0;
+const VISITOR_SHOUT = -1;
+// Random events' visitors stand out from the crowd
+const VISITOR_SCALE = 1.5;
 type FlashFx = { color: string; start: number };
 
 function lerp(a: number, b: number, t: number): number {
@@ -260,6 +265,10 @@ export class GameView {
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== PLAYER_SHOUT);
                     this.shouts.push({ enemyUid: PLAYER_SHOUT, text: event.text, start: now });
                     break;
+                case "visitorShout":
+                    this.shouts = this.shouts.filter((s) => s.enemyUid !== VISITOR_SHOUT);
+                    this.shouts.push({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
+                    break;
                 case "slash":
                     this.slashes.push({
                         x: event.x,
@@ -334,6 +343,10 @@ export class GameView {
 
         for (const thrall of sim.thralls) {
             this.drawThrall(actors, sim, thrall, alpha);
+        }
+
+        if (sim.visitor) {
+            this.drawVisitor(actors, sim, sim.visitor);
         }
 
         for (const turret of sim.turrets) {
@@ -601,6 +614,32 @@ export class GameView {
         });
     }
 
+    // Facing the player, and blinking when they're about to go
+    private drawVisitor(actors: ActorRenderer, sim: Sim, visitor: Visitor): void {
+        const { def, x, y } = visitor;
+        const model = this.assets.get("visitor:" + def.id);
+        const left = (visitor.endTick - sim.tick) / TICKS_PER_SECOND;
+        if (
+            !model ||
+            def.idleSeq === undefined ||
+            (left < VISITOR_BLINK && Math.floor(sim.tick / 6) % 2 === 0)
+        ) {
+            return;
+        }
+        const anim = model.getAnim(def.idleSeq);
+        const player = sim.player;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick),
+            x,
+            this.ground(sim, x, y),
+            y,
+            yawFromVector(player.x - x, player.y - y),
+            { scale: VISITOR_SCALE, silhouette: true },
+        );
+    }
+
     private drawPlayer(actors: ActorRenderer, sim: Sim, alpha: number): void {
         // A power-up's look replaces the player's usual model and everything it does
         const powerUp = sim.wornPowerUp;
@@ -837,6 +876,15 @@ export class GameView {
                 x = lerp(player.prevX, player.x, alpha);
                 y = lerp(player.prevY, player.y, alpha);
                 height = this.assets.getPlayer()?.height ?? 200;
+            } else if (shout.enemyUid === VISITOR_SHOUT) {
+                const visitor = sim.visitor;
+                if (!visitor) {
+                    continue;
+                }
+                x = visitor.x;
+                y = visitor.y;
+                const model = this.assets.get("visitor:" + visitor.def.id);
+                height = (model?.height ?? 200) * VISITOR_SCALE;
             } else {
                 const enemy = this.enemiesByUid.get(shout.enemyUid);
                 if (!enemy || enemy.dead) {
@@ -1239,8 +1287,9 @@ export class GameView {
     }
 
     // A beam of the casket's tier colour over every casket on the ground (and
-    // of the power-up colour over power-ups), and an arrow at the edge of the
-    // screen for ones out of view
+    // of the power-up colour over power-ups, and the visitor colour over a
+    // random event's visitor), and an arrow at the edge of the screen for ones
+    // out of view
     private drawLootBeams(
         overlay: Overlay,
         sim: Sim,
@@ -1248,7 +1297,6 @@ export class GameView {
         now: number,
         scale: number,
     ): void {
-        const ctx = overlay.ctx;
         const pulse = 0.75 + 0.25 * Math.sin(now / 180);
         for (const pickup of sim.pickups) {
             let color: string;
@@ -1265,54 +1313,81 @@ export class GameView {
             if (pickup.disguise && pickup.disguise.openTick !== -1) {
                 color = DISGUISE_COLOR;
             }
-            const ground = this.ground(sim, pickup.x, pickup.y);
-            const base = overlay.project(pickup.x, ground, pickup.y, this.screen);
-            if (!base.visible) {
-                this.drawEdgeArrow(overlay, sim, pickup, alpha, color, pulse, scale);
-                continue;
-            }
-            const grow = Math.min(1, Math.max(0, (sim.tick - landTick) / 20));
-            const bx = base.x;
-            const by = base.y;
-            const glow = ctx.createRadialGradient(bx, by, 0, bx, by, 30 * scale);
-            glow.addColorStop(0, withAlpha(color, 0.55 * pulse));
-            glow.addColorStop(1, withAlpha(color, 0));
-            ctx.fillStyle = glow;
-            ctx.beginPath();
-            ctx.ellipse(bx, by, 30 * scale, 13 * scale, 0, 0, Math.PI * 2);
-            ctx.fill();
-            if (grow <= 0) {
-                continue;
-            }
-            const top = overlay.project(
-                pickup.x,
-                ground - LOOT_BEAM_HEIGHT * grow,
-                pickup.y,
-                this.screen2,
-            );
-            ctx.lineCap = "round";
-            const beam = ctx.createLinearGradient(bx, by, top.x, top.y);
-            beam.addColorStop(0, withAlpha(color, 0.7 * pulse));
-            beam.addColorStop(1, withAlpha(color, 0));
-            ctx.strokeStyle = beam;
-            ctx.lineWidth = 18 * scale;
-            ctx.beginPath();
-            ctx.moveTo(bx, by);
-            ctx.lineTo(top.x, top.y);
-            ctx.stroke();
-            const core = ctx.createLinearGradient(bx, by, top.x, top.y);
-            core.addColorStop(0, `rgba(255, 255, 255, ${0.8 * pulse})`);
-            core.addColorStop(1, "rgba(255, 255, 255, 0)");
-            ctx.strokeStyle = core;
-            ctx.lineWidth = 5 * scale;
-            ctx.stroke();
+            this.drawBeam(overlay, sim, pickup, landTick, color, alpha, pulse, scale);
         }
+        const visitor = sim.visitor;
+        if (visitor) {
+            this.drawBeam(
+                overlay,
+                sim,
+                visitor,
+                visitor.startTick,
+                VISITOR_COLOR,
+                alpha,
+                pulse,
+                scale,
+            );
+        }
+    }
+
+    private drawBeam(
+        overlay: Overlay,
+        sim: Sim,
+        target: { x: number; y: number },
+        landTick: number,
+        color: string,
+        alpha: number,
+        pulse: number,
+        scale: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const ground = this.ground(sim, target.x, target.y);
+        const base = overlay.project(target.x, ground, target.y, this.screen);
+        if (!base.visible) {
+            this.drawEdgeArrow(overlay, sim, target, alpha, color, pulse, scale);
+            return;
+        }
+        const grow = Math.min(1, Math.max(0, (sim.tick - landTick) / 20));
+        const bx = base.x;
+        const by = base.y;
+        const glow = ctx.createRadialGradient(bx, by, 0, bx, by, 30 * scale);
+        glow.addColorStop(0, withAlpha(color, 0.55 * pulse));
+        glow.addColorStop(1, withAlpha(color, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 30 * scale, 13 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        if (grow <= 0) {
+            return;
+        }
+        const top = overlay.project(
+            target.x,
+            ground - LOOT_BEAM_HEIGHT * grow,
+            target.y,
+            this.screen2,
+        );
+        ctx.lineCap = "round";
+        const beam = ctx.createLinearGradient(bx, by, top.x, top.y);
+        beam.addColorStop(0, withAlpha(color, 0.7 * pulse));
+        beam.addColorStop(1, withAlpha(color, 0));
+        ctx.strokeStyle = beam;
+        ctx.lineWidth = 18 * scale;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(top.x, top.y);
+        ctx.stroke();
+        const core = ctx.createLinearGradient(bx, by, top.x, top.y);
+        core.addColorStop(0, `rgba(255, 255, 255, ${0.8 * pulse})`);
+        core.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.strokeStyle = core;
+        ctx.lineWidth = 5 * scale;
+        ctx.stroke();
     }
 
     private drawEdgeArrow(
         overlay: Overlay,
         sim: Sim,
-        pickup: Pickup,
+        pickup: { x: number; y: number },
         alpha: number,
         color: string,
         pulse: number,

@@ -1,6 +1,7 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
 import { SOUNDS } from "../content/sounds";
 import { ItemUse } from "../content/types";
@@ -55,6 +56,10 @@ export function getGameSoundIds(): number[] {
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
     }
+    ids.push(VISITOR_SOUND);
+    for (const { effect } of RANDOM_EVENTS) {
+        ids.push("sound" in effect ? effect.sound : -1);
+    }
     for (const value of Object.values(SOUNDS)) {
         ids.push(...(Array.isArray(value) ? value : [value]));
     }
@@ -98,6 +103,9 @@ export class GameSounds {
                     audio.playAt(getPowerUp(event.id).hitSound ?? -1, event.x, event.y, px, py, {
                         volume: 0.9,
                     });
+                    break;
+                case "visitor":
+                    audio.play(event.sound, { volume: 1, minGap: 0 });
                     break;
                 case "powerUpEnded":
                     audio.play(getPowerUp(event.id).endSound ?? -1, { volume: 1, minGap: 0 });

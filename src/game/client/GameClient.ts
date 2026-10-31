@@ -56,7 +56,13 @@ import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import { ChoiceView, GameStore, HudView, QuestTrackView, Screen, SlotView } from "./GameStore";
 import { GameView } from "./GameView";
-import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./ItemViews";
+import {
+    getBuffViews,
+    getChestView,
+    getEventView,
+    getGearViews,
+    getInventoryViews,
+} from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
@@ -565,6 +571,33 @@ export class GameClient implements GameFrameHandler {
         this.updateHud(true);
     }
 
+    // Takes one of what a random event's visitor has on offer
+    chooseEvent(index: number): void {
+        const sim = this.sim;
+        if (!sim || sim.state !== "event") {
+            return;
+        }
+        if (!sim.chooseEventOption(index)) {
+            this.sounds.denied();
+            return;
+        }
+        this.handleEvents(sim, sim.takeEvents());
+        this.syncOverlay();
+        this.updateHud(true);
+    }
+
+    // Walks away from what a random event's visitor has on offer
+    leaveEvent(): void {
+        const sim = this.sim;
+        if (!sim || sim.state !== "event") {
+            return;
+        }
+        sim.leaveEvent();
+        this.handleEvents(sim, sim.takeEvents());
+        this.syncOverlay();
+        this.updateHud(true);
+    }
+
     // Rolls the level up's rewards or the open casket's item again, for one of
     // the run's rerolls. False when there's none left.
     reroll(): boolean {
@@ -785,7 +818,11 @@ export class GameClient implements GameFrameHandler {
                 this.resume();
             } else if (overlay === "none") {
                 this.pause();
+            } else if (overlay === "event" && code === "Escape") {
+                this.leaveEvent();
             }
+        } else if (overlay === "event" && code.startsWith("Digit")) {
+            this.chooseEvent(parseInt(code.slice(5)) - 1);
         } else if (overlay === "levelUp" && code.startsWith("Digit")) {
             const index = parseInt(code.slice(5)) - 1;
             if (index >= 0 && index < sim.choices.length) {
@@ -937,6 +974,11 @@ export class GameClient implements GameFrameHandler {
                 case "notice":
                     this.store.toast(event.message);
                     break;
+                case "visitor":
+                    if (event.message) {
+                        this.store.toast(event.message);
+                    }
+                    break;
                 case "alch":
                     // There was no casket screen to show what it was
                     if (this.display.autoAlch) {
@@ -968,6 +1010,13 @@ export class GameClient implements GameFrameHandler {
             this.resolveChest("alch");
         } else if (sim.state === "chest") {
             this.store.set({ overlay: "chest", chest: getChestView(sim), choices: [] });
+        } else if (sim.state === "event") {
+            this.store.set({
+                overlay: "event",
+                event: getEventView(sim),
+                choices: [],
+                chest: undefined,
+            });
         } else if (sim.state === "levelUp") {
             this.sounds.levelUp();
             this.store.set({ overlay: "levelUp", choices: getChoiceViews(sim), chest: undefined });

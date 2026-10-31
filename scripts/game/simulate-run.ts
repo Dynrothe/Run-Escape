@@ -170,10 +170,15 @@ function botMove(sim: Sim): { x: number; y: number } {
         }
     }
     // Bones nearby are worth a detour unless enemies are right on top, and
-    // power-ups twice as far
+    // power-ups and random events' visitors twice as far
     let best = Infinity;
     let bx = 0;
     let by = 0;
+    if (sim.visitor) {
+        bx = sim.visitor.x - player.x;
+        by = sim.visitor.y - player.y;
+        best = (bx * bx + by * by) / 4;
+    }
     for (const pickup of sim.pickups) {
         const dx = pickup.x - player.x;
         const dy = pickup.y - player.y;
@@ -302,6 +307,25 @@ function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: num
     return { x: move.x * a + move.y * c, y: move.x * b + move.y * d };
 }
 
+// Buys the dearest power-up it can until there's none it can, and knows the
+// answer to every question
+function eventChoice(sim: Sim): number {
+    const options = sim.offer?.options ?? [];
+    let best = -1;
+    let bestPrice = -1;
+    options.forEach((option, index) => {
+        if (option.kind === "answer") {
+            if (option.correct) {
+                best = index;
+            }
+        } else if (!option.sold && option.price <= sim.coins && option.price > bestPrice) {
+            best = index;
+            bestPrice = option.price;
+        }
+    });
+    return best;
+}
+
 function runOnce(characterId: string, seed: number) {
     const sim = new Sim({
         grid,
@@ -357,6 +381,13 @@ function runOnce(characterId: string, seed: number) {
             }
             for (const set of sim.activeSets) {
                 finished.add(set);
+            }
+            continue;
+        }
+        if (sim.state === "event") {
+            const choice = eventChoice(sim);
+            if (choice === -1 || !sim.chooseEventOption(choice)) {
+                sim.leaveEvent();
             }
             continue;
         }

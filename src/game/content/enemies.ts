@@ -775,6 +775,42 @@ export const ENEMIES: EnemyDef[] = [
     // enraged he casts his Fire Waves three at a time and barrages all around
     // you.
     {
+        // A random event's, on any map (RANDOM_EVENTS). Quick with his hands:
+        // what he takes comes back when he's killed.
+        id: "highwayman",
+        name: "Highwayman",
+        npcId: 518,
+        ...HUMAN,
+        hp: 450,
+        damage: 0,
+        speed: 2.8,
+        radius: 0.45,
+        xp: 150,
+        sounds: HUMAN_SOUNDS,
+        scale: 1.5,
+        knockbackResist: 0.8,
+        spawnMessage: "A highwayman jumps out at you! Stand and deliver!",
+        caskets: ["hard"],
+        boss: {
+            attackInterval: 1.2,
+            enrage: { message: "The highwayman gets desperate!", shout: "Hand it over!" },
+            attacks: [
+                {
+                    name: "Pickpocket",
+                    kind: "swing",
+                    damage: 2,
+                    windup: 0.4,
+                    cooldown: 1,
+                    range: 1.8,
+                    radius: 1.8,
+                    weight: 1,
+                    shout: "Your money or your life!",
+                    effect: { kind: "steal", fraction: 0.1 },
+                },
+            ],
+        },
+    },
+    {
         id: "wise_old_man",
         name: "Wise Old Man",
         npcId: 2108,
