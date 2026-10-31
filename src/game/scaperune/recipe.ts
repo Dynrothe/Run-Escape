@@ -1,5 +1,6 @@
 import type { MapFileLoader } from "../../rs/map/MapFileLoader";
 import { MAP_SQUARE_SIZE, type TileGrid } from "./format";
+import type { GeneratedMap } from "./generator";
 
 // What a recipe needs to know about a loc
 export type LocInfo = {
@@ -34,6 +35,10 @@ export type MapRecipe = {
     // because the game needs it before it builds anything.
     spawn: { x: number; y: number };
     build(context: BuildContext): TileGrid;
+    // A hand-made map's own build with what check-maps.ts holds it to, if it wants checking
+    detail?(context: BuildContext): GeneratedMap;
+    // What the map's called on the map list, if not its id
+    title?: { name: string; description: string };
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from

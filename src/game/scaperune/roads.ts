@@ -157,7 +157,7 @@ export class RoadNetwork {
         return touches;
     }
 
-    private add(line: RoadLine, width: (point: number) => number, trail: boolean): void {
+    add(line: RoadLine, width: (point: number) => number, trail: boolean): void {
         const { ground, corners } = this.build;
         const { points } = line;
         addPathToField(this.road, corners.x, corners.y, points, width);

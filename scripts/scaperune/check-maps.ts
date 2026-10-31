@@ -557,8 +557,8 @@ function checkMap(
 let failed = false;
 for (const recipe of SCAPERUNE_DEV_MAPS.filter((map) => GENERATED.test(map.id))) {
     const settings = DEV_MAP_SETTINGS[recipe.id];
-    failed =
-        !checkMap(recipe.id, (context) => generateMapDetail(settings, context), recipe) || failed;
+    const detail = recipe.detail ?? ((context) => generateMapDetail(settings, context));
+    failed = !checkMap(recipe.id, detail, recipe) || failed;
 }
 SWEEP.forEach((overrides, i) => {
     const settings: GeneratorSettings = { seed: 11 + i, ...DEFAULT_SETTINGS, ...overrides };
