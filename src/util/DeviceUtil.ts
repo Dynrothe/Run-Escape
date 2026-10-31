@@ -33,4 +33,13 @@ export const isWebGL2Supported = !!document.createElement("canvas").getContext("
 
 export const isWebGPUSupported = "gpu" in navigator;
 
-export const pixelRatio = window.devicePixelRatio || 1;
+// A finger is the main pointer: a phone or tablet, not a laptop with a touch screen
+export const isCoarsePointer = !!window.matchMedia?.("(pointer: coarse)").matches;
+
+// Phones report 3 or so, and filling that many pixels costs far more than it
+// shows on a screen this small
+const MAX_TOUCH_PIXEL_RATIO = 1.5;
+
+export const pixelRatio = isCoarsePointer
+    ? Math.min(window.devicePixelRatio || 1, MAX_TOUCH_PIXEL_RATIO)
+    : window.devicePixelRatio || 1;
