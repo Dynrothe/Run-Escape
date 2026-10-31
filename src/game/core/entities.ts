@@ -472,6 +472,8 @@ export type GroundPool = {
     damage: number;
     interval: number;
     effect?: PlayerEffectDef;
+    // Scenery it's drawn as
+    locId: number;
     startTick: number;
     endTick: number;
     // The next hit on a player standing in it

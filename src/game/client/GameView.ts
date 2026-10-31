@@ -22,6 +22,7 @@ import {
     FallingRock,
     Glyph,
     GroundFire,
+    GroundPool,
     Pickup,
     Rampage,
     SimEvent,
@@ -88,11 +89,11 @@ const HITSPLAT_SPRITE_SCALE = 0.85;
 const SLASH_MS = 180;
 // A disguised boss's beam, once it's shaking
 const DISGUISE_COLOR = "#ff3020";
-// Tiles round it that its warning covers: about what the boss fills
-const DISGUISE_RING = 3;
-// Bosses' pools: ticks they take to spread, seconds they take to dry up
+// Bosses' pools: ticks they take to spread and to dry up, and the model's
+// scale for each tile of radius
 const POOL_GROW_TICKS = 12;
-const POOL_FADE_SECONDS = 1;
+const POOL_DRY_TICKS = 50;
+const POOL_SCALE = 2.2;
 // Swooshes are white, apart from these weapons' (r, g, b)
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
@@ -475,6 +476,10 @@ export class GameView {
             this.drawFire(actors, sim, fire);
         }
 
+        for (const pool of sim.pools) {
+            this.drawPool(actors, sim, pool);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -566,6 +571,22 @@ export class GameView {
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
             });
+        });
+    }
+
+    // A boss's pool: the real thing on the ground, spreading as it lands and
+    // fading as it dries up, each one turned its own way
+    private drawPool(actors: ActorRenderer, sim: Sim, pool: GroundPool): void {
+        const model = this.assets.get("loc:" + pool.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= pool.endTick) {
+            return;
+        }
+        const size = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
+        const height = this.ground(sim, pool.x, pool.y);
+        actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
+            scale: pool.radius * POOL_SCALE * size,
+            alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
         });
     }
 
@@ -785,8 +806,6 @@ export class GameView {
             this.enemiesByUid.set(enemy.uid, enemy);
         }
 
-        this.drawPools(overlay, sim, now);
-        this.drawOpeningCaskets(overlay, sim);
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
         this.fight.drawGround(overlay, sim, alpha, now, scale);
@@ -948,45 +967,6 @@ export class GameView {
             drawHitsplat(ctx, sprite, p.x, p.y, pixel, hitsplat.amount, hitsplat.kind);
         }
         ctx.globalAlpha = 1;
-    }
-
-    // Bosses' pools on the ground, with a ring so the edge is easy to read,
-    // fading as they dry up
-    private drawPools(overlay: Overlay, sim: Sim, now: number): void {
-        const ctx = overlay.ctx;
-        for (const pool of sim.pools) {
-            const left = (pool.endTick - sim.tick) / TICKS_PER_SECOND;
-            const fade = Math.min(1, left / POOL_FADE_SECONDS);
-            const grow = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
-            const pulse = 0.5 + 0.5 * Math.sin(now / 240 + pool.uid);
-            this.traceGroundCircle(overlay, sim, pool.x, pool.y, pool.radius * grow);
-            ctx.fillStyle = `rgba(90, 160, 30, ${(0.34 + 0.08 * pulse) * fade})`;
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = `rgba(190, 240, 70, ${0.8 * fade})`;
-            ctx.stroke();
-        }
-    }
-
-    // A disguised boss about to come out: a red ring filling in round its
-    // casket, for stepping back from
-    private drawOpeningCaskets(overlay: Overlay, sim: Sim): void {
-        const ctx = overlay.ctx;
-        for (const pickup of sim.pickups) {
-            const disguise = pickup.disguise;
-            if (!disguise || disguise.openTick === -1) {
-                continue;
-            }
-            const shake = getEnemy(disguise.enemyId).disguise!.shake * TICKS_PER_SECOND;
-            const t = Math.min(1, 1 - (disguise.openTick - sim.tick) / shake);
-            this.traceGroundCircle(overlay, sim, pickup.x, pickup.y, DISGUISE_RING);
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = `rgba(255, 60, 40, ${0.6 + 0.4 * t})`;
-            ctx.stroke();
-            this.traceGroundCircle(overlay, sim, pickup.x, pickup.y, DISGUISE_RING * t);
-            ctx.fillStyle = `rgba(255, 40, 20, ${0.15 + 0.2 * t})`;
-            ctx.fill();
-        }
     }
 
     // A boss winding up: a red circle filling in over the ground a swing or

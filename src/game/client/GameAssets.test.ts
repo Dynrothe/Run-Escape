@@ -34,6 +34,12 @@ describe("enemy bakes", () => {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
                 }
+                if (attack.pool) {
+                    expect(keys).toContain("loc:" + attack.pool.locId);
+                }
+            }
+            for (const id of enemy.disguise?.warning?.spotAnims ?? []) {
+                expect(keys).toContain("spot:" + id);
             }
         }
     });

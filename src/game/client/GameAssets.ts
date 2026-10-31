@@ -143,6 +143,7 @@ function getSpotAnimIds(): number[] {
     }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
+        add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
@@ -389,6 +390,13 @@ export class GameAssets {
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                if (attack.pool) {
+                    locIds.add(attack.pool.locId);
+                }
+            }
+        }
         for (const powerUp of POWER_UPS) {
             if (powerUp.locId !== undefined) {
                 locIds.add(powerUp.locId);

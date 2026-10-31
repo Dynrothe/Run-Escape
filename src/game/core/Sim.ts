@@ -5970,11 +5970,28 @@ export class Sim {
         const near =
             Math.hypot(this.player.x - pickup.x, this.player.y - pickup.y) < DISGUISE_TOUCH;
         if (disguise.openTick === -1 && (near || this.tick >= disguise.shakeTick)) {
-            disguise.openTick = this.tick + Math.round(def.disguise!.shake * TICKS_PER_SECOND);
+            const ticks = Math.round(def.disguise!.shake * TICKS_PER_SECOND);
+            disguise.openTick = this.tick + ticks;
             this.events.push({ type: "notice", message: "The casket shudders..." });
+            this.showDisguiseWarning(pickup, def, ticks);
         }
         if (disguise.openTick !== -1 && this.tick >= disguise.openTick) {
             this.revealBoss(pickup, def);
+        }
+    }
+
+    // The ring of what's about to come out, around the shaking casket
+    private showDisguiseWarning(pickup: Pickup, def: EnemyDef, ticks: number): void {
+        const warning = def.disguise!.warning;
+        if (!warning) {
+            return;
+        }
+        const { spotAnims, count, ringRadius } = warning;
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const x = pickup.x + Math.cos(angle) * ringRadius;
+            const y = pickup.y + Math.sin(angle) * ringRadius;
+            this.addEffect(spotAnims[i % spotAnims.length], x, y, 0.3, ticks, 0, true);
         }
     }
 
@@ -6052,6 +6069,7 @@ export class Sim {
                     damage: pool.damage * enemy.damageScale,
                     interval: Math.round(pool.interval * TICKS_PER_SECOND),
                     effect: pool.effect,
+                    locId: pool.locId,
                     startTick: this.tick,
                     endTick: this.tick + Math.round(pool.seconds * TICKS_PER_SECOND),
                     nextTick: 0,
