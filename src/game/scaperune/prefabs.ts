@@ -4,8 +4,15 @@ import type { PlacedLoc, TileGrid } from "./format";
 import { cutPrefab, rotatePrefab } from "./prefab";
 import type { BuildContext } from "./recipe";
 
-// A rectangle of the real world, in world tiles: its south-west corner and size
-export type PrefabDef = { worldX: number; worldY: number; sizeX: number; sizeY: number };
+// A rectangle of the real world, in world tiles: its south-west corner and size, and any locs
+// that are there but aren't wanted
+export type PrefabDef = {
+    worldX: number;
+    worldY: number;
+    sizeX: number;
+    sizeY: number;
+    leaveOut?: number[];
+};
 
 // Rectangles that hold a whole building, every wall, and nothing else. Find more with
 // scripts/scaperune/find-prefabs.ts, and check them with check-prefabs.ts.
@@ -30,7 +37,14 @@ export const PREFABS: Record<string, PrefabDef> = {
     sophanem_fort: { worldX: 3259, worldY: 2776, sizeX: 10, sizeY: 9 },
     // Darkmeyer's stone and Burgh de Rott's rot
     darkmeyer_house: { worldX: 3639, worldY: 3375, sizeX: 10, sizeY: 7 },
-    darkmeyer_hall: { worldX: 3660, worldY: 3375, sizeX: 9, sizeY: 8 },
+    // It has a black tower at each end, far too tall without what stood round them
+    darkmeyer_hall: {
+        worldX: 3660,
+        worldY: 3375,
+        sizeX: 9,
+        sizeY: 8,
+        leaveOut: [39177, 39180],
+    },
     darkmeyer_shop: { worldX: 3639, worldY: 3383, sizeX: 10, sizeY: 8 },
     burgh_house: { worldX: 3529, worldY: 3310, sizeX: 7, sizeY: 7 },
     burgh_inn: { worldX: 3530, worldY: 3318, sizeX: 10, sizeY: 9 },
@@ -56,8 +70,6 @@ export type BridgeDef = PrefabDef & {
     turns: number;
     // How high its own banks are, to set it on ours. The river bed under it is at 0.
     bankHeight: number;
-    // Locs in its rectangle that are only there by chance
-    leaveOut?: number[];
 };
 
 export const BRIDGES: Record<string, BridgeDef> = {
@@ -87,7 +99,12 @@ const DOOR_NAME = /\b(door|gate|curtain)\b/i;
 const BUILDING_FEATHER = 4;
 
 export function loadPrefab(context: BuildContext, def: PrefabDef): TileGrid {
-    return cutPrefab(context.maps, def.worldX, def.worldY, def.sizeX, def.sizeY);
+    const prefab = cutPrefab(context.maps, def.worldX, def.worldY, def.sizeX, def.sizeY);
+    const { leaveOut } = def;
+    if (leaveOut) {
+        prefab.locs = prefab.locs.filter((loc) => !leaveOut.includes(loc.id));
+    }
+    return prefab;
 }
 
 export function isDoor(context: Pick<BuildContext, "locs">, loc: PlacedLoc): boolean {

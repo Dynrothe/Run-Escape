@@ -105,13 +105,14 @@ async function main(): Promise<void> {
         ...(Object.keys(BIOMES) as BiomeId[]).slice(4).map(
             (biome): Partial<GeneratorSettings> => ({
                 biome,
-                island: 0.3,
-                mountains: 0.5,
+                // A chasm cuts more off than a sea does
+                island: BIOMES[biome].chasm ? 0.1 : 0.3,
+                mountains: BIOMES[biome].chasm ? 0.2 : 0.5,
                 rubble: 1,
                 caves: 1,
-                ponds: 6,
-                lakes: 2,
-                rivers: 1,
+                ponds: BIOMES[biome].chasm ? 0 : 6,
+                lakes: BIOMES[biome].chasm ? 0 : 2,
+                rivers: BIOMES[biome].chasm ? 0 : 1,
                 buildings: 1,
                 trees: 1,
                 rocks: 1,

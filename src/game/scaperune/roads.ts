@@ -1,4 +1,3 @@
-import { PlacedLoc } from "./format";
 import { Build, createClimb, forTilesNear, getTouchedTiles, hasRelief, lerp } from "./mapBuild";
 import { Noise, createNoise, smoothField } from "./noise";
 import { Point, addPathToField, smoothPath } from "./paths";
@@ -494,7 +493,6 @@ export function placeBridges(
                 anchor: def.bankHeight,
                 keepUnderlays: true,
                 keepHeights: true,
-                skipLoc: (loc: PlacedLoc) => def.leaveOut?.includes(loc.id) ?? false,
             };
             const stampAt = crossing - BRIDGE_DECK_ROW;
             const bridge = river.vertical ? eastWest : rotatePrefab(eastWest, 1, context.locs);

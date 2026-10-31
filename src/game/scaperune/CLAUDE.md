@@ -126,7 +126,9 @@ would show as a line across it, so each piece of water is the kind of the biome 
 
 **Chasms.** A biome with `chasm` has a drop for a sea. The ground comes down in `CHASM_EDGE` tiles rather than `SHORE_REACH`,
 so its edge is a cliff, and the "water" is overlay 39, the Cosmic Plane's stars. `hasRelief` is true for these, so all the
-rock logic runs on the edge. Fords can't cross it, so anything the sea cuts off is blocked and only looked at.
+rock logic runs on the edge. Fords can't cross it, so anything the sea cuts off is blocked and only looked at, and that
+can leave too little to play on: a river cuts the land in two for good, and its water's stars too, so `Sky islands` has
+none.
 
 **Finding what a place is made of**, all without a browser:
 
