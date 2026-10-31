@@ -638,6 +638,11 @@
         display: none;
     }
 
+    /* The Quiz Master's question is no use unseen */
+    .ui-levelup .ui-event-speech {
+        display: block;
+    }
+
     .ui-choices {
         flex: 1 1 auto;
         flex-direction: row;

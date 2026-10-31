@@ -1,3 +1,4 @@
+import { getBuffViews } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import {
@@ -14,13 +15,24 @@ import {
 } from "../content/endless";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
+import { getMapEnemies } from "../content/mapEnemies";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
 import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
+import {
+    OLD_MAN_OFFERS,
+    RANDOM_EVENTS,
+    RANDOM_EVENT_FIRST,
+    VISITOR_DISTANCE,
+    VISITOR_LIFETIME,
+    getQuizGroups,
+    getRandomEvent,
+} from "../content/randomEvents";
+import { SHOP_UPGRADES } from "../content/shop";
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { DPS_WINDOW_SECONDS, LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
-import { Enemy, SimEvent } from "./entities";
+import { Enemy, SimEvent, Visitor } from "./entities";
 import { TestLoc, makeGrid } from "./world/testGrid";
 import { endlessXpForLevel, runXpForLevel } from "./xp";
 
@@ -68,6 +80,9 @@ function runFor(sim: Sim, seconds: number, move: "circle" | "still" = "circle"):
         }
         if (sim.state === "chest") {
             sim.resolveChest("take");
+        }
+        if (sim.state === "event") {
+            sim.leaveEvent();
         }
         if (move === "circle") {
             const angle = (sim.tick / TICKS_PER_SECOND) * 0.8;
@@ -4481,5 +4496,323 @@ describe("the damage meter", () => {
         const dps = run();
         expect(dps).toBeGreaterThan(0);
         expect(run()).toBe(dps);
+    });
+});
+
+describe("random events", () => {
+    // One particular visitor, with the player standing somewhere else for now
+    function withVisitor(id: string, sim = createSim()): Visitor {
+        expect(sim.startRandomEvent(getRandomEvent(id))).toBe(true);
+        return sim.visitor!;
+    }
+
+    function walkUp(sim: Sim): void {
+        const visitor = sim.visitor!;
+        sim.player.x = visitor.x + 0.5;
+        sim.player.y = visitor.y;
+        sim.step(0, 0);
+    }
+
+    test("every visitor can be baked and says what they're doing", () => {
+        for (const event of RANDOM_EVENTS) {
+            if (event.effect.kind === "ambush") {
+                expect(getEnemy(event.effect.enemyId).boss).toBeDefined();
+                continue;
+            }
+            expect(event.npcId).toBeDefined();
+            expect(event.idleSeq).toBeDefined();
+            expect(event.arrive).toBeTruthy();
+            expect(event.leave).toBeTruthy();
+            expect(event.shouts?.length).toBeGreaterThan(0);
+        }
+    });
+
+    test("they turn up in time, one at a time and not the same twice running", () => {
+        // Endless, and with no crowd to slow it down or kill the player
+        const sim = createSim("wizard", 1, "lumbridge", emptyStats(), true);
+        const seen: string[] = [];
+        let first = -1;
+        for (let i = 0; i < 4000 * TICKS_PER_SECOND && seen.length < 10; i++) {
+            const before = sim["lastRandomEventId"];
+            sim.enemies = [];
+            sim.step(0, 0);
+            sim.takeEvents();
+            const latest = sim["lastRandomEventId"];
+            if (latest && latest !== before) {
+                seen.push(latest);
+                if (first === -1) {
+                    first = sim.seconds;
+                }
+            }
+        }
+        // (a repeat would never register as a change, so ten means none came twice running)
+        expect(seen.length).toBe(10);
+        expect(first).toBeGreaterThanOrEqual(RANDOM_EVENT_FIRST[0]);
+        expect(first).toBeLessThanOrEqual(RANDOM_EVENT_FIRST[1]);
+        expect(new Set(seen).size).toBeGreaterThan(3);
+    });
+
+    test("a visitor waits, says their piece, then goes", () => {
+        const sim = createSim();
+        const visitor = withVisitor("genie", sim);
+        const distance = Math.hypot(visitor.x - sim.player.x, visitor.y - sim.player.y);
+        expect(distance).toBeGreaterThanOrEqual(VISITOR_DISTANCE[0] - 1);
+        expect(distance).toBeLessThanOrEqual(VISITOR_DISTANCE[1] + 1);
+        expect(sim.takeEvents().some((e) => e.type === "visitor")).toBe(true);
+        sim.step(0, 0);
+        expect(sim.takeEvents().some((e) => e.type === "visitorShout")).toBe(true);
+        runFor(sim, VISITOR_LIFETIME - 1, "still");
+        expect(sim.visitor).toBe(visitor);
+        runFor(sim, 2, "still");
+        expect(sim.visitor).toBeUndefined();
+    });
+
+    test("the genie grants experience", () => {
+        const sim = createSim();
+        withVisitor("genie", sim);
+        const level = sim.xpForNextLevel - sim.xpForThisLevel;
+        const xp = sim.xp;
+        walkUp(sim);
+        expect(sim.visitor).toBeUndefined();
+        expect(sim.xp - xp).toBeGreaterThanOrEqual(level * 0.75);
+    });
+
+    test("the sandwich lady feeds you, and it's no good ignoring her", () => {
+        const sim = createSim();
+        withVisitor("sandwich_lady", sim);
+        sim.player.hp = 5;
+        walkUp(sim);
+        expect(sim.player.hp).toBe(5 + sim.player.maxHp * 0.4);
+
+        const ignored = createSim();
+        const { endTick } = withVisitor("sandwich_lady", ignored);
+        ignored.tick = endTick - 1;
+        ignored.step(0, 0);
+        expect(ignored.visitor).toBeUndefined();
+        expect(ignored.player.hp).toBeLessThan(ignored.player.maxHp);
+
+        // But she's not out to kill
+        const close = createSim();
+        const last = withVisitor("sandwich_lady", close);
+        close.player.hp = 1;
+        close.tick = last.endTick - 1;
+        close.step(0, 0);
+        expect(close.visitor).toBeUndefined();
+        expect(close.state).toBe("playing");
+        expect(close.player.hp).toBe(1);
+    });
+
+    test("Rick Turpentine leaves a casket to walk over", () => {
+        const sim = createSim();
+        withVisitor("rick_turpentine", sim);
+        walkUp(sim);
+        expect(sim.pickups.some((p) => p.kind === "casket")).toBe(true);
+    });
+
+    test("the strange plant's fruit speeds you up and cures poison", () => {
+        const sim = createSim();
+        withVisitor("strange_plant", sim);
+        sim.player.poisonEnd = sim.tick + 500;
+        sim.player.poisonDamage = 1;
+        walkUp(sim);
+        expect(sim.stats.moveSpeed).toBeCloseTo(0.3);
+        expect(sim.player.poisonEnd).toBe(-1);
+        expect(sim.cured).toBe(true);
+        // It's not an item, so its timer goes by what it says
+        expect(getBuffViews(sim)[0]).toMatchObject({ name: "Strange fruit", objId: 464 });
+    });
+
+    describe("the Mysterious Old Man", () => {
+        function meetOldMan(coins: number, sim = createSim()): Sim {
+            withVisitor("mysterious_old_man", sim);
+            sim.coins = coins;
+            walkUp(sim);
+            return sim;
+        }
+
+        test("has the run wait while he shows different power-ups", () => {
+            const sim = meetOldMan(0);
+            expect(sim.state).toBe("event");
+            const ids = sim.offer!.options.map((o) => (o.kind === "powerUp" ? o.powerUpId : ""));
+            expect(new Set(ids).size).toBe(OLD_MAN_OFFERS);
+            const tick = sim.tick;
+            sim.step(1, 0);
+            expect(sim.tick).toBe(tick);
+            sim.leaveEvent();
+            expect(sim.state).toBe("playing");
+            expect(sim.offer).toBeUndefined();
+        });
+
+        test("wants paying", () => {
+            const sim = meetOldMan(0);
+            sim.takeEvents();
+            expect(sim.chooseEventOption(0)).toBe(false);
+            expect(sim.takeEvents().some((e) => e.type === "powerUp")).toBe(false);
+            expect(sim.state).toBe("event");
+        });
+
+        test("sells each thing once and is done when it's all gone", () => {
+            const sim = meetOldMan(100000);
+            const prices = sim.offer!.options.map((o) => (o.kind === "powerUp" ? o.price : 0));
+            sim.takeEvents();
+            expect(sim.chooseEventOption(0)).toBe(true);
+            expect(sim.coins).toBe(100000 - prices[0]);
+            expect(sim.takeEvents().some((e) => e.type === "powerUp")).toBe(true);
+            expect(sim.chooseEventOption(0)).toBe(false);
+            expect(sim.coins).toBe(100000 - prices[0]);
+            expect(sim.chooseEventOption(1)).toBe(true);
+            expect(sim.state).toBe("event");
+            expect(sim.chooseEventOption(2)).toBe(true);
+            expect(sim.state).toBe("playing");
+        });
+
+        test("doesn't put off the next power-up to drop", () => {
+            const sim = meetOldMan(100000);
+            const lastDrop = sim["lastPowerUpTick"];
+            sim.chooseEventOption(0);
+            expect(sim["lastPowerUpTick"]).toBe(lastDrop);
+        });
+
+        test("charges more later on, and less in endless runs where coins are worth less", () => {
+            const price = (sim: Sim) => sim["oldManPrice"](getPowerUp("magnet"));
+            const early = createSim();
+            const late = createSim();
+            late.tick = 10 * 60 * TICKS_PER_SECOND;
+            const endless = createSim("warrior", 1, "lumbridge", emptyStats(), true);
+            endless.tick = late.tick;
+            expect(price(late)).toBeGreaterThan(price(early));
+            expect(price(endless)).toBeLessThan(price(late));
+        });
+
+        test("a level up that came in meanwhile waits its turn", () => {
+            const sim = meetOldMan(0);
+            sim.xp = sim.xpForNextLevel;
+            sim.leaveEvent();
+            expect(sim.state).toBe("levelUp");
+        });
+
+        test("a nuke that finishes off the final boss ends the run", () => {
+            const sim = meetOldMan(100000);
+            const boss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss")!;
+            boss.hp = 1;
+            sim.offer!.options[0] = {
+                kind: "powerUp",
+                powerUpId: "bot_nuke",
+                price: 1,
+                sold: false,
+            };
+            sim.chooseEventOption(0);
+            expect(sim.state).toBe("victory");
+            expect(sim.offer).toBeUndefined();
+        });
+    });
+
+    describe("the Quiz Master", () => {
+        function meetQuizMaster(seed = 1): Sim {
+            const sim = createSim("warrior", seed);
+            withVisitor("quiz_master", sim);
+            walkUp(sim);
+            return sim;
+        }
+
+        test("always has one odd one out, from another group", () => {
+            const groups = getQuizGroups();
+            expect(groups.length).toBeGreaterThan(2);
+            for (let seed = 1; seed <= 40; seed++) {
+                const options = meetQuizMaster(seed).offer!.options;
+                expect(options.length).toBe(4);
+                const answers = options.flatMap((o) => (o.kind === "answer" ? [o] : []));
+                const odd = answers.filter((o) => o.correct);
+                expect(odd.length).toBe(1);
+                const rest = answers.filter((o) => !o.correct).map((o) => o.itemId);
+                const group = groups.find((g) => g.some((item) => item.id === rest[0]))!;
+                expect(rest.every((id) => group.some((item) => item.id === id))).toBe(true);
+                expect(group.some((item) => item.id === odd[0].itemId)).toBe(false);
+            }
+        });
+
+        test("gives a power-up for the right answer and nothing for a wrong one", () => {
+            const right = meetQuizMaster();
+            right.takeEvents();
+            const answers = right.offer!.options;
+            right.chooseEventOption(answers.findIndex((o) => o.kind === "answer" && o.correct));
+            expect(right.state).toBe("playing");
+            expect(right.takeEvents().some((e) => e.type === "powerUp")).toBe(true);
+
+            const wrong = meetQuizMaster();
+            wrong.takeEvents();
+            wrong.chooseEventOption(
+                wrong.offer!.options.findIndex((o) => o.kind === "answer" && !o.correct),
+            );
+            expect(wrong.state).toBe("playing");
+            expect(wrong.takeEvents().some((e) => e.type === "powerUp")).toBe(false);
+        });
+    });
+
+    describe("the highwayman", () => {
+        const event = getRandomEvent("highwayman");
+
+        test("keeps up with the run, robs you, and pays it back with a casket", () => {
+            const sim = createSim();
+            sim.tick = 8 * 60 * TICKS_PER_SECOND;
+            sim.coins = 1000;
+            expect(sim.startRandomEvent(event)).toBe(true);
+            expect(sim.visitor).toBeUndefined();
+            const boss = sim.enemies.find((e) => e.def.id === "highwayman")!;
+            expect(boss.maxHp).toBeGreaterThan(getEnemy("highwayman").hp);
+            sim.applyPlayerEffect({ kind: "steal", fraction: 0.1 }, boss);
+            expect(sim.coins).toBe(900);
+            boss.hp = 1;
+            sim["damageEnemy"](boss, 10, 0, sim.player.x, sim.player.y);
+            expect(sim.coins).toBe(1000);
+            expect(sim.pickups.some((p) => p.kind === "casket" && p.tier === "hard")).toBe(true);
+        });
+
+        test("waits until there's something to steal and no one else about", () => {
+            const pick = (sim: Sim) => {
+                const seen = new Set<string>();
+                for (let i = 0; i < 200; i++) {
+                    seen.add(sim["rollRandomEvent"]()!.id);
+                }
+                return seen;
+            };
+            const sim = createSim();
+            expect(pick(sim)).not.toContain("highwayman");
+            sim.tick = (event.minSeconds ?? 0) * TICKS_PER_SECOND;
+            expect(pick(sim)).toContain("highwayman");
+            sim.spawnEnemy(getEnemy("wise_old_man"), "boss");
+            expect(pick(sim)).not.toContain("highwayman");
+        });
+
+        test("is baked for every map", () => {
+            for (const map of [...MAPS, ...FUN_MAPS]) {
+                expect(getMapEnemies(map).map((def) => def.id)).toContain("highwayman");
+            }
+        });
+    });
+});
+
+describe("the power-up rate", () => {
+    // Power-ups from a steady two kills a second for a few hours
+    function dropsOver(rate: number): number {
+        const metaStats = emptyStats();
+        metaStats.powerUpRate = rate;
+        const sim = createSim("warrior", 7, "lumbridge", metaStats);
+        let drops = 0;
+        const ticks = 4 * 60 * 60 * TICKS_PER_SECOND;
+        for (sim.tick = 0; sim.tick < ticks; sim.tick += TICKS_PER_SECOND / 2) {
+            sim["rollPowerUp"](sim.player.x, sim.player.y);
+            drops += sim.pickups.length;
+            sim.pickups.length = 0;
+        }
+        return drops;
+    }
+
+    test("Runecraft's ranks have them drop that much more often", () => {
+        const runecraft = SHOP_UPGRADES.find((u) => u.id === "runecraft")!;
+        const rate = runecraft.perRank * runecraft.maxRank;
+        const ratio = dropsOver(rate) / dropsOver(0);
+        expect(ratio).toBeGreaterThan((1 + rate) * 0.9);
+        expect(ratio).toBeLessThan((1 + rate) * 1.1);
     });
 });
