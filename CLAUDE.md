@@ -38,6 +38,7 @@ go stale. Add anything that cost you time to work out.
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
+| What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`   |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
@@ -112,6 +113,10 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
+- `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
+  than the frame rate: headless runs on a software rasterizer.
+- Enemies are baked per map when a run starts, so an enemy from another map, spawned from the
+  console, takes a moment to show up.
 - Headless Chromium needs `--use-angle=swiftshader --enable-unsafe-swiftshader`, and a persistent
   profile, or the cache won't fit in its storage quota. The cache can take a while to load.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state

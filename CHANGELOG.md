@@ -5,6 +5,12 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- The game draws far less of the map on busy maps: only what's on screen, not everything nearby.
+- The game starts much faster and uses far less memory. Each map's monsters now load when you set
+  off for it, so the first run on a map takes a moment longer to start.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added

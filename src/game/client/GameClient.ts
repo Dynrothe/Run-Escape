@@ -9,6 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
+import { getMapEnemies } from "../content/mapEnemies";
 import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
@@ -443,15 +444,19 @@ export class GameClient implements GameFrameHandler {
             map.fun !== undefined ||
             (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
         const characterId = map.fun?.character ?? this.store.getSnapshot().characterId;
-        if (!this.grids.has(mapId)) {
+        const enemies = getMapEnemies(map);
+        if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
                 loadingText: `Travelling to ${map.name}`,
-                loadingProgress: 50,
+                loadingProgress: 25,
             });
         }
         try {
             this.grid = await this.loadGrid(mapId);
+            await this.assets.loadEnemies(enemies, (done, total) => {
+                this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
+            });
         } catch (e) {
             console.error("Failed to load map", mapId, e);
             this.store.set({ screen: "characters" });

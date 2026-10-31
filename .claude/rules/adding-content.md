@@ -91,7 +91,8 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
 animations, sounds and stats. Tests check that every enemy a map or boss refers to exists, and
-that every boss attacks.
+that every boss attacks. It's baked for the maps that use it (`getMapEnemies` finds its id wherever
+a map, or an enemy on that map, mentions it), so that needs nothing added.
 
 ## Map
 

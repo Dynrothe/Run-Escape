@@ -91,7 +91,37 @@ src/rs/model/player/         player models from identity kits and worn items
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 opcodes, and two bugs were fixed (floor collision missing on the edge of every
-map square, and a resize during loading leaving the 3D view in a corner).
+map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
+map squares its own way (see below).
+
+### What gets drawn
+
+A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are
+baked into cells of 8 tiles (32 without `WEBGL_multi_draw`, where each one is a real draw call).
+`CullGrid` gives each cell a bounding box of what's really in it: terrain goes in by tile, merged
+models by triangle, and instanced models and animated locs by where they stand. Anything wider
+than a cell gets a box of its own, so it can't stretch its cell's box over the rest. A frame tests
+the boxes against the camera's frustum and leaves the rest out of the multi draw with a count of
+0: `gl_DrawID` picks a draw's data, so the list has to stay in order. This holds at any camera
+angle, because a box holds everything in it, whatever's looking at it. `SdMapLoaderInput.cullCellSize`
+turns it on; those squares have no LOD or interact draws, which the viewer needs and the game
+doesn't. The boxes follow what `main.vert.glsl` does to a vertex (`CullGrid.addInstance`), so a change
+to where the shader puts things needs one there too. `render-stats.ts --cull=8` checks it.
+
+Actors are culled as spheres in `ActorRenderer.draw`, by `ActorModel.reach`: the furthest any vertex
+gets from the model's origin in any frame of any animation, so bosses' big swings count.
+
+The game has no hover menus, so its frames have no interact buffer, and with no multisampling
+they're drawn straight into the texture the screen quad reads.
+
+Enemies are baked when a run starts, for that map (`getMapEnemies`, `GameAssets.loadEnemies`), in
+place of the last map's: they're most of the actors' memory, and a map uses few of them. It goes by
+the enemy ids it finds in the map's waves, events and bosses, and in those enemies, so a new way for
+an enemy to bring on another needs nothing added. An enemy that isn't baked anyway (the console's
+`spawnBoss`) gets baked when it's first drawn, and shows up a moment later.
+
+`window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
+`await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
 
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS
 Wiki's [list of in-game sound IDs](https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs).
@@ -120,6 +150,9 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         map in caches/collision, built on the
                                                         first run)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
+scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
+                                         draw ranges, bytes (--cull=8 checks the culling boxes and
+                                         counts what spots draw, --bake is memory per map's actors)
 ```
 
 Tests: `npm test`.

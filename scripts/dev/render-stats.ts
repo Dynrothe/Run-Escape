@@ -14,6 +14,8 @@
 import { mat4, vec3 } from "gl-matrix";
 
 import { GameAssets } from "../../src/game/client/GameAssets";
+import { ENEMIES } from "../../src/game/content/enemies";
+import { getMapEnemies } from "../../src/game/content/mapEnemies";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { Frustum } from "../../src/mapviewer/Frustum";
 import { ActorBakeLoader } from "../../src/mapviewer/webgl/actor/ActorBakeLoader";
@@ -675,7 +677,8 @@ async function reportMap(mapId: string, state: ReturnType<typeof createWorkerSta
 async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<void> {
     const loader = new ActorBakeLoader();
     const rows: { key: string; bytes: number; kind: string }[] = [];
-    for (const request of GameAssets.getBaseRequests()) {
+    const requests = [...GameAssets.getBaseRequests(), ...GameAssets.getEnemyRequests(ENEMIES)];
+    for (const request of requests) {
         const result = await loader.load(state, {
             requests: [request],
             loadedTextureIds: new Set<number>(),
@@ -697,6 +700,19 @@ async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<
     console.log([...kinds].map(([kind, bytes]) => `${kind} ${mb(bytes)}`).join(", "));
     for (const row of rows.slice(0, 15)) {
         console.log(`  ${mb(row.bytes).padStart(10)}  ${row.key}`);
+    }
+    const bytesByKey = new Map(rows.map((row) => [row.key, row.bytes]));
+    const common = rows
+        .filter((row) => !row.key.startsWith("npc:"))
+        .reduce((n, r) => n + r.bytes, 0);
+    console.log(`\nnot enemies: ${mb(common)}; each map's enemies:`);
+    for (const map of ALL_MAPS) {
+        const enemies = getMapEnemies(map);
+        let bytes = 0;
+        for (const { key } of GameAssets.getEnemyRequests(enemies)) {
+            bytes += bytesByKey.get(key) ?? 0;
+        }
+        console.log(`  ${mb(bytes).padStart(10)}  ${map.id} (${enemies.length} enemies)`);
     }
 }
 
