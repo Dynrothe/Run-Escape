@@ -5,6 +5,8 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.19.0 - 2026-10-31
+
 ### Added
 
 - A DPS meter under the quests shows how much damage you've been dealing, from everything, over
