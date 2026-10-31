@@ -155,18 +155,18 @@ version and how to run it.
   to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there from the
   start.
 
-    | Map        | For beating it                                   | For its bosses                                                                                       |
-    | ---------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert     | Osmumten's fang                                  | Smoke Burst (Fareed), Blood Burst (Dessous), Shadow Burst (Damis)                                    |
-    | Fremennik  | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
-    | Karamja    | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend    | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
-    | Varlamore  | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
-    | Morytania  | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
-    | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
-    | Inferno    |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
-    | Hallowed Night |                                              | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
+    | Map            | For beating it                                   | For its bosses                                                                                       |
+    | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+    | Desert         | Osmumten's fang                                  | Smoke Burst (Fareed), Blood Burst (Dessous), Shadow Burst (Damis)                                    |
+    | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
+    | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
+    | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Varlamore      | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
+    | Morytania      | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
+    | God Wars       | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
+    | Prifddinas     | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts

@@ -1,6 +1,6 @@
 import { ENEMY_BY_ID } from "./enemies";
-import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
 import { RANDOM_EVENTS } from "./randomEvents";
+import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
 import { EnemyDef, MapDef } from "./types";
 
 // Every enemy id anywhere in a piece of content. It goes by the values, not by
