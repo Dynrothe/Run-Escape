@@ -137,6 +137,10 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
 
 ## Conventions
 
+- **Show it with real assets, not coloured overlays.** Bosses, hazards, projectiles and effects use the
+  game's own models, spot animations and objects, so a player can see what's happening from what's in the
+  world. Look in the cache first. Reach for a colour overlay, a flat shape or a sprite only when nothing
+  real can do the job, and then keep it small and say so in the pull request.
 - **Pull requests**: work on a branch and open a pull request. Don't commit to `main`. Keep one
   topic in each pull request, unless asked to combine them.
 - **Stage files by name**, not with `git add -A`. `.gitignore` has `caches/`, which only matches a
