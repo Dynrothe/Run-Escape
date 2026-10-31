@@ -44,7 +44,7 @@ function parseRecipe(args: string[]): MapRecipe {
     for (const [name, value] of values) {
         const def = SETTINGS[name as SettingKey];
         given[name] =
-            name !== "seed" && def?.kind === "choice"
+            name !== "seed" && (def?.kind === "choice" || def?.kind === "heightmap")
                 ? value
                 : def?.kind === "flag"
                   ? value === "true"

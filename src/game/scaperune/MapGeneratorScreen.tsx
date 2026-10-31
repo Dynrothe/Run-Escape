@@ -8,11 +8,13 @@ import { GENERATED_MAP_ID, drawGeneratedMap, installGeneratedMap } from "./gener
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
+    HEIGHTMAP_SIZE,
     SETTINGS,
     SETTING_PRESETS,
     SETTING_SECTIONS,
     SLOW_ARENA_SQUARES,
     SettingKey,
+    encodeHeightmap,
     formatSettings,
     getSettingsError,
     parseSettings,
@@ -31,6 +33,26 @@ function randomSeed(): number {
 // Kept while the screen's closed, for coming back to it after a run
 let lastSettings: GeneratorSettings = { seed: 1, ...DEFAULT_SETTINGS };
 let lastPreview: { url: string; settings: GeneratorSettings } | undefined;
+
+// An image as a heightmap: its brightness, shrunk to fit
+async function readHeightmap(file: File): Promise<string> {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = HEIGHTMAP_SIZE;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(bitmap, 0, 0, HEIGHTMAP_SIZE, HEIGHTMAP_SIZE);
+    bitmap.close();
+    const { data } = ctx.getImageData(0, 0, HEIGHTMAP_SIZE, HEIGHTMAP_SIZE);
+    const heights = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE);
+    for (let y = 0; y < HEIGHTMAP_SIZE; y++) {
+        for (let x = 0; x < HEIGHTMAP_SIZE; x++) {
+            // Images have their first row at the top, and north's at the top
+            const at = (x + (HEIGHTMAP_SIZE - 1 - y) * HEIGHTMAP_SIZE) * 4;
+            heights[x + y * HEIGHTMAP_SIZE] = (data[at] + data[at + 1] + data[at + 2]) / 3;
+        }
+    }
+    return encodeHeightmap(heights);
+}
 
 function SettingField({
     name,
@@ -61,6 +83,27 @@ function SettingField({
                     onChange={(e) => change({ [name]: e.target.valueAsNumber })}
                 />
                 <span className="ui-mapgen-value">{Number((value as number).toFixed(2))}</span>
+            </>
+        );
+    } else if (def.kind === "heightmap") {
+        control = (
+            <>
+                <input
+                    type="file"
+                    accept="image/*"
+                    aria-label={def.label}
+                    onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                            void readHeightmap(file).then((text) => change({ [name]: text }));
+                        }
+                    }}
+                />
+                {value !== "" && (
+                    <button className="ui-button" onClick={() => change({ [name]: "" })}>
+                        Clear
+                    </button>
+                )}
             </>
         );
     } else if (def.kind === "flag") {

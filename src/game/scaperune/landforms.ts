@@ -1,7 +1,7 @@
 import type { TileRect } from "./collision";
 import { Noise, createFractal, createNoise, createRidged, createRng, warpNoise } from "./noise";
 import type { Point } from "./paths";
-import type { GeneratorSettings } from "./settings";
+import { GeneratorSettings, HEIGHTMAP_SIZE, decodeHeightmap } from "./settings";
 import { MAX_HEIGHT, Terrain, limitSlope } from "./terrain";
 
 // The shape of the land, before water, roads or anything else: rolling hills, then mountain
@@ -377,6 +377,29 @@ function addMountainRing({ settings, bounds, terrain, mountain }: Shaping): void
     });
 }
 
+// A height from an image, stretched over the arena and on past it, from the floor of the land
+// at black to peakHeight at white. It takes the place of hills and ranges.
+function addHeightmap({ settings, bounds, terrain, mountain }: Shaping): void {
+    const bytes = decodeHeightmap(settings.heightmap);
+    if (!bytes) {
+        return;
+    }
+    const { arena } = bounds;
+    const last = HEIGHTMAP_SIZE - 1;
+    const read = (x: number, y: number) => bytes[x + y * HEIGHTMAP_SIZE] / 255;
+    forCorners(terrain, (x, y, at) => {
+        const u = Math.min(Math.max((x - arena.x0) / (arena.x1 + 1 - arena.x0), 0), 1) * last;
+        const v = Math.min(Math.max((y - arena.y0) / (arena.y1 + 1 - arena.y0), 0), 1) * last;
+        const tx = Math.min(Math.floor(u), last - 1);
+        const ty = Math.min(Math.floor(v), last - 1);
+        const south = lerp(read(tx, ty), read(tx + 1, ty), u - tx);
+        const north = lerp(read(tx, ty + 1), read(tx + 1, ty + 1), u - tx);
+        const value = lerp(south, north, v - ty);
+        terrain.height[at] = lerp(LAND_FLOOR, settings.peakHeight, value);
+        mountain[at] = smoothstep((value - 0.4) / 0.3);
+    });
+}
+
 // Steps in the mountains: flat benches with risers between. Where the mountain's steep a
 // riser's a cliff, and where it's gentle it's a slope, so they come out as ledges that
 // run out into ramps by themselves.
@@ -424,6 +447,7 @@ export function createRelief(settings: GeneratorSettings, bounds: LandformBounds
     const craters: Crater[] = [];
     addHills(shaping, hills);
     addMountains(shaping);
+    addHeightmap(shaping);
     addPlateaus(shaping);
     addMesas(shaping);
     addCanyons(shaping);

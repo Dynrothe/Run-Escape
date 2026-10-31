@@ -10,11 +10,14 @@ import { createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
+    HEIGHTMAP_SIZE,
     MAX_ARENA_SQUARES,
     SETTINGS,
     SETTING_PRESETS,
     SETTING_SECTIONS,
     SettingKey,
+    decodeHeightmap,
+    encodeHeightmap,
     formatSettings,
     generateMap,
     generatedRecipe,
@@ -93,6 +96,26 @@ describe("generateMap", () => {
         expect(() => parseSettings('{"biome":"moon"}')).toThrow(/moon/);
     });
 
+    // Rising from west to east
+    const ramp = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) =>
+        Math.round(((i % HEIGHTMAP_SIZE) / (HEIGHTMAP_SIZE - 1)) * 255),
+    );
+
+    it("takes the ground's height from a heightmap", () => {
+        const full = settings({ heightmap: encodeHeightmap(ramp), ponds: 0, boundary: "forest" });
+        const grid = generateMap(full, context);
+        const arena = getGeneratedArena(full);
+        const heightAt = (x: number) =>
+            grid.levels[0].heights[x + ((arena.y0 + arena.y1) >> 1) * (grid.sizeX + 1)];
+        expect(heightAt(arena.x1 - 4)).toBeGreaterThan(heightAt(arena.x0 + 4) + 80);
+        expect(decodeHeightmap(encodeHeightmap(ramp))).toEqual(ramp);
+    });
+
+    it("won't take something that isn't a heightmap", () => {
+        expect(getSettingsError(settings({ heightmap: "nonsense" }))).toBeDefined();
+        expect(getSettingsError(settings({ heightmap: 5 as unknown as string }))).toBeDefined();
+    });
+
     // What to change, on top of what makes the setting count at all
     const CHANGES: { [K in SettingKey]: [GeneratorSettings[K], Partial<GeneratorSettings>?] } = {
         squaresX: [3],
@@ -120,6 +143,7 @@ describe("generateMap", () => {
         rubble: [1, { mountains: 0.6 }],
         snow: [0.8, { mountains: 0.6 }],
         passWidth: [12, { mountains: 0.8 }],
+        heightmap: [encodeHeightmap(ramp)],
         plateaus: [2],
         mesas: [3],
         canyons: [1],

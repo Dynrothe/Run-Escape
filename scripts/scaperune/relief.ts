@@ -59,7 +59,7 @@ function main(): void {
         }
         const def = SETTINGS[name as SettingKey];
         given[name] =
-            name !== "seed" && def?.kind === "choice"
+            name !== "seed" && (def?.kind === "choice" || def?.kind === "heightmap")
                 ? value
                 : def?.kind === "flag"
                   ? value === "true"

@@ -98,6 +98,7 @@ export function lerp(a: number, b: number, t: number): number {
 export function hasRelief(settings: GeneratorSettings): boolean {
     return (
         settings.mountains > 0 ||
+        settings.heightmap !== "" ||
         settings.boundary === "mountains" ||
         settings.plateaus > 0 ||
         settings.mesas > 0 ||

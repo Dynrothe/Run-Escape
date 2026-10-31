@@ -68,6 +68,9 @@ export type GeneratorSettings = {
     snow: number;
     // Tiles across a pass between pieces of ground cut off from each other
     passWidth: number;
+    // A height for the arena from an image, in place of hills and ranges: a square of bytes
+    // as base64, as encodeHeightmap makes it. Empty for none.
+    heightmap: string;
     plateaus: number;
     mesas: number;
     canyons: number;
@@ -142,7 +145,8 @@ export type NumberSettingDef = Shown & {
 };
 export type ChoiceSettingDef = Shown & { kind: "choice"; label: string; options: string[] };
 export type FlagSettingDef = Shown & { kind: "flag"; label: string };
-export type SettingDef = NumberSettingDef | ChoiceSettingDef | FlagSettingDef;
+export type HeightmapSettingDef = Shown & { kind: "heightmap"; label: string };
+export type SettingDef = NumberSettingDef | ChoiceSettingDef | FlagSettingDef | HeightmapSettingDef;
 
 function number(label: string, min: number, max: number, step: number, more?: Shown) {
     return { kind: "number", label, min, max, step, ...more } as const;
@@ -165,6 +169,9 @@ function flag(label: string, more?: Shown) {
 export const MAX_ARENA_SQUARES = 28;
 export const SLOW_ARENA_SQUARES = 16;
 
+// A heightmap's a square of this many bytes a side
+export const HEIGHTMAP_SIZE = 129;
+
 const hasBuildings = (settings: GeneratorSettings) => settings.buildings > 0;
 const hasRoads = (settings: GeneratorSettings) => settings.roads > 0;
 const notSea = (settings: GeneratorSettings) => settings.boundary !== "sea";
@@ -172,6 +179,7 @@ const hasMountains = (settings: GeneratorSettings) =>
     settings.mountains > 0 || settings.boundary === "mountains";
 const hasRock = (settings: GeneratorSettings) =>
     hasMountains(settings) ||
+    settings.heightmap !== "" ||
     settings.plateaus > 0 ||
     settings.mesas > 0 ||
     settings.canyons > 0 ||
@@ -209,6 +217,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     rubble: share("Rubble", { when: hasRock }),
     snow: share("Snow", { when: hasRock }),
     passWidth: number("Pass width", 3, 12, 1, { when: hasRock }),
+    heightmap: { kind: "heightmap", label: "Heightmap image" },
     plateaus: number("Plateaus", 0, 6, 1),
     mesas: number("Mesas", 0, 12, 1),
     canyons: number("Canyons", 0, 3, 1),
@@ -294,6 +303,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "rubble",
             "snow",
             "passWidth",
+            "heightmap",
             "plateaus",
             "mesas",
             "canyons",
@@ -356,6 +366,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     rubble: 0.5,
     snow: 0,
     passWidth: 6,
+    heightmap: "",
     plateaus: 0,
     mesas: 0,
     canyons: 0,
@@ -538,6 +549,21 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
     },
 };
 
+// A heightmap as a setting: bytes, a row at a time, HEIGHTMAP_SIZE a side
+export function encodeHeightmap(heights: Uint8Array): string {
+    return btoa(String.fromCharCode(...heights));
+}
+
+// A heightmap's bytes, or undefined if it isn't one
+export function decodeHeightmap(text: string): Uint8Array | undefined {
+    try {
+        const bytes = Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
+        return bytes.length === HEIGHTMAP_SIZE * HEIGHTMAP_SIZE ? bytes : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 // What's wrong with some settings, or undefined
 export function getSettingsError(settings: GeneratorSettings): string | undefined {
     if (!Number.isInteger(settings.seed) || settings.seed < 0) {
@@ -552,6 +578,10 @@ export function getSettingsError(settings: GeneratorSettings): string | undefine
         } else if (def.kind === "choice") {
             if (!def.options.includes(String(value))) {
                 return `${def.label} can't be ${String(value)}.`;
+            }
+        } else if (def.kind === "heightmap") {
+            if (typeof value !== "string" || (value !== "" && !decodeHeightmap(value))) {
+                return `${def.label} isn't a heightmap.`;
             }
         } else {
             if (typeof value !== "number" || !Number.isFinite(value)) {

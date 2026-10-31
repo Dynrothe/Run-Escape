@@ -16,7 +16,9 @@ import {
     FORD_HALF_WIDTH,
     GeneratedMap,
     GeneratorSettings,
+    HEIGHTMAP_SIZE,
     SETTING_PRESETS,
+    encodeHeightmap,
     generateMapDetail,
     generatedRecipe,
 } from "../../src/game/scaperune/generator";
@@ -34,6 +36,13 @@ import { addCustomMapSquares } from "../../src/rs/map/CustomMapFileLoader";
 import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
 
 const GENERATED = /^scaperune_(?!palette|prefabs|cliffs)/;
+
+// The worst a heightmap could be: black and white squares, with no way between them
+const CHECKS = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) => {
+    const x = i % HEIGHTMAP_SIZE;
+    const y = Math.floor(i / HEIGHTMAP_SIZE);
+    return ((x >> 4) + (y >> 4)) % 2 === 0 ? 0 : 255;
+});
 
 // Everywhere it can go wrong: every boundary and biome, and each setting at its worst,
 // on small arenas and long thin ones
@@ -100,6 +109,7 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     { mesas: 12, plateaus: 6, buildings: 1, towns: 3, biome: "desert", boundary: "forest" },
     { volcanoes: 2, squaresX: 3, squaresY: 3, snow: 1, rivers: 1 },
     { volcanoes: 2, mesas: 12, canyons: 3, mountains: 1, plateaus: 6, biome: "swamp" },
+    { heightmap: encodeHeightmap(CHECKS), peakHeight: 255, squaresX: 3, squaresY: 3, rivers: 1 },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -466,7 +476,7 @@ SWEEP.forEach((overrides, i) => {
     const settings: GeneratorSettings = { seed: 11 + i, ...DEFAULT_SETTINGS, ...overrides };
     const recipe = generatedRecipe("sweep", 70, 134, settings);
     const passed = checkMap(
-        `sweep ${i} ${JSON.stringify(overrides)}`,
+        `sweep ${i} ${JSON.stringify({ ...overrides, heightmap: undefined })}`,
         (context) => generateMapDetail(settings, context),
         recipe,
     );
