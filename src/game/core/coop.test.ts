@@ -255,6 +255,60 @@ describe("co-op", () => {
         expect(together.xp).toBeLessThan(alone.xp);
     });
 
+    it("has a boss's pools and bullets land on each of the party, and curse just one", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        b.player.x = a.player.x + 6;
+        b.player.y = a.player.y;
+        const pool = { enemyId: "goblin", radius: 1, damage: 5, interval: 50, locId: -1 };
+        sim.pools = [a, b].map((h, i) => ({
+            ...pool,
+            uid: i,
+            x: h.player.x,
+            y: h.player.y,
+            startTick: 0,
+            endTick: 1000,
+            nextTick: 0,
+        }));
+        sim.step();
+        expect(a.player.hp).toBeLessThan(a.player.maxHp);
+        expect(b.player.hp).toBeLessThan(b.player.maxHp);
+
+        const bullets = sim.bullets;
+        sim.bulletSources.push({
+            attack: getEnemy("the_nightmare").boss!.attacks[0],
+            enemy: sim.spawnEnemy(getEnemy("goblin"), "normal")!,
+        });
+        sim.pools = [];
+        a.player.invulnerable = b.player.invulnerable = 0;
+        const before = [a.player.hp, b.player.hp];
+        for (const h of [a, b]) {
+            bullets.add(h.player.x, h.player.y, 0, 0, 0, 0.3, 4, 10, 0, sim.tick);
+        }
+        sim.step();
+        expect(a.player.hp).toBeLessThan(before[0]);
+        expect(b.player.hp).toBeLessThan(before[1]);
+
+        sim.takeEvents();
+        sim.as(1, () => sim.applyPlayerEffect({ kind: "curse", attacks: 3 }));
+        expect(b.curse).toBeDefined();
+        expect(a.curse).toBeUndefined();
+        expect(sim.takeEvents().find((e) => e.type === "playerCursed")?.hero).toBe(1);
+    });
+
+    it("has the blast once a boss's walkers are in land on the whole party", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        b.player.x = a.player.x + 20;
+        const nightmare = getEnemy("the_nightmare");
+        const boss = sim.spawnEnemy(nightmare, "boss")!;
+        const attack = nightmare.boss!.attacks.find((attack) => attack.summon?.walkTo)!;
+        const blast = { attack, enemies: [], absorbed: 2, perAbsorbed: 1 };
+        sim.as(0, () => (sim as unknown as Record<string, Function>).stepWalkers(boss, blast));
+        expect(a.player.hp).toBeLessThan(a.player.maxHp);
+        expect(b.player.hp).toBeLessThan(b.player.maxHp);
+    });
+
     it("plays out the same on every player's copy", () => {
         usePortableMath(true);
         const host = createParty(["warrior", "wizard", "ranger"], 9, 0);

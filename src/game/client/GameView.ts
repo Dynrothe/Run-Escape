@@ -4,6 +4,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
@@ -22,12 +23,14 @@ import {
     FallingRock,
     Glyph,
     GroundFire,
+    GroundPool,
     Pickup,
     Rampage,
     SimEvent,
     Thrall,
     Visitor,
 } from "../core/entities";
+import { BossFightView } from "./BossFightView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -51,6 +54,9 @@ const SHIELDED_TINT = 0xd0b8ff;
 // far from the boss, in tiles
 const SHELTER_LENGTH = 30;
 const CANNON_SCALE = 0.75;
+// From this many tiles' radius, a dev map stands something on more than its middle
+const BIG_ACTOR_RADIUS = 0.95;
+const BIG_ACTOR_LIFT = 0.6;
 // Yaws face the way NPC models do (south at 0); the cannon's barrel points
 // north in its model, so it's turned half a turn to aim where it shoots
 const CANNON_YAW_OFFSET = 1024;
@@ -61,6 +67,9 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+
+// What's running from a boss's entrance fades out this many ticks before it goes
+const LEAVING_FADE_TICKS = 20;
 
 // Heights above the ground, in tiles
 const PROJECTILE_HEIGHT = 0.9;
@@ -83,6 +92,13 @@ const MAX_HITSPLATS = 120;
 // the font's own size, where it's crisp
 const HITSPLAT_SPRITE_SCALE = 0.85;
 const SLASH_MS = 180;
+// A disguised boss's beam, once it's shaking
+const DISGUISE_COLOR = "#ff3020";
+// Bosses' pools: ticks they take to spread and to dry up, and the model's
+// scale for each tile of radius
+const POOL_GROW_TICKS = 12;
+const POOL_DRY_TICKS = 50;
+const POOL_SCALE = 2.2;
 // Swooshes are white, apart from these weapons' (r, g, b)
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
@@ -92,6 +108,7 @@ const SLASH_COLORS: Record<string, string> = {
     sanguine_scythe: "150, 20, 40",
     ancient_godsword: "150, 20, 40",
     burning_claws: "240, 130, 40",
+    inquisitors_mace: "230, 200, 120",
     dinhs_blazing_bulwark: "240, 130, 40",
 };
 const AURA_MS = 320;
@@ -185,9 +202,14 @@ export class GameView {
     // teammate (GameClient sets it)
     viewHero = 0;
 
-    constructor(readonly assets: GameAssets) {}
+    private readonly fight: BossFightView;
+
+    constructor(readonly assets: GameAssets) {
+        this.fight = new BossFightView(assets);
+    }
 
     reset(): void {
+        this.fight.reset();
         this.hitsplats = [];
         this.slashes = [];
         this.auras = [];
@@ -212,6 +234,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
+            this.fight.onEvent(event, now);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
@@ -287,6 +310,10 @@ export class GameView {
                 case "blast":
                     this.blasts.push({ x: event.x, y: event.y, radius: event.radius, start: now });
                     break;
+                case "bossAbsorbBlast":
+                    // Everywhere: there's no getting out of it
+                    this.flash = { color: "#ff40c0", start: now };
+                    break;
                 case "powerUp": {
                     const powerUp = getPowerUp(event.id);
                     if (powerUp.flash) {
@@ -308,6 +335,25 @@ export class GameView {
 
     private ground(sim: Sim, x: number, y: number): number {
         return sim.grid.getHeight(x, y) / 128;
+    }
+
+    // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
+    // middle alone: it'd sink into the hill on one side. It's lifted part of the way to the
+    // highest ground under it.
+    private groundUnder(sim: Sim, x: number, y: number, radius: number): number {
+        const middle = this.ground(sim, x, y);
+        if (!sim.map.scaperune || radius < BIG_ACTOR_RADIUS) {
+            return middle;
+        }
+        const reach = radius * 0.7;
+        // Negative is up
+        const top = Math.min(
+            this.ground(sim, x - reach, y - reach),
+            this.ground(sim, x + reach, y - reach),
+            this.ground(sim, x - reach, y + reach),
+            this.ground(sim, x + reach, y + reach),
+        );
+        return middle + Math.min(top - middle, 0) * BIG_ACTOR_LIFT;
     }
 
     submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
@@ -421,6 +467,13 @@ export class GameView {
                 if (t < 1) {
                     yaw = (yaw + Math.round(t * 2048)) & 2047;
                 }
+                // A boss in disguise, about to come out: rattling on the spot
+                const opening = pickup.disguise && pickup.disguise.openTick !== -1;
+                if (opening) {
+                    yaw = (yaw + Math.round(Math.sin(tick * 1.4) * 120)) & 2047;
+                    height -= 0.12 * Math.abs(Math.sin(tick * 0.9));
+                    scale = 1.5;
+                }
             } else if (pickup.kind === "powerUp") {
                 // Blinks when it's about to go
                 const age = (tick - pickup.spawnTick) / TICKS_PER_SECOND;
@@ -449,9 +502,15 @@ export class GameView {
             this.drawFire(actors, sim, fire);
         }
 
+        for (const pool of sim.pools) {
+            this.drawPool(actors, sim, pool);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
+
+        this.fight.submitActors(actors, sim, alpha);
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -538,6 +597,22 @@ export class GameView {
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
             });
+        });
+    }
+
+    // A boss's pool: the real thing on the ground, spreading as it lands and
+    // fading as it dries up, each one turned its own way
+    private drawPool(actors: ActorRenderer, sim: Sim, pool: GroundPool): void {
+        const model = this.assets.get("loc:" + pool.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= pool.endTick) {
+            return;
+        }
+        const size = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
+        const height = this.ground(sim, pool.x, pool.y);
+        actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
+            scale: pool.radius * POOL_SCALE * size,
+            alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
         });
     }
 
@@ -713,13 +788,23 @@ export class GameView {
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }
-        const height = this.ground(sim, x, y) + (sink * model.height * enemy.scale) / 128;
+        const height =
+            this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
+            (sink * model.height * enemy.scale) / 128;
         let tint = enemy.tint;
         if (enemy.frozen > 0 && !enemy.dead) {
             tint = FROZEN_TINT;
-        } else if (enemy.shieldEnd > tick) {
+        } else if (
+            enemy.shieldEnd > tick &&
+            !enemy.leaving &&
+            !enemy.totemOf &&
+            enemy.risingEnd === 0
+        ) {
             tint = SHIELDED_TINT;
         }
+        // Fading out as it reaches the edge
+        const leaving = enemy.leaving;
+        const fade = leaving ? Math.min(1, (leaving.endTick - tick) / LEAVING_FADE_TICKS) : 1;
         // The boss is hit all the time; a full flash would leave him white
         const flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
         actors.draw(model, anim, frame, x, height, y, enemy.yaw, {
@@ -727,6 +812,7 @@ export class GameView {
             tint,
             flash,
             silhouette: enemy.boss,
+            alpha: Math.max(0, fade),
         });
     }
 
@@ -742,6 +828,7 @@ export class GameView {
 
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
+        this.fight.drawGround(overlay, sim, alpha, now, scale);
         this.drawAuras(overlay, sim, now);
         this.drawBlasts(overlay, sim, now, scale);
         this.drawRockTargets(overlay, sim, now, scale);
@@ -781,6 +868,7 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
+        this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
     }
 
@@ -918,6 +1006,16 @@ export class GameView {
                 ),
             );
             const kind = windup.attack.kind;
+            // Those that mark the ground themselves (BossFightView)
+            if (
+                kind === "ground" ||
+                kind === "quarters" ||
+                kind === "surge" ||
+                kind === "pattern" ||
+                windup.attack.cone !== undefined
+            ) {
+                continue;
+            }
             if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
                 // Where to hide instead of where it hits (it hits everywhere else)
                 continue;
@@ -1209,9 +1307,12 @@ export class GameView {
                 color = CASKETS[pickup.tier].color;
                 landTick += CASKET_HOP_TICKS;
             } else if (pickup.kind === "powerUp") {
-                color = POWER_UP_COLOR;
+                color = getPowerUp(pickup.powerUp ?? "").color ?? POWER_UP_COLOR;
             } else {
                 continue;
+            }
+            if (pickup.disguise && pickup.disguise.openTick !== -1) {
+                color = DISGUISE_COLOR;
             }
             this.drawBeam(overlay, sim, pickup, landTick, color, alpha, pulse, scale);
         }

@@ -2,6 +2,7 @@ import {
     BossAttackDef,
     CasketTier,
     EnemyDef,
+    PlayerEffectDef,
     RandomEventDef,
     Stats,
     ThrallDef,
@@ -49,6 +50,52 @@ export type BossWindup = {
     // Where a blast lands: where the player was when it started, and for a
     // blast of several, spots scattered around it
     targets: { x: number; y: number }[];
+    // The way the boss faced as it began (a cone swing's wedge)
+    dirX: number;
+    dirY: number;
+    // A surge's lane, there on the ground the whole time it winds up
+    lane?: SurgeLane;
+};
+
+// Across the arena, from where a surge starts to where it stops; what's within
+// halfWidth tiles of the line is in its way
+export type SurgeLane = {
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    halfWidth: number;
+};
+
+// A surge under way: the boss going down its lane
+export type BossSurge = {
+    attack: BossAttackDef;
+    lane: SurgeLane;
+    startTick: number;
+    endTick: number;
+    // The heroes it's gone through (by index), each hit once
+    hit: number[];
+};
+
+// Where a boss fought in phases (BossDef.phases) has got to
+export type BossPhase = {
+    // Counts from 0
+    index: number;
+    stage: "shield" | "totems";
+    shield: number;
+    shieldMax: number;
+    // Its four totems
+    totems: Enemy[];
+    // The attack it's to open this phase with, until it has
+    opener?: BossAttackDef;
+};
+
+// Enemies walking to a boss to be absorbed (BossAttackDef summon.walkTo)
+export type BossWalkers = {
+    attack: BossAttackDef;
+    enemies: Enemy[];
+    absorbed: number;
+    perAbsorbed: number;
 };
 
 export type BossState = {
@@ -63,6 +110,108 @@ export type BossState = {
     enraged: boolean;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    phase?: BossPhase;
+    surge?: BossSurge;
+    walkers?: BossWalkers;
+    // It stands still until this tick, as its volleys go out
+    channelEnd: number;
+    // BossDef.stomp: hits since the player stepped under it, and the next one
+    stomps?: number;
+    nextStomp?: number;
+};
+
+// A boss's big entrance (BossDef.intro)
+export type BossIntro = {
+    def: EnemyDef;
+    type: "boss" | "finalBoss";
+    hp?: number;
+    startTick: number;
+    riseTick: number;
+    endTick: number;
+    // Up once it's risen
+    boss?: Enemy;
+};
+
+// Off to the edge of the map, as a boss rises (BossDef.intro): it can't be
+// hit, doesn't fight, and is gone at endTick
+export type EnemyLeaving = {
+    vx: number;
+    vy: number;
+    startTick: number;
+    endTick: number;
+};
+
+// A spot on the ground a boss has marked (BossAttackDef ground), shown from
+// startTick. It lands at landTick, or with armed spots, goes off under the
+// player any time from landTick to endTick (fuseTick once they've set it off).
+export type GroundHazard = {
+    uid: number;
+    enemyUid: number;
+    attack: BossAttackDef;
+    x: number;
+    y: number;
+    radius: number;
+    damage: number;
+    startTick: number;
+    landTick: number;
+    endTick: number;
+    armed: boolean;
+    fuseTick: number;
+};
+
+// A boss's corpse flowers (BossAttackDef quarters), crossing at (x, y). The
+// lines are up from startTick and they hurt from hurtTick. safe: the quarter
+// that doesn't, see quarterOf.
+export type BossQuarters = {
+    enemyUid: number;
+    attack: BossAttackDef;
+    x: number;
+    y: number;
+    safe: number;
+    damage: number;
+    startTick: number;
+    hurtTick: number;
+    endTick: number;
+    nextHurt: number;
+};
+
+// Which of the four quarters around (cx, cy) a spot is in
+export function quarterOf(cx: number, cy: number, x: number, y: number): number {
+    return (x >= cx ? 1 : 0) + (y >= cy ? 2 : 0);
+}
+
+// Volleys still to come from a boss's pattern attack
+export type BulletEmitter = {
+    enemyUid: number;
+    attack: BossAttackDef;
+    // Index into Sim.bulletAttacks
+    source: number;
+    nextTick: number;
+    volleysLeft: number;
+    angle: number;
+    damage: number;
+};
+
+// The player's controls shuffled (PlayerEffectDef curse): x and y of what's
+// pressed, times this
+export type PlayerCurse = {
+    matrix: readonly [number, number, number, number];
+    attacksLeft: number;
+};
+
+// Eating away at the player, until it bursts at burstTick
+export type PlayerParasite = {
+    enemyUid: number;
+    attack: BossAttackDef;
+    damage: number;
+    startTick: number;
+    burstTick: number;
+};
+
+// Held in place by enemies at their side (BossAttackDef summon.holds)
+export type PlayerHold = {
+    enemies: Enemy[];
+    endTick: number;
 };
 
 // When an enemy can next use what its def gives it besides walking up and
@@ -141,6 +290,15 @@ export type Enemy = {
     xp: number;
     // Takes no damage until this tick (EnemyDef.shield); 0 once it's down
     shieldEnd: number;
+    // Rising (BossDef.intro) until this tick, doing nothing else; 0 once it's up
+    risingEnd: number;
+    // On its way off the map (BossDef.intro)
+    leaving?: EnemyLeaving;
+    // One of a boss's totems (BossPhasesDef): its hitpoints are the charge it
+    // still needs, and it can't die
+    totemOf?: Enemy;
+    // Walking to this boss to be absorbed (BossAttackDef summon.walkTo)
+    walksTo?: Enemy;
     // The last tick a blocked hit showed on it, so they don't pile up
     blockedTick: number;
     // The enemy that called it in (EnemyDef.spawns), 0 for none
@@ -294,6 +452,36 @@ export type Pickup = {
     tier?: CasketTier;
     // Power-ups only: which one
     powerUp?: string;
+    // A casket that's really a boss (EnemyDef.disguise)
+    disguise?: DisguisedBoss;
+};
+
+export type DisguisedBoss = {
+    enemyId: string;
+    // Its hitpoints on this map, when they're not its own
+    hp?: number;
+    // When it starts shaking if it's left alone
+    shakeTick: number;
+    // When it opens, -1 until it's shaking
+    openTick: number;
+};
+
+// A pool on the ground that hurts the player (BossAttackDef.pool)
+export type GroundPool = {
+    uid: number;
+    enemyId: string;
+    x: number;
+    y: number;
+    radius: number;
+    damage: number;
+    interval: number;
+    effect?: PlayerEffectDef;
+    // Scenery it's drawn as
+    locId: number;
+    startTick: number;
+    endTick: number;
+    // The next hit on a player standing in it
+    nextTick: number;
 };
 
 // A one-off spot animation somewhere in the world (spell impacts, strikes)
@@ -521,6 +709,8 @@ export type Buff = {
 // Stats a boss attack lowered, until endTick
 export type Debuff = {
     id: string;
+    // Doses of a debuff that stacks; its stats are all of them added up
+    stacks?: number;
     name: string;
     iconObjId: number;
     stats: Partial<Stats>;
@@ -572,6 +762,25 @@ type SimEventBody =
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
     | { type: "bossSwing"; x: number; y: number; radius: number }
+    // A boss's big entrance has begun (the screen's going dark), and it's risen
+    | { type: "bossIntro"; enemyId: string; sound: number }
+    | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
+    // A boss fought in phases has moved on; message: what to do now
+    | {
+          type: "bossStage";
+          enemyId: string;
+          phase: number;
+          stage: "shield" | "totems";
+          message: string;
+          x: number;
+          y: number;
+      }
+    // Its totems' blast, from each totem to the boss
+    | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
+    // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it
+    | { type: "bossAbsorbBlast"; x: number; y: number; absorbed: number }
+    // The player's controls were shuffled, or came back
+    | { type: "playerCursed"; cursed: boolean }
     | {
           type: "slash";
           x: number;

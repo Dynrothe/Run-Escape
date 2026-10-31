@@ -12,13 +12,22 @@ import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
-import { FUN_MAPS, MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import {
+    FUN_MAPS,
+    MAPS,
+    MAP_BY_ID,
+    getArenaRegion,
+    getMap,
+    isDevMap,
+    isFunMap,
+} from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
@@ -48,6 +57,7 @@ import {
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig } from "../render/CameraRig";
 import { GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { installRecipe } from "../scaperune/squares";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import {
     GameAssets,
@@ -99,7 +109,12 @@ const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
 const RUN_PITCH = -400;
+// Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
+const OPEN_WORLD_MARGIN = 56;
 const RUN_DISTANCE = 18;
+// How long the camera takes to follow the ground up a slope on a dev map, in ms: without this,
+// it lurches at every crease in tall ground
+const CAMERA_GROUND_EASE = 110;
 // Closer on a phone held sideways: it shows as much to each side as a desktop
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
@@ -168,6 +183,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isNew: choice.kind === "newWeapon" || choice.kind === "newPassive",
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
+            isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
             rarity: rarity && { name: rarity.name, color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
@@ -275,6 +291,8 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    // Where the camera thinks the ground is, on a dev map
+    private cameraGround: number | undefined;
     private shownDps = 0;
     private shownDpsTick = 0;
     // Each hero's look, as last baked
@@ -480,7 +498,6 @@ export class GameClient implements GameFrameHandler {
         return url.toString();
     }
 
-    // What this player brings to a co-op run
     // The maps this player has, and has endless for, which rooms go by
     private getUnlocks(): Unlocks {
         const ids = [...MAPS, ...FUN_MAPS].map((m) => m.id);
@@ -678,6 +695,7 @@ export class GameClient implements GameFrameHandler {
     private async loadGrid(mapId: string): Promise<ArenaGrid> {
         let grid = this.grids.get(mapId);
         if (!grid) {
+            await installRecipe(this.mapViewer, mapId);
             const region = await this.mapViewer.workerPool.queueLoad<
                 RegionDataInput,
                 RegionData,
@@ -687,6 +705,11 @@ export class GameClient implements GameFrameHandler {
             this.grids.set(mapId, grid);
         }
         return grid;
+    }
+
+    // Forgets a map's collision, for a map that's changed
+    forgetGrid(mapId: string): void {
+        this.grids.delete(mapId);
     }
 
     // Loads a map's collision and enemies for a run, with the loading screen if
@@ -715,8 +738,7 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    async startRun(): Promise<void> {
-        const { mapId } = this.store.getSnapshot();
+    async startRun(mapId: string = this.store.getSnapshot().mapId): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
@@ -810,6 +832,10 @@ export class GameClient implements GameFrameHandler {
         const map = sim.map;
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(map.scaperune === true);
+        this.grid.exactGround = map.scaperune === true;
+        this.cameraGround = undefined;
+        this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
         const music = map.music && MUSIC[map.music];
         if (music) {
@@ -1056,6 +1082,8 @@ export class GameClient implements GameFrameHandler {
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(false);
+        this.renderer.setBrightness(1);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -1091,7 +1119,12 @@ export class GameClient implements GameFrameHandler {
         );
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
-        const newGear = result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newGear = isDevMap(sim.map.id)
+            ? []
+            : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newTrophies = isDevMap(sim.map.id)
+            ? []
+            : result.trophies.filter((id) => !this.save.trophies.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
@@ -1114,6 +1147,7 @@ export class GameClient implements GameFrameHandler {
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
+                newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
@@ -1129,7 +1163,7 @@ export class GameClient implements GameFrameHandler {
     // quest pays out, once the run is over, however it ends (beating the map
     // shows on the results instead)
     private announceTasks(sim: Sim): void {
-        if (sim.runOver) {
+        if (sim.runOver || isDevMap(sim.map.id)) {
             return;
         }
         const result = sim.getResult();
@@ -1226,11 +1260,14 @@ export class GameClient implements GameFrameHandler {
 
         // The world fades out past the edge of the map
         const { baseX, baseY, sizeX, sizeY } = this.grid;
+        // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+        // has scenery there (scaperune/CLAUDE.md).
+        const open = this.sim?.map.scaperune === true ? OPEN_WORLD_MARGIN : 0;
         const playArea = this.renderer.playArea;
-        playArea[0] = baseX;
-        playArea[1] = baseY;
-        playArea[2] = baseX + sizeX;
-        playArea[3] = baseY + sizeY;
+        playArea[0] = baseX - open;
+        playArea[1] = baseY - open;
+        playArea[2] = baseX + sizeX + open;
+        playArea[3] = baseY + sizeY + open;
 
         const sim = this.sim;
         if (!sim) {
@@ -1278,7 +1315,13 @@ export class GameClient implements GameFrameHandler {
         const px = player.prevX + (player.x - player.prevX) * alpha;
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
-        this.cameraRig.apply(camera, px, this.grid.getHeight(px, py) / 128 - 0.6, py);
+        let ground = this.grid.getHeight(px, py) / 128;
+        if (sim.map.scaperune) {
+            const last = this.cameraGround ?? ground;
+            ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
+            this.cameraGround = ground;
+        }
+        this.cameraRig.apply(camera, px, ground - 0.6, py);
     }
 
     // A co-op run: frames step at the run's pace, the host's whenever it
@@ -1446,6 +1489,7 @@ export class GameClient implements GameFrameHandler {
                 case "bossSpawned":
                 case "bossRose":
                 case "bossEnraged":
+                case "bossStage":
                     // Bosses that turn up together say so once (Pest Control's
                     // portals, on the first)
                     if (event.message) {
@@ -1576,11 +1620,28 @@ export class GameClient implements GameFrameHandler {
         let boss: HudView["boss"];
         const shownBoss = sim.shownBoss;
         if (shownBoss) {
+            const phase = shownBoss.bossState?.phase;
+            const parasite = sim.parasite;
             boss = {
                 name: shownBoss.def.name,
                 fraction: shownBoss.dead ? 0 : shownBoss.hp / shownBoss.maxHp,
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
+            if (phase && !shownBoss.dead) {
+                boss.fraction = phase.shield / phase.shieldMax;
+                boss.fight = {
+                    phase: phase.index + 1,
+                    phases: shownBoss.def.boss?.phases?.phases.length ?? 1,
+                    stage: phase.stage,
+                    totems: phase.totems.map((totem) =>
+                        phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
+                    ),
+                    curseAttacks: sim.curse?.attacksLeft,
+                    parasiteSeconds: parasite
+                        ? Math.max(0, (parasite.burstTick - sim.tick) / TICKS_PER_SECOND)
+                        : undefined,
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;

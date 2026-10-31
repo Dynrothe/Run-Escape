@@ -146,7 +146,7 @@ export type HudView = {
     // What skipping the level up's rewards costs, while they can be skipped
     skip?: { cost: number; affordable: boolean };
     // enraged: below half its hitpoints, faster and with its enraged attacks
-    boss?: { name: string; fraction: number; enraged: boolean };
+    boss?: BossView;
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -162,6 +162,23 @@ export type DamageView = {
     damage: number;
     kills: number;
     perSecond?: number;
+};
+
+// fraction: of its hitpoints, or a fight in phases' shield. fight: how that
+// fight's going, and what's on the player (see BossPhasesDef)
+export type BossView = {
+    name: string;
+    fraction: number;
+    enraged: boolean;
+    fight?: {
+        phase: number;
+        phases: number;
+        stage: "shield" | "totems";
+        // How charged each totem is, 0 to 1
+        totems: number[];
+        curseAttacks?: number;
+        parasiteSeconds?: number;
+    };
 };
 
 export type BossKillView = { name: string; seconds: number };
@@ -186,6 +203,8 @@ export type ChoiceView = {
     isEvolution: boolean;
     // A godsword's hilt to pick
     isHilt: boolean;
+    // A hilt pick that's the run's Ancient spell, not a godsword's hilt
+    isSpell: boolean;
     // The rolled rarity of this offer, if it has one
     rarity?: { name: string; color: string };
     // Weapons: what this level changes, or a new weapon's stats
@@ -244,6 +263,8 @@ export type UiSnapshot = {
         unlockedCharacters: string[];
         unlockedItems: string[];
         newGear: string[];
+        // The names of the trophies it found for the first time
+        newTrophies: string[];
         quests: { name: string; coins: number }[];
         // Co-op: who else played, and why it ended early if it did
         party?: string[];

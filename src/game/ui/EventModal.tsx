@@ -36,7 +36,7 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
                         </button>
                     ))}
                 </div>
-                <div className="ui-levelup-actions">
+                <div className="ui-levelup-actions ui-event-actions">
                     {forSale && <Coins amount={coins} />}
                     <button className="ui-button" onClick={() => client.leaveEvent()}>
                         {event.leaveLabel}

@@ -1214,6 +1214,40 @@
     background: linear-gradient(#e01010, #800000);
 }
 
+/* A fight in phases: its shield, then its totems filling up */
+.ui-boss-phase {
+    color: #ff9ae6;
+}
+
+.ui-boss-fill-shield {
+    background: linear-gradient(#8fe8ff, #2a9fd6);
+}
+
+.ui-boss-fill-totem {
+    background: linear-gradient(#ffe48f, #d6922a);
+}
+
+.ui-boss-totems {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-boss-totem {
+    flex: 1;
+    min-width: 0;
+}
+
+.ui-boss-status {
+    color: #ffff00;
+    font-size: 16px;
+    text-align: center;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-boss-curse {
+    color: #ff9ae6;
+}
+
 .ui-boss-warning {
     position: absolute;
     top: 70px;
@@ -1276,6 +1310,7 @@
 /* Sold, or more than the coins carried */
 .ui-choice:disabled {
     opacity: 0.55;
+    cursor: default;
 }
 
 /* A weapon's stats or what its level changes, small under the card's text */
@@ -1342,6 +1377,12 @@
     display: flex;
     justify-content: center;
     gap: 10px;
+}
+
+/* A level up's buttons bring their own margin, in .ui-reroll */
+.ui-event-actions {
+    align-items: center;
+    margin-top: 10px;
 }
 
 .ui-pause {

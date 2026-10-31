@@ -13,6 +13,7 @@ function getBroughtOn(def: EnemyDef): string[] {
         ...(def.boss?.rises?.into ? [def.boss.rises.into] : []),
         ...(def.boss?.summonsAt?.map((s) => s.enemyId) ?? []),
         ...(def.boss?.attacks.flatMap((a) => (a.summon ? [a.summon.enemyId] : [])) ?? []),
+        ...(def.boss?.attacks.flatMap((a) => a.candies ?? []) ?? []),
         ...(def.boss?.glyph ? [def.boss.glyph.lookId] : []),
     ];
 }
@@ -36,6 +37,16 @@ describe("getMapEnemies", () => {
                 expect(ids).toContain(other);
             }
         }
+    });
+
+    test("a map with pumpkins brings in what their tricks do", () => {
+        const ids = getMapEnemies({
+            ...getMap("lumbridge"),
+            id: "halloween",
+            waves: [],
+            events: [],
+        });
+        expect(ids.map((def) => def.id)).toContain("ghost");
     });
 
     test("a map doesn't bring in everything", () => {

@@ -34,7 +34,8 @@ version and how to run it.
   hand and passives like the Graceful outfit or Amulet of glory show up on your character.
 - **The Ancient bursts**: Ice Burst freezes what's around you, Smoke Burst poisons it, Shadow
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
-  You carry only one burst, and they share one weapon's chance of being offered.
+  Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of
+  the four you want, keeping its level, and it's your only burst for that run.
 - **Evolutions** from the new maps' passives: maxed elemental runes with Vengeance become
   **Astral runes**, which never stop circling; maxed throwing knives with Obsidian armour become
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
@@ -119,7 +120,9 @@ version and how to run it.
       new maps: **Osmumten's fang**, fast stabs that hit bosses and elites again; the
       **Tzhaar-ket-om**, a slow sweep with huge knockback whose every fourth swing is a Quake
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
-      hits take 30% more damage; the **Dual macuahuitl**, very fast slashes on both sides; and
+      hits take 30% more damage; the **Inquisitor's mace**, crushing blows a quarter harder on the
+      undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
+      sides; and
       the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
       everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon.
@@ -143,7 +146,9 @@ version and how to run it.
       its damage, up to 2 hitpoints. From the new maps: the **Kodai wand**, Water Surge at two
       enemies at once, and the **Blue moon spear**, ice that crashes down and freezes. The
       **Crystal staff** grows from basic to attuned (level 4) and perfected (level 7), and
-      **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning.
+      **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning. The
+      **Volatile Nightmare staff** casts Immolate at the toughest enemy in range, slow and heavier
+      the bigger the target.
 - **Unlocks**: from the Desert on, every map holds new things to find. Beating it, or killing
   one of its mid-run bosses, brings a weapon, a passive or a piece of gear into the game for
   every run after (a toast and the results screen say so). Until then it's never offered or
@@ -151,17 +156,18 @@ version and how to run it.
   to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there from the
   start.
 
-    | Map        | For beating it                                   | For its bosses                                                                                       |
-    | ---------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert     | Osmumten's fang                                  | Smoke Burst (Fareed), Blood Burst (Dessous), Shadow Burst (Damis)                                    |
-    | Fremennik  | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
-    | Karamja    | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend    | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
-    | Varlamore  | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
-    | Morytania  | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
-    | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
-    | Inferno    |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Map            | For beating it                                   | For its bosses                                                                                       |
+    | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst)                                               |
+    | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
+    | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
+    | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Varlamore      | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
+    | Morytania      | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
+    | God Wars       | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
+    | Prifddinas     | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -212,6 +218,10 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+- **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
+  Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
+  trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
+  mask or a Scythe inside, for the Collection log. Those do nothing in a run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -269,6 +279,9 @@ version and how to run it.
       snakelings, and the corrupted ones late on.
     - **The Inferno**: Mor Ul Rek's TzHaar, nibblers, Jal-MejRah bats, Jal-Ak blobs that split
       into three, Jal-ImKot that dig up next to you, Jal-Xil, and Jal-Zek that raise the dead.
+    - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
+      afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
+      vampyres.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.
@@ -328,6 +341,11 @@ version and how to run it.
     - **The Inferno**: **JalTok-Jad** with his healers, a **Jal-Zek champion** and a
       **TzHaar-Ket champion**; at 15:00 **three JalTok-Jads at once**, each with healers of its
       own, and the run's won when the last of them falls.
+    - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
+      pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
+      onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and
+      stomps, hurting more the longer you stay under it. It drops a real master casket.
+      At 15:00, **The Nightmare**.
 - **Gear** goes in the OSRS equipment slots (head, cape, neck, body, shield, legs, hands, feet,
   ring) and shows on your character: about ten pieces a slot, from Rune and Mystic to the
   Barrows brothers' armour, Armadyl, Ancestral, the Infernal cape, Pegasian boots and an Avernic
@@ -389,6 +407,11 @@ version and how to run it.
       them and gets what they bring. The Mysterious Old Man's and the Quiz Master's offers are
       theirs to choose from while the run waits, paid for from the shared coins. Ignore the
       Sandwich lady and everyone still standing gets the baguette.
+    - A **boss's attacks** land on whoever they reach: The Nightmare's bullets, marks, quarters and
+      charge, Slash Bash's pools and The Mimic's stomp hurt each player caught in them, and the blast
+      once her Sleepwalkers reach her hits everyone. A curse,
+      her parasite and being held are on the player they hit. Her fight starts with the whole
+      party in the middle of her square, and each player rolls for their own Collection log drop.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party

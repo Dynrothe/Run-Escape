@@ -4,6 +4,7 @@ import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
 import { VarManager } from "../vartype/VarManager";
 import { LocModelType } from "./LocModelType";
+import { LOC_OVERRIDES } from "./LocOverrides";
 import { LocTypeLoader } from "./LocTypeLoader";
 
 export class LocType extends Type {
@@ -556,6 +557,15 @@ export class LocType extends Type {
     }
 
     override post(): void {
+        const override = LOC_OVERRIDES.get(this.id);
+        if (override) {
+            this.models = override.models ? [override.models] : this.models;
+            this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+            if (override.solid) {
+                this.clipType = 2;
+                this.blocksProjectile = false;
+            }
+        }
         if (this.isInteractive === -1) {
             this.isInteractive = 0;
             if (this.models && (!this.types || this.types[0] === 10)) {

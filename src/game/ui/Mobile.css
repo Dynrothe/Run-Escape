@@ -501,7 +501,8 @@
         display: none;
     }
 
-    .ui-log-card {
+    .ui-log-card,
+    .ui-log-tab {
         min-height: 44px;
     }
 
@@ -583,6 +584,10 @@
         height: 10px;
     }
 
+    .ui-boss-status {
+        font-size: 14px;
+    }
+
     .ui-boss-warning {
         top: calc(var(--safe-top) + 42px);
         font-size: 16px;
@@ -660,7 +665,8 @@
         overflow-y: auto;
     }
 
-    .ui-reroll {
+    .ui-reroll,
+    .ui-event-actions {
         margin-top: 4px;
     }
 

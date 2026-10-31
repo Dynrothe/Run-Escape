@@ -15,10 +15,13 @@ const JUMP_SOUTH = 9;
 const DIR_X = [0, 1, 0, -1, 1, 1, -1, -1];
 const DIR_Y = [1, 0, -1, 0, 1, -1, -1, 1];
 
+// What canStep needs of a grid
+export type StepGrid = Pick<ArenaGrid, "isSolid" | "getFlags">;
+
 // Whether a one tile step is allowed, with the OSRS rules: walls on either side
 // of the edge block it, and a diagonal step needs both straight routes around
 // the corner open.
-export function canStep(grid: ArenaGrid, x: number, y: number, dx: number, dy: number): boolean {
+export function canStep(grid: StepGrid, x: number, y: number, dx: number, dy: number): boolean {
     if (grid.isSolid(x + dx, y + dy)) {
         return false;
     }

@@ -95,6 +95,7 @@ export class SceneBuilder {
         sizeY: number,
         smoothUnderlays: boolean = false,
         locLoadType: LocLoadType = LocLoadType.MODELS,
+        tileModels: boolean = true,
     ): Scene {
         const scene = new Scene(Scene.MAX_LEVELS, sizeX, sizeY);
 
@@ -150,7 +151,10 @@ export class SceneBuilder {
             }
         }
 
-        this.addTileModels(scene, smoothUnderlays);
+        // Collision for a whole arena doesn't draw, and these are most of its memory
+        if (tileModels) {
+            this.addTileModels(scene, smoothUnderlays);
+        }
         scene.setTileMinLevels();
 
         if (locLoadType === LocLoadType.MODELS) {

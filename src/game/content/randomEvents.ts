@@ -22,7 +22,7 @@ export const VISITOR_SHOUT_EVERY = 5;
 // Their loot beams and minimap dots
 export const VISITOR_COLOR = "#ffb43c";
 // A puff as they come and go, and teleport_vwoop as they come
-export const VISITOR_SPOTANIM = 111;
+export const VISITOR_SPOTANIM = 86;
 export const VISITOR_SOUND = 200;
 
 // What the Mysterious Old Man charges goes up by this for each minute of the

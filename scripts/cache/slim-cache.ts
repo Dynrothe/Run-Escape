@@ -38,7 +38,9 @@ import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
+import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
+import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
 import { LoadedCache } from "../../src/mapviewer/Caches";
 import { ActorBakeLoader } from "../../src/mapviewer/webgl/actor/ActorBakeLoader";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
@@ -189,6 +191,7 @@ function getContentObjIds(): number[] {
             THRALLS,
             ALL_MAPS,
             SHOP_UPGRADES,
+            TROPHIES,
         },
         "",
     );
@@ -204,6 +207,9 @@ function getStackCounts(state: WorkerState, objId: number): number[] {
 function playerRequest(key: string, appearance: PlayerAppearance, seqIds: number[]): BakeRequest {
     return { kind: "player", key, appearance, seqIds };
 }
+
+// Bake requests to put through one buffer
+const BAKE_BATCH = 25;
 
 // The map loader logs every square
 async function quietly<T>(load: () => Promise<T>): Promise<T> {
@@ -246,8 +252,13 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
     ];
     const bakeLoader = new ActorBakeLoader();
     const enemyRequests = GameAssets.getEnemyRequests(ENEMIES);
-    for (const requests of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
-        await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
+    for (const all of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
+        // The game bakes a map's worth at a time. Everything in one buffer is more
+        // than an array can hold (Invalid array length).
+        for (let i = 0; i < all.length; i += BAKE_BATCH) {
+            const requests = all.slice(i, i + BAKE_BATCH);
+            await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
+        }
     }
 
     await load(new SoundLoader(), { ids: getGameSoundIds() });
@@ -267,6 +278,7 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
 
     const mapLoader = new SdMapDataLoader();
     for (const map of ALL_MAPS) {
+        installRecipeInSceneBuilder(state.sceneBuilder, map.id);
         const region = getArenaRegion(map);
         await load(new RegionDataLoader(), region);
 
