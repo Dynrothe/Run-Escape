@@ -1,5 +1,5 @@
 import { Ground } from "../Ground";
-import { BIOMES, BiomeDef, CLIFF_FALL } from "../biomes";
+import { BIOMES, BiomeDef, CLIFF_FALL, WATERFALL } from "../biomes";
 import { Exit } from "../building";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { TILE_BLOCKED, TILE_BRIDGE } from "../format";
@@ -125,7 +125,7 @@ const COURSE: [number, number, number][] = [
     [124, 145, 6],
     [138, 140, 6],
     [147, 139, 3.5],
-    [150, 139, 3],
+    [149, 139, 3],
     [160, 137, 4],
     [172, 128, 4.5],
     [184, 126, 4.5],
@@ -133,17 +133,18 @@ const COURSE: [number, number, number][] = [
     [218, 129, 4],
     [228, 132, 5],
     [236, 133, 3],
-    [241, 134, 3],
+    [238, 134, 3],
     [249, 146, 4.5],
     [274, 146, 4.5],
     [286, 142, 5],
     [300, 140, 5],
 ];
 const CROSSINGS = [100, 196, 262];
-// Where it falls: the rows between its foot and its lip have rock, and the falls on it
+// Where it falls: the rows between its foot and its lip have rock, and the falls on it. Those
+// are short, because CLIFF_FALL only covers about 3 tiles from its foot, however tall the cliff.
 const FALLS: { foot: number; lip: number; low: number; high: number }[] = [
-    { foot: 147, lip: 150, low: RIVER_VALE, high: RIVER_SHELF },
-    { foot: 236, lip: 241, low: RIVER_SHELF, high: RIVER_HIGH },
+    { foot: 147, lip: 149, low: RIVER_VALE, high: RIVER_SHELF },
+    { foot: 236, lip: 238, low: RIVER_SHELF, high: RIVER_HIGH },
 ];
 
 // A pool of its own under a cliff, for a fall with no river behind it
@@ -523,11 +524,14 @@ function paintFloors(build: Build, massif: Float32Array): void {
             const grass = y < 150 ? VALE_GRASS : SHELF_GRASS;
             let floor = grass[Math.floor(patch * grass.length)];
             const onStair = x > 66 && x < 128 && y > 206 && y < 250;
+            // Grey under what's left of a tile at the water's edge below a fall: rock stops at
+            // whole tiles there, and brown would show its steps
+            const byFall = FALLS.some(({ foot }) => Math.abs(y - foot) < 14);
             if (massif[at] > 0.35 || toCliff[i] < 3 || onStair) {
                 floor =
                     height > 170
                         ? GREY_ROCK
-                        : height > 120
+                        : height > 120 || byFall
                           ? DRY_ROCK[patch > 0.5 ? 0 : 1]
                           : BROWN_ROCK;
             }
@@ -1231,6 +1235,10 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
             });
         }
         falls.push({ x: centre - 2, y: foot - 2 });
+        // Foam along the water's edge, over the strip of ground under the model's own
+        for (const x of [centre - 4, centre - 1, centre + 2]) {
+            ground.grid.locs.push({ id: WATERFALL, type: 10, rotation: 0, level: 0, x, y: foot });
+        }
     }
     for (const { x, y, out } of POOLS.filter((pool) => pool.fall)) {
         ground.grid.locs.push({
