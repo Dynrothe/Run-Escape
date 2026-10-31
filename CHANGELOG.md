@@ -5,6 +5,8 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.19.1 - 2026-10-31
+
 ### Added
 
 - Random events: every few minutes someone turns up near you for 30 seconds. Walk up to them to see
