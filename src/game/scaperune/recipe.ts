@@ -35,6 +35,9 @@ export type MapRecipe = {
     // because the game needs it before it builds anything.
     spawn: { x: number; y: number };
     build(context: BuildContext): TileGrid;
+    // What the map screen shows, if not the id and a line saying it's a test
+    name?: string;
+    description?: string;
     // A hand-made map's own build with what check-maps.ts holds it to, if it wants checking
     detail?(context: BuildContext): GeneratedMap;
     // What the map's called on the map list, if not its id
