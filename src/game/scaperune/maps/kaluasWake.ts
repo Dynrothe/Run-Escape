@@ -1,6 +1,7 @@
 import { Ground } from "../Ground";
 import { BIOMES, BiomeDef, WATERFALL } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
+import { placeFallPools, placeFalls } from "../falls";
 import { TILE_BLOCKED } from "../format";
 import { DEFAULT_SETTINGS, GeneratedMap, GeneratorSettings } from "../generator";
 import { Relief, shapeCliffs } from "../landforms";
@@ -27,6 +28,7 @@ import { PrefabDef, PrefabKit, isDoor, loadPrefab } from "../prefabs";
 import { BuildContext, MapRecipe } from "../recipe";
 import {
     MAX_BANK,
+    Pool,
     River,
     SEA_BED,
     createWaterLevels,
@@ -80,6 +82,7 @@ const SETTINGS: GeneratorSettings = {
     roadWidth: 2.4,
     roadCurviness: 0.15,
     rockFaces: 1,
+    cliffFalls: 0.25,
     caves: 0.25,
     passWidth: 6,
     waymarkers: 0.5,
@@ -123,14 +126,20 @@ const JUNGLE: BiomeDef = {
     rock: { ...BIOMES.jungle.rock, overlay: 32 },
 };
 
-const TROPICAL: BiomeDef = { ...BIOMES.tropical, rock: JUNGLE.rock };
+const TROPICAL: BiomeDef = {
+    ...BIOMES.tropical,
+    road: JUNGLE.road,
+    trail: JUNGLE.trail,
+    rock: JUNGLE.rock,
+};
 
 const SCORCHED: BiomeDef = {
     ...BIOMES.ash,
     ground: [101, 187, 169],
     hillGround: 155,
     trail: 176,
-    road: 88,
+    // The same road all over: it can't change colour without a line across it
+    road: JUNGLE.road,
     props: [
         [20234, 2],
         [49388, 2],
@@ -170,14 +179,17 @@ const LAVA_COURSE: [number, number][] = [
     [58, 164],
     [44, 172],
     [34, 179],
-    [25, 183],
+    [24, 184],
 ];
 // Lava standing in pools: [chart x, chart y, radius]
 const LAVA_PONDS: [number, number, number][] = [
     [19, 160, 6],
     [50, 172, 5],
     [28, 172, 4],
+    // Where the lava gives out at the sea
+    [184, 24, 7],
 ];
+const LAVA_CRUST = 1.2;
 const LAVA_WIDTH = 12;
 // A bridge spans this either side of its middle
 const BRIDGE_HALF = 4.5;
@@ -241,7 +253,7 @@ const DECK: Rect[] = [
     [48, 52, 56, 60],
     [26, 40, 34, 48],
     [48, 40, 56, 48],
-    [36, 25, 46, 35],
+    [33, 22, 49, 35],
 ];
 const DECK_HEIGHT = 24;
 const DECK_RAIL = 9025;
@@ -260,10 +272,17 @@ const BEACH_DECOR = [57982, 57983, 30797, 729, 3171, 51810, 51811];
 
 const SURF_SPACING = 4;
 
+const MAX_STRANDED = 500;
+
+// Thick jungle, under the trees
+const UNDERGROWTH = [9010, 9015, 1204, 4825, 4829, 1398, 1390];
+
 const CORAL = [12498, 12507, 12529, 12509, 12518, 12487];
 
 // Places nothing tall grows: [chart x, chart y, radius]
 const CLEARINGS: [number, number, number][] = [
+    [232, 146, 8],
+    [30, 100, 11],
     [118, 44, 15],
     [112, 64, 20],
     [106, 80, 9],
@@ -436,7 +455,9 @@ function createScorch(lavaLine: Float32Array): (x: number, y: number) => number 
         const wander = edge(x / 18, y / 18);
         const row = Math.min(Math.max(Math.round(y), 0), SIZE_Y);
         const onRiver = y < KALUA.y + 8 && y > CHART + 20;
-        const fromLava = onRiver ? Math.abs(x - lavaLine[row]) : Infinity;
+        // The wind's from the west, so the east bank has come off worst
+        const side = x > lavaLine[row] ? 0.5 : 1;
+        const fromLava = onRiver ? Math.abs(x - lavaLine[row]) * side : Infinity;
         const lava = 1.1 - fromLava / (12 + wander * 22);
         const peak = 1.1 - (Math.hypot(x - KALUA.x, y - KALUA.y) - 22) / (10 + wander * 18);
         const spit = y > CHART + 141 && x < CHART + 66 ? 1 : 0;
@@ -777,7 +798,7 @@ function placeStilts(build: Build, roads: RoadNetwork): PlacedBuilding[] {
         ["ape_hut", 49, 53, 41, 50],
         ["taibwo_hut", 27, 41, 41, 50],
         ["taibwo_hut", 49, 41, 41, 50],
-        ["taibwo_house", 36, 26, 41, 36],
+        ["taibwo_house", 36, 24, 41, 36],
     ];
     return huts.flatMap(([name, x, y, tx, ty]) => {
         const hut = placeHouse(
@@ -811,6 +832,89 @@ function put(
         across,
         deep,
     );
+}
+
+// What's lying about, where there's room for it: [loc id, x, y, tiles across, tiles deep]
+const THINGS: [number, number, number, number, number][] = [
+    // Landfall's yards
+    [29085, 113, 72, 1, 1],
+    [4764, 112, 74, 1, 1],
+    [4764, 115, 72, 1, 1],
+    [4764, 112, 71, 1, 1],
+    [4277, 106, 62, 2, 2],
+    [9534, 107, 53, 1, 1],
+    [9535, 108, 55, 1, 1],
+    [9519, 107, 61, 1, 1],
+    [396, 99, 53, 1, 1],
+    [358, 121, 52, 1, 1],
+    [357, 122, 54, 1, 1],
+    [365, 121, 56, 1, 1],
+    [620, 120, 66, 1, 1],
+    [4754, 94, 54, 2, 2],
+    [4749, 118, 62, 2, 2],
+    [4754, 131, 64, 2, 2],
+    [4749, 128, 76, 2, 2],
+    [4861, 111, 56, 1, 1],
+    [1160, 134, 56, 2, 2],
+    // What came ashore at Landfall Bay
+    [52684, 104, 27, 3, 3],
+    [52683, 137, 27, 2, 3],
+    [271, 122, 29, 1, 1],
+    [821, 135, 31, 1, 2],
+    [9519, 126, 31, 1, 1],
+    [358, 125, 30, 1, 1],
+    [14174, 113, 27, 2, 2],
+    [30843, 142, 31, 1, 2],
+    [32319, 130, 31, 1, 1],
+    [32319, 133, 24, 1, 1],
+    [13609, 96, 38, 2, 2],
+    // On the stilts, and tied up to them
+    [4277, 49, 49, 2, 2],
+    [27523, 31, 50, 1, 1],
+    [16872, 29, 50, 1, 1],
+    // The Sun Isle's north end: the old gods, down the back stair
+    [51888, 224, 142, 4, 4],
+    [51895, 240, 142, 4, 4],
+    [60984, 231, 144, 1, 1],
+    [60984, 236, 144, 1, 1],
+    // Banana groves on Tai'Mara
+    [4754, 34, 98, 2, 2],
+    [4749, 38, 101, 2, 2],
+    [4754, 35, 104, 2, 2],
+    [4749, 39, 106, 2, 2],
+    [4754, 22, 92, 2, 2],
+    [4749, 20, 96, 2, 2],
+    [4754, 23, 100, 2, 2],
+    [1160, 26, 104, 2, 2],
+    // Wreckers' Key: what they've salvaged, round a fire
+    [29085, 228, 33, 1, 1],
+    [821, 224, 36, 1, 2],
+    [821, 235, 32, 1, 2],
+    [271, 233, 23, 1, 1],
+    [362, 226, 30, 1, 1],
+    [357, 225, 29, 1, 1],
+    [358, 227, 28, 1, 1],
+    [14174, 220, 24, 2, 2],
+    // The Maw
+    [60984, 122, 113, 1, 1],
+];
+
+// Tied up at the stilts
+const BOATS: [number, number, number, number, number][] = [
+    [52684, 44, 34, 3, 3],
+    [52683, 37, 37, 2, 3],
+    [52683, 58, 46, 2, 3],
+];
+
+function placeThings(build: Build): void {
+    for (const [id, x, y, across, deep] of THINGS) {
+        if (build.ground.isClear(x + CHART, y + CHART, across, deep)) {
+            put(build, id, x, y, across, deep);
+        }
+    }
+    for (const [id, x, y, across, deep] of BOATS) {
+        put(build, id, x, y, across, deep);
+    }
 }
 
 // Something big that stands on the land, on a plot of its own: [loc id, x, y, tiles across, tiles
@@ -875,7 +979,10 @@ const TEMPLE_X = 220;
 const TEMPLE_Y = 102;
 const PLATFORM: Rect = [218, 100, 247, 132];
 const PLATFORM_HEIGHT = 62;
-const STAIR: Rect = [231, 92, 236, 100];
+const STAIRS: { rect: Rect; foot: number; top: number }[] = [
+    { rect: [231, 92, 236, 100], foot: 92, top: 100 },
+    { rect: [231, 132, 236, 141], foot: 142, top: 133 },
+];
 const STAIR_FOOT = 46;
 const TEMPLE_UNDERLAY = 62;
 
@@ -886,11 +993,13 @@ function pinTemple(build: Build): void {
     const sizeY = y1 - y0 + 1;
     terrain.pinRect(x0 + CHART, y0 + CHART, sizeX, sizeY, PLATFORM_HEIGHT);
     plots.push({ x: x0 + CHART, y: y0 + CHART, sizeX, sizeY, height: PLATFORM_HEIGHT });
-    const [stairX0, stairY0, stairX1, stairY1] = STAIR;
-    for (let cy = stairY0; cy <= stairY1; cy++) {
-        const climb = (cy - stairY0) / (stairY1 - stairY0);
-        for (let cx = stairX0; cx <= stairX1 + 1; cx++) {
-            terrain.pin(cx + CHART, cy + CHART, lerp(STAIR_FOOT, PLATFORM_HEIGHT, climb));
+    for (const { rect, foot, top } of STAIRS) {
+        const [stairX0, stairY0, stairX1, stairY1] = rect;
+        for (let cy = stairY0; cy <= stairY1 + 1; cy++) {
+            const climb = Math.min(Math.max((cy - foot) / (top - foot), 0), 1);
+            for (let cx = stairX0; cx <= stairX1 + 1; cx++) {
+                terrain.pin(cx + CHART, cy + CHART, lerp(STAIR_FOOT, PLATFORM_HEIGHT, climb));
+            }
         }
     }
     // A wall of stone round it, too steep to climb: what's pinned first stays
@@ -924,11 +1033,14 @@ function stampTemple(build: Build): void {
 
 // The Maw: broken pillars where the road gives out at the crater's rim
 function dressMaw(build: Build): void {
+    // Smoke off the crater's rim, and off the shore where the lava meets the sea
     for (const [x, y] of [
-        [138, 128],
-        [133, 124],
-        [143, 131],
-        [140, 121],
+        [126, 124],
+        [148, 136],
+        [130, 140],
+        [149, 121],
+        [175, 24],
+        [193, 25],
     ]) {
         put(build, 22975, x, y, 2, 3);
     }
@@ -945,8 +1057,15 @@ function dressMaw(build: Build): void {
 
 // Rails and posts on the deck, and what the Tai'Mara leave lying about on it
 function dressDeck(build: Build, deck: Uint8Array): void {
-    const { ground, rng } = build;
+    const { ground, rng, context } = build;
     const { footprint } = ground;
+    // What came with the huts from dry land
+    ground.grid.locs = ground.grid.locs.filter(
+        (loc) =>
+            !deck[ground.tile(loc.x, loc.y)] ||
+            loc.type !== LOC_NORMAL ||
+            !/tree|plant|bush/i.test(context.locs(loc.id).name),
+    );
     const rail = (x: number, y: number, rotation: number) => {
         ground.grid.locs.push({ id: DECK_RAIL, type: LOC_WALL, rotation, level: 0, x, y });
     };
@@ -988,34 +1107,34 @@ function dressDeck(build: Build, deck: Uint8Array): void {
 
 // What's out at sea: [loc id, x, y, tiles across, tiles deep]
 const SEA_PIECES: [number, number, number, number, number][] = [
-    // The fleet
-    [60471, 150, 7, 4, 4],
-    [60479, 71, 30, 4, 4],
-    [60475, 201, 12, 4, 4],
-    [60473, 172, 12, 2, 2],
-    [60477, 70, 160, 5, 3],
-    [60467, 66, 104, 3, 2],
-    [60469, 200, 172, 3, 2],
-    [60465, 90, 12, 2, 1],
-    [59352, 218, 150, 5, 3],
-    // The ghost of one of them, off the volcano's north shore
-    [59333, 120, 183, 4, 4],
+    // The fleet, off Landfall Bay and round the islands, where you can see it from the shore
+    [60471, 108, 12, 4, 4],
+    [60479, 138, 12, 4, 4],
+    [60465, 124, 15, 2, 1],
+    [60473, 198, 20, 2, 2],
+    [60475, 166, 16, 4, 4],
+    [60467, 64, 92, 3, 2],
+    [60469, 64, 66, 3, 2],
+    [60477, 66, 160, 5, 3],
+    [60469, 207, 140, 3, 2],
+    [59352, 8, 142, 5, 3],
+    // The ghost of one of them
+    [59333, 247, 52, 4, 4],
     // Stacks of rock
-    [60444, 92, 8, 6, 4],
-    [60444, 250, 150, 6, 4],
-    [60444, 6, 14, 6, 4],
-    [60444, 66, 180, 6, 4],
-    [60444, 180, 184, 6, 4],
-    [60440, 56, 16, 2, 2],
-    [60440, 244, 4, 2, 2],
+    [60444, 88, 20, 6, 4],
+    [60444, 244, 150, 6, 4],
+    [60444, 4, 22, 6, 4],
+    [60444, 66, 172, 6, 4],
+    [60440, 60, 28, 2, 2],
+    [60440, 248, 14, 2, 2],
     // The old harbour, drowned when the land went down: its steeple and stones
-    [48327, 62, 124, 9, 9],
+    [48327, 62, 122, 9, 9],
     [34795, 56, 118, 1, 1],
     [34796, 72, 120, 1, 1],
-    [34780, 58, 136, 1, 1],
-    [34795, 73, 134, 1, 1],
-    [34796, 66, 139, 1, 1],
-    [34780, 54, 128, 1, 1],
+    [34780, 58, 134, 1, 1],
+    [34795, 73, 132, 1, 1],
+    [34796, 66, 135, 1, 1],
+    [34780, 54, 126, 1, 1],
 ];
 
 function placeSea(build: Build, water: Uint8Array): PlacedPiece[] {
@@ -1070,39 +1189,41 @@ function placeSea(build: Build, water: Uint8Array): PlacedPiece[] {
 }
 
 // Foam along the beaches, in lengths of 3 tiles where the shore runs straight enough
-function placeSurf(build: Build, water: Uint8Array, shape: Shape): void {
+function placeSurf(build: Build, water: Uint8Array, shape: Shape, zone: Uint8Array): void {
     const { ground, biomeAt } = build;
-    const isWater = (x: number, y: number) => water[ground.tile(x, y)] !== 0;
+    // A length of foam blocks all its tiles, and one by a bridge could shut its deck
+    const isWater = (x: number, y: number) =>
+        water[ground.tile(x, y)] !== 0 && !zone[ground.tile(x, y)];
+    const addSurf = (rotation: number, x: number, y: number) => {
+        ground.grid.locs.push({ id: WATERFALL, type: LOC_NORMAL, rotation, level: 0, x, y });
+    };
     for (let y = CHART - 8; y < SIZE_Y - CHART + 8; y++) {
         for (let x = CHART - 8; x < SIZE_X - CHART + 8; x++) {
             const i = ground.tile(x, y);
             if (ground.level0.overlays[i] !== SEA_OVERLAY || biomeAt(x, y) === SCORCHED) {
                 continue;
             }
-            const row = (x + y * 3) % SURF_SPACING === 0;
-            const southShore =
-                isWater(x, y) &&
-                isWater(x + 1, y) &&
-                isWater(x + 2, y) &&
-                !isWater(x, y + 2) &&
-                !isWater(x + 1, y + 2) &&
-                !isWater(x + 2, y + 2);
-            const northShore =
-                isWater(x, y) &&
-                isWater(x + 1, y) &&
-                isWater(x + 2, y) &&
-                !isWater(x, y - 2) &&
-                !isWater(x + 1, y - 2) &&
-                !isWater(x + 2, y - 2);
-            if (row && (southShore || northShore) && shape.toSea[i] === 0) {
-                ground.grid.locs.push({
-                    id: WATERFALL,
-                    type: LOC_NORMAL,
-                    rotation: 0,
-                    level: 0,
-                    x,
-                    y,
-                });
+            // Not in among the stilts
+            const inBay = x - CHART < 60 && y - CHART > 22 && y - CHART < 74 && x - CHART > 20;
+            if (shape.toSea[i] !== 0 || inBay) {
+                continue;
+            }
+            const along = (dx: number, dy: number, from: number) =>
+                [0, 1, 2].every((at) =>
+                    from === 0
+                        ? isWater(x + dx * at, y + dy * at)
+                        : !isWater(x + dx * at + dy * from, y + dy * at + dx * from),
+                );
+            const wet = (dx: number, dy: number) => along(dx, dy, 0);
+            const spot = x * 5 + y * 3;
+            if (spot % SURF_SPACING === 0 && wet(1, 0) && (along(1, 0, 2) || along(1, 0, -2))) {
+                addSurf(0, x, y);
+            } else if (
+                spot % SURF_SPACING === 1 &&
+                wet(0, 1) &&
+                (along(0, 1, 2) || along(0, 1, -2))
+            ) {
+                addSurf(1, x, y);
             }
         }
     }
@@ -1145,17 +1266,21 @@ function scatter(build: Build, water: Uint8Array, shape: Shape): void {
                 if (ground.isClear(x - 1, y - 1, size + 2, size + 2)) {
                     place(id, size, LOC_NORMAL, x, y);
                 }
-            } else if (roll < tree + 0.012) {
+            } else if (roll < tree + 0.05) {
+                if (biome === JUNGLE && clump > 0.5 && ground.isClear(x, y, 1, 1)) {
+                    place(pick(rng, UNDERGROWTH), 1, LOC_NORMAL, x, y);
+                }
+            } else if (roll < tree + 0.062) {
                 const [id, size] = pick(rng, biome.rocks);
                 if (ground.isClear(x, y, size, size)) {
                     place(id, size, LOC_NORMAL, x, y);
                 }
-            } else if (roll < tree + 0.016) {
+            } else if (roll < tree + 0.074) {
                 const [id, size] = pick(rng, biome.props);
                 if (ground.isClear(x - 1, y - 1, size + 2, size + 2)) {
                     place(id, size, LOC_NORMAL, x, y);
                 }
-            } else if (roll < tree + 0.17) {
+            } else if (roll < tree + 0.22) {
                 if (ground.isClear(x, y, 1, 1)) {
                     const decor = beach ? BEACH_DECOR : biome.decor;
                     ground.grid.locs.push({
@@ -1167,7 +1292,7 @@ function scatter(build: Build, water: Uint8Array, shape: Shape): void {
                         y,
                     });
                 }
-            } else if (roll < tree + 0.19) {
+            } else if (roll < tree + 0.24) {
                 if (ground.isClear(x, y, 1, 1) && !open) {
                     place(pick(rng, biome.flowers), 1, LOC_NORMAL, x, y);
                 }
@@ -1200,35 +1325,24 @@ function paintThinRock(build: Build, rock: Uint8Array, skip: Uint8Array): void {
 }
 
 // Anything that can't be walked to is shut off, so nobody stands at it from the far side
-function shutOffStranded(build: Build): number {
+function shutOffStranded(build: Build): void {
     const { ground, context, arena, spawn } = build;
     const { grid, sizeX, sizeY } = ground;
     const flags = getCollisionFlags(grid, context.locs);
     const reached = findReachable(flags, sizeX, sizeY, arena, spawn.x, spawn.y);
     const stranded = findStranded(flags, sizeX, arena, reached);
+    // Pockets by the cliffs, not an island: check-maps can't see this once they're blocked
+    if (stranded.length > MAX_STRANDED) {
+        throw new Error(`${stranded.length} tiles can't be reached: is a bridge shut?`);
+    }
     for (const i of stranded) {
         blockTile(grid, i);
     }
-    return stranded.length;
 }
 
-function buildMap(context: BuildContext): GeneratedMap {
-    const sea = createSea();
-    const { deck, skirt } = createDeckMask();
-    const notSea = deck.map((tile, i) => tile | skirt[i]);
-    const seaTiles = getTouchedTiles(sea, SIZE_X, SIZE_Y).map((tile, i) => tile & (1 - notSea[i]));
-    const shape: Shape = {
-        sea,
-        seaTiles,
-        toSea: distanceTo(seaTiles, SIZE_X, SIZE_Y, 16),
-        lavaLine: createLavaLine(),
-    };
-    const build = createBuild(context, shape);
-    const { ground, terrain, corners } = build;
-    shapeLand(build, shape);
-
-    // The lava: down from the crater, cutting a channel as it goes
-    const lava = createLava(shape.lavaLine);
+// The lava: out of the crater and down to the sea, and in pools. Above 0 is lava.
+function createLavaField(lava: River): { field: Float32Array; pools: Pool[] } {
+    const corners = { x: SIZE_X + 1, y: SIZE_Y + 1 };
     const fresh = new Float32Array(corners.x * corners.y).fill(-8);
     const [lavaNorth, , , , , , , , lavaSouth] = LAVA_COURSE;
     for (let y = lavaSouth[0] + CHART; y <= lavaNorth[0] + CHART; y++) {
@@ -1240,7 +1354,7 @@ function buildMap(context: BuildContext): GeneratedMap {
             fresh[x + y * corners.x] = half - Math.abs(x - centre);
         }
     }
-    const pools = [
+    const pools: Pool[] = [
         { x: KALUA.x, y: KALUA.y, radius: RIM_RADIUS - 6, level: 0 },
         ...LAVA_PONDS.map(([x, y, radius]) => ({
             x: x + CHART,
@@ -1260,7 +1374,31 @@ function buildMap(context: BuildContext): GeneratedMap {
             }
         }
     }
-    const smoothFresh = smoothField(fresh, corners.x, corners.y, 2);
+    return { field: smoothField(fresh, corners.x, corners.y, 2), pools };
+}
+
+function buildMap(context: BuildContext): GeneratedMap {
+    const lavaLine = createLavaLine();
+    const lava = createLava(lavaLine);
+    const { field: smoothFresh, pools } = createLavaField(lava);
+    const sea = createSea();
+    // The sea stands off the lava, with a crust of black rock between them
+    for (let i = 0; i < sea.length; i++) {
+        sea[i] = Math.min(sea[i], -smoothFresh[i] - LAVA_CRUST);
+    }
+    const { deck, skirt } = createDeckMask();
+    const notSea = deck.map((tile, i) => tile | skirt[i]);
+    const seaTiles = getTouchedTiles(sea, SIZE_X, SIZE_Y).map((tile, i) => tile & (1 - notSea[i]));
+    const shape: Shape = {
+        sea,
+        seaTiles,
+        toSea: distanceTo(seaTiles, SIZE_X, SIZE_Y, 16),
+        lavaLine,
+    };
+    const build = createBuild(context, shape);
+    const { ground, terrain, corners } = build;
+    shapeLand(build, shape);
+
     const flood = new Uint8Array(corners.x * corners.y);
     const levels = createWaterLevels(build, [lava], pools, smoothFresh, flood);
     const freshTiles = getTouchedTiles(smoothFresh, SIZE_X, SIZE_Y);
@@ -1296,6 +1434,8 @@ function buildMap(context: BuildContext): GeneratedMap {
     const buildings = [...placeVillage(build, roads), ...placeStilts(build, roads)];
     const landmarks = pinPieces(build, roads);
     placeRuins(build, roads);
+    const waterField = sea.map((value, i) => Math.max(value, smoothFresh[i]));
+    const falls = placeFallPools(build, { field: waterField, tiles: waterTiles });
 
     const steepest = SETTINGS.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
@@ -1306,8 +1446,9 @@ function buildMap(context: BuildContext): GeneratedMap {
     // No little square of road where the spawn is: the road just ends on the sand
     bridgeZone[ground.tile(SPAWN.x + 2, SPAWN.y)] = 1;
     const roadTiles = roads.paint();
-    fillTiles(ground, deck, PLANKS, ground.footprint);
-    const stone = createRectMask([PLATFORM, STAIR], 1);
+    const floored = Uint8Array.from(ground.level0.overlays, (overlay) => (overlay ? 1 : 0));
+    fillTiles(ground, deck, PLANKS, floored);
+    const stone = createRectMask([PLATFORM, ...STAIRS.map(({ rect }) => rect)], 1);
     fillTiles(ground, stone, SANDSTONE);
     const rockSkip = new Uint8Array(waterTiles.length);
     for (let i = 0; i < rockSkip.length; i++) {
@@ -1324,12 +1465,14 @@ function buildMap(context: BuildContext): GeneratedMap {
     paintThinRock(build, rock, rockSkip);
     const caves = placeCaves(build, rock);
     fillTiles(ground, skirt, PLANKS);
+    placeFalls(build, falls);
     placeWaymarkers(build, roads);
     stampTemple(build);
     dressMaw(build);
     dressDeck(build, deck);
+    placeThings(build);
     landmarks.push(...placeSea(build, waterTiles));
-    placeSurf(build, waterTiles, shape);
+    placeSurf(build, waterTiles, shape, bridgeZone);
     scatter(build, waterTiles, shape);
     shutOffStranded(build);
 
@@ -1343,7 +1486,7 @@ function buildMap(context: BuildContext): GeneratedMap {
         passes,
         walkSlope: SETTINGS.walkSlope,
         caves,
-        falls: [],
+        falls,
         waterfalls: [],
     };
 }

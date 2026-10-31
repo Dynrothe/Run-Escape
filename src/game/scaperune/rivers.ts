@@ -69,7 +69,7 @@ export type River = {
 };
 
 // A lake or pond: where it is, and how high its water stands
-type Pool = { x: number; y: number; radius: number; level: number };
+export type Pool = { x: number; y: number; radius: number; level: number };
 
 function riverStraightness(river: River, along: number): number {
     let away = Infinity;
