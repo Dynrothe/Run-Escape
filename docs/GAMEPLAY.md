@@ -360,8 +360,10 @@ version and how to run it.
     - The run's **level is shared**: every level up gives each player their own three choices, and
       the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
       shared too, and everyone banks the run's coins.
-    - The crowd is **bigger and tougher** for each player past the first (more of them about at
-      once, and more hitpoints; bosses more again).
+    - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
+      at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
+      10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party
+      levels about as fast as a player on their own.
     - Enemies go for whoever's **nearest**, and pickups fly to whoever's nearest.
     - A player who falls with no ring of life left (it saves you as it does on your own) is
       **down** and out for the rest of the run, watching a teammate who's still up. The run goes

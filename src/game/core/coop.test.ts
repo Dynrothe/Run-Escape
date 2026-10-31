@@ -209,16 +209,22 @@ describe("co-op", () => {
     });
 
     it("makes the crowd bigger and tougher for each player", () => {
-        expect(getPartyScale(1)).toEqual({ crowd: 1, hp: 1, bossHp: 1 });
+        expect(getPartyScale(1)).toEqual({ crowd: 1, hp: 1, bossHp: 1, damage: 1, xp: 1 });
         const two = getPartyScale(2);
         expect(two.crowd).toBeGreaterThan(1);
         expect(getPartyScale(4).hp).toBeGreaterThan(two.hp);
+        // Bosses keep up with a party's damage (about a player's worth each)
+        expect(getPartyScale(4).bossHp).toBeGreaterThanOrEqual(4);
         const solo = createParty(["warrior"]);
         const duo = createParty(["warrior", "wizard"]);
         const goblin = getEnemy("goblin");
-        expect(duo.spawnEnemy(goblin, "normal")!.maxHp).toBeGreaterThan(
-            solo.spawnEnemy(goblin, "normal")!.maxHp,
-        );
+        const alone = solo.spawnEnemy(goblin, "normal")!;
+        const together = duo.spawnEnemy(goblin, "normal")!;
+        expect(together.maxHp).toBeGreaterThan(alone.maxHp);
+        expect(together.damage).toBeGreaterThanOrEqual(alone.damage);
+        expect(together.damageScale).toBeGreaterThan(alone.damageScale);
+        // A bigger crowd's bones are worth a little less each
+        expect(together.xp).toBeLessThan(alone.xp);
     });
 
     it("plays out the same on every player's copy", () => {

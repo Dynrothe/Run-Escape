@@ -2020,11 +2020,11 @@ export class Sim {
             this.roundHp *
             (boss ? this.partyScale.bossHp : this.partyScale.hp);
         // What its hits are multiplied by: its touch, a boss's attacks, its
-        // explosion
-        let hitScale = bossDamage * (boss ? 1 : damageScale);
+        // explosion (and in co-op, harder for each player)
+        let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
-        let xp = def.xp * roundScale(ROUND_XP, this.round);
+        let xp = def.xp * roundScale(ROUND_XP, this.round) * this.partyScale.xp;
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
