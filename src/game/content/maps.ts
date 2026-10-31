@@ -322,6 +322,7 @@ function createDevMap(recipe: MapRecipe): MapDef {
         victoryText: "",
         fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
         dev: true,
+        ...recipe.details,
     };
 }
 

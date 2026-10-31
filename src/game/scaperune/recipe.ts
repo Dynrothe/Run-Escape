@@ -1,4 +1,5 @@
 import type { MapFileLoader } from "../../rs/map/MapFileLoader";
+import type { MapDef } from "../content/types";
 import { MAP_SQUARE_SIZE, type TileGrid } from "./format";
 import type { GeneratedMap } from "./generator";
 
@@ -42,6 +43,8 @@ export type MapRecipe = {
     detail?(context: BuildContext): GeneratedMap;
     // What the map's called on the map list, if not its id
     title?: { name: string; description: string };
+    // The same with what check-maps.ts needs, for a hand-made map to be held to its rules
+    buildDetail?(context: BuildContext): GeneratedMap;
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from
@@ -49,6 +52,21 @@ export type MapRecipe = {
         enemyDensity: number;
         brightness: number;
     };
+    // A hand-made map's own name, waves and so on, over what createDevMap gives it
+    details?: Partial<
+        Pick<
+            MapDef,
+            | "name"
+            | "description"
+            | "iconObjId"
+            | "difficulty"
+            | "waves"
+            | "events"
+            | "finalBossWarning"
+            | "victoryText"
+            | "fun"
+        >
+    >;
 };
 
 // The rectangle the game plays on, in world tiles
