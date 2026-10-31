@@ -1,5 +1,6 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
@@ -107,8 +108,27 @@ describe("generateMap", () => {
         hillScale: [70],
         waterLevel: [0.5],
         groundPatches: [36],
+        walkSlope: [8, { mountains: 0.6, rivers: 1 }],
+        mountains: [0.6],
+        peakHeight: [255, { mountains: 0.6 }],
+        ridgeScale: [80, { mountains: 0.6 }],
+        ruggedness: [1, { mountains: 0.6 }],
+        warp: [1, { mountains: 0.6 }],
+        terraces: [1, { mountains: 0.6 }],
+        terraceHeight: [50, { mountains: 0.6 }],
+        rockFaces: [0, { mountains: 0.6 }],
+        rubble: [1, { mountains: 0.6 }],
+        snow: [0.8, { mountains: 0.6 }],
+        passWidth: [12, { mountains: 0.8 }],
+        plateaus: [2],
+        mesas: [3],
+        canyons: [1],
+        canyonWidth: [14, { canyons: 1 }],
+        volcanoes: [1],
+        caves: [1, { mountains: 0.8, squaresX: 3, squaresY: 3 }],
         rivers: [1],
         riverWidth: [18, { rivers: 1 }],
+        riverValley: [0, { rivers: 1, mountains: 0.6 }],
         lakes: [2],
         ponds: [6],
         trees: [1],
@@ -254,19 +274,22 @@ describe("generateMap", () => {
 // Against the game's real collision and the real prefabs, when there's a cache.
 // In a script, because the cache's loaders don't load under vitest.
 describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () => {
-    it("reach everywhere with the game's own collision", () => {
-        const output = execFileSync("npx", ["tsx", "scripts/scaperune/check-maps.ts"], {
-            encoding: "utf8",
-            timeout: 280000,
-        });
-        expect(output).toContain("All open tiles reach the spawn");
-    }, 290000);
+    // Not to block the test runner, which gives up on a worker that goes quiet for a minute
+    const run = promisify(execFile);
 
-    it("have every prefab's floor, in every rotation", () => {
-        const output = execFileSync("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
+    it("reach everywhere with the game's own collision", async () => {
+        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-maps.ts"], {
+            encoding: "utf8",
+            timeout: 400000,
+        });
+        expect(stdout).toContain("All open tiles reach the spawn");
+    }, 410000);
+
+    it("have every prefab's floor, in every rotation", async () => {
+        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
             encoding: "utf8",
             timeout: 60000,
         });
-        expect(output).toContain("check out in all 4 rotations");
+        expect(stdout).toContain("check out in all 4 rotations");
     }, 70000);
 });

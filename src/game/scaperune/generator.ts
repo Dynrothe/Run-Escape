@@ -2,13 +2,21 @@ import { Ground } from "./Ground";
 import { BIOMES, BiomeDef } from "./biomes";
 import type { Exit } from "./building";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
-import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
+import { MAP_SQUARE_SIZE, TILE_BLOCKED, TILE_BRIDGE, TileGrid } from "./format";
+import {
+    LandformBounds,
+    Relief,
+    createRelief,
+    getHillBoundaryRise,
+    shapeCliffs,
+} from "./landforms";
 import { Noise, Rng, createNoise, createRng, distanceTo, smoothField } from "./noise";
 import { PathFinder, Point, addPathToField, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
 import {
     BRIDGE,
     BRIDGE_BANK_HEIGHT,
+    BRIDGE_BED_HEIGHT,
     BRIDGE_DECK_EAST,
     BRIDGE_DECK_ROW,
     BRIDGE_DECK_WEST,
@@ -18,7 +26,9 @@ import {
     loadPrefab,
 } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
+import { Plot, RoadLine, gradeRoads } from "./roadGrades";
 import { DEFAULT_SETTINGS, GeneratorSettings, getSettingsError } from "./settings";
+import { Terrain, getTileSlope, limitNorthFaces, limitSlope, spreadNearest } from "./terrain";
 
 export * from "./settings";
 
@@ -49,7 +59,7 @@ export const FORD_HALF_WIDTH = 2;
 // of the gap between its fences and on, before it can curve
 const BRIDGE_ROAD_STRAIGHT = 6;
 // Rows kept clear either side of a bridge's road
-const BRIDGE_ROAD_CLEAR = 3;
+const BRIDGE_ROAD_CLEAR = 4;
 // Crossings are at most this far apart, so that wherever you are one's inside
 // the flow field's window (48 tiles each way)
 const CROSSING_SPACING = 60;
@@ -63,13 +73,77 @@ const MAX_FORDS = 16;
 // Fewer reachable tiles than this isn't a map you can play
 const MIN_PLAYABLE_TILES = 300;
 const SEA_BED = 6;
+// The lowest fresh water can be
 const RIVER_BED = 8;
-const LAND_FLOOR = 34;
-// Tiles between a building and anything else
+// How far under the ground round it water lies
+const WATER_DROP = 18;
+// Tiles a shore takes to come down to the water, at the least. Tall ground takes longer.
+const MIN_BANK = 6;
+const MAX_BANK = 24;
+// How steep the sides of a river's valley are, from a gorge to a wide valley
+const GORGE_SLOPE = 34;
+const VALLEY_SLOPE = 7;
+// Tiles either side of a crossing where a river runs level
+const LEVEL_AT_CROSSING = 13;
+// How much of the land's height a river's course minds, against a straight line
+const VALLEY_SEEK = 1;
+// The steepest a road climbs, in height units a tile, and what going over that costs
+const ROAD_GRADE = 5;
+const ROAD_CLIMB_COST = 6;
+// How steep a road can go at a pinch, to meet something, as a share of what's walkable
+const ROAD_STEEPEST = 0.75;
+// What a tile of cliff costs a road, for the cutting
+const ROAD_CLIFF_COST = 14;
+// Tiles either side of a road that are level with it, past its own half width
+const ROAD_SHOULDER = 1.2;
+// Passes to even out the ground pinned to roads
+const ROAD_SMOOTHING = 2;
+// How steep the sides of cuttings and embankments are, in height units a tile: a share of
+// what's walkable, so that you can walk up out of a road
+const SETTLE_SLOPE = 0.8;
+// A pass climbs a little steeper than a road, as a share of what's walkable
+const PASS_GRADE = 0.6;
+const PASS_CLIFF_COST = 5;
+// Pieces of ground this big that cliffs cut off get a pass. Smaller ones stay out of reach.
+const MIN_PASS_PIECE = 300;
+// Tiles a pass runs on past the cliffs at each end
+const PASS_RUN_OUT = 7;
+const MAX_PASSES = 24;
+// Points along a main road between places it's routed to, over rough ground, and how far
+// they can move to find ground to stand on
+const MAIN_ROAD_STEP = 24;
+const MAIN_ROAD_SNAP = 8;
+// How steep a cliff can drop away to the north, in height units a tile. The camera looks
+// north from high up, at 70 degrees, which is 45 units a tile: anything steeper hides
+// the ground at its foot. This leaves a margin for the top of the screen.
+const NORTH_FACE_SLOPE = 30;
+// Snow starts this high, with the setting at its least and its most
+const SNOW_LINE_HIGH = 235;
+const SNOW_LINE_LOW = 110;
+// How much steeper than walkable a tile is before it gets a rock face
+const FACE_SLOPE = 2;
+const CAVES_A_SQUARE = 1.5;
+const CAVE_WIDTH = 3;
+const CAVE_DEPTH = 2;
+// How much higher the ground has to rise behind a cave for there to be a cliff to go in
+const CAVE_CLIFF = 24;
+// The most the ground can rise over a building's plot for it to go there
+const MAX_PLOT_RISE = 18;
+// Tiles round a building's walls that are flat with it
+const PLOT_MARGIN = 1;
+// Tiles out of a door that are level with it
+const DOOR_STEP = 3;
+// A door step gives way to another building's plot
+const DOOR_STEP_PIN = 0.005;
+// Tiles between a building and anything else, and between it and water
 const BUILDING_CLEAR = 3;
+const WATER_CLEAR = 6;
 // A fenced yard stands this far off a building's walls
 const YARD_GAP = 2;
 const FENCE = 980;
+// Chances a tile of mountain gets a heap of rubble and a stone, with the setting at 1
+const RUBBLE_CHANCE = 0.006;
+const STONE_CHANCE = 0.12;
 
 const LOC_WALL = 0;
 const LOC_NORMAL = 10;
@@ -97,6 +171,18 @@ type Build = {
     biomeAt(x: number, y: number): BiomeDef;
     // Tiles in from the arena's edge, negative outside
     toEdge(x: number, y: number): number;
+    // The land's shape, and its heights as they're being worked on
+    relief: Relief;
+    terrain: Terrain;
+    // Tiles of cliff, and of water, whose corners stay where they are
+    cliffs: Uint8Array;
+    heldCorners: Uint8Array;
+    // Ground you can get to from the spawn, as far as cliffs go: anything else stays empty
+    mainland: Uint8Array;
+    // Tiles' heights, for how steep a step is
+    tileHeights: Float32Array;
+    // Buildings' plots, for roads to keep to
+    plots: Plot[];
 };
 
 // The water as painted: repainted when a ford cuts through it
@@ -111,11 +197,16 @@ type River = {
     wiggle: Noise;
     amount: number;
     halfWidth: number;
+    // Its column or row along its length, where the land gives it a valley to run in
+    valley?: Float32Array;
+    // How high the water is along its length
+    levels: Float32Array;
 };
 
-// A road, as laid, for checking. lead is how many of its first points run straight out
-// of something and can be next to it.
-export type RoadLine = { points: Point[]; lead: number; halfWidth: number };
+// A lake or pond: where it is, and how high its water stands
+type Pool = { x: number; y: number; radius: number; level: number };
+
+export type { RoadLine };
 
 // A building: its way out, if it has one, and whether a road ends there
 export type PlacedBuilding = {
@@ -136,6 +227,9 @@ export type GeneratedMap = {
     roadTiles: Uint8Array;
     lines: RoadLine[];
     buildings: PlacedBuilding[];
+    // Passes cut through cliffs
+    passes: RoadLine[];
+    walkSlope: number;
 };
 
 export function getGeneratedSize(settings: Pick<GeneratorSettings, "squaresX" | "squaresY">): {
@@ -201,9 +295,36 @@ function riverStraightness(river: River, along: number): number {
     return Math.min(Math.max(away - 10, 0) / 12, 1);
 }
 
+// The line a river would follow if it didn't wander
+function riverLine(river: River, along: number): number {
+    const { valley, line } = river;
+    if (!valley) {
+        return line;
+    }
+    return valley[Math.min(Math.max(Math.round(along), 0), valley.length - 1)];
+}
+
+function getNearestCrossing(river: River, along: number): number {
+    let best = along;
+    let bestDistance = Infinity;
+    for (const crossing of river.crossings) {
+        const distance = Math.abs(along - crossing);
+        if (distance < bestDistance) {
+            best = crossing;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
 function riverCentre(river: River, along: number): number {
     const straight = riverStraightness(river, along);
-    return river.line + (river.wiggle(along / 30, 3.5) - 0.5) * 2 * river.amount * straight;
+    const line = lerp(
+        riverLine(river, getNearestCrossing(river, along)),
+        riverLine(river, along),
+        straight,
+    );
+    return line + (river.wiggle(along / 30, 3.5) - 0.5) * 2 * river.amount * straight;
 }
 
 // Rivers narrow to a bridge's span where one can cross them
@@ -251,9 +372,96 @@ function createRivers(build: Build): River[] {
             wiggle: createNoise(settings.seed + 100 + i, 1),
             amount: Math.max(half * 0.2, 10),
             halfWidth: settings.riverWidth / 2,
+            levels: new Float32Array((vertical ? build.corners.y : build.corners.x) + 1),
         });
+        const river = rivers[rivers.length - 1];
+        if (hasRelief(settings)) {
+            river.valley = findValley(build, river);
+            river.amount *= 0.3;
+        }
     }
     return rivers;
+}
+
+// Whether there's more to the land than hills
+function hasRelief(settings: GeneratorSettings): boolean {
+    return (
+        settings.mountains > 0 ||
+        settings.boundary === "mountains" ||
+        settings.plateaus > 0 ||
+        settings.mesas > 0 ||
+        settings.canyons > 0 ||
+        settings.volcanoes > 0
+    );
+}
+
+// The low ground along a river: for each step along, the column that climbs least, each
+// a column at most from the last (seam carving). It keeps to its side of the arena, so that
+// two rivers don't end up in one valley.
+function findValley(build: Build, river: River): Float32Array {
+    const { arena, corners, terrain, settings } = build;
+    const [alongCount, acrossCount] = river.vertical
+        ? [corners.y, corners.x]
+        : [corners.x, corners.y];
+    const [low, high] = river.vertical ? [arena.x0, arena.x1] : [arena.y0, arena.y1];
+    const width = high - low + 1;
+    const span = Math.max(width * 0.3, 16);
+    const heightAt = (along: number, across: number) =>
+        terrain.height[river.vertical ? across + along * corners.x : along + across * corners.x];
+    const totals = new Float32Array(alongCount * width);
+    const from = new Int8Array(alongCount * width);
+    for (let along = 0; along < alongCount; along++) {
+        for (let at = 0; at < width; at++) {
+            const across = low + at;
+            const offset = Math.abs(across - river.line);
+            const cost =
+                (heightAt(along, across) * VALLEY_SEEK) / 16 + Math.max(offset - span, 0) * 2;
+            let best = 0;
+            let way = 0;
+            if (along > 0) {
+                best = Infinity;
+                for (let step = -1; step <= 1; step++) {
+                    const next = at + step;
+                    if (next >= 0 && next < width) {
+                        const total = totals[next + (along - 1) * width];
+                        if (total < best) {
+                            best = total;
+                            way = step;
+                        }
+                    }
+                }
+            }
+            totals[at + along * width] = best + cost;
+            from[at + along * width] = way;
+        }
+    }
+    let end = 0;
+    for (let at = 1; at < width; at++) {
+        if (totals[at + (alongCount - 1) * width] < totals[end + (alongCount - 1) * width]) {
+            end = at;
+        }
+    }
+    const valley = new Float32Array(alongCount);
+    for (let along = alongCount - 1, at = end; along >= 0; along--) {
+        valley[along] = low + at;
+        at += from[at + along * width];
+    }
+    // Smooth it out, with a wider reach the more it can wander
+    const reach = Math.max(Math.round(settings.ridgeScale / 4), 6);
+    return smoothLine(valley, reach);
+}
+
+function smoothLine(line: Float32Array, reach: number): Float32Array {
+    const out = new Float32Array(line.length);
+    for (let i = 0; i < line.length; i++) {
+        const span = Math.min(reach, i, line.length - 1 - i);
+        let sum = 0;
+        for (let j = i - span; j <= i + span; j++) {
+            sum += line[j];
+        }
+        out[i] = sum / (span * 2 + 1);
+    }
+    return out;
 }
 
 // The arena's edge with its corners rounded off: tiles in from it, negative outside
@@ -276,12 +484,15 @@ function toRoundedEdge(build: Build, x: number, y: number): number {
 // than tiles so that its edges can be smooth lines.
 function createWaterFields(build: Build, rivers: River[], hills: Noise) {
     const { settings, arena, rng, corners, spawn } = build;
+    const pools: Pool[] = [];
     const rough = settings.shoreRoughness;
     const coast = createNoise(settings.seed + 1, rough > 0.7 ? 3 : 2);
     const shape = createNoise(settings.seed + 2, 1);
     const count = corners.x * corners.y;
     const sea = new Float32Array(count).fill(-100);
     const fresh = new Float32Array(count).fill(-100);
+    // Low ground flooded, which stands at the lowest level there is
+    const flood = new Uint8Array(count);
 
     if (settings.boundary === "sea") {
         const depth = getCoastDepth(build);
@@ -302,6 +513,7 @@ function createWaterFields(build: Build, rivers: River[], hills: Noise) {
             for (let x = 0; x < corners.x; x++) {
                 const low = line - hills(x / settings.hillScale, y / settings.hillScale);
                 fresh[x + y * corners.x] = low * 80;
+                flood[x + y * corners.x] = low > -0.1 ? 1 : 0;
             }
         }
     }
@@ -327,6 +539,7 @@ function createWaterFields(build: Build, rivers: River[], hills: Noise) {
         // Anywhere in the arena, clear of the spawn
         const x = lerp(arena.x0, arena.x1, rng());
         const y = lerp(arena.y0, arena.y1, rng());
+        pools.push({ x, y, radius, level: 0 });
         const reach = radius * 1.5 + 8;
         const x0 = Math.max(Math.floor(x - reach), 0);
         const x1 = Math.min(Math.ceil(x + reach), corners.x - 1);
@@ -359,7 +572,7 @@ function createWaterFields(build: Build, rivers: River[], hills: Noise) {
         }
         return out;
     };
-    return { sea: smooth(sea), fresh: smooth(fresh) };
+    return { sea: smooth(sea), fresh: smooth(fresh), flood, pools };
 }
 
 // The tiles a corner field has anything of
@@ -381,41 +594,379 @@ function getTouchedTiles(field: Float32Array, sizeX: number, sizeY: number): Uin
     return tiles;
 }
 
-// How high the ground rises into a boundary of hills, 0 to 1
-function getHillBoundaryRise(build: Build, x: number, y: number): number {
-    const { settings, toEdge } = build;
-    if (settings.boundary !== "hills") {
-        return 0;
+// A corner's distance from a tile field: the least of the tiles round it
+function getCornerDistance(build: Build, tiles: Float32Array, x: number, y: number): number {
+    const { sizeX, sizeY } = build;
+    let distance = Infinity;
+    for (const [tx, ty] of [
+        [x - 1, y - 1],
+        [x, y - 1],
+        [x - 1, y],
+        [x, y],
+    ]) {
+        if (tx >= 0 && ty >= 0 && tx < sizeX && ty < sizeY) {
+            distance = Math.min(distance, tiles[tx + ty * sizeX]);
+        }
     }
-    return smoothstep((settings.boundaryDepth - toEdge(x, y)) / (settings.boundaryDepth + 24));
+    return distance;
 }
 
-function paintHeights(
-    build: Build,
-    hills: Noise,
-    toSea: Float32Array,
-    toFresh: Float32Array,
-): void {
-    const { settings, ground, sizeX, sizeY, corners } = build;
-    const amount = 8 + settings.hills * 260;
-    const base = 56 + settings.hills * 30;
+// Takes the land down to the sea, over a few tiles
+function sinkSea(build: Build, toSea: Float32Array): void {
+    const { terrain, corners } = build;
+    const { height } = terrain;
     for (let y = 0; y < corners.y; y++) {
         for (let x = 0; x < corners.x; x++) {
-            const i = ground.tile(Math.min(x, sizeX - 1), Math.min(y, sizeY - 1));
-            const noise = hills(x / settings.hillScale, y / settings.hillScale) - 0.5;
-            let height = Math.max(base + noise * amount, LAND_FLOOR);
-            height += getHillBoundaryRise(build, x, y) * 150;
-            height = RIVER_BED + (height - RIVER_BED) * Math.min(toFresh[i] / 6, 1);
-            height = SEA_BED + (height - SEA_BED) * Math.min(toSea[i] / 8, 1);
-            ground.setHeight(x, y, height);
+            const at = terrain.corner(x, y);
+            const share = Math.min(getCornerDistance(build, toSea, x, y) / 8, 1);
+            height[at] = SEA_BED + (height[at] - SEA_BED) * share;
         }
     }
 }
 
+// How high a river's water stands along its length: under the ground, always downhill to
+// its lower end, and level at a crossing for a bridge's sake. One with the sea at both ends
+// runs down to each from its highest point.
+function setRiverLevels(build: Build, river: River): void {
+    const { terrain, corners } = build;
+    const count = river.vertical ? corners.y : corners.x;
+    const { levels } = river;
+    const heightAt = (along: number) => {
+        const across = riverCentre(river, along);
+        return river.vertical ? terrain.getHeight(across, along) : terrain.getHeight(along, across);
+    };
+    let high = 0;
+    for (let along = 0; along < count; along++) {
+        levels[along] = Math.max(heightAt(along) - WATER_DROP, RIVER_BED);
+        if (levels[along] > levels[high]) {
+            high = along;
+        }
+    }
+    const first = levels[0];
+    const last = levels[count - 1];
+    const fall = (start: number, end: number) => {
+        const way = Math.sign(end - start);
+        for (let along = start + way; along !== end + way; along += way) {
+            levels[along] = Math.min(levels[along], levels[along - way]);
+        }
+    };
+    if (first < RIVER_BED + 2 && last < RIVER_BED + 2) {
+        fall(high, 0);
+        fall(high, count - 1);
+    } else if (first > last) {
+        fall(0, count - 1);
+    } else {
+        fall(count - 1, 0);
+    }
+    for (const crossing of river.crossings) {
+        const level = levels[Math.min(Math.max(crossing, 0), count - 1)];
+        for (
+            let along = crossing - LEVEL_AT_CROSSING;
+            along <= crossing + LEVEL_AT_CROSSING;
+            along++
+        ) {
+            if (along >= 0 && along < count) {
+                levels[along] = level;
+            }
+        }
+    }
+    levels.set(smoothLine(levels, 3));
+}
+
+// How high the fresh water stands at each corner, and everywhere else the height of the
+// nearest water
+function createWaterLevels(
+    build: Build,
+    rivers: River[],
+    pools: Pool[],
+    fresh: Float32Array,
+    flood: Uint8Array,
+): Float32Array {
+    const { terrain, corners } = build;
+    const levels = new Float32Array(fresh.length).fill(Infinity);
+    for (const river of rivers) {
+        setRiverLevels(build, river);
+        const [alongCount, acrossCount] = river.vertical
+            ? [corners.y, corners.x]
+            : [corners.x, corners.y];
+        for (let along = 0; along < alongCount; along++) {
+            const centre = riverCentre(river, along);
+            const reach = riverHalfWidth(river, along) + 8;
+            const first = Math.max(Math.floor(centre - reach), 0);
+            const last = Math.min(Math.ceil(centre + reach), acrossCount - 1);
+            for (let across = first; across <= last; across++) {
+                const i = river.vertical ? across + along * corners.x : along + across * corners.x;
+                levels[i] = Math.min(levels[i], river.levels[along]);
+            }
+        }
+    }
+    // A pool's as high as its lowest shore, or as what runs into it
+    for (const pool of pools) {
+        pool.level = Infinity;
+        const reach = pool.radius * 1.5 + 8;
+        for (let a = 0; a < 24; a++) {
+            const angle = (a / 24) * Math.PI * 2;
+            const x = pool.x + Math.cos(angle) * reach;
+            const y = pool.y + Math.sin(angle) * reach;
+            pool.level = Math.min(pool.level, terrain.getHeight(x, y) - WATER_DROP);
+        }
+        pool.level = Math.max(pool.level, RIVER_BED);
+    }
+    const touches = (pool: Pool, other: Pool) =>
+        Math.hypot(pool.x - other.x, pool.y - other.y) < (pool.radius + other.radius) * 1.5 + 16;
+    for (const pool of pools) {
+        for (const other of pools) {
+            if (touches(pool, other)) {
+                pool.level = Math.min(pool.level, other.level);
+            }
+        }
+    }
+    for (const pool of pools) {
+        const reach = pool.radius * 1.5 + 8;
+        const x0 = Math.max(Math.floor(pool.x - reach), 0);
+        const x1 = Math.min(Math.ceil(pool.x + reach), corners.x - 1);
+        const y0 = Math.max(Math.floor(pool.y - reach), 0);
+        const y1 = Math.min(Math.ceil(pool.y + reach), corners.y - 1);
+        for (let cy = y0; cy <= y1; cy++) {
+            for (let cx = x0; cx <= x1; cx++) {
+                const i = cx + cy * corners.x;
+                if (fresh[i] > -8) {
+                    levels[i] = Math.min(levels[i], pool.level);
+                }
+            }
+        }
+    }
+    for (let i = 0; i < levels.length; i++) {
+        if (flood[i]) {
+            levels[i] = RIVER_BED;
+        }
+    }
+    spreadNearest(levels, corners.x, corners.y);
+    return levels;
+}
+
+// Takes the land down to the fresh water. Tall ground needs a wider valley to get down in,
+// as wide as the setting says.
+function sinkFresh(build: Build, toFresh: Float32Array, levels: Float32Array): void {
+    const { terrain, corners, settings } = build;
+    const { height } = terrain;
+    const slope = lerp(GORGE_SLOPE, VALLEY_SLOPE, settings.riverValley);
+    for (let y = 0; y < corners.y; y++) {
+        for (let x = 0; x < corners.x; x++) {
+            const at = terrain.corner(x, y);
+            const level = levels[at];
+            if (level === Infinity) {
+                continue;
+            }
+            const bank = Math.max((height[at] - level) / slope, MIN_BANK);
+            const share = Math.min(getCornerDistance(build, toFresh, x, y) / bank, 1);
+            height[at] = level + (height[at] - level) * share;
+        }
+    }
+}
+
+// The corners of water tiles: nothing moves them from here on
+function holdWater(build: Build, tiles: Uint8Array): void {
+    const { sizeX, sizeY, corners, heldCorners } = build;
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            if (tiles[x + y * sizeX]) {
+                const at = x + y * corners.x;
+                heldCorners[at] = 1;
+                heldCorners[at + 1] = 1;
+                heldCorners[at + corners.x] = 1;
+                heldCorners[at + corners.x + 1] = 1;
+            }
+        }
+    }
+}
+
+function refreshTileHeights(build: Build): void {
+    const { terrain, sizeX, sizeY, corners, tileHeights } = build;
+    const { height } = terrain;
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const at = x + y * corners.x;
+            tileHeights[x + y * sizeX] =
+                (height[at] +
+                    height[at + 1] +
+                    height[at + corners.x] +
+                    height[at + corners.x + 1]) /
+                4;
+        }
+    }
+}
+
+// Brings the ground to its pins, and whatever that's made walkable stops being cliff
+function settleTerrain(build: Build): void {
+    const { terrain, settings, cliffs, heldCorners, sizeX, sizeY } = build;
+    const before = Float32Array.from(terrain.height);
+    terrain.settle(settings.walkSlope * SETTLE_SLOPE, heldCorners);
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            if (
+                cliffs[i] &&
+                terrain.getSlope(x, y) <= settings.walkSlope &&
+                terrain.height[terrain.corner(x, y)] !== before[terrain.corner(x, y)]
+            ) {
+                cliffs[i] = 0;
+            }
+        }
+    }
+    refreshTileHeights(build);
+}
+
+// The ground round the spawn is level and walkable, whatever the land's doing there
+function pinSpawn(build: Build): void {
+    const { terrain, spawn, cliffs, sizeX, settings } = build;
+    if (!hasRelief(settings)) {
+        return;
+    }
+    const height = Math.round(terrain.getHeight(spawn.x, spawn.y));
+    const reach = SPAWN_CLEAR + 1;
+    for (let y = spawn.y - reach; y <= spawn.y + reach; y++) {
+        for (let x = spawn.x - reach; x <= spawn.x + reach; x++) {
+            if (Math.hypot(x - spawn.x, y - spawn.y) <= reach) {
+                terrain.pin(x, y, height, 0);
+                cliffs[x + y * sizeX] = 0;
+            }
+        }
+    }
+}
+
+// Pieces of open ground, by tile: 0 for cliff and outside the arena
+function findGroundPieces(build: Build): { labels: Int32Array; sizes: number[] } {
+    const { cliffs, arena, sizeX } = build;
+    const labels = new Int32Array(cliffs.length);
+    const sizes = [0];
+    const stack: number[] = [];
+    for (let y = arena.y0; y <= arena.y1; y++) {
+        for (let x = arena.x0; x <= arena.x1; x++) {
+            const start = x + y * sizeX;
+            if (labels[start] || cliffs[start]) {
+                continue;
+            }
+            const label = sizes.length;
+            let size = 0;
+            labels[start] = label;
+            stack.push(start);
+            while (stack.length > 0) {
+                const i = stack.pop()!;
+                size++;
+                const tx = i % sizeX;
+                const ty = (i - tx) / sizeX;
+                for (const [nx, ny] of [
+                    [tx - 1, ty],
+                    [tx + 1, ty],
+                    [tx, ty - 1],
+                    [tx, ty + 1],
+                ]) {
+                    if (nx < arena.x0 || ny < arena.y0 || nx > arena.x1 || ny > arena.y1) {
+                        continue;
+                    }
+                    const j = nx + ny * sizeX;
+                    if (!labels[j] && !cliffs[j]) {
+                        labels[j] = label;
+                        stack.push(j);
+                    }
+                }
+            }
+            sizes.push(size);
+        }
+    }
+    return { labels, sizes };
+}
+
+// What a step costs a road or pass, as a multiple: nothing extra up to its grade, and
+// quickly more after that, so it goes round or winds up a slope rather than straight up it
+function createClimb(build: Build, grade: number, cost: number) {
+    const { tileHeights } = build;
+    return (from: number, to: number): number => {
+        const over = Math.abs(tileHeights[to] - tileHeights[from]) / grade - 1;
+        return over > 0 ? 1 + over * over * cost : 1;
+    };
+}
+
+// Cuts a pass to each big piece of ground the cliffs have cut off from the spawn: a graded
+// way through, that roads can then use
+function cutPasses(build: Build): RoadLine[] {
+    const { terrain, cliffs, arena, spawn, finder, settings, sizeX } = build;
+    const passes: RoadLine[] = [];
+    if (!hasRelief(settings)) {
+        return passes;
+    }
+    pinSpawn(build);
+    settleTerrain(build);
+    const { labels, sizes } = findGroundPieces(build);
+    const joined = new Uint8Array(sizes.length);
+    joined[labels[spawn.x + spawn.y * sizeX]] = 1;
+    const inset = 3;
+    const cost = (x: number, y: number) => {
+        const inside =
+            x >= arena.x0 + inset &&
+            y >= arena.y0 + inset &&
+            x <= arena.x1 - inset &&
+            y <= arena.y1 - inset;
+        if (!inside) {
+            return Infinity;
+        }
+        return cliffs[x + y * sizeX] ? PASS_CLIFF_COST : 1;
+    };
+    refreshTileHeights(build);
+    const passGrade = settings.walkSlope * PASS_GRADE;
+    const climb = createClimb(build, passGrade, 2);
+    const order = sizes
+        .map((size, label) => ({ size, label }))
+        .filter(({ size, label }) => label > 0 && size >= MIN_PASS_PIECE)
+        .sort((a, b) => b.size - a.size);
+    for (const { label } of order) {
+        if (joined[label] || passes.length >= MAX_PASSES) {
+            continue;
+        }
+        const start = labels.indexOf(label);
+        const path = finder.find(
+            { x: start % sizeX, y: Math.floor(start / sizeX) },
+            cost,
+            (i) => joined[labels[i]] !== 0,
+            climb,
+        );
+        if (path.length === 0) {
+            continue;
+        }
+        for (const i of path) {
+            joined[labels[i]] = 1;
+        }
+        // Only where it needs cutting, and a little either side, to ease into the ground
+        const firstCliff = path.findIndex((i) => cliffs[i]);
+        const lastCliff = path.length - 1 - [...path].reverse().findIndex((i) => cliffs[i]);
+        const cut = path.slice(
+            Math.max(firstCliff - PASS_RUN_OUT, 0),
+            lastCliff + PASS_RUN_OUT + 1,
+        );
+        const raw = cut.map((i) => ({ x: (i % sizeX) + 0.5, y: Math.floor(i / sizeX) + 0.5 }));
+        const points = smoothPath(raw, 4, 4);
+        passes.push({ points, lead: 0, halfWidth: settings.passWidth / 2, grade: passGrade });
+    }
+    // Cut now, so that roads find them. They're graded again with the roads at the end.
+    gradeRoads(terrain, passes, [], 0, settings.walkSlope * ROAD_STEEPEST);
+    settleTerrain(build);
+    terrain.clearPins();
+    pinSpawn(build);
+    const after = findGroundPieces(build).labels;
+    const home = after[spawn.x + spawn.y * sizeX];
+    for (let i = 0; i < after.length; i++) {
+        build.mainland[i] = after[i] === home ? 1 : 0;
+    }
+    return passes;
+}
+
 function paintFloors(build: Build, toSea: Float32Array): void {
-    const { settings, ground, sizeX, sizeY, biomeAt } = build;
+    const { settings, ground, sizeX, sizeY, biomeAt, terrain, relief, cliffs } = build;
     const patches = createNoise(settings.seed + 4);
+    const edges = createNoise(settings.seed + 10, 2);
     const span = settings.groundPatches;
+    const snowLine = getSnowLine(settings);
     for (let y = 0; y < sizeY; y++) {
         for (let x = 0; x < sizeX; x++) {
             const biome = biomeAt(x, y);
@@ -423,10 +974,132 @@ function paintFloors(build: Build, toSea: Float32Array): void {
             // The noise bunches round the middle, so stretch it
             const patch = Math.min(Math.max((patches(x / span, y / span) - 0.3) / 0.4, 0), 0.999);
             let floor = biome.ground[Math.floor(patch * biome.ground.length)];
-            if (getHillBoundaryRise(build, x, y) > 0.08) {
+            if (getHillBoundaryRise(settings, build, x, y) > 0.08) {
                 floor = biome.hillGround;
             }
+            const edge = edges(x / 16, y / 16);
+            const rocky = relief.mountain[terrain.corner(x, y)] > 0.25 + edge * 0.5 || cliffs[i];
+            if (rocky) {
+                floor = biome.rock.ground;
+            }
+            if (terrain.height[terrain.corner(x, y)] + edge * 40 > snowLine) {
+                floor = biome.rock.snowGround;
+            }
             ground.level0.underlays[i] = toSea[i] < 4 ? biome.shore : floor;
+        }
+    }
+}
+
+// How high snow starts, in height units: past the top of everything with no snow
+function getSnowLine(settings: GeneratorSettings): number {
+    return settings.snow > 0 ? lerp(SNOW_LINE_HIGH, SNOW_LINE_LOW, settings.snow) : Infinity;
+}
+
+// Lava in the craters
+function paintLava(build: Build): void {
+    const { ground, relief, corners, biomeAt, sizeX, sizeY } = build;
+    if (relief.craters.length === 0) {
+        return;
+    }
+    const field = new Float32Array(corners.x * corners.y).fill(-4);
+    for (const { x, y, radius } of relief.craters) {
+        const reach = Math.ceil(radius) + 4;
+        for (let cy = Math.round(y) - reach; cy <= Math.round(y) + reach; cy++) {
+            for (let cx = Math.round(x) - reach; cx <= Math.round(x) + reach; cx++) {
+                const at = cx + cy * corners.x;
+                field[at] = Math.max(field[at], radius - Math.hypot(cx - x, cy - y));
+            }
+        }
+    }
+    ground.paintField(field, biomeAt(sizeX >> 1, sizeY >> 1).rock.lava, true);
+}
+
+// The rock on everything too steep to walk, and rock faces over the steepest. It's painted
+// after the roads, and goes round them.
+function paintRock(build: Build, skip: Uint8Array): Uint8Array {
+    const { ground, settings, sizeX, sizeY, corners, cliffs, biomeAt, terrain } = build;
+    if (!hasRelief(settings)) {
+        return new Uint8Array(sizeX * sizeY);
+    }
+    const { heights, flags } = ground.level0;
+    const middle = biomeAt(sizeX >> 1, sizeY >> 1).rock;
+    const snowLine = getSnowLine(settings);
+    const rock = new Uint8Array(sizeX * sizeY);
+    const snowy = new Uint8Array(sizeX * sizeY);
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            if (!(flags[i] & TILE_BLOCKED) || skip[i]) {
+                continue;
+            }
+            const steep = getTileSlope(heights, corners.x, x, y) > settings.walkSlope;
+            if (steep || cliffs[i]) {
+                const high = terrain.height[terrain.corner(x, y)] > snowLine;
+                (high ? snowy : rock)[i] = 1;
+            }
+        }
+    }
+    ground.paintOverlay(rock, middle.overlay, false, skip);
+    ground.paintOverlay(snowy, middle.snowOverlay, false, skip);
+
+    const roll = createRng(settings.seed + 200);
+    for (let y = 1; y < sizeY - 1; y++) {
+        for (let x = 1; x < sizeX - 1; x++) {
+            const i = x + y * sizeX;
+            const slope = getTileSlope(heights, corners.x, x, y);
+            if ((!rock[i] && !snowy[i]) || slope < settings.walkSlope + FACE_SLOPE) {
+                continue;
+            }
+            if (roll() < settings.rockFaces) {
+                const { faces } = biomeAt(x, y).rock;
+                const [id, type] = faces[Math.floor(roll() * faces.length)];
+                ground.grid.locs.push({
+                    id,
+                    type,
+                    rotation: Math.floor(roll() * 4),
+                    level: 0,
+                    x,
+                    y,
+                });
+            }
+        }
+    }
+    return rock;
+}
+
+// Cave mouths, for looks: in the foot of a cliff that faces the camera
+function placeCaves(build: Build, rock: Uint8Array): void {
+    const { settings, ground, arena, biomeAt, sizeX, corners } = build;
+    const { heights, flags } = ground.level0;
+    const wanted = Math.round(
+        settings.caves * settings.squaresX * settings.squaresY * CAVES_A_SQUARE,
+    );
+    const roll = createRng(settings.seed + 201);
+    const fits = (x: number, y: number) => {
+        for (let tx = x; tx < x + CAVE_WIDTH; tx++) {
+            const i = tx + y * sizeX;
+            if (!rock[i] || !(flags[i + sizeX] & TILE_BLOCKED) || flags[i - sizeX] & TILE_BLOCKED) {
+                return false;
+            }
+        }
+        const rise =
+            heights[x + 1 + (y + CAVE_DEPTH + 1) * corners.x] - heights[x + 1 + y * corners.x];
+        return rise >= CAVE_CLIFF;
+    };
+    let placed = 0;
+    for (let attempt = 0; attempt < wanted * 300 && placed < wanted; attempt++) {
+        const x = Math.floor(lerp(arena.x0, arena.x1 - CAVE_WIDTH, roll()));
+        const y = Math.floor(lerp(arena.y0 + 1, arena.y1 - CAVE_DEPTH - 2, roll()));
+        if (fits(x, y)) {
+            ground.place(
+                { id: biomeAt(x, y).rock.cave, type: LOC_NORMAL, rotation: 0, level: 0, x, y },
+                CAVE_WIDTH,
+                CAVE_DEPTH,
+            );
+            for (let ty = y; ty < y + CAVE_DEPTH; ty++) {
+                rock.fill(0, x + ty * sizeX, x + CAVE_WIDTH + ty * sizeX);
+            }
+            placed++;
         }
     }
 }
@@ -468,16 +1141,18 @@ class RoadNetwork {
     // close to, because zones overlap and a spot that's given up on takes its own off
     readonly offLimits: Uint8Array;
     readonly lines: RoadLine[] = [];
-    // Every few tiles of road, to find the nearest. Not the spawn: that's no road.
+    // Every point of road, to find the nearest. Not the spawn: that's no road.
     private readonly samples: Point[] = [];
     private readonly road: Float32Array;
     private readonly trail: Float32Array;
     private readonly wiggle: Noise;
     private readonly curves: number;
+    private readonly climb: (from: number, to: number) => number;
 
     constructor(
         readonly build: Build,
         readonly water: Uint8Array,
+        readonly bridgeZone: Uint8Array,
     ) {
         const { ground, corners, settings, spawn } = build;
         this.tiles = new Uint8Array(ground.sizeX * ground.sizeY);
@@ -487,6 +1162,7 @@ class RoadNetwork {
         this.trail = new Float32Array(corners.x * corners.y).fill(-4);
         this.wiggle = createNoise(settings.seed + 5, 1);
         this.curves = settings.roadCurviness;
+        this.climb = createClimb(build, ROAD_GRADE, ROAD_CLIMB_COST);
         // Everything leads to the spawn, if nothing else
         this.tiles[ground.tile(spawn.x, spawn.y)] = 1;
     }
@@ -526,17 +1202,19 @@ class RoadNetwork {
         }
         return (
             1 +
+            (this.build.cliffs[i] ? ROAD_CLIFF_COST : 0) +
             this.wiggle(x / lerp(24, 7, this.curves), y / lerp(24, 7, this.curves)) *
                 this.curves *
                 9
         );
     }
 
+    // Whether a road's on a building, or by a bridge's road where nothing's to go
     private touchesBuilding(points: Point[], from: number): boolean {
         const { ground } = this.build;
         let touches = false;
         forTilesNear(this.build, points.slice(from), this.halfWidth + 0.5, (i) => {
-            touches ||= ground.footprint[i] !== 0;
+            touches ||= ground.footprint[i] !== 0 || this.bridgeZone[i] !== 0;
         });
         return touches;
     }
@@ -563,11 +1241,22 @@ class RoadNetwork {
         forTilesNear(this.build, points.slice(line.lead), clear, (i) => {
             this.tiles[i] = 1;
         });
-        points.forEach((point, i) => {
-            if (i % 3 === 0) {
-                this.samples.push(point);
+        this.samples.push(...points);
+    }
+
+    // A road as smooth as it'll go without drifting onto a building
+    private smoothRoad(raw: Point[], pinned: number): Point[] {
+        const reach = Math.round(lerp(9, 5, this.curves));
+        let points = smoothPath(raw, reach, 7, pinned);
+        for (const [tryReach, passes] of [
+            [4, 3],
+            [2, 1],
+        ]) {
+            if (this.touchesBuilding(points, pinned)) {
+                points = smoothPath(raw, tryReach, passes, pinned);
             }
-        });
+        }
+        return this.touchesBuilding(points, pinned) ? raw : points;
     }
 
     // The way from a road's start to the rest of the roads: its tiles, or nothing
@@ -578,13 +1267,19 @@ class RoadNetwork {
         const inTurn = getTurningCircles(lead);
         const turning = (x: number, y: number) => (inTurn(x, y) ? Infinity : free(x, y));
         // Somewhere too tight for a wide turn makes do with a sharp one
-        const wide = finder.find(from, turning, isRoad);
-        return wide.length > 0 ? wide : finder.find(from, free, isRoad);
+        const wide = finder.find(from, turning, isRoad, this.climb);
+        return wide.length > 0 ? wide : finder.find(from, free, isRoad, this.climb);
     }
 
     // Lays a road out of something along a route, as findRoute found it. With no route
     // it leads nowhere, and narrows away into the ground.
-    lay(from: Point, lead: Point[], route: number[], leadHalfWidth: number): void {
+    lay(
+        from: Point,
+        lead: Point[],
+        route: number[],
+        leadHalfWidth: number,
+        startHeight: number,
+    ): void {
         const { ground, sizeX } = this.build;
         this.tiles[ground.tile(from.x, from.y)] = 1;
         // Found from the far end back
@@ -592,43 +1287,111 @@ class RoadNetwork {
             .map((i) => ({ x: (i % sizeX) + 0.5, y: Math.floor(i / sizeX) + 0.5 }))
             .reverse();
 
-        // As smooth as it'll go without drifting onto a building
-        const raw = [...lead, ...onward];
-        const reach = Math.round(lerp(9, 5, this.curves));
-        let points = smoothPath(raw, reach, 7, lead.length);
-        for (const [tryReach, passes] of [
-            [4, 3],
-            [2, 1],
-        ]) {
-            if (this.touchesBuilding(points, lead.length)) {
-                points = smoothPath(raw, tryReach, passes, lead.length);
-            }
-        }
-        if (this.touchesBuilding(points, lead.length)) {
-            points = raw;
-        }
+        const points = this.smoothRoad([...lead, ...onward], lead.length);
 
         const width = (i: number) =>
             i < lead.length
                 ? leadHalfWidth
                 : lerp(leadHalfWidth, this.halfWidth, Math.min((i - lead.length) / ROAD_WIDEN, 1));
-        this.add({ points, lead: lead.length, halfWidth: this.halfWidth }, width, true);
+        const start = startHeight;
+        const line = {
+            points,
+            lead: lead.length,
+            halfWidth: this.halfWidth,
+            start,
+            grade: ROAD_GRADE,
+        };
+        this.add(line, width, true);
         if (onward.length === 0) {
             this.taper(points, leadHalfWidth);
         }
     }
 
+    // A long line that's to go over rough ground: its way between points along it, where
+    // it can be walked and climbed. Each run's a stretch that's joined up.
+    private routeThrough(line: Point[], skip: Uint8Array): Point[][] {
+        const { ground, sizeX, finder, cliffs } = this.build;
+        const free = (x: number, y: number) =>
+            skip[ground.tile(x, y)] ? Infinity : this.cost(x, y);
+        const isFree = (x: number, y: number) =>
+            ground.inside(x, y) && free(x, y) !== Infinity && !cliffs[ground.tile(x, y)];
+        // The nearest tile that'll do
+        const snap = (point: Point): Point | undefined => {
+            const x = Math.floor(point.x);
+            const y = Math.floor(point.y);
+            for (let reach = 0; reach <= MAIN_ROAD_SNAP; reach++) {
+                for (let ny = y - reach; ny <= y + reach; ny++) {
+                    for (let nx = x - reach; nx <= x + reach; nx++) {
+                        if (
+                            Math.max(Math.abs(nx - x), Math.abs(ny - y)) === reach &&
+                            isFree(nx, ny)
+                        ) {
+                            return { x: nx, y: ny };
+                        }
+                    }
+                }
+            }
+            return undefined;
+        };
+        const runs: Point[][] = [];
+        let run: Point[] = [];
+        let last: Point | undefined;
+        const finish = () => {
+            if (run.length > 3) {
+                runs.push(this.smoothRoad(run, 1));
+            }
+            run = [];
+            last = undefined;
+        };
+        for (let at = 0; at < line.length; at += MAIN_ROAD_STEP) {
+            const next = snap(line[at]);
+            if (!next) {
+                finish();
+                continue;
+            }
+            if (last) {
+                const end = ground.tile(next.x, next.y);
+                const route = finder.find(last, free, (i) => i === end, this.climb);
+                if (route.length === 0) {
+                    finish();
+                } else {
+                    for (let i = route.length - 1; i >= 0; i--) {
+                        run.push({
+                            x: (route[i] % sizeX) + 0.5,
+                            y: Math.floor(route[i] / sizeX) + 0.5,
+                        });
+                    }
+                }
+            }
+            last = next;
+        }
+        finish();
+        return runs;
+    }
+
+    private addRun(run: Point[]): void {
+        const { ground } = this.build;
+        this.add(
+            { points: run, lead: 0, halfWidth: this.halfWidth, grade: ROAD_GRADE },
+            () => this.halfWidth,
+            true,
+        );
+        for (const point of run) {
+            this.tiles[ground.tile(Math.floor(point.x), Math.floor(point.y))] = 1;
+        }
+    }
+
     // Lays a road along a line, leaving out where it can't go, for others to join
     addMainRoad(line: Point[], skip: Uint8Array): void {
-        const { ground } = this.build;
-        const width = () => this.halfWidth;
+        const { ground, settings } = this.build;
+        if (hasRelief(settings)) {
+            this.routeThrough(line, skip).forEach((run) => this.addRun(run));
+            return;
+        }
         let run: Point[] = [];
         const finish = () => {
             if (run.length > 3) {
-                this.add({ points: run, lead: 0, halfWidth: this.halfWidth }, width, true);
-                for (const point of run) {
-                    this.tiles[ground.tile(Math.floor(point.x), Math.floor(point.y))] = 1;
-                }
+                this.addRun(run);
             }
             run = [];
         };
@@ -706,7 +1469,12 @@ const BRIDGE_HIDDEN_FLOOR = 61;
 
 // How a road leaves something: dead straight along these points, in tile corners, to
 // where it's free to find its way from (from, a tile)
-type RoadStart = { from: Point; lead: Point[] };
+type RoadStart = { from: Point; lead: Point[]; height: number };
+
+// A river's line at a crossing: bridges stand on whole tiles
+function getCrossingLine(river: River, crossing: number): number {
+    return Math.round(riverLine(river, crossing));
+}
 
 // Bridges where rivers can take one. Returns a road start for each end of each, and
 // marks where main roads must keep off them.
@@ -716,7 +1484,7 @@ function placeBridges(
     water: Uint8Array,
     zone: Uint8Array,
 ): RoadStart[] {
-    const { context, ground, arena } = build;
+    const { context, ground, arena, terrain } = build;
     const starts: RoadStart[] = [];
     const prefab = loadPrefab(context, BRIDGE);
     const turned = rotatePrefab(prefab, 1, context.locs);
@@ -726,10 +1494,11 @@ function placeBridges(
         for (const crossing of river.crossings) {
             // Tile corners along the bridge's middle line, by distance from the river's
             // middle. Turning a prefab mirrors it along its length.
+            const line = getCrossingLine(river, crossing);
             const across = (distance: number): Point =>
                 river.vertical
-                    ? { x: river.line + distance, y: crossing }
-                    : { x: crossing, y: river.line + distance };
+                    ? { x: line + distance, y: crossing }
+                    : { x: crossing, y: line + distance };
             const deckNear = river.vertical ? BRIDGE_DECK_WEST - middle : middle - BRIDGE_DECK_EAST;
             const deckFar = river.vertical ? BRIDGE_DECK_EAST - middle : middle - BRIDGE_DECK_WEST;
 
@@ -751,33 +1520,47 @@ function placeBridges(
                 fits &&= onLand(distance);
             }
             const crossesOther = rivers.some(
-                (other) =>
-                    other !== river && Math.abs(crossing - riverCentre(other, river.line)) < 26,
+                (other) => other !== river && Math.abs(crossing - riverCentre(other, line)) < 26,
             );
             if (!fits || crossesOther) {
                 continue;
             }
-            const near = across(deckNear - 3);
-            const far = across(deckFar + 3);
-            const height = Math.max(
-                (ground.getHeight(near.x, near.y) + ground.getHeight(far.x, far.y)) / 2,
-                BRIDGE_BANK_HEIGHT,
-            );
+            // Its banks stand as far over the water as they do where it's from
+            const height = river.levels[crossing] + BRIDGE_BANK_HEIGHT - BRIDGE_BED_HEIGHT;
             const options = {
                 floor: (overlay: number) => overlay === BRIDGE_HIDDEN_FLOOR,
-                feather: 5,
+                feather: 0,
                 flatten: false,
                 height,
                 anchor: BRIDGE_BANK_HEIGHT,
                 keepUnderlays: true,
+                keepHeights: true,
             };
             const stampAt = crossing - BRIDGE_DECK_ROW;
             const bridge = river.vertical ? prefab : turned;
-            const stampX = river.vertical ? river.line - middle : stampAt;
-            const stampY = river.vertical ? stampAt : river.line - middle;
+            const stampX = river.vertical ? line - middle : stampAt;
+            const stampY = river.vertical ? stampAt : line - middle;
             ground.stamp(bridge, stampX, stampY, options);
+            const cornersOfStamp = bridge.sizeX + 1;
+            for (let cy = 0; cy <= bridge.sizeY; cy++) {
+                for (let cx = 0; cx <= bridge.sizeX; cx++) {
+                    const own = bridge.levels[0].heights[cx + cy * cornersOfStamp];
+                    terrain.pin(stampX + cx, stampY + cy, height + own - BRIDGE_BANK_HEIGHT);
+                }
+            }
             for (let y = stampY; y < stampY + bridge.sizeY; y++) {
                 for (let x = stampX; x < stampX + bridge.sizeX; x++) {
+                    zone[ground.tile(x, y)] = 1;
+                }
+            }
+            // Nothing goes on the road's rows or close by, all the way along: no buildings
+            // or trees, nor roads doubling back beside it
+            for (let distance = -straight; distance <= straight; distance++) {
+                const p = across(distance);
+                for (let row = -BRIDGE_ROAD_CLEAR - 1; row <= BRIDGE_ROAD_CLEAR; row++) {
+                    const x = river.vertical ? p.x : p.x + row;
+                    const y = river.vertical ? p.y + row : p.y;
+                    ground.reserved[ground.tile(x, y)] = 1;
                     zone[ground.tile(x, y)] = 1;
                 }
             }
@@ -787,18 +1570,9 @@ function placeBridges(
             ]) {
                 const lead: Point[] = [];
                 for (let distance = deck; distance !== end + way; distance += way) {
-                    const p = across(distance);
-                    lead.push(p);
-                    // Nothing goes on the road's rows or close by: no buildings or
-                    // trees, nor roads doubling back beside it
-                    for (let row = -BRIDGE_ROAD_CLEAR - 1; row <= BRIDGE_ROAD_CLEAR; row++) {
-                        const x = river.vertical ? p.x : p.x + row;
-                        const y = river.vertical ? p.y + row : p.y;
-                        ground.reserved[ground.tile(x, y)] = 1;
-                        zone[ground.tile(x, y)] = 1;
-                    }
+                    lead.push(across(distance));
                 }
-                starts.push({ from: across(end + way), lead });
+                starts.push({ from: across(end + way), lead, height });
             }
         }
     }
@@ -898,7 +1672,7 @@ function fitsBuilding(
     sizeX: number,
     sizeY: number,
 ): boolean {
-    const { settings, ground, spawn, toEdge } = build;
+    const { settings, ground, spawn, toEdge, terrain, cliffs, mainland } = build;
     const inset = settings.boundary === "sea" ? 3 : settings.boundaryDepth + 3;
     if (Math.min(toEdge(x, y), toEdge(x + sizeX, y + sizeY)) < inset) {
         return false;
@@ -909,6 +1683,8 @@ function fitsBuilding(
             if (
                 !ground.inside(tx, ty) ||
                 water[i] ||
+                cliffs[i] ||
+                !mainland[i] ||
                 ground.reserved[i] ||
                 Math.hypot(tx - spawn.x, ty - spawn.y) <= SPAWN_CLEAR
             ) {
@@ -916,7 +1692,82 @@ function fitsBuilding(
             }
         }
     }
+    const { min, max } = terrain.getRange(
+        x - PLOT_MARGIN,
+        y - PLOT_MARGIN,
+        sizeX + PLOT_MARGIN * 2,
+        sizeY + PLOT_MARGIN * 2,
+    );
+    if (max - min > MAX_PLOT_RISE) {
+        return false;
+    }
+    // The ground has to get from the plot down to any water, at a walkable slope. Water
+    // doesn't move for it.
+    const reach = WATER_CLEAR;
+    for (let ty = y - reach; ty < y + sizeY + reach; ty++) {
+        for (let tx = x - reach; tx < x + sizeX + reach; tx++) {
+            if (ground.inside(tx, ty) && water[ground.tile(tx, ty)]) {
+                return false;
+            }
+        }
+    }
     return true;
+}
+
+// How high a building's plot goes: the middle of its ground, as near what it's joining as
+// that ground will let it, and within walking distance of any plot beside it. Undefined
+// if that's not near its own ground.
+function getPlotHeight(
+    build: Build,
+    x: number,
+    y: number,
+    sizeX: number,
+    sizeY: number,
+    joining?: number,
+): number | undefined {
+    const { terrain, plots, settings } = build;
+    const margin = PLOT_MARGIN;
+    const { min, max } = terrain.getRange(
+        x - margin,
+        y - margin,
+        sizeX + margin * 2,
+        sizeY + margin * 2,
+    );
+    const middle = (min + max) / 2;
+    let height = joining === undefined ? middle : Math.min(Math.max(joining, min), max);
+    const slope = settings.walkSlope * SETTLE_SLOPE;
+    for (const plot of plots) {
+        const gapX = Math.max(plot.x - (x + sizeX), x - (plot.x + plot.sizeX), 0);
+        const gapY = Math.max(plot.y - (y + sizeY), y - (plot.y + plot.sizeY), 0);
+        const gap = Math.max(Math.hypot(gapX, gapY) - margin * 2, 1) * slope;
+        height = Math.min(Math.max(height, plot.height - gap), plot.height + gap);
+    }
+    return height < min - MAX_PLOT_RISE || height > max + MAX_PLOT_RISE
+        ? undefined
+        : Math.round(height);
+}
+
+// Makes a building's plot flat at a height, and the ground out of its door
+function pinPlot(
+    build: Build,
+    x: number,
+    y: number,
+    sizeX: number,
+    sizeY: number,
+    height: number,
+    exit?: Exit,
+): void {
+    const { terrain, plots } = build;
+    const margin = PLOT_MARGIN;
+    terrain.pinRect(x - margin, y - margin, sizeX + margin * 2, sizeY + margin * 2, height);
+    plots.push({ x, y, sizeX, sizeY, height });
+    if (exit) {
+        for (let out = 1; out <= DOOR_STEP; out++) {
+            const stepX = Math.round(exit.x + exit.outX * out);
+            const stepY = Math.round(exit.y + exit.outY * out);
+            terrain.pinRect(stepX - 1, stepY - 1, 2, 2, height, DOOR_STEP_PIN);
+        }
+    }
 }
 
 // A fence round a building a little way off, with a gap at its door
@@ -1042,12 +1893,22 @@ function placeBuilding(
             markOffLimits(build, roads, x, y, prefab.sizeX, prefab.sizeY, -1);
             continue;
         }
-        kit.stamp(ground, name, turns, x, y);
+        // Its road has to be able to get from its door to where it joins
+        const joining = route.length > 0 ? build.tileHeights[route[0]] : undefined;
+        const height = getPlotHeight(build, x, y, prefab.sizeX, prefab.sizeY, joining);
+        const steepest = settings.walkSlope * ROAD_STEEPEST * route.length;
+        const tooFar = joining !== undefined && Math.abs(joining - (height ?? 0)) > steepest;
+        if (height === undefined || tooFar) {
+            markOffLimits(build, roads, x, y, prefab.sizeX, prefab.sizeY, -1);
+            continue;
+        }
+        kit.stamp(ground, name, turns, x, y, true);
+        pinPlot(build, x, y, prefab.sizeX, prefab.sizeY, height, exit);
         if (rng() < settings.gardens) {
             placeYard(build, plot);
         }
         if (wantsRoad) {
-            roads.lay(from, lead, route, roads.halfWidth);
+            roads.lay(from, lead, route, roads.halfWidth, height);
         }
         return plot;
     }
@@ -1091,7 +1952,12 @@ function placeRuins(build: Build, roads: RoadNetwork, water: Uint8Array): void {
         const x = Math.round(x0);
         const y = Math.round(y0);
         if (fitsBuilding(build, water, x, y, prefab.sizeX, prefab.sizeY)) {
-            kit.stampRuin(ground, name, turns, x, y, rng);
+            const height = getPlotHeight(build, x, y, prefab.sizeX, prefab.sizeY);
+            if (height === undefined) {
+                continue;
+            }
+            kit.stampRuin(ground, name, turns, x, y, rng, true);
+            pinPlot(build, x, y, prefab.sizeX, prefab.sizeY, height);
             markOffLimits(build, roads, x, y, prefab.sizeX, prefab.sizeY, 1);
             placed++;
         }
@@ -1127,7 +1993,9 @@ function placeBoundary(build: Build, roadTiles: Uint8Array): void {
 }
 
 function scatter(build: Build, water: Uint8Array): void {
-    const { settings, ground, rng, arena, spawn, biomeAt, toEdge, sizeX, sizeY } = build;
+    const { settings, ground, rng, arena, spawn, biomeAt, toEdge, sizeX, sizeY, relief } = build;
+    const { terrain } = build;
+    const snowLine = getSnowLine(settings);
     const clumpScale = lerp(8, 28, settings.treeClumping);
     const clumps = createNoise(settings.seed + 6);
     const flowerPatches = createNoise(settings.seed + 9, 1);
@@ -1160,7 +2028,34 @@ function scatter(build: Build, water: Uint8Array): void {
             const inBelt = belt && edge < settings.boundaryDepth;
             const clump = clumps(x / clumpScale, y / clumpScale);
             const density = clump > clumpLine ? inClump : outOfClump;
-            const treeChance = inBelt ? 0.5 : settings.trees * density;
+            // Trees thin out up the mountains, and stones take over
+            const mountain = relief.mountain[terrain.corner(x, y)];
+            const rocky = Math.min(mountain * 1.6, 1);
+            if (rocky > 0) {
+                const chance = settings.rubble * rocky;
+                const { rubble, stones } = biome.rock;
+                if (roll < chance * RUBBLE_CHANCE) {
+                    const [id, size] = pick(rng, rubble);
+                    if (ground.isClear(x - 1, y - 1, size + 2, size + 2)) {
+                        place(id, size, LOC_NORMAL, x, y);
+                    }
+                    continue;
+                }
+                if (roll < chance * STONE_CHANCE && ground.isClear(x, y, 1, 1)) {
+                    ground.grid.locs.push({
+                        id: pick(rng, stones),
+                        type: LOC_FLOOR_DECORATION,
+                        rotation: Math.floor(rng() * 4),
+                        level: 0,
+                        x,
+                        y,
+                    });
+                    continue;
+                }
+            }
+            // Nothing grows on the snow
+            const bare = terrain.height[terrain.corner(x, y)] > snowLine ? 0 : 1 - rocky;
+            const treeChance = (inBelt ? 0.5 : settings.trees * density) * bare;
             const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006);
             if (stones && edge < 3 && edge > -3) {
                 // A line of boulders along the edge, where the ground gets too steep
@@ -1185,7 +2080,7 @@ function scatter(build: Build, water: Uint8Array): void {
                 if (ground.isClear(x, y, size, size)) {
                     place(id, size, LOC_NORMAL, x, y);
                 }
-            } else if (roll < treeChance + rockChance + settings.grass * 0.56) {
+            } else if (roll < treeChance + rockChance + settings.grass * 0.56 * bare) {
                 if (ground.isClear(x, y, 1, 1)) {
                     ground.grid.locs.push({
                         id: pick(rng, biome.decor),
@@ -1197,7 +2092,7 @@ function scatter(build: Build, water: Uint8Array): void {
                     });
                 }
             } else if (
-                rng() < settings.flowers * 0.4 &&
+                rng() < settings.flowers * 0.4 * bare &&
                 flowerPatches(x / 9, y / 9) > 0.55 &&
                 ground.isClear(x, y, 1, 1)
             ) {
@@ -1251,6 +2146,7 @@ function layFord(build: Build, path: number[], water: WaterPaint): void {
     }
     ground.clearOverlay(water.tiles);
     water.tiles = ground.paintField(water.field, biomeAt(sizeX >> 1, sizeY >> 1).water, true);
+    blockSteepGround(build);
     ground.grid.locs = ground.grid.locs.filter(
         (loc) =>
             !ford[ground.tile(loc.x, loc.y)] ||
@@ -1263,24 +2159,31 @@ function layFord(build: Build, path: number[], water: WaterPaint): void {
 // and whatever's still cut off is blocked. Nobody can get next to a blocked tile
 // from the other side, so it's never an invisible wall.
 function connectGround(build: Build, water: WaterPaint, offLimits: Uint8Array): RoadLine[] {
-    const { ground, context, arena, spawn, finder } = build;
+    const { ground, context, arena, spawn, finder, cliffs } = build;
     const { grid, sizeX, sizeY } = ground;
     const fords: RoadLine[] = [];
     let flags = getCollisionFlags(grid, context.locs);
     let reached = findReachable(flags, sizeX, sizeY, arena, spawn.x, spawn.y);
+    const cost = (x: number, y: number) => {
+        const inArena = x >= arena.x0 && y >= arena.y0 && x <= arena.x1 && y <= arena.y1;
+        const i = ground.tile(x, y);
+        return inArena && !offLimits[i] && !cliffs[i] ? 1 : Infinity;
+    };
     for (let count = 0; count < MAX_FORDS; count++) {
         const stranded = findStranded(flags, sizeX, arena, reached);
-        const piece = groupTiles(stranded, sizeX)[0];
-        if (!piece || piece.length < MIN_STRANDED_PIECE) {
-            break;
+        // The biggest piece a ford can get to: cliffs can be in the way
+        let path: number[] = [];
+        for (const piece of groupTiles(stranded, sizeX)) {
+            if (piece.length < MIN_STRANDED_PIECE) {
+                break;
+            }
+            const at = piece[0];
+            const start = { x: at % sizeX, y: Math.floor(at / sizeX) };
+            path = finder.find(start, cost, (i) => reached[i] !== 0);
+            if (path.length > 0) {
+                break;
+            }
         }
-        const at = piece[0];
-        const start = { x: at % sizeX, y: Math.floor(at / sizeX) };
-        const cost = (x: number, y: number) => {
-            const inArena = x >= arena.x0 && y >= arena.y0 && x <= arena.x1 && y <= arena.y1;
-            return inArena && !offLimits[ground.tile(x, y)] ? 1 : Infinity;
-        };
-        const path = finder.find(start, cost, (i) => reached[i] !== 0);
         if (path.length === 0) {
             break;
         }
@@ -1310,7 +2213,16 @@ function createBuild(settings: GeneratorSettings, context: BuildContext): Build 
     const regions = createNoise(settings.seed + 7, 2);
     const secondLine = 0.25 + settings.biomeMix * 0.5;
     const hasSecond = settings.secondBiome !== "none" && settings.biomeMix > 0;
+    const corners = { x: sizeX + 1, y: sizeY + 1 };
+    const bounds: LandformBounds = {
+        corners,
+        arena,
+        spawn: getGeneratedSpawn(settings),
+        toEdge: (x, y) => Math.min(x - arena.x0, arena.x1 + 1 - x, y - arena.y0, arena.y1 + 1 - y),
+    };
+    const relief = createRelief(settings, bounds);
     return {
+        ...bounds,
         settings,
         context,
         ground: new Ground(sizeX, sizeY),
@@ -1319,14 +2231,45 @@ function createBuild(settings: GeneratorSettings, context: BuildContext): Build 
         kit: new PrefabKit(context),
         sizeX,
         sizeY,
-        corners: { x: sizeX + 1, y: sizeY + 1 },
-        spawn: getGeneratedSpawn(settings),
-        arena,
         biomeAt: hasSecond
             ? (x, y) => (regions(x / 60, y / 60) < secondLine ? second : first)
             : () => first,
-        toEdge: (x, y) => Math.min(x - arena.x0, arena.x1 + 1 - x, y - arena.y0, arena.y1 + 1 - y),
+        relief,
+        terrain: relief.terrain,
+        cliffs: new Uint8Array(sizeX * sizeY),
+        heldCorners: new Uint8Array(corners.x * corners.y),
+        mainland: new Uint8Array(sizeX * sizeY).fill(1),
+        tileHeights: new Float32Array(sizeX * sizeY),
+        plots: [],
     };
+}
+
+// Ground's height and what's walkable, once everything's been placed on it
+function finishHeights(build: Build): void {
+    const { terrain, ground, corners, heldCorners } = build;
+    settleTerrain(build);
+    const fixed = Uint8Array.from(heldCorners);
+    terrain.markPinned(fixed);
+    limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
+    terrain.write((x, y, height) => ground.setHeight(x, y, height));
+}
+
+// Tiles too steep to walk are blocked, going by the heights as they'll be drawn, and so is
+// what's left of the cliffs. Bridges are walked on a level up.
+function blockSteepGround(build: Build): void {
+    const { ground, settings, cliffs, sizeX, sizeY, corners } = build;
+    const { heights, flags } = ground.level0;
+    const bridges = ground.grid.levels[1].flags;
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            const steep = getTileSlope(heights, corners.x, x, y) > settings.walkSlope;
+            if ((steep || cliffs[i]) && !(bridges[i] & TILE_BRIDGE)) {
+                flags[i] |= TILE_BLOCKED;
+                ground.reserved[i] = 1;
+            }
+        }
+    }
 }
 
 export function generateMapDetail(
@@ -1338,38 +2281,61 @@ export function generateMapDetail(
         throw new Error(error);
     }
     const build = createBuild(settings, context);
-    const { ground, sizeX, sizeY, biomeAt } = build;
-    const hills = createNoise(settings.seed + 3);
+    const { ground, sizeX, sizeY, biomeAt, relief, terrain, corners } = build;
 
     const rivers = createRivers(build);
-    const fields = createWaterFields(build, rivers, hills);
+    const fields = createWaterFields(build, rivers, relief.hills);
     const seaTiles = getTouchedTiles(fields.sea, sizeX, sizeY);
     const freshTiles = getTouchedTiles(fields.fresh, sizeX, sizeY);
     const toSea = distanceTo(seaTiles, sizeX, sizeY, 8);
-    const toFresh = distanceTo(freshTiles, sizeX, sizeY, 6);
-    paintHeights(build, hills, toSea, toFresh);
-    paintFloors(build, toSea);
+    const toFresh = distanceTo(freshTiles, sizeX, sizeY, MAX_BANK);
+    sinkSea(build, toSea);
+    const levels = createWaterLevels(build, rivers, fields.pools, fields.fresh, fields.flood);
+    sinkFresh(build, toFresh, levels);
 
     const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
     const waterOverlay = biomeAt(sizeX >> 1, sizeY >> 1).water;
     const waterTiles = ground.paintField(waterField, waterOverlay, true);
     const water: WaterPaint = { field: waterField, tiles: waterTiles };
+    holdWater(build, seaTiles);
+    holdWater(build, freshTiles);
 
-    const roads = new RoadNetwork(build, waterTiles);
+    if (hasRelief(settings)) {
+        build.cliffs.set(shapeCliffs(terrain, settings.walkSlope));
+    } else {
+        limitSlope(terrain.height, corners.x, corners.y, settings.walkSlope * 0.92);
+    }
+    const passes = cutPasses(build);
+    refreshTileHeights(build);
+    paintFloors(build, toSea);
+
     const bridgeZone = new Uint8Array(waterTiles.length);
+    const roads = new RoadNetwork(build, waterTiles, bridgeZone);
     const bridgeStarts = placeBridges(build, rivers, waterTiles, bridgeZone);
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>
             Math.hypot(a.from.x - build.spawn.x, a.from.y - build.spawn.y) -
             Math.hypot(b.from.x - build.spawn.x, b.from.y - build.spawn.y);
-        for (const { from, lead } of bridgeStarts.sort(byDistance)) {
-            roads.lay(from, lead, roads.findRoute(from, lead), BRIDGE_ROAD_HALF_WIDTH);
+        for (const { from, lead, height } of bridgeStarts.sort(byDistance)) {
+            roads.lay(from, lead, roads.findRoute(from, lead), BRIDGE_ROAD_HALF_WIDTH, height);
         }
     }
     const buildings = placeBuildings(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
+    const steepest = settings.walkSlope * ROAD_STEEPEST;
+    gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
+    terrain.smoothPins(ROAD_SMOOTHING);
+    finishHeights(build);
+    blockSteepGround(build);
+
     const roadTiles = settings.roads > 0 ? roads.paint() : new Uint8Array(waterTiles.length);
+    const rockSkip = new Uint8Array(waterTiles.length);
+    for (let i = 0; i < rockSkip.length; i++) {
+        rockSkip[i] = waterTiles[i] | roadTiles[i] | ground.footprint[i] | bridgeZone[i];
+    }
+    placeCaves(build, paintRock(build, rockSkip));
+    paintLava(build);
     placeBoundary(build, roadTiles);
     scatter(build, waterTiles);
     const fords = connectGround(build, water, roads.offLimits);
@@ -1379,6 +2345,8 @@ export function generateMapDetail(
         roadTiles,
         lines: [...roads.lines, ...fords],
         buildings,
+        passes,
+        walkSlope: settings.walkSlope,
     };
 }
 

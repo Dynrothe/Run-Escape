@@ -30,6 +30,8 @@ export const BRIDGE_DECK_WEST = 4;
 export const BRIDGE_DECK_EAST = 15;
 // How high the bridge's own banks are, to set it on ours
 export const BRIDGE_BANK_HEIGHT = 30;
+// How high the river bed is under it. A bridge's bank stands this much over the water.
+export const BRIDGE_BED_HEIGHT = 0;
 
 const DOOR_NAME = /\b(door|gate|curtain)\b/i;
 // Over this many tiles the ground eases back to its own heights round a building
@@ -88,12 +90,21 @@ export class PrefabKit {
         return entry;
     }
 
-    // Stands a building on the ground, with its doors off so that you can walk in
-    stamp(ground: Ground, name: string, turns: number, x: number, y: number): void {
+    // Stands a building on the ground, with its doors off so that you can walk in.
+    // keepHeights is for a map that pins its ground for itself.
+    stamp(
+        ground: Ground,
+        name: string,
+        turns: number,
+        x: number,
+        y: number,
+        keepHeights = false,
+    ): void {
         ground.stamp(this.get(name, turns).prefab, x, y, {
             floor: "footprint",
             feather: BUILDING_FEATHER,
             flatten: true,
+            keepHeights,
             keepUnderlays: true,
             skipLoc: (loc) => isDoor(this.context, loc),
         });
@@ -107,11 +118,13 @@ export class PrefabKit {
         x: number,
         y: number,
         roll: () => number,
+        keepHeights = false,
     ): void {
         ground.stamp(this.get(name, turns).prefab, x, y, {
             floor: "footprint",
             feather: BUILDING_FEATHER,
             flatten: true,
+            keepHeights,
             keepUnderlays: true,
             skipLoc: (loc) => isDoor(this.context, loc) || loc.type > 3 || roll() > RUIN_WALLS,
         });

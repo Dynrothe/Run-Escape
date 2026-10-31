@@ -3,7 +3,7 @@ import { BIOMES, BiomeId } from "./biomes";
 // Everything the generator can be told, in one place: the map generator's screen,
 // the checks and the error messages are all built from SETTINGS.
 
-export type BoundaryStyle = "sea" | "forest" | "hills" | "fence";
+export type BoundaryStyle = "sea" | "forest" | "hills" | "fence" | "mountains";
 export type RoadStyle = "branching" | "ring" | "spine";
 export type WaveSet =
     | "lumbridge"
@@ -43,9 +43,45 @@ export type GeneratorSettings = {
     waterLevel: number;
     groundPatches: number;
 
+    // Mountains
+    // Share of the map that's mountain: 0 is none, 1 is most of it
+    mountains: number;
+    // How high the tallest of them gets, in height units: 255 is all there is
+    peakHeight: number;
+    // Tiles from one ridge to the next
+    ridgeScale: number;
+    // 0 is smooth domes; 1 is sharp crests with lots of small ridges
+    ruggedness: number;
+    // 0 is straight ranges; 1 is ranges and ridges bent about
+    warp: number;
+    // 0 is an even climb; 1 is ledges with cliffs between
+    terraces: number;
+    // How tall a ledge's cliff is, in height units
+    terraceHeight: number;
+    // The steepest ground you can walk on, in height units a tile. 16 is 45 degrees.
+    walkSlope: number;
+    // How much of a cliff has rock faces on it
+    rockFaces: number;
+    // Rock lying about on the mountains
+    rubble: number;
+    // Where snow starts: 0 is none, 1 is only the very tops, below that lower down
+    snow: number;
+    // Tiles across a pass between pieces of ground cut off from each other
+    passWidth: number;
+    plateaus: number;
+    mesas: number;
+    canyons: number;
+    // Tiles across a canyon's floor
+    canyonWidth: number;
+    volcanoes: number;
+    // Cave mouths in cliffs that face you, for looks
+    caves: number;
+
     // Water
     rivers: number;
     riverWidth: number;
+    // 0 is a sheer gorge; 1 is a wide valley
+    riverValley: number;
     lakes: number;
     ponds: number;
 
@@ -130,6 +166,14 @@ export const SLOW_ARENA_SQUARES = 16;
 const hasBuildings = (settings: GeneratorSettings) => settings.buildings > 0;
 const hasRoads = (settings: GeneratorSettings) => settings.roads > 0;
 const notSea = (settings: GeneratorSettings) => settings.boundary !== "sea";
+const hasMountains = (settings: GeneratorSettings) =>
+    settings.mountains > 0 || settings.boundary === "mountains";
+const hasRock = (settings: GeneratorSettings) =>
+    hasMountains(settings) ||
+    settings.plateaus > 0 ||
+    settings.mesas > 0 ||
+    settings.canyons > 0 ||
+    settings.volcanoes > 0;
 
 const BIOME_IDS = Object.keys(BIOMES);
 
@@ -139,7 +183,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     biome: choice("Biome", BIOME_IDS),
     secondBiome: choice("Second biome", ["none", ...BIOME_IDS]),
     biomeMix: share("Second biome's share", { when: (s) => s.secondBiome !== "none" }),
-    boundary: choice("Boundary", ["sea", "forest", "hills", "fence"]),
+    boundary: choice("Boundary", ["sea", "forest", "hills", "fence", "mountains"]),
     island: share("Sea coming in", { when: (s) => s.boundary === "sea" }),
     boundaryDepth: number("Boundary depth", 2, 32, 1, { when: notSea }),
     shoreRoughness: share("Shore roughness"),
@@ -149,8 +193,30 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     waterLevel: share("Water level"),
     groundPatches: number("Ground patch size", 5, 40, 1),
 
+    mountains: share("Mountains"),
+    peakHeight: number("Peak height", 60, 255, 5, { when: hasMountains }),
+    ridgeScale: number("Ridge spacing", 20, 120, 2, { when: hasMountains }),
+    ruggedness: share("Ruggedness", { when: hasMountains }),
+    warp: share("Bend in the ranges", { when: hasMountains }),
+    terraces: share("Terraces", { when: hasMountains }),
+    terraceHeight: number("Ledge height", 12, 60, 2, {
+        when: (s) => hasMountains(s) && s.terraces > 0,
+    }),
+    walkSlope: number("Steepest walkable slope", 8, 16, 1),
+    rockFaces: share("Rock faces", { when: hasRock }),
+    rubble: share("Rubble", { when: hasRock }),
+    snow: share("Snow", { when: hasRock }),
+    passWidth: number("Pass width", 3, 12, 1, { when: hasRock }),
+    plateaus: number("Plateaus", 0, 6, 1),
+    mesas: number("Mesas", 0, 12, 1),
+    canyons: number("Canyons", 0, 3, 1),
+    canyonWidth: number("Canyon width", 3, 16, 1, { when: (s) => s.canyons > 0 }),
+    volcanoes: number("Volcanoes", 0, 2, 1),
+    caves: share("Caves", { when: hasRock }),
+
     rivers: number("Rivers", 0, 4, 1),
     riverWidth: number("River width", 4, 20, 1, { when: (s) => s.rivers > 0 }),
+    riverValley: share("River valleys", { when: (s) => s.rivers > 0 }),
     lakes: number("Lakes", 0, 8, 1),
     ponds: number("Ponds", 0, 16, 1),
 
@@ -210,8 +276,30 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "shoreRoughness",
         ],
     },
-    { name: "Terrain", keys: ["hills", "hillScale", "waterLevel", "groundPatches"] },
-    { name: "Water", keys: ["rivers", "riverWidth", "lakes", "ponds"] },
+    { name: "Terrain", keys: ["hills", "hillScale", "waterLevel", "groundPatches", "walkSlope"] },
+    {
+        name: "Mountains",
+        keys: [
+            "mountains",
+            "peakHeight",
+            "ridgeScale",
+            "ruggedness",
+            "warp",
+            "terraces",
+            "terraceHeight",
+            "rockFaces",
+            "rubble",
+            "snow",
+            "passWidth",
+            "plateaus",
+            "mesas",
+            "canyons",
+            "canyonWidth",
+            "volcanoes",
+            "caves",
+        ],
+    },
+    { name: "Water", keys: ["rivers", "riverWidth", "riverValley", "lakes", "ponds"] },
     {
         name: "Scenery",
         keys: ["trees", "treeClumping", "treeMix", "rocks", "rockMix", "grass", "flowers"],
@@ -250,8 +338,28 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     waterLevel: 0,
     groundPatches: 14,
 
+    mountains: 0,
+    peakHeight: 200,
+    ridgeScale: 44,
+    ruggedness: 0.5,
+    warp: 0.5,
+    terraces: 0.5,
+    terraceHeight: 30,
+    walkSlope: 12,
+    rockFaces: 1,
+    rubble: 0.5,
+    snow: 0,
+    passWidth: 6,
+    plateaus: 0,
+    mesas: 0,
+    canyons: 0,
+    canyonWidth: 8,
+    volcanoes: 0,
+    caves: 0.3,
+
     rivers: 0,
     riverWidth: 9,
+    riverValley: 0.6,
     lakes: 0,
     ponds: 1,
 
@@ -318,15 +426,94 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         squaresX: 3,
         squaresY: 3,
         biome: "snow",
-        boundary: "hills",
-        boundaryDepth: 20,
-        hills: 1,
-        hillScale: 34,
-        rocks: 1,
-        rockMix: 0.8,
+        boundary: "mountains",
+        boundaryDepth: 10,
+        mountains: 0.6,
+        snow: 0.6,
+        rocks: 0.6,
         trees: 0.4,
         buildings: 0.15,
         rivers: 1,
+    },
+    Alpine: {
+        squaresX: 4,
+        squaresY: 4,
+        boundary: "mountains",
+        boundaryDepth: 8,
+        mountains: 0.75,
+        peakHeight: 245,
+        ridgeScale: 46,
+        ruggedness: 0.7,
+        snow: 0.55,
+        rivers: 1,
+        riverValley: 0.7,
+        trees: 0.6,
+        roads: 1,
+        buildings: 0.25,
+        towns: 1,
+        townSize: 24,
+    },
+    Highlands: {
+        squaresX: 4,
+        squaresY: 4,
+        boundary: "forest",
+        mountains: 0.45,
+        peakHeight: 170,
+        ruggedness: 0.35,
+        terraces: 0.9,
+        terraceHeight: 24,
+        rivers: 2,
+        riverValley: 0.9,
+        lakes: 1,
+        trees: 0.7,
+        roads: 1,
+        buildings: 0.3,
+    },
+    Canyon: {
+        squaresX: 4,
+        squaresY: 4,
+        biome: "desert",
+        boundary: "mountains",
+        boundaryDepth: 6,
+        hills: 0.15,
+        peakHeight: 150,
+        canyons: 3,
+        canyonWidth: 10,
+        mesas: 8,
+        plateaus: 2,
+        trees: 0.1,
+        rocks: 0.6,
+        rubble: 0.8,
+        ponds: 0,
+        roads: 0.6,
+        buildings: 0.2,
+    },
+    Volcano: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "swamp",
+        island: 0.2,
+        volcanoes: 1,
+        mountains: 0.2,
+        peakHeight: 130,
+        rubble: 1,
+        trees: 0.5,
+        ponds: 0,
+        buildings: 0.2,
+    },
+    Valley: {
+        squaresX: 3,
+        squaresY: 3,
+        boundary: "mountains",
+        boundaryDepth: 16,
+        lakes: 1,
+        ponds: 0,
+        rivers: 1,
+        hills: 0.3,
+        buildings: 0.5,
+        towns: 1,
+        roads: 1,
+        trees: 0.5,
     },
     Town: {
         squaresX: 3,

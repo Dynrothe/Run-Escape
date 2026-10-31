@@ -39,16 +39,32 @@ function build(context: BuildContext): TileGrid {
             ground.place({ id, type, rotation: 0, level: 0, x, y }, size, size);
             x += size + 1;
         };
-        for (const [id, size] of [...biome.trees, ...biome.rocks]) {
+        for (const [id, size] of [
+            ...biome.trees,
+            ...biome.rocks,
+            ...biome.rock.rubble,
+            [biome.rock.cave, 3] as [number, number],
+        ]) {
             put(id, size, 10);
         }
-        for (const id of biome.decor) {
+        for (const [id, type] of biome.rock.faces) {
+            put(id, 1, type);
+        }
+        for (const id of [...biome.decor, ...biome.rock.stones]) {
             put(id, 1, 22);
         }
         for (const id of biome.flowers) {
             put(id, 1, 10);
         }
-        for (const underlay of [...biome.ground, biome.shore, biome.trail, biome.hillGround]) {
+        const { rock } = biome;
+        for (const underlay of [
+            ...biome.ground,
+            biome.shore,
+            biome.trail,
+            biome.hillGround,
+            rock.ground,
+            rock.snowGround,
+        ]) {
             ground.level0.underlays[ground.tile(x, y)] = underlay;
             x += 2;
         }
@@ -56,6 +72,9 @@ function build(context: BuildContext): TileGrid {
         for (const [overlay, blocked] of [
             [biome.water, true],
             [biome.road, false],
+            [rock.overlay, true],
+            [rock.snowOverlay, true],
+            [rock.lava, true],
         ] as const) {
             const block = new Uint8Array(SIZE * SIZE);
             for (let dy = 0; dy < 4; dy++) {
