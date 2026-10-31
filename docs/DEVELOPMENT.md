@@ -119,6 +119,10 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
 
 The curse is applied to the input in `stepPlayer`, so keys and the touch stick go the same way.
 
+Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apart: she floats in all
+of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
+2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
+
 ### What gets drawn
 
 A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are
@@ -180,7 +184,11 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         META=max ARMOURY=max for everything
                                                         bought; uses a collision snapshot per
                                                         map in caches/collision, built on the
-                                                        first run)
+                                                        first run; FINAL_BOSS=the_nightmare
+                                                        BOSS_ARENA=48 tries a phased boss on any
+                                                        map, FRESH=1 straight at it, SAFE_WAVES=1
+                                                        with what a run earned, FLAT=1 with no
+                                                        walls, DODGE=1 keeping off its marks)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and

@@ -695,8 +695,9 @@ export class BossFightView {
         ctx.textBaseline = "alphabetic";
         ctx.globalAlpha = titleFade;
         ctx.font = `${24 * pixel}px "OSRS Bold", sans-serif`;
-        // Clear of the boss bar and what's under it, on a phone as well
-        const y = height * 0.4;
+        // The lower third: the bar and what's under it are above, and on a phone
+        // anything nearer the middle is on top of the player
+        const y = height * 0.72;
         ctx.fillStyle = "#000000";
         ctx.fillText(def.title, width / 2 + pixel, y + pixel);
         ctx.fillStyle = "#ff9ae6";
