@@ -170,7 +170,7 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
-  would drop only has a 10% chance to, and only 25 can lie on the ground at once. A round's master
+  would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
   would've been a chest".
 - **Auto alch** (off by default, in Settings and the pause menu) high alchs every casket as it's

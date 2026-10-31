@@ -15,7 +15,7 @@ the version in the corner).
 
 ### Changed
 
-- Past 15 minutes in an endless run, chests are twice as likely to drop (10%, up from 5%), and 25
+- Past 15 minutes in an endless run, chests are five times as likely to drop (25%, up from 5%), and 25
   can lie on the ground at once, up from 10.
 
 ## 0.18.0 - 2026-10-30
