@@ -629,6 +629,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             smoothTerrain,
             minimizeDrawCalls,
             cullCellSize = 0,
+            skipMinimap = false,
             loadedTextureIds,
         }: SdMapLoaderInput,
     ): Promise<RenderDataResult<SdMapData | undefined>> {
@@ -797,13 +798,9 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const vertices = sceneBuf.vertexBuf.byteArray();
         const indices = new Int32Array(sceneBuf.indices);
 
-        const minimapBlob = await loadMinimapBlob(
-            state.mapImageRenderer,
-            scene,
-            minLevel,
-            borderSize,
-            false,
-        );
+        const minimapBlob = skipMinimap
+            ? undefined
+            : await loadMinimapBlob(state.mapImageRenderer, scene, minLevel, borderSize, false);
 
         const loadedTextures = new Map<number, Int32Array>();
         for (const textureId of sceneBuf.usedTextureIds) {

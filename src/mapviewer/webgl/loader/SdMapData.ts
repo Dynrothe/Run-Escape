@@ -22,7 +22,7 @@ export type SdMapData = {
     tileRenderFlags: Uint8Array[][];
     collisionDatas: CollisionData[];
 
-    minimapBlob: Blob;
+    minimapBlob?: Blob;
 
     vertices: Uint8Array;
     indices: Int32Array;

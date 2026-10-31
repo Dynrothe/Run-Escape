@@ -19,5 +19,8 @@ export type SdMapLoaderInput = {
     // per square, what the map viewer needs.
     cullCellSize?: number;
 
+    // Leaves out the minimap image of the square, which only the viewer shows
+    skipMinimap?: boolean;
+
     loadedTextureIds: Set<number>;
 };

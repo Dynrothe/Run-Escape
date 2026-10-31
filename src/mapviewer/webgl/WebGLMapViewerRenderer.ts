@@ -163,7 +163,13 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     // Dev: off draws everything in a visible square, to compare frames
     cullCells: boolean = true;
 
+    // Map squares come with a minimap image, for the viewer's minimap
+    skipMinimap: boolean = false;
+
     cullBackFace: boolean = true;
+
+    // Draws into a second, RGBA32F colour buffer for the hover menus
+    useInteractTarget: boolean = true;
 
     msaaEnabled: boolean = false;
     fxaaEnabled: boolean = false;
@@ -200,7 +206,9 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     async init(): Promise<void> {
         await super.init();
 
-        this.app = PicoGL.createApp(this.canvas);
+        // Only a full screen quad is drawn to the canvas, from a framebuffer of
+        // its own, so its multisamples and depth buffer would go unused
+        this.app = PicoGL.createApp(this.canvas, { antialias: false, depth: false });
         this.gl = this.app.gl as WebGL2RenderingContext;
 
         // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_webgl_provoking_vertex_when_its_available
@@ -284,8 +292,6 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     }
 
     initFramebuffers(): void {
-        this.initFramebuffer();
-
         this.textureColorTarget = this.app.createTexture2D(this.app.width, this.app.height, {
             minFilter: PicoGL.LINEAR,
             magFilter: PicoGL.LINEAR,
@@ -294,16 +300,20 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             .createFramebuffer()
             .colorTarget(0, this.textureColorTarget);
 
+        this.initFramebuffer();
+
         // Interact
-        this.interactColorTarget = this.app.createTexture2D(this.app.width, this.app.height, {
-            internalFormat: PicoGL.RGBA32F,
-            type: PicoGL.FLOAT,
-            minFilter: PicoGL.NEAREST,
-            magFilter: PicoGL.NEAREST,
-        });
-        this.interactFramebuffer = this.app
-            .createFramebuffer()
-            .colorTarget(0, this.interactColorTarget);
+        if (this.useInteractTarget) {
+            this.interactColorTarget = this.app.createTexture2D(this.app.width, this.app.height, {
+                internalFormat: PicoGL.RGBA32F,
+                type: PicoGL.FLOAT,
+                minFilter: PicoGL.NEAREST,
+                magFilter: PicoGL.NEAREST,
+            });
+            this.interactFramebuffer = this.app
+                .createFramebuffer()
+                .colorTarget(0, this.interactColorTarget);
+        }
     }
 
     initFramebuffer(): void {
@@ -317,18 +327,20 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             samples = this.gl.getParameter(PicoGL.MAX_SAMPLES);
         }
 
-        this.colorTarget = this.app.createRenderbuffer(
-            this.app.width,
-            this.app.height,
-            PicoGL.RGBA8,
-            samples,
-        );
-        this.interactTarget = this.app.createRenderbuffer(
-            this.app.width,
-            this.app.height,
-            PicoGL.RGBA32F,
-            samples,
-        );
+        // Without multisampling the frame can go straight into the texture it's
+        // drawn from, with no copy
+        this.colorTarget =
+            samples > 0
+                ? this.app.createRenderbuffer(
+                      this.app.width,
+                      this.app.height,
+                      PicoGL.RGBA8,
+                      samples,
+                  )
+                : undefined;
+        this.interactTarget = this.useInteractTarget
+            ? this.app.createRenderbuffer(this.app.width, this.app.height, PicoGL.RGBA32F, samples)
+            : undefined;
         this.depthTarget = this.app.createRenderbuffer(
             this.app.width,
             this.app.height,
@@ -337,9 +349,11 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
         );
         this.framebuffer = this.app
             .createFramebuffer()
-            .colorTarget(0, this.colorTarget)
-            .colorTarget(1, this.interactTarget)
+            .colorTarget(0, this.colorTarget ?? this.textureColorTarget!)
             .depthTarget(this.depthTarget);
+        if (this.interactTarget) {
+            this.framebuffer.colorTarget(1, this.interactTarget);
+        }
 
         this.needsFramebufferUpdate = false;
     }
@@ -666,6 +680,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             smoothTerrain: this.smoothTerrain,
             minimizeDrawCalls: !this.hasMultiDraw,
             cullCellSize: this.cullCellSize,
+            skipMinimap: this.skipMinimap,
             loadedTextureIds: this.loadedTextureIds,
         });
 
@@ -690,13 +705,15 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     ): void {
         const { mapX, mapY } = mapData;
 
-        this.mapViewer.setMapImageUrl(
-            mapX,
-            mapY,
-            URL.createObjectURL(mapData.minimapBlob),
-            true,
-            false,
-        );
+        if (mapData.minimapBlob) {
+            this.mapViewer.setMapImageUrl(
+                mapX,
+                mapY,
+                URL.createObjectURL(mapData.minimapBlob),
+                true,
+                false,
+            );
+        }
 
         const frameCount = this.stats.frameCount;
         this.mapManager.addMap(
@@ -834,7 +851,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             !this.framebuffer ||
             !this.textureFramebuffer ||
             !this.frameDrawCall ||
-            !this.interactFramebuffer ||
+            (this.useInteractTarget && !this.interactFramebuffer) ||
             !this.textureArray ||
             !this.textureMaterials
         ) {
@@ -844,7 +861,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
         if (this.needsResize) {
             this.framebuffer.resize();
             this.textureFramebuffer.resize();
-            this.interactFramebuffer.resize();
+            this.interactFramebuffer?.resize();
 
             this.resolutionUni[0] = this.app.width;
             this.resolutionUni[1] = this.app.height;
@@ -932,12 +949,13 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
 
         // Can't sample from renderbuffer so blit to a texture for sampling.
         this.app.readFramebuffer(this.framebuffer);
+        if (this.colorTarget) {
+            this.app.drawFramebuffer(this.textureFramebuffer);
+            this.gl.readBuffer(PicoGL.COLOR_ATTACHMENT0);
+            this.app.blitFramebuffer(PicoGL.COLOR_BUFFER_BIT);
+        }
 
-        this.app.drawFramebuffer(this.textureFramebuffer);
-        this.gl.readBuffer(PicoGL.COLOR_ATTACHMENT0);
-        this.app.blitFramebuffer(PicoGL.COLOR_BUFFER_BIT);
-
-        if (!inputManager.isPointerLock()) {
+        if (this.interactFramebuffer && !inputManager.isPointerLock()) {
             const mouseX = inputManager.mouseX;
             const mouseY = inputManager.mouseY;
             if (mouseX !== -1 && mouseY !== -1) {

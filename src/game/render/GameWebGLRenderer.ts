@@ -54,6 +54,9 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         // The game draws its own NPCs and items
         this.loadNpcs = false;
         this.loadObjs = false;
+        // No hover menus, and a minimap of its own (Minimap.ts)
+        this.useInteractTarget = false;
+        this.skipMinimap = true;
         // The game's camera never sees a square three away, so low detail
         // draws are never used
         mapViewer.lodDistance = Infinity;
