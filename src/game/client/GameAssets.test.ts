@@ -1,10 +1,36 @@
 import { describe, expect, test } from "vitest";
 
 import { EquipSlot, createAppearance } from "../../rs/model/player/PlayerModelLoader";
+import { ENEMIES } from "../content/enemies";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { getWeapon } from "../content/weapons";
-import { GameAssets, getPowerUpLookRequests } from "./GameAssets";
+import {
+    GameAssets,
+    getEnemyModelKey,
+    getPowerUpLookRequests,
+    getShieldedModelKey,
+} from "./GameAssets";
 import { getGameSoundIds } from "./GameSounds";
+
+describe("enemy bakes", () => {
+    test("have every model GameView asks for", () => {
+        for (const enemy of ENEMIES) {
+            const keys = GameAssets.getEnemyRequests([enemy]).map((r) => r.key);
+            const variants = enemy.outfits?.length ?? 1;
+            for (let variant = 0; variant < variants; variant++) {
+                expect(keys).toContain(getEnemyModelKey(enemy, variant));
+            }
+            if (enemy.shield?.look) {
+                expect(keys).toContain(getShieldedModelKey(enemy));
+            }
+        }
+    });
+
+    test("aren't in the base bake", () => {
+        const keys = GameAssets.getBaseRequests().map((r) => r.key);
+        expect(keys).not.toContain("npc:goblin");
+    });
+});
 
 describe("power-ups in the cache", () => {
     test("a look puts its item in hand, takes the shield off and leaves the rest", () => {

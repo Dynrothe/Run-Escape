@@ -7,6 +7,8 @@ export type DisplaySettings = {
     pauseOnBlur: boolean;
     // The quest tracker on the HUD is open (Q, or its title, opens and shuts it)
     questTracker: boolean;
+    // Caskets are high alched as they're opened, with no casket screen
+    autoAlch: boolean;
 };
 
 const SETTINGS_KEY = "rune-survivors-display";
@@ -17,7 +19,7 @@ function getDefaults(): DisplaySettings {
     try {
         reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     } catch (e) {}
-    return { menuSpin: !reducedMotion, pauseOnBlur: true, questTracker: true };
+    return { menuSpin: !reducedMotion, pauseOnBlur: true, questTracker: true, autoAlch: false };
 }
 
 export function loadDisplaySettings(): DisplaySettings {
@@ -34,6 +36,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.questTracker === "boolean") {
                 settings.questTracker = data.questTracker;
+            }
+            if (typeof data.autoAlch === "boolean") {
+                settings.autoAlch = data.autoAlch;
             }
         }
     } catch (e) {}

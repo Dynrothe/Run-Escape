@@ -49,7 +49,8 @@ function readVolume(value: unknown, otherwise: number): number {
 
 // Plays the client's synthesized sound effects with Web Audio. Browsers only
 // allow audio after the page is interacted with, so the context is made on the
-// first click or key press; sounds asked for before then are skipped.
+// first click or key press; sounds asked for before then are skipped. On a touch
+// screen a press doesn't count until the finger lifts, hence the two ends of one.
 export class GameAudio {
     settings: AudioSettings = loadSettings();
 
@@ -64,12 +65,18 @@ export class GameAudio {
 
     constructor() {
         window.addEventListener("pointerdown", this.unlock);
+        window.addEventListener("pointerup", this.unlock);
+        window.addEventListener("touchend", this.unlock);
         window.addEventListener("keydown", this.unlock);
+        document.addEventListener("visibilitychange", this.onVisibilityChange);
     }
 
     dispose(): void {
         window.removeEventListener("pointerdown", this.unlock);
+        window.removeEventListener("pointerup", this.unlock);
+        window.removeEventListener("touchend", this.unlock);
         window.removeEventListener("keydown", this.unlock);
+        document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopMusic();
         this.context?.close();
     }
@@ -98,8 +105,19 @@ export class GameAudio {
                 return;
             }
         }
-        if (this.context.state === "suspended") {
+        // iOS also has "interrupted", for after a call or going to another app
+        if (this.context.state !== "running") {
             this.context.resume();
+        }
+        // Started away from a press, it can be refused (a run has loading first)
+        if (this.music?.element.paused) {
+            this.music.element.play().catch(() => {});
+        }
+    };
+
+    private onVisibilityChange = (): void => {
+        if (!document.hidden && this.context && this.context.state !== "running") {
+            this.context.resume().catch(() => {});
         }
     };
 
