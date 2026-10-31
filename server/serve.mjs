@@ -2,8 +2,8 @@
 // with everything it needs, co-op's relay included, from one Node process
 // with no packages:
 //
-//   node server/serve.mjs                  # on port 8080, or PORT
-//   COOP=off node server/serve.mjs         # without co-op (the game hides it)
+//   npm run serve                          # single player, on port 8080 (or PORT)
+//   npm run serve:multiplayer              # with co-op too (or MULTIPLAYER=on)
 //
 // Without a slim cache in the build it serves the full one from caches/, like
 // `vite preview` does.
@@ -16,7 +16,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RELAY_PATH, createRelay } from "./coop-relay.mjs";
+import { RELAY_PATH, createRelay, isMultiplayerOn } from "./coop-relay.mjs";
 
 const REPO = resolve(fileURLToPath(import.meta.url), "../..");
 const ROOT = resolve(process.env.DIST ?? join(REPO, "dist"));
@@ -24,7 +24,7 @@ const ROOT = resolve(process.env.DIST ?? join(REPO, "dist"));
 const CACHES = existsSync(join(ROOT, "caches")) ? join(ROOT, "caches") : join(REPO, "caches");
 const PORT = parseInt(process.env.PORT ?? "8080");
 const HOST = process.env.HOST ?? "0.0.0.0";
-const COOP = process.env.COOP !== "off";
+const MULTIPLAYER = isMultiplayerOn();
 
 const MIME_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -89,7 +89,7 @@ function cacheControl(urlPath) {
         : "no-cache";
 }
 
-const relay = COOP ? createRelay() : undefined;
+const relay = MULTIPLAYER ? createRelay() : undefined;
 
 const server = createServer((req, res) => {
     if (relay?.handleRequest(req, res)) {
@@ -136,5 +136,9 @@ if (!existsSync(join(CACHES, "caches.json"))) {
 server.listen(PORT, HOST, () => {
     console.log(`Run Escape on http://localhost:${PORT} (serving ${ROOT})`);
     console.log(`Cache from ${CACHES}`);
-    console.log(COOP ? `Co-op relay at ${RELAY_PATH}` : "Co-op is off (COOP=off)");
+    console.log(
+        MULTIPLAYER
+            ? `Multiplayer on: co-op relay at ${RELAY_PATH}`
+            : "Multiplayer off (npm run serve:multiplayer, or MULTIPLAYER=on, turns it on)",
+    );
 });

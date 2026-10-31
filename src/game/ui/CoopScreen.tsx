@@ -122,7 +122,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         {coop.status === "connecting"
                             ? "Connecting..."
                             : online
-                              ? `${coop.rooms.length} open`
+                              ? `${coop.roomsTotal} open`
                               : "Offline"}
                     </span>
                 </h3>
@@ -163,6 +163,29 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         </div>
                     )}
                 </div>
+                {online && coop.roomsPages > 1 && (
+                    <div className="ui-coop-pages">
+                        <button
+                            className="ui-button ui-button-small"
+                            aria-label="Previous page"
+                            disabled={coop.roomsPage === 0}
+                            onClick={() => client.showRoomsPage(coop.roomsPage - 1)}
+                        >
+                            ‹
+                        </button>
+                        <span>
+                            Page {coop.roomsPage + 1} of {coop.roomsPages}
+                        </span>
+                        <button
+                            className="ui-button ui-button-small"
+                            aria-label="Next page"
+                            disabled={coop.roomsPage >= coop.roomsPages - 1}
+                            onClick={() => client.showRoomsPage(coop.roomsPage + 1)}
+                        >
+                            ›
+                        </button>
+                    </div>
+                )}
                 {coop.error && <div className="ui-coop-error">{coop.error}</div>}
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.closeCoop()}>

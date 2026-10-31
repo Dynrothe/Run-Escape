@@ -102,9 +102,9 @@ writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only
 reads, about 26 MB instead of 227 MB). The page has to be served with
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
 HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples. `npm run serve` serves the build with those headers and co-op's relay from one Node
-process with no packages (`COOP=off` leaves co-op out, and the game hides it). The game only
-offers co-op where a relay answers, so a plain static host serves it as a single-player game; see
+examples. `npm run serve` serves the build with those headers from one Node process with no
+packages, and `npm run serve:multiplayer` runs co-op's relay in it too. The game only offers
+Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
 [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 
 ## Contributing

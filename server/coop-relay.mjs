@@ -16,8 +16,23 @@ import { fileURLToPath } from "node:url";
 
 export const RELAY_PATH = "/coop";
 
+// Whether multiplayer's been turned on for a server that has the relay in it
+// (serve.mjs, and the dev and preview servers): MULTIPLAYER=on, or the
+// :multiplayer npm scripts, or --multiplayer. Off, the game hides it.
+export function isMultiplayerOn(env = process.env, argv = process.argv) {
+    return (
+        ["on", "1", "true"].includes((env.MULTIPLAYER ?? "").toLowerCase()) ||
+        (env.npm_lifecycle_event ?? "").endsWith(":multiplayer") ||
+        argv.includes("--multiplayer")
+    );
+}
+
 const MAX_PARTY = 4;
 const MAX_ROOMS = 1000;
+// The open rooms list comes a page at a time: this many to a page unless the
+// game asks for another size, up to the most
+const LIST_PAGE_SIZE = 8;
+const MAX_LIST_PAGE_SIZE = 20;
 // Bigger than any message the game sends (a start with everyone's loadout)
 const MAX_MESSAGE_BYTES = 256 * 1024;
 // A client sending more than this many messages a second is dropped
@@ -233,6 +248,12 @@ function cleanName(name) {
     return clean.slice(0, NAME_LENGTH) || "Adventurer";
 }
 
+// A whole number from a message, kept within min and max
+function clampInt(value, min, max, fallback) {
+    const n = Number.isInteger(value) ? value : fallback;
+    return Math.max(min, Math.min(max, n));
+}
+
 function cleanId(id) {
     return typeof id === "string" ? id.replace(/[^a-z0-9_]/g, "").slice(0, 40) : "";
 }
@@ -241,6 +262,10 @@ export function createRelay() {
     const rooms = new Map();
     const clients = new Set();
     let nextId = 1;
+    let nextRoomOrder = 1;
+    // The open rooms as the list shows them, worked out again only after a
+    // room changes (everyone browsing asks every few seconds)
+    let openRooms;
 
     function newCode() {
         for (;;) {
@@ -274,6 +299,7 @@ export function createRelay() {
     }
 
     function broadcastRoom(room) {
+        openRooms = undefined;
         const view = roomView(room);
         for (const member of room.members) {
             member.connection.send({ t: "room", room: view, you: member.id });
@@ -292,6 +318,17 @@ export function createRelay() {
         };
     }
 
+    // Rooms anyone can join: open, not under way and not full. The fullest
+    // first (they'll start soonest), then the ones waiting longest, so the
+    // order holds still while people browse.
+    function getOpenRooms() {
+        openRooms ??= [...rooms.values()]
+            .filter((room) => room.open && !room.started && room.members.length < MAX_PARTY)
+            .sort((a, b) => b.members.length - a.members.length || a.order - b.order)
+            .map(listing);
+        return openRooms;
+    }
+
     // Takes a client out of their room. reason goes to them; the rest are
     // told who's gone.
     function leaveRoom(client, reason) {
@@ -307,6 +344,7 @@ export function createRelay() {
         }
         if (room.members.length === 0) {
             rooms.delete(room.code);
+            openRooms = undefined;
             return;
         }
         if (room.hostId === client.id) {
@@ -328,6 +366,7 @@ export function createRelay() {
 
     function disband(room, reason) {
         rooms.delete(room.code);
+        openRooms = undefined;
         for (const member of room.members) {
             member.room = undefined;
             member.ready = false;
@@ -359,15 +398,21 @@ export function createRelay() {
             case "ping":
                 client.connection.send({ t: "pong" });
                 return;
-            case "list":
+            case "list": {
+                const size = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+                const list = getOpenRooms();
+                const pages = Math.max(1, Math.ceil(list.length / size));
+                // Past the last page (rooms filled up or went): the last one
+                const page = clampInt(message.page, 0, pages - 1, 0);
                 client.connection.send({
                     t: "rooms",
-                    rooms: [...rooms.values()]
-                        .filter((r) => r.open && !r.started && r.members.length < MAX_PARTY)
-                        .slice(0, 50)
-                        .map(listing),
+                    rooms: list.slice(page * size, (page + 1) * size),
+                    page,
+                    pages,
+                    total: list.length,
                 });
                 return;
+            }
             case "create": {
                 if (rooms.size >= MAX_ROOMS) {
                     error("The co-op server is full. Try again in a bit.");
@@ -384,6 +429,7 @@ export function createRelay() {
                     endless: message.endless === true,
                     started: false,
                     members: [client],
+                    order: nextRoomOrder++,
                 };
                 rooms.set(created.code, created);
                 client.room = created;
@@ -583,7 +629,7 @@ export function createRelay() {
 // Run on its own
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     const port = parseInt(process.env.PORT ?? "8787");
-    const path = process.env.COOP_PATH ?? RELAY_PATH;
+    const path = process.env.MULTIPLAYER_PATH ?? RELAY_PATH;
     const relay = createRelay();
     const server = createServer((req, res) => {
         if (!relay.handleRequest(req, res, path)) {

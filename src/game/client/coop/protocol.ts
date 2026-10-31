@@ -65,7 +65,8 @@ export type DownMessage = {
 
 export type ClientMessage =
     | { t: "ping" }
-    | { t: "list" }
+    // A page of the open rooms (0 for the first), size to a page
+    | { t: "list"; page?: number; size?: number }
     | {
           t: "create";
           open: boolean;
@@ -87,7 +88,9 @@ export type ClientMessage =
 export type ServerMessage =
     | { t: "welcome"; id: string }
     | { t: "pong" }
-    | { t: "rooms"; rooms: RoomListing[] }
+    // A page of the open rooms, which page it is (the last, if the one asked
+    // for has gone), of how many, and how many rooms in all
+    | { t: "rooms"; rooms: RoomListing[]; page: number; pages: number; total: number }
     | { t: "room"; room: RoomView; you: string }
     | { t: "gone"; reason: GoneReason }
     | { t: "error"; message: string }

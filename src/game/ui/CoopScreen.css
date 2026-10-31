@@ -125,6 +125,16 @@
     color: #b8aa8a;
 }
 
+/* Under the list when there's more than a page of rooms */
+.ui-coop-pages {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+    color: #b8aa8a;
+}
+
 .ui-coop-empty {
     margin: auto;
     text-align: center;

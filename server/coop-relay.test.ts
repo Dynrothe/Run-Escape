@@ -1,7 +1,7 @@
 import { Server, createServer } from "node:http";
 import { AddressInfo } from "node:net";
 
-import { RELAY_PATH, createRelay } from "./coop-relay.mjs";
+import { RELAY_PATH, createRelay, isMultiplayerOn } from "./coop-relay.mjs";
 
 type Message = { t: string; [key: string]: any };
 
@@ -60,6 +60,18 @@ class TestClient {
         }
     }
 }
+
+describe("multiplayer toggle", () => {
+    it("is off unless it's turned on", () => {
+        expect(isMultiplayerOn({}, [])).toBe(false);
+        expect(isMultiplayerOn({ MULTIPLAYER: "off" }, [])).toBe(false);
+        expect(isMultiplayerOn({ MULTIPLAYER: "on" }, [])).toBe(true);
+        expect(isMultiplayerOn({ MULTIPLAYER: "1" }, [])).toBe(true);
+        expect(isMultiplayerOn({ npm_lifecycle_event: "serve:multiplayer" }, [])).toBe(true);
+        expect(isMultiplayerOn({ npm_lifecycle_event: "serve" }, [])).toBe(false);
+        expect(isMultiplayerOn({}, ["node", "serve.mjs", "--multiplayer"])).toBe(true);
+    });
+});
 
 describe("co-op relay", () => {
     let server: Server;
@@ -126,6 +138,47 @@ describe("co-op relay", () => {
         const { rooms } = await browser.next("rooms");
         expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
         expect(rooms[0].host).toBe("Host");
+    });
+
+    it("lists the open rooms a page at a time, fullest first", async () => {
+        const codes: string[] = [];
+        for (let i = 0; i < 5; i++) {
+            codes.push((await party(0, true)).code);
+        }
+        // One more player in the last one: it goes to the top
+        const busy = await party(1, true);
+        const browser = await connect();
+        const page = async (n: number) => {
+            browser.send({ t: "list", page: n, size: 2 });
+            return browser.next("rooms");
+        };
+        const first = await page(0);
+        expect(first).toMatchObject({ page: 0, pages: 3, total: 6 });
+        expect(first.rooms.map((r: { code: string }) => r.code)).toEqual([busy.code, codes[0]]);
+        expect((await page(2)).rooms.map((r: { code: string }) => r.code)).toEqual([
+            codes[3],
+            codes[4],
+        ]);
+        // Past the end (rooms went while browsing): the last page
+        expect(await page(9)).toMatchObject({ page: 2, pages: 3 });
+        // A room that's started or filled up comes off the list
+        busy.host.send({ t: "start", game: {} });
+        await busy.guests[0].next("start");
+        browser.send({ t: "list", size: 20 });
+        const after = await browser.next("rooms");
+        expect(after.total).toBe(5);
+        expect(after.rooms.map((r: { code: string }) => r.code)).not.toContain(busy.code);
+    });
+
+    it("lists nothing past what's there, and copes with nonsense", async () => {
+        const browser = await connect();
+        browser.send({ t: "list", page: -3, size: 1e9 });
+        expect(await browser.next("rooms")).toMatchObject({
+            rooms: [],
+            page: 0,
+            pages: 1,
+            total: 0,
+        });
     });
 
     it("says when a code's wrong or a room's full", async () => {

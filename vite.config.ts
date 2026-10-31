@@ -5,7 +5,7 @@ import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
-import { createRelay } from "./server/coop-relay.mjs";
+import { createRelay, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
 
@@ -105,11 +105,11 @@ function serveCachesPlugin(): Plugin {
 }
 
 // Runs the co-op relay (server/coop-relay.mjs) at /coop on the dev server and
-// `vite preview`, so co-op works without starting it separately. COOP=off
-// leaves it out, and the game hides co-op.
+// `vite preview` when multiplayer's turned on (npm run start:multiplayer, or
+// MULTIPLAYER=on). Off, the game hides co-op.
 function coopRelayPlugin(): Plugin {
     const start = (httpServer: HttpServer | null, middlewares: Connect.Server) => {
-        if (!httpServer || process.env.COOP === "off") {
+        if (!httpServer || !isMultiplayerOn()) {
             return;
         }
         const relay = createRelay();

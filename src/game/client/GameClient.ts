@@ -413,6 +413,11 @@ export class GameClient implements GameFrameHandler {
         this.coop.create(open, mapId, endless);
     }
 
+    // Another page of the open rooms
+    showRoomsPage(page: number): void {
+        this.coop.refresh(page);
+    }
+
     joinRoom(code: string): void {
         this.coop.join(code);
     }

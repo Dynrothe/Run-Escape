@@ -51,11 +51,12 @@ changes the sim directly.
 npm install
 npm run download-caches    # the game's cache, into caches/
 npm start                  # dev server on http://localhost:5173
+npm run start:multiplayer  # the same, with co-op's relay (Multiplayer on the title screen)
 npm test                   # vitest
 npx tsc --noEmit -p .      # type check
 npx prettier --write <files>
 npm run build && npm run slim-cache    # build for hosting (only when deploying)
-npm run serve              # serve the build with co-op's relay (COOP=off without it)
+npm run serve              # serve the build (serve:multiplayer with co-op's relay)
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.

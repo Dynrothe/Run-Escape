@@ -17,8 +17,12 @@ export type CoopView = {
     status: "offline" | "connecting" | "online";
     // Why the last thing didn't work, shown until the next try
     error?: string;
-    // Open rooms to join, while not in one
+    // Open rooms to join, while not in one: a page of them, which one, of
+    // how many, and how many rooms in all
     rooms: RoomListing[];
+    roomsPage: number;
+    roomsPages: number;
+    roomsTotal: number;
     room?: RoomView;
     // This player's id in the room
     you?: string;
@@ -28,7 +32,14 @@ export type CoopView = {
     available?: boolean;
 };
 
-export const OFFLINE: CoopView = { status: "offline", rooms: [], name: "" };
+export const OFFLINE: CoopView = {
+    status: "offline",
+    rooms: [],
+    roomsPage: 0,
+    roomsPages: 1,
+    roomsTotal: 0,
+    name: "",
+};
 
 // How long to wait for the relay to say it's there
 const AVAILABLE_TIMEOUT_MS = 4000;
@@ -169,6 +180,7 @@ export class CoopLobby {
                     room: undefined,
                     you: undefined,
                     rooms: [],
+                    roomsPage: 0,
                     error: wasOnline
                         ? "Lost the connection to the co-op server."
                         : "Couldn't reach the co-op server.",
@@ -184,7 +196,13 @@ export class CoopLobby {
         this.socket = undefined;
         this.stopTimers();
         socket?.close();
-        this.update({ status: "offline", room: undefined, you: undefined, rooms: [] });
+        this.update({
+            status: "offline",
+            room: undefined,
+            you: undefined,
+            rooms: [],
+            roomsPage: 0,
+        });
     }
 
     private stopTimers(): void {
@@ -220,7 +238,12 @@ export class CoopLobby {
                 );
                 break;
             case "rooms":
-                this.update({ rooms: message.rooms });
+                this.update({
+                    rooms: message.rooms,
+                    roomsPage: message.page,
+                    roomsPages: message.pages,
+                    roomsTotal: message.total,
+                });
                 break;
             case "room":
                 this.update({ room: message.room, you: message.you, error: undefined });
@@ -232,6 +255,10 @@ export class CoopLobby {
                 break;
             case "error":
                 this.update({ error: message.message });
+                // A listed room that's filled up or started since: off the list
+                if (!this.view.room) {
+                    this.refresh();
+                }
                 break;
             case "start":
                 this.onStart?.(message.game);
@@ -249,7 +276,7 @@ export class CoopLobby {
     }
 
     // Asks whether there's a relay, for whether to offer co-op at all: none
-    // when the server runs without one (COOP=off) or a host doesn't run it
+    // when the server runs without one or a host doesn't run it
     async checkAvailable(): Promise<boolean> {
         let available = false;
         try {
@@ -266,8 +293,9 @@ export class CoopLobby {
         return available;
     }
 
-    refresh(): void {
-        this.send({ t: "list" });
+    // The open rooms again: this page of them (the one shown, by default)
+    refresh(page = this.view.roomsPage): void {
+        this.send({ t: "list", page: Math.max(0, page) });
     }
 
     setName(name: string): void {

@@ -59,16 +59,18 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 ### Co-op relay
 
 The simplest way to host everything: `npm run serve` (`node server/serve.mjs`, no packages) serves
-`dist/` with the headers above and runs the co-op relay in the same process, on `PORT` (8080). Run
-`npm run build` first; with no slim cache in `dist/caches` it serves the full one from `caches/`,
-so it also works for trying a build locally (http://localhost:8080).
-`COOP=off` runs it without the relay, and the game hides co-op: it only offers it when a relay
-answers. Put something that does HTTPS in front of it, like Caddy
+`dist/` with the headers above on `PORT` (8080), and `npm run serve:multiplayer` (or
+`MULTIPLAYER=on npm run serve`) runs the co-op relay in the same process. Multiplayer is off unless
+it's turned on, and the game only offers it when a relay answers. Run `npm run build` first; with no
+slim cache in `dist/caches` it serves the full one from `caches/`, so it also works for trying a
+build locally (http://localhost:8080). Put something that does HTTPS in front of it, like Caddy
 (`caddy reverse-proxy --from game.example.com --to localhost:8080`).
 
-The relay is light: in a test, 400 players (100 rooms of four) took 10-30% of one core and about
-60 MB, at about 15 KB/s a room. A small VPS runs it easily; serving the game itself (about 26 MB
-for each new player) is the bigger cost.
+The relay is light. In a load test at the game's own rates (host frames 25 times a second, guests'
+moves about 4), a room of four was about 5.3 KB/s of messages and 109 of them a second, around
+12 KB/s on the wire with TCP's own overhead, or about 40 MB an hour. 100 rooms (400 players, and 50
+more browsing the room list) took at most 13% of one core and 64 MB. A small VPS runs it easily;
+serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
 packages, so copy the one file to the server and run it.
@@ -91,7 +93,8 @@ location /game/coop {
 ```
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
-else. `npm start` and `npm run preview` run a relay of their own at `/coop`.
+else. `npm run start:multiplayer` (and `npm run preview` with `MULTIPLAYER=on`) runs a relay of its
+own at `/coop`.
 
 ## Code
 
@@ -204,8 +207,12 @@ from the host to everyone else. The host leaving a run ends it for everyone; in 
 room goes to the next player. How much bigger the crowd gets for each player is in
 `content/coop.ts`. The balance bot plays solo runs only.
 
-To try it locally, open the game in two windows (one private, for a save of its own), make a room
-in one and join it from the other.
+The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
+longest), worked out once after each change rather than for every request; the menu asks for its
+page every 5 seconds, and again when joining fails (a room that filled up or started meanwhile).
+
+To try it locally, `npm run start:multiplayer` and open the game in two windows (one private, for a
+save of its own), make a room in one and join it from the other.
 
 ### Notice
 
