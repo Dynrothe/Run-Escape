@@ -325,7 +325,7 @@ function createDevMap(recipe: MapRecipe): MapDef {
     };
 }
 
-const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
+export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
 
 // Every map, the campaign's and the fun ones
 export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
