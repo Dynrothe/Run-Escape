@@ -30,6 +30,7 @@ import { getActiveSets, getSet } from "../content/sets";
 import {
     BoltProcDef,
     BossAttackDef,
+    BossPhasesDef,
     CasketTier,
     CombatStyle,
     EnemyBlinksDef,
@@ -77,7 +78,13 @@ import {
 } from "./Upgrades";
 import {
     ActivePowerUp,
+    BossIntro,
+    BossPhase,
+    BossQuarters,
+    BossSurge,
+    BossWalkers,
     BossWindup,
+    BulletEmitter,
     Buff,
     DamageSource,
     Death,
@@ -85,26 +92,34 @@ import {
     Effect,
     Enemy,
     EnemyAbilities,
+    EnemyLeaving,
     EnemyProjectile,
     FairyRing,
     FallingRock,
     Glyph,
     GroundFire,
+    GroundHazard,
     PassiveState,
     PendingHit,
     Pickup,
     PickupKind,
     Player,
+    PlayerCurse,
+    PlayerHold,
+    PlayerParasite,
     Projectile,
     ProjectileKind,
     Rampage,
     SimEvent,
+    SurgeLane,
     Thrall,
     Turret,
     WeaponState,
+    quarterOf,
     projectileSource,
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
+import { BulletPool } from "./BulletPool";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlowField, canWalkStraight } from "./world/FlowField";
 import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
@@ -186,6 +201,32 @@ const ENRAGE_AT = 0.5;
 const ENRAGED_INTERVAL = 0.7;
 const ENRAGED_SPEED = 1.3;
 const ENRAGED_TINT = 0xff7a66;
+
+// A boss's entrance: how fast what's left runs for the edge at most, in tiles a
+// second, and how long before the end it's all gone. Further off than that
+// speed gets it, it just goes.
+const LEAVE_MAX_SPEED = 16;
+const LEAVE_MIN_SCALE = 2;
+const LEAVE_MARGIN_TICKS = 25;
+// Ticks an armed spot takes to go off once it's stepped on
+const HAZARD_FUSE_TICKS = 15;
+const BULLET_GRACE_TICKS = 30;
+// Tiles from the player that what holds them turns up
+const SUMMON_BESIDE = 1.8;
+// Tiles from a boss that what's walking to it is absorbed
+const ABSORB_REACH = 2.6;
+// A surge's reach along its lane, either side of the boss's middle
+const SURGE_BODY = 2.5;
+// What a curse does to the controls: quarter turns, a half turn, and mirrors.
+// Each is a whole direction turned, so the stick's angles still work.
+const CURSE_SHUFFLES = [
+    [0, -1, 1, 0],
+    [0, 1, -1, 0],
+    [-1, 0, 0, -1],
+    [-1, 0, 0, 1],
+    [1, 0, 0, -1],
+    [0, 1, 1, 0],
+] as const;
 
 const CANNON_SPOTANIM = 53;
 const LEVEL_UP_SPOTANIM = 199;
@@ -398,6 +439,27 @@ export class Sim {
     rings: FairyRing[] = [];
     // Bosses' glyphs (BossDef.glyph)
     glyphs: Glyph[] = [];
+    // A boss's bullets, what fired each (BulletPool.source), and the volleys to
+    // come
+    readonly bullets = new BulletPool();
+    readonly bulletSources: { attack: BossAttackDef; enemy: Enemy }[] = [];
+    private emitters: BulletEmitter[] = [];
+    // Bullets pass through the player until this tick, so a mistake costs one
+    // of them rather than the whole of a volley
+    private bulletGraceEnd = 0;
+    // What a boss has marked on the ground, and its corpse flowers
+    hazards: GroundHazard[] = [];
+    quarters?: BossQuarters;
+    // A boss's entrance under way, and a boss it's just the player and
+    // (BossIntroDef.alone), for as long as it's up
+    intro?: BossIntro;
+    private aloneWith?: Enemy;
+    // What a boss has done to the player
+    curse?: PlayerCurse;
+    parasite?: PlayerParasite;
+    hold?: PlayerHold;
+    private drowsyEndTick = 0;
+    private drowsyInterval = 1;
     // Burning ground left by weapons
     fires: GroundFire[] = [];
     // Hits still to land, a moment after their swing
@@ -1182,6 +1244,7 @@ export class Sim {
         if (this.map.fun && this.mapSeconds >= RUN_LENGTH) {
             this.nextRound();
         }
+        this.stepIntro();
         this.stepDirector();
         this.stepChat();
         this.rebuildEnemyHash();
@@ -1197,6 +1260,7 @@ export class Sim {
         this.stepProjectiles();
         this.stepFires();
         this.stepEnemyProjectiles();
+        this.stepBossFight();
         this.stepPickups();
         this.cleanUp();
         this.checkLevelUp();
@@ -1224,9 +1288,24 @@ export class Sim {
         const player = this.player;
         player.prevX = player.x;
         player.prevY = player.y;
+        // It's the input that's cursed, so keys and the stick go the same way
+        const curse = this.curse;
+        if (curse) {
+            const [a, b, c, d] = curse.matrix;
+            const x = moveX * a + moveY * b;
+            moveY = moveX * c + moveY * d;
+            moveX = x;
+        }
         const frozen = player.frozen > 0;
         if (frozen) {
             player.frozen--;
+        }
+        // Held by what's beside them, they can still turn to hit it
+        if (frozen && this.hold && (moveX !== 0 || moveY !== 0)) {
+            const len = Math.hypot(moveX, moveY);
+            player.facingX = moveX / len;
+            player.facingY = moveY / len;
+            player.yaw = yawFromVector(moveX, moveY);
         }
         const moving = !frozen && (moveX !== 0 || moveY !== 0);
         if (moving) {
@@ -1247,7 +1326,7 @@ export class Sim {
         }
         // Held above what a hit gives, or boss hits and poison get through as
         // it runs down (see reviving), and below the > 30 that makes them blink
-        if (this.tick < this.sledEndTick) {
+        if (this.tick < this.sledEndTick || this.intro) {
             player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS + 1);
         }
         if (player.flash > 0) {
@@ -1306,6 +1385,13 @@ export class Sim {
     }
 
     private stepDirector(): void {
+        if (this.aloneWith?.dead) {
+            this.aloneWith = undefined;
+        }
+        // Nothing else comes while a boss makes its entrance, or fights alone
+        if (this.intro || this.aloneWith) {
+            return;
+        }
         const seconds = this.mapSeconds;
         const events = this.map.events;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
@@ -1314,6 +1400,10 @@ export class Sim {
                 this.spawnEnemy(getEnemy(event.enemyId), "elite");
             } else if (event.kind === "ring") {
                 this.spawnRing(getEnemy(event.enemyId), event.count);
+            } else if (getEnemy(event.enemyId).boss?.intro) {
+                this.startIntro(getEnemy(event.enemyId), event.kind, event.hp);
+                this.eventIndex++;
+                return;
             } else if (!this.spawnBoss(getEnemy(event.enemyId), event.kind, event.hp)) {
                 // Nowhere to put it this tick; bosses can't be skipped
                 break;
@@ -1454,8 +1544,9 @@ export class Sim {
         def: EnemyDef,
         type: "boss" | "finalBoss",
         hp: number | undefined,
+        at?: { x: number; y: number },
     ): Enemy | undefined {
-        const boss = this.spawnEnemy(def, type, undefined, hp);
+        const boss = this.spawnEnemy(def, type, at, hp);
         if (boss) {
             const finalBoss = type === "finalBoss";
             if (finalBoss) {
@@ -1553,6 +1644,7 @@ export class Sim {
                           rises: 0,
                           enraged: false,
                           summonsDone: 0,
+                          channelEnd: 0,
                       }
                     : undefined,
             damageScale: hitScale,
@@ -1574,6 +1666,7 @@ export class Sim {
             deathTick: 0,
             xp,
             shieldEnd: 0,
+            risingEnd: 0,
             blockedTick: -BLOCKED_SPLAT_TICKS,
             spawnedBy: 0,
             nextFoeLook: this.tick + (this.nextUid % FOE_LOOK_TICKS),
@@ -1594,6 +1687,9 @@ export class Sim {
         const glyph = boss ? def.boss?.glyph : undefined;
         if (glyph) {
             this.addGlyph(enemy, getEnemy(glyph.lookId));
+        }
+        if (boss && def.boss?.phases) {
+            this.startPhases(enemy, def.boss.phases);
         }
         return enemy;
     }
@@ -1649,7 +1745,7 @@ export class Sim {
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
         for (const enemy of this.enemies) {
-            if (!enemy.dead) {
+            if (!enemy.dead && !enemy.leaving) {
                 this.enemyHash.insert(enemy);
             }
         }
@@ -1668,8 +1764,24 @@ export class Sim {
             if (enemy.dead) {
                 continue;
             }
+            if (enemy.leaving) {
+                this.stepLeaving(enemy, enemy.leaving);
+                continue;
+            }
             if (enemy.shieldEnd !== 0 && this.tick >= enemy.shieldEnd) {
                 this.dropShield(enemy);
+            }
+            if (enemy.risingEnd !== 0) {
+                if (this.tick < enemy.risingEnd) {
+                    continue;
+                }
+                enemy.risingEnd = 0;
+                enemy.anim = "walk";
+                enemy.animStart = this.tick;
+            }
+            if (enemy.walksTo) {
+                this.stepWalker(enemy, enemy.walksTo);
+                continue;
             }
             if (enemy.attackCooldown > 0) {
                 enemy.attackCooldown--;
@@ -1751,8 +1863,11 @@ export class Sim {
                 const bossState = enemy.bossState;
                 if (bossState) {
                     const keep = enemy.def.boss?.keepDistance;
-                    if (bossState.windup) {
+                    if (bossState.windup || bossState.surge || bossState.walkers) {
                         // Stands still winding up, so a swing can be stepped away from
+                        dirX = dirY = 0;
+                    } else if (this.tick < bossState.channelEnd) {
+                        // And while its volleys go out, so a spiral stays a spiral
                         dirX = dirY = 0;
                     } else if (keep !== undefined && distance < keep) {
                         // Ranged bosses stop once they're in range (and stand their
@@ -1929,6 +2044,7 @@ export class Sim {
                 enemy.anim === "attack" &&
                 this.tick - enemy.animStart > 30 &&
                 !enemy.bossState?.windup &&
+                !enemy.bossState?.surge &&
                 (enemy.abilities?.blinkLand ?? -1) === -1
             ) {
                 enemy.anim = "walk";
@@ -2281,7 +2397,7 @@ export class Sim {
     // One of count enemies turning up in a ring radius tiles around another,
     // trying a few spots before giving up
     private spawnNear(
-        enemy: Enemy,
+        enemy: { x: number; y: number },
         def: EnemyDef,
         radius: number,
         index: number,
@@ -2307,7 +2423,7 @@ export class Sim {
     private stepHealer(enemy: Enemy, abilities: EnemyAbilities, heals: EnemyHealsDef): void {
         const tick = this.tick;
         let target = abilities.healTarget;
-        if (target && (target.hp >= target.maxHp || !this.canHeal(enemy, heals, target))) {
+        if (target && (hurtFraction(target) >= 1 || !this.canHeal(enemy, heals, target))) {
             target = abilities.healTarget = undefined;
         }
         if (!target && (tick + enemy.uid) % HEAL_RETARGET_TICKS === 0) {
@@ -2321,10 +2437,19 @@ export class Sim {
             return;
         }
         abilities.nextHeal = tick + secondsToTicks(heals.interval);
-        target.hp = Math.min(
-            target.maxHp,
-            target.hp + Math.max(1, Math.round(target.maxHp * heals.fraction)),
-        );
+        const phase = target.bossState?.phase;
+        if (phase) {
+            // Only its shield can be fed
+            phase.shield = Math.min(
+                phase.shieldMax,
+                phase.shield + Math.max(1, Math.round(phase.shieldMax * heals.fraction)),
+            );
+        } else {
+            target.hp = Math.min(
+                target.maxHp,
+                target.hp + Math.max(1, Math.round(target.maxHp * heals.fraction)),
+            );
+        }
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
         }
@@ -2339,7 +2464,7 @@ export class Sim {
         let best: Enemy | undefined;
         let bestFraction = 1;
         for (const other of this.enemies) {
-            const fraction = other.hp / other.maxHp;
+            const fraction = hurtFraction(other);
             if (fraction < bestFraction && this.canHeal(enemy, heals, other)) {
                 best = other;
                 bestFraction = fraction;
@@ -2586,6 +2711,848 @@ export class Sim {
         return Math.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
     }
 
+    // ---- Boss fights: entrances, phases, patterns ----
+
+    // The square a boss's fight goes by: the map's if it names one, or all of it
+    get bossArena(): { minX: number; minY: number; maxX: number; maxY: number } {
+        const square = this.map.bossArena;
+        if (square) {
+            return {
+                minX: square.baseX,
+                minY: square.baseY,
+                maxX: square.baseX + square.size,
+                maxY: square.baseY + square.size,
+            };
+        }
+        const grid = this.grid;
+        return {
+            minX: grid.baseX,
+            minY: grid.baseY,
+            maxX: grid.baseX + grid.sizeX,
+            maxY: grid.baseY + grid.sizeY,
+        };
+    }
+
+    // The player's safe and everything runs for it (BossDef.intro); the boss
+    // comes up partway through
+    startIntro(def: EnemyDef, type: "boss" | "finalBoss", hp?: number): void {
+        const intro = def.boss!.intro!;
+        const startTick = this.tick;
+        const endTick = startTick + secondsToTicks(intro.seconds);
+        this.intro = {
+            def,
+            type,
+            hp,
+            startTick,
+            riseTick: startTick + secondsToTicks(intro.riseAt),
+            endTick,
+        };
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.sendOff(enemy, endTick - LEAVE_MARGIN_TICKS);
+            }
+        }
+        this.clearBossAttacks();
+        this.enemyProjectiles = [];
+        this.funBossGroup = [];
+        this.events.push({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
+    }
+
+    // Off to the nearest edge of the map. It can't be hit, and it's gone by
+    // lastTick however far that is.
+    private sendOff(enemy: Enemy, lastTick: number): void {
+        const { x, y } = enemy;
+        const grid = this.grid;
+        const west = x - grid.baseX;
+        const east = grid.baseX + grid.sizeX - x;
+        const south = y - grid.baseY;
+        const north = grid.baseY + grid.sizeY - y;
+        const distance = Math.min(west, east, south, north);
+        const stays = enemy.def.stationary ?? false;
+        const ticks = Math.max(1, lastTick - this.tick);
+        const speed = stays
+            ? 0
+            : Math.min(
+                  LEAVE_MAX_SPEED / TICKS_PER_SECOND,
+                  Math.max(distance / ticks, enemy.speed * LEAVE_MIN_SCALE),
+              );
+        const dirX = distance === west ? -1 : distance === east ? 1 : 0;
+        const dirY = dirX !== 0 ? 0 : distance === south ? -1 : 1;
+        enemy.leaving = {
+            vx: dirX * speed,
+            vy: dirY * speed,
+            startTick: this.tick,
+            endTick: stays
+                ? lastTick
+                : Math.min(lastTick, this.tick + Math.ceil(distance / speed)),
+        };
+        // Whatever it was doing, it's stopped
+        enemy.shieldEnd = Infinity;
+        enemy.jump = undefined;
+        enemy.frozen = 0;
+        enemy.vx = enemy.vy = 0;
+        enemy.anim = "walk";
+        enemy.animStart = this.tick;
+        enemy.yaw = yawFromVector(dirX, dirY);
+        if (enemy.bossState) {
+            enemy.bossState.windup = undefined;
+            enemy.bossState.surge = undefined;
+        }
+    }
+
+    // Straight there: through whatever's in the way, as nothing's looking
+    private stepLeaving(enemy: Enemy, leaving: EnemyLeaving): void {
+        enemy.x += leaving.vx;
+        enemy.y += leaving.vy;
+        if (this.tick >= leaving.endTick) {
+            this.vanish(enemy);
+        }
+    }
+
+    // Gone with no death, no drop and nothing counted
+    private vanish(enemy: Enemy): void {
+        enemy.dead = true;
+        enemy.deathTick = -Infinity;
+    }
+
+    private stepIntro(): void {
+        const intro = this.intro;
+        if (!intro) {
+            return;
+        }
+        if (this.tick >= intro.riseTick && !intro.boss) {
+            this.riseBoss(intro);
+        }
+        if (this.tick >= intro.endTick) {
+            this.intro = undefined;
+        }
+    }
+
+    // Up it comes, towards the middle of the arena from the player, so it's on
+    // the screen wherever they are
+    private riseBoss(intro: BossIntro): void {
+        const def = intro.def;
+        const rise = def.boss!.intro!;
+        const player = this.player;
+        const arena = this.bossArena;
+        const dx = (arena.minX + arena.maxX) / 2 - player.x;
+        const dy = (arena.minY + arena.maxY) / 2 - player.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        const reach = Math.min(rise.distance, length);
+        const x = player.x + (dx / length) * reach;
+        const y = player.y + (dy / length) * reach;
+        const at = this.canTurnUpAt(def, x, y)
+            ? { x, y }
+            : (this.findSpotNear(player.x, player.y, rise.distance, def.radius) ??
+              findFreeSpot(this.grid, x, y, def.radius));
+        const boss = this.spawnBoss(def, intro.type, intro.hp, at);
+        if (!boss) {
+            return;
+        }
+        intro.boss = boss;
+        boss.risingEnd = intro.endTick;
+        boss.shieldEnd = intro.endTick;
+        boss.anim = "attack";
+        boss.attackSeq = rise.seq ?? def.idleSeq;
+        boss.animStart = this.tick;
+        boss.yaw = yawFromVector(player.x - boss.x, player.y - boss.y);
+        boss.attackCooldown = intro.endTick - this.tick + TICKS_PER_SECOND;
+        if (rise.spotAnim !== undefined) {
+            this.addEffect(rise.spotAnim, boss.x, boss.y, 0, intro.endTick - this.tick);
+        }
+        if (rise.alone) {
+            this.aloneWith = boss;
+        }
+        this.events.push({
+            type: "bossRising",
+            enemyId: def.id,
+            sound: rise.sound ?? -1,
+            x: boss.x,
+            y: boss.y,
+        });
+    }
+
+    // Its first shield, and its totems standing idle in the corners
+    private startPhases(boss: Enemy, phases: BossPhasesDef): void {
+        const shieldMax = Math.round(boss.maxHp * phases.phases[0].shield);
+        const totems: Enemy[] = [];
+        const arena = this.bossArena;
+        const margin = phases.totems.margin;
+        const idle = getEnemy(phases.totems.idleId);
+        const charge = Math.max(1, Math.round(boss.maxHp * phases.totems.charge));
+        for (const x of [arena.minX + margin, arena.maxX - margin]) {
+            for (const y of [arena.minY + margin, arena.maxY - margin]) {
+                const spot = findFreeSpot(this.grid, x, y, idle.radius);
+                const totem = this.spawnEnemy(idle, "normal", spot);
+                if (totem) {
+                    totem.totemOf = boss;
+                    totem.hp = totem.maxHp = charge;
+                    totem.xp = 0;
+                    totem.noDrops = true;
+                    totem.shieldEnd = Infinity;
+                    totems.push(totem);
+                }
+            }
+        }
+        boss.bossState!.phase = { index: 0, stage: "shield", shield: shieldMax, shieldMax, totems };
+    }
+
+    // Down comes the shield: nothing can touch it now, and the totems wake
+    private breakShield(boss: Enemy, phase: BossPhase): void {
+        const phases = boss.def.boss!.phases!;
+        phase.stage = "totems";
+        phase.shield = 0;
+        boss.shieldEnd = Infinity;
+        const charging = getEnemy(phases.totems.chargingId);
+        for (const totem of phase.totems) {
+            totem.def = charging;
+            totem.hp = totem.maxHp;
+            totem.shieldEnd = 0;
+        }
+        this.pushStage(boss, phase, phases.shieldMessage);
+    }
+
+    private totemCharged(totem: Enemy, boss: Enemy): void {
+        const phase = boss.bossState?.phase;
+        const phases = boss.def.boss?.phases;
+        if (!phase || !phases) {
+            return;
+        }
+        totem.hp = 0;
+        totem.def = getEnemy(phases.totems.chargedId);
+        totem.shieldEnd = Infinity;
+        this.events.push({
+            type: "bossAttack",
+            enemyId: boss.def.id,
+            sound: phases.totems.chargedSound ?? -1,
+            x: totem.x,
+            y: totem.y,
+        });
+        if (phase.totems.every((t) => t.hp <= 0)) {
+            this.totemsBlast(boss, phase, phases);
+        }
+    }
+
+    // All four charged: they take a share of its hitpoints, the last of it
+    // with the last blast, and otherwise it's on to the next phase
+    private totemsBlast(boss: Enemy, phase: BossPhase, phases: BossPhasesDef): void {
+        const totemsDef = phases.totems;
+        for (const totem of phase.totems) {
+            this.events.push({
+                type: "totemBlast",
+                sound: totemsDef.blastSound ?? -1,
+                x: totem.x,
+                y: totem.y,
+                toX: boss.x,
+                toY: boss.y,
+            });
+        }
+        if (totemsDef.blastSpotAnim !== undefined) {
+            this.addEffect(totemsDef.blastSpotAnim, boss.x, boss.y, 0, 60, boss.uid);
+        }
+        const next = phases.phases[phase.index + 1];
+        if (!next) {
+            boss.shieldEnd = 0;
+            boss.bossState!.windup = undefined;
+            this.killEnemy(boss);
+            return;
+        }
+        boss.hp -= Math.round(boss.maxHp / phases.phases.length);
+        phase.index++;
+        phase.stage = "shield";
+        phase.shieldMax = phase.shield = Math.round(boss.maxHp * next.shield);
+        phase.opener = next.opener
+            ? boss.def.boss!.attacks.find((a) => a.name === next.opener)
+            : undefined;
+        boss.shieldEnd = 0;
+        const idle = getEnemy(totemsDef.idleId);
+        for (const totem of phase.totems) {
+            totem.def = idle;
+            totem.hp = totem.maxHp;
+            totem.shieldEnd = Infinity;
+        }
+        this.quarters = undefined;
+        this.pushStage(boss, phase, phases.blastMessage);
+    }
+
+    private pushStage(boss: Enemy, phase: BossPhase, message: string): void {
+        this.events.push({
+            type: "bossStage",
+            enemyId: boss.def.id,
+            phase: phase.index + 1,
+            stage: phase.stage,
+            message,
+            x: boss.x,
+            y: boss.y,
+        });
+    }
+
+    // With the boss gone, so is all it had going
+    private endBossFight(boss: Enemy): void {
+        const state = boss.bossState;
+        if (!state?.phase) {
+            return;
+        }
+        for (const enemy of this.enemies) {
+            if (!enemy.dead && (enemy.totemOf === boss || enemy.walksTo === boss)) {
+                this.vanish(enemy);
+            }
+        }
+        this.clearBossAttacks();
+    }
+
+    // Everything a boss had in the air and on the ground, and on the player
+    private clearBossAttacks(): void {
+        this.bullets.clear();
+        this.emitters = [];
+        this.hazards = [];
+        this.quarters = undefined;
+        this.parasite = undefined;
+        this.hold = undefined;
+        if (this.curse) {
+            this.curse = undefined;
+            this.events.push({ type: "playerCursed", cursed: false });
+        }
+    }
+
+    // A fight across a big arena stays on the screen
+    private leashBoss(
+        enemy: Enemy,
+        leash: NonNullable<NonNullable<EnemyDef["boss"]>["leash"]>,
+    ): void {
+        const player = this.player;
+        const spot = this.findSpotNear(player.x, player.y, leash.keep, enemy.radius);
+        if (!spot) {
+            return;
+        }
+        if (leash.spotAnim !== undefined) {
+            this.addEffect(leash.spotAnim, enemy.x, enemy.y, 0, 40);
+            this.addEffect(leash.spotAnim, spot.x, spot.y, 0, 40);
+        }
+        enemy.x = enemy.prevX = spot.x;
+        enemy.y = enemy.prevY = spot.y;
+        enemy.vx = enemy.vy = 0;
+    }
+
+    // Whether the player's in a cone swing's wedge, or right under the boss
+    private inCone(
+        enemy: Enemy,
+        windup: BossWindup,
+        attack: BossAttackDef,
+        cone: number,
+    ): boolean {
+        const player = this.player;
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= (attack.underRadius ?? 0) + player.radius) {
+            return true;
+        }
+        if (distance < 0.001) {
+            return true;
+        }
+        const along = (dx * windup.dirX + dy * windup.dirY) / distance;
+        return along >= Math.cos(cone / 2);
+    }
+
+    // The marks of a ground attack, there from now until they land
+    private markGround(enemy: Enemy, attack: BossAttackDef, landTick: number): void {
+        const ground = attack.ground;
+        if (!ground) {
+            return;
+        }
+        const player = this.player;
+        const damage = attack.damage > 0 ? this.getBossDamage(enemy, attack) : 0;
+        const armed = ground.armed !== undefined;
+        const add = (x: number, y: number) => {
+            this.hazards.push({
+                uid: this.nextUid++,
+                enemyUid: enemy.uid,
+                attack,
+                x,
+                y,
+                radius: ground.radius,
+                damage,
+                startTick: this.tick,
+                landTick,
+                endTick: armed ? landTick + secondsToTicks(ground.armed!) : landTick,
+                armed,
+                fuseTick: -1,
+            });
+        };
+        for (const spots of ground.spots) {
+            switch (spots.shape) {
+                case "under":
+                    add(enemy.x, enemy.y);
+                    break;
+                case "player":
+                    add(player.x, player.y);
+                    break;
+                case "ring":
+                    for (let i = 0; i < spots.count; i++) {
+                        const angle = (i / spots.count) * Math.PI * 2;
+                        add(
+                            enemy.x + Math.cos(angle) * spots.distance,
+                            enemy.y + Math.sin(angle) * spots.distance,
+                        );
+                    }
+                    break;
+                case "grid": {
+                    const half = (spots.size - 1) / 2;
+                    for (let i = 0; i < spots.size; i++) {
+                        for (let j = 0; j < spots.size; j++) {
+                            add(
+                                player.x + (i - half) * spots.spacing,
+                                player.y + (j - half) * spots.spacing,
+                            );
+                        }
+                    }
+                    break;
+                }
+                case "scatter":
+                    for (let i = 0; i < spots.count; i++) {
+                        const angle = this.rng.range(0, Math.PI * 2);
+                        const distance = this.rng.range(1, spots.spread);
+                        add(
+                            player.x + Math.cos(angle) * distance,
+                            player.y + Math.sin(angle) * distance,
+                        );
+                    }
+                    break;
+            }
+        }
+    }
+
+    // The lines cross close enough to the player that the safe quarter's
+    // always in reach, wherever in the arena they are
+    private growQuarters(enemy: Enemy, attack: BossAttackDef, hurtTick: number): void {
+        const quarters = attack.quarters;
+        if (!quarters) {
+            return;
+        }
+        const player = this.player;
+        const arena = this.bossArena;
+        const margin = quarters.offset * 2;
+        const offset = () => this.rng.range(-quarters.offset, quarters.offset);
+        const clamp = (value: number, min: number, max: number) =>
+            Math.min(Math.max(value, min + margin), max - margin);
+        const x = clamp(player.x + offset(), arena.minX, arena.maxX);
+        const y = clamp(player.y + offset(), arena.minY, arena.maxY);
+        this.quarters = {
+            enemyUid: enemy.uid,
+            attack,
+            x,
+            y,
+            safe: this.rng.int(4),
+            damage: this.getBossDamage(enemy, attack),
+            startTick: this.tick,
+            hurtTick,
+            endTick: hurtTick + secondsToTicks(quarters.seconds),
+            nextHurt: hurtTick,
+        };
+    }
+
+    // She goes to the edge at once and stands there: the lane's on the ground
+    // from now until she's gone by, in line with where the player is, so
+    // there's something to step out of
+    private pickLane(enemy: Enemy, attack: BossAttackDef): SurgeLane {
+        const player = this.player;
+        const arena = this.bossArena;
+        const margin = enemy.radius + 1;
+        const edge = this.rng.int(4);
+        const minX = arena.minX + margin;
+        const maxX = arena.maxX - margin;
+        const minY = arena.minY + margin;
+        const maxY = arena.maxY - margin;
+        const px = Math.min(Math.max(player.x, minX), maxX);
+        const py = Math.min(Math.max(player.y, minY), maxY);
+        const lane: SurgeLane = {
+            fromX: edge === 0 ? minX : edge === 1 ? maxX : px,
+            fromY: edge === 2 ? minY : edge === 3 ? maxY : py,
+            toX: edge === 0 ? maxX : edge === 1 ? minX : px,
+            toY: edge === 2 ? maxY : edge === 3 ? minY : py,
+            halfWidth: attack.radius ?? 2.5,
+        };
+        if (attack.castSpotAnim !== undefined) {
+            this.addEffect(attack.castSpotAnim, enemy.x, enemy.y, 0, 40);
+        }
+        enemy.x = enemy.prevX = lane.fromX;
+        enemy.y = enemy.prevY = lane.fromY;
+        enemy.vx = enemy.vy = 0;
+        enemy.yaw = yawFromVector(lane.toX - lane.fromX, lane.toY - lane.fromY);
+        return lane;
+    }
+
+    private startSurge(enemy: Enemy, attack: BossAttackDef, lane: SurgeLane): void {
+        const length = Math.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY);
+        const speed = attack.speed ?? 24;
+        enemy.bossState!.surge = {
+            attack,
+            lane,
+            startTick: this.tick,
+            endTick: this.tick + Math.max(1, Math.ceil((length / speed) * TICKS_PER_SECOND)),
+            hit: false,
+        };
+        enemy.anim = "attack";
+        enemy.animStart = this.tick;
+        enemy.attackSeq = enemy.def.boss?.surgeSeq ?? enemy.attackSeq;
+    }
+
+    // Down the lane at a steady speed, through anything
+    private stepSurge(enemy: Enemy, surge: BossSurge): void {
+        const { lane, attack } = surge;
+        const span = surge.endTick - surge.startTick;
+        const f = Math.min(1, (this.tick - surge.startTick) / span);
+        const dx = lane.toX - lane.fromX;
+        const dy = lane.toY - lane.fromY;
+        enemy.x = lane.fromX + dx * f;
+        enemy.y = lane.fromY + dy * f;
+        const player = this.player;
+        if (!surge.hit) {
+            const length = Math.max(0.001, Math.hypot(dx, dy));
+            const px = player.x - enemy.x;
+            const py = player.y - enemy.y;
+            const along = (px * dx + py * dy) / length;
+            const across = (px * dy - py * dx) / length;
+            if (
+                Math.abs(across) <= lane.halfWidth + player.radius &&
+                Math.abs(along) <= SURGE_BODY + player.radius
+            ) {
+                surge.hit = true;
+                this.bossHit(enemy.def.id, enemy, attack, this.getBossDamage(enemy, attack));
+            }
+        }
+        if (f >= 1) {
+            enemy.bossState!.surge = undefined;
+            const spot = findFreeSpot(this.grid, enemy.x, enemy.y, enemy.radius);
+            enemy.x = spot.x;
+            enemy.y = spot.y;
+            enemy.anim = "walk";
+            enemy.animStart = this.tick;
+        }
+    }
+
+    private markPlayer(enemy: Enemy, attack: BossAttackDef): void {
+        const parasite = attack.parasite;
+        if (parasite) {
+            if (!this.parasite) {
+                this.parasite = {
+                    enemyUid: enemy.uid,
+                    attack,
+                    damage: this.getBossDamage(enemy, attack),
+                    startTick: this.tick,
+                    burstTick: this.tick + secondsToTicks(parasite.seconds),
+                };
+            }
+            return;
+        }
+        if (attack.effect) {
+            this.applyPlayerEffect(attack.effect, enemy);
+        }
+    }
+
+    private startPattern(enemy: Enemy, attack: BossAttackDef, windup: BossWindup): void {
+        const pattern = attack.pattern;
+        if (!pattern) {
+            return;
+        }
+        let source = this.bulletSources.findIndex(
+            (s) => s.attack === attack && s.enemy === enemy,
+        );
+        if (source === -1) {
+            source = this.bulletSources.push({ attack, enemy }) - 1;
+        }
+        const aimed = pattern.shape === "spread";
+        this.emitters.push({
+            enemyUid: enemy.uid,
+            attack,
+            source,
+            nextTick: this.tick,
+            volleysLeft: pattern.volleys,
+            angle: aimed
+                ? Math.atan2(windup.dirY, windup.dirX)
+                : this.rng.range(0, Math.PI * 2),
+            damage: this.getBossDamage(enemy, attack),
+        });
+        enemy.bossState!.channelEnd =
+            this.tick + secondsToTicks(pattern.volleys * pattern.interval);
+    }
+
+    private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
+        const pattern = emitter.attack.pattern!;
+        const speed = pattern.speed / TICKS_PER_SECOND;
+        const life = Math.ceil(pattern.range / speed);
+        const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
+        const count = pattern.count;
+        const spread = pattern.shape === "spread";
+        const step = spread
+            ? (pattern.arc ?? 1) / Math.max(1, count - 1)
+            : (Math.PI * 2) / count;
+        const first = spread ? emitter.angle - (pattern.arc ?? 1) / 2 : emitter.angle;
+        for (let i = 0; i < count; i++) {
+            const angle = first + i * step;
+            this.bullets.add(
+                boss.x,
+                boss.y,
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                turn,
+                pattern.radius,
+                emitter.damage,
+                life,
+                emitter.source,
+                this.tick,
+            );
+        }
+        emitter.angle += pattern.turn ?? 0;
+    }
+
+    private stepBossFight(): void {
+        if (this.runOver) {
+            return;
+        }
+        this.stepHold();
+        this.stepEmitters();
+        this.stepBullets();
+        if (this.runOver) {
+            return;
+        }
+        this.stepHazards();
+        if (this.runOver) {
+            return;
+        }
+        this.stepQuarters();
+        if (this.runOver) {
+            return;
+        }
+        this.stepParasite();
+    }
+
+    private stepHold(): void {
+        const hold = this.hold;
+        if (!hold) {
+            return;
+        }
+        if (this.tick >= hold.endTick || hold.enemies.every((enemy) => enemy.dead)) {
+            this.hold = undefined;
+            return;
+        }
+        this.player.frozen = Math.max(this.player.frozen, 2);
+    }
+
+    private stepEmitters(): void {
+        const emitters = this.emitters;
+        if (emitters.length === 0) {
+            return;
+        }
+        let spent = false;
+        for (const emitter of emitters) {
+            if (this.tick < emitter.nextTick) {
+                continue;
+            }
+            const boss = this.enemies.find((e) => e.uid === emitter.enemyUid);
+            if (!boss || boss.dead) {
+                emitter.volleysLeft = 0;
+                spent = true;
+                continue;
+            }
+            this.fireVolley(emitter, boss);
+            emitter.volleysLeft--;
+            emitter.nextTick = this.tick + secondsToTicks(emitter.attack.pattern!.interval);
+            spent ||= emitter.volleysLeft <= 0;
+        }
+        if (spent) {
+            this.emitters = emitters.filter((emitter) => emitter.volleysLeft > 0);
+        }
+    }
+
+    private stepBullets(): void {
+        const bullets = this.bullets;
+        if (bullets.count === 0) {
+            return;
+        }
+        const player = this.player;
+        const spare = this.tick < this.bulletGraceEnd || this.reviving;
+        const hit = bullets.step(player.x, player.y, player.radius, spare);
+        if (hit !== -1) {
+            const { attack, enemy } = this.bulletSources[bullets.source[hit]];
+            this.bulletGraceEnd = this.tick + BULLET_GRACE_TICKS;
+            this.bossHit(enemy.def.id, enemy, attack, bullets.damage[hit]);
+        }
+    }
+
+    private stepHazards(): void {
+        const hazards = this.hazards;
+        if (hazards.length === 0) {
+            return;
+        }
+        const player = this.player;
+        const tick = this.tick;
+        let spent = false;
+        // However many land on them, it's the one hit
+        let landed = false;
+        for (const hazard of hazards) {
+            if (hazard.armed && hazard.fuseTick === -1 && tick >= hazard.landTick) {
+                if (tick >= hazard.endTick) {
+                    hazard.endTick = -1;
+                    spent = true;
+                } else if (
+                    Math.hypot(player.x - hazard.x, player.y - hazard.y) <=
+                    hazard.radius + player.radius
+                ) {
+                    hazard.fuseTick = tick + HAZARD_FUSE_TICKS;
+                }
+                continue;
+            }
+            const goesOff = hazard.armed ? hazard.fuseTick : hazard.landTick;
+            if (hazard.armed && hazard.fuseTick === -1) {
+                continue;
+            }
+            if (tick < goesOff) {
+                continue;
+            }
+            hazard.endTick = -1;
+            spent = true;
+            landed = this.landHazard(hazard, landed) || landed;
+            if (this.runOver) {
+                return;
+            }
+        }
+        if (spent) {
+            this.hazards = this.hazards.filter((hazard) => hazard.endTick !== -1);
+        }
+    }
+
+    // Returns whether it hit the player
+    private landHazard(hazard: GroundHazard, alreadyHit: boolean): boolean {
+        const { attack, x, y, radius } = hazard;
+        const player = this.player;
+        this.events.push({ type: "bossSwing", x, y, radius });
+        if (attack.impactSpotAnim !== undefined) {
+            this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
+        }
+        if (Math.hypot(player.x - x, player.y - y) > radius + player.radius || alreadyHit) {
+            return false;
+        }
+        const enemy = this.enemies.find((e) => e.uid === hazard.enemyUid);
+        if (hazard.damage > 0) {
+            this.bossHit(enemy?.def.id ?? "", enemy, attack, hazard.damage, false);
+        } else if (attack.effect && !this.reviving) {
+            this.applyPlayerEffect(attack.effect, enemy);
+        }
+        return true;
+    }
+
+    private stepQuarters(): void {
+        const quarters = this.quarters;
+        if (!quarters) {
+            return;
+        }
+        const tick = this.tick;
+        if (tick >= quarters.endTick) {
+            this.quarters = undefined;
+            return;
+        }
+        if (tick < quarters.nextHurt) {
+            return;
+        }
+        const def = quarters.attack.quarters!;
+        quarters.nextHurt = tick + secondsToTicks(def.interval);
+        const player = this.player;
+        if (quarterOf(quarters.x, quarters.y, player.x, player.y) === quarters.safe) {
+            return;
+        }
+        const enemy = this.enemies.find((e) => e.uid === quarters.enemyUid);
+        this.bossHit(enemy?.def.id ?? "", enemy, quarters.attack, quarters.damage, false);
+        const phase = enemy?.bossState?.phase;
+        if (phase?.stage === "shield") {
+            phase.shield = Math.min(
+                phase.shieldMax,
+                phase.shield + Math.round(phase.shieldMax * def.heal),
+            );
+        }
+    }
+
+    // Out it comes for a big hit, and stays to feed the boss. An antidote
+    // weakens it first.
+    private stepParasite(): void {
+        const parasite = this.parasite;
+        if (!parasite || this.tick < parasite.burstTick) {
+            return;
+        }
+        this.parasite = undefined;
+        const def = parasite.attack.parasite!;
+        const player = this.player;
+        const boss = this.enemies.find((e) => e.uid === parasite.enemyUid);
+        const weak = this.cured;
+        this.bossHit(
+            boss?.def.id ?? "",
+            boss,
+            parasite.attack,
+            parasite.damage * (weak ? 0.5 : 1),
+        );
+        if (this.runOver) {
+            return;
+        }
+        const out = this.spawnNear(
+            player,
+            getEnemy(weak ? def.weakEnemyId : def.enemyId),
+            SUMMON_BESIDE,
+            0,
+            1,
+            6,
+        );
+        if (out) {
+            out.noDrops = true;
+        }
+    }
+
+    // Walking to the boss, through anything in its way
+    private stepWalker(enemy: Enemy, boss: Enemy): void {
+        if (boss.dead) {
+            this.vanish(enemy);
+            return;
+        }
+        if (enemy.frozen > 0) {
+            enemy.frozen--;
+            return;
+        }
+        const dx = boss.x - enemy.x;
+        const dy = boss.y - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= ABSORB_REACH) {
+            const walkers = boss.bossState?.walkers;
+            if (walkers) {
+                walkers.absorbed++;
+            }
+            this.vanish(enemy);
+            return;
+        }
+        enemy.x += (dx / distance) * enemy.speed;
+        enemy.y += (dy / distance) * enemy.speed;
+        enemy.yaw = yawFromVector(dx, dy);
+    }
+
+    // True while there's still some on their way. With the last of them gone
+    // the boss lets out what it took in, which can't be dodged.
+    private stepWalkers(boss: Enemy, walkers: BossWalkers): boolean {
+        if (walkers.enemies.some((enemy) => !enemy.dead)) {
+            return true;
+        }
+        boss.bossState!.walkers = undefined;
+        const attack = walkers.attack;
+        const damage =
+            (attack.damage + walkers.absorbed * walkers.perAbsorbed) * boss.damageScale;
+        this.events.push({
+            type: "bossAbsorbBlast",
+            x: boss.x,
+            y: boss.y,
+            absorbed: walkers.absorbed,
+        });
+        this.bossHit(boss.def.id, boss, attack, damage);
+        return false;
+    }
+
     // ---- Bosses ----
 
     // Picks an attack once the last one is done (among those the player is in
@@ -2593,7 +3560,8 @@ export class Sim {
     private stepBoss(enemy: Enemy, distance: number): void {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
-        if (!state.enraged && enemy.hp <= enemy.maxHp * ENRAGE_AT) {
+        // A fight in phases gets harder by the phase instead
+        if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * ENRAGE_AT) {
             this.enrage(enemy);
         }
         this.callSummons(enemy, false);
@@ -2601,6 +3569,13 @@ export class Sim {
             if (state.cooldowns[i] > 0) {
                 state.cooldowns[i]--;
             }
+        }
+        if (state.surge) {
+            this.stepSurge(enemy, state.surge);
+            return;
+        }
+        if (state.walkers && this.stepWalkers(enemy, state.walkers)) {
+            return;
         }
         const windup = state.windup;
         if (windup) {
@@ -2610,7 +3585,18 @@ export class Sim {
             }
             return;
         }
-        if (enemy.attackCooldown > 0) {
+        if (def.leash && distance > def.leash.distance) {
+            this.leashBoss(enemy, def.leash);
+        }
+        // It holds off while the player can't move, and what's fired can land
+        if (enemy.attackCooldown > 0 || this.hold || this.tick < state.channelEnd) {
+            return;
+        }
+        const phase = state.phase;
+        const opener = phase?.opener;
+        if (opener) {
+            phase.opener = undefined;
+            this.startBossAttack(enemy, opener);
             return;
         }
         const usable: number[] = [];
@@ -2619,7 +3605,9 @@ export class Sim {
                 state.cooldowns[i] === 0 &&
                 distance <= attack.range &&
                 distance >= (attack.minRange ?? 0) &&
-                (!attack.enraged || state.enraged)
+                (!attack.enraged || state.enraged) &&
+                (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
+                !(attack.parasite && this.parasite)
             ) {
                 usable.push(i);
             }
@@ -2630,17 +3618,54 @@ export class Sim {
         const index = usable[this.rng.weightedIndex(usable.map((i) => def.attacks[i].weight))];
         const attack = def.attacks[index];
         state.cooldowns[index] = Math.round(attack.cooldown * TICKS_PER_SECOND);
-        state.windup = {
+        this.startBossAttack(enemy, attack);
+    }
+
+    // Starts winding an attack up. Everything it'll do to the ground is on the
+    // ground from now on.
+    private startBossAttack(enemy: Enemy, attack: BossAttackDef): void {
+        const state = enemy.bossState!;
+        const def = enemy.def.boss!;
+        const player = this.player;
+        const startTick = this.tick;
+        const landTick = startTick + Math.max(1, Math.round(attack.windup * TICKS_PER_SECOND));
+        const toPlayer = Math.max(0.001, Math.hypot(player.x - enemy.x, player.y - enemy.y));
+        const windup: BossWindup = {
             attack,
-            startTick: this.tick,
-            landTick: this.tick + Math.max(1, Math.round(attack.windup * TICKS_PER_SECOND)),
+            startTick,
+            landTick,
             targets: attack.kind === "blast" ? this.pickBlastTargets(attack) : [],
+            dirX: (player.x - enemy.x) / toPlayer,
+            dirY: (player.y - enemy.y) / toPlayer,
         };
-        const interval = def.attackInterval * (state.enraged ? ENRAGED_INTERVAL : 1);
+        state.windup = windup;
+        if (attack.kind === "ground") {
+            this.markGround(enemy, attack, landTick);
+        } else if (attack.kind === "quarters") {
+            this.growQuarters(enemy, attack, landTick);
+        } else if (attack.kind === "surge") {
+            windup.lane = this.pickLane(enemy, attack);
+        }
+        const drowsy = this.tick < this.drowsyEndTick ? this.drowsyInterval : 1;
+        const interval = def.attackInterval * (state.enraged ? ENRAGED_INTERVAL : 1) * drowsy;
         enemy.attackCooldown = Math.round(interval * TICKS_PER_SECOND);
         enemy.anim = "attack";
         enemy.animStart = this.tick;
         enemy.attackSeq = attack.seq ?? enemy.def.attackSeq;
+        if (attack.windupSound !== undefined) {
+            this.events.push({
+                type: "bossAttack",
+                enemyId: enemy.def.id,
+                sound: attack.windupSound,
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
+        const curse = this.curse;
+        if (curse && --curse.attacksLeft <= 0) {
+            this.curse = undefined;
+            this.events.push({ type: "playerCursed", cursed: false });
+        }
         if (attack.shout) {
             this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
@@ -2716,6 +3741,9 @@ export class Sim {
                 }
                 hit ||= Math.hypot(player.x - x, player.y - y) <= radius + player.radius;
             }
+            if (hit && attack.cone !== undefined) {
+                hit = this.inCone(enemy, windup, attack, attack.cone);
+            }
             if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
                 // Behind the glyph: it takes the blow
                 hit = false;
@@ -2738,6 +3766,22 @@ export class Sim {
         }
         if (attack.castSpotAnim !== undefined) {
             this.addEffect(attack.castSpotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+        }
+        if (attack.kind === "ground" || attack.kind === "quarters") {
+            // Their marks land by themselves
+            return;
+        }
+        if (attack.kind === "surge") {
+            this.startSurge(enemy, attack, windup.lane!);
+            return;
+        }
+        if (attack.kind === "mark") {
+            this.markPlayer(enemy, attack);
+            return;
+        }
+        if (attack.kind === "pattern") {
+            this.startPattern(enemy, attack, windup);
+            return;
         }
         this.launchProjectiles(enemy, attack, this.getBossDamage(enemy, attack), false);
     }
@@ -2782,13 +3826,46 @@ export class Sim {
 
     // Calls in the attack's enemies in a ring around the boss
     private summonAround(enemy: Enemy, attack: BossAttackDef): void {
-        if (!attack.summon) {
+        const summon = attack.summon;
+        if (!summon) {
             return;
         }
-        const def = getEnemy(attack.summon.enemyId);
-        const count = attack.summon.count;
-        for (let i = 0; i < count; i++) {
-            this.spawnNear(enemy, def, 1.5, i, count);
+        const def = getEnemy(summon.enemyId);
+        const count = summon.count;
+        const around = summon.beside ? this.player : enemy;
+        const radius = summon.walkTo?.distance ?? (summon.beside ? SUMMON_BESIDE : 1.5);
+        const attempts = summon.beside || summon.walkTo ? 6 : 1;
+        const spawned: Enemy[] = [];
+        const also = summon.alsoId !== undefined ? getEnemy(summon.alsoId) : undefined;
+        const total = count + (also ? 1 : 0);
+        for (let i = 0; i < total; i++) {
+            const one = this.spawnNear(around, i < count ? def : also!, radius, i, total, attempts);
+            if (one) {
+                spawned.push(one);
+            }
+        }
+        if (summon.beside || summon.walkTo) {
+            // What's part of the fight isn't a farm
+            for (const one of spawned) {
+                one.noDrops = true;
+            }
+        }
+        if (spawned.length === 0) {
+            return;
+        }
+        if (summon.holds !== undefined) {
+            this.hold = { enemies: spawned, endTick: this.tick + secondsToTicks(summon.holds) };
+        }
+        if (summon.walkTo) {
+            for (const one of spawned) {
+                one.walksTo = enemy;
+            }
+            enemy.bossState!.walkers = {
+                attack,
+                enemies: spawned,
+                absorbed: 0,
+                perAbsorbed: summon.walkTo.perAbsorbed,
+            };
         }
     }
 
@@ -3023,6 +4100,12 @@ export class Sim {
             }
             return;
         }
+        if (effect.kind === "curse") {
+            const matrix = CURSE_SHUFFLES[this.rng.int(CURSE_SHUFFLES.length)];
+            this.curse = { matrix, attacksLeft: effect.attacks };
+            this.events.push({ type: "playerCursed", cursed: true });
+            return;
+        }
         if ((effect.kind === "poison" || effect.kind === "debuff") && this.cured) {
             return;
         }
@@ -3044,6 +4127,20 @@ export class Sim {
                     name: effect.name,
                     iconObjId: effect.iconObjId,
                     stats: effect.stats,
+                    startTick: this.tick,
+                    endTick: this.tick + ticks,
+                });
+                this.updateStats();
+                break;
+            case "drowsy":
+                this.drowsyEndTick = this.tick + ticks;
+                this.drowsyInterval = effect.bossInterval;
+                this.debuffs = this.debuffs.filter((d) => d.id !== effect.id);
+                this.debuffs.push({
+                    id: effect.id,
+                    name: effect.name,
+                    iconObjId: effect.iconObjId,
+                    stats: { moveSpeed: effect.moveSpeed },
                     startTick: this.tick,
                     endTick: this.tick + ticks,
                 });
@@ -3143,7 +4240,13 @@ export class Sim {
                     this.rng.range(0.85, 1.15),
             ),
         );
-        enemy.hp -= damage;
+        const phase = enemy.bossState?.phase;
+        if (phase) {
+            // All a hit can get at is its shield
+            phase.shield -= damage;
+        } else {
+            enemy.hp -= damage;
+        }
         enemy.flash = 5;
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
@@ -3169,7 +4272,15 @@ export class Sim {
                 enemy.vy += (dy / len) * k;
             }
         }
-        if (enemy.hp <= 0 && !this.riseAgain(enemy)) {
+        if (phase) {
+            if (phase.shield <= 0) {
+                this.breakShield(enemy, phase);
+            }
+        } else if (enemy.totemOf) {
+            if (enemy.hp <= 0) {
+                this.totemCharged(enemy, enemy.totemOf);
+            }
+        } else if (enemy.hp <= 0 && !this.riseAgain(enemy)) {
             this.killEnemy(enemy);
         }
         return damage;
@@ -3200,6 +4311,7 @@ export class Sim {
             // A boss's glyph goes with it, rather than hanging about on the
             // victory screen
             this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
+            this.endBossFight(enemy);
         }
         this.events.push({
             type: "kill",
@@ -5070,6 +6182,7 @@ export class Sim {
                 this.sledSpeed = effect.speed;
                 // Whatever had them stuck, they're off
                 player.frozen = 0;
+                this.hold = undefined;
                 message = "You jump on the sled!";
                 break;
             case "rock":
@@ -5339,7 +6452,7 @@ export class Sim {
                 this.damageEnemy(enemy, enemy.maxHp * bossDamage, 0, player.x, player.y, 0);
                 continue;
             }
-            if (enemy.shieldEnd > this.tick) {
+            if (enemy.shieldEnd > this.tick || enemy.totemOf) {
                 this.showBlocked(enemy);
                 continue;
             }
@@ -5487,6 +6600,16 @@ function addStats(stats: Stats, add: Partial<Stats>): void {
 // Whether an enemy is any of these (a vampyre, undead)
 function hasTag(enemy: Enemy, tags: readonly EnemyTag[]): boolean {
     return enemy.def.tags?.some((tag) => tags.includes(tag)) ?? false;
+}
+
+// How far from all there a healer sees it: a fight in phases is in its shield,
+// and with that down there's nothing to give back
+function hurtFraction(enemy: Enemy): number {
+    const phase = enemy.bossState?.phase;
+    if (phase) {
+        return phase.stage === "shield" ? phase.shield / phase.shieldMax : 1;
+    }
+    return enemy.hp / enemy.maxHp;
 }
 
 function secondsToTicks(seconds: number): number {

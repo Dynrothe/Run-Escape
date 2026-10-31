@@ -907,6 +907,7 @@ export class GameClient implements GameFrameHandler {
                 case "bossSpawned":
                 case "bossRose":
                 case "bossEnraged":
+                case "bossStage":
                     // Bosses that turn up together say so once (Pest Control's
                     // portals, on the first)
                     if (event.message) {
@@ -983,11 +984,28 @@ export class GameClient implements GameFrameHandler {
         let boss: HudView["boss"];
         const shownBoss = sim.shownBoss;
         if (shownBoss) {
+            const phase = shownBoss.bossState?.phase;
+            const parasite = sim.parasite;
             boss = {
                 name: shownBoss.def.name,
                 fraction: shownBoss.dead ? 0 : shownBoss.hp / shownBoss.maxHp,
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
+            if (phase && !shownBoss.dead) {
+                boss.fraction = phase.shield / phase.shieldMax;
+                boss.fight = {
+                    phase: phase.index + 1,
+                    phases: shownBoss.def.boss?.phases?.phases.length ?? 1,
+                    stage: phase.stage,
+                    totems: phase.totems.map((totem) =>
+                        phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
+                    ),
+                    curseAttacks: sim.curse?.attacksLeft,
+                    parasiteSeconds: parasite
+                        ? Math.max(0, (parasite.burstTick - sim.tick) / TICKS_PER_SECOND)
+                        : undefined,
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;
