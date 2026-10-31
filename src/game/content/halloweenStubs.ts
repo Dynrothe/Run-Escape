@@ -71,13 +71,10 @@ export function getHalloweenStubMap(maps: MapDef[]): MapDef[] {
             waves: [
                 {
                     start: 0,
-                    enemies: [
-                        { id: "goblin", weight: 3 },
-                        { id: "ghost", weight: 2 },
-                    ],
-                    spawnRate: 3,
-                    minAlive: 20,
-                    maxAlive: 60,
+                    enemies: [{ id: "goblin", weight: 1 }],
+                    spawnRate: 1,
+                    minAlive: 4,
+                    maxAlive: 30,
                 },
             ],
             events: [
