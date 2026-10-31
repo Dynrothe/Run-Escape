@@ -5,6 +5,17 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Play on a phone or tablet: drag anywhere to move, and tap on-screen buttons to pause and use items.
+- Every screen now fits a phone held sideways, with a nudge to turn it if it's held upright.
+
+### Fixed
+
+- Sound starts properly from the first tap on touch screens.
+- Losing the graphics, which phones can do to a game in the background, now says so instead of
+  leaving a black screen.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added
