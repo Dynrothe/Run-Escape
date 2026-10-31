@@ -5,6 +5,8 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.19.2 - 2026-10-31
+
 ### Fixed
 
 - The Mysterious Old Man's and Quiz Master's screens have room between their choices and buttons.
