@@ -9,6 +9,9 @@ the version in the corner).
 
 ### Added
 
+- Early support for phones and tablets: drag anywhere to move, and tap on-screen buttons to pause
+  and use items.
+- Every screen now fits a phone held sideways, with a nudge to turn it if it's held upright.
 - A DPS meter under the quests shows how much damage you've been dealing, from everything, over
   the last 8 seconds.
 - New setting, Auto alch: high alch every chest as you open it, with no chest screen and no pause.
@@ -20,6 +23,12 @@ the version in the corner).
 - The game draws far less of the map on busy maps: only what's on screen, not everything nearby.
 - The game starts much faster and uses far less memory. Each map's monsters now load when you set
   off for it, so the first run on a map takes a moment longer to start.
+
+### Fixed
+
+- Sound starts properly from the first tap on touch screens.
+- Losing the graphics, which phones can do to a game in the background, now says so instead of
+  leaving a black screen.
 
 ## 0.18.0 - 2026-10-30
 

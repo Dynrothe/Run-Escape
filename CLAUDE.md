@@ -32,6 +32,7 @@ go stale. Add anything that cost you time to work out.
 | Save data and migrations                              | `src/game/core/save.ts`                 |
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
+| Touch screens: the stick, its buttons, phone layouts  | `docs/DEVELOPMENT.md`, Touch screens    |
 | React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
 | Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
 | How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
@@ -109,6 +110,8 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
 ```
 
 ## Testing in the browser
+
+- Anything new on screen needs to work on a phone too: see Touch screens in `docs/DEVELOPMENT.md`.
 
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.

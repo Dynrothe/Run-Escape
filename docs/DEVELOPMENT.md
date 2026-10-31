@@ -79,6 +79,7 @@ src/game/
             GameAssets (what gets baked), GameStore (state for the React UI)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon
+  client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per pass
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one
@@ -161,6 +162,25 @@ URL flags: `?autostart=wizard` starts a run right away, `?stress=300` adds 300 g
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed. F3
 shows collision and stats.
+
+### Touch screens
+
+Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never see it:
+`isCoarsePointer` in code, a media query in `Mobile.css`.
+
+- `client/GameTouch.ts` is the stick, with no DOM. `GameInput.getMoveVector` reads it when no key
+  is down, so the sim gets the same input a keyboard gives: length 0 or 1.
+- `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
+  on top. Its buttons act on `pointerdown`, because a browser won't fire `click` for a second finger
+  while the thumb's down.
+- `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
+  UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
+  there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
+- A touch screen also gets a pixel ratio capped at 1.5, 2 workers instead of 4, and a closer camera
+  on a phone.
+
+To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
+`Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
 
 ### Notice
 

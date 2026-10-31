@@ -5,6 +5,7 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import massacre from "../../media/music/massacre.ogg";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
+import { isCoarsePointer } from "../../util/DeviceUtil";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
@@ -82,6 +83,10 @@ const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
 const RUN_PITCH = -400;
 const RUN_DISTANCE = 18;
+// Closer on a phone held sideways: it shows as much to each side as a desktop
+// window does, and the player stays big enough to see
+const PHONE_RUN_DISTANCE = 15;
+const PHONE_MAX_HEIGHT = 520;
 
 // The level up's rewards, as the UI shows them
 // What a new endless round brings, for its toast
@@ -504,7 +509,10 @@ export class GameClient implements GameFrameHandler {
         this.appearanceVersion = -1;
         this.view.reset();
         this.cameraRig.pitch = RUN_PITCH;
-        this.cameraRig.distance = RUN_DISTANCE;
+        this.cameraRig.distance =
+            isCoarsePointer && window.innerHeight <= PHONE_MAX_HEIGHT
+                ? PHONE_RUN_DISTANCE
+                : RUN_DISTANCE;
         this.cameraRig.yaw = 0;
         this.store.set({
             screen: "run",

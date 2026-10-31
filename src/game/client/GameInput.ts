@@ -1,6 +1,11 @@
+import { TouchStick } from "./GameTouch";
+
 // Keyboard and wheel input for the game. Listens on the window, so the canvas
 // doesn't need focus; keys are dropped when the window loses focus.
 export class GameInput {
+    // Fed by TouchControls, on touch screens
+    readonly stick = new TouchStick();
+
     private readonly down = new Set<string>();
     private wheel = 0;
 
@@ -29,8 +34,8 @@ export class GameInput {
         return this.down.has(code);
     }
 
-    // Movement from WASD / arrow keys as a vector of length 0 or 1, x east and
-    // y north.
+    // Movement from WASD / arrow keys, or else the touch stick, as a vector of
+    // length 0 or 1, x east and y north.
     getMoveVector(out: { x: number; y: number }): { x: number; y: number } {
         let x = 0;
         let y = 0;
@@ -39,8 +44,11 @@ export class GameInput {
         if (this.isDown("KeyD") || this.isDown("ArrowRight")) x += 1;
         if (this.isDown("KeyA") || this.isDown("ArrowLeft")) x -= 1;
         const len = Math.hypot(x, y);
-        out.x = len > 0 ? x / len : 0;
-        out.y = len > 0 ? y / len : 0;
+        if (len === 0) {
+            return this.stick.getMove(out);
+        }
+        out.x = x / len;
+        out.y = y / len;
         return out;
     }
 
