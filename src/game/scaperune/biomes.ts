@@ -621,8 +621,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         ground: [235, 234, 239],
         shore: 240,
         hillGround: 240,
-        trail: 239,
-        road: 14,
+        trail: 240,
+        road: 72,
         water: 7,
         trees: [
             [40788, 2],
