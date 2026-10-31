@@ -953,6 +953,22 @@ describe("bullet patterns", () => {
     });
 });
 
+describe("her real assets", () => {
+    test("everything she fires or marks the ground with is a real model", () => {
+        for (const a of nightmare().boss!.attacks) {
+            if (a.pattern) {
+                expect(a.spotAnim).toBeDefined();
+            }
+            if (a.ground) {
+                expect(a.ground.spotAnim ?? a.ground.locId).toBeDefined();
+            }
+            if (a.parasite) {
+                expect(a.spotAnim).toBeDefined();
+            }
+        }
+    });
+});
+
 describe("the bullet pool", () => {
     function add(pool: BulletPool, x: number, vx = 0, life = 100): number {
         return pool.add(x, 0, vx, 0, 0, 0.25, 1, life, 0, 0);

@@ -146,7 +146,7 @@ function getSpotAnimIds(): number[] {
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
-            add(attack.ground?.spotAnim);
+            add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
             add(...(attack.impactSpotAnims ?? []));
         }
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
@@ -301,7 +301,6 @@ export class GameAssets {
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
             enemy.boss?.intro?.seq ?? -1,
             enemy.boss?.surgeSeq ?? -1,
-            enemy.boss?.phases?.stunnedSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(

@@ -3494,9 +3494,10 @@ export class Sim {
     private landHazard(hazard: GroundHazard, alreadyHit: boolean): boolean {
         const { attack, x, y, radius } = hazard;
         const player = this.player;
-        this.events.push({ type: "bossSwing", x, y, radius });
         if (attack.impactSpotAnim !== undefined) {
             this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
+        } else if (!attack.ground?.spotAnim) {
+            this.events.push({ type: "bossSwing", x, y, radius });
         }
         if (Math.hypot(player.x - x, player.y - y) > radius + player.radius || alreadyHit) {
             return false;

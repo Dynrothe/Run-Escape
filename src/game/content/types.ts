@@ -330,8 +330,10 @@ export type BulletPatternDef = {
     arc?: number;
     // Radians a second each bullet curves by as it flies
     curve?: number;
-    // Its glow on the overlay, as a CSS colour
-    color: string;
+    // Model scale, when its hit size would leave it too thin to dodge, and how
+    // much it's lit up against dark ground (0 to 1)
+    scale?: number;
+    bright?: number;
 };
 
 // Where a boss's "ground" attack marks the ground, each spot radius tiles
@@ -350,9 +352,15 @@ export type GroundPatternDef = {
     // Set: it stays armed this many seconds after the windup, going off under
     // whoever comes within radius rather than landing all at once (spores)
     armed?: number;
-    // What's drawn at each spot: scenery, or a spot animation
+    // What's drawn at each spot, scaled to radius: scenery, or a spot animation.
+    // It's all that marks the spot, so it has to be there from the start. fit: how
+    // much bigger than that, for a model with more around it than it looks.
     locId?: number;
     spotAnim?: number;
+    fit?: number;
+    // Drawn as it is in the middle of the spot, for what can't be scaled up
+    // (Grasping Claws' arm: as wide as its spot, it'd tower over the arena)
+    middleSpotAnim?: number;
 };
 
 // A boss's corpse flowers: lines cross near the player, and the quarters but
@@ -543,8 +551,6 @@ export type BossPhasesDef = {
     };
     shieldMessage: string;
     blastMessage: string;
-    // Stands like this in place of its idle while its shield's down
-    stunnedSeq?: number;
     // Of the player's hitpoints, given back by each blast
     blastHeal?: number;
 };
