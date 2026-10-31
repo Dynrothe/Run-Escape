@@ -556,9 +556,12 @@ function checkMap(
 
 let failed = false;
 for (const recipe of SCAPERUNE_DEV_MAPS.filter((map) => GENERATED.test(map.id))) {
+    // A hand-made map has no settings, and says what's on it itself
     const settings = DEV_MAP_SETTINGS[recipe.id];
-    failed =
-        !checkMap(recipe.id, (context) => generateMapDetail(settings, context), recipe) || failed;
+    const detail = settings
+        ? (context: BuildContext) => generateMapDetail(settings, context)
+        : recipe.buildDetail!;
+    failed = !checkMap(recipe.id, detail, recipe) || failed;
 }
 SWEEP.forEach((overrides, i) => {
     const settings: GeneratorSettings = { seed: 11 + i, ...DEFAULT_SETTINGS, ...overrides };

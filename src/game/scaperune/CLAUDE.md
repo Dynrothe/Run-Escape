@@ -303,7 +303,12 @@ This one has a known fault, left in to show it: the house's door stays shut, so 
 23 tiles inside as stranded. Drop the door with `skipLoc`, as the generator does.
 
 Then add it to `SCAPERUNE_DEV_MAPS`. `content/maps.ts` makes a `MapDef` for each dev map, with Lumbridge's
-waves. In the browser console: `game.selectMap("scaperune_little_island"); await game.startRun()`.
+waves, and `details` on the recipe goes over that: its name, description, waves and events. Leave `fun` set, because
+only fun maps are open without beating another. In the browser console:
+`game.selectMap("scaperune_little_island"); await game.startRun()`.
+
+`check-maps.ts` takes any map called `scaperune_*`, so a hand-made one needs `buildDetail` as well as `build`: it
+returns the grid with what the checks hold it to (see `maps/shatteredRealm.ts`).
 
 Grid tiles start at the grid's south-west corner, x east and y north. `getRecipeWorldTile` turns them
 into world tiles.
