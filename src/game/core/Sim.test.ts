@@ -3601,6 +3601,32 @@ describe("endless runs", () => {
             expect(dropped).toBeGreaterThan(0);
         });
 
+        test("a casket's chance is 10%, and 25 can lie on the ground", () => {
+            expect(LATE_CASKET_CHANCE).toBe(0.1);
+            expect(LATE_CASKET_LIMIT).toBe(25);
+            const sim = lateRun();
+            let dropped = 0;
+            for (let i = 0; i < 5000; i++) {
+                sim.dropCasket(1040.5, 1036.5, true);
+                dropped += countCaskets(sim);
+                sim.pickups.length = 0;
+            }
+            expect(dropped / 5000).toBeGreaterThan(0.085);
+            expect(dropped / 5000).toBeLessThan(0.115);
+        });
+
+        test("the limit doesn't apply before then, or outside endless runs", () => {
+            const early = createEndless();
+            early.tick = (LATE_CASKET_SECONDS - 1) * TICKS_PER_SECOND;
+            const normal = lateRun(false);
+            for (const sim of [early, normal]) {
+                for (let i = 0; i < LATE_CASKET_LIMIT + 5; i++) {
+                    sim.dropCasket(1040.5, 1036.5, true);
+                }
+                expect(countCaskets(sim)).toBe(LATE_CASKET_LIMIT + 5);
+            }
+        });
+
         test("drop as usual before then, and outside endless runs", () => {
             const early = createEndless();
             early.tick = (LATE_CASKET_SECONDS - 1) * TICKS_PER_SECOND;

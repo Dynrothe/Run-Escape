@@ -10,6 +10,11 @@ the version in the corner).
 - A DPS meter under the quests shows how much damage you've been dealing, from everything, over
   the last 8 seconds.
 
+### Changed
+
+- Past 15 minutes in an endless run, chests are twice as likely to drop (10%, up from 5%), and 25
+  can lie on the ground at once, up from 10.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added
