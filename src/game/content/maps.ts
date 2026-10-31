@@ -303,8 +303,8 @@ function createDevMap(recipe: MapRecipe): MapDef {
     const density = play?.enemyDensity ?? 1;
     return {
         id: recipe.id,
-        name: recipe.id,
-        description: "ScapeRune test map, for development.",
+        name: recipe.name ?? recipe.id,
+        description: recipe.description ?? "ScapeRune test map, for development.",
         iconObjId: 1351,
         arena: getRecipeArena(recipe),
         spawn: getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y),
