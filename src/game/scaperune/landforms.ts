@@ -31,6 +31,8 @@ const MESA_EDGE = 3;
 const PLATEAU_EDGE = 5;
 const CANYON_WALL = 4;
 const CRATER_WALL = 6;
+// Tiles between the points of a noise's lattice
+const LATTICE = 3;
 // Tiles round a landform that keep off the next one
 const FEATURE_GAP = 6;
 
@@ -142,6 +144,29 @@ function getLineForShare(field: Noise, bounds: LandformBounds, scale: number, sh
     return samples[Math.floor((samples.length - 1) * (1 - share))];
 }
 
+// A field for smooth noise, read off a lattice rather than worked out at every corner:
+// heights finer than a few tiles can't draw, and big maps have millions of corners
+function latticeOf(noise: Noise, terrain: Terrain, scale: number): Noise {
+    const countX = Math.ceil(terrain.cornersX / LATTICE) + 2;
+    const countY = Math.ceil(terrain.cornersY / LATTICE) + 2;
+    const values = new Float32Array(countX * countY);
+    for (let y = 0; y < countY; y++) {
+        for (let x = 0; x < countX; x++) {
+            values[x + y * countX] = noise((x * LATTICE) / scale, (y * LATTICE) / scale);
+        }
+    }
+    return (x, y) => {
+        const fx = x / LATTICE;
+        const fy = y / LATTICE;
+        const tx = Math.floor(fx);
+        const ty = Math.floor(fy);
+        const at = tx + ty * countX;
+        const south = lerp(values[at], values[at + 1], fx - tx);
+        const north = lerp(values[at + countX], values[at + countX + 1], fx - tx);
+        return lerp(south, north, fy - ty);
+    };
+}
+
 // Where ranges run: long bands, wide across, from a noise's zero lines
 function createRange(seed: number): Noise {
     const noise = createFractal(seed, 2, 0.4);
@@ -168,13 +193,15 @@ function addMountains(shaping: Shaping): void {
     const line = getLineForShare(chains, bounds, chainScale, cover);
     // The foothills: this much of the cover's on its way up
     const top = getLineForShare(chains, bounds, chainScale, cover * RANGE_CORE);
+    const chainAt = latticeOf(chains, terrain, chainScale);
+    const detailAt = latticeOf(detail, terrain, ridgeScale);
     forCorners(terrain, (x, y, at) => {
-        const rise = (chains(x / chainScale, y / chainScale) - line) / (top - line);
+        const rise = (chainAt(x, y) - line) / (top - line);
         const body = smoothstep(rise) * lowland(x, y);
         if (body <= 0) {
             return;
         }
-        const crest = detail(x / ridgeScale, y / ridgeScale);
+        const crest = detailAt(x, y);
         const peak = Math.max(peakHeight - terrain.height[at], 0);
         const shape = lerp(1, 0.35 + crest * 1.1, lerp(0.5, 1, ruggedness));
         terrain.height[at] += peak * Math.pow(body, 1.2) * shape;

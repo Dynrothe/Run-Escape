@@ -30,6 +30,7 @@ const NEAR_PAST_EDGE = 2.2;
 // Points along a line that don't count as far along it
 const SAME_STRETCH = 8;
 const SMOOTH_PASSES = 8;
+const ROUND_PASSES = 3;
 // What's over the grade is first shared out by trying steeper grades, up to this much steeper
 const STEEPER_TRIES = [1, 1.3, 1.6, 2];
 
@@ -246,20 +247,25 @@ export function gradeRoads(
     };
     fit();
     const { first, to } = graph;
-    for (let pass = 0; pass < SMOOTH_PASSES; pass++) {
-        const from = Float32Array.from(heights);
-        for (let i = 0; i < count; i++) {
-            if (!Number.isNaN(pins[i])) {
-                continue;
+    const smooth = (passes: number) => {
+        for (let pass = 0; pass < passes; pass++) {
+            const from = Float32Array.from(heights);
+            for (let i = 0; i < count; i++) {
+                if (!Number.isNaN(pins[i])) {
+                    continue;
+                }
+                let sum = from[i];
+                for (let at = first[i]; at < first[i + 1]; at++) {
+                    sum += from[to[at]];
+                }
+                heights[i] = sum / (first[i + 1] - first[i] + 1);
             }
-            let sum = from[i];
-            for (let at = first[i]; at < first[i + 1]; at++) {
-                sum += from[to[at]];
-            }
-            heights[i] = sum / (first[i + 1] - first[i] + 1);
         }
-    }
+    };
+    smooth(SMOOTH_PASSES);
     fit();
+    // Limiting leaves a crease at the top of each climb: this rounds them off
+    smooth(ROUND_PASSES);
 
     graded.forEach((line, l) => {
         line.heights = heights.slice(offsets[l], offsets[l + 1]);

@@ -114,7 +114,7 @@ const PASS_CLIFF_COST = 5;
 const MIN_PASS_PIECE = 300;
 // Tiles a pass runs on past the cliffs at each end
 const PASS_RUN_OUT = 7;
-const MAX_PASSES = 24;
+const PASSES_A_SQUARE = 4;
 // Points along a main road between places it's routed to, over rough ground, and how far
 // they can move to find ground to stand on
 const MAIN_ROAD_STEP = 24;
@@ -144,6 +144,11 @@ const DOOR_STEP_PIN = 0.005;
 // Tiles between a building and anything else, and between it and water
 const BUILDING_CLEAR = 3;
 const WATER_CLEAR = 6;
+// Spots tried for a town, and how it's judged: points round it, and how far they can be
+// off its height
+const TOWN_TRIES = 12;
+const TOWN_SAMPLES = 8;
+const TOWN_RISE = 24;
 // A fenced yard stands this far off a building's walls
 const YARD_GAP = 2;
 const FENCE = 980;
@@ -878,10 +883,16 @@ function pinSpawn(build: Build): void {
 }
 
 // Pieces of open ground, by tile: 0 for cliff and outside the arena
-function findGroundPieces(build: Build): { labels: Int32Array; sizes: number[] } {
+function findGroundPieces(build: Build): {
+    labels: Int32Array;
+    sizes: number[];
+    // A tile of each, and how far it is from the spawn
+    starts: number[];
+} {
     const { cliffs, arena, sizeX } = build;
     const labels = new Int32Array(cliffs.length);
     const sizes = [0];
+    const starts = [0];
     const stack: number[] = [];
     for (let y = arena.y0; y <= arena.y1; y++) {
         for (let x = arena.x0; x <= arena.x1; x++) {
@@ -915,9 +926,10 @@ function findGroundPieces(build: Build): { labels: Int32Array; sizes: number[] }
                 }
             }
             sizes.push(size);
+            starts.push(start);
         }
     }
-    return { labels, sizes };
+    return { labels, sizes, starts };
 }
 
 // What a step costs a road or pass, as a multiple: nothing extra up to its grade, and
@@ -940,7 +952,7 @@ function cutPasses(build: Build): RoadLine[] {
     }
     pinSpawn(build);
     settleTerrain(build);
-    const { labels, sizes } = findGroundPieces(build);
+    const { labels, sizes, starts } = findGroundPieces(build);
     const joined = new Uint8Array(sizes.length);
     joined[labels[spawn.x + spawn.y * sizeX]] = 1;
     const inset = 3;
@@ -958,15 +970,21 @@ function cutPasses(build: Build): RoadLine[] {
     refreshTileHeights(build);
     const passGrade = settings.walkSlope * PASS_GRADE;
     const climb = createClimb(build, passGrade, 2);
+    // Nearest first, so that each has something near to join
+    const toSpawn = (label: number) => {
+        const x = starts[label] % sizeX;
+        return Math.hypot(x - spawn.x, Math.floor(starts[label] / sizeX) - spawn.y);
+    };
     const order = sizes
         .map((size, label) => ({ size, label }))
         .filter(({ size, label }) => label > 0 && size >= MIN_PASS_PIECE)
-        .sort((a, b) => b.size - a.size);
+        .sort((a, b) => toSpawn(a.label) - toSpawn(b.label));
+    const maxPasses = settings.squaresX * settings.squaresY * PASSES_A_SQUARE;
     for (const { label } of order) {
-        if (joined[label] || passes.length >= MAX_PASSES) {
+        if (joined[label] || passes.length >= maxPasses) {
             continue;
         }
-        const start = labels.indexOf(label);
+        const start = starts[label];
         const path = finder.find(
             { x: start % sizeX, y: Math.floor(start / sizeX) },
             cost,
@@ -1281,12 +1299,13 @@ class RoadNetwork {
         );
     }
 
-    // Whether a road's on a building, or by a bridge's road where nothing's to go
-    private touchesBuilding(points: Point[], from: number): boolean {
+    // Whether a point of road is on a building, or by a bridge's road where nothing's to go.
+    // A road coming off a bridge starts out next to that, so it's let off (nearBridge).
+    private touchesBuilding(point: Point, nearBridge: boolean): boolean {
         const { ground } = this.build;
         let touches = false;
-        forTilesNear(this.build, points.slice(from), this.halfWidth + 0.5, (i) => {
-            touches ||= ground.footprint[i] !== 0 || this.bridgeZone[i] !== 0;
+        forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
+            touches ||= ground.footprint[i] !== 0 || (!nearBridge && this.bridgeZone[i] !== 0);
         });
         return touches;
     }
@@ -1316,19 +1335,19 @@ class RoadNetwork {
         this.samples.push(...points);
     }
 
-    // A road as smooth as it'll go without drifting onto a building
+    // A road as smooth as it'll go without drifting onto a building: each stretch that
+    // does gets less smoothing, down to none
     private smoothRoad(raw: Point[], pinned: number): Point[] {
         const reach = Math.round(lerp(9, 5, this.curves));
-        let points = smoothPath(raw, reach, 7, pinned);
-        for (const [tryReach, passes] of [
-            [4, 3],
-            [2, 1],
-        ]) {
-            if (this.touchesBuilding(points, pinned)) {
-                points = smoothPath(raw, tryReach, passes, pinned);
-            }
-        }
-        return this.touchesBuilding(points, pinned) ? raw : points;
+        const clean = (points: Point[], fallback: Point[]) =>
+            points.map((point, i) => {
+                const touches =
+                    i >= pinned && this.touchesBuilding(point, i < pinned + ROAD_TURN_RADIUS);
+                return touches ? fallback[i] : point;
+            });
+        const light = clean(smoothPath(raw, 2, 1, pinned), raw);
+        const medium = clean(smoothPath(raw, 4, 3, pinned), light);
+        return clean(smoothPath(raw, reach, 7, pinned), medium);
     }
 
     // The way from a road's start to the rest of the roads: its tiles, or nothing
@@ -1616,8 +1635,13 @@ function placeBridges(
             const cornersOfStamp = bridge.sizeX + 1;
             for (let cy = 0; cy <= bridge.sizeY; cy++) {
                 for (let cx = 0; cx <= bridge.sizeX; cx++) {
+                    // The deck's stored over the ground under it, so that has to stay. Past
+                    // it the bank's lumpy, and a road runs off it, so it's level.
+                    const out = (river.vertical ? stampX + cx : stampY + cy) - line;
                     const own = bridge.levels[0].heights[cx + cy * cornersOfStamp];
-                    terrain.pin(stampX + cx, stampY + cy, height + own - BRIDGE_BANK_HEIGHT);
+                    const onDeck = out >= deckNear && out <= deckFar;
+                    const rise = onDeck ? own - BRIDGE_BANK_HEIGHT : 0;
+                    terrain.pin(stampX + cx, stampY + cy, height + rise);
                 }
             }
             for (let y = stampY; y < stampY + bridge.sizeY; y++) {
@@ -1704,15 +1728,44 @@ function getBuildingNames(build: Build, x: number, y: number): string[] {
     return names.filter((name) => isBuildingKind(name, settings));
 }
 
+// Middles for towns: somewhere with ground to build on, if there's anywhere
 function getTownCentres(build: Build): Point[] {
-    const { settings, arena, rng } = build;
+    const { settings, arena, rng, cliffs, mainland, ground, terrain } = build;
     const centres: Point[] = [];
     const inset = Math.min(20, (arena.x1 - arena.x0) >> 2);
+    const score = (x: number, y: number) => {
+        // How much of a ring round it you could build on
+        let good = 0;
+        const reach = settings.townSize * 0.6;
+        const middle = terrain.getHeight(x, y);
+        for (let a = 0; a < TOWN_SAMPLES; a++) {
+            const angle = (a / TOWN_SAMPLES) * Math.PI * 2;
+            const sx = Math.floor(x + Math.cos(angle) * reach);
+            const sy = Math.floor(y + Math.sin(angle) * reach);
+            const i = ground.tile(sx, sy);
+            const level = Math.abs(terrain.getHeight(sx, sy) - middle) < TOWN_RISE;
+            good += ground.inside(sx, sy) && !cliffs[i] && mainland[i] && level ? 1 : 0;
+        }
+        return good;
+    };
     for (let i = 0; i < settings.towns; i++) {
-        centres.push({
-            x: lerp(arena.x0 + inset, arena.x1 - inset, rng()),
-            y: lerp(arena.y0 + inset, arena.y1 - inset, rng()),
-        });
+        let best: Point | undefined;
+        let bestScore = -1;
+        for (let attempt = 0; attempt < TOWN_TRIES; attempt++) {
+            const spot = {
+                x: lerp(arena.x0 + inset, arena.x1 - inset, rng()),
+                y: lerp(arena.y0 + inset, arena.y1 - inset, rng()),
+            };
+            const spotScore = score(spot.x, spot.y);
+            if (spotScore > bestScore) {
+                best = spot;
+                bestScore = spotScore;
+            }
+            if (!hasRelief(settings)) {
+                break;
+            }
+        }
+        centres.push(best!);
     }
     return centres;
 }
@@ -2174,19 +2227,24 @@ function scatter(build: Build, water: Uint8Array): void {
     }
 }
 
-// Pieces of a list of tiles, joined by touching sides
-function groupTiles(tiles: number[], sizeX: number): number[][] {
-    const left = new Set(tiles);
+// Pieces of a list of tiles, joined by touching sides, biggest first
+function groupTiles(tiles: number[], sizeX: number, count: number): number[][] {
+    const left = new Uint8Array(count);
+    for (const tile of tiles) {
+        left[tile] = 1;
+    }
     const pieces: number[][] = [];
     for (const start of tiles) {
-        if (!left.delete(start)) {
+        if (!left[start]) {
             continue;
         }
+        left[start] = 0;
         const piece = [start];
         for (let at = 0; at < piece.length; at++) {
             const i = piece[at];
             for (const j of [i - 1, i + 1, i - sizeX, i + sizeX]) {
-                if (left.delete(j)) {
+                if (left[j]) {
+                    left[j] = 0;
                     piece.push(j);
                 }
             }
@@ -2245,7 +2303,7 @@ function connectGround(build: Build, water: WaterPaint, offLimits: Uint8Array): 
         const stranded = findStranded(flags, sizeX, arena, reached);
         // The biggest piece a ford can get to: cliffs can be in the way
         let path: number[] = [];
-        for (const piece of groupTiles(stranded, sizeX)) {
+        for (const piece of groupTiles(stranded, sizeX, flags.length)) {
             if (piece.length < MIN_STRANDED_PIECE) {
                 break;
             }
