@@ -89,10 +89,12 @@ describe("pickGameFolder", () => {
 
 describe("zipEntryPath", () => {
     test("places ordinary entries inside the target", () => {
-        expect(zipEntryPath("/data/x", "index.html")).toBe("/data/x/index.html");
-        expect(zipEntryPath("/data/x", "assets/a-1.js")).toBe("/data/x/assets/a-1.js");
-        expect(zipEntryPath("/data/x", "assets/")).toBe("/data/x/assets");
-        expect(zipEntryPath("/data/x", "static/.htaccess")).toBe("/data/x/static/.htaccess");
+        expect(zipEntryPath("/data/x", "index.html", path.posix)).toBe("/data/x/index.html");
+        expect(zipEntryPath("/data/x", "assets/a-1.js", path.posix)).toBe("/data/x/assets/a-1.js");
+        expect(zipEntryPath("/data/x", "assets/", path.posix)).toBe("/data/x/assets");
+        expect(zipEntryPath("/data/x", "static/.htaccess", path.posix)).toBe(
+            "/data/x/static/.htaccess",
+        );
     });
 
     test.each([

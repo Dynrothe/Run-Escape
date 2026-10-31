@@ -60,8 +60,8 @@ describe("parseRange", () => {
 
 describe("resolveGamePath", () => {
     test("finds files inside the root", () => {
-        expect(resolveGamePath("/g", "/index.html")).toBe("/g/index.html");
-        expect(resolveGamePath("/g", "/a%20b.js")).toBe("/g/a b.js");
+        expect(resolveGamePath("/g", "/index.html", path.posix)).toBe("/g/index.html");
+        expect(resolveGamePath("/g", "/a%20b.js", path.posix)).toBe("/g/a b.js");
     });
 
     test.each([["/%2e%2e/x"], ["/..%2fx"], ["/a/..%2f..%2fx"], ["/%00"], ["/%zz"], ["/"]])(

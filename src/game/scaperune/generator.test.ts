@@ -330,9 +330,11 @@ describe("generateMap", () => {
 describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () => {
     // Not to block the test runner, which gives up on a worker that goes quiet for a minute
     const run = promisify(execFile);
+    // Node itself, as Windows has no plain `npx` to start
+    const tsx = (script: string) => ["--import", "tsx", script];
 
     it("reach everywhere with the game's own collision", async () => {
-        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-maps.ts"], {
+        const { stdout } = await run(process.execPath, tsx("scripts/scaperune/check-maps.ts"), {
             encoding: "utf8",
             timeout: 400000,
         });
@@ -340,7 +342,7 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () =
     }, 410000);
 
     it("have every prefab's floor, in every rotation", async () => {
-        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
+        const { stdout } = await run(process.execPath, tsx("scripts/scaperune/check-prefabs.ts"), {
             encoding: "utf8",
             timeout: 60000,
         });
