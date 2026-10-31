@@ -154,6 +154,7 @@ describe("generateMap", () => {
         riverWidth: [18, { rivers: 1 }],
         riverValley: [0, { rivers: 1, mountains: 0.6 }],
         waterfalls: [0, { rivers: 2, mountains: 1, peakHeight: 255, squaresX: 3, squaresY: 3 }],
+        cliffFalls: [1, { mountains: 0.8, squaresX: 3, squaresY: 3 }],
         lakes: [2],
         ponds: [6],
         trees: [1],

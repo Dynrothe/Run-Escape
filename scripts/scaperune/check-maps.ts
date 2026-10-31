@@ -141,6 +141,9 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     },
     { mountains: 0.6, landmarks: 1, props: 1, waymarkers: 1, roads: 1, buildings: 1, squaresX: 3 },
     { boundary: "fence", towns: 8, townSize: 10, townWalls: 1, buildings: 1, roads: 0 },
+    { biome: "astral", island: 0.3, shoreRoughness: 1, landmarks: 1, buildings: 1 },
+    { biome: "astral", island: 0.1, waterLevel: 0.5, squaresX: 3, squaresY: 3, rivers: 1 },
+    { biome: "autumn", secondBiome: "astral", biomeMix: 0.5, landmarks: 1, squaresX: 3 },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -435,6 +438,18 @@ function checkLandmarks(map: GeneratedMap): string[] {
     return problems;
 }
 
+// A cliff's waterfall comes down into its pool
+function checkFalls(map: GeneratedMap): string[] {
+    const { grid, falls } = map;
+    const { flags, overlays } = grid.levels[0];
+    return falls
+        .filter(({ x, y }) => {
+            const i = x + 1 + (y - 2) * grid.sizeX;
+            return !(flags[i] & TILE_BLOCKED) || overlays[i] === 0;
+        })
+        .map(({ x, y }) => `the waterfall at ${x},${y} has no pool`);
+}
+
 // Open tiles the play camera can't see, for the ground between
 function countHiddenTiles(
     grid: TileGrid,
@@ -515,6 +530,7 @@ function checkMap(
         ...roadHeights.problems,
         ...checkBuildingGround(map),
         ...checkLandmarks(map),
+        ...checkFalls(map),
     ];
     if (hidden > 0) {
         problems.push(`${hidden} open tiles are hidden from the camera`);
@@ -524,7 +540,7 @@ function checkMap(
     console.log(
         `${id}: ${open} open, ${stranded} stranded, bridges ${eastWest}+${northSouth}, ` +
             `${map.buildings.length} buildings (${roadless} without a road), ` +
-            `${map.landmarks.length} landmarks, ` +
+            `${map.landmarks.length} landmarks, ${map.falls.length} falls, ` +
             `passes ${map.passes.length}, steepest road ${roadHeights.steepest.toFixed(1)}`,
     );
     for (const problem of problems.slice(0, 6)) {

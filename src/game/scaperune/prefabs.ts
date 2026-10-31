@@ -43,10 +43,9 @@ export const PREFABS: Record<string, PrefabDef> = {
     hosidius_barn: { worldX: 1783, worldY: 3519, sizeX: 9, sizeY: 12 },
     shayzien_house: { worldX: 1537, worldY: 3540, sizeX: 8, sizeY: 11 },
     shayzien_shop: { worldX: 1537, worldY: 3553, sizeX: 8, sizeY: 7 },
-    // The north: Lovakengj's iron and the Wilderness
+    // Lovakengj's iron
     lovakengj_house: { worldX: 1538, worldY: 3778, sizeX: 12, sizeY: 7 },
     lovakengj_hall: { worldX: 1551, worldY: 3778, sizeX: 11, sizeY: 12 },
-    wilderness_keep: { worldX: 3178, worldY: 3721, sizeX: 10, sizeY: 10 },
 };
 
 // The bridge over the River Lum, 18 tiles east to west with its deck on level 1
@@ -106,7 +105,6 @@ const BUILDING_KINDS: Record<string, "house" | "shop" | "church"> = {
     shayzien_shop: "shop",
     lovakengj_house: "house",
     lovakengj_hall: "church",
-    wilderness_keep: "church",
 };
 
 export function isBuildingKind(

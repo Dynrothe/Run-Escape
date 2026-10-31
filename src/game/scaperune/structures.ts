@@ -34,7 +34,11 @@ export type SetPiece =
     // In the water, close in to the shore
     | { kind: "wreck"; locs: PieceLoc[] }
     // Out in the water: the top of something tall, and what's left of a town round it
-    | { kind: "sunken"; middle: PieceLoc[]; stones: PieceLoc[]; count: number; radius: number };
+    | { kind: "sunken"; middle: PieceLoc[]; stones: PieceLoc[]; count: number; radius: number }
+    // A hedge maze, cells a side, with something to find in the middle
+    | { kind: "maze"; hedges: number[]; cells: number; middle: PieceLoc }
+    // The biome's wall round a yard, tiles a side, with a gate each way and things inside
+    | { kind: "fort"; size: number; inside: PieceLoc[]; count: number };
 
 function single(...locs: PieceLoc[]): SetPiece {
     return { kind: "single", locs };
@@ -66,6 +70,18 @@ const RUINED_PILLARS: PieceLoc[] = [
 ];
 
 export const SET_PIECES: Record<string, SetPiece> = {
+    hedge_maze: { kind: "maze", hedges: [1116, 1117], cells: 5, middle: [879, 2, 2] },
+    fort: {
+        kind: "fort",
+        size: 17,
+        inside: [
+            [724, 1, 1],
+            [60438, 1, 1],
+            [13435, 1, 1],
+            [404, 1, 1],
+        ],
+        count: 7,
+    },
     stone_circle: { kind: "ring", stones: STANDING_STONES, count: 9, radius: 6 },
     desert_circle: {
         kind: "ring",
@@ -195,13 +211,54 @@ const WRECK_REACH = 4;
 // Of a town's walls, tiles either side of a gate where there's no road through
 const GATE_HALF = 2;
 
+// The same for a fort's
+const FORT_GATE = 2;
+
 // Tiles from a town's outermost building to its wall
 const TOWN_WALL_GAP = 4;
+
+// A town needs this many buildings to have a wall
+const MIN_WALLED_BUILDINGS = 2;
+
+// Half the width of a town's square, how far off its middle to look for one, in steps of 2 tiles,
+// and how much the ground can rise over it
+const TOWN_SQUARE = 4;
+
+const TOWN_SQUARE_SEARCH = 6;
+
+const TOWN_SQUARE_RISE = 14;
+
+// In a town's square, and the cobbles on its streets
+export const FOUNTAIN = 879;
+
+export const PAVING = 12;
 
 // Tiles along a road between stones, and off its edge
 const MARKER_SPACING = 16;
 
 const MARKER_OFFSET = 2;
+
+// Tiles across a maze's corridors, with a tile of hedge between them. Crowds have to fit.
+const MAZE_CELL = 3;
+
+// Of a maze's hedges between cells, the share knocked through, so that it isn't a trap
+const MAZE_LOOPS = 0.2;
+
+// All the locs a piece can use, for the palette
+export function getPieceLocs(piece: SetPiece): PieceLoc[] {
+    switch (piece.kind) {
+        case "ring":
+            return [...piece.stones, ...(piece.middle ? [piece.middle] : [])];
+        case "sunken":
+            return [...piece.middle, ...piece.stones];
+        case "maze":
+            return [piece.middle, ...piece.hedges.map((id): PieceLoc => [id, 1, 1])];
+        case "fort":
+            return piece.inside;
+        default:
+            return piece.locs;
+    }
+}
 
 // The rectangle a piece needs
 function getPieceSize(piece: SetPiece): { sizeX: number; sizeY: number } {
@@ -213,6 +270,13 @@ function getPieceSize(piece: SetPiece): { sizeX: number; sizeY: number } {
     }
     if (piece.kind === "rows") {
         return { sizeX: piece.across * piece.gap, sizeY: piece.deep * piece.gap };
+    }
+    if (piece.kind === "maze") {
+        const size = piece.cells * (MAZE_CELL + 1) + 1;
+        return { sizeX: size, sizeY: size };
+    }
+    if (piece.kind === "fort") {
+        return { sizeX: piece.size, sizeY: piece.size };
     }
     const size = piece.radius * 2 + 3;
     return { sizeX: size, sizeY: size };
@@ -245,6 +309,123 @@ function putRing(
         const stoneX = Math.round(x + Math.cos(angle) * radius);
         const stoneY = Math.round(y + Math.sin(angle) * radius);
         putLoc(build, pick(rng, stones), stoneX, stoneY, Math.floor(rng() * 4));
+    }
+}
+
+// A maze's hedges, a tile to a tile: every cell can be got to, by a tree of corridors with a
+// few of its walls knocked through, and there's a way in on each side
+function placeMaze(
+    build: Build,
+    piece: Extract<SetPiece, { kind: "maze" }>,
+    x: number,
+    y: number,
+): void {
+    const { ground, rng } = build;
+    const { cells } = piece;
+    const step = MAZE_CELL + 1;
+    const size = cells * step + 1;
+    const hedge = new Uint8Array(size * size);
+    for (let ty = 0; ty < size; ty++) {
+        for (let tx = 0; tx < size; tx++) {
+            hedge[tx + ty * size] = tx % step === 0 || ty % step === 0 ? 1 : 0;
+        }
+    }
+    const open = (cellX: number, cellY: number, wayX: number, wayY: number) => {
+        // The hedge between a cell and the next, all but its posts
+        for (let at = 1; at <= MAZE_CELL; at++) {
+            const tx = wayX !== 0 ? cellX * step + (wayX > 0 ? step : 0) : cellX * step + at;
+            const ty = wayY !== 0 ? cellY * step + (wayY > 0 ? step : 0) : cellY * step + at;
+            hedge[tx + ty * size] = 0;
+        }
+    };
+    const WAYS = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+    ];
+    const seen = new Uint8Array(cells * cells);
+    const trail = [[rng() * cells, rng() * cells].map(Math.floor)];
+    seen[trail[0][0] + trail[0][1] * cells] = 1;
+    while (trail.length > 0) {
+        const [cellX, cellY] = trail[trail.length - 1];
+        const ways = WAYS.filter(([wayX, wayY]) => {
+            const nextX = cellX + wayX;
+            const nextY = cellY + wayY;
+            const inside = nextX >= 0 && nextY >= 0 && nextX < cells && nextY < cells;
+            return inside && !seen[nextX + nextY * cells];
+        });
+        if (ways.length === 0) {
+            trail.pop();
+            continue;
+        }
+        const [wayX, wayY] = pick(rng, ways);
+        open(cellX, cellY, wayX, wayY);
+        seen[cellX + wayX + (cellY + wayY) * cells] = 1;
+        trail.push([cellX + wayX, cellY + wayY]);
+    }
+    for (let cellY = 0; cellY < cells; cellY++) {
+        for (let cellX = 0; cellX + 1 < cells; cellX++) {
+            if (rng() < MAZE_LOOPS) {
+                open(cellX, cellY, 1, 0);
+            }
+            if (rng() < MAZE_LOOPS) {
+                open(cellY, cellX, 0, 1);
+            }
+        }
+    }
+    const door = () => Math.floor(rng() * cells);
+    open(door(), 0, 0, -1);
+    open(door(), cells - 1, 0, 1);
+    open(0, door(), -1, 0);
+    open(cells - 1, door(), 1, 0);
+    for (let ty = 0; ty < size; ty++) {
+        for (let tx = 0; tx < size; tx++) {
+            if (hedge[tx + ty * size]) {
+                const id = pick(rng, piece.hedges);
+                ground.place(
+                    { id, type: LOC_NORMAL, rotation: 0, level: 0, x: x + tx, y: y + ty },
+                    1,
+                    1,
+                );
+            }
+        }
+    }
+    const middle = (cells >> 1) * step + 1;
+    putLoc(build, piece.middle, x + middle, y + middle, 0);
+}
+
+// A walled yard, the biome's wall all round it with a gate in the middle of each side
+function placeFort(
+    build: Build,
+    piece: Extract<SetPiece, { kind: "fort" }>,
+    x: number,
+    y: number,
+): void {
+    const { ground, rng, biomeAt } = build;
+    const last = piece.size - 1;
+    const id = biomeAt(x, y).wall;
+    const gate = (at: number) => Math.abs(at - (last >> 1)) <= FORT_GATE;
+    const wall = (tx: number, ty: number, rotation: number) => {
+        ground.grid.locs.push({ id, type: LOC_WALL, rotation, level: 0, x: tx, y: ty });
+        ground.reserved[ground.tile(tx, ty)] = 1;
+    };
+    for (let at = 0; at <= last; at++) {
+        if (!gate(at)) {
+            wall(x + at, y, WALL_SOUTH);
+            wall(x + at, y + last, WALL_NORTH);
+            wall(x, y + at, WALL_WEST);
+            wall(x + last, y + at, WALL_EAST);
+        }
+    }
+    const room = piece.size - 6;
+    for (let i = 0; i < piece.count; i++) {
+        const loc = pick(rng, piece.inside);
+        const tx = x + 3 + Math.floor(rng() * room);
+        const ty = y + 3 + Math.floor(rng() * room);
+        if (ground.isClear(tx - 1, ty - 1, loc[1] + 2, loc[2] + 2)) {
+            putLoc(build, loc, tx, ty, 0);
+        }
     }
 }
 
@@ -290,6 +471,10 @@ function placeOnPlot(build: Build, piece: SetPiece, x: number, y: number): void 
                 }
             }
         }
+    } else if (piece.kind === "maze") {
+        placeMaze(build, piece, x, y);
+    } else if (piece.kind === "fort") {
+        placeFort(build, piece, x, y);
     }
 }
 
@@ -410,16 +595,20 @@ export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[]
     return placed;
 }
 
-// A wall all round each of the towns that gets one, a little way out from its buildings,
-// open where roads go through it and with a gate on the side towards the spawn
-export function placeTownWalls(
+// A town with a wall round it, by the rectangle the wall stands on
+export type WalledTown = { x0: number; y0: number; x1: number; y1: number };
+
+// Which towns have walls, a little way out from their buildings, each with a square and a
+// fountain at its middle if there's room
+export function chooseWalledTowns(
     build: Build,
     buildings: PlacedBuilding[],
-    roadTiles: Uint8Array,
-): void {
-    const { settings, ground, biomeAt, arena, rng, spawn } = build;
+    roads: RoadNetwork,
+): WalledTown[] {
+    const { settings, ground, arena, rng, terrain, spawn } = build;
+    const walled: WalledTown[] = [];
     if (settings.townWalls <= 0) {
-        return;
+        return walled;
     }
     const towns = new Map<number, PlacedBuilding[]>();
     for (const building of buildings) {
@@ -428,7 +617,7 @@ export function placeTownWalls(
         }
     }
     for (const members of towns.values()) {
-        if (rng() >= settings.townWalls || members.length < 2) {
+        if (rng() >= settings.townWalls || members.length < MIN_WALLED_BUILDINGS) {
             continue;
         }
         const x0 = Math.max(Math.min(...members.map((b) => b.x)) - TOWN_WALL_GAP, arena.x0 + 2);
@@ -441,6 +630,57 @@ export function placeTownWalls(
             Math.max(...members.map((b) => b.y + b.sizeY)) + TOWN_WALL_GAP,
             arena.y1 - 2,
         );
+        walled.push({ x0, y0, x1, y1 });
+        // Round the middle till there's a spot for the square
+        const middleX = (x0 + x1) >> 1;
+        const middleY = (y0 + y1) >> 1;
+        let done = false;
+        for (let reach = 0; reach < TOWN_SQUARE_SEARCH && !done; reach++) {
+            for (let tries = 0; tries < 8 && !done; tries++) {
+                const angle = (tries / 8) * Math.PI * 2;
+                const x = Math.round(middleX + Math.cos(angle) * reach * 2) - TOWN_SQUARE;
+                const y = Math.round(middleY + Math.sin(angle) * reach * 2) - TOWN_SQUARE;
+                const size = TOWN_SQUARE * 2;
+                const clearOfSpawn = Math.hypot(x - spawn.x, y - spawn.y) > TOWN_SQUARE * 3;
+                const { min, max } = terrain.getRange(x, y, size, size);
+                if (
+                    clearOfSpawn &&
+                    max - min < TOWN_SQUARE_RISE &&
+                    ground.isClear(x, y, size, size)
+                ) {
+                    pinPlot(build, x, y, size, size, Math.round((min + max) / 2));
+                    roads.addSquare(x + TOWN_SQUARE, y + TOWN_SQUARE, TOWN_SQUARE);
+                    ground.place(
+                        {
+                            id: FOUNTAIN,
+                            type: LOC_NORMAL,
+                            rotation: 0,
+                            level: 0,
+                            x: x + TOWN_SQUARE - 1,
+                            y: y + TOWN_SQUARE - 1,
+                        },
+                        2,
+                        2,
+                    );
+                    done = true;
+                }
+            }
+        }
+    }
+    return walled;
+}
+
+// Inside a wall a road's paved
+export function getPaving(walled: WalledTown[], x: number, y: number): number | undefined {
+    return walled.some((town) => x > town.x0 && x < town.x1 && y > town.y0 && y < town.y1)
+        ? PAVING
+        : undefined;
+}
+
+// The walls round towns, open where roads go through them, and with a gate each way
+export function placeTownWalls(build: Build, walled: WalledTown[], roadTiles: Uint8Array): void {
+    const { ground, biomeAt, spawn } = build;
+    for (const { x0, y0, x1, y1 } of walled) {
         const id = biomeAt((x0 + x1) >> 1, (y0 + y1) >> 1).wall;
         // A gate on each side, on the line to the spawn if it's that side
         const gateX = Math.min(Math.max(spawn.x, x0 + GATE_HALF + 1), x1 - GATE_HALF - 1);

@@ -44,6 +44,9 @@ const SNOW_LINE_LOW = 110;
 // How much steeper than walkable a tile is before it gets a rock face
 const FACE_SLOPE = 2;
 
+// Of the tiles at a cliff's edge, the share that get a boulder: they're wider than a tile
+const BOULDER_SHARE = 0.34;
+
 const CAVES_A_SQUARE = 1.5;
 
 const CAVE_WIDTH = 3;
@@ -266,10 +269,12 @@ export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
                 continue;
             }
             const inner = faced[i - 1] && faced[i + 1] && faced[i - sizeX] && faced[i + sizeX];
-            const { faces, edgeFaces } = biomeAt(x, y).rock;
-            const list = inner ? faces : edgeFaces;
+            if (inner || roll() >= BOULDER_SHARE) {
+                continue;
+            }
+            const { boulders } = biomeAt(x, y).rock;
             ground.grid.locs.push({
-                id: list[Math.floor(roll() * list.length)],
+                id: boulders[Math.floor(roll() * boulders.length)],
                 type: LOC_NORMAL,
                 rotation: Math.floor(roll() * 4),
                 level: 0,
@@ -325,6 +330,9 @@ export function placeCaves(build: Build, rock: Uint8Array): Point[] {
 export function finishHeights(build: Build): void {
     const { terrain, ground, corners, heldCorners } = build;
     settleTerrain(build);
+    for (const at of build.heldForNow) {
+        heldCorners[at] = 0;
+    }
     const fixed = Uint8Array.from(heldCorners);
     terrain.markPinned(fixed);
     limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);

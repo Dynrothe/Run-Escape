@@ -7,7 +7,7 @@ import { BuildContext, MapRecipe } from "../recipe";
 const CELL_X = 10;
 const CELL_Y = 11;
 const COLS = 6;
-const ROWS = 6;
+const ROWS = 7;
 const MARGIN = 64;
 const SIZE = 4 * 64;
 const LOW = 30;
@@ -41,6 +41,8 @@ const KINDS: [number, number, number, number?][] = [
     [19039, 10, 3, 0],
     [30177, 10, 3, 0],
     [26499, 10, 3, 0],
+    [51484, 10, 3, 0],
+    [60437, 10, 1],
     [83, -1, 1],
     [26, -1, 1],
     [222, -1, 1],

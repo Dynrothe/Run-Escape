@@ -95,6 +95,7 @@ const GENERATED: GeneratedLine[] = [
             ["elven", "Elven", 75, 128],
             ["fairy", "Fairy", 79, 128],
             ["darkwood", "Darkwood", 83, 128],
+            ["astral", "Sky islands", 87, 124],
         ] as const
     ).map(
         ([id, preset, mapX, mapY], i): GeneratedLine => [

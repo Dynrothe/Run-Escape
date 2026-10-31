@@ -1,5 +1,5 @@
 import { Ground } from "./Ground";
-import { BiomeDef } from "./biomes";
+import { BIOMES, BiomeDef } from "./biomes";
 import { TileRect } from "./collision";
 import { Relief } from "./landforms";
 import { Rng } from "./noise";
@@ -61,6 +61,8 @@ export type Build = {
     // Tiles of cliff, and of water, whose corners stay where they are
     cliffs: Uint8Array;
     heldCorners: Uint8Array;
+    // Those held only until the ground's settled, not against the limit on north faces
+    heldForNow: number[];
     // Ground you can get to from the spawn, as far as cliffs go: anything else stays empty
     mainland: Uint8Array;
     // Tiles' heights, for how steep a step is
@@ -103,7 +105,9 @@ export function hasRelief(settings: GeneratorSettings): boolean {
         settings.plateaus > 0 ||
         settings.mesas > 0 ||
         settings.canyons > 0 ||
-        settings.volcanoes > 0
+        settings.volcanoes > 0 ||
+        BIOMES[settings.biome].chasm === true ||
+        (settings.secondBiome !== "none" && BIOMES[settings.secondBiome].chasm === true)
     );
 }
 

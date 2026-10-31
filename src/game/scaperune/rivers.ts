@@ -14,6 +14,10 @@ const BRIDGE_RIVER_HALF_WIDTH = 4.5;
 const CROSSING_SPACING = 60;
 
 export const SEA_BED = 6;
+// Tiles the ground takes to come down to the sea, or down into a chasm
+const SHORE_REACH = 8;
+
+const CHASM_EDGE = 2;
 
 // The lowest fresh water can be
 export const RIVER_BED = 8;
@@ -346,12 +350,14 @@ export function createWaterFields(build: Build, rivers: River[], hills: Noise) {
 
 // Takes the land down to the sea, over a few tiles
 export function sinkSea(build: Build, toSea: Float32Array): void {
-    const { terrain, corners } = build;
+    const { terrain, corners, biomeAt, sizeX, sizeY } = build;
     const { height } = terrain;
     for (let y = 0; y < corners.y; y++) {
         for (let x = 0; x < corners.x; x++) {
             const at = terrain.corner(x, y);
-            const share = Math.min(getCornerDistance(build, toSea, x, y) / 8, 1);
+            const biome = biomeAt(Math.min(x, sizeX - 1), Math.min(y, sizeY - 1));
+            const reach = biome.chasm ? CHASM_EDGE : SHORE_REACH;
+            const share = Math.min(getCornerDistance(build, toSea, x, y) / reach, 1);
             height[at] = SEA_BED + (height[at] - SEA_BED) * share;
         }
     }

@@ -1,10 +1,10 @@
 import { Ground } from "./Ground";
-import { BIOMES, WATERFALL } from "./biomes";
+import { BIOMES, CLIFF_FALL, WATERFALL } from "./biomes";
 import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGE, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
-import { SET_PIECES } from "./structures";
+import { FOUNTAIN, PAVING, SET_PIECES, getPieceLocs } from "./structures";
 
 // Everything the generator can ask the cache for, on one map: each biome's
 // floors and locs, and every prefab. The slim cache only keeps what a map reads,
@@ -36,7 +36,8 @@ function build(context: BuildContext): TileGrid {
 
     const rows = Math.ceil(defs.length / 8);
     ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * rows }, 3, 2);
-    let y = PLOT * rows + 3;
+    ground.place({ id: CLIFF_FALL, type: 10, rotation: 0, level: 0, x: 8, y: PLOT * rows }, 3, 3);
+    let y = PLOT * rows + 4;
     for (const biome of Object.values(BIOMES)) {
         let x = 2;
         const put = (id: number, size: number, type: number) => {
@@ -52,7 +53,7 @@ function build(context: BuildContext): TileGrid {
         ]) {
             put(id, size, 10);
         }
-        for (const id of [...biome.rock.faces, ...biome.rock.edgeFaces, biome.marker]) {
+        for (const id of [...biome.rock.boulders, biome.marker]) {
             put(id, 1, 10);
         }
         for (const id of [biome.fence, biome.wall]) {
@@ -94,16 +95,18 @@ function build(context: BuildContext): TileGrid {
         }
         y += 6;
     }
+    const paved = new Uint8Array(SIZE * SIZE);
+    for (let dy = 0; dy < 4; dy++) {
+        for (let dx = 0; dx < 4; dx++) {
+            paved[ground.tile(14 + dx, PLOT * rows + dy)] = 1;
+        }
+    }
+    ground.paintOverlay(paved, PAVING, false);
+    ground.place({ id: FOUNTAIN, type: 10, rotation: 0, level: 0, x: 20, y: PLOT * rows }, 2, 2);
     // Set pieces, each on a row of its own: they're big
     let x = 2;
     for (const piece of Object.values(SET_PIECES)) {
-        const locs =
-            piece.kind === "sunken"
-                ? [...piece.middle, ...piece.stones]
-                : piece.kind === "ring"
-                  ? [...piece.stones, ...(piece.middle ? [piece.middle] : [])]
-                  : piece.locs;
-        for (const [id, sizeX, sizeY] of locs) {
+        for (const [id, sizeX, sizeY] of getPieceLocs(piece)) {
             if (x + sizeX + 1 >= SIZE) {
                 x = 2;
                 y += PIECE_ROW;

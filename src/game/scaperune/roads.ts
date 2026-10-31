@@ -364,7 +364,19 @@ export class RoadNetwork {
         }
     }
 
-    paint(): Uint8Array {
+    // A round of road, for a town's square
+    addSquare(x: number, y: number, radius: number): void {
+        const { corners } = this.build;
+        const middle = [
+            { x, y },
+            { x: x + 0.01, y },
+        ];
+        addPathToField(this.road, corners.x, corners.y, middle, radius);
+        addPathToField(this.trail, corners.x, corners.y, middle, radius + TRAIL_MARGIN);
+    }
+
+    // paving says which overlay a tile gets, if it isn't the biome's own road
+    paint(paving?: (x: number, y: number) => number | undefined): Uint8Array {
         const { ground, sizeX, sizeY, corners, biomeAt } = this.build;
         const skip = new Uint8Array(this.water.length);
         for (let i = 0; i < skip.length; i++) {
@@ -378,9 +390,7 @@ export class RoadNetwork {
             room &&= this.bridgeZone[i] === 0;
         });
         if (this.lines.length > 0 && room) {
-            const middle = [spawn, { x: spawn.x + 0.01, y: spawn.y }];
-            addPathToField(this.road, corners.x, corners.y, middle, reach);
-            addPathToField(this.trail, corners.x, corners.y, middle, reach + TRAIL_MARGIN);
+            this.addSquare(spawn.x, spawn.y, reach);
         }
         const band = getTouchedTiles(this.trail, sizeX, sizeY);
         for (let y = 0; y < sizeY; y++) {
@@ -392,7 +402,8 @@ export class RoadNetwork {
             }
         }
         const field = smoothField(this.road, corners.x, corners.y, 1);
-        return ground.paintField(field, (x, y) => biomeAt(x, y).road, false, skip);
+        const overlay = (x: number, y: number) => paving?.(x, y) ?? biomeAt(x, y).road;
+        return ground.paintField(field, overlay, false, skip);
     }
 }
 

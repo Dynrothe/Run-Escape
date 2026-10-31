@@ -14,17 +14,17 @@ export type BiomeId =
     | "deadlands"
     | "elven"
     | "fairy"
-    | "darkwood";
+    | "darkwood"
+    | "astral";
 
 // What mountains are made of. See CLAUDE.md for how these were picked.
 export type RockDef = {
     // Underlay on the mountains, and overlay on what's too steep to walk
     ground: number;
     overlay: number;
-    // Locs with a model that fills their tile and follows the ground (contour)
-    faces: number[];
-    // The same with broken edges, for the outside of a cliff: whole tiles make stairs
-    edgeFaces: number[];
+    // Big round boulders along the edge of a cliff: one tile each, but they stand over two
+    // or three, so that a line of them's a rock wall
+    boulders: number[];
     // Heaps of rock, [loc id, tiles a side], that block
     rubble: [number, number][];
     // Stones on the ground (loc type 22)
@@ -72,14 +72,20 @@ export type BiomeDef = {
     rock: RockDef;
     // Its water's lava, or anything else that doesn't fall in foam
     molten?: boolean;
+    // Its sea's a drop: the land stops at a cliff rather than a beach
+    chasm?: boolean;
 };
 
 // Foam at the foot of a waterfall, 3 tiles wide with rotation 0 running east to west
 export const WATERFALL = 26499;
+// A waterfall 3 tiles wide that follows the ground, so it climbs any cliff, foam and all
+export const CLIFF_FALL = 51484;
 // Lava, as in Karamja's volcano
 const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
 const SNOW = 58;
+
+const BOULDERS = [60436, 60437, 60438, 60439];
 
 function rock(def: Omit<RockDef, "snowGround" | "lava">): RockDef {
     return { ...def, snowGround: SNOW, lava: LAVA };
@@ -112,16 +118,23 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [60440, 2],
         ],
         buildings: ["lumbridge_house", "lumbridge_church", "varrock_shop"],
-        // Trollheim's rock, Karuulm's faces
-        landmarks: ["stone_circle", "great_boulder", "redwoods", "shipwreck", "drowned_town"],
+        // Trollheim's ground, with stone that takes the light
+        landmarks: [
+            "stone_circle",
+            "great_boulder",
+            "redwoods",
+            "hedge_maze",
+            "fort",
+            "shipwreck",
+            "drowned_town",
+        ],
         fence: 980,
         wall: 1902,
         marker: 34781,
         rock: rock({
             ground: 92,
-            overlay: 83,
-            faces: [34384, 34372],
-            edgeFaces: [34388, 34391, 34392],
+            overlay: 20,
+            boulders: BOULDERS,
             rubble: [
                 [11434, 2],
                 [3718, 2],
@@ -165,15 +178,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             "sophanem_fort",
         ],
         // The cliffs round the Bandit Camp
-        landmarks: ["desert_circle", "great_skeleton", "shipwreck"],
+        landmarks: ["desert_circle", "great_skeleton", "fort", "shipwreck"],
         fence: 1415,
         wall: 1415,
         marker: 10019,
         rock: rock({
             ground: 68,
             overlay: 26,
-            faces: [34372],
-            edgeFaces: [34373],
+            boulders: [11386, 11387, 11105, 11106],
             rubble: [
                 [18894, 2],
                 [18893, 2],
@@ -215,9 +227,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34796,
         rock: rock({
             ground: 94,
-            overlay: 222,
-            faces: [42352, 34384],
-            edgeFaces: [42353, 34388],
+            overlay: 32,
+            boulders: BOULDERS,
             rubble: [
                 [11933, 2],
                 [4605, 2],
@@ -228,13 +239,13 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     },
     // Trollweiss
     snow: {
-        ground: [58],
+        ground: [58, 218, 59],
         shore: 59,
         hillGround: 55,
         // The snow itself: any tint in it shows as a coloured halo round the road
         trail: 58,
         road: 82,
-        water: 6,
+        water: 547,
         trees: [
             [1330, 3],
             [1331, 3],
@@ -245,21 +256,27 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [19686, 2],
         ],
         decor: [561, 560, 559],
-        flowers: [6476, 6477],
+        // Blue ice showing through, in patches
+        flowers: [60397, 60399, 60398, 60400, 60394, 60395, 60396, 60393, 60391, 60408],
         props: [
+            [60404, 2],
+            [60405, 2],
+            [33178, 2],
+            [33220, 2],
+            [33215, 2],
             [19686, 2],
-            [11922, 2],
+            [60406, 1],
         ],
         buildings: ["rellekka_hut", "rellekka_house"],
-        landmarks: ["longship", "great_boulder", "stone_circle"],
+        landmarks: ["longship", "great_boulder", "stone_circle", "fort"],
         fence: 4246,
         wall: 4246,
         marker: 34780,
         rock: rock({
-            ground: 92,
-            overlay: 3,
-            faces: [34384],
-            edgeFaces: [34388, 34391, 34392],
+            // Near the snow's own, as a dark rock bleeds a long way into white
+            ground: 16,
+            overlay: 20,
+            boulders: [33220, 60404, 60405, 33215, 33216],
             rubble: [
                 [11922, 2],
                 [11434, 2],
@@ -305,9 +322,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 2975,
         rock: rock({
             ground: 97,
-            overlay: 83,
-            faces: [34372],
-            edgeFaces: [34373],
+            overlay: 20,
+            boulders: BOULDERS,
             rubble: [
                 [60440, 2],
                 [3718, 2],
@@ -352,8 +368,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 223,
             overlay: 26,
-            faces: [34372],
-            edgeFaces: [34373],
+            boulders: [11386, 11387, 60438],
             rubble: [
                 [51790, 2],
                 [60440, 2],
@@ -364,8 +379,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     },
     // Fossil Island's ash and the Wilderness's ground, running with lava
     ash: {
-        ground: [56, 147, 145],
-        shore: 148,
+        ground: [56, 145, 146],
+        shore: 147,
         hillGround: 146,
         trail: 148,
         road: 99,
@@ -390,16 +405,15 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [60440, 2],
             [5952, 2],
         ],
-        buildings: ["lovakengj_house", "lovakengj_hall", "wilderness_keep"],
+        buildings: ["lovakengj_house", "lovakengj_hall", "shayzien_house"],
         landmarks: ["crater", "crater_field", "black_crystal", "great_boulder"],
         fence: 39202,
         wall: 39400,
         marker: 34797,
         rock: rock({
             ground: 148,
-            overlay: 99,
-            faces: [42352],
-            edgeFaces: [42353],
+            overlay: 32,
+            boulders: BOULDERS,
             rubble: [
                 [14461, 2],
                 [11933, 2],
@@ -434,15 +448,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [60438, 1],
         ],
         buildings: ["hosidius_barn", "shayzien_house", "shayzien_shop"],
-        landmarks: ["redwoods", "stone_circle", "great_boulder"],
+        landmarks: ["redwoods", "stone_circle", "great_boulder", "hedge_maze", "fort"],
         fence: 980,
         wall: 17088,
         marker: 34781,
         rock: rock({
             ground: 92,
-            overlay: 83,
-            faces: [34372],
-            edgeFaces: [34373],
+            overlay: 20,
+            boulders: BOULDERS,
             rubble: [
                 [18894, 2],
                 [51792, 2],
@@ -480,15 +493,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         ],
         buildings: ["darkmeyer_house", "darkmeyer_hall", "darkmeyer_shop", "burgh_house"],
         ruins: ["burgh_house", "burgh_inn", "darkmeyer_house"],
-        landmarks: ["graveyard", "blisterwood", "dark_crystal", "drowned_town"],
+        landmarks: ["graveyard", "blisterwood", "dark_crystal", "fort", "drowned_town"],
         fence: 39202,
         wall: 39400,
         marker: 404,
         rock: rock({
             ground: 94,
-            overlay: 94,
-            faces: [42352, 34384],
-            edgeFaces: [42353, 34388],
+            overlay: 32,
+            boulders: BOULDERS,
             rubble: [
                 [11933, 2],
                 [4605, 2],
@@ -531,9 +543,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 36492,
         rock: rock({
             ground: 92,
-            overlay: 83,
-            faces: [34372],
-            edgeFaces: [34373],
+            overlay: 20,
+            boulders: BOULDERS,
             rubble: [
                 [3894, 2],
                 [3895, 2],
@@ -575,9 +586,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 12006,
         rock: rock({
             ground: 144,
-            overlay: 83,
-            faces: [34372],
-            edgeFaces: [34373],
+            overlay: 20,
+            boulders: BOULDERS,
             rubble: [
                 [3894, 2],
                 [3895, 2],
@@ -622,15 +632,58 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34796,
         rock: rock({
             ground: 241,
-            overlay: 94,
-            faces: [42352],
-            edgeFaces: [42353],
+            overlay: 32,
+            boulders: BOULDERS,
             rubble: [
                 [60918, 2],
                 [60927, 2],
             ],
             stones: [61098, 61100],
             cave: 17209,
+        }),
+    },
+    // Nothing like it in the game: bright land broken off in pieces over the stars, the sky a
+    // floor from the Cosmic Plane
+    astral: {
+        ground: [99, 51, 48],
+        shore: 55,
+        hillGround: 93,
+        trail: 67,
+        road: 12,
+        water: 39,
+        molten: true,
+        chasm: true,
+        trees: [
+            [10834, 2],
+            [36672, 2],
+            [36674, 3],
+        ],
+        rocks: [
+            [60438, 1],
+            [3894, 2],
+        ],
+        decor: [3549, 3548, 3547, 60420, 60419, 60418],
+        flowers: [36549, 36550, 36551, 36492, 3904],
+        props: [
+            [27886, 2],
+            [27882, 3],
+            [60440, 2],
+        ],
+        buildings: ["prif_house", "prif_hut", "prif_shop"],
+        landmarks: ["crystal", "crystal_field", "stone_circle", "hedge_maze"],
+        fence: 36255,
+        wall: 36247,
+        marker: 36492,
+        rock: rock({
+            ground: 55,
+            overlay: 20,
+            boulders: BOULDERS,
+            rubble: [
+                [3894, 2],
+                [3895, 2],
+            ],
+            stones: [3614, 11439],
+            cave: 2123,
         }),
     },
 };

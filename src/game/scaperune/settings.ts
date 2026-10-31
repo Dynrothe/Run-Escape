@@ -60,7 +60,7 @@ export type GeneratorSettings = {
     terraceHeight: number;
     // The steepest ground you can walk on, in height units a tile. 16 is 45 degrees.
     walkSlope: number;
-    // How much of a cliff has rock faces on it
+    // How many boulders stand along the edges of cliffs
     rockFaces: number;
     // Rock lying about on the mountains
     rubble: number;
@@ -87,6 +87,8 @@ export type GeneratorSettings = {
     riverValley: number;
     // How much of rivers' fall comes down in waterfalls
     waterfalls: number;
+    // Waterfalls off cliffs that face you, into pools
+    cliffFalls: number;
     lakes: number;
     ponds: number;
 
@@ -221,7 +223,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
         when: (s) => hasMountains(s) && s.terraces > 0,
     }),
     walkSlope: number("Steepest walkable slope", 8, 16, 1),
-    rockFaces: share("Rock faces", { when: hasRock }),
+    rockFaces: share("Boulders on cliffs", { when: hasRock }),
     rubble: share("Rubble", { when: hasRock }),
     snow: share("Snow", { when: hasRock }),
     passWidth: number("Pass width", 3, 12, 1, { when: hasRock }),
@@ -237,6 +239,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     riverWidth: number("River width", 4, 20, 1, { when: (s) => s.rivers > 0 }),
     riverValley: share("River valleys", { when: (s) => s.rivers > 0 }),
     waterfalls: share("Waterfalls", { when: (s) => s.rivers > 0 && hasRock(s) }),
+    cliffFalls: share("Cliff waterfalls", { when: hasRock }),
     lakes: number("Lakes", 0, 8, 1),
     ponds: number("Ponds", 0, 16, 1),
 
@@ -326,7 +329,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
     },
     {
         name: "Water",
-        keys: ["rivers", "riverWidth", "riverValley", "waterfalls", "lakes", "ponds"],
+        keys: ["rivers", "riverWidth", "riverValley", "waterfalls", "cliffFalls", "lakes", "ponds"],
     },
     {
         name: "Scenery",
@@ -393,6 +396,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     riverWidth: 9,
     riverValley: 0.6,
     waterfalls: 0.5,
+    cliffFalls: 0.4,
     lakes: 0,
     ponds: 1,
 
@@ -559,6 +563,8 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         buildings: 1,
         towns: 2,
         townSize: 34,
+        townWalls: 1,
+        waymarkers: 0.6,
         roads: 1,
         roadStyle: "ring",
         gardens: 0.6,
@@ -669,6 +675,19 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         props: 0.8,
         buildings: 0,
         ruins: 0.4,
+    },
+    "Sky islands": {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "astral",
+        island: 0.3,
+        shoreRoughness: 1,
+        hills: 0.3,
+        ponds: 0,
+        trees: 0.35,
+        flowers: 0.5,
+        landmarks: 0.6,
+        buildings: 0.3,
     },
     Darkwood: {
         squaresX: 3,
