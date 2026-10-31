@@ -1,4 +1,5 @@
 import { cleanName, isNameAllowed, playerName } from "../../../../server/names.mjs";
+import { MAP_BY_ID } from "../../content/maps";
 import { GameStore } from "../GameStore";
 import {
     ClientMessage,
@@ -7,6 +8,7 @@ import {
     GoneReason,
     Loadout,
     MemberView,
+    MissingMap,
     RoomListing,
     RoomView,
     ServerMessage,
@@ -36,6 +38,8 @@ export type CoopView = {
     // There's a relay to play co-op through (the game only offers it then);
     // undefined until it's been asked
     available?: boolean;
+    // The relay lets players into rooms on maps they haven't unlocked
+    anyMap: boolean;
 };
 
 export const OFFLINE: CoopView = {
@@ -47,6 +51,7 @@ export const OFFLINE: CoopView = {
     roomsFull: false,
     name: "",
     nameAllowed: true,
+    anyMap: false,
 };
 
 // How long to wait for the relay to say it's there
@@ -96,6 +101,15 @@ export function parseRoomCode(text: string): string {
         .replace(/[^A-Za-z0-9]/g, "")
         .toUpperCase()
         .slice(0, ROOM_CODE_LENGTH);
+}
+
+// What's missing for a room's map, by the map's name
+export function describeMissing(need: MissingMap): string {
+    const map = MAP_BY_ID.get(need.mapId);
+    const what = `${map?.name ?? need.mapId}${need.endless ? " endless" : ""}`;
+    return need.who
+        ? `${need.who} hasn't got ${what} unlocked.`
+        : `You need ${what} unlocked to join this room.`;
 }
 
 export function loadCoopName(): string {
@@ -235,6 +249,7 @@ export class CoopLobby {
                     you: message.id,
                     error: undefined,
                     available: true,
+                    anyMap: message.anyMap === true,
                 });
                 this.refresh();
                 this.listTimer = window.setInterval(() => {
@@ -265,7 +280,9 @@ export class CoopLobby {
                 this.onGone?.(message.reason);
                 break;
             case "error":
-                this.update({ error: message.message });
+                this.update({
+                    error: message.need ? describeMissing(message.need) : message.message,
+                });
                 // A listed room that's filled up or started since: off the list
                 if (!this.view.room) {
                     this.refresh();

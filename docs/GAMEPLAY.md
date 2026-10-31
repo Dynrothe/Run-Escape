@@ -353,8 +353,10 @@ version and how to run it.
   host too) is ready, which can be a party of one. The host can open or close the room, kick a
   player and disband it. A pasted invite link in the code box leaves just its code. Names are
   lowercase letters only (no spaces), and offensive ones aren't allowed.
-    - A win counts for everyone, and opens the map it was on for a player who hadn't got that far
-      (along with the next), but not the maps before it.
+    - You can only join a room on a map you've unlocked yourself (and its endless, for an endless
+      room), and the host can only pick maps everyone in the room has, so nobody skips ahead. A
+      server can let anyone in instead (`MULTIPLAYER_ANY_MAP`); then a win opens the map it was
+      on for a player who hadn't got that far (along with the next), but not the maps before it.
     - The run's **level is shared**: every level up gives each player their own three choices, and
       the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
       shared too, and everyone banks the run's coins.

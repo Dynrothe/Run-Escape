@@ -1,7 +1,7 @@
 import { Server, createServer } from "node:http";
 import { AddressInfo } from "node:net";
 
-import { RELAY_PATH, createRelay, isMultiplayerOn } from "./coop-relay.mjs";
+import { RELAY_PATH, createRelay, isAnyMapOn, isMultiplayerOn } from "./coop-relay.mjs";
 
 type Message = { t: string; [key: string]: any };
 
@@ -71,6 +71,12 @@ describe("multiplayer toggle", () => {
         expect(isMultiplayerOn({ npm_lifecycle_event: "serve" }, [])).toBe(false);
         expect(isMultiplayerOn({}, ["node", "serve.mjs", "--multiplayer"])).toBe(true);
     });
+
+    it("keeps rooms to players with their map unless MULTIPLAYER_ANY_MAP is on", () => {
+        expect(isAnyMapOn({}, [])).toBe(false);
+        expect(isAnyMapOn({ MULTIPLAYER_ANY_MAP: "on" }, [])).toBe(true);
+        expect(isAnyMapOn({}, ["--any-map"])).toBe(true);
+    });
 });
 
 describe("co-op relay", () => {
@@ -81,7 +87,13 @@ describe("co-op relay", () => {
 
     // Everyone here connects from the same address, so the limits on each
     // address are out of the way unless a test sets them
-    const LOOSE = { connectionsPerAddress: 1000, roomsPerAddress: 1000, createsPerMinute: 1000 };
+    // (and rooms take anyone, unlocked maps or not, unless a test says so)
+    const LOOSE = {
+        connectionsPerAddress: 1000,
+        roomsPerAddress: 1000,
+        createsPerMinute: 1000,
+        anyMap: true,
+    };
 
     async function start(limits: Parameters<typeof createRelay>[0] = LOOSE): Promise<void> {
         relay = createRelay(limits);
@@ -367,5 +379,33 @@ describe("co-op relay", () => {
         host.send({ t: "me", loadout: { unlockedItems: ["x".repeat(20_000)] } });
         const { room } = await host.roomWhere(() => true);
         expect(room.members[0].loadout).toBeUndefined();
+    });
+
+    it("only takes players with the room's map unlocked, by default", async () => {
+        await restart({ anyMap: false });
+        const has = { maps: ["lumbridge", "barrows"], endless: ["lumbridge"] };
+        const host = await connect();
+        // The host's beaten Barrows (so has it endless), the others haven't
+        const hostHas = { ...has, endless: ["lumbridge", "barrows"] };
+        host.send({ t: "create", mapId: "barrows", me: { name: "hosta", unlocks: hostHas } });
+        const { room } = await host.room();
+        const newcomer = await connect();
+        newcomer.send({
+            t: "join",
+            code: room.code,
+            me: { name: "newbie", unlocks: { maps: ["lumbridge"], endless: [] } },
+        });
+        const refused = await newcomer.next("error");
+        expect(refused.need).toEqual({ mapId: "barrows", endless: false });
+        // The host can't move the room to a map someone in it hasn't got
+        const veteran = await connect();
+        veteran.send({ t: "join", code: room.code, me: { name: "vet", unlocks: has } });
+        await veteran.room();
+        host.send({ t: "settings", endless: true });
+        expect((await host.next("error")).need).toEqual({
+            mapId: "barrows",
+            endless: true,
+            who: "vet",
+        });
     });
 });

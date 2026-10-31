@@ -9,13 +9,22 @@ export type Loadout = {
     armoury: Record<string, number>;
 };
 
+// The maps a player has unlocked, and has endless for, which rooms go by
+// unless the relay takes anyone (MULTIPLAYER_ANY_MAP)
+export type Unlocks = { maps: string[]; endless: string[] };
+
 export type MemberView = {
     id: string;
     name: string;
     characterId: string;
     ready: boolean;
     loadout?: Loadout;
+    unlocks?: Unlocks;
 };
+
+// What a player's missing to play on a room's map: the map (its endless too,
+// for an endless room), and who, when it's someone else
+export type MissingMap = { mapId: string; endless: boolean; who?: string };
 
 export type RoomView = {
     code: string;
@@ -87,7 +96,8 @@ export type ClientMessage =
     | { t: "down"; d: DownMessage };
 
 export type ServerMessage =
-    | { t: "welcome"; id: string }
+    // anyMap: rooms take players whatever maps they have
+    | { t: "welcome"; id: string; anyMap?: boolean }
     | { t: "pong" }
     // A page of the open rooms, which page it is (the last, if the one asked
     // for has gone), of how many, and how many rooms in all
@@ -102,7 +112,7 @@ export type ServerMessage =
       }
     | { t: "room"; room: RoomView; you: string }
     | { t: "gone"; reason: GoneReason }
-    | { t: "error"; message: string }
+    | { t: "error"; message: string; need?: MissingMap }
     | { t: "start"; game: GameStart }
     | { t: "left"; id: string }
     | { t: "up"; from: string; d: UpMessage }

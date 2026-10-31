@@ -10,7 +10,7 @@ import { MAX_PARTY } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
-import { MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { FUN_MAPS, MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, describeQuest } from "../content/quests";
@@ -64,7 +64,7 @@ import { Overlay, ScreenPoint } from "./Overlay";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
-import { GameStart, GoneReason, Loadout } from "./coop/protocol";
+import { GameStart, GoneReason, Loadout, Unlocks } from "./coop/protocol";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -400,6 +400,7 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({
             characterId: this.store.getSnapshot().characterId,
             loadout: this.getLoadout(),
+            unlocks: this.getUnlocks(),
         });
         await this.coop.connect();
     }
@@ -461,6 +462,15 @@ export class GameClient implements GameFrameHandler {
     }
 
     // What this player brings to a co-op run
+    // The maps this player has, and has endless for, which rooms go by
+    private getUnlocks(): Unlocks {
+        const ids = [...MAPS, ...FUN_MAPS].map((m) => m.id);
+        return {
+            maps: ids.filter((id) => isMapUnlocked(this.save, id)),
+            endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
+        };
+    }
+
     private getLoadout(): Loadout {
         return makeLoadout(getMetaStats(this.save), [...this.save.unlockedItems], {
             ...this.save.armoury,
@@ -1050,7 +1060,7 @@ export class GameClient implements GameFrameHandler {
             },
         });
         // The room sees this player's new unlocks and upgrades next run
-        this.coop.setMe({ loadout: this.getLoadout() });
+        this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
     }
 
     // A task or quest done mid-run: the adventurer or item joins, and the

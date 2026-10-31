@@ -31,7 +31,22 @@ export function isMultiplayerOn(env = process.env, argv = process.argv) {
     );
 }
 
+// Whether players can join rooms on maps they haven't unlocked (and so open
+// them by winning there): MULTIPLAYER_ANY_MAP=on or --any-map. Off by default, so nobody
+// skips ahead: a room only takes players with its map unlocked (and its
+// endless, for an endless room), and the host can only pick maps everyone in
+// it has. Each player's game says which maps it has; with no accounts that's
+// its word, so this keeps fair players fair rather than stopping a cheat.
+export function isAnyMapOn(env = process.env, argv = process.argv) {
+    return (
+        ["on", "1", "true"].includes((env.MULTIPLAYER_ANY_MAP ?? "").toLowerCase()) ||
+        argv.includes("--any-map")
+    );
+}
+
 const MAX_PARTY = 4;
+// No game has more maps than this
+const MAX_UNLOCKED_MAPS = 200;
 // Rooms on the relay at once; past that, a new one waits for one to go
 const MAX_ROOMS = 2000;
 // Limits on each address (see client-ip.mjs for who a connection's from), so
@@ -259,6 +274,17 @@ function acceptKey(key) {
 
 // ---- Rooms ----
 
+// The maps a player's game says it has unlocked, and has endless for
+function cleanUnlocks(unlocks) {
+    const list = (ids) =>
+        Array.isArray(ids) ? ids.slice(0, MAX_UNLOCKED_MAPS).map(cleanId).filter(Boolean) : [];
+    return { maps: list(unlocks?.maps), endless: list(unlocks?.endless) };
+}
+
+function hasUnlocked(unlocks, mapId, endless) {
+    return unlocks.maps.includes(mapId) && (!endless || unlocks.endless.includes(mapId));
+}
+
 // A whole number from a message, kept within min and max
 function clampInt(value, min, max, fallback) {
     const n = Number.isInteger(value) ? value : fallback;
@@ -280,6 +306,8 @@ export function createRelay(limits = {}) {
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
         proxy = proxyMode(),
+        // Rooms take players without their map (see isAnyMapOn)
+        anyMap = isAnyMapOn(),
     } = limits;
     let warnedProxy = false;
     const rooms = new Map();
@@ -320,6 +348,7 @@ export function createRelay(limits = {}) {
                 characterId: client.characterId,
                 ready: client.ready,
                 loadout: client.loadout,
+                unlocks: client.unlocks,
             })),
         };
     }
@@ -459,6 +488,33 @@ export function createRelay(limits = {}) {
             const size = JSON.stringify(message.loadout)?.length ?? 0;
             client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
         }
+        if (message.unlocks !== undefined) {
+            client.unlocks = cleanUnlocks(message.unlocks);
+        }
+    }
+
+    // What stops these players (with these unlocks, or their own) playing on a
+    // map: the first one without it, as an error for whoever's asking, or
+    // nothing. who: the player's name, said when it isn't the one asking.
+    function missingMap(players, mapId, endless, asking) {
+        if (anyMap) {
+            return undefined;
+        }
+        for (const { client, unlocks = client.unlocks } of players) {
+            if (!hasUnlocked(unlocks, mapId, endless)) {
+                const need = { mapId, endless, ...(client !== asking && { who: client.name }) };
+                const what = `${mapId}${endless ? " (endless)" : ""}`;
+                return {
+                    t: "error",
+                    message:
+                        client === asking
+                            ? `You need ${what} unlocked to join this room.`
+                            : `${client.name} hasn't got ${what} unlocked.`,
+                    need,
+                };
+            }
+        }
+        return undefined;
     }
 
     function handle(client, message) {
@@ -501,6 +557,16 @@ export function createRelay(limits = {}) {
                 const taken = checkName(client, message.me ?? {});
                 if (taken) {
                     error(taken);
+                    return;
+                }
+                const hostMissing = missingMap(
+                    [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
+                    cleanId(message.mapId) || "lumbridge",
+                    message.endless === true,
+                    client,
+                );
+                if (hostMissing) {
+                    client.connection.send(hostMissing);
                     return;
                 }
                 if (!mayCreate(client)) {
@@ -549,6 +615,16 @@ export function createRelay(limits = {}) {
                     error(nameError);
                     return;
                 }
+                const missing = missingMap(
+                    [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
+                    target.mapId,
+                    target.endless,
+                    client,
+                );
+                if (missing) {
+                    client.connection.send(missing);
+                    return;
+                }
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
@@ -577,11 +653,24 @@ export function createRelay(limits = {}) {
                     if (message.open !== undefined) {
                         room.open = message.open === true;
                     }
-                    if (message.mapId !== undefined) {
-                        room.mapId = cleanId(message.mapId) || room.mapId;
-                    }
-                    if (message.endless !== undefined) {
-                        room.endless = message.endless === true;
+                    const mapId =
+                        message.mapId !== undefined
+                            ? cleanId(message.mapId) || room.mapId
+                            : room.mapId;
+                    const endless =
+                        message.endless !== undefined ? message.endless === true : room.endless;
+                    // Only a map everyone in the room has
+                    const missing = missingMap(
+                        room.members.map((member) => ({ client: member })),
+                        mapId,
+                        endless,
+                        client,
+                    );
+                    if (missing) {
+                        client.connection.send(missing);
+                    } else {
+                        room.mapId = mapId;
+                        room.endless = endless;
                     }
                     broadcastRoom(room);
                 }
@@ -603,6 +692,16 @@ export function createRelay(limits = {}) {
                 return;
             case "start":
                 if (isHost && !room.started) {
+                    const missing = missingMap(
+                        room.members.map((member) => ({ client: member })),
+                        room.mapId,
+                        room.endless,
+                        client,
+                    );
+                    if (missing) {
+                        client.connection.send(missing);
+                        return;
+                    }
                     room.started = true;
                     for (const member of room.members) {
                         member.ready = false;
@@ -675,6 +774,7 @@ export function createRelay(limits = {}) {
             characterId: "",
             ready: false,
             loadout: undefined,
+            unlocks: cleanUnlocks(undefined),
             room: undefined,
             connection: undefined,
             address,
@@ -694,7 +794,9 @@ export function createRelay(limits = {}) {
             },
         );
         clients.add(client);
-        client.connection.send({ t: "welcome", id: client.id });
+        // anyMap: the game shows rooms on maps the player hasn't got as locked
+        // unless it's on
+        client.connection.send({ t: "welcome", id: client.id, anyMap });
         if (head && head.length > 0) {
             client.connection.receive(head);
         }

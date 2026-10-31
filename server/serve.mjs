@@ -6,6 +6,8 @@
 //   npm run serve:multiplayer              # with co-op too (or MULTIPLAYER=on)
 //   ... -- --proxy=cloudflare              # behind a proxy (or PROXY=local|cloudflare;
 //                                          # see client-ip.mjs)
+//   ... -- --any-map                       # rooms take players without their map
+//                                          # (or MULTIPLAYER_ANY_MAP=on; see coop-relay.mjs)
 //
 // Without a slim cache in the build it serves the full one from caches/, like
 // `vite preview` does.
@@ -19,7 +21,7 @@ import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { proxyMode } from "./client-ip.mjs";
-import { RELAY_PATH, createRelay, isMultiplayerOn } from "./coop-relay.mjs";
+import { RELAY_PATH, createRelay, isAnyMapOn, isMultiplayerOn } from "./coop-relay.mjs";
 
 const REPO = resolve(fileURLToPath(import.meta.url), "../..");
 const ROOT = resolve(process.env.DIST ?? join(REPO, "dist"));
@@ -141,7 +143,10 @@ server.listen(PORT, HOST, () => {
     console.log(`Cache from ${CACHES}`);
     console.log(
         MULTIPLAYER
-            ? `Multiplayer on: co-op relay at ${RELAY_PATH}, proxy in front: ${proxyMode()}`
+            ? `Multiplayer on: co-op relay at ${RELAY_PATH}, proxy in front: ${proxyMode()}, ` +
+                  (isAnyMapOn()
+                      ? "rooms take anyone (MULTIPLAYER_ANY_MAP)"
+                      : "rooms take only players with their map unlocked")
             : "Multiplayer off (npm run serve:multiplayer, or MULTIPLAYER=on, turns it on)",
     );
 });

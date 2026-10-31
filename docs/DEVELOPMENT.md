@@ -229,6 +229,15 @@ through `sim.as(hero, ...)`. Events that are a hero's own (a hit taken, a pickup
 `hero` in co-op, so the client shows its own and leaves the rest. A solo run has one hero and
 plays exactly as before.
 
+Rooms only take players who've unlocked their map (and its endless, for an endless room), and the
+host can only pick maps everyone in the room has, so nobody skips ahead: someone without it is told
+"You need Barrows unlocked to join this room", and the open list shows that room as locked to them.
+Each player's game sends the maps it has (`unlocks`), checked by the relay on joining, on the host
+changing the map or endless, and at the start. `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone
+into any room instead, and a win then opens that map for a player who hadn't got there. With no
+accounts, a player's maps are their game's word: this keeps fair players fair rather than stopping
+a cheat.
+
 A name's only one player's at a time: making or joining a room with a name someone in a room already
 has is turned down, and it's free again once they've gone. There are no accounts, so nothing keeps a
 name for anyone. A game that's given a map or adventurer it hasn't got (from a newer or made-up game)
