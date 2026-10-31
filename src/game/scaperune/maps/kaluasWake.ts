@@ -54,6 +54,9 @@ import { Terrain } from "../terrain";
 // Kalua's Wake: an island chain round a smoking volcano. Everything on it is placed by hand,
 // in chart tiles: x east and y north from the arena's south-west corner, 0 to 255 by 0 to 191.
 //
+// It's built as the generator builds a map, a stage at a time, but with its coasts, roads, water
+// and everything on them drawn here. See generateMapDetail for the order things must go in.
+//
 // When the fire-priests of the Sun Temple let their flame die, Mount Kalua woke. Its lava cut
 // the great island in two and ran a fleet aground, and the Tai'Mara took to their stilts.
 //
@@ -161,10 +164,11 @@ const CONE_RISE = 36;
 const CRATER_FLOOR = 190;
 // Cliffs round it, lowest first, with a way up through each at an angle (degrees, as atan2)
 const RINGS = [
-    { radius: 59, rise: 50, gap: 232 },
-    { radius: 43, rise: 50, gap: 208 },
-    { radius: 29, rise: 50, gap: 228 },
+    { radius: 59, rise: 50, gap: 232, faces: "south" },
+    { radius: 43, rise: 50, gap: 208, faces: "all" },
+    { radius: 29, rise: 50, gap: 228, faces: "all" },
 ];
+const SHORE_REACH = 11;
 const RISER = 3;
 const RAMP = 26;
 const GAP_WIDTH = 20;
@@ -461,7 +465,9 @@ function createScorch(lavaLine: Float32Array): (x: number, y: number) => number 
         const lava = 1.1 - fromLava / (12 + wander * 22);
         const peak = 1.1 - (Math.hypot(x - KALUA.x, y - KALUA.y) - 22) / (10 + wander * 18);
         const spit = y > CHART + 141 && x < CHART + 66 ? 1 : 0;
-        return Math.max(Math.min(Math.max(lava, peak), 1), spit);
+        // The volcano's north side, facing away from everyone, is all ash down to the sea
+        const north = x > CHART + 78 && x < CHART + 210 && y > KALUA.y + 26 + wander * 12 ? 1 : 0;
+        return Math.max(Math.min(Math.max(lava, peak), 1), spit, north);
     };
 }
 
@@ -542,7 +548,9 @@ function getVolcano(x: number, y: number, wobble: number): { rise: number; body:
     for (const ring of RINGS) {
         const gap = smoothstep(1 - angleBetween(angle, ring.gap) / GAP_WIDTH);
         const width = lerp(RISER, RAMP, gap);
-        rise += ring.rise * smoothstep((ring.radius + width / 2 - distance) / width);
+        // The lowest would run into the north shore, so it fades out along the flanks
+        const share = ring.faces === "south" ? smoothstep((angleBetween(angle, 90) - 75) / 30) : 1;
+        rise += ring.rise * share * smoothstep((ring.radius + width / 2 - distance) / width);
     }
     return { rise, body: smoothstep((1 - out) * 1.6) };
 }
@@ -567,7 +575,7 @@ function shapeLand(build: Build, shape: Shape): void {
     sinkCoast(build, shape);
 }
 
-// Takes the land down to the sea: gently on the beaches, and sharply under the volcano's north
+// Takes the land down to the sea
 function sinkCoast(build: Build, shape: Shape): void {
     const { terrain, corners } = build;
     const { height } = terrain;
@@ -585,8 +593,7 @@ function sinkCoast(build: Build, shape: Shape): void {
                     distance = Math.min(distance, shape.toSea[tx + ty * SIZE_X]);
                 }
             }
-            const reach = y > KALUA.y + 20 ? 6 : 11;
-            const share = Math.min(distance / reach, 1);
+            const share = Math.min(distance / SHORE_REACH, 1);
             height[at] = SEA_BED + (height[at] - SEA_BED) * share;
         }
     }
@@ -872,6 +879,13 @@ const THINGS: [number, number, number, number, number][] = [
     [4277, 49, 49, 2, 2],
     [27523, 31, 50, 1, 1],
     [16872, 29, 50, 1, 1],
+    [4277, 34, 33, 2, 2],
+    [392, 47, 33, 1, 1],
+    [392, 47, 28, 1, 1],
+    [27523, 47, 30, 1, 1],
+    [9519, 34, 24, 1, 1],
+    [357, 35, 23, 1, 1],
+    [358, 47, 24, 1, 1],
     // The Sun Isle's north end: the old gods, down the back stair
     [51888, 224, 142, 4, 4],
     [51895, 240, 142, 4, 4],
@@ -1118,6 +1132,7 @@ const SEA_PIECES: [number, number, number, number, number][] = [
     [60477, 66, 160, 5, 3],
     [60469, 207, 140, 3, 2],
     [59352, 8, 142, 5, 3],
+    [60475, 150, 183, 4, 4],
     // The ghost of one of them
     [59333, 247, 52, 4, 4],
     // Stacks of rock

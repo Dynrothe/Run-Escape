@@ -303,7 +303,12 @@ This one has a known fault, left in to show it: the house's door stays shut, so 
 23 tiles inside as stranded. Drop the door with `skipLoc`, as the generator does.
 
 Then add it to `SCAPERUNE_DEV_MAPS`. `content/maps.ts` makes a `MapDef` for each dev map, with Lumbridge's
-waves. In the browser console: `game.selectMap("scaperune_little_island"); await game.startRun()`.
+waves unless `play` says otherwise, and the `name` and `description` it's given. In the browser console:
+`game.selectMap("scaperune_little_island"); await game.startRun()`.
+
+`check-maps.ts` skips a hand-made map unless it has a `detail`, which builds it as a `GeneratedMap`. `maps/kaluasWake.ts`
+is a whole map done that way: a `Build` of its own with the generator's parts run in the generator's order, and its
+coasts, roads and places drawn by hand.
 
 Grid tiles start at the grid's south-west corner, x east and y north. `getRecipeWorldTile` turns them
 into world tiles.
