@@ -24,6 +24,8 @@ export type CoopView = {
     roomsPage: number;
     roomsPages: number;
     roomsTotal: number;
+    // No room for another one on the relay until one goes
+    roomsFull: boolean;
     room?: RoomView;
     // This player's id in the room
     you?: string;
@@ -42,6 +44,7 @@ export const OFFLINE: CoopView = {
     roomsPage: 0,
     roomsPages: 1,
     roomsTotal: 0,
+    roomsFull: false,
     name: "",
     nameAllowed: true,
 };
@@ -58,6 +61,7 @@ const GONE_TEXT: Record<GoneReason, string> = {
     kicked: "The host removed you from the party.",
     disbanded: "The host disbanded the party.",
     hostLeft: "The host left, so the party's over.",
+    idle: "The room closed after half an hour with nothing happening.",
 };
 
 // Where the relay is: VITE_COOP_URL when the build gives one, otherwise
@@ -249,6 +253,7 @@ export class CoopLobby {
                     roomsPage: message.page,
                     roomsPages: message.pages,
                     roomsTotal: message.total,
+                    roomsFull: message.full === true,
                 });
                 break;
             case "room":

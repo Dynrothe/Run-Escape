@@ -14,6 +14,7 @@ import { createHash, randomInt } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
+import { clientAddress } from "./client-ip.mjs";
 import { DEFAULT_NAME, playerName } from "./names.mjs";
 
 export const RELAY_PATH = "/coop";
@@ -30,7 +31,20 @@ export function isMultiplayerOn(env = process.env, argv = process.argv) {
 }
 
 const MAX_PARTY = 4;
-const MAX_ROOMS = 1000;
+// Rooms on the relay at once; past that, a new one waits for one to go
+const MAX_ROOMS = 2000;
+// Limits on each address (see client-ip.mjs for who a connection's from), so
+// one machine can't take the relay over. Generous enough for a household or
+// a LAN party behind one address.
+const MAX_CONNECTIONS_PER_ADDRESS = 16;
+const MAX_ROOMS_PER_ADDRESS = 4;
+const MAX_CREATES_PER_MINUTE = 10;
+// A room nobody's done anything in for this long is closed
+const IDLE_MS = 30 * 60_000;
+// Bigger than any real loadout (the shop's bonuses, unlocked items and
+// Armoury); a bigger one is dropped rather than sent round the room
+const MAX_LOADOUT_BYTES = 16 * 1024;
+const FULL_TEXT = "All rooms are taken right now. Try again when one opens.";
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most
 const LIST_PAGE_SIZE = 8;
@@ -254,10 +268,22 @@ function cleanId(id) {
     return typeof id === "string" ? id.replace(/[^a-z0-9_]/g, "").slice(0, 40) : "";
 }
 
-export function createRelay() {
+// limits: any of the relay's limits to change (the tests' tighter or looser
+// ones); the rest are as above
+export function createRelay(limits = {}) {
+    const {
+        maxRooms = MAX_ROOMS,
+        connectionsPerAddress = MAX_CONNECTIONS_PER_ADDRESS,
+        roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
+        createsPerMinute = MAX_CREATES_PER_MINUTE,
+        idleMs = IDLE_MS,
+    } = limits;
     const rooms = new Map();
     const clients = new Set();
     let nextId = 1;
+    // Connections from each address, and when each made its latest rooms
+    const connectionsFrom = new Map();
+    const createdFrom = new Map();
     let nextRoomOrder = 1;
     // The open rooms as the list shows them, worked out again only after a
     // room changes (everyone browsing asks every few seconds)
@@ -371,6 +397,50 @@ export function createRelay() {
         room.members = [];
     }
 
+    // Someone else in a room already has this name. Names are a player's
+    // own only while they're in a room: no accounts, so nothing's kept.
+    function nameTaken(name, client) {
+        for (const room of rooms.values()) {
+            if (room.members.some((member) => member !== client && member.name === name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The name a player's after, or an error if it's taken
+    function checkName(client, message) {
+        const name = message.name !== undefined ? playerName(message.name) : client.name;
+        return nameTaken(name, client)
+            ? `Someone's already using ${name} right now. Pick another name.`
+            : undefined;
+    }
+
+    // Rooms whose host is at this address
+    function roomsHostedFrom(address) {
+        let count = 0;
+        for (const room of rooms.values()) {
+            const host = room.members.find((member) => member.id === room.hostId);
+            if (host?.address === address) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // Whether this address may make another room now (and if so, notes it)
+    function mayCreate(client) {
+        const now = Date.now();
+        const recent = (createdFrom.get(client.address) ?? []).filter((t) => now - t < 60_000);
+        if (recent.length >= createsPerMinute) {
+            createdFrom.set(client.address, recent);
+            return false;
+        }
+        recent.push(now);
+        createdFrom.set(client.address, recent);
+        return true;
+    }
+
     function setMember(client, message) {
         if (message.name !== undefined) {
             client.name = playerName(message.name);
@@ -382,12 +452,16 @@ export function createRelay() {
             client.ready = message.ready === true;
         }
         if (message.loadout !== undefined) {
-            client.loadout = message.loadout;
+            const size = JSON.stringify(message.loadout)?.length ?? 0;
+            client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
         }
     }
 
     function handle(client, message) {
         const room = client.room;
+        if (room) {
+            room.lastActive = Date.now();
+        }
         const isHost = room !== undefined && room.hostId === client.id;
         const error = (text) => client.connection.send({ t: "error", message: text });
         switch (message.t) {
@@ -406,12 +480,27 @@ export function createRelay() {
                     page,
                     pages,
                     total: list.length,
+                    // No room for another until one goes
+                    full: rooms.size >= maxRooms,
                 });
                 return;
             }
             case "create": {
-                if (rooms.size >= MAX_ROOMS) {
-                    error("The co-op server is full. Try again in a bit.");
+                if (rooms.size >= maxRooms) {
+                    error(FULL_TEXT);
+                    return;
+                }
+                if (roomsHostedFrom(client.address) >= roomsPerAddress) {
+                    error("There are too many rooms from your connection already.");
+                    return;
+                }
+                const taken = checkName(client, message.me ?? {});
+                if (taken) {
+                    error(taken);
+                    return;
+                }
+                if (!mayCreate(client)) {
+                    error("That's a lot of rooms. Wait a minute before making another.");
                     return;
                 }
                 leaveRoom(client);
@@ -426,6 +515,7 @@ export function createRelay() {
                     started: false,
                     members: [client],
                     order: nextRoomOrder++,
+                    lastActive: Date.now(),
                 };
                 rooms.set(created.code, created);
                 client.room = created;
@@ -450,6 +540,11 @@ export function createRelay() {
                 if (target.members.includes(client)) {
                     return;
                 }
+                const nameError = checkName(client, message.me ?? {});
+                if (nameError) {
+                    error(nameError);
+                    return;
+                }
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
@@ -463,7 +558,13 @@ export function createRelay() {
                 return;
             case "me":
                 if (room) {
-                    setMember(client, message);
+                    const nameError = checkName(client, message);
+                    if (nameError) {
+                        error(nameError);
+                        setMember(client, { ...message, name: undefined });
+                    } else {
+                        setMember(client, message);
+                    }
                     broadcastRoom(room);
                 }
                 return;
@@ -544,6 +645,13 @@ export function createRelay() {
             socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
             return;
         }
+        const address = clientAddress(req, socket);
+        const connections = connectionsFrom.get(address) ?? 0;
+        if (connections >= connectionsPerAddress) {
+            socket.end("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+            return;
+        }
+        connectionsFrom.set(address, connections + 1);
         socket.write(
             "HTTP/1.1 101 Switching Protocols\r\n" +
                 "Upgrade: websocket\r\n" +
@@ -558,12 +666,19 @@ export function createRelay() {
             loadout: undefined,
             room: undefined,
             connection: undefined,
+            address,
         };
         client.connection = new Connection(
             socket,
             (message) => handle(client, message),
             () => {
                 clients.delete(client);
+                const left = (connectionsFrom.get(address) ?? 1) - 1;
+                if (left > 0) {
+                    connectionsFrom.set(address, left);
+                } else {
+                    connectionsFrom.delete(address);
+                }
                 leaveRoom(client);
             },
         );
@@ -580,6 +695,24 @@ export function createRelay() {
         }
     }, PING_MS);
     pinger.unref?.();
+
+    // Rooms nobody's done anything in for a long while are closed, and the
+    // record of rooms made from each address is kept to the last minute
+    const sweeper = setInterval(() => sweep(Date.now()), 60_000);
+    sweeper.unref?.();
+
+    function sweep(now) {
+        for (const room of [...rooms.values()]) {
+            if (now - room.lastActive > idleMs) {
+                disband(room, "idle");
+            }
+        }
+        for (const [address, times] of createdFrom) {
+            if (times.every((t) => now - t >= 60_000)) {
+                createdFrom.delete(address);
+            }
+        }
+    }
 
     return {
         // Takes over an HTTP server's WebSocket upgrades to path (and leaves
@@ -607,11 +740,21 @@ export function createRelay() {
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",
             });
-            res.end(JSON.stringify({ coop: true, players: clients.size, rooms: rooms.size }));
+            res.end(
+                JSON.stringify({
+                    coop: true,
+                    players: clients.size,
+                    rooms: rooms.size,
+                    full: rooms.size >= maxRooms,
+                }),
+            );
             return true;
         },
+        // Closes idle rooms as if it were this time (for the tests)
+        sweep,
         close() {
             clearInterval(pinger);
+            clearInterval(sweeper);
             for (const client of clients) {
                 client.connection.close(1001);
             }

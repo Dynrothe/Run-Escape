@@ -73,8 +73,8 @@ more browsing the room list) took at most 13% of one core and 64 MB. A small VPS
 serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
-packages, so copy it and `server/names.mjs` (the name rules, which the game uses too) to the server
-and run it.
+packages, so copy it with `server/names.mjs` (the name rules, which the game uses too) and
+`server/client-ip.mjs` to the server and run it.
 
 ```
 PORT=8787 node server/coop-relay.mjs
@@ -89,9 +89,30 @@ location /game/coop {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_read_timeout 120s;
 }
 ```
+
+The relay limits each address (see below), so it has to know players' real ones behind a proxy.
+It takes the word of a proxy on the same machine or a private network (the last address in its
+`X-Forwarded-For`, which the proxy adds itself; Caddy does by default, nginx with the line above),
+and of Cloudflare (`CF-Connecting-IP`, believed only from Cloudflare's own addresses). Anyone else's
+headers are ignored, so they can't be made up to get round the limits. `TRUSTED_PROXIES`
+(`"10.1.2.3,10.9.0.0/16"`) adds proxies elsewhere, and `CLOUDFLARE_IPS` replaces the list of
+Cloudflare's addresses in `server/client-ip.mjs` if it changes.
+
+Its limits, at the top of `server/coop-relay.mjs`:
+
+| What                          | Limit                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| Rooms on the relay            | 2,000; past that, making one says they're all taken (and the menu shows it) |
+| Connections from one address  | 16 (a household or LAN party behind one address)                            |
+| Rooms hosted from one address | 4                                                                           |
+| Rooms made from one address   | 10 a minute                                                                 |
+| A room with nothing happening | closed after 30 minutes                                                     |
+| A player's loadout            | 16 KB, or it's dropped                                                      |
+| A message                     | 256 KB, and 400 a second from one connection                                |
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
 else. `npm run start:multiplayer` (and `npm run preview` with `MULTIPLAYER=on`) runs a relay of its
@@ -201,6 +222,12 @@ venom) remembers whose with `hero`, and the sim works as them when it acts. Co-o
 through `sim.as(hero, ...)`. Events that are a hero's own (a hit taken, a pickup, a casket) carry
 `hero` in co-op, so the client shows its own and leaves the rest. A solo run has one hero and
 plays exactly as before.
+
+A name's only one player's at a time: making or joining a room with a name someone in a room already
+has is turned down, and it's free again once they've gone. There are no accounts, so nothing keeps a
+name for anyone. A game that's given a map or adventurer it hasn't got (from a newer or made-up game)
+leaves the room rather than playing a run it can't, and other players' shop bonuses are kept within
+what the shop sells.
 
 Player names, which the open rooms list shows anyone, are lowercase a-z only and checked against a
 banned list (with digits and symbols standing in for letters read as letters) in

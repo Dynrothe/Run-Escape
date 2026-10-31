@@ -79,8 +79,12 @@ describe("co-op relay", () => {
     let url: string;
     const clients: TestClient[] = [];
 
-    beforeEach(async () => {
-        relay = createRelay();
+    // Everyone here connects from the same address, so the limits on each
+    // address are out of the way unless a test sets them
+    const LOOSE = { connectionsPerAddress: 1000, roomsPerAddress: 1000, createsPerMinute: 1000 };
+
+    async function start(limits: Parameters<typeof createRelay>[0] = LOOSE): Promise<void> {
+        relay = createRelay(limits);
         server = createServer((req, res) => {
             if (!relay.handleRequest(req, res)) {
                 res.writeHead(404);
@@ -90,15 +94,28 @@ describe("co-op relay", () => {
         relay.attach(server);
         await new Promise<void>((resolve) => server.listen(0, resolve));
         url = `ws://localhost:${(server.address() as AddressInfo).port}${RELAY_PATH}`;
-    });
+    }
 
-    afterEach(async () => {
+    async function stop(): Promise<void> {
         for (const client of clients.splice(0)) {
             client.socket.close();
         }
         relay.close();
         await new Promise((resolve) => server.close(resolve));
-    });
+    }
+
+    // Starts again with these limits
+    async function restart(limits: Parameters<typeof createRelay>[0]): Promise<void> {
+        await stop();
+        await start({ ...LOOSE, ...limits });
+    }
+
+    beforeEach(() => start());
+    afterEach(() => stop());
+
+    // Names are a-z only and nobody in a room shares one: each gets its own
+    let named = 0;
+    const nextName = (base: string) => base + "abcdefghijklmnopqrstuvwxyz"[named++ % 26];
 
     async function connect(): Promise<TestClient> {
         const client = new TestClient(url);
@@ -110,12 +127,12 @@ describe("co-op relay", () => {
     // A host with a room, and guests in it
     async function party(guests: number, open = false) {
         const host = await connect();
-        host.send({ t: "create", open, me: { name: "Host", characterId: "warrior" } });
+        host.send({ t: "create", open, me: { name: nextName("host"), characterId: "warrior" } });
         const { room } = await host.room();
         const others: TestClient[] = [];
         for (let i = 0; i < guests; i++) {
             const guest = await connect();
-            guest.send({ t: "join", code: room.code, me: { name: `Guest ${i + 1}` } });
+            guest.send({ t: "join", code: room.code, me: { name: nextName("guest") } });
             await guest.room();
             others.push(guest);
         }
@@ -126,7 +143,10 @@ describe("co-op relay", () => {
         const { host, code } = await party(1);
         const { room, you } = await host.room();
         expect(room.code).toBe(code);
-        expect(room.members.map((m: { name: string }) => m.name)).toEqual(["host", "guest"]);
+        expect(room.members.map((m: { name: string }) => m.name)).toEqual([
+            expect.stringMatching(/^host[a-z]$/),
+            expect.stringMatching(/^guest[a-z]$/),
+        ]);
         expect(room.hostId).toBe(you);
     });
 
@@ -137,7 +157,7 @@ describe("co-op relay", () => {
         browser.send({ t: "list" });
         const { rooms } = await browser.next("rooms");
         expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
-        expect(rooms[0].host).toBe("host");
+        expect(rooms[0].host).toMatch(/^host[a-z]$/);
     });
 
     it("cleans up names, and won't show a banned one", async () => {
@@ -274,7 +294,78 @@ describe("co-op relay", () => {
         await party(1);
         const response = await fetch(url.replace("ws:", "http:"));
         expect(response.headers.get("access-control-allow-origin")).toBe("*");
-        expect(await response.json()).toEqual({ coop: true, players: 2, rooms: 1 });
+        expect(await response.json()).toEqual({ coop: true, players: 2, rooms: 1, full: false });
         expect((await fetch(url.replace("ws:", "http:") + "/nope")).status).toBe(404);
+    });
+
+    it("keeps names to one player at a time", async () => {
+        const host = await connect();
+        host.send({ t: "create", open: true, me: { name: "zezima" } });
+        const { room } = await host.room();
+        const other = await connect();
+        other.send({ t: "create", open: true, me: { name: "Zezima" } });
+        expect((await other.next("error")).message).toMatch(/already using zezima/);
+        other.send({ t: "join", code: room.code, me: { name: "zezima" } });
+        expect((await other.next("error")).message).toMatch(/already using zezima/);
+        // Free again once they've gone
+        host.send({ t: "leave" });
+        await host.next("gone");
+        other.send({ t: "create", open: true, me: { name: "zezima" } });
+        expect((await other.room()).room.members[0].name).toBe("zezima");
+    });
+
+    it("tells you when every room's taken", async () => {
+        await restart({ maxRooms: 2 });
+        await party(0, true);
+        await party(0, true);
+        const late = await connect();
+        late.send({ t: "list" });
+        expect((await late.next("rooms")).full).toBe(true);
+        late.send({ t: "create", open: true, me: { name: "latecomer" } });
+        expect((await late.next("error")).message).toMatch(/All rooms are taken/);
+    });
+
+    it("limits the connections and rooms from one address", async () => {
+        await restart({ connectionsPerAddress: 3, roomsPerAddress: 2 });
+        await party(0);
+        await party(0);
+        const third = await connect();
+        third.send({ t: "create", me: { name: "thirdroom" } });
+        expect((await third.next("error")).message).toMatch(/too many rooms/);
+        // A fourth connection isn't let in at all
+        const refused = new WebSocket(url);
+        const closed = await new Promise<boolean>((resolve) => {
+            refused.onopen = () => resolve(false);
+            refused.onerror = () => resolve(true);
+        });
+        expect(closed).toBe(true);
+    });
+
+    it("slows down making room after room", async () => {
+        await restart({ createsPerMinute: 2 });
+        const client = await connect();
+        for (let i = 0; i < 2; i++) {
+            client.send({ t: "create", me: { name: "maker" } });
+            await client.room();
+        }
+        client.send({ t: "create", me: { name: "maker" } });
+        expect((await client.next("error")).message).toMatch(/Wait a minute/);
+    });
+
+    it("closes a room nobody's done anything in for a while", async () => {
+        const { host, guests } = await party(1);
+        relay.sweep(Date.now() + 29 * 60_000);
+        expect(relay.roomCount).toBe(1);
+        relay.sweep(Date.now() + 31 * 60_000);
+        expect((await guests[0].next("gone")).reason).toBe("idle");
+        expect((await host.next("gone")).reason).toBe("idle");
+        expect(relay.roomCount).toBe(0);
+    });
+
+    it("drops a loadout too big to be real", async () => {
+        const { host } = await party(0);
+        host.send({ t: "me", loadout: { unlockedItems: ["x".repeat(20_000)] } });
+        const { room } = await host.roomWhere(() => true);
+        expect(room.members[0].loadout).toBeUndefined();
     });
 });

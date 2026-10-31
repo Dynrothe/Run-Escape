@@ -49,7 +49,8 @@ export type GameStart = {
 };
 
 // Why a player is out of a room
-export type GoneReason = "left" | "kicked" | "disbanded" | "hostLeft";
+// (idle: nothing happened in the room for half an hour)
+export type GoneReason = "left" | "kicked" | "disbanded" | "hostLeft" | "idle";
 
 // A guest to the host: a move, something they did, or that their copy of the
 // run is ready to go (the map's loaded)
@@ -90,7 +91,15 @@ export type ServerMessage =
     | { t: "pong" }
     // A page of the open rooms, which page it is (the last, if the one asked
     // for has gone), of how many, and how many rooms in all
-    | { t: "rooms"; rooms: RoomListing[]; page: number; pages: number; total: number }
+    | {
+          t: "rooms";
+          rooms: RoomListing[];
+          page: number;
+          pages: number;
+          total: number;
+          // Every room the relay can hold is taken
+          full: boolean;
+      }
     | { t: "room"; room: RoomView; you: string }
     | { t: "gone"; reason: GoneReason }
     | { t: "error"; message: string }

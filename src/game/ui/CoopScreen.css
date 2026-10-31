@@ -125,6 +125,20 @@
     color: #b8aa8a;
 }
 
+/* The room's code, to read out to a friend */
+.ui-coop-room-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #8a7e66;
+}
+
+.ui-coop-hint {
+    margin-top: 8px;
+    text-align: center;
+    color: #b8aa8a;
+}
+
 /* Under the list when there's more than a page of rooms */
 .ui-coop-pages {
     display: flex;

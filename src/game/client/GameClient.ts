@@ -10,11 +10,12 @@ import { MAX_PARTY } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
-import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
+import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -160,19 +161,28 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
     });
 }
 
-// What a co-op player's loadout gives their hero
+// What a co-op player's loadout gives their hero, no more than the shop can
+// (another player's game could send anything)
 function loadoutStats(loadout: Loadout | undefined): Stats {
     const stats = emptyStats();
     for (const [key, value] of Object.entries(loadout?.metaStats ?? {})) {
         if (key in stats && typeof value === "number" && Number.isFinite(value)) {
-            stats[key as keyof Stats] = value;
+            const most = SHOP_MAX[key as keyof Stats] ?? 0;
+            stats[key as keyof Stats] = Math.max(Math.min(0, most), Math.min(most, value));
         }
     }
     return stats;
 }
 
+// Each stat with every shop upgrade for it bought
+const SHOP_MAX: Partial<Stats> = {};
+for (const upgrade of SHOP_UPGRADES) {
+    SHOP_MAX[upgrade.stat] = (SHOP_MAX[upgrade.stat] ?? 0) + upgrade.perRank * upgrade.maxRank;
+}
+
 // Why a co-op run ended early, on its results
 const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
+    idle: "The room closed after half an hour with nothing happening.",
     kicked: "The host removed you from the party.",
     disbanded: "The host disbanded the party.",
     hostLeft: "The host left, so the run's over.",
@@ -709,6 +719,16 @@ export class GameClient implements GameFrameHandler {
         const focus = game.heroes.findIndex((hero) => hero.id === you);
         const room = this.coop.room;
         if (focus === -1 || !room) {
+            return;
+        }
+        // A map or adventurer this game hasn't got (another player's game
+        // could be newer, or made up): it can't play along
+        if (
+            !MAP_BY_ID.has(game.mapId) ||
+            !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
+        ) {
+            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.coop.leave();
             return;
         }
         if (this.sim) {

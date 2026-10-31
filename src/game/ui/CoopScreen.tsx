@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { DEFAULT_NAME } from "../../../server/names.mjs";
 import { GameClient } from "../client/GameClient";
 import { TeammateView, UiSnapshot } from "../client/GameStore";
 import { parseRoomCode } from "../client/coop/CoopLobby";
 import { RoomView } from "../client/coop/protocol";
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
-import { FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { FUN_MAPS, MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { isEndlessUnlocked, isMapUnlocked } from "../core/save";
 import "./CoopScreen.css";
 import { AdventurerPanel, Toggle, getStartingWeaponIcon } from "./GameUi";
@@ -32,10 +31,12 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
     const coop = ui.coop;
     const [code, setCode] = useState("");
     const [open, setOpen] = useState(false);
-    // A banned name can't make or join a room until it's changed
-    const nameOk = coop.nameAllowed;
+    // Rooms need a name to show, and not a banned one
+    const nameOk = coop.nameAllowed && coop.name.length > 0;
     const online = coop.status === "online";
     const canJoin = online && nameOk;
+    // Rooms on maps this game hasn't got (a newer game's) can't be joined
+    const rooms = coop.rooms.filter((listing) => MAP_BY_ID.has(listing.mapId));
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.code === "Escape" && !(e.target instanceof HTMLInputElement)) {
@@ -59,7 +60,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         <input
                             className="ui-coop-input"
                             value={coop.name}
-                            placeholder={DEFAULT_NAME}
+                            placeholder="pick a name"
                             spellCheck={false}
                             autoCapitalize="none"
                             // Lowercase a-z only, kept that way as it's typed
@@ -90,7 +91,12 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         </div>
                         <button
                             className="ui-button ui-button-go"
-                            disabled={!canJoin}
+                            disabled={!canJoin || coop.roomsFull}
+                            title={
+                                coop.roomsFull
+                                    ? "All rooms are taken right now. Try again when one opens."
+                                    : undefined
+                            }
                             onClick={() => client.createRoom(open)}
                         >
                             Create
@@ -133,11 +139,12 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                     </span>
                 </h3>
                 <div className="ui-coop-rooms">
-                    {coop.rooms.map((listing) => (
+                    {rooms.map((listing) => (
                         <div key={listing.code} className="ui-coop-room">
                             <ItemIcon objId={getMap(listing.mapId).iconObjId} size={20} />
                             <span className="ui-coop-room-name">
                                 <span className="ui-coop-room-host">{listing.host}</span>
+                                <span className="ui-coop-room-code">{listing.code}</span>
                                 <span className="ui-coop-room-map">
                                     {getMap(listing.mapId).name}
                                     {listing.endless && !getMap(listing.mapId).fun && ", endless"}
@@ -193,8 +200,16 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         </button>
                     </div>
                 )}
-                {!nameOk && (
+                {!coop.nameAllowed && (
                     <div className="ui-coop-error">That name isn't allowed. Pick another.</div>
+                )}
+                {coop.nameAllowed && coop.name.length === 0 && online && (
+                    <div className="ui-coop-hint">Pick a name to make or join a room.</div>
+                )}
+                {coop.roomsFull && online && (
+                    <div className="ui-coop-error">
+                        All rooms are taken right now. Try again when one opens.
+                    </div>
                 )}
                 {coop.error && <div className="ui-coop-error">{coop.error}</div>}
                 <div className="ui-row">
@@ -215,7 +230,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const me = room.members.find((m) => m.id === you);
     // The host readies up too, so a party of one can play
     const everyoneReady = room.members.every((m) => m.ready);
-    const map = getMap(room.mapId);
+    // A map this game hasn't got (a newer host's) shows as the first
+    const map = MAP_BY_ID.get(room.mapId) ?? MAPS[0];
     const [copied, setCopied] = useState(false);
     const copyInvite = () => {
         navigator.clipboard
@@ -258,7 +274,10 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 <div className="ui-coop-members">
                     {room.members.map((member) => {
                         const character = getCharacter(
-                            map.fun?.character ?? (member.characterId || "warrior"),
+                            map.fun?.character ??
+                                (CHARACTERS.some((c) => c.id === member.characterId)
+                                    ? member.characterId
+                                    : CHARACTERS[0].id),
                         );
                         const host = member.id === room.hostId;
                         return (
