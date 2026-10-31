@@ -75,7 +75,7 @@ export * from "./settings";
 
 // Makes a whole map from a seed and settings. The same seed and settings give
 // the same map, anywhere: everything random comes from the seed. It only uses
-// what's in BIOMES, PREFABS and BRIDGE (palette.ts), so the slim cache can hold
+// what's in BIOMES, PREFABS and BRIDGES (palette.ts), so the slim cache can hold
 // all that any seed could ask for. See CLAUDE.md.
 
 export const FORD_HALF_WIDTH = 2;

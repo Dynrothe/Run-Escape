@@ -83,7 +83,7 @@ doesn't change the map. A setting that only matters with another (`when`) hides 
 ```
 
 The same seed and settings always give the same map. It's generated at load from a fixed palette (`BIOMES`,
-`PREFABS` and `BRIDGE`); nothing is baked to a file.
+`PREFABS` and `BRIDGES`); nothing is baked to a file.
 
 What it does, in order: the land's shape (`landforms.ts`), rivers down its valleys, sea and lakes, cliffs, passes,
 floors, bridges, main roads, buildings with their roads, set pieces, ruins, pools for waterfalls, town squares, then the
@@ -167,6 +167,9 @@ On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a
 **Town walls.** `townWalls` is the share of towns with one. It's a rectangle a little way out from a town's buildings, open
 where roads go through and with a gate on each side, in the biome's `wall`, and inside it roads are cobbled and there's a
 square with a fountain. A wall loc is a thin thing on a tile's side, so it costs nothing, and reachability needs no help.
+
+**Cities.** A town with walls is laid out in districts, a wedge each for houses, shops and churches, as far as the biome
+has them. `Walled city` is the preset.
 
 **Waymarkers** stand beside roads, turn about, every 16 tiles at 1.
 
@@ -381,8 +384,11 @@ along it is and all the bridge logic stands. Their level only falls toward their
 `LEVEL_AT_CROSSING` tiles round a crossing, and banks come down over `riverValley`'s slope: sheer gorges at 0 and wide
 valleys at 1. Fresh water's corners are held: nothing moves them.
 
-**Bridges** stand with their banks `BRIDGE_BANK_HEIGHT` over the water (the prefab's river bed is at 0 under banks at 30),
-pinned from the prefab's own heights, because the deck's stored relative to the ground under it.
+**Bridges** stand with their banks `bankHeight` over the water (a prefab's river bed is at 0), pinned from the prefab's own
+heights, because the deck's stored relative to the ground under it. There are three in `BRIDGES`, and a biome names one:
+Lumbridge's stone, its twin in Tirannwn with elven lamps, and Varlamore's red timber. They can stand in for each other
+because all of them have an 11 tile deck, 2 wide, at the same place in an 18 by 6 rectangle. There are dozens of other bridges
+in the cache, but with their own banks: most run into cliffs or are flat with the water, and a few end in blocked tiles.
 
 **Buildings** stand on a flat plot (`pinPlot`) with a level step out of the door. They only go where the ground rises
 less than `MAX_PLOT_RISE` over the plot, away from cliffs and with room to get down to water, and where their road can

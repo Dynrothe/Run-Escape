@@ -572,7 +572,24 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         trees: 0.25,
         flowers: 0.6,
     },
+    "Walled city": {
+        squaresX: 4,
+        squaresY: 4,
+        boundary: "forest",
+        hills: 0.15,
+        towns: 1,
+        townSize: 52,
+        townWalls: 1,
+        buildings: 0.8,
+        roads: 1,
+        waymarkers: 0.5,
+        gardens: 0.25,
+        trees: 0.4,
+        landmarks: 0.1,
+        ponds: 0,
+    },
     Jungle: {
+        waveSet: "karamja",
         squaresX: 3,
         squaresY: 3,
         biome: "jungle",
@@ -591,6 +608,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         roads: 0.7,
     },
     "Tropical islands": {
+        waveSet: "karamja",
         squaresX: 4,
         squaresY: 4,
         biome: "tropical",
@@ -606,6 +624,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         props: 0.6,
     },
     Ashlands: {
+        waveSet: "wilderness",
         squaresX: 3,
         squaresY: 3,
         biome: "ash",
@@ -624,6 +643,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         buildings: 0.15,
     },
     Autumn: {
+        waveSet: "kourend",
         squaresX: 3,
         squaresY: 3,
         biome: "autumn",
@@ -639,6 +659,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         townSize: 24,
     },
     "Dead lands": {
+        waveSet: "morytania",
         squaresX: 3,
         squaresY: 3,
         biome: "deadlands",
@@ -651,6 +672,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         props: 0.7,
     },
     Elven: {
+        waveSet: "varlamore",
         squaresX: 3,
         squaresY: 3,
         biome: "elven",
@@ -677,6 +699,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         ruins: 0.4,
     },
     "Sky islands": {
+        waveSet: "fremennik",
         squaresX: 3,
         squaresY: 3,
         biome: "astral",
@@ -690,6 +713,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         buildings: 0.3,
     },
     Darkwood: {
+        waveSet: "barrows",
         squaresX: 3,
         squaresY: 3,
         biome: "darkwood",

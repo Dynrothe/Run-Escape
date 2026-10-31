@@ -1,14 +1,14 @@
+import { PlacedLoc } from "./format";
 import { Build, createClimb, forTilesNear, getTouchedTiles, hasRelief, lerp } from "./mapBuild";
 import { Noise, createNoise, smoothField } from "./noise";
 import { Point, addPathToField, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
 import {
-    BRIDGE,
-    BRIDGE_BANK_HEIGHT,
-    BRIDGE_BED_HEIGHT,
+    BRIDGES,
     BRIDGE_DECK_EAST,
     BRIDGE_DECK_ROW,
     BRIDGE_DECK_WEST,
+    BRIDGE_LENGTH,
     loadPrefab,
 } from "./prefabs";
 import { River, getCrossingLine, riverCentre } from "./rivers";
@@ -441,11 +441,9 @@ export function placeBridges(
     water: Uint8Array,
     zone: Uint8Array,
 ): RoadStart[] {
-    const { context, ground, arena, terrain } = build;
+    const { context, ground, arena, terrain, biomeAt } = build;
     const starts: RoadStart[] = [];
-    const prefab = loadPrefab(context, BRIDGE);
-    const turned = rotatePrefab(prefab, 1, context.locs);
-    const middle = BRIDGE.sizeX >> 1;
+    const middle = BRIDGE_LENGTH >> 1;
     const straight = middle + BRIDGE_ROAD_STRAIGHT;
     for (const river of rivers) {
         for (const crossing of river.crossings) {
@@ -482,19 +480,24 @@ export function placeBridges(
             if (!fits || crossesOther) {
                 continue;
             }
-            // Its banks stand as far over the water as they do where it's from
-            const height = river.levels[crossing] + BRIDGE_BANK_HEIGHT - BRIDGE_BED_HEIGHT;
+            // Each biome has its own, where one fits, and banks stand as far over the water
+            // as they do where they're from
+            const middleTile = river.vertical ? biomeAt(line, crossing) : biomeAt(crossing, line);
+            const def = BRIDGES[middleTile.bridge];
+            const eastWest = rotatePrefab(loadPrefab(context, def), def.turns, context.locs);
+            const height = river.levels[crossing] + def.bankHeight;
             const options = {
                 floor: (overlay: number) => overlay === BRIDGE_HIDDEN_FLOOR,
                 feather: 0,
                 flatten: false,
                 height,
-                anchor: BRIDGE_BANK_HEIGHT,
+                anchor: def.bankHeight,
                 keepUnderlays: true,
                 keepHeights: true,
+                skipLoc: (loc: PlacedLoc) => def.leaveOut?.includes(loc.id) ?? false,
             };
             const stampAt = crossing - BRIDGE_DECK_ROW;
-            const bridge = river.vertical ? prefab : turned;
+            const bridge = river.vertical ? eastWest : rotatePrefab(eastWest, 1, context.locs);
             const stampX = river.vertical ? line - middle : stampAt;
             const stampY = river.vertical ? stampAt : line - middle;
             ground.stamp(bridge, stampX, stampY, options);
@@ -506,7 +509,7 @@ export function placeBridges(
                     const out = (river.vertical ? stampX + cx : stampY + cy) - line;
                     const own = bridge.levels[0].heights[cx + cy * cornersOfStamp];
                     const onDeck = out >= deckNear && out <= deckFar;
-                    const rise = onDeck ? own - BRIDGE_BANK_HEIGHT : 0;
+                    const rise = onDeck ? own - def.bankHeight : 0;
                     terrain.pin(stampX + cx, stampY + cy, height + rise);
                 }
             }

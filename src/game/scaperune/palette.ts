@@ -2,7 +2,7 @@ import { Ground } from "./Ground";
 import { BIOMES, CLIFF_FALL, WATERFALL } from "./biomes";
 import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
-import { BRIDGE, PREFABS, loadPrefab } from "./prefabs";
+import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
 import { FOUNTAIN, PAVING, SET_PIECES, getPieceLocs } from "./structures";
 
@@ -22,7 +22,7 @@ function build(context: BuildContext): TileGrid {
     ground.level0.heights.fill(40);
 
     // A plot each for the prefabs and bridge, then a strip per biome
-    const defs = [...Object.values(PREFABS), BRIDGE];
+    const defs = [...Object.values(PREFABS), ...Object.values(BRIDGES)];
     defs.forEach((def, i) => {
         const prefab = rotatePrefab(loadPrefab(context, def), 0, context.locs);
         ground.stamp(prefab, 1 + (i % 8) * (PLOT + 2), 1 + Math.floor(i / 8) * PLOT, {

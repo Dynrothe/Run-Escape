@@ -48,18 +48,39 @@ export const PREFABS: Record<string, PrefabDef> = {
     lovakengj_hall: { worldX: 1551, worldY: 3778, sizeX: 11, sizeY: 12 },
 };
 
-// The bridge over the River Lum, 18 tiles east to west with its deck on level 1
-// across a river 9 tiles wide (from x 5 to 13) running north to south. The deck and
-// the gap between the fences at each end are the 2 rows either side of y = 3.
-export const BRIDGE: PrefabDef = { worldX: 3236, worldY: 3223, sizeX: 18, sizeY: 6 };
+// A bridge, turned as turns says to run east to west: 18 tiles long and 6 wide, with its deck on
+// level 1 across a river 9 tiles wide (from x 5 to 13) running north to south. The deck and the
+// gap between the fences at each end are the 2 rows either side of y = 3. Only these fit
+// that as they are, so they're swapped for each other: others have their own banks and heights.
+export type BridgeDef = PrefabDef & {
+    turns: number;
+    // How high its own banks are, to set it on ours. The river bed under it is at 0.
+    bankHeight: number;
+    // Locs in its rectangle that are only there by chance
+    leaveOut?: number[];
+};
+
+export const BRIDGES: Record<string, BridgeDef> = {
+    // Over the River Lum
+    stone: { worldX: 3236, worldY: 3223, sizeX: 18, sizeY: 6, turns: 0, bankHeight: 30 },
+    // The same bridge, in Tirannwn: pale, with elven lamps
+    elven: {
+        worldX: 2238,
+        worldY: 3229,
+        sizeX: 6,
+        sizeY: 18,
+        turns: 1,
+        bankHeight: 30,
+        leaveOut: [3886, 3897],
+    },
+    // Red timber, from Varlamore, level all the way over
+    timber: { worldX: 1506, worldY: 3200, sizeX: 6, sizeY: 18, turns: 1, bankHeight: 35 },
+};
+export const BRIDGE_LENGTH = 18;
 export const BRIDGE_DECK_ROW = 3;
 // Tile edges where the deck starts and stops, in x
 export const BRIDGE_DECK_WEST = 4;
 export const BRIDGE_DECK_EAST = 15;
-// How high the bridge's own banks are, to set it on ours
-export const BRIDGE_BANK_HEIGHT = 30;
-// How high the river bed is under it. A bridge's bank stands this much over the water.
-export const BRIDGE_BED_HEIGHT = 0;
 
 const DOOR_NAME = /\b(door|gate|curtain)\b/i;
 // Over this many tiles the ground eases back to its own heights round a building
@@ -74,7 +95,7 @@ export function isDoor(context: Pick<BuildContext, "locs">, loc: PlacedLoc): boo
 }
 
 // What a building is, for the settings that turn them on and off
-const BUILDING_KINDS: Record<string, "house" | "shop" | "church"> = {
+const BUILDING_KINDS: Record<string, BuildingKind> = {
     lumbridge_house: "house",
     lumbridge_church: "church",
     varrock_shop: "shop",
@@ -106,6 +127,12 @@ const BUILDING_KINDS: Record<string, "house" | "shop" | "church"> = {
     lovakengj_house: "house",
     lovakengj_hall: "church",
 };
+
+export type BuildingKind = "house" | "shop" | "church";
+
+export function getBuildingKind(name: string): BuildingKind {
+    return BUILDING_KINDS[name];
+}
 
 export function isBuildingKind(
     name: string,

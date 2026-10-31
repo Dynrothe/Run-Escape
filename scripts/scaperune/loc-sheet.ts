@@ -224,7 +224,7 @@ function drawPrefab(spec: string, x0: number, y0: number): void {
         }
     }
     const order = [...prefab.locs]
-        .filter((loc) => loc.level === 0 && (loc.type <= 3 || loc.type >= 9))
+        .filter((loc) => loc.level <= 1 && (loc.type <= 3 || loc.type >= 9))
         .sort((a, b) => b.y - a.y);
     for (const loc of order) {
         const def = locTypes.load(loc.id);

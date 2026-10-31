@@ -76,11 +76,11 @@ export const SET_PIECES: Record<string, SetPiece> = {
         size: 17,
         inside: [
             [724, 1, 1],
-            [60438, 1, 1],
+            [42044, 2, 3],
+            [23061, 2, 3],
             [13435, 1, 1],
-            [404, 1, 1],
         ],
-        count: 7,
+        count: 8,
     },
     stone_circle: { kind: "ring", stones: STANDING_STONES, count: 9, radius: 6 },
     desert_circle: {
@@ -91,6 +91,18 @@ export const SET_PIECES: Record<string, SetPiece> = {
         middle: [11100, 2, 2],
     },
     great_skeleton: single([59324, 7, 3]),
+    beached_wreck: single([49423, 6, 4], [59372, 6, 3]),
+    fairy_ring: {
+        kind: "ring",
+        stones: [
+            [12005, 1, 1],
+            [12006, 1, 1],
+            [4057, 1, 1],
+        ],
+        count: 12,
+        radius: 4,
+        middle: [29495, 1, 1],
+    },
     great_boulder: single([60444, 6, 4]),
     giant_mushroom: single([43131, 9, 9]),
     mushroom_grove: { kind: "grove", locs: MUSHROOM_TREES, count: 4, radius: 7 },
@@ -204,6 +216,9 @@ export type PlacedPiece = {
 const PIECES_A_SQUARE = 1.5;
 
 const TRIES_A_PIECE = 40;
+
+// Houses in a drowned town
+const DROWNED_HOUSES = 3;
 
 // A wreck's this near the shore, in tiles from its edge
 const WRECK_REACH = 4;
@@ -522,6 +537,24 @@ export function placeSetPieces(build: Build, roads: RoadNetwork, water: Uint8Arr
     return placed;
 }
 
+// What's left of a drowned town's houses, standing in the water where they fell
+function placeDrownedWalls(build: Build, radius: number, x: number, y: number): void {
+    const { kit, rng, biomeAt } = build;
+    const biome = biomeAt(x, y);
+    const names = biome.ruins ?? biome.buildings;
+    const turn = rng() * Math.PI * 2;
+    for (let i = 0; i < DROWNED_HOUSES && names.length > 0; i++) {
+        const angle = turn + (i / DROWNED_HOUSES) * Math.PI * 2;
+        const turns = Math.floor(rng() * 4);
+        const name = pick(rng, names);
+        const { prefab } = kit.get(name, turns);
+        const reach = radius - Math.max(prefab.sizeX, prefab.sizeY) / 2 - 1;
+        const houseX = Math.round(x + Math.cos(angle) * reach - prefab.sizeX / 2);
+        const houseY = Math.round(y + Math.sin(angle) * reach - prefab.sizeY / 2);
+        kit.stampRuin(build.ground, name, turns, houseX, houseY, rng, true);
+    }
+}
+
 // Whether a rectangle's all water
 function isAllWater(
     build: Build,
@@ -589,6 +622,7 @@ export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[]
             const loc = pick(rng, piece.middle);
             putLoc(build, loc, tx - (loc[1] >> 1), ty - (loc[2] >> 1), 0);
             putRing(build, piece.stones, piece.count, piece.radius, tx, ty);
+            placeDrownedWalls(build, piece.radius, tx, ty);
         }
         placed.push({ name, x, y, ...size, onLand: false });
     }

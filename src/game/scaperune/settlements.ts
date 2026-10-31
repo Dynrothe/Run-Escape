@@ -13,7 +13,7 @@ import {
     pick,
 } from "./mapBuild";
 import { Point } from "./paths";
-import { PREFABS, isBuildingKind } from "./prefabs";
+import { BuildingKind, PREFABS, getBuildingKind, isBuildingKind } from "./prefabs";
 import { ROAD_STEEPEST, RoadNetwork } from "./roads";
 
 // Where buildings go, and the ground they stand on.
@@ -42,6 +42,9 @@ const TOWN_TRIES = 12;
 const TOWN_SAMPLES = 8;
 
 const TOWN_RISE = 24;
+
+// What a city's quarters are given over to, going round it
+const DISTRICTS: BuildingKind[] = ["house", "shop", "church"];
 
 // A fenced yard stands this far off a building's walls
 const YARD_GAP = 2;
@@ -125,7 +128,14 @@ export function pickSpot(build: Build, towns: Point[]): Candidate | undefined {
         x = lerp(arena.x0, arena.x1, rng());
         y = lerp(arena.y0, arena.y1, rng());
     }
-    const names = getBuildingNames(build, Math.floor(x), Math.floor(y));
+    let names = getBuildingNames(build, Math.floor(x), Math.floor(y));
+    // A town with walls is a city, in districts, each a wedge of it
+    if (town !== undefined && settings.townWalls > 0) {
+        const angle = Math.atan2(y - towns[town].y, x - towns[town].x) / (Math.PI * 2) + 0.5;
+        const kind = DISTRICTS[Math.floor((angle + town * 0.37) * DISTRICTS.length) % 3];
+        const inDistrict = names.filter((name) => getBuildingKind(name) === kind);
+        names = inDistrict.length > 0 ? inDistrict : names;
+    }
     return names.length > 0 ? { name: pick(rng, names), centreX: x, centreY: y, town } : undefined;
 }
 
