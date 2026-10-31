@@ -1,5 +1,5 @@
 import { Ground } from "./Ground";
-import { BIOMES, BiomeDef } from "./biomes";
+import { BIOMES, BiomeDef, WATERFALL } from "./biomes";
 import type { Exit } from "./building";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TILE_BRIDGE, TileGrid } from "./format";
@@ -85,6 +85,12 @@ const GORGE_SLOPE = 34;
 const VALLEY_SLOPE = 7;
 // Tiles either side of a crossing where a river runs level
 const LEVEL_AT_CROSSING = 13;
+// How far a river has to fall for it to come down as a waterfall, and tiles it keeps clear
+// of a crossing
+const WATERFALL_DROP = 16;
+const WATERFALL_RUN = 6;
+const WATERFALL_SPACING = 30;
+const WATERFALL_WIDTH = 3;
 // How much of the land's height a river's course minds, against a straight line
 const VALLEY_SEEK = 1;
 // The steepest a road climbs, in height units a tile, and what going over that costs
@@ -201,6 +207,8 @@ type River = {
     valley?: Float32Array;
     // How high the water is along its length
     levels: Float32Array;
+    // Where it falls, for waterfalls
+    drops: { along: number; level: number }[];
 };
 
 // A lake or pond: where it is, and how high its water stands
@@ -230,6 +238,8 @@ export type GeneratedMap = {
     // Passes cut through cliffs
     passes: RoadLine[];
     walkSlope: number;
+    caves: Point[];
+    waterfalls: Point[];
 };
 
 export function getGeneratedSize(settings: Pick<GeneratorSettings, "squaresX" | "squaresY">): {
@@ -373,6 +383,7 @@ function createRivers(build: Build): River[] {
             amount: Math.max(half * 0.2, 10),
             halfWidth: settings.riverWidth / 2,
             levels: new Float32Array((vertical ? build.corners.y : build.corners.x) + 1),
+            drops: [],
         });
         const river = rivers[rivers.length - 1];
         if (hasRelief(settings)) {
@@ -671,6 +682,37 @@ function setRiverLevels(build: Build, river: River): void {
         }
     }
     levels.set(smoothLine(levels, 3));
+    stepRiver(build, river);
+}
+
+// Gathers a river's fall into drops, for waterfalls, away from crossings
+function stepRiver(build: Build, river: River): void {
+    const { settings } = build;
+    if (settings.waterfalls <= 0) {
+        return;
+    }
+    const { levels } = river;
+    const roll = createRng(settings.seed + 300 + river.line);
+    const clear = (along: number) =>
+        river.crossings.every(
+            (crossing) => Math.abs(along - crossing) > LEVEL_AT_CROSSING + WATERFALL_RUN,
+        );
+    const way = levels[0] >= levels[levels.length - 1] ? 1 : -1;
+    const first = way > 0 ? 0 : levels.length - 1;
+    let held = levels[first];
+    let last = -Infinity;
+    for (let along = first; along >= 0 && along < levels.length; along += way) {
+        const drop = held - levels[along];
+        const due = Math.abs(along - last) >= WATERFALL_SPACING;
+        if (drop >= WATERFALL_DROP && due && clear(along) && roll() < settings.waterfalls) {
+            river.drops.push({ along, level: levels[along] });
+            held = levels[along];
+            last = along;
+        } else if (!clear(along)) {
+            held = levels[along];
+        }
+        levels[along] = held;
+    }
 }
 
 // How high the fresh water stands at each corner, and everywhere else the height of the
@@ -1072,9 +1114,32 @@ function paintRock(build: Build, skip: Uint8Array): Uint8Array {
     return rock;
 }
 
+// Foam along the foot of a river's drops
+function placeWaterfalls(build: Build, rivers: River[]): void {
+    const { ground } = build;
+    for (const river of rivers) {
+        for (const { along } of river.drops) {
+            const centre = riverCentre(river, along);
+            const half = riverHalfWidth(river, along);
+            for (let at = -half; at + WATERFALL_WIDTH <= half; at += WATERFALL_WIDTH) {
+                const across = Math.round(centre + at);
+                ground.grid.locs.push({
+                    id: WATERFALL,
+                    type: LOC_NORMAL,
+                    rotation: river.vertical ? 0 : 1,
+                    level: 0,
+                    x: river.vertical ? across : along,
+                    y: river.vertical ? along : across,
+                });
+            }
+        }
+    }
+}
+
 // Cave mouths, for looks: in the foot of a cliff that faces the camera
-function placeCaves(build: Build, rock: Uint8Array): void {
+function placeCaves(build: Build, rock: Uint8Array): Point[] {
     const { settings, ground, arena, biomeAt, sizeX, corners } = build;
+    const caves: Point[] = [];
     const { heights, flags } = ground.level0;
     const wanted = Math.round(
         settings.caves * settings.squaresX * settings.squaresY * CAVES_A_SQUARE,
@@ -1096,6 +1161,7 @@ function placeCaves(build: Build, rock: Uint8Array): void {
         const x = Math.floor(lerp(arena.x0, arena.x1 - CAVE_WIDTH, roll()));
         const y = Math.floor(lerp(arena.y0 + 1, arena.y1 - CAVE_DEPTH - 2, roll()));
         if (fits(x, y)) {
+            caves.push({ x, y });
             ground.place(
                 { id: biomeAt(x, y).rock.cave, type: LOC_NORMAL, rotation: 0, level: 0, x, y },
                 CAVE_WIDTH,
@@ -1107,6 +1173,7 @@ function placeCaves(build: Build, rock: Uint8Array): void {
             placed++;
         }
     }
+    return caves;
 }
 
 // The tiles a road's points are on, or near
@@ -2339,8 +2406,9 @@ export function generateMapDetail(
     for (let i = 0; i < rockSkip.length; i++) {
         rockSkip[i] = waterTiles[i] | roadTiles[i] | ground.footprint[i] | bridgeZone[i];
     }
-    placeCaves(build, paintRock(build, rockSkip));
+    const caves = placeCaves(build, paintRock(build, rockSkip));
     paintLava(build);
+    placeWaterfalls(build, rivers);
     placeBoundary(build, roadTiles);
     scatter(build, waterTiles);
     const fords = connectGround(build, water, roads.offLimits);
@@ -2352,6 +2420,13 @@ export function generateMapDetail(
         buildings,
         passes,
         walkSlope: settings.walkSlope,
+        caves,
+        waterfalls: rivers.flatMap((river) =>
+            river.drops.map(({ along }) => {
+                const across = riverCentre(river, along);
+                return river.vertical ? { x: across, y: along } : { x: along, y: across };
+            }),
+        ),
     };
 }
 

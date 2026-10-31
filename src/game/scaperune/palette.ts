@@ -1,5 +1,5 @@
 import { Ground } from "./Ground";
-import { BIOMES } from "./biomes";
+import { BIOMES, WATERFALL } from "./biomes";
 import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGE, PREFABS, loadPrefab } from "./prefabs";
@@ -32,6 +32,7 @@ function build(context: BuildContext): TileGrid {
         });
     });
 
+    ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * 2 }, 3, 2);
     let y = PLOT * 2 + 2;
     for (const biome of Object.values(BIOMES)) {
         let x = 2;

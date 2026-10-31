@@ -82,6 +82,8 @@ export type GeneratorSettings = {
     riverWidth: number;
     // 0 is a sheer gorge; 1 is a wide valley
     riverValley: number;
+    // How much of rivers' fall comes down in waterfalls
+    waterfalls: number;
     lakes: number;
     ponds: number;
 
@@ -217,6 +219,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     rivers: number("Rivers", 0, 4, 1),
     riverWidth: number("River width", 4, 20, 1, { when: (s) => s.rivers > 0 }),
     riverValley: share("River valleys", { when: (s) => s.rivers > 0 }),
+    waterfalls: share("Waterfalls", { when: (s) => s.rivers > 0 && hasRock(s) }),
     lakes: number("Lakes", 0, 8, 1),
     ponds: number("Ponds", 0, 16, 1),
 
@@ -299,7 +302,10 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "caves",
         ],
     },
-    { name: "Water", keys: ["rivers", "riverWidth", "riverValley", "lakes", "ponds"] },
+    {
+        name: "Water",
+        keys: ["rivers", "riverWidth", "riverValley", "waterfalls", "lakes", "ponds"],
+    },
     {
         name: "Scenery",
         keys: ["trees", "treeClumping", "treeMix", "rocks", "rockMix", "grass", "flowers"],
@@ -360,6 +366,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     rivers: 0,
     riverWidth: 9,
     riverValley: 0.6,
+    waterfalls: 0.5,
     lakes: 0,
     ponds: 1,
 

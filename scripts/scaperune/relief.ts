@@ -154,6 +154,9 @@ function main(): void {
         const middle = pass.points[pass.points.length >> 1];
         console.log(`pass at ${Math.round(middle.x)},${Math.round(middle.y)}`);
     }
+    console.log(`caves at ${map.caves.map(({ x, y }) => `${x},${y}`).join(" ")}`);
+    const falls = map.waterfalls.map(({ x, y }) => `${Math.round(x)},${Math.round(y)}`);
+    console.log(`waterfalls at ${falls.join(" ")}`);
     const flags = getCollisionFlags(grid, STUB_CONTEXT.locs);
     const reached = findReachable(flags, sizeX, sizeY, arena, spawn.x, spawn.y);
     const stranded = findStranded(flags, sizeX, arena, reached).length;

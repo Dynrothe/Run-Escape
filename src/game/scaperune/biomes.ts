@@ -50,6 +50,8 @@ export type BiomeDef = {
     rock: RockDef;
 };
 
+// Foam at the foot of a waterfall, 3 tiles wide with rotation 0 running east to west
+export const WATERFALL = 26499;
 // Lava, as in Karamja's volcano
 const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
