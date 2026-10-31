@@ -3,8 +3,9 @@ import { RenderStats } from "./RenderStats";
 
 function resizeCanvas(canvas: HTMLCanvasElement) {
     const devicePixelRatio = pixelRatio;
-    const width = canvas.offsetWidth * devicePixelRatio;
-    const height = canvas.offsetHeight * devicePixelRatio;
+    // Rounded, or a fractional ratio never matches and it resizes every frame
+    const width = Math.round(canvas.offsetWidth * devicePixelRatio);
+    const height = Math.round(canvas.offsetHeight * devicePixelRatio);
 
     if (width !== canvas.width || height !== canvas.height) {
         canvas.width = width;
