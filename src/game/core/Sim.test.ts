@@ -385,7 +385,8 @@ describe("power-ups", () => {
             sim.pickups.length = 0;
         }
         expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
-        expect(new Set(seen).size).toBe(POWER_UPS.length);
+        // All of them, bar what drops some other way (the pumpkin)
+        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0).length);
     });
 
     test("are walked over to use them, and don't wait around", () => {

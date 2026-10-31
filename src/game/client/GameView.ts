@@ -79,6 +79,11 @@ const MAX_HITSPLATS = 120;
 // the font's own size, where it's crisp
 const HITSPLAT_SPRITE_SCALE = 0.85;
 const SLASH_MS = 180;
+// A disguised boss's beam, once it's shaking
+const DISGUISE_COLOR = "#ff3020";
+// Bosses' pools: ticks they take to spread, seconds they take to dry up
+const POOL_GROW_TICKS = 12;
+const POOL_FADE_SECONDS = 1;
 // Swooshes are white, apart from these weapons' (r, g, b)
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
@@ -88,6 +93,7 @@ const SLASH_COLORS: Record<string, string> = {
     sanguine_scythe: "150, 20, 40",
     ancient_godsword: "150, 20, 40",
     burning_claws: "240, 130, 40",
+    inquisitors_mace: "230, 200, 120",
     dinhs_blazing_bulwark: "240, 130, 40",
 };
 const AURA_MS = 320;
@@ -404,6 +410,13 @@ export class GameView {
                 if (t < 1) {
                     yaw = (yaw + Math.round(t * 2048)) & 2047;
                 }
+                // A boss in disguise, about to come out: rattling on the spot
+                const opening = pickup.disguise && pickup.disguise.openTick !== -1;
+                if (opening) {
+                    yaw = (yaw + Math.round(Math.sin(tick * 1.4) * 120)) & 2047;
+                    height -= 0.12 * Math.abs(Math.sin(tick * 0.9));
+                    scale = 1.5;
+                }
             } else if (pickup.kind === "powerUp") {
                 // Blinks when it's about to go
                 const age = (tick - pickup.spawnTick) / TICKS_PER_SECOND;
@@ -699,6 +712,7 @@ export class GameView {
             this.enemiesByUid.set(enemy.uid, enemy);
         }
 
+        this.drawPools(overlay, sim, now);
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
         this.drawAuras(overlay, sim, now);
@@ -848,6 +862,24 @@ export class GameView {
             drawHitsplat(ctx, sprite, p.x, p.y, pixel, hitsplat.amount, hitsplat.kind);
         }
         ctx.globalAlpha = 1;
+    }
+
+    // Bosses' pools on the ground, with a ring so the edge is easy to read,
+    // fading as they dry up
+    private drawPools(overlay: Overlay, sim: Sim, now: number): void {
+        const ctx = overlay.ctx;
+        for (const pool of sim.pools) {
+            const left = (pool.endTick - sim.tick) / TICKS_PER_SECOND;
+            const fade = Math.min(1, left / POOL_FADE_SECONDS);
+            const grow = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
+            const pulse = 0.5 + 0.5 * Math.sin(now / 240 + pool.uid);
+            this.traceGroundCircle(overlay, sim, pool.x, pool.y, pool.radius * grow);
+            ctx.fillStyle = `rgba(90, 160, 30, ${(0.34 + 0.08 * pulse) * fade})`;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `rgba(190, 240, 70, ${0.8 * fade})`;
+            ctx.stroke();
+        }
     }
 
     // A boss winding up: a red circle filling in over the ground a swing or
@@ -1157,9 +1189,12 @@ export class GameView {
                 color = CASKETS[pickup.tier].color;
                 landTick += CASKET_HOP_TICKS;
             } else if (pickup.kind === "powerUp") {
-                color = POWER_UP_COLOR;
+                color = getPowerUp(pickup.powerUp ?? "").color ?? POWER_UP_COLOR;
             } else {
                 continue;
+            }
+            if (pickup.disguise && pickup.disguise.openTick !== -1) {
+                color = DISGUISE_COLOR;
             }
             const ground = this.ground(sim, pickup.x, pickup.y);
             const base = overlay.project(pickup.x, ground, pickup.y, this.screen);

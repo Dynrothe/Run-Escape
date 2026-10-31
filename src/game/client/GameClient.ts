@@ -16,6 +16,7 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { formatStats } from "../content/stats";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
@@ -688,6 +689,9 @@ export class GameClient implements GameFrameHandler {
         const newGear = isDevMap(sim.map.id)
             ? []
             : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newTrophies = isDevMap(sim.map.id)
+            ? []
+            : result.trophies.filter((id) => !this.save.trophies.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
@@ -710,6 +714,7 @@ export class GameClient implements GameFrameHandler {
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
+                newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
             },
         });

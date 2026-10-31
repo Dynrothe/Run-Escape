@@ -5,6 +5,20 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- New boss: Slash Bash. His disease stacks up, a little slower and weaker each dose, and his bile
+  leaves pools you won't want to stand in.
+- New boss: The Mimic. Not every master casket is what it seems. It flings candy that brings its
+  Third Age minions, and its stomp hurts more the longer you stay under it.
+- Trick or treat: enemies on Hallowed Night sometimes drop a pumpkin. Walk over it for a treat
+  (healing, coins, a sugar rush) or a trick (ghosts, a curse).
+- New weapons for killing The Nightmare: the Inquisitor's mace, which crushes the undead, and the
+  Volatile Nightmare staff, whose Immolate burns big things hardest.
+- The Collection log has a Hallowed Night page: the Jar of Dreams and Little Nightmare from The
+  Nightmare, and halloween masks and a Scythe hidden in pumpkins.
+- Four new quests on Hallowed Night.
+
 ## 0.19.0 - 2026-10-31
 
 ### Added

@@ -2,6 +2,7 @@ import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
+import { getHalloweenStubMap } from "./halloweenStubs";
 import { MapDef } from "./types";
 import {
     BARROWS_EVENTS,
@@ -328,7 +329,13 @@ function createDevMap(recipe: MapRecipe): MapDef {
 export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
 
 // Every map, the campaign's and the fun ones
-export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
+export const ALL_MAPS: MapDef[] = [
+    ...MAPS,
+    ...FUN_MAPS,
+    ...DEV_MAPS,
+    // A stand-in, until the real one is merged (halloweenStubs.ts)
+    ...getHalloweenStubMap(MAPS),
+];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
 

@@ -28,6 +28,14 @@ import {
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { getActiveSets, getSet } from "../content/sets";
 import {
+    PUMPKIN_CHANCE,
+    PUMPKIN_ID,
+    PUMPKIN_MAPS,
+    PUMPKIN_MIN_GAP,
+    PUMPKIN_OUTCOMES,
+} from "../content/trickOrTreat";
+import { TROPHIES, TrophyDef } from "../content/trophies";
+import {
     BoltProcDef,
     BossAttackDef,
     CasketTier,
@@ -90,6 +98,7 @@ import {
     FallingRock,
     Glyph,
     GroundFire,
+    GroundPool,
     PassiveState,
     PendingHit,
     Pickup,
@@ -154,6 +163,14 @@ const SPAWN_MAX_DISTANCE = 24;
 // Bosses turn up a little closer, so the fight starts soon
 const BOSS_SPAWN_MIN_DISTANCE = 12;
 const BOSS_SPAWN_MAX_DISTANCE = 16;
+// A boss in disguise (EnemyDef.disguise): how far from the player it lies, how
+// close sets it off, and ticks between it opening and its first attack
+const DISGUISE_MIN_DISTANCE = 7;
+const DISGUISE_MAX_DISTANCE = 11;
+const DISGUISE_TOUCH = 1;
+const DISGUISE_ATTACK_DELAY = 100;
+// Bosses' pools on the ground at once (the oldest dries up)
+const MAX_POOLS = 12;
 // Enemies left this far behind are brought back near the player
 const RELOCATE_DISTANCE = 34;
 const FLOW_FIELD_SIZE = 96;
@@ -330,6 +347,8 @@ export type RunResult = {
     gearFound: string[];
     // The weapons evolved into, for the Collection log
     evolutionsMade: string[];
+    // The trophies found, for the Collection log
+    trophies: string[];
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills: Record<string, number>;
     caskets: number;
@@ -400,6 +419,8 @@ export class Sim {
     glyphs: Glyph[] = [];
     // Burning ground left by weapons
     fires: GroundFire[] = [];
+    // Pools left by bosses' attacks
+    pools: GroundPool[] = [];
     // Hits still to land, a moment after their swing
     private pendingHits: PendingHit[] = [];
     // Enemies that died lately, for revivers (oldest first)
@@ -415,6 +436,10 @@ export class Sim {
     bossesKilled: string[] = [];
     // Gear out of caskets this run, rerolled away or not
     readonly gearFound = new Set<string>();
+    // Collection log items found (see trophies.ts)
+    readonly trophies = new Set<string>();
+    // When the next trick or treat pumpkin can drop
+    private nextPumpkinTick = 0;
     // Sets caskets have stopped bringing the missing pieces of
     readonly declinedSets = new Set<string>();
     coins = 0;
@@ -612,6 +637,7 @@ export class Sim {
             bossesKilled: [...this.bossesKilled],
             gearFound: [...this.gearFound],
             evolutionsMade: [...this.evolutionsMade],
+            trophies: [...this.trophies],
             enemyKills: { ...this.enemyKills },
             caskets: this.casketsOpened,
             stats: this.getRunStats(),
@@ -1196,6 +1222,7 @@ export class Sim {
         this.stepRings();
         this.stepProjectiles();
         this.stepFires();
+        this.stepPools();
         this.stepEnemyProjectiles();
         this.stepPickups();
         this.cleanUp();
@@ -1314,7 +1341,7 @@ export class Sim {
                 this.spawnEnemy(getEnemy(event.enemyId), "elite");
             } else if (event.kind === "ring") {
                 this.spawnRing(getEnemy(event.enemyId), event.count);
-            } else if (!this.spawnBoss(getEnemy(event.enemyId), event.kind, event.hp)) {
+            } else if (!this.bringOnBoss(getEnemy(event.enemyId), event.kind, event.hp)) {
                 // Nowhere to put it this tick; bosses can't be skipped
                 break;
             }
@@ -2281,7 +2308,7 @@ export class Sim {
     // One of count enemies turning up in a ring radius tiles around another,
     // trying a few spots before giving up
     private spawnNear(
-        enemy: Enemy,
+        enemy: Vec2,
         def: EnemyDef,
         radius: number,
         index: number,
@@ -2597,6 +2624,7 @@ export class Sim {
             this.enrage(enemy);
         }
         this.callSummons(enemy, false);
+        this.stepStomp(enemy);
         for (let i = 0; i < state.cooldowns.length; i++) {
             if (state.cooldowns[i] > 0) {
                 state.cooldowns[i]--;
@@ -2700,6 +2728,7 @@ export class Sim {
             x: enemy.x,
             y: enemy.y,
         });
+        this.landBlastExtras(enemy, windup);
         if (attack.kind === "swing" || attack.kind === "blast") {
             // A swing hits around the boss, a blast where the player was (and
             // around there); the player is hit once however many land on them
@@ -3038,15 +3067,13 @@ export class Sim {
                 player.poisonEnd = this.tick + ticks;
                 break;
             case "debuff":
-                this.debuffs = this.debuffs.filter((d) => d.id !== effect.id);
-                this.debuffs.push({
-                    id: effect.id,
-                    name: effect.name,
-                    iconObjId: effect.iconObjId,
-                    stats: effect.stats,
-                    startTick: this.tick,
-                    endTick: this.tick + ticks,
-                });
+                this.debuffs = this.debuffs
+                    .filter((d) => d.id !== effect.id)
+                    .concat({
+                        ...this.stackDebuff(effect),
+                        startTick: this.tick,
+                        endTick: this.tick + ticks,
+                    });
                 this.updateStats();
                 break;
         }
@@ -3324,6 +3351,7 @@ export class Sim {
     // Bones, and now and then a casket, coins, food or a power-up
     private dropLoot(enemy: Enemy): void {
         this.dropPickup("bones", enemy.x, enemy.y, enemy.xp);
+        this.rollBossTrophies(enemy);
         if (enemy.bonesOnly) {
             return;
         }
@@ -3355,6 +3383,7 @@ export class Sim {
         }
         if (!enemy.boss) {
             this.rollPowerUp(enemy.x - 0.3, enemy.y + 0.3);
+            this.rollPumpkin(enemy.x + 0.3, enemy.y - 0.3);
         }
     }
 
@@ -4755,6 +4784,294 @@ export class Sim {
         return effect;
     }
 
+    // ---- Halloween: disguises, stomps, pools, pumpkins, trophies ----
+
+    // A boss event: the boss, or the casket it's hiding in. False if there's
+    // nowhere to put it this tick.
+    private bringOnBoss(def: EnemyDef, type: "boss" | "finalBoss", hp?: number): boolean {
+        if (def.disguise && type === "boss") {
+            return this.layDisguise(def, hp);
+        }
+        return this.spawnBoss(def, type, hp) !== undefined;
+    }
+
+    // Looks like any casket dropping, toast and all, close enough to tempt
+    private layDisguise(def: EnemyDef, hp: number | undefined): boolean {
+        const disguise = def.disguise!;
+        const pos = this.findSpawnPoint(def, DISGUISE_MIN_DISTANCE, DISGUISE_MAX_DISTANCE);
+        if (!pos) {
+            return false;
+        }
+        const { x, y } = this.walkableSpot(pos.x, pos.y);
+        this.dropPickup("casket", x, y, 1, {
+            tier: disguise.casket,
+            disguise: {
+                enemyId: def.id,
+                hp,
+                shakeTick: this.tick + Math.round(disguise.seconds * TICKS_PER_SECOND),
+                openTick: -1,
+            },
+        });
+        this.events.push({ type: "casketDropped", tier: disguise.casket, x, y });
+        return true;
+    }
+
+    // It stays put (a magnet doesn't move it), shakes when it's walked onto or
+    // left too long, and then opens: there's a moment to step away first
+    private stepDisguise(pickup: Pickup): void {
+        const disguise = pickup.disguise!;
+        const def = getEnemy(disguise.enemyId);
+        const near =
+            Math.hypot(this.player.x - pickup.x, this.player.y - pickup.y) < DISGUISE_TOUCH;
+        if (disguise.openTick === -1 && (near || this.tick >= disguise.shakeTick)) {
+            disguise.openTick = this.tick + Math.round(def.disguise!.shake * TICKS_PER_SECOND);
+            this.events.push({ type: "notice", message: "The casket shudders..." });
+        }
+        if (disguise.openTick !== -1 && this.tick >= disguise.openTick) {
+            this.revealBoss(pickup, def);
+        }
+    }
+
+    private revealBoss(pickup: Pickup, def: EnemyDef): void {
+        const boss = this.spawnEnemy(
+            def,
+            "boss",
+            { x: pickup.x, y: pickup.y },
+            pickup.disguise!.hp,
+        );
+        if (!boss) {
+            return;
+        }
+        pickup.value = -1;
+        const seq = def.disguise!.seq;
+        if (seq !== undefined) {
+            boss.anim = "attack";
+            boss.animStart = this.tick;
+            boss.attackSeq = seq;
+        }
+        boss.attackCooldown = DISGUISE_ATTACK_DELAY;
+        if (def.spawnSpotAnim !== undefined) {
+            this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
+        }
+        this.events.push({
+            type: "bossSpawned",
+            enemyId: def.id,
+            name: def.name,
+            message: def.spawnMessage ?? `${def.name} has appeared!`,
+            finalBoss: false,
+            x: boss.x,
+            y: boss.y,
+        });
+    }
+
+    // Standing under a boss that stomps (BossDef.stomp)
+    private stepStomp(enemy: Enemy): void {
+        const stomp = enemy.def.boss!.stomp;
+        if (!stomp) {
+            return;
+        }
+        const state = enemy.bossState!;
+        const player = this.player;
+        if (Math.hypot(player.x - enemy.x, player.y - enemy.y) > stomp.radius) {
+            state.stomps = 0;
+            state.nextStomp = undefined;
+            return;
+        }
+        const interval = Math.round(stomp.interval * TICKS_PER_SECOND);
+        state.nextStomp ??= this.tick + interval;
+        if (this.tick < state.nextStomp || this.reviving || player.invulnerable > 0) {
+            return;
+        }
+        state.stomps = (state.stomps ?? 0) + 1;
+        state.nextStomp = this.tick + interval;
+        const damage = Math.min(stomp.max, stomp.damage * state.stomps) * enemy.damageScale;
+        this.damagePlayer(damage, enemy.def.id, false, stomp.sound);
+    }
+
+    // What a blast leaves behind where it lands, besides its hit
+    private landBlastExtras(enemy: Enemy, windup: BossWindup): void {
+        const attack = windup.attack;
+        if (attack.kind !== "blast") {
+            return;
+        }
+        const pool = attack.pool;
+        if (pool) {
+            for (const { x, y } of windup.targets) {
+                this.pools.push({
+                    uid: this.nextUid++,
+                    enemyId: enemy.def.id,
+                    x,
+                    y,
+                    radius: pool.radius,
+                    damage: pool.damage * enemy.damageScale,
+                    interval: Math.round(pool.interval * TICKS_PER_SECOND),
+                    effect: pool.effect,
+                    startTick: this.tick,
+                    endTick: this.tick + Math.round(pool.seconds * TICKS_PER_SECOND),
+                    nextTick: 0,
+                });
+            }
+            this.pools.splice(0, Math.max(0, this.pools.length - MAX_POOLS));
+        }
+        attack.impactSpotAnims?.forEach((spotAnim, i) => {
+            const spot = windup.targets[i];
+            if (spot) {
+                this.addEffect(spotAnim, spot.x, spot.y, 0, 40);
+            }
+        });
+        const candies = attack.candies ?? [];
+        const first = windup.targets.length - candies.length;
+        candies.forEach((id, i) => {
+            const spot = windup.targets[first + i];
+            if (spot) {
+                this.bringMinion(enemy, getEnemy(id), spot);
+            }
+        });
+    }
+
+    // One of a boss's minions, unless it still has that kind up: they come
+    // back with the next attack, and there's nothing to farm
+    private bringMinion(boss: Enemy, def: EnemyDef, at: { x: number; y: number }): void {
+        const up = this.enemies.some((e) => !e.dead && e.def === def && e.spawnedBy === boss.uid);
+        if (up) {
+            return;
+        }
+        const spot = this.canTurnUpAt(def, at.x, at.y) ? at : { x: boss.x, y: boss.y };
+        const minion = this.spawnEnemy(def, "normal", spot);
+        if (minion) {
+            minion.spawnedBy = boss.uid;
+            minion.noDrops = true;
+        }
+    }
+
+    // A pool hurts a player standing in it, and not one who's stepped out,
+    // however long ago it last hit them
+    private stepPools(): void {
+        if (this.pools.length === 0) {
+            return;
+        }
+        this.pools = this.pools.filter((pool) => pool.endTick > this.tick);
+        const player = this.player;
+        for (const pool of this.pools) {
+            const inside =
+                Math.hypot(player.x - pool.x, player.y - pool.y) <= pool.radius + player.radius;
+            if (
+                !inside ||
+                this.tick < pool.nextTick ||
+                player.invulnerable > 0 ||
+                this.reviving ||
+                this.runOver
+            ) {
+                continue;
+            }
+            pool.nextTick = this.tick + pool.interval;
+            this.damagePlayer(pool.damage, pool.enemyId, false);
+            if (pool.effect && !this.runOver && !this.reviving) {
+                this.applyPlayerEffect(pool.effect);
+            }
+        }
+    }
+
+    // A debuff as it stands with this dose: a stacking one is its stats times
+    // the doses so far
+    private stackDebuff(
+        effect: Extract<PlayerEffectDef, { kind: "debuff" }>,
+    ): Pick<Debuff, "id" | "name" | "iconObjId" | "stats" | "stacks"> {
+        const { id, name, iconObjId, stats, stacks: most } = effect;
+        if (most === undefined) {
+            return { id, name, iconObjId, stats };
+        }
+        const had = this.debuffs.find((d) => d.id === id)?.stacks ?? 0;
+        const stacks = Math.min(most, had + 1);
+        const stacked = Object.fromEntries(
+            Object.entries(stats).map(([key, value]) => [key, value * stacks]),
+        );
+        return {
+            id,
+            name: stacks > 1 ? `${name} x${stacks}` : name,
+            iconObjId,
+            stats: stacked,
+            stacks,
+        };
+    }
+
+    // Enemies on some maps now and then drop a pumpkin (see trickOrTreat.ts)
+    private rollPumpkin(x: number, y: number): void {
+        if (!PUMPKIN_MAPS.includes(this.map.id) || this.tick < this.nextPumpkinTick) {
+            return;
+        }
+        if (this.rng.chance(PUMPKIN_CHANCE * (1 + this.stats.luck))) {
+            this.nextPumpkinTick = this.tick + PUMPKIN_MIN_GAP * TICKS_PER_SECOND;
+            const spot = this.walkableSpot(x, y);
+            this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: PUMPKIN_ID });
+        }
+    }
+
+    // Now and then a treat holds a trophy instead; otherwise it's a treat or a
+    // trick by weight. What it says as it opens.
+    private openPumpkin(): string {
+        const trophy = TROPHIES.find(
+            ({ from }) => from.kind === "pumpkin" && this.rng.chance(from.chance),
+        );
+        if (trophy) {
+            this.events.push({ type: "playerShout", text: "Treat!" });
+            return this.findTrophy(trophy);
+        }
+        const index = this.rng.weightedIndex(PUMPKIN_OUTCOMES.map((o) => o.weight));
+        const outcome = PUMPKIN_OUTCOMES[index];
+        const player = this.player;
+        const does = outcome.does;
+        switch (does.kind) {
+            case "heal":
+                this.heal(player.maxHp * does.fraction);
+                break;
+            case "coins":
+                this.coins += Math.round(does.coins * (1 + this.stats.greed) * this.coinScale);
+                break;
+            case "buff":
+                this.addBuff(does.itemId, does.stats, does.seconds, false);
+                break;
+            case "enemies": {
+                const def = getEnemy(does.enemyId);
+                for (let i = 0; i < does.count; i++) {
+                    const enemy = this.spawnNear(player, def, 2.5, i, does.count, 3);
+                    if (enemy) {
+                        enemy.bonesOnly = true;
+                    }
+                }
+                break;
+            }
+            case "effect":
+                this.applyPlayerEffect(does.effect);
+                break;
+        }
+        this.events.push({ type: "playerShout", text: outcome.trick ? "Trick!" : "Treat!" });
+        return outcome.message;
+    }
+
+    // Collection log trophies a boss can drop on its map
+    private rollBossTrophies(enemy: Enemy): void {
+        if (!enemy.boss) {
+            return;
+        }
+        for (const trophy of TROPHIES) {
+            const { from } = trophy;
+            if (
+                from.kind === "boss" &&
+                from.enemyId === enemy.def.id &&
+                from.mapId === this.map.id &&
+                this.rng.chance(from.chance)
+            ) {
+                this.events.push({ type: "notice", message: this.findTrophy(trophy) });
+            }
+        }
+    }
+
+    private findTrophy(trophy: TrophyDef): string {
+        this.trophies.add(trophy.id);
+        return `New item added to your collection log: ${trophy.name}`;
+    }
+
     // ---- Pickups ----
 
     dropCasket(x: number, y: number, elite: boolean): void {
@@ -4803,7 +5120,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise"> = {},
     ): void {
         if (kind === "bones" && this.pickups.length >= MAX_PICKUPS) {
             // Too many lying around: the pile furthest from the player comes
@@ -4857,6 +5174,10 @@ export class Sim {
         for (const pickup of this.pickups) {
             pickup.prevX = pickup.x;
             pickup.prevY = pickup.y;
+            if (pickup.disguise) {
+                this.stepDisguise(pickup);
+                continue;
+            }
             if (
                 pickup.kind === "powerUp" &&
                 !pickup.attracted &&
@@ -5095,6 +5416,9 @@ export class Sim {
                     scale: effect.scale,
                 });
                 message = "A fairy ring opens at your feet!";
+                break;
+            case "pumpkin":
+                message = this.openPumpkin();
                 break;
             case "laps":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);

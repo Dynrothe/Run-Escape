@@ -37,6 +37,7 @@ import { PASSIVES } from "../../src/game/content/passives";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
+import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
 import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
 import { LoadedCache } from "../../src/mapviewer/Caches";
@@ -188,6 +189,7 @@ function getContentObjIds(): number[] {
             THRALLS,
             ALL_MAPS,
             SHOP_UPGRADES,
+            TROPHIES,
         },
         "",
     );

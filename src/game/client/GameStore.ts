@@ -206,6 +206,8 @@ export type UiSnapshot = {
         unlockedCharacters: string[];
         unlockedItems: string[];
         newGear: string[];
+        // The names of the trophies it found for the first time
+        newTrophies: string[];
         quests: { name: string; coins: number }[];
     };
     toasts: Toast[];
