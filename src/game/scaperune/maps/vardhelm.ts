@@ -49,8 +49,8 @@ const CITY_TOWER = 1867;
 const TOWER_SPACING = 7;
 const VALE_GRASS = [48, 99, 100];
 const SHELF_GRASS = [52, 48, 100];
-// The tarn's frozen over
-const TARN_ICE = 196;
+// Floes on the tarn
+const FLOES = [60404, 60405];
 // Underlays for rock, going up. The renderer blends hues, so that brown running straight
 // into the snow's blue passes through a bright green: the greys come between them.
 const BROWN_ROCK = 92;
@@ -60,6 +60,7 @@ const NEUTRAL_SNOW = 58;
 const FIELD_FENCE = BIOMES.meadow.fence;
 const GREAT_BOULDER = 60444;
 const PARAPET = 1902;
+const GUARD = 818;
 const SHRINE_CRYSTAL = 27878;
 const STONES = [34780, 34781, 7016];
 const GRAVES = [404, 405, 401, 400];
@@ -77,7 +78,7 @@ const SNOW_TREES: [number, number][] = [...BIOMES.snow.trees, [1318, 3]];
 const SNOW_FLATS = BIOMES.snow.decor;
 
 // Buildings from the real world that only this map has
-const VARDHELM_PREFABS: Record<string, PrefabDef> = {
+export const VARDHELM_PREFABS: Record<string, PrefabDef> = {
     ...PREFABS,
     // Camelot
     camelot_keep: { worldX: 2745, worldY: 3489, sizeX: 27, sizeY: 30 },
@@ -129,10 +130,10 @@ const COURSE: [number, number, number][] = [
     [172, 128, 4.5],
     [184, 126, 4.5],
     [208, 126, 4.5],
-    [218, 130, 4],
-    [228, 136, 5],
-    [236, 137, 3],
-    [241, 138, 3],
+    [218, 129, 4],
+    [228, 132, 5],
+    [236, 133, 3],
+    [241, 134, 3],
     [249, 146, 4.5],
     [274, 146, 4.5],
     [286, 142, 5],
@@ -146,7 +147,11 @@ const FALLS: { foot: number; lip: number; low: number; high: number }[] = [
 ];
 
 // A pool of its own under a cliff, for a fall with no river behind it
-const POOLS = [{ x: 214, y: 225, across: 6, out: 4, level: 72 }];
+const POOLS = [
+    { x: 214, y: 225, across: 6, out: 4, level: 72, fall: true },
+    // Aldmere Water
+    { x: 204, y: 90, across: 19, out: 12, level: 26, fall: false },
+];
 
 function getCourse(y: number): { centre: number; half: number } {
     let i = 0;
@@ -210,7 +215,7 @@ const STAIR_ROWS: [number, number, number][] = [
 ];
 // Half the width of a bench: past that it's the cliff up to the next
 const BENCH = 4;
-const stairWander = createNoise(1187 + 12, 1);
+const stairWander = createNoise(SETTINGS.seed + 12, 1);
 
 function getStairHeight(x: number, y: number): number {
     const along = Math.min(Math.max((x - STAIR_WEST) / (STAIR_EAST - STAIR_WEST), -0.3), 1.3);
@@ -387,19 +392,21 @@ function getWaterField(terrain: Terrain, rock: boolean): Float32Array {
     for (let y = 278; y < 320; y++) {
         for (let x = 110; x < 176; x++) {
             const away = Math.hypot((x - 138) / 1.2, y - 298);
-            const edge = 13 + (shore(x / 12, y / 12) - 0.5) * 8 - away;
+            const edge = 13 + (shore(x / 20, y / 20) - 0.5) * 8 - away;
             field[x + y * cornersX] = Math.max(field[x + y * cornersX], edge);
         }
     }
     for (const { x: poolX, y: poolY, across, out } of POOLS) {
-        for (let y = poolY - out - 2; y <= poolY + out + 2; y++) {
-            for (let x = poolX - across - 2; x <= poolX + across + 2; x++) {
-                const reach = (1 - Math.hypot((x - poolX) / across, (y - poolY) / out)) * out;
+        for (let y = poolY - out * 2; y <= poolY + out * 2; y++) {
+            for (let x = poolX - across * 2; x <= poolX + across * 2; x++) {
+                const wobble = (shore(x / 24, y / 24) - 0.5) * 0.5;
+                const away = Math.hypot((x - poolX) / across, (y - poolY) / out);
+                const reach = (1 + wobble - away) * out;
                 field[x + y * cornersX] = Math.max(field[x + y * cornersX], reach);
             }
         }
     }
-    const smoothed = smoothField(field, cornersX, cornersY, 1);
+    const smoothed = smoothField(field, cornersX, cornersY, 2);
     // Not across a fall's lip and foot: those are straight lines across the river
     if (rock) {
         for (const { foot, lip } of FALLS) {
@@ -747,10 +754,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
         }
     }
     sinkFresh(build, distanceTo(carved, sizeX, sizeY, MAX_BANK), levels);
-    const iceEdge = createNoise(SETTINGS.seed + 13, 2);
-    const waterKind = (x: number, y: number) =>
-        y + (iceEdge(x / 9, y / 9) - 0.5) * 18 > 293 ? TARN_ICE : BIOMES.meadow.water;
-    const waterTiles = ground.paintField(getWaterField(terrain, true), waterKind, true);
+    const waterTiles = ground.paintField(getWaterField(terrain, true), BIOMES.meadow.water, true);
     holdWater(build, waterTiles);
 
     build.cliffs.set(shapeCliffs(terrain, SETTINGS.walkSlope));
@@ -1066,11 +1070,22 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     place(355, 199, 270);
     place(362, 199, 271);
     place(361, 212, 277);
+    // The king's guard, stood along the way to the keep and down the avenue
+    for (let y = 277; y <= 281; y += 2) {
+        place(GUARD, 203, y, 1, 1);
+        place(GUARD, 209, y, 1, 3);
+    }
+    for (let x = 176; x <= 200; x += 6) {
+        place(GUARD, x, 259, 1, 0);
+        place(GUARD, x, 266, 1, 2);
+    }
     // Crops, by the road out of Aldmere
     fencedField(build, 98, 116, 24, 12, [15506, 15507, 15508]);
     fencedField(build, 120, 72, 14, 10, [312]);
     place(299, 96, 113);
     place(304, 94, 114);
+    // And Lastlight's, what little grows up here
+    fencedField(build, 214, 204, 12, 8, [312]);
     // The old stones at Stonewake, on the Shelf's west end, and their dead
     for (let stone = 0; stone < 9; stone++) {
         const angle = (stone / 9) * Math.PI * 2;
@@ -1146,6 +1161,18 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     place(1282, 206, 146, 2);
     place(1283, 226, 158, 2);
     place(1284, 204, 128, 2);
+    // Ice on the tarn, all out on the water
+    for (let floe = 0; floe < 40; floe++) {
+        const x = Math.floor(lerp(118, 158, build.rng()));
+        const y = Math.floor(lerp(290, 310, build.rng()));
+        let water = true;
+        for (const i of [0, 1, sizeX, sizeX + 1]) {
+            water &&= waterTiles[ground.tile(x, y) + i] === 1;
+        }
+        if (water) {
+            place(FLOES[floe % FLOES.length], x, y, 2, floe % 4);
+        }
+    }
     // A rockfall has shut the road south
     for (let x = 100; x < 116; x += 2) {
         place(11434, x, 68 + (x % 3), 2);
@@ -1191,7 +1218,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     paintRockFaces(build, rockSkip, massif);
     for (const { foot, centre } of [
         { foot: 147, centre: 139 },
-        { foot: 236, centre: 137 },
+        { foot: 236, centre: 133 },
     ]) {
         for (const x of [centre - 4, centre - 2, centre]) {
             ground.grid.locs.push({
@@ -1200,12 +1227,12 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
                 rotation: 0,
                 level: 0,
                 x,
-                y: foot - 1,
+                y: foot - 2,
             });
         }
-        falls.push({ x: centre - 2, y: foot - 1 });
+        falls.push({ x: centre - 2, y: foot - 2 });
     }
-    for (const { x, y, out } of POOLS) {
+    for (const { x, y, out } of POOLS.filter((pool) => pool.fall)) {
         ground.grid.locs.push({
             id: CLIFF_FALL,
             type: 10,
