@@ -148,6 +148,17 @@ function godsword(
 // The blade takes its hilt at this level
 const HILT_LEVEL = 2;
 
+// Having beaten the Desert, a burst's first level picks the run's Ancient spell
+const ANCIENT_SPELL_PICK = {
+    level: HILT_LEVEL,
+    into: [
+        { weaponId: "ice_burst", hiltObjId: 4675 },
+        { weaponId: "smoke_burst", hiltObjId: 25491 },
+        { weaponId: "shadow_burst", hiltObjId: 25492 },
+        { weaponId: "blood_burst", hiltObjId: 25489 },
+    ],
+};
+
 // An evolved weapon's levels: what it evolves into, then two more steps of
 // damage
 function evolvedLevels(
@@ -427,6 +438,7 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         // One Ancient burst at a time
         family: "ancient_burst",
+        hilts: ANCIENT_SPELL_PICK,
         freezes: true,
         levels: levels(
             {
@@ -494,7 +506,9 @@ export const WEAPONS: WeaponDef[] = [
         hitSound: -1,
         rarity: "common",
         family: "ancient_burst",
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "fareed" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Smoke Burst",
@@ -534,7 +548,9 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         family: "ancient_burst",
         drain: 0.2,
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "damis_risen" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Shadow Burst",
@@ -572,7 +588,9 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         family: "ancient_burst",
         lifesteal: { chance: 0.05, fraction: 0.5, max: 2, spotAnim: 1542 },
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "dessous" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Blood Burst",

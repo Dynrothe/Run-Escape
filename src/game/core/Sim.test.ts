@@ -4290,6 +4290,29 @@ describe("Castle Wars and Pest Control", () => {
     });
 });
 
+describe("the Ancient spell pick", () => {
+    test("a burst's second level becomes the spell picked, at the same level", () => {
+        const sim = new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "ancient_mage",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            unlockedItems: new Set(["smoke_burst", "shadow_burst", "blood_burst"]),
+        });
+        sim.state = "levelUp";
+        sim.pendingLevelUps = 1;
+        sim.choices = [{ kind: "weaponLevel", weaponId: "ice_burst", level: 2, quality: "common" }];
+        sim.choose(0);
+        expect(sim.choosingHilt).toBe(true);
+        expect(sim.choices.length).toBe(4);
+        sim.choose(2);
+        expect(sim.weapons.map((w) => [w.def.id, w.level])).toEqual([["shadow_burst", 2]]);
+    });
+});
+
 describe("extra slots from the shop", () => {
     const slots = (weaponSlots: number, passiveSlots: number) =>
         createSim("warrior", 1, "lumbridge", { ...emptyStats(), weaponSlots, passiveSlots });

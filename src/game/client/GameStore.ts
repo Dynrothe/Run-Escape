@@ -200,6 +200,8 @@ export type ChoiceView = {
     isEvolution: boolean;
     // A godsword's hilt to pick
     isHilt: boolean;
+    // A hilt pick that's the run's Ancient spell, not a godsword's hilt
+    isSpell: boolean;
     // The rolled rarity of this offer, if it has one
     rarity?: { name: string; color: string };
     // Weapons: what this level changes, or a new weapon's stats

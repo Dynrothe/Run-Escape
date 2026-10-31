@@ -1280,18 +1280,23 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // The godsword's hilt is picked as the rest of the level up that took it
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
+    const spell = ui.choices.some((choice) => choice.isSpell);
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-levelup">
                 <h2>
-                    {hilt
-                        ? "Your godsword needs a hilt!"
-                        : "Congratulations, you've advanced a level!"}
+                    {spell
+                        ? "Choose your Ancient spell!"
+                        : hilt
+                          ? "Your godsword needs a hilt!"
+                          : "Congratulations, you've advanced a level!"}
                 </h2>
                 <p className="ui-subtle">
-                    {hilt
-                        ? "Pick the god whose hilt it takes, and with it its special attack:"
-                        : `You are now level ${ui.hud?.level}. Choose a reward:`}
+                    {spell
+                        ? "It keeps its level, and it's your only burst this run:"
+                        : hilt
+                          ? "Pick the god whose hilt it takes, and with it its special attack:"
+                          : `You are now level ${ui.hud?.level}. Choose a reward:`}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -1318,7 +1323,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                         <span className="ui-tag ui-tag-evolve">Evolution!</span>
                                     )}
                                     {choice.isHilt && (
-                                        <span className="ui-tag ui-tag-evolve">Hilt</span>
+                                        <span className="ui-tag ui-tag-evolve">
+                                            {choice.isSpell ? "Spell" : "Hilt"}
+                                        </span>
                                     )}
                                 </div>
                                 <div className="ui-card-text">{choice.text}</div>

@@ -705,6 +705,8 @@ export type WeaponDef = {
     // Weapons of a family (the godswords) share one weapon's chance of being
     // offered, and only one of them is carried
     family?: string;
+    // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
+    pickOnly?: boolean;
     // Used in place of every so many attacks (sweeps and slashes)
     special?: SpecialAttackDef;
     // Bosses and elites are hit again for these fractions of the damage (the

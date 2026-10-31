@@ -189,15 +189,24 @@ describe("save", () => {
     test("map tasks bring in items, which new saves don't have", () => {
         const save = createSave();
         expect(save.unlockedItems).toEqual([]);
-        recordRun(save, run("desert", { seconds: 460, bossesKilled: ["fareed", "dessous"] }));
-        expect(save.unlockedItems).toEqual(["smoke_burst", "blood_burst"]);
         // Only on its own map
-        recordRun(save, run("lumbridge", { bossesKilled: ["damis_risen"] }));
-        expect(save.unlockedItems).not.toContain("shadow_burst");
+        recordRun(save, run("lumbridge", { bossesKilled: ["ket_zek"] }));
+        expect(save.unlockedItems).toEqual([]);
+        recordRun(save, run("karamja", { seconds: 460, bossesKilled: ["ket_zek"] }));
+        expect([...save.unlockedItems].sort()).toEqual(["obsidian_armour", "toktz_xil_ul"]);
+        // The Ancient spells take beating the Desert, not its bosses
+        recordRun(save, run("desert", { seconds: 460, bossesKilled: ["fareed", "dessous"] }));
+        expect(save.unlockedItems).not.toContain("smoke_burst");
         recordRun(save, run("desert", { victory: true, seconds: 900 }));
-        expect(save.unlockedItems).toContain("osmumtens_fang");
+        expect(save.unlockedItems).toEqual(
+            expect.arrayContaining([
+                "osmumtens_fang",
+                "smoke_burst",
+                "shadow_burst",
+                "blood_burst",
+            ]),
+        );
         expect(save.unlockedCharacters).toContain("nomad");
-        expect(save.unlockedItems).not.toContain("shadow_burst");
     });
 
     test("a run's item tasks can be seen before it's recorded", () => {
@@ -212,7 +221,12 @@ describe("save", () => {
             unlockedItems: ["smoke_burst", "nothing", "smoke_burst"],
             mapVictories: { desert: 1 },
         });
-        expect(save.unlockedItems).toEqual(["smoke_burst", "osmumtens_fang"]);
+        expect([...save.unlockedItems].sort()).toEqual([
+            "blood_burst",
+            "osmumtens_fang",
+            "shadow_burst",
+            "smoke_burst",
+        ]);
         expect(migrateSave({ version: 2 }).unlockedItems).toEqual([]);
         const old = migrateSave({ version: 2, mapVictories: { varlamore: 1 } });
         expect(old.unlockedItems).toEqual(
@@ -230,10 +244,13 @@ describe("save", () => {
     test("exported saves import as they were", () => {
         const save = createSave();
         recordRun(save, run("lumbridge", { victory: true, seconds: 900, coins: 10000 }));
-        recordRun(save, run("desert", { bossesKilled: ["fareed"] }));
+        recordRun(save, run("karamja", { bossesKilled: ["ket_zek"] }));
         expect(buyUpgrade(save, "strength")).toBe(true);
         expect(importSave(exportSave(save))).toEqual(save);
-        expect(importSave(exportSave(save)).unlockedItems).toEqual(["smoke_burst"]);
+        expect([...importSave(exportSave(save)).unlockedItems].sort()).toEqual([
+            "obsidian_armour",
+            "toktz_xil_ul",
+        ]);
         // Older exports come in migrated
         expect(importSave(JSON.stringify({ version: 1, victories: 1 })).mapVictories).toEqual({
             lumbridge: 1,

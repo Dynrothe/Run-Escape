@@ -23,6 +23,11 @@ the version in the corner).
   Nightmare, and halloween masks and a Scythe hidden in pumpkins.
 - Four new quests on Hallowed Night.
 
+### Changed
+
+- Ancient spells: level ups only offer Ice Burst now. Beat the Desert and its second level lets you
+  pick which burst you want for the run.
+
 ## 0.19.2 - 2026-10-31
 
 ### Fixed

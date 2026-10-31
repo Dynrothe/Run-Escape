@@ -861,13 +861,13 @@ export class Sim {
         if (choice) {
             this.apply(choice);
         }
-        // A godsword's blade that just reached its hilt level: picking the
-        // hilt is the rest of this level up
+        // A godsword's blade or an Ancient burst that just reached its pick
+        // level: picking is the rest of this level up
         const weapon =
             choice?.kind === "weaponLevel"
                 ? this.weapons.find((w) => w.def.id === choice.weaponId)
                 : undefined;
-        const hilts = weapon ? hiltChoices(weapon) : [];
+        const hilts = weapon ? hiltChoices(weapon, this.unlockedItems) : [];
         if (hilts.length > 0) {
             this.choices = hilts;
             return;

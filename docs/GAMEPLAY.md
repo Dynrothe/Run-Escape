@@ -34,7 +34,8 @@ version and how to run it.
   hand and passives like the Graceful outfit or Amulet of glory show up on your character.
 - **The Ancient bursts**: Ice Burst freezes what's around you, Smoke Burst poisons it, Shadow
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
-  You carry only one burst, and they share one weapon's chance of being offered.
+  Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of
+  the four you want, keeping its level, and it's your only burst for that run.
 - **Evolutions** from the new maps' passives: maxed elemental runes with Vengeance become
   **Astral runes**, which never stop circling; maxed throwing knives with Obsidian armour become
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
@@ -157,7 +158,7 @@ version and how to run it.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | Smoke Burst (Fareed), Blood Burst (Dessous), Shadow Burst (Damis)                                    |
+    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst)                                               |
     | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
     | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
