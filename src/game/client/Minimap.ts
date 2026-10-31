@@ -14,6 +14,11 @@ const TILE_PIXELS = 3;
 // A map square's image of another plane that didn't come is asked for again
 // after this long
 const PLANE_IMAGE_RETRY_MS = 2000;
+// An arena with more map squares a side than this keeps a coarser picture, and only
+// asks for the images near the player: the workers have the scenery to load
+const BIG_ARENA_SQUARES = 8;
+const BIG_ARENA_TILE_PIXELS = 1;
+const BIG_ARENA_IMAGE_REACH = 2;
 
 // Dots: yellow for enemies like the client's NPC dots (orange and bigger for
 // elites), red for bosses, white for the player
@@ -32,8 +37,13 @@ function lerp(a: number, b: number, t: number): number {
 // power-ups further away than it shows sit on its rim, pointing the way.
 export class Minimap {
     private map?: MapDef;
-    // The whole arena at IMAGE_TILE_PIXELS, filled in as map squares come in
+    // The whole arena at tilePixels, filled in as map squares come in
     private background?: HTMLCanvasElement;
+    private tilePixels = IMAGE_TILE_PIXELS;
+    private big = false;
+    // The map square the player's on
+    private playerMapX = 0;
+    private playerMapY = 0;
     private readonly loaded = new Set<number>();
     private readonly loading = new Set<number>();
     // Images of other planes than the ground floor's, which the map viewer
@@ -49,8 +59,11 @@ export class Minimap {
         }
         this.map = map;
         const background = document.createElement("canvas");
-        background.width = map.arena.sizeX * IMAGE_TILE_PIXELS;
-        background.height = map.arena.sizeY * IMAGE_TILE_PIXELS;
+        const squares = Math.max(map.arena.sizeX, map.arena.sizeY) / MAP_SQUARE_SIZE;
+        this.big = squares > BIG_ARENA_SQUARES;
+        this.tilePixels = this.big ? BIG_ARENA_TILE_PIXELS : IMAGE_TILE_PIXELS;
+        background.width = map.arena.sizeX * this.tilePixels;
+        background.height = map.arena.sizeY * this.tilePixels;
         this.background = background;
         this.loaded.clear();
         this.loading.clear();
@@ -131,6 +144,13 @@ export class Minimap {
                 if (this.loaded.has(id) || this.loading.has(id)) {
                     continue;
                 }
+                const away = Math.max(
+                    Math.abs(mapX - this.playerMapX),
+                    Math.abs(mapY - this.playerMapY),
+                );
+                if (this.big && away > BIG_ARENA_IMAGE_REACH) {
+                    continue;
+                }
                 const url = this.getImageUrl(mapX, mapY, id);
                 if (!url) {
                     continue;
@@ -143,12 +163,15 @@ export class Minimap {
                         return;
                     }
                     // The images have north at the top
+                    const pixels = this.tilePixels;
                     background
                         .getContext("2d")!
                         .drawImage(
                             image,
-                            (mapX * MAP_SQUARE_SIZE - baseX) * IMAGE_TILE_PIXELS,
-                            (baseY + sizeY - (mapY + 1) * MAP_SQUARE_SIZE) * IMAGE_TILE_PIXELS,
+                            (mapX * MAP_SQUARE_SIZE - baseX) * pixels,
+                            (baseY + sizeY - (mapY + 1) * MAP_SQUARE_SIZE) * pixels,
+                            MAP_SQUARE_SIZE * pixels,
+                            MAP_SQUARE_SIZE * pixels,
                         );
                     this.loaded.add(id);
                     this.loading.delete(id);
@@ -160,6 +183,8 @@ export class Minimap {
     }
 
     draw(canvas: HTMLCanvasElement, sim: Sim, alpha: number): void {
+        this.playerMapX = Math.floor(sim.player.x / MAP_SQUARE_SIZE);
+        this.playerMapY = Math.floor(sim.player.y / MAP_SQUARE_SIZE);
         this.loadImages();
         // Its size on screen, after the UI's zoom (clientWidth is before it)
         const size = Math.round(canvas.getBoundingClientRect().width * pixelRatio);
