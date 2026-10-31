@@ -1,7 +1,6 @@
 import { Exit } from "./building";
 import {
     Build,
-    FENCE,
     LOC_WALL,
     SETTLE_SLOPE,
     SPAWN_CLEAR,
@@ -56,9 +55,11 @@ export type PlacedBuilding = {
     sizeY: number;
     exit?: Exit;
     hasRoad: boolean;
+    // Which town it's in, if it's in one
+    town?: number;
 };
 
-type Candidate = { name: string; centreX: number; centreY: number };
+type Candidate = { name: string; centreX: number; centreY: number; town?: number };
 
 // The buildings that can go somewhere, by the settings
 function getBuildingNames(build: Build, x: number, y: number): string[] {
@@ -113,22 +114,23 @@ export function pickSpot(build: Build, towns: Point[]): Candidate | undefined {
     const { settings, arena, rng } = build;
     let x: number;
     let y: number;
+    let town: number | undefined;
     if (towns.length > 0) {
-        const town = pick(rng, towns);
+        town = Math.floor(rng() * towns.length);
         const angle = rng() * Math.PI * 2;
         const distance = Math.sqrt(rng()) * settings.townSize;
-        x = town.x + Math.cos(angle) * distance;
-        y = town.y + Math.sin(angle) * distance;
+        x = towns[town].x + Math.cos(angle) * distance;
+        y = towns[town].y + Math.sin(angle) * distance;
     } else {
         x = lerp(arena.x0, arena.x1, rng());
         y = lerp(arena.y0, arena.y1, rng());
     }
     const names = getBuildingNames(build, Math.floor(x), Math.floor(y));
-    return names.length > 0 ? { name: pick(rng, names), centreX: x, centreY: y } : undefined;
+    return names.length > 0 ? { name: pick(rng, names), centreX: x, centreY: y, town } : undefined;
 }
 
 // Whether a rectangle has room for a building, with space round it
-function fitsBuilding(
+export function fitsBuilding(
     build: Build,
     water: Uint8Array,
     x: number,
@@ -136,7 +138,7 @@ function fitsBuilding(
     sizeX: number,
     sizeY: number,
 ): boolean {
-    const { settings, ground, spawn, toEdge, terrain, cliffs, mainland } = build;
+    const { settings, ground, spawn, toEdge, terrain, cliffs, mainland, plots } = build;
     const inset = settings.boundary === "sea" ? 3 : settings.boundaryDepth + 3;
     if (Math.min(toEdge(x, y), toEdge(x + sizeX, y + sizeY)) < inset) {
         return false;
@@ -154,6 +156,18 @@ function fitsBuilding(
             ) {
                 return false;
             }
+        }
+    }
+    // Round buildings have corners of their plot that nothing's standing on
+    const gap = BUILDING_CLEAR + PLOT_MARGIN * 2;
+    for (const plot of plots) {
+        if (
+            x < plot.x + plot.sizeX + gap &&
+            plot.x < x + sizeX + gap &&
+            y < plot.y + plot.sizeY + gap &&
+            plot.y < y + sizeY + gap
+        ) {
+            return false;
         }
     }
     const { min, max } = terrain.getRange(
@@ -181,7 +195,7 @@ function fitsBuilding(
 // How high a building's plot goes: the middle of its ground, as near what it's joining as
 // that ground will let it, and within walking distance of any plot beside it. Undefined
 // if that's not near its own ground.
-function getPlotHeight(
+export function getPlotHeight(
     build: Build,
     x: number,
     y: number,
@@ -212,7 +226,7 @@ function getPlotHeight(
 }
 
 // Makes a building's plot flat at a height, and the ground out of its door
-function pinPlot(
+export function pinPlot(
     build: Build,
     x: number,
     y: number,
@@ -236,7 +250,7 @@ function pinPlot(
 
 // A fence round a building a little way off, with a gap at its door
 function placeYard(build: Build, plot: PlacedBuilding): void {
-    const { ground } = build;
+    const { ground, biomeAt } = build;
     const { exit } = plot;
     const x0 = plot.x - YARD_GAP;
     const y0 = plot.y - YARD_GAP;
@@ -255,7 +269,8 @@ function placeYard(build: Build, plot: PlacedBuilding): void {
                     (exit.outY > 0 ? y === y1 : y === y0) &&
                     (rotation === WALL_NORTH || rotation === WALL_SOUTH)));
         if (!inGap) {
-            ground.grid.locs.push({ id: FENCE, type: LOC_WALL, rotation, level: 0, x, y });
+            const id = biomeAt(x, y).fence;
+            ground.grid.locs.push({ id, type: LOC_WALL, rotation, level: 0, x, y });
         }
     };
     for (let x = x0; x <= x1; x++) {
@@ -301,7 +316,7 @@ function getPlacings(
     return placings.sort((a, b) => b.facing - a.facing);
 }
 
-function markOffLimits(
+export function markOffLimits(
     build: Build,
     roads: RoadNetwork,
     x: number,
@@ -343,6 +358,7 @@ function placeBuilding(
             sizeY: prefab.sizeY,
             exit,
             hasRoad: wantsRoad,
+            town: spot.town,
         };
         // Straight out of the door, so that's how the road arrives
         const lead: Point[] = [];
@@ -407,14 +423,17 @@ export function placeBuildings(
 
 // Ruined buildings: some of their walls, none of their furniture, and no road
 export function placeRuins(build: Build, roads: RoadNetwork, water: Uint8Array): void {
-    const { settings, ground, kit, rng } = build;
+    const { settings, ground, kit, rng, biomeAt } = build;
     const wanted = Math.round(settings.ruins * settings.squaresX * settings.squaresY * 2);
-    const names = Object.keys(PREFABS);
     let placed = 0;
     for (let attempt = 0; attempt < wanted * 30 && placed < wanted; attempt++) {
-        const name = pick(rng, names);
         const x0 = lerp(build.arena.x0, build.arena.x1, rng());
         const y0 = lerp(build.arena.y0, build.arena.y1, rng());
+        const biome = biomeAt(Math.floor(x0), Math.floor(y0));
+        const names = settings.anyBuildings
+            ? Object.keys(PREFABS)
+            : (biome.ruins ?? biome.buildings);
+        const name = pick(rng, names);
         const turns = Math.floor(rng() * 4);
         const { prefab } = kit.get(name, turns);
         const x = Math.round(x0);

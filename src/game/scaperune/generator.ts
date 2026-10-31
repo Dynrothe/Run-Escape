@@ -5,7 +5,6 @@ import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
 import { LandformBounds, createRelief, getHillBoundaryRise, shapeCliffs } from "./landforms";
 import {
     Build,
-    FENCE,
     LOC_FLOOR_DECORATION,
     LOC_NORMAL,
     LOC_WALL,
@@ -60,6 +59,13 @@ import {
 } from "./roads";
 import { DEFAULT_SETTINGS, GeneratorSettings, getSettingsError } from "./settings";
 import { PlacedBuilding, placeBuildings, placeRuins } from "./settlements";
+import {
+    PlacedPiece,
+    placeSetPieces,
+    placeTownWalls,
+    placeWaterPieces,
+    placeWaymarkers,
+} from "./structures";
 import { limitSlope } from "./terrain";
 
 export * from "./settings";
@@ -79,6 +85,9 @@ const MIN_STRANDED_PIECE = 150;
 
 const MAX_FORDS = 16;
 
+// Every so many tiles of a piece of water are looked at to see what it's in
+const WATER_SAMPLE = 7;
+
 // Fewer reachable tiles than this isn't a map you can play
 const MIN_PLAYABLE_TILES = 300;
 
@@ -86,6 +95,12 @@ const MIN_PLAYABLE_TILES = 300;
 const RUBBLE_CHANCE = 0.006;
 
 const STONE_CHANCE = 0.12;
+
+// Chance a tile gets something big, with the setting at 1, and how much the edge between two
+// biomes frays, in the noise that divides them. That's about 8 tiles each way.
+const PROP_CHANCE = 0.006;
+
+const BIOME_FRAY = 0.16;
 
 export type { RoadLine };
 
@@ -97,6 +112,7 @@ export type GeneratedMap = {
     roadTiles: Uint8Array;
     lines: RoadLine[];
     buildings: PlacedBuilding[];
+    landmarks: PlacedPiece[];
     // Passes cut through cliffs
     passes: RoadLine[];
     walkSlope: number;
@@ -181,7 +197,8 @@ function placeBoundary(build: Build, roadTiles: Uint8Array): void {
     const fence = (x: number, y: number, rotation: number) => {
         // A way through for a road, as well as nothing in the water
         if (!ground.isWaterTile(x, y) && !roadTiles[ground.tile(x, y)]) {
-            ground.grid.locs.push({ id: FENCE, type: LOC_WALL, rotation, level: 0, x, y });
+            const { fence: id } = build.biomeAt(x, y);
+            ground.grid.locs.push({ id, type: LOC_WALL, rotation, level: 0, x, y });
         }
     };
     for (let x = x0; x <= x1; x++) {
@@ -195,7 +212,7 @@ function placeBoundary(build: Build, roadTiles: Uint8Array): void {
 }
 
 function scatter(build: Build, water: Uint8Array): void {
-    const { settings, ground, rng, arena, spawn, biomeAt, toEdge, sizeX, sizeY, relief } = build;
+    const { settings, ground, rng, arena, spawn, biomeNear, toEdge, sizeX, sizeY, relief } = build;
     const { terrain } = build;
     const snowLine = getSnowLine(settings);
     const clumpScale = lerp(8, 28, settings.treeClumping);
@@ -225,7 +242,7 @@ function scatter(build: Build, water: Uint8Array): void {
             if (Math.hypot(x - spawn.x, y - spawn.y) < SPAWN_CLEAR) {
                 continue;
             }
-            const biome = biomeAt(x, y);
+            const biome = biomeNear(x, y, rng());
             const edge = toEdge(x, y);
             const inBelt = belt && edge < settings.boundaryDepth;
             const clump = clumps(x / clumpScale, y / clumpScale);
@@ -259,6 +276,7 @@ function scatter(build: Build, water: Uint8Array): void {
             const bare = terrain.height[terrain.corner(x, y)] > snowLine ? 0 : 1 - rocky;
             const treeChance = (inBelt ? 0.5 : settings.trees * density) * bare;
             const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006);
+            const propChance = settings.props * PROP_CHANCE * bare;
             if (stones && edge < 3 && edge > -3) {
                 // A line of boulders along the edge, where the ground gets too steep
                 const [id, size] = biome.rocks[biome.rocks.length - 1];
@@ -282,7 +300,12 @@ function scatter(build: Build, water: Uint8Array): void {
                 if (ground.isClear(x, y, size, size)) {
                     place(id, size, LOC_NORMAL, x, y);
                 }
-            } else if (roll < treeChance + rockChance + settings.grass * 0.56 * bare) {
+            } else if (roll < treeChance + rockChance + propChance) {
+                const [id, size] = pick(rng, biome.props);
+                if (ground.isClear(x - 1, y - 1, size + 2, size + 2)) {
+                    place(id, size, LOC_NORMAL, x, y);
+                }
+            } else if (roll < treeChance + rockChance + propChance + settings.grass * 0.56 * bare) {
                 if (ground.isClear(x, y, 1, 1)) {
                     ground.grid.locs.push({
                         id: pick(rng, biome.decor),
@@ -331,6 +354,37 @@ function groupTiles(tiles: number[], sizeX: number, count: number): number[][] {
     return pieces.sort((a, b) => b.length - a.length);
 }
 
+// Which water each tile gets. A step in water's colour would show as a line across it, so
+// each piece of water is all one kind: the kind of the biome most of it's in.
+function getWaterOverlay(build: Build, tiles: Uint8Array): (x: number, y: number) => number {
+    const { ground, sizeX, biomeAt } = build;
+    const list = [...tiles.keys()].filter((i) => tiles[i]);
+    const kinds = new Map<number, number>();
+    for (const piece of groupTiles(list, sizeX, tiles.length)) {
+        const counts = new Map<number, number>();
+        for (let at = 0; at < piece.length; at += WATER_SAMPLE) {
+            const i = piece[at];
+            const kind = biomeAt(i % sizeX, Math.floor(i / sizeX)).water;
+            counts.set(kind, (counts.get(kind) ?? 0) + 1);
+        }
+        const most = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+        for (const i of piece) {
+            kinds.set(i, most);
+        }
+    }
+    return (x, y) => kinds.get(ground.tile(x, y)) ?? biomeAt(x, y).water;
+}
+
+// Paints water, as a piece at a time. It's painted twice: the first says what's in a piece.
+function paintWater(build: Build, field: Float32Array): Uint8Array {
+    const { ground, biomeAt, settings } = build;
+    if (settings.secondBiome === "none") {
+        return ground.paintField(field, (x, y) => biomeAt(x, y).water, true);
+    }
+    const tiles = ground.paintField(field, 0, true);
+    return ground.paintField(field, getWaterOverlay(build, tiles), true);
+}
+
 // Dries a band along a path, taking off anything standing there
 function layFord(build: Build, path: number[], water: WaterPaint): void {
     const { ground, sizeX, sizeY, corners, biomeAt } = build;
@@ -352,7 +406,7 @@ function layFord(build: Build, path: number[], water: WaterPaint): void {
         }
     }
     ground.clearOverlay(water.tiles);
-    water.tiles = ground.paintField(water.field, biomeAt(sizeX >> 1, sizeY >> 1).water, true);
+    water.tiles = ground.paintField(water.field, getWaterOverlay(build, water.tiles), true);
     blockSteepGround(build);
     ground.grid.locs = ground.grid.locs.filter(
         (loc) =>
@@ -441,6 +495,10 @@ function createBuild(settings: GeneratorSettings, context: BuildContext): Build 
         biomeAt: hasSecond
             ? (x, y) => (regions(x / 60, y / 60) < secondLine ? second : first)
             : () => first,
+        biomeNear: hasSecond
+            ? (x, y, roll) =>
+                  regions(x / 60, y / 60) + (roll - 0.5) * BIOME_FRAY < secondLine ? second : first
+            : () => first,
         relief,
         terrain: relief.terrain,
         cliffs: new Uint8Array(sizeX * sizeY),
@@ -473,8 +531,7 @@ export function generateMapDetail(
     sinkFresh(build, toFresh, levels);
 
     const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
-    const waterOverlay = biomeAt(sizeX >> 1, sizeY >> 1).water;
-    const waterTiles = ground.paintField(waterField, waterOverlay, true);
+    const waterTiles = paintWater(build, waterField);
     const water: WaterPaint = { field: waterField, tiles: waterTiles };
     holdWater(build, seaTiles);
     holdWater(build, freshTiles);
@@ -501,6 +558,7 @@ export function generateMapDetail(
         }
     }
     const buildings = placeBuildings(build, roads, waterTiles);
+    const landmarks = placeSetPieces(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
@@ -517,6 +575,9 @@ export function generateMapDetail(
     paintLava(build);
     placeWaterfalls(build, rivers);
     placeBoundary(build, roadTiles);
+    placeTownWalls(build, buildings, roadTiles);
+    placeWaymarkers(build, roads);
+    landmarks.push(...placeWaterPieces(build, waterTiles));
     scatter(build, waterTiles);
     const fords = connectGround(build, water, roads.offLimits);
     return {
@@ -525,6 +586,7 @@ export function generateMapDetail(
         roadTiles,
         lines: [...roads.lines, ...fords],
         buildings,
+        landmarks,
         passes,
         walkSlope: settings.walkSlope,
         caves,

@@ -14,6 +14,7 @@ import { PlacedLoc } from "../../src/game/scaperune/format";
 import { cutPrefab } from "../../src/game/scaperune/prefab";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
+import { UnderlayFloorType } from "../../src/rs/config/floortype/UnderlayFloorType";
 import { LocModelLoader } from "../../src/rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../src/rs/config/loctype/LocModelType";
 import { HSL_RGB_MAP, blendLight } from "../../src/rs/util/ColorUtil";
@@ -209,7 +210,7 @@ function drawPrefab(spec: string, x0: number, y0: number): void {
                 const type = overlayTypes.load(overlays[i] - 1);
                 color = type.textureId === -1 ? type.primaryRgb : 0x6688aa;
             } else if (underlays[i]) {
-                color = underlayTypes.load(underlays[i] - 1).rgbColor;
+                color = (underlayTypes.load(underlays[i] - 1) as UnderlayFloorType).rgbColor;
             }
             for (let py = 0; py < Math.ceil(tile * SIN); py++) {
                 for (let px = 0; px < Math.ceil(tile); px++) {

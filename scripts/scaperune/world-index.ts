@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { createTileGrid, readLocs, readTerrain } from "../../src/game/scaperune/format";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
+import { UnderlayFloorType } from "../../src/rs/config/floortype/UnderlayFloorType";
 import { loadGameCache } from "../cache/scene-util";
 
 const out = process.argv[2];
@@ -92,7 +93,7 @@ const floorsUsed = (key: "underlays" | "overlays") => {
 };
 const underlays = Object.fromEntries(
     floorsUsed("underlays").map((id) => {
-        const type = underlayTypes.load(id - 1);
+        const type = underlayTypes.load(id - 1) as UnderlayFloorType;
         return [id, { rgb: type.rgbColor.toString(16) }];
     }),
 );

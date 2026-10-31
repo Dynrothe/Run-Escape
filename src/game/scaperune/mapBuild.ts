@@ -22,8 +22,6 @@ export const SPAWN_CLEAR = 7;
 // what's walkable, so that you can walk up out of a road
 export const SETTLE_SLOPE = 0.8;
 
-export const FENCE = 980;
-
 export const LOC_WALL = 0;
 
 export const LOC_NORMAL = 10;
@@ -53,6 +51,8 @@ export type Build = {
     spawn: Point;
     arena: TileRect;
     biomeAt(x: number, y: number): BiomeDef;
+    // The same for what's scattered on it: roll, from 0 to 1, frays the edge between two
+    biomeNear(x: number, y: number, roll: number): BiomeDef;
     // Tiles in from the arena's edge, negative outside
     toEdge(x: number, y: number): number;
     // The land's shape, and its heights as they're being worked on

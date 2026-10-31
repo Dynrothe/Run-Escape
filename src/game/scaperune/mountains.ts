@@ -207,7 +207,7 @@ export function getSnowLine(settings: GeneratorSettings): number {
 
 // Lava in the craters
 export function paintLava(build: Build): void {
-    const { ground, relief, corners, biomeAt, sizeX, sizeY } = build;
+    const { ground, relief, corners, biomeAt } = build;
     if (relief.craters.length === 0) {
         return;
     }
@@ -221,7 +221,7 @@ export function paintLava(build: Build): void {
             }
         }
     }
-    ground.paintField(field, biomeAt(sizeX >> 1, sizeY >> 1).rock.lava, true);
+    ground.paintField(field, (x, y) => biomeAt(x, y).rock.lava, true);
 }
 
 // The rock on everything too steep to walk, and rock faces over the steepest. It's painted
@@ -232,7 +232,6 @@ export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
         return new Uint8Array(sizeX * sizeY);
     }
     const { heights, flags } = ground.level0;
-    const middle = biomeAt(sizeX >> 1, sizeY >> 1).rock;
     const snowLine = getSnowLine(settings);
     const rock = new Uint8Array(sizeX * sizeY);
     const snowy = new Uint8Array(sizeX * sizeY);
@@ -249,7 +248,7 @@ export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
             }
         }
     }
-    ground.paintOverlay(rock, middle.overlay, false, skip);
+    ground.paintOverlay(rock, (x, y) => biomeAt(x, y).rock.overlay, false, skip);
 
     const roll = createRng(settings.seed + 200);
     const faced = new Uint8Array(sizeX * sizeY);

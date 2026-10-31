@@ -556,11 +556,15 @@ export function holdWater(build: Build, tiles: Uint8Array): void {
 
 // Foam along the foot of a river's drops
 export function placeWaterfalls(build: Build, rivers: River[]): void {
-    const { ground } = build;
+    const { ground, biomeAt } = build;
     for (const river of rivers) {
         for (const { along } of river.drops) {
             const centre = riverCentre(river, along);
             const half = riverHalfWidth(river, along);
+            const middle = Math.round(centre);
+            if ((river.vertical ? biomeAt(middle, along) : biomeAt(along, middle)).molten) {
+                continue;
+            }
             for (let at = -half; at + WATERFALL_WIDTH <= half; at += WATERFALL_WIDTH) {
                 const across = Math.round(centre + at);
                 ground.grid.locs.push({

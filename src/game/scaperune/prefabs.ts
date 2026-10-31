@@ -18,6 +18,35 @@ export const PREFABS: Record<string, PrefabDef> = {
     canifis_house: { worldX: 3473, worldY: 3490, sizeX: 9, sizeY: 12 },
     rellekka_hut: { worldX: 2665, worldY: 3699, sizeX: 8, sizeY: 7 },
     rellekka_house: { worldX: 2677, worldY: 3686, sizeX: 9, sizeY: 9 },
+    // Bamboo and thatch: Tai Bwo Wannai, and a stone hut on Ape Atoll
+    taibwo_hut: { worldX: 2787, worldY: 3051, sizeX: 7, sizeY: 7 },
+    taibwo_house: { worldX: 2794, worldY: 3052, sizeX: 10, sizeY: 9 },
+    taibwo_hall: { worldX: 2831, worldY: 2979, sizeX: 10, sizeY: 16 },
+    ape_hut: { worldX: 2765, worldY: 2747, sizeX: 7, sizeY: 7 },
+    // Whitewashed Pollnivneach, and sandstone Sophanem
+    pollnivneach_house: { worldX: 3356, worldY: 2990, sizeX: 7, sizeY: 7 },
+    pollnivneach_inn: { worldX: 3355, worldY: 2998, sizeX: 6, sizeY: 8 },
+    pollnivneach_shop: { worldX: 3362, worldY: 2998, sizeX: 5, sizeY: 7 },
+    sophanem_fort: { worldX: 3259, worldY: 2776, sizeX: 10, sizeY: 9 },
+    // Darkmeyer's stone and Burgh de Rott's rot
+    darkmeyer_house: { worldX: 3639, worldY: 3375, sizeX: 10, sizeY: 7 },
+    darkmeyer_hall: { worldX: 3660, worldY: 3375, sizeX: 9, sizeY: 8 },
+    darkmeyer_shop: { worldX: 3639, worldY: 3383, sizeX: 10, sizeY: 8 },
+    burgh_house: { worldX: 3529, worldY: 3310, sizeX: 7, sizeY: 7 },
+    burgh_inn: { worldX: 3530, worldY: 3318, sizeX: 10, sizeY: 9 },
+    // Prifddinas's eight-sided houses
+    prif_house: { worldX: 3269, worldY: 6034, sizeX: 7, sizeY: 7 },
+    prif_shop: { worldX: 3234, worldY: 6037, sizeX: 7, sizeY: 7 },
+    prif_hut: { worldX: 3253, worldY: 6037, sizeX: 7, sizeY: 7 },
+    prif_hall: { worldX: 3305, worldY: 6052, sizeX: 7, sizeY: 7 },
+    // Hosidius, and Shayzien's dark halls
+    hosidius_barn: { worldX: 1783, worldY: 3519, sizeX: 9, sizeY: 12 },
+    shayzien_house: { worldX: 1537, worldY: 3540, sizeX: 8, sizeY: 11 },
+    shayzien_shop: { worldX: 1537, worldY: 3553, sizeX: 8, sizeY: 7 },
+    // The north: Lovakengj's iron and the Wilderness
+    lovakengj_house: { worldX: 1538, worldY: 3778, sizeX: 12, sizeY: 7 },
+    lovakengj_hall: { worldX: 1551, worldY: 3778, sizeX: 11, sizeY: 12 },
+    wilderness_keep: { worldX: 3178, worldY: 3721, sizeX: 10, sizeY: 10 },
 };
 
 // The bridge over the River Lum, 18 tiles east to west with its deck on level 1
@@ -55,6 +84,29 @@ const BUILDING_KINDS: Record<string, "house" | "shop" | "church"> = {
     canifis_house: "shop",
     rellekka_hut: "house",
     rellekka_house: "house",
+    taibwo_hut: "house",
+    taibwo_house: "house",
+    taibwo_hall: "shop",
+    ape_hut: "house",
+    pollnivneach_house: "house",
+    pollnivneach_inn: "shop",
+    pollnivneach_shop: "shop",
+    sophanem_fort: "church",
+    darkmeyer_house: "house",
+    darkmeyer_hall: "church",
+    darkmeyer_shop: "shop",
+    burgh_house: "house",
+    burgh_inn: "shop",
+    prif_house: "house",
+    prif_shop: "shop",
+    prif_hut: "house",
+    prif_hall: "church",
+    hosidius_barn: "shop",
+    shayzien_house: "house",
+    shayzien_shop: "shop",
+    lovakengj_house: "house",
+    lovakengj_hall: "church",
+    wilderness_keep: "church",
 };
 
 export function isBuildingKind(
@@ -110,7 +162,8 @@ export class PrefabKit {
         });
     }
 
-    // The same with most of it gone: no furniture, and some of its walls
+    // The same with most of it gone: no furniture, some of its walls and none of its floor,
+    // which would only show as a slab with nothing round it
     stampRuin(
         ground: Ground,
         name: string,
@@ -121,7 +174,7 @@ export class PrefabKit {
         keepHeights = false,
     ): void {
         ground.stamp(this.get(name, turns).prefab, x, y, {
-            floor: "footprint",
+            floor: () => false,
             feather: BUILDING_FEATHER,
             flatten: true,
             keepHeights,

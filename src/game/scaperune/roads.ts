@@ -25,6 +25,9 @@ const ROAD_WIDEN = 6;
 // 11 tiles, so that's a stain that takes the contrast out of the overlay's edge.
 const TRAIL_MARGIN = 0.8;
 
+// How far past a road's edge the square at the spawn reaches
+const SPAWN_SQUARE = 2.5;
+
 // Tiles past a road's edge that scatter keeps off
 const ROAD_CLEAR_MARGIN = 0.3;
 
@@ -367,6 +370,18 @@ export class RoadNetwork {
         for (let i = 0; i < skip.length; i++) {
             skip[i] = this.water[i] | ground.footprint[i];
         }
+        // Roads end in points, so where they meet at the spawn is a little square
+        const { spawn } = this.build;
+        const reach = this.halfWidth + SPAWN_SQUARE;
+        let room = true;
+        forTilesNear(this.build, [spawn], reach + 2, (i) => {
+            room &&= this.bridgeZone[i] === 0;
+        });
+        if (this.lines.length > 0 && room) {
+            const middle = [spawn, { x: spawn.x + 0.01, y: spawn.y }];
+            addPathToField(this.road, corners.x, corners.y, middle, reach);
+            addPathToField(this.trail, corners.x, corners.y, middle, reach + TRAIL_MARGIN);
+        }
         const band = getTouchedTiles(this.trail, sizeX, sizeY);
         for (let y = 0; y < sizeY; y++) {
             for (let x = 0; x < sizeX; x++) {
@@ -377,7 +392,7 @@ export class RoadNetwork {
             }
         }
         const field = smoothField(this.road, corners.x, corners.y, 1);
-        return ground.paintField(field, biomeAt(sizeX >> 1, sizeY >> 1).road, false, skip);
+        return ground.paintField(field, (x, y) => biomeAt(x, y).road, false, skip);
     }
 }
 

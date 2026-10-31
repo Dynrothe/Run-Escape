@@ -110,6 +110,37 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     { volcanoes: 2, squaresX: 3, squaresY: 3, snow: 1, rivers: 1 },
     { volcanoes: 2, mesas: 12, canyons: 3, mountains: 1, plateaus: 6, biome: "swamp" },
     { heightmap: encodeHeightmap(CHECKS), peakHeight: 255, squaresX: 3, squaresY: 3, rivers: 1 },
+    { biome: "jungle", boundary: "forest", rivers: 1, landmarks: 1, buildings: 1, props: 1 },
+    { biome: "tropical", waterLevel: 0.5, island: 0.1, landmarks: 1, squaresX: 3, squaresY: 3 },
+    { biome: "ash", rivers: 2, lakes: 2, landmarks: 1, volcanoes: 1, squaresX: 3, squaresY: 3 },
+    {
+        biome: "autumn",
+        towns: 2,
+        townSize: 16,
+        townWalls: 1,
+        buildings: 1,
+        roads: 1,
+        waymarkers: 1,
+        squaresX: 3,
+        squaresY: 3,
+    },
+    { biome: "deadlands", boundary: "hills", landmarks: 1, ruins: 1, ponds: 8 },
+    { biome: "elven", boundary: "forest", landmarks: 1, lakes: 2, towns: 1, townWalls: 1 },
+    { biome: "fairy", landmarks: 1, ruins: 1, props: 1, buildings: 1 },
+    { biome: "darkwood", boundary: "fence", landmarks: 1, trees: 1, ruins: 1, gardens: 1 },
+    {
+        biome: "jungle",
+        secondBiome: "ash",
+        biomeMix: 0.5,
+        rivers: 2,
+        lakes: 3,
+        roads: 1,
+        landmarks: 1,
+        squaresX: 3,
+        squaresY: 3,
+    },
+    { mountains: 0.6, landmarks: 1, props: 1, waymarkers: 1, roads: 1, buildings: 1, squaresX: 3 },
+    { boundary: "fence", towns: 8, townSize: 10, townWalls: 1, buildings: 1, roads: 0 },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -119,7 +150,10 @@ const ROAD_OFF_DECK = 7;
 const ROAD_ALONE_OFF_DECK = 4;
 
 // Problems with the roads off a grid's bridges, and how many ran each way
-function checkBridgeRoads(grid: TileGrid): { problems: string[]; ways: number[] } {
+function checkBridgeRoads(
+    grid: TileGrid,
+    roadTiles: Uint8Array,
+): { problems: string[]; ways: number[] } {
     const { sizeX } = grid;
     const deck = new Set<number>();
     grid.levels[1].flags.forEach((flag, i) => {
@@ -167,7 +201,8 @@ function checkBridgeRoads(grid: TileGrid): { problems: string[]; ways: number[] 
                     }
                 }
                 for (const across of [low - 1, high + 1]) {
-                    if (step <= ROAD_ALONE_OFF_DECK && overlayAt(along, across).overlay !== 0) {
+                    const i = eastWest ? along + across * sizeX : across + along * sizeX;
+                    if (step <= ROAD_ALONE_OFF_DECK && roadTiles[i]) {
                         problems.push(`road outside the fences at ${along},${across}`);
                     }
                 }
@@ -370,6 +405,36 @@ function checkBuildingGround(map: GeneratedMap): string[] {
     return problems;
 }
 
+// Set pieces on land stand on flat ground, with nothing built or painted under them
+function checkLandmarks(map: GeneratedMap): string[] {
+    const { grid, landmarks, roadTiles, footprint } = map;
+    const problems: string[] = [];
+    const corners = grid.sizeX + 1;
+    const { heights } = grid.levels[0];
+    for (const { name, x, y, sizeX, sizeY, onLand } of landmarks.filter((piece) => piece.onLand)) {
+        let min = Infinity;
+        let max = -Infinity;
+        for (let cy = y; cy <= y + sizeY; cy++) {
+            for (let cx = x; cx <= x + sizeX; cx++) {
+                min = Math.min(min, heights[cx + cy * corners]);
+                max = Math.max(max, heights[cx + cy * corners]);
+            }
+        }
+        if (onLand && max !== min) {
+            problems.push(`${name} at ${x},${y} isn't on flat ground: ${min} to ${max}`);
+        }
+        for (let ty = y; ty < y + sizeY; ty++) {
+            for (let tx = x; tx < x + sizeX; tx++) {
+                const i = tx + ty * grid.sizeX;
+                if (roadTiles[i] || footprint[i]) {
+                    problems.push(`${name} at ${x},${y} has something under it at ${tx},${ty}`);
+                }
+            }
+        }
+    }
+    return problems;
+}
+
 // Open tiles the play camera can't see, for the ground between
 function countHiddenTiles(
     grid: TileGrid,
@@ -430,7 +495,7 @@ function checkMap(
     const grid = new ArenaGrid(buildRegionData(sceneBuilder, createVarManager(cache), region));
     const spawn = getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y);
     const { open, stranded } = countStranded(grid, spawn.x, spawn.y);
-    const bridges = checkBridgeRoads(map.grid);
+    const bridges = checkBridgeRoads(map.grid, map.roadTiles);
     const gridRect = {
         x0: recipe.margin * 64,
         y0: recipe.margin * 64,
@@ -449,6 +514,7 @@ function checkMap(
         ...checkCollision(map, grid, origin, gridRect, context),
         ...roadHeights.problems,
         ...checkBuildingGround(map),
+        ...checkLandmarks(map),
     ];
     if (hidden > 0) {
         problems.push(`${hidden} open tiles are hidden from the camera`);
@@ -458,6 +524,7 @@ function checkMap(
     console.log(
         `${id}: ${open} open, ${stranded} stranded, bridges ${eastWest}+${northSouth}, ` +
             `${map.buildings.length} buildings (${roadless} without a road), ` +
+            `${map.landmarks.length} landmarks, ` +
             `passes ${map.passes.length}, steepest road ${roadHeights.steepest.toFixed(1)}`,
     );
     for (const problem of problems.slice(0, 6)) {

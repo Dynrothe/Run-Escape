@@ -4,15 +4,17 @@ import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGE, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
+import { SET_PIECES } from "./structures";
 
 // Everything the generator can ask the cache for, on one map: each biome's
 // floors and locs, and every prefab. The slim cache only keeps what a map reads,
 // and a generated map's reads change with the seed, so shipping seeds means
 // loading this map too (CLAUDE.md, scripts/scaperune/check-palette.ts).
 
-const SQUARES = 3;
+const SQUARES = 5;
 const SIZE = SQUARES * 64;
 const PLOT = 20;
+const PIECE_ROW = 10;
 
 function build(context: BuildContext): TileGrid {
     const ground = new Ground(SIZE, SIZE);
@@ -32,8 +34,9 @@ function build(context: BuildContext): TileGrid {
         });
     });
 
-    ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * 2 }, 3, 2);
-    let y = PLOT * 2 + 2;
+    const rows = Math.ceil(defs.length / 8);
+    ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * rows }, 3, 2);
+    let y = PLOT * rows + 3;
     for (const biome of Object.values(BIOMES)) {
         let x = 2;
         const put = (id: number, size: number, type: number) => {
@@ -44,12 +47,16 @@ function build(context: BuildContext): TileGrid {
             ...biome.trees,
             ...biome.rocks,
             ...biome.rock.rubble,
+            ...biome.props,
             [biome.rock.cave, 3] as [number, number],
         ]) {
             put(id, size, 10);
         }
-        for (const id of [...biome.rock.faces, ...biome.rock.edgeFaces]) {
+        for (const id of [...biome.rock.faces, ...biome.rock.edgeFaces, biome.marker]) {
             put(id, 1, 10);
+        }
+        for (const id of [biome.fence, biome.wall]) {
+            put(id, 1, 0);
         }
         for (const id of [...biome.decor, ...biome.rock.stones]) {
             put(id, 1, 22);
@@ -86,6 +93,24 @@ function build(context: BuildContext): TileGrid {
             x += 6;
         }
         y += 6;
+    }
+    // Set pieces, each on a row of its own: they're big
+    let x = 2;
+    for (const piece of Object.values(SET_PIECES)) {
+        const locs =
+            piece.kind === "sunken"
+                ? [...piece.middle, ...piece.stones]
+                : piece.kind === "ring"
+                  ? [...piece.stones, ...(piece.middle ? [piece.middle] : [])]
+                  : piece.locs;
+        for (const [id, sizeX, sizeY] of locs) {
+            if (x + sizeX + 1 >= SIZE) {
+                x = 2;
+                y += PIECE_ROW;
+            }
+            ground.place({ id, type: 10, rotation: 0, level: 0, x, y }, sizeX, sizeY);
+            x += sizeX + 1;
+        }
     }
     return ground.grid;
 }

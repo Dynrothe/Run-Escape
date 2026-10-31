@@ -3,6 +3,7 @@
 // the slim cache does and compares the cache groups they touch.
 //
 //   npx tsx scripts/scaperune/check-palette.ts
+import { BIOMES, BiomeId } from "../../src/game/scaperune/biomes";
 import { GeneratorSettings, generatedRecipe } from "../../src/game/scaperune/generator";
 import { PALETTE_RECIPE } from "../../src/game/scaperune/palette";
 import { MapRecipe } from "../../src/game/scaperune/recipe";
@@ -100,6 +101,33 @@ async function main(): Promise<void> {
             squaresY: 3,
         },
         { biome: "snow", mountains: 0.8, snow: 1, rubble: 1, caves: 1 },
+        // Each of the others, with everything of theirs turned up
+        ...(Object.keys(BIOMES) as BiomeId[]).slice(4).map(
+            (biome): Partial<GeneratorSettings> => ({
+                biome,
+                island: 0.3,
+                mountains: 0.5,
+                rubble: 1,
+                caves: 1,
+                ponds: 6,
+                lakes: 2,
+                rivers: 1,
+                buildings: 1,
+                trees: 1,
+                rocks: 1,
+                grass: 1,
+                flowers: 1,
+                props: 1,
+                landmarks: 1,
+                ruins: 1,
+                gardens: 1,
+                waymarkers: 1,
+                towns: 1,
+                townWalls: 1,
+                squaresX: 3,
+                squaresY: 3,
+            }),
+        ),
     ];
     let missing = 0;
     for (let i = 0; i < maps.length; i++) {

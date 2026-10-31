@@ -16,7 +16,8 @@ const GROUND = 999;
 const MARGIN = 6;
 const SIDE_X = [-1, 0, 1, 0];
 const SIDE_Y = [0, 1, 0, -1];
-// Of a building's floor, the most that can be outside its walls (steps and paths)
+// Of the floor a stamp takes, the most that can be outside its walls (steps and paths).
+// A town's paving round a building isn't taken, so it doesn't count.
 const MAX_FLOOR_OUTSIDE = 0.25;
 
 // The tiles no flood from outside the grid reaches, with walls, doors and the gaps
@@ -100,16 +101,16 @@ function checkPrefab(name: string, context: BuildContext, turns: number): string
 
     const from = prefab.levels[0];
     const to = ground.level0;
-    let floor = 0;
+    let outside = 0;
     let kept = 0;
     for (let y = 0; y < prefab.sizeY; y++) {
         for (let x = 0; x < prefab.sizeX; x++) {
             const i = x + y * prefab.sizeX;
             const j = ground.tile(x + MARGIN, y + MARGIN);
             const own = from.overlays[i] !== 0 || from.underlays[i] !== 0;
-            if (from.overlays[i] !== 0) {
-                floor++;
-                kept += to.overlays[j] !== 0 ? 1 : 0;
+            if (from.overlays[i] !== 0 && to.overlays[j] !== 0) {
+                kept++;
+                outside += enclosed.has(i) ? 0 : 1;
             }
             if (!enclosed.has(i)) {
                 continue;
@@ -124,8 +125,8 @@ function checkPrefab(name: string, context: BuildContext, turns: number): string
     if (enclosed.size < kept * 0.75) {
         problems.push(`walls aren't closed: ${enclosed.size} tiles enclosed, ${kept} kept`);
     }
-    if (kept < floor * (1 - MAX_FLOOR_OUTSIDE)) {
-        problems.push(`only ${kept} of ${floor} floor tiles kept`);
+    if (outside > kept * MAX_FLOOR_OUTSIDE) {
+        problems.push(`${outside} of ${kept} floor tiles taken are outside the walls`);
     }
     return problems;
 }

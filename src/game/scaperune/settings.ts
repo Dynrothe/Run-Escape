@@ -100,6 +100,8 @@ export type GeneratorSettings = {
     rockMix: number;
     grass: number;
     flowers: number;
+    // Big things that stand about: a biome's own boulders, plants and bones
+    props: number;
 
     // Roads
     // 0 is none; 1 is a road to every building and bridge
@@ -122,6 +124,12 @@ export type GeneratorSettings = {
     // Fenced yards round buildings
     gardens: number;
     ruins: number;
+    // A biome's set pieces: stone circles, wrecks, giant mushrooms
+    landmarks: number;
+    // Share of towns with a wall round them
+    townWalls: number;
+    // Old stones along the roads: 1 is one every 16 tiles
+    waymarkers: number;
 
     // Play
     // Where you start, across and up the arena, 0 to 1
@@ -239,6 +247,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     rockMix: share("Rock size", { when: (s) => s.rocks > 0 }),
     grass: share("Grass"),
     flowers: share("Flowers"),
+    props: share("Big scenery"),
 
     roads: share("Roads"),
     roadStyle: choice("Road network", ["branching", "ring", "spine"], { when: hasRoads }),
@@ -254,6 +263,9 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     anyBuildings: flag("Buildings from any biome", { when: hasBuildings }),
     gardens: share("Fenced yards", { when: hasBuildings }),
     ruins: share("Ruins"),
+    landmarks: share("Landmarks"),
+    townWalls: share("Town walls", { when: (s) => s.towns > 0 && s.buildings > 0 }),
+    waymarkers: share("Waymarkers", { when: hasRoads }),
 
     spawnX: share("Start, west to east"),
     spawnY: share("Start, south to north"),
@@ -318,7 +330,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
     },
     {
         name: "Scenery",
-        keys: ["trees", "treeClumping", "treeMix", "rocks", "rockMix", "grass", "flowers"],
+        keys: ["trees", "treeClumping", "treeMix", "rocks", "rockMix", "grass", "flowers", "props"],
     },
     { name: "Roads", keys: ["roads", "roadStyle", "roadWidth", "roadCurviness"] },
     {
@@ -333,6 +345,9 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "anyBuildings",
             "gardens",
             "ruins",
+            "landmarks",
+            "townWalls",
+            "waymarkers",
         ],
     },
     { name: "Play", keys: ["spawnX", "spawnY", "waveSet", "enemyDensity", "brightness"] },
@@ -388,6 +403,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     rockMix: 0.5,
     grass: 0.5,
     flowers: 0.2,
+    props: 0.4,
 
     roads: 0.8,
     roadStyle: "branching",
@@ -403,6 +419,9 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     anyBuildings: false,
     gardens: 0,
     ruins: 0,
+    landmarks: 0.3,
+    townWalls: 0,
+    waymarkers: 0,
 
     spawnX: 0.5,
     spawnY: 0.5,
@@ -546,6 +565,123 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         hills: 0.15,
         trees: 0.25,
         flowers: 0.6,
+    },
+    Jungle: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "jungle",
+        boundary: "forest",
+        trees: 0.9,
+        treeClumping: 0.5,
+        treeMix: 0.6,
+        hills: 0.35,
+        rivers: 1,
+        grass: 0.9,
+        flowers: 0.6,
+        props: 0.8,
+        buildings: 0.25,
+        towns: 1,
+        townSize: 20,
+        roads: 0.7,
+    },
+    "Tropical islands": {
+        squaresX: 4,
+        squaresY: 4,
+        biome: "tropical",
+        island: 0.1,
+        waterLevel: 0.5,
+        hills: 0.6,
+        hillScale: 44,
+        shoreRoughness: 0.7,
+        trees: 0.35,
+        treeClumping: 0.3,
+        ponds: 0,
+        buildings: 0.2,
+        props: 0.6,
+    },
+    Ashlands: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "ash",
+        boundary: "mountains",
+        boundaryDepth: 8,
+        volcanoes: 1,
+        peakHeight: 140,
+        hills: 0.4,
+        rivers: 2,
+        lakes: 2,
+        ponds: 2,
+        trees: 0.25,
+        rocks: 0.7,
+        rubble: 1,
+        props: 0.7,
+        buildings: 0.15,
+    },
+    Autumn: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "autumn",
+        boundary: "forest",
+        trees: 0.8,
+        treeClumping: 0.7,
+        hills: 0.5,
+        rivers: 1,
+        ponds: 2,
+        flowers: 0.5,
+        buildings: 0.4,
+        towns: 1,
+        townSize: 24,
+    },
+    "Dead lands": {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "deadlands",
+        boundary: "hills",
+        hills: 0.4,
+        ponds: 4,
+        trees: 0.5,
+        buildings: 0.3,
+        ruins: 0.6,
+        props: 0.7,
+    },
+    Elven: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "elven",
+        boundary: "forest",
+        trees: 0.8,
+        treeMix: 0.8,
+        lakes: 1,
+        rivers: 1,
+        flowers: 0.5,
+        buildings: 0.4,
+        towns: 1,
+        townSize: 22,
+        roads: 1,
+    },
+    Fairy: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "fairy",
+        trees: 0.5,
+        flowers: 1,
+        grass: 0.8,
+        props: 0.8,
+        buildings: 0,
+        ruins: 0.4,
+    },
+    Darkwood: {
+        squaresX: 3,
+        squaresY: 3,
+        biome: "darkwood",
+        boundary: "forest",
+        trees: 1,
+        treeClumping: 0.7,
+        treeMix: 0.6,
+        ponds: 2,
+        ruins: 0.4,
+        buildings: 0.1,
+        props: 0.8,
     },
 };
 

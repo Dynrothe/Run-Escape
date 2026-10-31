@@ -27,6 +27,9 @@ export type StampOptions = {
     keepUnderlays?: boolean;
 };
 
+// An overlay, or which one for a tile
+export type OverlayChoice = number | ((x: number, y: number) => number);
+
 function smoothstep(t: number): number {
     return t * t * (3 - 2 * t);
 }
@@ -71,12 +74,12 @@ export class Ground {
 
     // Paints an overlay where a field is above 0. The field's per tile corner,
     // x + y * (sizeX + 1), so edges come out as lines rather than steps of whole
-    // tiles (shapes.ts). Blocked also blocks tiles at least half covered, so that
-    // collision follows what's drawn. skip leaves tiles alone. Returns the tiles
-    // it touched.
+    // tiles (shapes.ts). The overlay can depend on where it is. Blocked also blocks tiles
+    // at least half covered, so that collision follows what's drawn. skip leaves tiles
+    // alone. Returns the tiles it touched.
     paintField(
         field: Float32Array,
-        overlay: number,
+        overlay: OverlayChoice,
         blocked: boolean,
         skip?: Uint8Array,
     ): Uint8Array {
@@ -96,7 +99,7 @@ export class Ground {
                 if (!shape || skip?.[i]) {
                     continue;
                 }
-                overlays[i] = overlay;
+                overlays[i] = typeof overlay === "number" ? overlay : overlay(x, y);
                 shapes[i] = shape[0];
                 rotations[i] = shape[1];
                 touched[i] = 1;
@@ -114,7 +117,7 @@ export class Ground {
     // tiles alone.
     paintOverlay(
         mask: Uint8Array,
-        overlay: number,
+        overlay: OverlayChoice,
         blocked: boolean,
         skip?: Uint8Array,
     ): Uint8Array {
