@@ -303,9 +303,8 @@ function createDevMap(recipe: MapRecipe): MapDef {
     const density = play?.enemyDensity ?? 1;
     return {
         id: recipe.id,
-        name: recipe.title?.name ?? recipe.name ?? recipe.id,
-        description:
-            recipe.title?.description ?? recipe.description ?? "ScapeRune test map, for development.",
+        name: recipe.id,
+        description: "ScapeRune test map, for development.",
         iconObjId: 1351,
         arena: getRecipeArena(recipe),
         spawn: getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y),
@@ -322,7 +321,7 @@ function createDevMap(recipe: MapRecipe): MapDef {
         victoryText: "",
         fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
         dev: true,
-        ...recipe.details,
+        ...recipe.mapDef,
     };
 }
 

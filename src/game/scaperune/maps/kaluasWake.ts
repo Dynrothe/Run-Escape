@@ -1508,10 +1508,6 @@ function buildMap(context: BuildContext): GeneratedMap {
 
 export const KALUAS_WAKE: MapRecipe = {
     id: "scaperune_kalua",
-    name: "Kalua's Wake",
-    description:
-        "An island chain round a smoking volcano. Fight from Landfall Bay through the jungle " +
-        "and the ash to the Sun Temple, the stilts of Tai'Mara and the mouth of Mount Kalua.",
     mapX: 72,
     mapY: 88,
     squaresX: SQUARES_X,
@@ -1520,5 +1516,11 @@ export const KALUAS_WAKE: MapRecipe = {
     spawn: SPAWN,
     build: (context) => buildMap(context).grid,
     detail: buildMap,
+    mapDef: {
+        name: "Kalua's Wake",
+        description:
+            "An island chain round a smoking volcano. Fight from Landfall Bay through the jungle " +
+            "and the ash to the Sun Temple, the stilts of Tai'Mara and the mouth of Mount Kalua.",
+    },
     play: { waveSet: "karamja", enemyDensity: 1, brightness: 1 },
 };

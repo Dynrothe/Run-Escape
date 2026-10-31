@@ -1,6 +1,6 @@
 // Indexes the whole world into a file, so that looking for what a place is made of doesn't
 // mean reading the cache each time: every map square's locs, floors and how often each is
-// used, by square. survey.ts reads it.
+// used, by square.
 //
 //   npx tsx scripts/scaperune/world-index.ts out.json
 import fs from "node:fs";

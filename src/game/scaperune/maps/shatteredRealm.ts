@@ -1808,8 +1808,8 @@ export const SHATTERED_REALM: MapRecipe = {
     margin: 1,
     spawn: { x: 192, y: 92 },
     build: (context) => buildDetail(context).grid,
-    buildDetail,
-    details: {
+    detail: buildDetail,
+    mapDef: {
         name: "The Shards of Ysmar",
         description:
             "A dead god's world, broken in pieces over the stars. Cross the causeways from the " +

@@ -1287,7 +1287,7 @@ export const VARDHELM: MapRecipe = {
     spawn: SPAWN,
     build: (context) => buildVardhelm(context).grid,
     detail: buildVardhelm,
-    title: {
+    mapDef: {
         name: "Vardhelm",
         description:
             "The High Kingdom has shut its gates, and the trolls are coming down with the thaw. " +

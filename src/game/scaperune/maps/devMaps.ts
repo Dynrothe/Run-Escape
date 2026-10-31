@@ -119,8 +119,6 @@ export const DEV_MAP_SETTINGS: Record<string, GeneratorSettings> = Object.fromEn
 
 export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     TERRAIN_TEST,
-    KALUAS_WAKE,
-    SHATTERED_REALM,
     ...GENERATED.map(([id, mapX, , mapY]) =>
         generatedRecipe(id, mapX, mapY ?? 104, DEV_MAP_SETTINGS[id]),
     ),
@@ -128,4 +126,6 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     PREFAB_GALLERY,
     CLIFF_GALLERY,
     VARDHELM,
+    KALUAS_WAKE,
+    SHATTERED_REALM,
 ];

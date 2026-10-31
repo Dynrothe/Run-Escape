@@ -303,16 +303,25 @@ This one has a known fault, left in to show it: the house's door stays shut, so 
 23 tiles inside as stranded. Drop the door with `skipLoc`, as the generator does.
 
 Then add it to `SCAPERUNE_DEV_MAPS`. `content/maps.ts` makes a `MapDef` for each dev map, with Lumbridge's
-waves, and `details` on the recipe goes over that: its name, description, waves and events. Leave `fun` set, because
-only fun maps are open without beating another. In the browser console:
+waves. `play` takes the waves, enemy density and brightness from a real map, and `mapDef` goes over the `MapDef` itself:
+its name, description, icon, difficulty, waves and events. Leave `fun` set, because `startRun` quietly does nothing on a
+map that isn't open, and dev maps are only open for being fun maps. That also means they're endless, so one with its own
+waves needs a boss in `fun`, and `paced()` needs exactly 15 wave sets. In the browser console:
 `game.selectMap("scaperune_little_island"); await game.startRun()`.
 
-`check-maps.ts` takes any map called `scaperune_*`, so a hand-made one needs `buildDetail` as well as `build`: it
-returns the grid with what the checks hold it to (see `maps/shatteredRealm.ts`).
+`check-maps.ts` skips a hand-made map unless it has a `detail`, which builds it as a `GeneratedMap`. It only checks a road's
+grade or a landmark's ground if `detail` passes them on, so `steepest road 0.0` or `0 landmarks` means unchecked.
 
-`check-maps.ts` skips a hand-made map unless it has a `detail`, which builds it as a `GeneratedMap`. `maps/kaluasWake.ts`
-is a whole map done that way: a `Build` of its own with the generator's parts run in the generator's order, and its
-coasts, roads and places drawn by hand.
+Three maps are whole worked examples, each going further than this one:
+
+- `maps/vardhelm.ts`: land carved by hand from a massif, a road up a cliff in hairpins, and prefabs of its own.
+- `maps/kaluasWake.ts`: coasts drawn as splines, a `Build` of its own with the generator's parts run in its order, sea
+  bridges and a raised village.
+- `maps/shatteredRealm.ts`: land over a void, its own waves, events and bosses, and terrain as architecture.
+
+`createBuild`, `paintFloors`, `scatter` and `connectGround` are private to the generator, and `paintRock`,
+`blockSteepGround`, `gradeRoads` and scatter need a `Build`, so a hand-made map copies what it needs. `squaresX` on a
+recipe includes the margin, and in `GeneratorSettings` it doesn't.
 
 Grid tiles start at the grid's south-west corner, x east and y north. `getRecipeWorldTile` turns them
 into world tiles.
@@ -343,9 +352,10 @@ into world tiles.
 ## Height
 
 Height's a layer of its own while a map's built: `Terrain` holds a float per corner, and only the finished heights go
-into the grid. Nothing writes heights directly. Whatever needs the ground to be a certain height **pins** it, and
+into the grid. Nothing in the generator writes heights directly. Whatever needs the ground to be a certain height **pins** it, and
 `settle` brings the ground round it to meet that, cutting and building no steeper than `SETTLE_SLOPE` of what's
-walkable. That one idea does cuttings, embankments, plots and the ground round bridges.
+walkable. That one idea does cuttings, embankments, plots and the ground round bridges. On a tie between two pins,
+the first one stays, so a late pin can quietly lose. A pin also beats a held corner.
 
 **The limits, measured:**
 
@@ -434,7 +444,8 @@ A dark underlay bleeds a long way into white (11 tiles), which is where snow's d
 **Waterfalls.** Rivers gather their fall into single drops at least `WATERFALL_SPACING` apart, with foam across the river.
 Most don't fall far in the arena, because they look for the low ground, so these are rare and mostly in the margin. What
 you'll see are `cliffFalls` (`falls.ts`): loc 51484, from Varlamore, on a cliff that faces the camera, into a pool made for
-it. That loc's contoured, so it climbs whatever's behind it and fits any cliff of 28 units or more. The pool's made
+it. That loc's contoured, so it climbs whatever's behind it and fits any cliff of 28 units or more, though it only covers
+about 3 tiles from its foot, so a taller cliff stays bare above that. The pool's made
 before the heights settle, because it needs level corners, and the cliff behind it is held meanwhile, or the pool would
 cut it back. It's let go before `limitNorthFaces`, or that can't do its job round it.
 
@@ -460,7 +471,7 @@ the cache, which is the quick way to work on shapes. Fake prefabs stand in, so b
 ## Water
 
 Paint it with an overlay and `blocked: true`. The blocked flag is what stops you, not the overlay.
-Water overlays: 6 and 442 (rivers and sea), 7 (swamp), 5 (lava). There's no water plane: water's drawn at the height of
+Water overlays: 6 and 442 (rivers and sea), 7 (swamp), 19 (lava). There's no water plane: water's drawn at the height of
 its tiles' corners, so keep them level, and bring heights near water down to it over a few tiles (`distanceTo` gives
 you the distance).
 
@@ -478,8 +489,9 @@ rectangle of the real world.
 3. **Check it**: `npx tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every prefab in every
    rotation and fails if a wall's cut off, floor is lost indoors, or there's no way out. Then look at it:
    `scaperune_prefabs` is a dev map with all of them in all 4 rotations.
-4. **Stamp it**: `stampBuilding(ground, context, def, turns, x, y, towardX, towardY)` stands it on flat ground with
-   its doors off, and returns its way out nearest a tile. For anything else,
+4. **Stamp it**: `kit.stamp(ground, name, turns, x, y)` on a `PrefabKit` stands it on flat ground with its doors off,
+   and `kit.stampRuin` leaves most of it gone. `new PrefabKit(context, MY_PREFABS)` lets a map bring its own, which
+   the generator won't pick and `check-prefabs.ts` won't check. For anything else,
    `ground.stamp(rotatePrefab(loadPrefab(context, def), turns, locs), x, y, options)`.
 
 `stamp` options:
@@ -501,8 +513,8 @@ Only rotation is possible. The format has no mirror.
 1. **Reachability, in Node.** `scripts/scaperune/preview.ts` and `check-maps.ts` print how many open tiles
    can't reach the spawn, using the game's real collision. It must be 0.
 2. **From above.** Look at the preview's PNG. The white square is the arena and the red dot is the spawn.
-3. **In the browser**, because tests don't cover how things look. Use `~/tools/pw/rs-terrain.mjs`, or
-   `game.selectMap(id); await game.startRun()` in the console. Look at it side-on too, with a lower
+3. **In the browser**, because tests don't cover how things look. Use `~/tools/pw/rs-height.mjs` (pass a distance of 18,
+   or it shoots from further out than the play camera), or `game.selectMap(id); await game.startRun()` in the console. Look at it side-on too, with a lower
    `game.cameraRig.pitch`: from above, hills barely show.
 4. **Tests**: `npx vitest run src/game/scaperune`.
 5. **A bot run** shows it plays at all: `DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1`.
@@ -510,6 +522,11 @@ Only rotation is possible. The format has no mirror.
 The generator guarantees reachability: it floods from the spawn over the same collision the game uses,
 lays a ford across anything big that's cut off, and blocks whatever's left. A hand-made recipe has no such
 check, so use `findReachable` and `findStranded` from `collision.ts`, or `preview.ts`.
+
+**`0 stranded` proves nothing if the recipe blocks what's cut off.** A whole island sealed off still passes, as nothing
+open is left stranded: one map lost 4,964 tiles that way. Have the recipe count what it blocks and throw over a limit.
+`placeBridges` also skips a bridge that doesn't fit without saying so, and needs about 11 tiles of straight land each side
+and a crossing of 9, so count what comes back.
 
 ## Traps
 
@@ -564,13 +581,18 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Shallow edges still step.** A line a tile side can't hold has to jump a corner or a middle at a time, so a
   nearly straight shore has small kinks a few tiles apart. Real shores have them too.
-- **Squares must be free.** Nothing in the cache uses x 70-99, y 100-130, and the map manager stops at x 100,
-  y 200. Each recipe needs its own.
+- **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
+  y 200. Each recipe needs its own: dev maps sit in y 72-131 (see `devMaps.ts` and each map's `mapX`, `mapY`), and the
+  map generator's screen has x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.
 - **Updating the game's cache can change a prefab**, because a prefab is coordinates into the real world.
   Check them when `GAME_CACHE_NAME` changes.
-- **Browser memory:** headless runs must filter the base bake, as `~/tools/pw/rs-terrain.mjs` does.
+- **Browser memory:** enemies bake per map whatever you do, and filtering the base bake saved nothing measurable when
+  three maps were built in October 2026, so expect 1.85-2 GB at peak with or without it.
+- **`paintField` and `ground.place` reserve tiles,** so a later `isClear` quietly drops whatever you meant to put there,
+  and trees stop fitting round decor. Unpainted paths aren't reserved, so trees grow on them.
+- **Fields painted separately leave a seam along their join.** A tile holds one overlay: merge them into one field first.
 - **"Sector index id mismatch" in the browser** means an aborted cache download, usually Vite's first-run
   reload. Delete the browser profile and try again.
 

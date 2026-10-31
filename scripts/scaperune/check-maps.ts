@@ -559,7 +559,7 @@ for (const recipe of SCAPERUNE_DEV_MAPS.filter((map) => GENERATED.test(map.id)))
     // A hand-made map has no settings, and says what's on it itself
     const settings = DEV_MAP_SETTINGS[recipe.id];
     // A hand-made map says how to build what it's held to, if it's held to the rules at all
-    const detail = settings ? (c: BuildContext) => generateMapDetail(settings, c) : (recipe.detail ?? recipe.buildDetail);
+    const detail = settings ? (c: BuildContext) => generateMapDetail(settings, c) : recipe.detail;
     if (detail) {
         failed = !checkMap(recipe.id, detail, recipe) || failed;
     }

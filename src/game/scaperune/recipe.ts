@@ -36,15 +36,8 @@ export type MapRecipe = {
     // because the game needs it before it builds anything.
     spawn: { x: number; y: number };
     build(context: BuildContext): TileGrid;
-    // What the map screen shows, if not the id and a line saying it's a test
-    name?: string;
-    description?: string;
     // A hand-made map's own build with what check-maps.ts holds it to, if it wants checking
     detail?(context: BuildContext): GeneratedMap;
-    // What the map's called on the map list, if not its id
-    title?: { name: string; description: string };
-    // The same with what check-maps.ts needs, for a hand-made map to be held to its rules
-    buildDetail?(context: BuildContext): GeneratedMap;
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from
@@ -53,7 +46,7 @@ export type MapRecipe = {
         brightness: number;
     };
     // A hand-made map's own name, waves and so on, over what createDevMap gives it
-    details?: Partial<
+    mapDef?: Partial<
         Pick<
             MapDef,
             | "name"
