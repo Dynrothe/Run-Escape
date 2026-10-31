@@ -3871,11 +3871,11 @@ export class Sim {
                 spawned.push(one);
             }
         }
-        if (summon.beside || summon.walkTo) {
-            // What's part of the fight isn't a farm
-            for (const one of spawned) {
-                one.noDrops = true;
-            }
+        // What's part of the fight isn't a farm, though Sleepwalkers count for
+        // their quest, which noDrops wouldn't
+        for (const one of spawned) {
+            one.noDrops = summon.beside ?? false;
+            one.bonesOnly = summon.walkTo !== undefined;
         }
         if (spawned.length === 0) {
             return;

@@ -704,6 +704,15 @@ describe("Sleepwalkers", () => {
         expect(sim.player.hp).toBe(200 - attack("Sleepwalkers").damage);
     });
 
+    test("they count for their quest, and drop nothing worth having", () => {
+        const { sim, boss } = walkers();
+        for (const walker of sim.enemies.filter((e) => e.walksTo === boss)) {
+            sim.damageEnemy(walker, 1e6, 0, walker.x, walker.y, 0);
+        }
+        expect(sim.enemyKills.sleepwalker).toBe(attack("Sleepwalkers").summon!.count);
+        expect(sim.pickups.every((p) => p.kind === "bones" && p.value === 0)).toBe(true);
+    });
+
     test("any hit kills one, and she doesn't attack until it's settled", () => {
         const { sim, boss } = walkers();
         const walker = sim.enemies.find((e) => e.walksTo === boss)!;

@@ -123,6 +123,7 @@ export class BossFightView {
     // ---- On the ground ----
 
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
+        this.drawSquareEdge(overlay, sim, scale);
         const quarters = sim.quarters;
         if (quarters) {
             this.drawQuarters(overlay, sim, quarters, alpha, scale);
@@ -210,6 +211,26 @@ export class BossFightView {
                 ctx.lineTo(p.x, p.y);
             }
         }
+    }
+
+    // A fight in a set square (MapDef.bossArena) can't be walked out of, and on
+    // open ground nothing else says why the player has stopped
+    private drawSquareEdge(overlay: Overlay, sim: Sim, scale: number): void {
+        const boss = sim.shownBoss;
+        if (!sim.map.bossArena || !boss?.def.boss?.phases || boss.dead) {
+            return;
+        }
+        const { minX, minY, maxX, maxY } = sim.bossArena;
+        this.traceGround(overlay, sim, [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY },
+        ]);
+        const ctx = overlay.ctx;
+        ctx.lineWidth = Math.max(2, 4 * scale);
+        ctx.strokeStyle = "rgba(255, 110, 215, 0.8)";
+        ctx.stroke();
     }
 
     // The whole lane, there from the start, red, with arrows running the way
