@@ -13,7 +13,10 @@ export type CoopAction =
     | { kind: "reroll" }
     | { kind: "skip" }
     | { kind: "chest"; action: ChestAction }
-    | { kind: "item"; index: number };
+    | { kind: "item"; index: number }
+    // A random event's offer: take one of its options, or walk away
+    | { kind: "event"; index: number }
+    | { kind: "leaveEvent" };
 
 // Something that happens to a hero just before frame `frame` is stepped:
 // what they're pressing now (as whole numbers, -127 to 127), what they did,
@@ -70,6 +73,14 @@ export function applyAction(sim: Sim, action: CoopAction): boolean {
             return true;
         case "item":
             return sim.useItem(action.index);
+        case "event":
+            return sim.chooseEventOption(action.index);
+        case "leaveEvent":
+            if (sim.state !== "event") {
+                return false;
+            }
+            sim.leaveEvent();
+            return true;
     }
 }
 

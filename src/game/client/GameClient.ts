@@ -60,7 +60,13 @@ import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import { ChoiceView, GameStore, HudView, QuestTrackView, Screen, SlotView } from "./GameStore";
 import { GameView } from "./GameView";
-import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./ItemViews";
+import {
+    getBuffViews,
+    getChestView,
+    getEventView,
+    getGearViews,
+    getInventoryViews,
+} from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
@@ -899,6 +905,18 @@ export class GameClient implements GameFrameHandler {
                     }
                 }
                 break;
+            case "event":
+                if (!done) {
+                    this.sounds.denied();
+                    return;
+                }
+                this.handleEvents(sim, sim.takeEvents());
+                this.syncOverlay();
+                break;
+            case "leaveEvent":
+                this.handleEvents(sim, sim.takeEvents());
+                this.syncOverlay();
+                break;
         }
         this.updateHud(true);
     }
@@ -918,6 +936,24 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.act({ kind: "chest", action });
+    }
+
+    // Takes one of what a random event's visitor has on offer
+    chooseEvent(index: number): void {
+        const sim = this.sim;
+        if (!sim || sim.state !== "event") {
+            return;
+        }
+        this.act({ kind: "event", index });
+    }
+
+    // Walks away from what a random event's visitor has on offer
+    leaveEvent(): void {
+        const sim = this.sim;
+        if (!sim || sim.state !== "event") {
+            return;
+        }
+        this.act({ kind: "leaveEvent" });
     }
 
     // Rolls the level up's rewards or the open casket's item again, for one of
@@ -1154,7 +1190,11 @@ export class GameClient implements GameFrameHandler {
                 this.resume();
             } else if (overlay === "none") {
                 this.pause();
+            } else if (overlay === "event" && code === "Escape") {
+                this.leaveEvent();
             }
+        } else if (overlay === "event" && code.startsWith("Digit")) {
+            this.chooseEvent(parseInt(code.slice(5)) - 1);
         } else if (overlay === "levelUp" && code.startsWith("Digit")) {
             const index = parseInt(code.slice(5)) - 1;
             if (index >= 0 && index < sim.choices.length) {
@@ -1340,6 +1380,8 @@ export class GameClient implements GameFrameHandler {
             hero.choices.map((c) => c.kind + ("weaponId" in c ? c.weaponId : "")).join(),
             sim.chest?.uid ?? 0,
             sim.chest?.itemId ?? "",
+            sim.offer?.uid ?? 0,
+            sim.offer?.options.filter((o) => o.kind === "powerUp" && o.sold).length ?? 0,
             sim.waitingOn.map((h) => h.index).join(),
         ].join("|");
     }
@@ -1431,6 +1473,11 @@ export class GameClient implements GameFrameHandler {
                 case "heroDown":
                     this.store.toast("You're down! Watch the rest of your party fight on.", 5000);
                     break;
+                case "visitor":
+                    if (event.message) {
+                        this.store.toast(event.message);
+                    }
+                    break;
                 case "alch":
                     // There was no casket screen to show what it was
                     if (this.display.autoAlch) {
@@ -1492,6 +1539,14 @@ export class GameClient implements GameFrameHandler {
             if (!this.coopRun || shown.overlay !== "chest" || chest?.uid !== shown.chest?.uid) {
                 this.store.set({ overlay: "chest", chest, choices: [], waitingOn });
             }
+        } else if (sim.state === "event" && sim.offer?.hero === sim.focus) {
+            this.store.set({
+                overlay: "event",
+                event: getEventView(sim),
+                choices: [],
+                chest: undefined,
+                waitingOn,
+            });
         } else if (sim.isChoosing()) {
             const was = this.store.getSnapshot().overlay;
             if (was !== "levelUp" || !this.coopRun) {

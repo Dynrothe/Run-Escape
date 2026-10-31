@@ -22,6 +22,7 @@ import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getPassive } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { EnemyDef, EnemyOutfit, GearSlot } from "../content/types";
 import { WEAPONS } from "../content/weapons";
@@ -109,9 +110,16 @@ export const HITSPLAT_SPRITES = { damage: 1359, poison: 1360, block: 1358 } as c
 
 // Every spot animation the content uses, plus the fixed ones (cannonball,
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
-// Amulet of blood fury's heal)
+// Amulet of blood fury's heal, a random event's visitor coming and going)
 function getSpotAnimIds(): number[] {
-    const ids = new Set<number>([53, 199, FREEZE_SPOTANIM, NUKE_SPOTANIM, BLOOD_FURY_SPOTANIM]);
+    const ids = new Set<number>([
+        53,
+        199,
+        FREEZE_SPOTANIM,
+        NUKE_SPOTANIM,
+        BLOOD_FURY_SPOTANIM,
+        VISITOR_SPOTANIM,
+    ]);
     const add = (...spotAnims: (number | undefined)[]) => {
         for (const id of spotAnims) {
             if (id !== undefined) {
@@ -364,6 +372,11 @@ export class GameAssets {
                     npcId: effect.npcId,
                     seqIds: [effect.walkSeq],
                 });
+            }
+        }
+        for (const { id, npcId, idleSeq } of RANDOM_EVENTS) {
+            if (npcId !== undefined && idleSeq !== undefined) {
+                requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }
         }
         const objIds = new Set(getThrownObjIds());

@@ -1,5 +1,6 @@
 import { getPartyScale } from "../content/coop";
 import { getEnemy } from "../content/enemies";
+import { getRandomEvent } from "../content/randomEvents";
 import { emptyStats } from "../content/types";
 import { HeroOptions, Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm, usePortableMath } from "./fmath";
@@ -45,6 +46,9 @@ function play(sim: Sim, ticks: number): void {
             }
             if (h.chests.length > 0) {
                 sim.as(h.index, () => sim.resolveChest("take"));
+            }
+            if (sim.offer?.hero === h.index) {
+                sim.as(h.index, () => sim.leaveEvent());
             }
             const angle = (sim.tick / TICKS_PER_SECOND) * 0.8 + h.index;
             sim.setInput(h.index, fm.cos(angle), fm.sin(angle));
@@ -197,6 +201,30 @@ describe("co-op", () => {
         }
         expect(sim.state).toBe("levelUp");
         sim.leave(1);
+        expect(sim.state).toBe("playing");
+    });
+
+    it("has a visitor's offer chosen by whoever met them, the rest waiting", () => {
+        const sim = createParty(["warrior", "wizard", "ranger"]);
+        expect(sim.startRandomEvent(getRandomEvent("mysterious_old_man"))).toBe(true);
+        const visitor = sim.visitor!;
+        for (const h of sim.heroes) {
+            h.player.x = visitor.x + 10;
+        }
+        sim.heroes[1].player.x = visitor.x + 0.5;
+        sim.heroes[1].player.y = visitor.y;
+        sim.step();
+        expect(sim.state).toBe("event");
+        expect(sim.offer?.hero).toBe(1);
+        expect(sim.waitingOn.map((h) => h.index)).toEqual([1]);
+        // Nobody else can buy or walk away for them
+        sim.coins = 1e6;
+        expect(sim.as(0, () => sim.chooseEventOption(0))).toBe(false);
+        sim.as(2, () => sim.leaveEvent());
+        expect(sim.state).toBe("event");
+        // Leaving the party walks away from it
+        sim.leave(1);
+        expect(sim.offer).toBeUndefined();
         expect(sim.state).toBe("playing");
     });
 

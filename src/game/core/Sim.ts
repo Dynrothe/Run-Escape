@@ -26,8 +26,23 @@ import {
     THRALLS,
     getPowerUp,
 } from "../content/powerups";
+import {
+    OLD_MAN_OFFERS,
+    OLD_MAN_PRICE_PER_MINUTE,
+    RANDOM_EVENTS,
+    RANDOM_EVENT_EVERY,
+    RANDOM_EVENT_FIRST,
+    VISITOR_DISTANCE,
+    VISITOR_LIFETIME,
+    VISITOR_REACH,
+    VISITOR_SHOUT_EVERY,
+    VISITOR_SOUND,
+    VISITOR_SPOTANIM,
+    getQuizGroups,
+} from "../content/randomEvents";
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { getActiveSets, getSet } from "../content/sets";
+import { SOUNDS } from "../content/sounds";
 import {
     BoltProcDef,
     BossAttackDef,
@@ -45,6 +60,8 @@ import {
     PlayerEffectDef,
     PowerUpDef,
     PowerUpEffect,
+    RandomEventDef,
+    RandomEventEffect,
     SpecialAttackDef,
     Stats,
     UtilityDef,
@@ -87,6 +104,8 @@ import {
     Enemy,
     EnemyAbilities,
     EnemyProjectile,
+    EventOffer,
+    EventOption,
     FairyRing,
     FallingRock,
     Glyph,
@@ -102,6 +121,7 @@ import {
     SimEvent,
     Thrall,
     Turret,
+    Visitor,
     WeaponState,
     projectileSource,
 } from "./entities";
@@ -135,6 +155,9 @@ const FOOD_HEAL = 10;
 // After being hit the player can't be hit again for a moment, so a crowd hurts
 // more than one enemy but can't melt them instantly
 const HIT_INVULNERABLE_TICKS = 12;
+// Seconds until a random event that couldn't happen gets another go
+const RANDOM_EVENT_RETRY = 5;
+const RANDOM_EVENT_SEED = 0x5eed;
 
 // A rampage: how far from the player it starts, how near the player a crowd
 // has to be to go for it, how far past it the charge runs (tiles), and how long
@@ -316,7 +339,7 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
 ]);
 
 // levelUp and chest wait for the player to choose
-export type SimState = "playing" | "levelUp" | "chest" | "dead" | "victory";
+export type SimState = "playing" | "levelUp" | "chest" | "event" | "dead" | "victory";
 
 export type SimOptions = {
     grid: ArenaGrid;
@@ -485,6 +508,10 @@ export class Sim {
     private hero!: Hero;
     // The hero this client plays
     readonly focus: number;
+    // A random event's visitor waiting around, and what one's offering while
+    // the run waits
+    visitor?: Visitor;
+    offer?: EventOffer;
 
     enemies: Enemy[] = [];
     projectiles: Projectile[] = [];
@@ -539,6 +566,12 @@ export class Sim {
     private lastPowerUpTick = 0;
     // What dropped last, which doesn't drop twice in a row
     private lastPowerUpId?: string;
+    // Random events roll on their own, so a run only goes differently for
+    // what they do and not for them being there
+    private readonly eventRng: Rng;
+    // Run second the next random event is due, and the last one (not twice running)
+    private nextRandomEventSeconds: number;
+    private lastRandomEventId?: string;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
     // While a Drill Demon lasts
@@ -750,6 +783,8 @@ export class Sim {
         ];
         this.partyScale = getPartyScale(party.length);
         this.focus = Math.min(options.focus ?? 0, party.length - 1);
+        this.eventRng = new Rng(options.seed ^ RANDOM_EVENT_SEED);
+        this.nextRandomEventSeconds = this.eventRng.range(...RANDOM_EVENT_FIRST);
         const fun = this.map.fun;
         if (fun) {
             this.nextFunBossSeconds = fun.bosses.firstAt;
@@ -779,8 +814,8 @@ export class Sim {
         const offset = index === 0 ? 0 : PARTY_SPREAD;
         const start = findFreeSpot(
             this.grid,
-            spawnX + Math.cos(angle) * offset,
-            spawnY + Math.sin(angle) * offset,
+            spawnX + fm.cos(angle) * offset,
+            spawnY + fm.sin(angle) * offset,
             PLAYER_RADIUS,
         );
         const flowField = new FlowField(FLOW_FIELD_SIZE);
@@ -1184,7 +1219,9 @@ export class Sim {
     // What the run waits on now: anyone's level up, then anyone's casket, or
     // nothing (co-op waits for everyone)
     private settle(): void {
-        if (this.anyoneToChoose()) {
+        if (this.offer) {
+            this.state = "event";
+        } else if (this.anyoneToChoose()) {
             this.state = "levelUp";
         } else if (this.heroes.some((hero) => hero.chests.length > 0)) {
             this.state = "chest";
@@ -1201,6 +1238,9 @@ export class Sim {
         }
         if (this.state === "chest") {
             return this.heroes.filter((hero) => hero.chests.length > 0);
+        }
+        if (this.state === "event" && this.offer) {
+            return [this.heroes[this.offer.hero]];
         }
         return [];
     }
@@ -1634,6 +1674,9 @@ export class Sim {
         hero.pendingLevelUps = 0;
         hero.choices = [];
         hero.chests = [];
+        if (this.offer?.hero === heroIndex) {
+            this.offer = undefined;
+        }
         this.as(heroIndex, () => this.emit({ type: "heroLeft" }));
         if (this.runOver) {
             return;
@@ -1711,6 +1754,7 @@ export class Sim {
         this.stepFires();
         this.stepEnemyProjectiles();
         this.stepPickups();
+        this.stepRandomEvents();
         this.cleanUp();
         this.checkLevelUp();
     }
@@ -5554,20 +5598,29 @@ export class Sim {
 
     // ---- Power-ups ----
 
-    // A kill is likelier to drop a power-up the longer it's been since the last
+    // A kill is likelier to drop a power-up the longer it's been since the
+    // last. A higher rate runs that clock faster, and the cube is what makes
+    // them come that much more often: the time between them goes as one over
+    // the cube root of the chance.
     private rollPowerUp(x: number, y: number): void {
+        const rate = 1 + this.stats.powerUpRate;
         const seconds = (this.tick - this.lastPowerUpTick) / TICKS_PER_SECOND;
-        if (seconds < POWER_UP_MIN_GAP) {
+        if (seconds * rate < POWER_UP_MIN_GAP) {
             return;
         }
         const minutes = seconds / 60;
-        const chance = POWER_UP_CHANCE * minutes * minutes * (1 + this.stats.luck);
+        const chance =
+            POWER_UP_CHANCE * fm.pow(rate, 3) * minutes * minutes * (1 + this.stats.luck);
         if (this.rng.chance(chance)) {
-            const index = this.rng.weightedIndex(
-                POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
-            );
-            this.dropPowerUp(POWER_UPS[index].id, x, y);
+            this.dropPowerUp(this.rollPowerUpId(), x, y);
         }
+    }
+
+    private rollPowerUpId(): string {
+        const index = this.rng.weightedIndex(
+            POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+        );
+        return POWER_UPS[index].id;
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
@@ -5928,6 +5981,301 @@ export class Sim {
             killed++;
         }
         return killed;
+    }
+
+    // ---- Random events ----
+
+    private stepRandomEvents(): void {
+        const visitor = this.visitor;
+        if (this.runOver) {
+            return;
+        }
+        if (visitor) {
+            this.stepVisitor(visitor);
+        } else if (this.seconds >= this.nextRandomEventSeconds) {
+            this.useVisitorHero();
+            // (none to pick or nowhere to put one: it's due again in a moment)
+            this.nextRandomEventSeconds = this.startRandomEvent(this.rollRandomEvent())
+                ? this.seconds + this.eventRng.range(...RANDOM_EVENT_EVERY)
+                : this.seconds + RANDOM_EVENT_RETRY;
+        }
+    }
+
+    // Co-op: one of the heroes still up, for a visitor (or an ambush) to turn
+    // up by, from the events' own rolls
+    private useVisitorHero(): void {
+        if (this.heroes.length === 1) {
+            return;
+        }
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        if (up.length > 0) {
+            this.use(up[this.eventRng.int(up.length)]);
+        }
+    }
+
+    private rollRandomEvent(): RandomEventDef | undefined {
+        const bossOut = this.enemies.some((enemy) => enemy.boss && !enemy.dead);
+        const index = this.eventRng.weightedIndex(
+            RANDOM_EVENTS.map((event) =>
+                event.id === this.lastRandomEventId ||
+                this.seconds < (event.minSeconds ?? 0) ||
+                (event.effect.kind === "ambush" && bossOut)
+                    ? 0
+                    : event.weight,
+            ),
+        );
+        return RANDOM_EVENTS[index];
+    }
+
+    // Puts this event in motion; false when it can't be right now
+    startRandomEvent(def: RandomEventDef | undefined): boolean {
+        if (!def) {
+            return false;
+        }
+        const effect = def.effect;
+        if (effect.kind === "ambush") {
+            // Enemy hitpoints as of now, unlike a map's bosses, which are placed
+            // for when they turn up
+            const enemy = getEnemy(effect.enemyId);
+            const hp = enemy.hp * this.map.difficulty.hp * this.enemyHpScale();
+            if (!this.spawnBoss(enemy, "boss", hp)) {
+                return false;
+            }
+            this.lastRandomEventId = def.id;
+            return true;
+        }
+        const spot = this.findVisitorSpot();
+        if (!spot) {
+            return false;
+        }
+        this.lastRandomEventId = def.id;
+        this.visitor = {
+            uid: this.nextUid++,
+            def,
+            x: spot.x,
+            y: spot.y,
+            startTick: this.tick,
+            endTick: this.tick + VISITOR_LIFETIME * TICKS_PER_SECOND,
+            nextShoutTick: this.tick,
+        };
+        this.addEffect(VISITOR_SPOTANIM, spot.x, spot.y, 0, 60);
+        this.events.push({ type: "visitor", message: def.arrive ?? "", sound: VISITOR_SOUND });
+        return true;
+    }
+
+    // A few tiles off, where the player can get to
+    private findVisitorSpot(): Vec2 | undefined {
+        const player = this.player;
+        for (let attempt = 0; attempt < 16; attempt++) {
+            const angle = this.eventRng.range(0, Math.PI * 2);
+            const distance = this.eventRng.range(...VISITOR_DISTANCE);
+            const x = Math.floor(player.x + fm.cos(angle) * distance) + 0.5;
+            const y = Math.floor(player.y + fm.sin(angle) * distance) + 0.5;
+            const tileX = Math.floor(x);
+            const tileY = Math.floor(y);
+            if (
+                this.grid.contains(tileX, tileY) &&
+                this.isWalkableTile(tileX, tileY) &&
+                isCircleFree(this.grid, x, y, PLAYER_RADIUS)
+            ) {
+                return { x, y };
+            }
+        }
+        return undefined;
+    }
+
+    private stepVisitor(visitor: Visitor): void {
+        if (this.tick >= visitor.endTick) {
+            this.visitorLeft(visitor);
+            return;
+        }
+        const shouts = visitor.def.shouts;
+        if (shouts && this.tick >= visitor.nextShoutTick) {
+            visitor.nextShoutTick = this.tick + VISITOR_SHOUT_EVERY * TICKS_PER_SECOND;
+            this.events.push({ type: "visitorShout", text: this.eventRng.pick(shouts) });
+        }
+        // (a casket opened this tick has the run waiting already)
+        if (this.state !== "playing") {
+            return;
+        }
+        const met = this.heroes.find(
+            (hero) =>
+                this.isUp(hero) &&
+                fm.hypot(hero.player.x - visitor.x, hero.player.y - visitor.y) <= VISITOR_REACH,
+        );
+        if (met) {
+            this.use(met);
+            this.meetVisitor(visitor);
+        }
+    }
+
+    // Left waiting too long
+    private visitorLeft(visitor: Visitor): void {
+        this.nextRandomEventSeconds = this.seconds + this.eventRng.range(...RANDOM_EVENT_EVERY);
+        this.visitor = undefined;
+        this.addEffect(VISITOR_SPOTANIM, visitor.x, visitor.y, 0, 60);
+        this.events.push({ type: "visitor", message: visitor.def.leave ?? "", sound: -1 });
+        const effect = visitor.def.effect;
+        if (effect.kind === "heal" && effect.ignoredHit) {
+            // Everyone still in the fight ignored them
+            const { ignoredHit, sound } = effect;
+            this.forEachHeroInReach(() => {
+                if (this.reviving) {
+                    return;
+                }
+                const hit = Math.round(this.player.maxHp * ignoredHit);
+                const amount = Math.min(hit, this.player.hp - 1);
+                if (amount > 0) {
+                    this.damagePlayer(amount, visitor.def.id, false, sound, true);
+                }
+            });
+        }
+    }
+
+    // Walked up to at last: they do what they came for
+    private meetVisitor(visitor: Visitor): void {
+        this.nextRandomEventSeconds = this.seconds + this.eventRng.range(...RANDOM_EVENT_EVERY);
+        this.visitor = undefined;
+        this.addEffect(VISITOR_SPOTANIM, visitor.x, visitor.y, 0, 60);
+        const def = visitor.def;
+        const effect = def.effect;
+        switch (effect.kind) {
+            case "shop":
+                this.openOffer(def, this.rollOldManOptions());
+                return;
+            case "quiz":
+                this.openOffer(def, this.rollQuizOptions(effect.options));
+                return;
+            case "ambush":
+                return;
+            case "xp":
+                this.xp += (this.xpForNextLevel - this.xpForThisLevel) * effect.levels;
+                break;
+            case "heal":
+                this.heal(this.player.maxHp * effect.fraction);
+                break;
+            case "casket": {
+                const tier = rollCasketTier(this.rng, this.seconds, true, this.stats.luck);
+                this.dropCasketOfTier(tier, visitor.x, visitor.y, true);
+                break;
+            }
+            case "buff":
+                this.addEventBuff(def.id, effect);
+                break;
+        }
+        this.emit({ type: "visitor", message: effect.message, sound: effect.sound }, true);
+    }
+
+    private addEventBuff(id: string, effect: Extract<RandomEventEffect, { kind: "buff" }>): void {
+        const { name, objId, stats, seconds, cures = false } = effect;
+        if (cures) {
+            this.player.poisonEnd = -1;
+            this.player.poisonDamage = 0;
+            this.debuffs = [];
+        }
+        this.addBuff(id, stats, seconds, cures);
+        this.buffs[this.buffs.length - 1].look = { name, objId };
+    }
+
+    private openOffer(def: RandomEventDef, options: EventOption[]): void {
+        this.offer = { uid: this.nextUid++, def, options, hero: this.hero.index };
+        this.state = "event";
+    }
+
+    // A few different power-ups, the ones that drop less often being the ones
+    // on offer less often too
+    private rollOldManOptions(): EventOption[] {
+        const left = [...POWER_UPS];
+        const options: EventOption[] = [];
+        while (options.length < OLD_MAN_OFFERS && left.length > 0) {
+            const index = this.eventRng.weightedIndex(left.map((p) => p.weight));
+            const [powerUp] = left.splice(index, 1);
+            options.push({
+                kind: "powerUp",
+                powerUpId: powerUp.id,
+                price: this.oldManPrice(powerUp),
+                sold: false,
+            });
+        }
+        return options;
+    }
+
+    private oldManPrice(powerUp: PowerUpDef): number {
+        const inflation = 1 + (this.seconds / 60) * OLD_MAN_PRICE_PER_MINUTE;
+        return Math.max(1, Math.round(powerUp.price * inflation * this.coinScale));
+    }
+
+    // Some of one group of things and the odd one out from another, anywhere
+    private rollQuizOptions(count: number): EventOption[] {
+        const groups = getQuizGroups();
+        const same = groups.splice(this.eventRng.int(groups.length), 1)[0];
+        const options: EventOption[] = [];
+        const pool = [...same];
+        while (options.length < count - 1 && pool.length > 0) {
+            const [item] = pool.splice(this.eventRng.int(pool.length), 1);
+            options.push({ kind: "answer", itemId: item.id, correct: false });
+        }
+        const odd = this.eventRng.pick(this.eventRng.pick(groups));
+        options.splice(this.eventRng.int(options.length + 1), 0, {
+            kind: "answer",
+            itemId: odd.id,
+            correct: true,
+        });
+        return options;
+    }
+
+    // Takes one of what's on offer. False when there's no such thing or the
+    // player can't pay for it.
+    chooseEventOption(index: number): boolean {
+        const offer = this.offer;
+        const option = offer?.options[index];
+        if (this.state !== "event" || !offer || !option || offer.hero !== this.hero.index) {
+            return false;
+        }
+        if (option.kind === "powerUp") {
+            if (option.sold || this.coins < option.price) {
+                return false;
+            }
+            this.coins -= option.price;
+            option.sold = true;
+            this.emit({ type: "visitor", message: "", sound: SOUNDS.buy }, true);
+            this.usePowerUp(getPowerUp(option.powerUpId));
+            // A bought nuke can finish off a final boss
+            if (this.runOver || offer.options.every((o) => o.kind === "powerUp" && o.sold)) {
+                this.leaveEvent();
+            }
+            return true;
+        }
+        const effect = offer.def.effect;
+        if (effect.kind === "quiz") {
+            this.emit(
+                {
+                    type: "visitor",
+                    message: option.correct ? effect.right : effect.wrong,
+                    sound: option.correct ? SOUNDS.levelUp : SOUNDS.denied,
+                },
+                true,
+            );
+            if (option.correct) {
+                this.usePowerUp(getPowerUp(this.rollPowerUpId()));
+            }
+        }
+        this.leaveEvent();
+        return true;
+    }
+
+    // Done with what's on offer: on with the run (or a level up or casket that
+    // came in meanwhile)
+    leaveEvent(): void {
+        if (this.offer && this.offer.hero !== this.hero.index) {
+            return;
+        }
+        this.offer = undefined;
+        if (this.state !== "event") {
+            return;
+        }
+        this.state = this.heroes.some((hero) => hero.chests.length > 0) ? "chest" : "playing";
+        this.checkLevelUp();
     }
 
     // A casket always has some coins and one item; the run waits while the

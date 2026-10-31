@@ -137,7 +137,7 @@ else. `npm start` and `npm run preview` run a relay of their own at `/coop`
 ```
 src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
-            of gear upgrades into), power-ups and thralls, characters, shop, maps
+            of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
             (what each map's tasks bring in); quests (what each asks for and pays)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
@@ -158,8 +158,8 @@ src/game/
     coop/     CoopLobby (the relay connection and the room), CoopRun (a run's lockstep, host or
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
-  ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon, CoopScreen (the
-            rooms, the lobby, the party in a run)
+  ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
+            offer), ItemIcon, CoopScreen (the rooms, the lobby, the party in a run)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,

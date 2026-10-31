@@ -1,4 +1,12 @@
-import { BossAttackDef, CasketTier, EnemyDef, Stats, ThrallDef, WeaponDef } from "../content/types";
+import {
+    BossAttackDef,
+    CasketTier,
+    EnemyDef,
+    RandomEventDef,
+    Stats,
+    ThrallDef,
+    WeaponDef,
+} from "../content/types";
 
 // Positions are world tiles (x east, y north). prevX/prevY are last tick's
 // position, for drawing between ticks.
@@ -405,6 +413,31 @@ export type FairyRing = {
     scale: number;
 };
 
+// Someone from a random event, standing around until endTick to be walked up to
+export type Visitor = {
+    uid: number;
+    def: RandomEventDef;
+    x: number;
+    y: number;
+    startTick: number;
+    endTick: number;
+    nextShoutTick: number;
+};
+
+// What a visitor who opens a screen has on offer, with the run waiting: a
+// power-up for sale, or an answer to the Quiz Master's question
+export type EventOption =
+    | { kind: "powerUp"; powerUpId: string; price: number; sold: boolean }
+    | { kind: "answer"; itemId: string; correct: boolean };
+
+export type EventOffer = {
+    uid: number;
+    def: RandomEventDef;
+    options: EventOption[];
+    // The hero who met the visitor, who chooses (co-op)
+    hero: number;
+};
+
 // A power-up that lasts a while, for the timers on screen
 export type ActivePowerUp = {
     uid: number;
@@ -481,6 +514,8 @@ export type Buff = {
     cures: boolean;
     startTick: number;
     endTick: number;
+    // For its timer, when it isn't from an item (itemId is then just a key)
+    look?: { name: string; objId: number };
 };
 
 // Stats a boss attack lowered, until endTick
@@ -596,6 +631,11 @@ type SimEventBody =
     // A boss took coins from the player, or gave them back when it died
     | { type: "coinsStolen"; enemyId: string; amount: number }
     | { type: "coinsReturned"; enemyId: string; amount: number }
+    // A random event's visitor came, went or did what they do; on screen for a
+    // moment. sound: cache sound effect, -1 for none.
+    | { type: "visitor"; message: string; sound: number }
+    // Said over the visitor's head
+    | { type: "visitorShout"; text: string }
     // An endless run's final boss is down and the next round has begun
     | { type: "roundStarted"; round: number }
     // Co-op: a hero went down with no revives left (out for the rest of the

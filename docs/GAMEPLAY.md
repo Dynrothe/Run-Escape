@@ -188,7 +188,8 @@ version and how to run it.
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
   after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
-  drops twice in a row.
+  drops twice in a row. The shop's Runecraft upgrade makes them drop 15% more often for each rank,
+  up to three.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
@@ -211,6 +212,24 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+- **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
+  same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
+  minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
+  walking up to them sets off what they came for.
+    - **Mysterious Old Man** (the likeliest): sells three power-ups, with the run paused while you
+      choose. Prices go up by a tenth of the base price for each minute of the run, and with the
+      map's coins. Buying one doesn't delay the next drop.
+    - **Quiz Master**: three items that go together and one that doesn't, with the run paused. The
+      odd one out wins a random power-up.
+    - **Genie**: three quarters of a level's experience.
+    - **Sandwich lady**: heals 40% of your hitpoints. Ignore her and she throws a baguette as she
+      leaves, for 15% of your hitpoints, which can't kill you.
+    - **Rick Turpentine**: drops a casket.
+    - **Strange plant**: its fruit gives 30% more movement speed for 20 seconds and cures poison, with
+      poison unable to touch you until it wears off.
+    - **Highwayman**: from 4:00, and not while a boss is out. A boss rather than a visitor, who
+      comes for you, and each Pickpocket steals a tenth of your coins. Kill him to get them back,
+      along with a hard casket.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Enemies only turn up where you could stand and walk to, never behind a wall or in
@@ -366,6 +385,10 @@ version and how to run it.
     - The run's **level is shared**: every level up gives each player their own three choices, and
       the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
       shared too, and everyone banks the run's coins.
+    - A **random event's** visitor turns up by one of the party, and whoever walks up first meets
+      them and gets what they bring. The Mysterious Old Man's and the Quiz Master's offers are
+      theirs to choose from while the run waits, paid for from the shared coins. Ignore the
+      Sandwich lady and everyone still standing gets the baguette.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party

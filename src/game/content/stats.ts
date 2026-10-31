@@ -29,6 +29,7 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
     meleeKnockback: { label: "melee knockback", unit: "percent" },
     weaponSlots: { label: "weapon slots", unit: "flat" },
     passiveSlots: { label: "passive slots", unit: "flat" },
+    powerUpRate: { label: "power-up drops", unit: "percent" },
 };
 
 // The order stats are listed in
