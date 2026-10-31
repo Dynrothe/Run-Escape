@@ -53,6 +53,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
+import { BulletPool } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
     ChestAction,
@@ -84,8 +85,8 @@ import {
     BossSurge,
     BossWalkers,
     BossWindup,
-    BulletEmitter,
     Buff,
+    BulletEmitter,
     DamageSource,
     Death,
     Debuff,
@@ -115,11 +116,10 @@ import {
     Thrall,
     Turret,
     WeaponState,
-    quarterOf,
     projectileSource,
+    quarterOf,
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
-import { BulletPool } from "./BulletPool";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlowField, canWalkStraight } from "./world/FlowField";
 import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
@@ -2782,9 +2782,7 @@ export class Sim {
             vx: dirX * speed,
             vy: dirY * speed,
             startTick: this.tick,
-            endTick: stays
-                ? lastTick
-                : Math.min(lastTick, this.tick + Math.ceil(distance / speed)),
+            endTick: stays ? lastTick : Math.min(lastTick, this.tick + Math.ceil(distance / speed)),
         };
         // Whatever it was doing, it's stopped
         enemy.shieldEnd = Infinity;
@@ -2837,10 +2835,12 @@ export class Sim {
         const arena = this.bossArena;
         const dx = (arena.minX + arena.maxX) / 2 - player.x;
         const dy = (arena.minY + arena.maxY) / 2 - player.y;
-        const length = Math.max(0.001, Math.hypot(dx, dy));
-        const reach = Math.min(rise.distance, length);
-        const x = player.x + (dx / length) * reach;
-        const y = player.y + (dy / length) * reach;
+        const length = Math.hypot(dx, dy);
+        // Standing in the middle already, any way will do
+        const dirX = length > 0.001 ? dx / length : 0;
+        const dirY = length > 0.001 ? dy / length : 1;
+        const x = player.x + dirX * rise.distance;
+        const y = player.y + dirY * rise.distance;
         const at = this.canTurnUpAt(def, x, y)
             ? { x, y }
             : (this.findSpotNear(player.x, player.y, rise.distance, def.radius) ??
@@ -3035,12 +3035,7 @@ export class Sim {
     }
 
     // Whether the player's in a cone swing's wedge, or right under the boss
-    private inCone(
-        enemy: Enemy,
-        windup: BossWindup,
-        attack: BossAttackDef,
-        cone: number,
-    ): boolean {
+    private inCone(enemy: Enemy, windup: BossWindup, attack: BossAttackDef, cone: number): boolean {
         const player = this.player;
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
@@ -3256,9 +3251,7 @@ export class Sim {
         if (!pattern) {
             return;
         }
-        let source = this.bulletSources.findIndex(
-            (s) => s.attack === attack && s.enemy === enemy,
-        );
+        let source = this.bulletSources.findIndex((s) => s.attack === attack && s.enemy === enemy);
         if (source === -1) {
             source = this.bulletSources.push({ attack, enemy }) - 1;
         }
@@ -3269,9 +3262,7 @@ export class Sim {
             source,
             nextTick: this.tick,
             volleysLeft: pattern.volleys,
-            angle: aimed
-                ? Math.atan2(windup.dirY, windup.dirX)
-                : this.rng.range(0, Math.PI * 2),
+            angle: aimed ? Math.atan2(windup.dirY, windup.dirX) : this.rng.range(0, Math.PI * 2),
             damage: this.getBossDamage(enemy, attack),
         });
         enemy.bossState!.channelEnd =
@@ -3285,9 +3276,7 @@ export class Sim {
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
         const count = pattern.count;
         const spread = pattern.shape === "spread";
-        const step = spread
-            ? (pattern.arc ?? 1) / Math.max(1, count - 1)
-            : (Math.PI * 2) / count;
+        const step = spread ? (pattern.arc ?? 1) / Math.max(1, count - 1) : (Math.PI * 2) / count;
         const first = spread ? emitter.angle - (pattern.arc ?? 1) / 2 : emitter.angle;
         for (let i = 0; i < count; i++) {
             const angle = first + i * step;
@@ -3392,23 +3381,21 @@ export class Sim {
         // However many land on them, it's the one hit
         let landed = false;
         for (const hazard of hazards) {
-            if (hazard.armed && hazard.fuseTick === -1 && tick >= hazard.landTick) {
+            if (hazard.armed && hazard.fuseTick === -1) {
+                // Waiting to be walked into, until it gives up
                 if (tick >= hazard.endTick) {
                     hazard.endTick = -1;
                     spent = true;
                 } else if (
+                    tick >= hazard.landTick &&
                     Math.hypot(player.x - hazard.x, player.y - hazard.y) <=
-                    hazard.radius + player.radius
+                        hazard.radius + player.radius
                 ) {
                     hazard.fuseTick = tick + HAZARD_FUSE_TICKS;
                 }
                 continue;
             }
-            const goesOff = hazard.armed ? hazard.fuseTick : hazard.landTick;
-            if (hazard.armed && hazard.fuseTick === -1) {
-                continue;
-            }
-            if (tick < goesOff) {
+            if (tick < (hazard.armed ? hazard.fuseTick : hazard.landTick)) {
                 continue;
             }
             hazard.endTick = -1;
@@ -3485,12 +3472,7 @@ export class Sim {
         const player = this.player;
         const boss = this.enemies.find((e) => e.uid === parasite.enemyUid);
         const weak = this.cured;
-        this.bossHit(
-            boss?.def.id ?? "",
-            boss,
-            parasite.attack,
-            parasite.damage * (weak ? 0.5 : 1),
-        );
+        this.bossHit(boss?.def.id ?? "", boss, parasite.attack, parasite.damage * (weak ? 0.5 : 1));
         if (this.runOver) {
             return;
         }
@@ -3541,8 +3523,7 @@ export class Sim {
         }
         boss.bossState!.walkers = undefined;
         const attack = walkers.attack;
-        const damage =
-            (attack.damage + walkers.absorbed * walkers.perAbsorbed) * boss.damageScale;
+        const damage = (attack.damage + walkers.absorbed * walkers.perAbsorbed) * boss.damageScale;
         this.events.push({
             type: "bossAbsorbBlast",
             x: boss.x,

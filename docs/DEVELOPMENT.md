@@ -68,6 +68,7 @@ src/game/
   core/     the game in plain TypeScript (no DOM), tested with vitest
     Sim.ts            fixed 20ms tick: movement, enemies, spawning, weapons, pickups, power-ups,
                       levels
+    BulletPool.ts     a boss's bullets, in flat arrays: hundreds at once, no allocation in the tick
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
                       FlowField (Dijkstra from the player, how hundreds of enemies find a way)
     Upgrades.ts       level up choices
@@ -79,6 +80,7 @@ src/game/
             Dev-only so far, with a temporary Map generator button on the dev server's title
             screen. Its CLAUDE.md is the guide to making one
   client/   GameClient (run flow, camera, input), GameView (3D actors + 2D overlay),
+            BossFightView (a phased boss's ground marks, bullets and entrance),
             GameAssets (what gets baked), GameStore (state for the React UI)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon
@@ -98,6 +100,24 @@ learned the rev 241 opcodes, the map loader can take extra map squares as plain 
 (`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
+
+### Boss fights as data
+
+A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `Sim.ts`. The Nightmare
+(`content/nightmare.ts`) is built from these, and any boss can use them:
+
+- `BossDef.intro`: the player's safe, the screen goes dark, what's left runs for the map's edge and
+  is gone, and the boss rises. `alone` stops the waves until it's dead.
+- `BossDef.phases`: a shield, then totems in the corners, then a blast for a share of its hitpoints.
+  Only the shield takes hits, in `damageEnemy`. Totems are enemies that can't die: their hitpoints
+  are the charge they still need, and `shieldEnd` is `Infinity` while they can't be hit, which keeps
+  weapons off them.
+- Attack kinds `pattern` (rings, spirals, aimed spreads), `ground` (marks that land, or stay armed),
+  `quarters`, `surge` and `mark`, and `phases` on an attack for when it's used.
+- `Sim.bossArena` is the square all this goes by: `MapDef.bossArena`, or the whole map. Nothing's
+  sized by hand, so she fights on any square.
+
+The curse is applied to the input in `stepPlayer`, so keys and the touch stick go the same way.
 
 ### What gets drawn
 

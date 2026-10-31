@@ -33,7 +33,7 @@ const STANDARD_ATTACKS: BossAttackDef[] = [
         seq: RANGED_SEQ,
         pattern: {
             shape: "spread",
-            count: 7,
+            count: 5,
             volleys: 3,
             interval: 0.45,
             speed: 8,
@@ -229,7 +229,7 @@ const PHASE_TWO_ATTACKS: BossAttackDef[] = [
         seq: MAGIC_SEQ,
         pattern: {
             shape: "ring",
-            count: 24,
+            count: 18,
             volleys: 3,
             interval: 0.7,
             speed: 5,

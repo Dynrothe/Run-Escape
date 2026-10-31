@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- The Nightmare: a three-phase final boss fought like a bullet hell. Break her shield, charge the
+  four totems, and dodge what she throws at you, all marked on the ground before it lands.
+
 ## 0.19.0 - 2026-10-31
 
 ### Added
