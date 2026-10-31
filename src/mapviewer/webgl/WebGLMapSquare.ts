@@ -16,7 +16,9 @@ import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { CollisionMap } from "../../rs/scene/CollisionMap";
 import { Scene } from "../../rs/scene/Scene";
+import { Frustum } from "../Frustum";
 import { DrawRange, newDrawRange } from "./DrawRange";
+import { FLOATS_PER_BOX } from "./buffer/CullGrid";
 import { SdMapData } from "./loader/SdMapData";
 import { LocAnimated } from "./loc/LocAnimated";
 import { Npc } from "./npc/Npc";
@@ -297,8 +299,15 @@ export class WebGLMapSquare {
 
             locsAnimated,
             npcs,
+
+            mapData.cullBoxes,
+            mapData.drawRangeBoxes,
+            mapData.drawRangeAlphaBoxes,
         );
     }
+
+    // Whether each of cullBoxes is on screen this frame
+    readonly boxVisible: Uint8Array;
 
     constructor(
         readonly mapX: number,
@@ -350,9 +359,26 @@ export class WebGLMapSquare {
 
         // Npcs
         readonly npcs: Npc[],
+
+        // Set when the square was loaded with a cull cell size
+        readonly cullBoxes?: Float32Array,
+        readonly drawRangeBoxes?: Uint16Array,
+        readonly drawRangeAlphaBoxes?: Uint16Array,
     ) {
         this.id = getMapSquareId(mapX, mapY);
         this.npcDataTextureOffsets = new Array(NPC_DATA_TEXTURE_BUFFER_SIZE).fill(-1);
+        this.boxVisible = new Uint8Array((cullBoxes?.length ?? 0) / FLOATS_PER_BOX);
+    }
+
+    updateBoxVisibility(frustum: Frustum): void {
+        const boxes = this.cullBoxes;
+        if (!boxes) {
+            return;
+        }
+        const visible = this.boxVisible;
+        for (let i = 0; i < visible.length; i++) {
+            visible[i] = frustum.intersectsBoxAt(boxes, i * FLOATS_PER_BOX) ? 1 : 0;
+        }
     }
 
     canRender(frameCount: number): boolean {

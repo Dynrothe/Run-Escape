@@ -17,6 +17,9 @@ the version in the corner).
 
 - Past 15 minutes in an endless run, chests are five times as likely to drop (25%, up from 5%), and 25
   can lie on the ground at once, up from 10.
+- The game draws far less of the map on busy maps: only what's on screen, not everything nearby.
+- The game starts much faster and uses far less memory. Each map's monsters now load when you set
+  off for it, so the first run on a map takes a moment longer to start.
 
 ## 0.18.0 - 2026-10-30
 

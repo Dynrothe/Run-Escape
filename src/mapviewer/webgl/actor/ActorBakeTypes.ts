@@ -76,6 +76,9 @@ export type BakedSet = {
     // first frame of the first animation
     height: number;
     radius: number;
+    // Furthest any vertex gets from the model's origin in any frame of any of
+    // its animations, in model units: what its culling goes by
+    reach: number;
     anims: BakedAnim[];
 };
 

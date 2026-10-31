@@ -20,10 +20,21 @@ export interface GameFrameHandler {
     drawOverlay(camera: Camera): void;
 }
 
+// A square is 64 tiles a side and the camera sees a small part of it, so its
+// draws are cut up and culled by this many tiles. Without multi draw each one is
+// a real draw call, so they stay fewer and bigger.
+const CULL_CELL_SIZE = 8;
+const CULL_CELL_SIZE_NO_MULTI_DRAW = 32;
+
 // The map viewer's WebGL renderer with the viewer's own controls, hover menus
 // and map square NPCs taken out, and the game's actors drawn in the NPC passes.
 export class GameWebGLRenderer extends WebGLMapViewerRenderer {
     game?: GameFrameHandler;
+
+    // Dev: to compare frames with another cell size, or none (0)
+    cullCellSizeOverride?: number;
+    // Dev: off draws every actor, on screen or not
+    cullActors = true;
 
     actorProgram?: Program;
     actorSilhouetteProgram?: Program;
@@ -43,6 +54,12 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         // The game draws its own NPCs and items
         this.loadNpcs = false;
         this.loadObjs = false;
+        // No hover menus, and a minimap of its own (Minimap.ts)
+        this.useInteractTarget = false;
+        this.skipMinimap = true;
+        // The game's camera never sees a square three away, so low detail
+        // draws are never used
+        mapViewer.lodDistance = Infinity;
         this.actorRendererReady = new Promise((resolve) => {
             this.resolveActorRenderer = resolve;
         });
@@ -66,6 +83,16 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         // The game reads input itself; the viewer's input manager would also move
         // the camera and grab the pointer.
         this.mapViewer.inputManager.cleanUp();
+    }
+
+    override async queueLoadMap(mapX: number, mapY: number): Promise<void> {
+        // The first squares are asked for before the renderer's up, and what
+        // they're baked like depends on whether it has multi draw
+        await this.actorRendererReady;
+        this.cullCellSize =
+            this.cullCellSizeOverride ??
+            (this.hasMultiDraw ? CULL_CELL_SIZE : CULL_CELL_SIZE_NO_MULTI_DRAW);
+        await super.queueLoadMap(mapX, mapY);
     }
 
     override async initShaders(): Promise<Program[]> {
@@ -102,7 +129,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         const camera = this.mapViewer.camera;
         const actors = this.actorRenderer;
         if (actors) {
-            actors.beginFrame();
+            actors.beginFrame(this.cullActors ? camera.frustum : undefined);
             this.game?.submitActors(actors, camera);
             actors.upload();
         }
