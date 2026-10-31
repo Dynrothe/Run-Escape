@@ -282,6 +282,35 @@ export const QUESTS: QuestDef[] = [
         coins: 2500,
     },
     {
+        id: "zogre_flesh_eaters",
+        name: "Zogre Flesh Eaters",
+        mapId: "halloween",
+        objective: { kind: "kill", enemyIds: ["slash_bash"], count: 1 },
+        coins: 1000,
+    },
+    // No OSRS quest has the Mimic in it: this one's named for the night
+    {
+        id: "trick_or_treat",
+        name: "Trick or Treat",
+        mapId: "halloween",
+        objective: { kind: "kill", enemyIds: ["the_mimic"], count: 1 },
+        coins: 1200,
+    },
+    {
+        id: "sleeping_giants",
+        name: "Sleeping Giants",
+        mapId: "halloween",
+        objective: { kind: "kill", enemyIds: ["sleepwalker"], count: 30, what: "sleepwalkers" },
+        coins: 1000,
+    },
+    {
+        id: "dream_mentor",
+        name: "Dream Mentor",
+        mapId: "halloween",
+        objective: { kind: "kill", enemyIds: ["the_nightmare"], count: 1 },
+        coins: 2500,
+    },
+    {
         id: "ratcatchers",
         name: "Ratcatchers",
         objective: {

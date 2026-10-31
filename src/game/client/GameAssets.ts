@@ -139,6 +139,7 @@ function getSpotAnimIds(): number[] {
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
             add(attack.ground?.spotAnim);
+            add(...(attack.impactSpotAnims ?? []));
         }
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
         add(enemy.boss?.phases?.totems.blastSpotAnim);

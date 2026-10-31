@@ -1021,29 +1021,23 @@ export const HALLOWEEN_WAVES: WaveDef[] = paced([
     ],
 ]);
 
-// stub: slash_bash, the_mimic and the_nightmare are written on other branches. The merge
-// puts those three ids in here in place of these.
-const SLASH_BASH = "pestilent_bloat";
-const THE_MIMIC = "vanstrom_klause";
-const THE_NIGHTMARE = "dharok";
-
 export const HALLOWEEN_EVENTS: RunEventDef[] = [
     { at: 100, kind: "elite", enemyId: "afflicted" },
     { at: 200, kind: "elite", enemyId: "fiyr_shade" },
     { at: 250, kind: "ring", enemyId: "werewolf", count: 20 },
-    { at: 300, kind: "boss", enemyId: SLASH_BASH, hp: 1900 },
+    { at: 300, kind: "boss", enemyId: "slash_bash", hp: 3400 },
     { at: 360, kind: "ring", enemyId: "ghoul", count: 30 },
     { at: 420, kind: "elite", enemyId: "ghoul" },
     { at: 480, kind: "elite", enemyId: "skeleton" },
     { at: 540, kind: "elite", enemyId: "shade" },
-    { at: 600, kind: "boss", enemyId: THE_MIMIC, hp: 3800 },
+    { at: 600, kind: "boss", enemyId: "the_mimic", hp: 7000 },
     { at: 620, kind: "ring", enemyId: "shade", count: 48 },
     { at: 660, kind: "elite", enemyId: "ghost" },
     { at: 720, kind: "elite", enemyId: "feral_vampyre" },
     { at: 780, kind: "elite", enemyId: "ankou" },
     { at: 840, kind: "ring", enemyId: "feral_vampyre", count: 60 },
     { at: 870, kind: "elite", enemyId: "giant_crypt_spider" },
-    { at: RUN_LENGTH, kind: "finalBoss", enemyId: THE_NIGHTMARE, hp: 10000 },
+    { at: RUN_LENGTH, kind: "finalBoss", enemyId: "the_nightmare" },
 ];
 
 // God Wars Dungeon: the four gods' armies, marching in from their own sides

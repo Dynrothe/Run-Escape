@@ -1,4 +1,12 @@
-import { BossAttackDef, CasketTier, EnemyDef, Stats, ThrallDef, WeaponDef } from "../content/types";
+import {
+    BossAttackDef,
+    CasketTier,
+    EnemyDef,
+    PlayerEffectDef,
+    Stats,
+    ThrallDef,
+    WeaponDef,
+} from "../content/types";
 
 // Positions are world tiles (x east, y north). prevX/prevY are last tick's
 // position, for drawing between ticks.
@@ -105,6 +113,9 @@ export type BossState = {
     walkers?: BossWalkers;
     // It stands still until this tick, as its volleys go out
     channelEnd: number;
+    // BossDef.stomp: hits since the player stepped under it, and the next one
+    stomps?: number;
+    nextStomp?: number;
 };
 
 // A boss's big entrance (BossDef.intro)
@@ -436,6 +447,34 @@ export type Pickup = {
     tier?: CasketTier;
     // Power-ups only: which one
     powerUp?: string;
+    // A casket that's really a boss (EnemyDef.disguise)
+    disguise?: DisguisedBoss;
+};
+
+export type DisguisedBoss = {
+    enemyId: string;
+    // Its hitpoints on this map, when they're not its own
+    hp?: number;
+    // When it starts shaking if it's left alone
+    shakeTick: number;
+    // When it opens, -1 until it's shaking
+    openTick: number;
+};
+
+// A pool on the ground that hurts the player (BossAttackDef.pool)
+export type GroundPool = {
+    uid: number;
+    enemyId: string;
+    x: number;
+    y: number;
+    radius: number;
+    damage: number;
+    interval: number;
+    effect?: PlayerEffectDef;
+    startTick: number;
+    endTick: number;
+    // The next hit on a player standing in it
+    nextTick: number;
 };
 
 // A one-off spot animation somewhere in the world (spell impacts, strikes)
@@ -626,6 +665,8 @@ export type Buff = {
 // Stats a boss attack lowered, until endTick
 export type Debuff = {
     id: string;
+    // Doses of a debuff that stacks; its stats are all of them added up
+    stacks?: number;
     name: string;
     iconObjId: number;
     stats: Partial<Stats>;

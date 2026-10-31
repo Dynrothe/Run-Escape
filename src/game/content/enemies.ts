@@ -77,6 +77,47 @@ const DISARMED: PlayerEffectDef = {
     seconds: 3,
 };
 
+// Slash Bash's: it builds up, and every dose starts the clock again
+const DISEASED: PlayerEffectDef = {
+    kind: "debuff",
+    id: "diseased",
+    name: "Diseased: stats drained",
+    // Relicym's balm, what cures it in OSRS
+    iconObjId: 4842,
+    stats: { might: -0.08, moveSpeed: -0.08 },
+    seconds: 8,
+    stacks: 4,
+};
+
+const BILE_POOL: BossAttackDef["pool"] = {
+    seconds: 7,
+    radius: 1.5,
+    damage: 1.5,
+    interval: 0.8,
+    effect: DISEASED,
+};
+
+// Stand-ins: the Mimic's animations don't say what it sounds like
+const MIMIC_SOUNDS = { attack: 2500, hit: 513, death: 512, candy: 163 };
+
+function thirdAgeMinion(id: string, name: string, npcId: number): EnemyDef {
+    return {
+        id,
+        name,
+        npcId,
+        idleSeq: 808,
+        walkSeq: 819,
+        attackSeq: 422,
+        deathSeq: 836,
+        hp: 90,
+        damage: 3,
+        speed: 2,
+        radius: 0.45,
+        xp: 0,
+        sounds: HUMAN_SOUNDS,
+    };
+}
+
 const SHADOWED: PlayerEffectDef = {
     kind: "debuff",
     id: "shadowed",
@@ -7981,12 +8022,207 @@ export const ENEMIES: EnemyDef[] = [
         },
     },
 
+    // Halloween's mid-run bosses. Slash Bash, the zombie ogre of Zogre Flesh
+    // Eaters, doesn't die to being hit in OSRS so much as out-last you: here his
+    // disease stacks up and slows you while his bile leaves less and less
+    // ground to stand on. Olm's acid spit (1354) and its splash (1294) stand in
+    // for his, as he has none of his own.
+    {
+        id: "slash_bash",
+        name: "Slash Bash",
+        tags: ["undead"],
+        npcId: 882,
+        idleSeq: 357,
+        walkSeq: 358,
+        attackSeq: 359,
+        deathSeq: 361,
+        hp: 1800,
+        damage: 0,
+        speed: 1.5,
+        radius: 0.45,
+        xp: 700,
+        // A zombie's: he's undead
+        sounds: { attack: 918, hit: 923, death: 922 },
+        knockbackResist: 1,
+        spawnMessage: "Slash Bash lumbers out of the dark, reeking of disease!",
+        boss: {
+            attackInterval: 2.4,
+            keepDistance: 2,
+            enrage: {
+                message: "Slash Bash retches. Bile everywhere!",
+                shout: "Grrraaagh!",
+            },
+            attacks: [
+                {
+                    name: "Bash",
+                    kind: "swing",
+                    damage: 6,
+                    windup: 0.9,
+                    cooldown: 0,
+                    range: 3,
+                    radius: 2.8,
+                    weight: 3,
+                    sound: 918,
+                    effect: DISEASED,
+                },
+                {
+                    name: "Bile spit",
+                    kind: "projectile",
+                    damage: 4,
+                    windup: 0.7,
+                    cooldown: 3,
+                    range: 14,
+                    minRange: 3,
+                    weight: 2,
+                    speed: 9,
+                    count: 3,
+                    spread: 0.3,
+                    spotAnim: 1354,
+                    impactSpotAnim: 1294,
+                    sound: 918,
+                    effect: DISEASED,
+                },
+                {
+                    name: "Bile throw",
+                    kind: "blast",
+                    damage: 5,
+                    windup: 1.3,
+                    cooldown: 5,
+                    range: 14,
+                    radius: 1.6,
+                    count: 2,
+                    spread: 4,
+                    weight: 3,
+                    impactSpotAnim: 1294,
+                    sound: 918,
+                    pool: BILE_POOL,
+                },
+                {
+                    name: "Bile deluge",
+                    kind: "blast",
+                    damage: 5,
+                    windup: 1.5,
+                    cooldown: 9,
+                    range: 16,
+                    radius: 1.6,
+                    count: 5,
+                    spread: 6,
+                    weight: 3,
+                    impactSpotAnim: 1294,
+                    sound: 918,
+                    pool: BILE_POOL,
+                    enraged: true,
+                    message: "Slash Bash heaves up a flood of bile!",
+                },
+            ],
+        },
+    },
+    // The Mimic, from elite and master clues: it lies on the map as a master
+    // casket until it's walked onto. Its real three attacks: the melee bite,
+    // six thrown candies (three do nothing more, red, green and blue bring a
+    // Third Age minion each, who drop nothing) and the stomp, which hurts
+    // more every moment you stay under it.
+    {
+        id: "the_mimic",
+        name: "The Mimic",
+        npcId: 7979,
+        idleSeq: 8307,
+        walkSeq: 8306,
+        attackSeq: 8308,
+        deathSeq: 8310,
+        hp: 3200,
+        damage: 0,
+        speed: 1.7,
+        radius: 0.45,
+        xp: 1200,
+        sounds: MIMIC_SOUNDS,
+        // Five tiles across in OSRS
+        scale: 0.8,
+        knockbackResist: 1,
+        spawnMessage: "Trick! The casket was a Mimic!",
+        disguise: { casket: "master", seconds: 25, shake: 1.5, seq: 8309 },
+        // Its bonus loot
+        caskets: ["master"],
+        boss: {
+            attackInterval: 2.2,
+            keepDistance: 3.5,
+            stomp: { radius: 2, interval: 0.6, damage: 1, max: 3, sound: MIMIC_SOUNDS.attack },
+            enrage: { message: "The Mimic gnashes its lid!" },
+            attacks: [
+                {
+                    name: "Bite",
+                    kind: "swing",
+                    damage: 7,
+                    windup: 0.8,
+                    cooldown: 0,
+                    range: 3.9,
+                    radius: 3.8,
+                    weight: 3,
+                    sound: MIMIC_SOUNDS.attack,
+                },
+                {
+                    name: "Candy attack",
+                    kind: "blast",
+                    damage: 5,
+                    windup: 1.6,
+                    cooldown: 7,
+                    range: 16,
+                    radius: 1.5,
+                    count: 6,
+                    spread: 5,
+                    weight: 3,
+                    seq: 8309,
+                    // Purple do nothing more; red, green and blue bring a minion
+                    impactSpotAnims: [1674, 1674, 1674, 1676, 1675, 1677],
+                    candies: ["third_age_warrior", "third_age_ranger", "third_age_mage"],
+                    sound: MIMIC_SOUNDS.candy,
+                    message: "The Mimic flings a handful of candy!",
+                },
+                {
+                    name: "Stomp",
+                    kind: "blast",
+                    damage: 6,
+                    windup: 1.1,
+                    cooldown: 6,
+                    range: 12,
+                    minRange: 4,
+                    radius: 2.6,
+                    weight: 2,
+                    leap: true,
+                    seq: 8309,
+                    sound: MIMIC_SOUNDS.attack,
+                },
+                {
+                    name: "Candy storm",
+                    kind: "blast",
+                    damage: 5,
+                    windup: 1.3,
+                    cooldown: 8,
+                    range: 16,
+                    radius: 1.5,
+                    count: 9,
+                    spread: 7,
+                    weight: 2,
+                    seq: 8309,
+                    impactSpotAnims: [1674, 1675, 1676, 1677, 1674, 1675, 1676, 1677, 1674],
+                    sound: MIMIC_SOUNDS.candy,
+                    enraged: true,
+                },
+            ],
+        },
+    },
+    // The Mimic's minions, one to a candy
+    thirdAgeMinion("third_age_warrior", "Third Age Warrior", 8635),
+    thirdAgeMinion("third_age_ranger", "Third Age Ranger", 8636),
+    { ...thirdAgeMinion("third_age_mage", "Third Age Mage", 8637), idleSeq: 813, walkSeq: 1205 },
+
     // The fun maps' players (fun/enemies.ts)
     ...FUN_ENEMIES,
 
     // The Nightmare and all that comes with her (nightmare.ts)
     ...NIGHTMARE_ENEMIES,
 ];
+
 
 export const ENEMY_BY_ID: Map<string, EnemyDef> = new Map(ENEMIES.map((e) => [e.id, e]));
 

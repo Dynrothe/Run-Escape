@@ -1598,6 +1598,11 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         {name} can be found now!
                     </p>
                 ))}
+                {result && result.newTrophies.length > 0 && (
+                    <p className="ui-unlocked">
+                        New in the Collection log: {listNames(result.newTrophies)}
+                    </p>
+                )}
                 {result && result.newGear.length > 0 && (
                     <p className="ui-unlocked">New in the Armoury: {listNames(result.newGear)}</p>
                 )}

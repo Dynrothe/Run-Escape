@@ -170,6 +170,11 @@ export type EnemyDef = {
     // at them, and doesn't come closer than twice that (Castle Wars' flag
     // carrier, off home with the flag)
     flees?: { range: number };
+    // Bosses: turns up as a reward casket of this tier instead, lying near the
+    // player with its beam like any other (the Mimic). Walking onto it, or
+    // leaving it for seconds, sets it shaking, and shake seconds later it opens
+    // and the boss comes out, playing seq.
+    disguise?: { casket: CasketTier; seconds: number; shake: number; seq?: number };
     // Bosses: the caskets it drops, in place of the usual one (elite, now and
     // then master). The flag carrier's flag is worth a second; a Pest Control
     // portal's is smaller, as there are four of them.
@@ -272,7 +277,9 @@ export type PlayerEffectDef =
     | { kind: "freeze"; seconds: number }
     // Damage every second for a while (poison breath)
     | { kind: "poison"; damage: number; seconds: number }
-    // Stats lowered for a while (Karil's tainted shot, Ahrim's curses)
+    // Stats lowered for a while (Karil's tainted shot, Ahrim's curses).
+    // stacks: another dose adds to it, up to this many at once, and starts the
+    // clock again (Slash Bash's disease); it replaces it when unset
     | {
           kind: "debuff";
           id: string;
@@ -280,6 +287,7 @@ export type PlayerEffectDef =
           iconObjId: number;
           stats: Partial<Stats>;
           seconds: number;
+          stacks?: number;
       }
     // Takes this fraction of the run's coins (the Wise Old Man's Telekinetic
     // Grab); they come back when the boss dies
@@ -464,6 +472,23 @@ export type BossAttackDef = {
     // A message on screen when it's used, for attacks the player has to do
     // something about
     message?: string;
+    // Blasts: each one leaves a pool that lasts seconds, hurting a player
+    // standing in it every interval seconds, with effect if it's set (Slash
+    // Bash's bile). radius is the pool's; damage is like the attack's.
+    pool?: {
+        seconds: number;
+        radius: number;
+        damage: number;
+        interval: number;
+        effect?: PlayerEffectDef;
+    };
+    // Blasts: the last of the spots each bring one of these enemies, unless
+    // the boss still has that kind up; they drop nothing (the Mimic's red,
+    // green and blue candies bring its Third Age minions)
+    candies?: string[];
+    // Blasts: the spot animation of each spot in turn in place of
+    // impactSpotAnim (each candy's colour)
+    impactSpotAnims?: number[];
     // Stopped by the boss's glyph (BossDef.glyph): a swing or blast lands
     // on the player only if the glyph isn't between them and the boss, and
     // projectiles break on it, so the player can hide behind it.
@@ -529,6 +554,10 @@ export type BossDef = {
     // Ranged bosses stop this many tiles away, and big ones far enough off not
     // to stand over you; other melee ones walk up
     keepDistance?: number;
+    // Standing under it hurts every interval seconds for damage, then a
+    // damage more each time, up to max; stepping out starts it over (the
+    // Mimic's stomp)
+    stomp?: { radius: number; interval: number; damage: number; max: number; sound?: number };
     // Dharok's set effect: hits get stronger as he loses hitpoints, up to
     // this much more at none left (1 = double)
     wretched?: number;
@@ -1107,6 +1136,8 @@ export type PowerUpEffect =
           spotAnim: number;
           scale: number;
       }
+    // Opens as a treat or a trick (see trickOrTreat.ts)
+    | { kind: "pumpkin" }
     // Everything within range runs laps around the player at this many times
     // its speed, radius tiles out, and can't attack; a line for the player to
     // shout
@@ -1133,8 +1164,10 @@ export type PowerUpDef = {
     objId: number;
     // Scenery drawn on the ground instead (the set-up cannon)
     locId?: number;
-    // Relative chance of being the one that drops
+    // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
+    // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
+    color?: string;
     // Flashes the screen this colour ("#rrggbb") when it's used
     flash?: string;
     // Cache sound effect when it's picked up (-1 for none)

@@ -501,7 +501,8 @@
         display: none;
     }
 
-    .ui-log-card {
+    .ui-log-card,
+    .ui-log-tab {
         min-height: 44px;
     }
 

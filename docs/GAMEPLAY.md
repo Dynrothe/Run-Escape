@@ -119,7 +119,9 @@ version and how to run it.
       new maps: **Osmumten's fang**, fast stabs that hit bosses and elites again; the
       **Tzhaar-ket-om**, a slow sweep with huge knockback whose every fourth swing is a Quake
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
-      hits take 30% more damage; the **Dual macuahuitl**, very fast slashes on both sides; and
+      hits take 30% more damage; the **Inquisitor's mace**, crushing blows a quarter harder on the
+      undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
+      sides; and
       the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
       everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon.
@@ -143,7 +145,9 @@ version and how to run it.
       its damage, up to 2 hitpoints. From the new maps: the **Kodai wand**, Water Surge at two
       enemies at once, and the **Blue moon spear**, ice that crashes down and freezes. The
       **Crystal staff** grows from basic to attuned (level 4) and perfected (level 7), and
-      **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning.
+      **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning. The
+      **Volatile Nightmare staff** casts Immolate at the toughest enemy in range, slow and heavier
+      the bigger the target.
 - **Unlocks**: from the Desert on, every map holds new things to find. Beating it, or killing
   one of its mid-run bosses, brings a weapon, a passive or a piece of gear into the game for
   every run after (a toast and the results screen say so). Until then it's never offered or
@@ -162,6 +166,7 @@ version and how to run it.
     | God Wars   | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
     | Prifddinas | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
     | Inferno    |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Hallowed Night |                                              | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -211,6 +216,10 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+- **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
+  Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
+  trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
+  mask or a Scythe inside, for the Collection log. Those do nothing in a run.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Enemies only turn up where you could stand and walk to, never behind a wall or in
@@ -312,7 +321,11 @@ version and how to run it.
     - **The Inferno**: **JalTok-Jad** with his healers, a **Jal-Zek champion** and a
       **TzHaar-Ket champion**; at 15:00 **three JalTok-Jads at once**, each with healers of its
       own, and the run's won when the last of them falls.
-    - **Hallowed Night**: **Slash Bash** and **The Mimic**; at 15:00 **The Nightmare**.
+    - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
+      pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
+      onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and
+      stomps, hurting more the longer you stay under it. It drops a real master casket.
+      At 15:00, **The Nightmare**.
 - **Gear** goes in the OSRS equipment slots (head, cape, neck, body, shield, legs, hands, feet,
   ring) and shows on your character: about ten pieces a slot, from Rune and Mystic to the
   Barrows brothers' armour, Armadyl, Ancestral, the Infernal cape, Pegasian boots and an Avernic

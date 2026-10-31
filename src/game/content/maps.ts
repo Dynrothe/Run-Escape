@@ -306,6 +306,8 @@ export const MAPS: MapDef[] = [
         events: HALLOWEEN_EVENTS,
         finalBossWarning: "The pumpkins go dark... The Nightmare is waking!",
         victoryText: "The Nightmare is laid to rest!",
+        // The ritual circle: all 192 tiles would put her totems a minute's walk apart
+        bossArena: { baseX: 4736, baseY: 4736, size: 64 },
         scaperune: true,
         seasonal: true,
         brightness: 0.8,
@@ -359,7 +361,11 @@ function createDevMap(recipe: MapRecipe): MapDef {
 export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
 
 // Every map, the campaign's and the fun ones
-export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
+export const ALL_MAPS: MapDef[] = [
+    ...MAPS,
+    ...FUN_MAPS,
+    ...DEV_MAPS,
+];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
 
@@ -401,14 +407,17 @@ export function getArenaRegion(map: MapDef): {
     return { ...map.arena, plane: map.plane ?? 0 };
 }
 
-// Whether anything on the map poisons you (the King Black Dragon's breath).
-// Antipoisons are only found where something does.
+// Whether anything on the map poisons you (the King Black Dragon's breath) or
+// gives you what stacks up (Slash Bash's disease). Antipoisons are only found
+// where something does.
 export function hasPoison(map: MapDef): boolean {
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
     ];
     return enemyIds.some((id) =>
-        getEnemy(id).boss?.attacks.some((attack) => attack.effect?.kind === "poison"),
+        getEnemy(id).boss?.attacks.some(({ effect }) =>
+            effect?.kind === "debuff" ? effect.stacks !== undefined : effect?.kind === "poison",
+        ),
     );
 }
