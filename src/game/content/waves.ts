@@ -954,6 +954,92 @@ export const MORYTANIA_EVENTS: RunEventDef[] = [
     { at: RUN_LENGTH, kind: "finalBoss", enemyId: "verzik_vitur", hp: 7000 },
 ];
 
+// Hallowed Night: the things that don't lie still. Crypt rats and ghasts out of the graves,
+// the restless dead of the hamlet, then zombies, skeletons and ghouls, shades and ghosts, and
+// the Ankou, mummies and feral vampyres at the end. It borrows them all from other maps.
+export const HALLOWEEN_WAVES: WaveDef[] = paced([
+    [
+        { id: "crypt_rat", weight: 3 },
+        { id: "ghast", weight: 2 },
+    ],
+    [
+        { id: "ghast", weight: 2 },
+        { id: "revenant_imp", weight: 3 },
+    ],
+    [
+        { id: "revenant_imp", weight: 1 },
+        { id: "revenant_goblin", weight: 3 },
+    ],
+    [
+        { id: "revenant_goblin", weight: 1 },
+        { id: "afflicted", weight: 3 },
+    ],
+    [
+        { id: "afflicted", weight: 2 },
+        { id: "fiyr_shade", weight: 2 },
+    ],
+    [
+        { id: "fiyr_shade", weight: 2 },
+        { id: "werewolf", weight: 2 },
+    ],
+    [
+        { id: "zombie", weight: 3 },
+        { id: "werewolf", weight: 1 },
+    ],
+    [
+        { id: "zombie", weight: 2 },
+        { id: "skeleton", weight: 2 },
+    ],
+    [
+        { id: "ghoul", weight: 3 },
+        { id: "skeleton", weight: 2 },
+    ],
+    [
+        { id: "shade", weight: 3 },
+        { id: "ghoul", weight: 1 },
+    ],
+    [
+        { id: "ghost", weight: 3 },
+        { id: "shade", weight: 1 },
+    ],
+    [
+        { id: "ghost", weight: 2 },
+        { id: "ankou", weight: 2 },
+    ],
+    [
+        { id: "mummy", weight: 2 },
+        { id: "skeletal_mystic", weight: 2 },
+    ],
+    [
+        { id: "ankou", weight: 2 },
+        { id: "feral_vampyre", weight: 3 },
+    ],
+    [
+        { id: "feral_vampyre", weight: 2 },
+        { id: "giant_crypt_spider", weight: 2 },
+        { id: "ankou", weight: 1 },
+    ],
+]);
+
+export const HALLOWEEN_EVENTS: RunEventDef[] = [
+    { at: 100, kind: "elite", enemyId: "afflicted" },
+    { at: 200, kind: "elite", enemyId: "fiyr_shade" },
+    { at: 250, kind: "ring", enemyId: "werewolf", count: 20 },
+    { at: 300, kind: "boss", enemyId: "slash_bash", hp: 3400 },
+    { at: 360, kind: "ring", enemyId: "ghoul", count: 30 },
+    { at: 420, kind: "elite", enemyId: "ghoul" },
+    { at: 480, kind: "elite", enemyId: "skeleton" },
+    { at: 540, kind: "elite", enemyId: "shade" },
+    { at: 600, kind: "boss", enemyId: "the_mimic", hp: 7000 },
+    { at: 620, kind: "ring", enemyId: "shade", count: 48 },
+    { at: 660, kind: "elite", enemyId: "ghost" },
+    { at: 720, kind: "elite", enemyId: "feral_vampyre" },
+    { at: 780, kind: "elite", enemyId: "ankou" },
+    { at: 840, kind: "ring", enemyId: "feral_vampyre", count: 60 },
+    { at: 870, kind: "elite", enemyId: "giant_crypt_spider" },
+    { at: RUN_LENGTH, kind: "finalBoss", enemyId: "the_nightmare" },
+];
+
 // God Wars Dungeon: the four gods' armies, marching in from their own sides
 // and fighting each other as much as you. Every wave has two or more of
 // them, so there's always a battle going on around you: Bandos's goblins and

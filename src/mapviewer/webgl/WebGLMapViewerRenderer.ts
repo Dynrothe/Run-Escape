@@ -666,6 +666,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     }
 
     override async queueLoadMap(mapX: number, mapY: number): Promise<void> {
+        const customMapVersion = this.mapViewer.customMapVersion;
         const mapData = await this.mapViewer.workerPool.queueLoad<
             SdMapLoaderInput,
             SdMapData | undefined,
@@ -684,6 +685,9 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             loadedTextureIds: this.loadedTextureIds,
         });
 
+        if (customMapVersion !== this.mapViewer.customMapVersion) {
+            return;
+        }
         if (mapData) {
             if (this.isValidMapData(mapData)) {
                 this.mapsToLoad.push(mapData);

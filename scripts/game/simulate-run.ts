@@ -10,8 +10,14 @@
 //   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
 //   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
 //   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
+//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
+//   FRESH=1 ...                                          # straight to it with nothing upgraded
+//   DODGE=1 ...     # also keeps off what a phased boss marks on the ground, and sidesteps bullets
+//   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
+//   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
+import { getEnemy } from "../../src/game/content/enemies";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
@@ -23,6 +29,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
@@ -49,8 +56,29 @@ const armoury =
         ? Object.fromEntries(CASKET_GEAR.map((g) => [g.id, getUpgradeLine(g.id).length - 1]))
         : undefined;
 const ARENA = map.arena;
+// Her map's not on every branch, so she can be tried on any map, in a square
+// around its spawn
+const finalBoss = process.env.FINAL_BOSS;
+const fresh = process.env.FRESH === "1";
+const dodges = process.env.DODGE === "1";
+if (finalBoss) {
+    map.events = map.events.map((e) =>
+        e.kind === "finalBoss" ? { at: e.at, kind: e.kind, enemyId: finalBoss, hp: e.hp } : e,
+    );
+    const size = parseInt(process.env.BOSS_ARENA ?? "0");
+    if (size > 0) {
+        map.bossArena = {
+            baseX: Math.round(map.spawn.x - size / 2),
+            baseY: Math.round(map.spawn.y - size / 2),
+            size,
+        };
+    }
+}
 console.time(`${map.name} arena`);
-const grid = new ArenaGrid(loadRegionData(map));
+const grid =
+    process.env.FLAT === "1"
+        ? makeGrid(new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)), ARENA.baseX, ARENA.baseY)
+        : new ArenaGrid(loadRegionData(map));
 console.timeEnd(`${map.name} arena`);
 
 // Like a person might: take evolutions, fill the weapon slots, then upgrade;
@@ -180,6 +208,105 @@ function botMove(sim: Sim): { x: number; y: number } {
     return { x: ax / len, y: ay / len };
 }
 
+// A phased boss's fight, as a careful person plays it, or undefined outside one.
+// Without DODGE it only goes where the fight needs it to: the totems and the
+// sleepwalkers, without which it can't be won at all.
+function fightMove(sim: Sim): { x: number; y: number } | undefined {
+    const boss = sim.shownBoss;
+    const state = boss?.bossState;
+    const phase = state?.phase;
+    if (!boss || !state || !phase || boss.dead) {
+        return undefined;
+    }
+    const player = sim.player;
+    const towards = (x: number, y: number) => {
+        const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
+        return { x: (x - player.x) / length, y: (y - player.y) / length };
+    };
+    if (dodges) {
+        const lane = state.windup?.lane ?? state.surge?.lane;
+        if (lane) {
+            const dx = lane.toX - lane.fromX;
+            const dy = lane.toY - lane.fromY;
+            const length = Math.max(0.001, Math.hypot(dx, dy));
+            const across = ((player.x - lane.fromX) * dy - (player.y - lane.fromY) * dx) / length;
+            if (Math.abs(across) < lane.halfWidth + 1) {
+                const side = across >= 0 ? 1 : -1;
+                return { x: (dy / length) * side, y: (-dx / length) * side };
+            }
+        }
+        const quarters = sim.quarters;
+        if (quarters) {
+            return towards(
+                quarters.x + (quarters.safe & 1 ? 3 : -3),
+                quarters.y + (quarters.safe & 2 ? 3 : -3),
+            );
+        }
+        // Sidesteps what's about to reach it, the nearer the more. A person reads
+        // the arms of a spiral far sooner than this does.
+        let awayX = 0;
+        let awayY = 0;
+        const { bullets } = sim;
+        for (let i = 0; i < bullets.count; i++) {
+            const slot = bullets.order[i];
+            const dx = player.x - bullets.x[slot];
+            const dy = player.y - bullets.y[slot];
+            const distSq = dx * dx + dy * dy;
+            // Only those coming this way
+            if (distSq < 9 && dx * bullets.vx[slot] + dy * bullets.vy[slot] > 0) {
+                const weight = 1 / Math.max(distSq, 0.1);
+                // Across its path, to whichever side it's already nearer
+                const side = dx * bullets.vy[slot] - dy * bullets.vx[slot] >= 0 ? 1 : -1;
+                awayX += bullets.vy[slot] * side * weight;
+                awayY += -bullets.vx[slot] * side * weight;
+            }
+        }
+        if (awayX !== 0 || awayY !== 0) {
+            const length = Math.hypot(awayX, awayY);
+            return { x: awayX / length, y: awayY / length };
+        }
+        for (const hazard of sim.hazards) {
+            const away = Math.hypot(player.x - hazard.x, player.y - hazard.y);
+            if (away < hazard.radius + 1.2) {
+                return towards(
+                    player.x + (player.x - hazard.x) / Math.max(0.001, away),
+                    player.y + (player.y - hazard.y) / Math.max(0.001, away),
+                );
+            }
+        }
+    }
+    let target: { x: number; y: number } | undefined;
+    let nearest = Infinity;
+    const consider = (enemy: { x: number; y: number }) => {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (distance < nearest) {
+            nearest = distance;
+            target = enemy;
+        }
+    };
+    if (state.walkers) {
+        state.walkers.enemies.filter((e) => !e.dead).forEach(consider);
+    } else if (phase.stage === "totems") {
+        phase.totems.filter((t) => t.hp > 0).forEach(consider);
+    }
+    if (target) {
+        // Close enough for short weapons, then it just stays there
+        return nearest < 2 ? { x: 0, y: 0 } : towards(target.x, target.y);
+    }
+    return undefined;
+}
+
+// Works out what to press for a shuffled direction, as a person soon does
+function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: number } {
+    const curse = sim.curse;
+    if (!curse) {
+        return move;
+    }
+    // They're all rotations and mirrors, so the inverse is the transpose
+    const [a, b, c, d] = curse.matrix;
+    return { x: move.x * a + move.y * c, y: move.x * b + move.y * d };
+}
+
 // Buys the dearest power-up it can until there's none it can, and knows the
 // answer to every question
 function eventChoice(sim: Sim): number {
@@ -231,6 +358,10 @@ function runOnce(characterId: string, seed: number) {
     const finished = new Set<string>();
     const recentHits: { tick: number; event: SimEvent }[] = [];
     const startTime = performance.now();
+    if (fresh && finalBoss) {
+        sim.startIntro(getEnemy(finalBoss), "finalBoss");
+    }
+    let fightTicks = 0;
     while (sim.tick < maxTicks && !sim.runOver) {
         if (sim.state === "levelUp") {
             const ranked = sim.choices
@@ -264,7 +395,7 @@ function runOnce(characterId: string, seed: number) {
             useItems(sim);
         }
         if (sim.tick % 5 === 0) {
-            move = botMove(sim);
+            move = fightMove(sim) ?? botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
             if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
                 stuckTicks += 5;
@@ -278,7 +409,14 @@ function runOnce(characterId: string, seed: number) {
             lastX = sim.player.x;
             lastY = sim.player.y;
         }
-        sim.step(move.x, move.y);
+        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned) {
+            sim.player.hp = sim.player.maxHp;
+        }
+        const pressed = uncursed(sim, move);
+        sim.step(pressed.x, pressed.y);
+        if (sim.shownBoss?.bossState?.phase) {
+            fightTicks++;
+        }
         for (const event of sim.takeEvents()) {
             if (event.type === "playerHit") {
                 recentHits.push({ tick: sim.tick, event });
@@ -315,6 +453,15 @@ function runOnce(characterId: string, seed: number) {
         const sorted = [...byEnemy.entries()].sort((a, b) => b[1] - a[1]);
         console.log(
             "  damage taken in the last 30s: " + sorted.map(([k, v]) => `${k} ${v}`).join(", "),
+        );
+    }
+    const fight = sim.shownBoss?.bossState?.phase;
+    if (fightTicks > 0) {
+        console.log(
+            `  fight: ${(fightTicks / TICKS_PER_SECOND).toFixed(0)}s, ` +
+                (fight ? `phase ${fight.index + 1} ${fight.stage}, ` : "") +
+                `maxHp ${sim.player.maxHp}, armour ${sim.stats.armor}, ` +
+                `taken ${sim.damageTaken}, dps ${Math.round(sim.dps)}`,
         );
     }
     const result = sim.getResult();

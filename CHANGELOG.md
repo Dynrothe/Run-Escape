@@ -3,7 +3,30 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.20.0 - 2026-10-31
+
+### Added
+
+- Hallowed Night, a Halloween map: a graveyard hamlet in a pumpkin patch at night, open to everyone
+  from the start. Fifteen minutes of the restless dead, with Slash Bash, The Mimic and The Nightmare.
+- The Nightmare: a three-phase final boss fought like a bullet hell. Break her shield, charge the
+  four totems, and dodge what she throws at you, all marked on the ground before it lands.
+- New boss: Slash Bash. His disease stacks up, a little slower and weaker each dose, and his bile
+  leaves pools you won't want to stand in.
+- New boss: The Mimic. Not every master casket is what it seems. It flings candy that brings its
+  Third Age minions, and its stomp hurts more the longer you stay under it.
+- Trick or treat: enemies on Hallowed Night sometimes drop a pumpkin. Walk over it for a treat
+  (healing, coins, a sugar rush) or a trick (ghosts, a curse).
+- New weapons for killing The Nightmare: the Inquisitor's mace, which crushes the undead, and the
+  Volatile Nightmare staff, whose Immolate burns big things hardest.
+- The Collection log has a Hallowed Night page: the Jar of Dreams and Little Nightmare from The
+  Nightmare, and halloween masks and a Scythe hidden in pumpkins.
+- Four new quests on Hallowed Night.
+
+### Changed
+
+- Ancient spells: level ups only offer Ice Burst now. Beat the Desert and its second level lets you
+  pick which burst you want for the run.
 
 ## 0.19.2 - 2026-10-31
 

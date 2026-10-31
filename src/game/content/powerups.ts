@@ -20,6 +20,21 @@ export const POWER_UP_COLOR = "#46f0dc";
 
 export const POWER_UPS: PowerUpDef[] = [
     {
+        // Never rolled with the rest (weight 0): only the maps in
+        // trickOrTreat.ts drop it
+        id: "pumpkin",
+        name: "Pumpkin",
+        description: "A treat or a trick.",
+        objId: 1959,
+        weight: 0,
+        price: 0,
+        color: "#ff8a1e",
+        flash: "#ff8a1e",
+        // eat
+        sound: 2393,
+        effect: { kind: "pumpkin" },
+    },
+    {
         id: "cannon",
         name: "Dwarf multicannon",
         description: "Sets up a cannon that shoots everything nearby for 20 seconds.",

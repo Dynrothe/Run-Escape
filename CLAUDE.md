@@ -40,6 +40,7 @@ go stale. Add anything that cost you time to work out.
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
+| ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`          |
 | What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`   |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
@@ -100,7 +101,8 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 - Sims don't need the game cache after the first run on a map: `scripts/game/collision-snapshot.ts`
   saves that map's collision to `caches/collision/` (gitignored). A snapshot rebuilds by itself when
   the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
-  else, delete that folder.
+  else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
+  recipes.
 
 After a content change, also run the checks that apply:
 
@@ -135,6 +137,10 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
 
 ## Conventions
 
+- **Show it with real assets, not coloured overlays.** Bosses, hazards, projectiles and effects use the
+  game's own models, spot animations and objects, so a player can see what's happening from what's in the
+  world. Look in the cache first. Reach for a colour overlay, a flat shape or a sprite only when nothing
+  real can do the job, and then keep it small and say so in the pull request.
 - **Pull requests**: work on a branch and open a pull request. Don't commit to `main`. Keep one
   topic in each pull request, unless asked to combine them.
 - **Stage files by name**, not with `git add -A`. `.gitignore` has `caches/`, which only matches a

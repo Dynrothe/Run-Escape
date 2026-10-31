@@ -68,6 +68,7 @@ src/game/
   core/     the game in plain TypeScript (no DOM), tested with vitest
     Sim.ts            fixed 20ms tick: movement, enemies, spawning, weapons, pickups, power-ups,
                       levels
+    BulletPool.ts     a boss's bullets, in flat arrays: hundreds at once, no allocation in the tick
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
                       FlowField (Dijkstra from the player, how hundreds of enemies find a way)
     Upgrades.ts       level up choices
@@ -75,7 +76,11 @@ src/game/
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count)
+  scaperune/ maps that aren't in OSRS: a seeded generator, recipes, prefabs cut from the real world.
+            Dev-only but for the recipes in maps/shippedMaps.ts, with a temporary Map generator
+            button on the dev server's title screen. Its CLAUDE.md is the guide to making one
   client/   GameClient (run flow, camera, input), GameView (3D actors + 2D overlay),
+            BossFightView (a phased boss's ground marks, bullets and entrance),
             GameAssets (what gets baked), GameStore (state for the React UI)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
@@ -92,9 +97,33 @@ src/rs/model/player/         player models from identity kits and worn items
 ```
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
-learned the rev 241 opcodes, and two bugs were fixed (floor collision missing on the edge of every
+learned the rev 241 opcodes, the map loader can take extra map squares as plain data
+(`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), `src/rs/config/loctype/LocOverrides.ts`
+gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
+
+### Boss fights as data
+
+A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `Sim.ts`. The Nightmare
+(`content/nightmare.ts`) is built from these, and any boss can use them:
+
+- `BossDef.intro`: the player's safe, the screen goes dark, what's left runs for the map's edge and
+  is gone, and the boss rises. `alone` stops the waves until it's dead.
+- `BossDef.phases`: a shield, then totems in the corners, then a blast for a share of its hitpoints.
+  Only the shield takes hits, in `damageEnemy`. Totems are enemies that can't die: their hitpoints
+  are the charge they still need, and `shieldEnd` is `Infinity` while they can't be hit, which keeps
+  weapons off them.
+- Attack kinds `pattern` (rings, spirals, aimed spreads), `ground` (marks that land, or stay armed),
+  `quarters`, `surge` and `mark`, and `phases` on an attack for when it's used.
+- `Sim.bossArena` is the square all this goes by: `MapDef.bossArena`, or the whole map. Nothing's
+  sized by hand, so she fights on any square.
+
+The curse is applied to the input in `stepPlayer`, so keys and the touch stick go the same way.
+
+Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apart: she floats in all
+of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
+2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
 ### What gets drawn
 
@@ -145,12 +174,23 @@ scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
+scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
+scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
+scripts/scaperune/relief.ts out.png preset=Alpine        a generated map's height, in seconds, without the cache
+scripts/scaperune/check-maps.ts          generated maps: every open tile reaches the spawn, roads off bridges, slopes,
+                                         road grades, plots, what the camera can see (ONLY=regex for some of them)
+scripts/scaperune/check-prefabs.ts       every prefab, in every rotation: its whole floor, a way out
+scripts/scaperune/check-palette.ts       the palette map reads all that generated maps read
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything
                                                         bought; uses a collision snapshot per
                                                         map in caches/collision, built on the
-                                                        first run)
+                                                        first run; FINAL_BOSS=the_nightmare
+                                                        BOSS_ARENA=48 tries a phased boss on any
+                                                        map, FRESH=1 straight at it, SAFE_WAVES=1
+                                                        with what a run earned, FLAT=1 with no
+                                                        walls, DODGE=1 keeping off its marks)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and

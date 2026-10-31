@@ -38,7 +38,9 @@ import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
+import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
+import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
 import { LoadedCache } from "../../src/mapviewer/Caches";
 import { ActorBakeLoader } from "../../src/mapviewer/webgl/actor/ActorBakeLoader";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
@@ -189,6 +191,7 @@ function getContentObjIds(): number[] {
             THRALLS,
             ALL_MAPS,
             SHOP_UPGRADES,
+            TROPHIES,
         },
         "",
     );
@@ -267,6 +270,7 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
 
     const mapLoader = new SdMapDataLoader();
     for (const map of ALL_MAPS) {
+        installRecipeInSceneBuilder(state.sceneBuilder, map.id);
         const region = getArenaRegion(map);
         await load(new RegionDataLoader(), region);
 

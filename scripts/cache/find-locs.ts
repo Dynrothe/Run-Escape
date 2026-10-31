@@ -22,6 +22,7 @@ for (let id = 0; id < locTypeLoader.getCount(); id++) {
         `${id}`.padStart(6),
         loc.name.padEnd(28),
         `size ${loc.sizeX}x${loc.sizeY}`,
+        `clip ${loc.clipType}`,
         `seq ${loc.seqId}`,
         `models [${loc.models?.flat().join(",")}] types [${loc.types?.join(",")}]`,
     );

@@ -8,6 +8,7 @@ import { ConfigType } from "../../rs/cache/ConfigType";
 import { IndexType } from "../../rs/cache/IndexType";
 import { Bzip2 } from "../../rs/compression/Bzip2";
 import { Gzip } from "../../rs/compression/Gzip";
+import { CustomMapSquares, addCustomMapSquares } from "../../rs/map/CustomMapFileLoader";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 import { SpriteLoader } from "../../rs/sprite/SpriteLoader";
@@ -104,6 +105,13 @@ const worker = {
             throw new Error("Worker not initialized");
         }
         workerState.varManager.set(values);
+    },
+    async addCustomMapSquares(squares: CustomMapSquares, removedIds: number[]): Promise<void> {
+        const workerState = await workerStatePromise;
+        if (!workerState) {
+            throw new Error("Worker not initialized");
+        }
+        addCustomMapSquares(workerState.sceneBuilder.mapFileLoader, squares, removedIds);
     },
     async loadCachedMapImages(): Promise<Map<number, string>> {
         const workerState = await workerStatePromise;

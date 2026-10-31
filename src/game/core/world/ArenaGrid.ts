@@ -46,6 +46,9 @@ export class ArenaGrid {
     readonly sizeX: number;
     readonly sizeY: number;
     readonly plane: number;
+    // Whether getHeight follows the two triangles a tile's drawn as, rather than easing
+    // across it. It only shows on steep ground: ScapeRune maps (scaperune/CLAUDE.md).
+    exactGround = false;
     // The cache's collision flags, less the locs that draw nothing and can go
     private readonly flags: Int32Array;
     // What blocks on each solid tile: a box, x0, y0, x1, y1 in tiles from the
@@ -355,6 +358,12 @@ export class ArenaGrid {
         const h10 = heights[i + 1];
         const h01 = heights[i + stride];
         const h11 = heights[i + stride + 1];
+        if (this.exactGround) {
+            // Tiles split from south-east to north-west (SceneTileModel)
+            return fx + fy <= 1
+                ? h00 + (h10 - h00) * fx + (h01 - h00) * fy
+                : h11 + (h01 - h11) * (1 - fx) + (h10 - h11) * (1 - fy);
+        }
         const south = h00 + (h10 - h00) * fx;
         const north = h01 + (h11 - h01) * fx;
         return south + (north - south) * fy;

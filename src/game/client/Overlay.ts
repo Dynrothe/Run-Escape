@@ -5,7 +5,8 @@ import { pixelRatio } from "../../util/DeviceUtil";
 
 const temp = vec4.create();
 
-export type ScreenPoint = { x: number; y: number; visible: boolean };
+// behind: it's behind the camera, and x and y say nothing
+export type ScreenPoint = { x: number; y: number; visible: boolean; behind?: boolean };
 
 // A 2D canvas over the 3D view, sized to the same pixels, for things drawn in
 // screen space at world positions (health bars, hitsplats, debug views).
@@ -44,6 +45,7 @@ export class Overlay {
         vec4.set(temp, x, y, z, 1);
         vec4.transformMat4(temp, temp, camera.viewProjMatrix);
         const w = temp[3];
+        out.behind = w <= 0;
         if (w <= 0) {
             out.visible = false;
             return out;
