@@ -25,6 +25,7 @@ import {
     randomSettings,
 } from "../../src/game/scaperune/generator";
 import { DEV_MAP_SETTINGS, SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
+import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";
 import { createRng } from "../../src/game/scaperune/noise";
 import {
     BuildContext,
@@ -555,7 +556,10 @@ function checkMap(
 }
 
 let failed = false;
-for (const recipe of SCAPERUNE_DEV_MAPS.filter((map) => GENERATED.test(map.id))) {
+for (const recipe of [
+    ...SCAPERUNE_MAPS,
+    ...SCAPERUNE_DEV_MAPS.filter((map) => GENERATED.test(map.id)),
+]) {
     // A hand-made map has no settings, and says what's on it itself
     const settings = DEV_MAP_SETTINGS[recipe.id];
     // A hand-made map says how to build what it's held to, if it's held to the rules at all

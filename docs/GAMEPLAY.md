@@ -250,6 +250,9 @@ version and how to run it.
       snakelings, and the corrupted ones late on.
     - **The Inferno**: Mor Ul Rek's TzHaar, nibblers, Jal-MejRah bats, Jal-Ak blobs that split
       into three, Jal-ImKot that dig up next to you, Jal-Xil, and Jal-Zek that raise the dead.
+    - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
+      afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
+      vampyres.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.
@@ -309,6 +312,7 @@ version and how to run it.
     - **The Inferno**: **JalTok-Jad** with his healers, a **Jal-Zek champion** and a
       **TzHaar-Ket champion**; at 15:00 **three JalTok-Jads at once**, each with healers of its
       own, and the run's won when the last of them falls.
+    - **Hallowed Night**: **Slash Bash** and **The Mimic**; at 15:00 **The Nightmare**.
 - **Gear** goes in the OSRS equipment slots (head, cape, neck, body, shield, legs, hands, feet,
   ring) and shows on your character: about ten pieces a slot, from Rune and Mystic to the
   Barrows brothers' armour, Armadyl, Ancestral, the Infernal cape, Pegasian boots and an Avernic

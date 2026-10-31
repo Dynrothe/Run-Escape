@@ -11,7 +11,6 @@ import fs from "node:fs";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { countStranded } from "../../src/game/scaperune/collision";
 import { generatedRecipe } from "../../src/game/scaperune/generator";
-import { SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../../src/game/scaperune/recipe";
 import {
     SETTINGS,
@@ -19,7 +18,11 @@ import {
     formatSettings,
     parseSettings,
 } from "../../src/game/scaperune/settings";
-import { buildRecipeSquares, createBuildContext } from "../../src/game/scaperune/squares";
+import {
+    buildRecipeSquares,
+    createBuildContext,
+    getRecipe,
+} from "../../src/game/scaperune/squares";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { createWorkerState } from "../../src/mapviewer/worker/WorkerState";
 import { addCustomMapSquares } from "../../src/rs/map/CustomMapFileLoader";
@@ -34,7 +37,7 @@ function parseRecipe(args: string[]): MapRecipe {
     const values = args.map((arg) => arg.split("=") as [string, string]);
     const mapId = new Map(values).get("map");
     if (mapId) {
-        const recipe = SCAPERUNE_DEV_MAPS.find((map) => map.id === mapId);
+        const recipe = getRecipe(mapId);
         if (!recipe) {
             throw new Error(`No map ${mapId}`);
         }

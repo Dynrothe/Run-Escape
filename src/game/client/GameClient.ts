@@ -506,8 +506,8 @@ export class GameClient implements GameFrameHandler {
         }
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
-        this.renderer.setSmoothTerrain(map.dev === true);
-        this.grid.exactGround = map.dev === true;
+        this.renderer.setSmoothTerrain(map.scaperune === true);
+        this.grid.exactGround = map.scaperune === true;
         this.cameraGround = undefined;
         this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
@@ -809,9 +809,9 @@ export class GameClient implements GameFrameHandler {
 
         // The world fades out past the edge of the map
         const { baseX, baseY, sizeX, sizeY } = this.grid;
-        // The world fades out past the arena's edge. A dev map's world carries on: it has
-        // scenery there (scaperune/CLAUDE.md).
-        const open = this.sim?.map.dev === true ? OPEN_WORLD_MARGIN : 0;
+        // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+        // has scenery there (scaperune/CLAUDE.md).
+        const open = this.sim?.map.scaperune === true ? OPEN_WORLD_MARGIN : 0;
         const playArea = this.renderer.playArea;
         playArea[0] = baseX - open;
         playArea[1] = baseY - open;
@@ -859,7 +859,7 @@ export class GameClient implements GameFrameHandler {
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
         let ground = this.grid.getHeight(px, py) / 128;
-        if (sim.map.dev) {
+        if (sim.map.scaperune) {
             const last = this.cameraGround ?? ground;
             ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
             this.cameraGround = ground;

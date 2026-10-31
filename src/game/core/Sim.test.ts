@@ -14,7 +14,7 @@ import {
 } from "../content/endless";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
-import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
 import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
@@ -2496,9 +2496,9 @@ describe("maps", () => {
         };
         // Zombies and skeletons turn up all over; everything else is the map's own
         const shared = ["zombie", "skeleton"];
-        for (const map of MAPS) {
+        for (const map of CAMPAIGN_MAPS) {
             const own = [...enemiesOn(map.id)].filter((id) => !shared.includes(id));
-            for (const other of MAPS.filter((m) => m !== map)) {
+            for (const other of CAMPAIGN_MAPS.filter((m) => m !== map)) {
                 const theirs = enemiesOn(other.id);
                 for (const id of own) {
                     expect(theirs.has(id), `${id} on ${other.id}`).toBe(false);
@@ -2523,8 +2523,10 @@ describe("maps", () => {
             const sim = createSim("warrior", 1, mapId);
             return sim.spawnEnemy(getEnemy("goblin"), "normal", { x: 1040.5, y: 1036.5 })!.maxHp;
         };
-        for (let i = 1; i < MAPS.length; i++) {
-            expect(goblinHp(MAPS[i].id)).toBeGreaterThan(goblinHp(MAPS[i - 1].id));
+        for (let i = 1; i < CAMPAIGN_MAPS.length; i++) {
+            expect(goblinHp(CAMPAIGN_MAPS[i].id)).toBeGreaterThan(
+                goblinHp(CAMPAIGN_MAPS[i - 1].id),
+            );
         }
     });
 

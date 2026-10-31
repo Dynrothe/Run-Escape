@@ -26,7 +26,7 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
-import { DEV_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, DEV_MAPS, FUN_MAPS, MAPS, SEASONAL_MAPS, getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
@@ -728,7 +728,7 @@ function AdventurerDetails({
 function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     const save = ui.save;
     const [peek, setPeek] = useState<string>();
-    const beaten = MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
+    const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
         return (
@@ -764,13 +764,20 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             <h2 className="ui-select-heading">
                 Map
                 <span className="ui-select-count">
-                    {beaten} / {MAPS.length} beaten
+                    {beaten} / {CAMPAIGN_MAPS.length} beaten
                 </span>
             </h2>
             <div className="ui-select-scroll">
                 <div className="ui-style-group">
+                    <div className="ui-style-name">
+                        Seasonal
+                        <span className="ui-style-treasure">open from the start</span>
+                    </div>
+                    <div className="ui-map-list">{SEASONAL_MAPS.map(tile)}</div>
+                </div>
+                <div className="ui-style-group">
                     <div className="ui-style-name">Campaign</div>
-                    <div className="ui-map-list">{MAPS.map(tile)}</div>
+                    <div className="ui-map-list">{CAMPAIGN_MAPS.map(tile)}</div>
                 </div>
                 <div className="ui-style-group">
                     <div className="ui-style-name">

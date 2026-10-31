@@ -35,9 +35,9 @@ function buildMapRegionData(map: MapDef): RegionData {
 // to a small file, which every later run starts from. It's Node's format, so a
 // snapshot won't read in Bun.
 export function loadRegionData(map: MapDef): RegionData {
-    // A dev map changes with its recipe and the generator, which the hash can't see, so
+    // A ScapeRune map changes with its recipe and the generator, which the hash can't see, so
     // it's always built, from its recipe
-    if (map.dev) {
+    if (map.scaperune) {
         return buildMapRegionData(map);
     }
     const path = getSnapshotPath(map);

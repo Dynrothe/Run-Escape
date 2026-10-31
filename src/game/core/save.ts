@@ -7,7 +7,7 @@ import {
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
 import { ITEM_BY_ID, getGear } from "../content/items";
-import { ALL_MAPS, MAPS, isDevMap, isFunMap } from "../content/maps";
+import { ALL_MAPS, MAPS, isDevMap, isFunMap, isSeasonalMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
 import { CharacterDef, QuestDef, Stats, UnlockTask, emptyStats } from "../content/types";
@@ -428,9 +428,9 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
 }
 
 // The first map is always open; each after it opens once the one before it
-// has been beaten. The fun maps are open from the start.
+// has been beaten. The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
-    if (isFunMap(mapId)) {
+    if (isFunMap(mapId) || isSeasonalMap(mapId)) {
         return true;
     }
     const index = MAPS.findIndex((m) => m.id === mapId);

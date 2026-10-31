@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Hallowed Night, a Halloween map: a graveyard hamlet in a pumpkin patch at night, open to everyone
+  from the start. Fifteen minutes of the restless dead, with Slash Bash, The Mimic and The Nightmare.
+
 ## 0.19.0 - 2026-10-31
 
 ### Added

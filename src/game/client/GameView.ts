@@ -282,12 +282,12 @@ export class GameView {
         return sim.grid.getHeight(x, y) / 128;
     }
 
-    // The ground for something big on a dev map, whose slopes are too steep to stand it by its
+    // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
     // middle alone: it'd sink into the hill on one side. It's lifted part of the way to the
     // highest ground under it.
     private groundUnder(sim: Sim, x: number, y: number, radius: number): number {
         const middle = this.ground(sim, x, y);
-        if (!sim.map.dev || radius < BIG_ACTOR_RADIUS) {
+        if (!sim.map.scaperune || radius < BIG_ACTOR_RADIUS) {
             return middle;
         }
         const reach = radius * 0.7;

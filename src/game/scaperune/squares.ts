@@ -7,10 +7,11 @@ import type { MapFileLoader } from "../../rs/map/MapFileLoader";
 import type { SceneBuilder } from "../../rs/scene/SceneBuilder";
 import { MAP_SQUARE_SIZE, PlacedLoc, writeLocs, writeTerrain } from "./format";
 import { SCAPERUNE_DEV_MAPS } from "./maps/devMaps";
+import { SCAPERUNE_MAPS } from "./maps/shippedMaps";
 import type { BuildContext, MapRecipe } from "./recipe";
 
 export function getRecipe(mapId: string): MapRecipe | undefined {
-    return SCAPERUNE_DEV_MAPS.find((recipe) => recipe.id === mapId);
+    return [...SCAPERUNE_MAPS, ...SCAPERUNE_DEV_MAPS].find((recipe) => recipe.id === mapId);
 }
 
 export function createBuildContext(maps: MapFileLoader, locTypes: LocTypeLoader): BuildContext {

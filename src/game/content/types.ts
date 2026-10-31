@@ -723,7 +723,12 @@ export type MapDef = {
     fun?: FunMapDef;
     // For development: a run here leaves the save alone
     dev?: boolean;
-    // How the map's drawn, 1 as the game is and lower darker. Dev maps only.
+    // Ground of our own, from the ScapeRune recipe with this id: the game draws it softer
+    // and leaves the world past the arena showing (scaperune/CLAUDE.md)
+    scaperune?: boolean;
+    // A seasonal event: open from the start, outside the campaign's chain
+    seasonal?: boolean;
+    // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;
 };
 

@@ -1,7 +1,7 @@
 import { ARMOURY_COSTS } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { getEnemy } from "../content/enemies";
-import { MAPS, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, MAPS, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
 import { LOCKABLE_ITEMS } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
@@ -115,18 +115,27 @@ describe("save", () => {
         const save = createSave();
         const won = (mapId: string) =>
             recordRun(save, run(mapId, { victory: true, seconds: 900, level: 40 }));
-        expect(isMapUnlocked(save, MAPS[0].id)).toBe(true);
-        for (let i = 1; i < MAPS.length; i++) {
+        expect(isMapUnlocked(save, CAMPAIGN_MAPS[0].id)).toBe(true);
+        for (let i = 1; i < CAMPAIGN_MAPS.length; i++) {
             // Each opens when the one before it is beaten, and not before
-            for (const later of MAPS.slice(i)) {
+            for (const later of CAMPAIGN_MAPS.slice(i)) {
                 expect(isMapUnlocked(save, later.id)).toBe(false);
             }
-            won(MAPS[i - 1].id);
-            expect(isMapUnlocked(save, MAPS[i].id)).toBe(true);
+            won(CAMPAIGN_MAPS[i - 1].id);
+            expect(isMapUnlocked(save, CAMPAIGN_MAPS[i].id)).toBe(true);
         }
-        expect(Object.keys(save.mapVictories)).toEqual(MAPS.slice(0, -1).map((m) => m.id));
-        expect(save.victories).toBe(MAPS.length - 1);
+        expect(Object.keys(save.mapVictories)).toEqual(CAMPAIGN_MAPS.slice(0, -1).map((m) => m.id));
+        expect(save.victories).toBe(CAMPAIGN_MAPS.length - 1);
         expect(isMapUnlocked(save, "nowhere")).toBe(false);
+    });
+
+    test("a seasonal map is open from the start and opens nothing", () => {
+        const save = createSave();
+        expect(isMapUnlocked(save, "halloween")).toBe(true);
+        expect(MAPS[MAPS.length - 1].seasonal).toBe(true);
+        recordRun(save, run("halloween", { victory: true, seconds: 900, level: 40 }));
+        expect(save.mapVictories.halloween).toBe(1);
+        expect(isMapUnlocked(save, CAMPAIGN_MAPS[1].id)).toBe(false);
     });
 
     test("wins from before maps count as Lumbridge wins", () => {

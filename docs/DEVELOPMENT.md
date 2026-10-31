@@ -76,8 +76,8 @@ src/game/
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count)
   scaperune/ maps that aren't in OSRS: a seeded generator, recipes, prefabs cut from the real world.
-            Dev-only so far, with a temporary Map generator button on the dev server's title
-            screen. Its CLAUDE.md is the guide to making one
+            Dev-only but for the recipes in maps/shippedMaps.ts, with a temporary Map generator
+            button on the dev server's title screen. Its CLAUDE.md is the guide to making one
   client/   GameClient (run flow, camera, input), GameView (3D actors + 2D overlay),
             GameAssets (what gets baked), GameStore (state for the React UI)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
