@@ -344,7 +344,7 @@ function placeHamlet(night: Night): void {
     night.stampFacing("burgh_inn", x - 21, y + 5, HAMLET);
     night.stampFacing("canifis_house", x + 5, y + 7, HAMLET);
     night.stampFacing("darkmeyer_house", x - 22, y - 16, HAMLET);
-    night.stampFacing("burgh_house", x + 6, y - 15, HAMLET);
+    night.stampFacing("burgh_house", x + 13, y - 11, HAMLET);
     night.stampFacing("burgh_house", x - 7, y + 12, HAMLET);
     // The green, with a heap of bones where the well was
     night.solid(WELL_BONES, 3, 3, x - 2, y - 2);
@@ -398,7 +398,7 @@ function placeGraveyard(night: Night): void {
     night.solid(MAUSOLEUM, 3, 3, x + 13, y + 14, 0, 1);
     for (let row = y - 19; row <= y + 10; row += 4) {
         for (let column = x - 19; column <= x + 18; column += 3) {
-            if (Math.abs(column - x) < 4 || Math.abs(row - y) < 3 || rng() < 0.15) {
+            if (Math.abs(column - x) < 4 || Math.abs(row - y) < 5 || rng() < 0.15) {
                 continue;
             }
             const roll = rng();
