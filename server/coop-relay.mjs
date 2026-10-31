@@ -59,7 +59,7 @@ const MAX_CREATES_PER_MINUTE = 10;
 const IDLE_MS = 30 * 60_000;
 // Bigger than any real loadout (the shop's bonuses, unlocked items and
 // Armoury); a bigger one is dropped rather than sent round the room
-const MAX_LOADOUT_BYTES = 16 * 1024;
+export const MAX_LOADOUT_BYTES = 16 * 1024;
 const FULL_TEXT = "All rooms are taken right now. Try again when one opens.";
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most
