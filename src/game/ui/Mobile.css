@@ -761,3 +761,25 @@
         grid-template-columns: 170px minmax(0, 1fr) 80px 80px;
     }
 }
+
+/* Co-op's lobby: the party tighter, and one empty place showing rather than
+   all of them, so the host's map list has room below */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-coop-member {
+        min-height: 30px;
+        padding: 1px 6px;
+    }
+
+    .ui-coop-member-empty + .ui-coop-member-empty {
+        display: none;
+    }
+
+    .ui-coop-party .ui-coop-maps {
+        min-height: 60px;
+        max-height: none;
+    }
+
+    .ui-coop-code-value {
+        font-size: 17px;
+    }
+}
