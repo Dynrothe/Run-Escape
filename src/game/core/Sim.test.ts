@@ -16,7 +16,7 @@ import {
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
-import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
 import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
 import {
     OLD_MAN_OFFERS,
@@ -400,7 +400,8 @@ describe("power-ups", () => {
             sim.pickups.length = 0;
         }
         expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
-        expect(new Set(seen).size).toBe(POWER_UPS.length);
+        // All of them, bar what drops some other way (the pumpkin)
+        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0).length);
     });
 
     test("are walked over to use them, and don't wait around", () => {
@@ -2511,9 +2512,9 @@ describe("maps", () => {
         };
         // Zombies and skeletons turn up all over; everything else is the map's own
         const shared = ["zombie", "skeleton"];
-        for (const map of MAPS) {
+        for (const map of CAMPAIGN_MAPS) {
             const own = [...enemiesOn(map.id)].filter((id) => !shared.includes(id));
-            for (const other of MAPS.filter((m) => m !== map)) {
+            for (const other of CAMPAIGN_MAPS.filter((m) => m !== map)) {
                 const theirs = enemiesOn(other.id);
                 for (const id of own) {
                     expect(theirs.has(id), `${id} on ${other.id}`).toBe(false);
@@ -2538,8 +2539,10 @@ describe("maps", () => {
             const sim = createSim("warrior", 1, mapId);
             return sim.spawnEnemy(getEnemy("goblin"), "normal", { x: 1040.5, y: 1036.5 })!.maxHp;
         };
-        for (let i = 1; i < MAPS.length; i++) {
-            expect(goblinHp(MAPS[i].id)).toBeGreaterThan(goblinHp(MAPS[i - 1].id));
+        for (let i = 1; i < CAMPAIGN_MAPS.length; i++) {
+            expect(goblinHp(CAMPAIGN_MAPS[i].id)).toBeGreaterThan(
+                goblinHp(CAMPAIGN_MAPS[i - 1].id),
+            );
         }
     });
 
@@ -2550,12 +2553,19 @@ describe("maps", () => {
                     continue;
                 }
                 const sim = createSim("warrior", 1, map.id);
-                const boss = sim.spawnEnemy(getEnemy(event.enemyId), "boss", {
-                    x: sim.player.x + 3,
-                    y: sim.player.y,
-                })!;
+                const def = getEnemy(event.enemyId);
+                const intro = def.boss?.intro;
+                // Her square is on the real map, not this test's field
+                const square = map.bossArena;
+                map.bossArena = undefined;
+                if (intro) {
+                    sim.startIntro(def, "finalBoss");
+                } else {
+                    sim.spawnEnemy(def, "boss", { x: sim.player.x + 3, y: sim.player.y });
+                }
                 let attacked = false;
-                for (let i = 0; i < 10 * TICKS_PER_SECOND && !attacked; i++) {
+                const seconds = 10 + (intro?.seconds ?? 0);
+                for (let i = 0; i < seconds * TICKS_PER_SECOND && !attacked; i++) {
                     sim.player.invulnerable = 100;
                     if (sim.state === "levelUp") {
                         sim.choose(0);
@@ -2566,7 +2576,8 @@ describe("maps", () => {
                     sim.step(0, 0);
                     attacked = sim.takeEvents().some((e) => e.type === "bossAttack");
                 }
-                expect(attacked, `${boss.def.id} on ${map.id}`).toBe(true);
+                map.bossArena = square;
+                expect(attacked, `${def.id} on ${map.id}`).toBe(true);
             }
         }
     });
@@ -4276,6 +4287,29 @@ describe("Castle Wars and Pest Control", () => {
         sim.damageEnemy(hunllef, 1e9, 0, sim.player.x, sim.player.y);
         expect(sim.state).toBe("victory");
         expect(sim.shownBoss).toBe(hunllef);
+    });
+});
+
+describe("the Ancient spell pick", () => {
+    test("a burst's second level becomes the spell picked, at the same level", () => {
+        const sim = new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "ancient_mage",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            unlockedItems: new Set(["smoke_burst", "shadow_burst", "blood_burst"]),
+        });
+        sim.state = "levelUp";
+        sim.pendingLevelUps = 1;
+        sim.choices = [{ kind: "weaponLevel", weaponId: "ice_burst", level: 2, quality: "common" }];
+        sim.choose(0);
+        expect(sim.choosingHilt).toBe(true);
+        expect(sim.choices.length).toBe(4);
+        sim.choose(2);
+        expect(sim.weapons.map((w) => [w.def.id, w.level])).toEqual([["shadow_burst", 2]]);
     });
 });
 

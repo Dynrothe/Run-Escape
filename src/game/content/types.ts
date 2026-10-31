@@ -173,6 +173,19 @@ export type EnemyDef = {
     // at them, and doesn't come closer than twice that (Castle Wars' flag
     // carrier, off home with the flag)
     flees?: { range: number };
+    // Bosses: turns up as a reward casket of this tier instead, lying near the
+    // player with its beam like any other (the Mimic). Walking onto it, or
+    // leaving it for seconds, sets it shaking, and shake seconds later it opens
+    // and the boss comes out, playing seq. warning: spot animations spinning in
+    // a ring ringRadius tiles round it while it shakes, for stepping back from
+    // (the Mimic's sweets).
+    disguise?: {
+        casket: CasketTier;
+        seconds: number;
+        shake: number;
+        seq?: number;
+        warning?: { spotAnims: number[]; count: number; ringRadius: number };
+    };
     // Bosses: the caskets it drops, in place of the usual one (elite, now and
     // then master). The flag carrier's flag is worth a second; a Pest Control
     // portal's is smaller, as there are four of them.
@@ -275,7 +288,9 @@ export type PlayerEffectDef =
     | { kind: "freeze"; seconds: number }
     // Damage every second for a while (poison breath)
     | { kind: "poison"; damage: number; seconds: number }
-    // Stats lowered for a while (Karil's tainted shot, Ahrim's curses)
+    // Stats lowered for a while (Karil's tainted shot, Ahrim's curses).
+    // stacks: another dose adds to it, up to this many at once, and starts the
+    // clock again (Slash Bash's disease); it replaces it when unset
     | {
           kind: "debuff";
           id: string;
@@ -283,10 +298,94 @@ export type PlayerEffectDef =
           iconObjId: number;
           stats: Partial<Stats>;
           seconds: number;
+          stacks?: number;
       }
     // Takes this fraction of the run's coins (the Wise Old Man's Telekinetic
     // Grab); they come back when the boss dies
-    | { kind: "steal"; fraction: number };
+    | { kind: "steal"; fraction: number }
+    // Shuffles which way the player's controls go until the boss has made this
+    // many more attacks (The Nightmare's Curse, with no prayers here to swap)
+    | { kind: "curse"; attacks: number }
+    // Slows the player, and has the boss attacking faster, for a while
+    // (The Nightmare's spores)
+    | {
+          kind: "drowsy";
+          id: string;
+          name: string;
+          iconObjId: number;
+          moveSpeed: number;
+          bossInterval: number;
+          seconds: number;
+      };
+
+// What a boss's "pattern" attack fires, as a bullet hell does
+export type BulletPatternDef = {
+    // ring: evenly spaced all round; spiral: a ring that turns between volleys;
+    // spread: a fan aimed at the player
+    shape: "ring" | "spiral" | "spread";
+    // Bullets a volley, how many volleys, and seconds between them
+    count: number;
+    volleys: number;
+    interval: number;
+    // Tiles per second, and how far they go
+    speed: number;
+    range: number;
+    // Tiles
+    radius: number;
+    // Radians a volley turns by (a spiral's arms)
+    turn?: number;
+    // Radians from one side of a spread to the other
+    arc?: number;
+    // Radians a second each bullet curves by as it flies
+    curve?: number;
+    // Model scale, when its hit size would leave it too thin to dodge, and how
+    // much it's lit up against dark ground (0 to 1)
+    scale?: number;
+    bright?: number;
+};
+
+// Where a boss's "ground" attack marks the ground, each spot radius tiles
+// across. Everything's on the ground for the attack's windup before it lands.
+export type GroundPatternDef = {
+    // under: on the boss; player: on the player; ring: around the boss, ring
+    // tiles out; grid: a lattice around the player, spacing tiles apart;
+    // scatter: at random within spread tiles of the player
+    spots: (
+        | { shape: "under" | "player" }
+        | { shape: "ring"; count: number; distance: number }
+        | { shape: "grid"; size: number; spacing: number }
+        | { shape: "scatter"; count: number; spread: number }
+    )[];
+    radius: number;
+    // Set: it stays armed this many seconds after the windup, going off under
+    // whoever comes within radius rather than landing all at once (spores)
+    armed?: number;
+    // What's drawn at each spot, scaled to radius: scenery, or a spot animation.
+    // It's all that marks the spot, so it has to be there from the start. fit: how
+    // much bigger than that, for a model with more around it than it looks.
+    locId?: number;
+    spotAnim?: number;
+    fit?: number;
+    // Drawn as it is in the middle of the spot, for what can't be scaled up
+    // (Grasping Claws' arm: as wide as its spot, it'd tower over the arena)
+    middleSpotAnim?: number;
+};
+
+// A boss's corpse flowers: lines cross near the player, and the quarters but
+// one hurt them every interval seconds for seconds, healing the boss
+export type QuartersDef = {
+    seconds: number;
+    interval: number;
+    // How much of its shield the boss gets back for each hit
+    heal: number;
+    // Tiles from the player the lines cross at most, and how far apart the
+    // flowers along them stand
+    offset: number;
+    spacing: number;
+    // Scenery for the flowers: on the lines of the safe quarter, and elsewhere
+    safeLocId: number;
+    hurtLocId: number;
+};
 
 export type BossAttackDef = {
     name: string;
@@ -294,8 +393,24 @@ export type BossAttackDef = {
     // projectile: fired where the player stands, so moving dodges it;
     // blast: lands on the spot the player stood on when it was cast;
     // teleport: the boss blinks away to somewhere else near the player;
-    // summon: calls in enemies around the boss
-    kind: "swing" | "projectile" | "blast" | "teleport" | "summon";
+    // summon: calls in enemies around the boss;
+    // pattern: fires BulletPatternDef's volleys;
+    // ground: marks the ground, GroundPatternDef;
+    // quarters: QuartersDef's flowers split the arena;
+    // surge: goes to the arena's edge in line with the player, then charges
+    // right across it, hitting what's in its lane;
+    // mark: lands effect or parasite on the player, however far they run
+    kind:
+        | "swing"
+        | "projectile"
+        | "blast"
+        | "teleport"
+        | "summon"
+        | "pattern"
+        | "ground"
+        | "quarters"
+        | "surge"
+        | "mark";
     // Out of the player's 25 base hitpoints; the biggest hits take about half
     damage: number;
     // Seconds the boss stands winding up (and animating) before it lands
@@ -310,7 +425,12 @@ export type BossAttackDef = {
     weight: number;
     // Swings and blasts: tiles around the boss (or the spot) they hit.
     // Teleports: how far from the player the boss lands.
+    // Surges: tiles either side of the lane's middle.
     radius?: number;
+    // Swings: hits only a wedge this many radians across, in the way the boss
+    // faced as it began, and under the boss (around it, underRadius tiles)
+    cone?: number;
+    underRadius?: number;
     // Projectiles: tiles per second, how many (fanned out by spread radians),
     // and how fast they turn towards the player (radians per second).
     // Blasts: how many land (the first on the player, the rest scattered up
@@ -324,11 +444,36 @@ export type BossAttackDef = {
     castSpotAnim?: number;
     spotAnim?: number;
     impactSpotAnim?: number;
-    // Summons: what comes, and how many
-    summon?: { enemyId: string; count: number };
+    // Summons: what comes, and how many.
+    // beside: they turn up by the player rather than the boss.
+    // holds: the player can't move until they're dead or this many seconds
+    // have gone, and the boss holds off whatever they couldn't step out of.
+    // walkTo: they turn up around the boss, distance tiles out, and walk to
+    // it. Those that get there are absorbed: when the last is dead or
+    // absorbed, a blast no one can dodge hits for damage, plus perAbsorbed
+    // for each one. (The Nightmare's Sleepwalkers.)
+    summon?: {
+        enemyId: string;
+        count: number;
+        // Comes with them, one of it (a Husk of each kind)
+        alsoId?: string;
+        beside?: boolean;
+        holds?: number;
+        walkTo?: { distance: number; perAbsorbed: number };
+    };
+    // A mark on the player, bursting after seconds for damage (and the attack's
+    // hit damage does nothing), leaving enemyId behind. An antidote keeping
+    // poison off halves the hit, and leaves weakEnemyId instead. (The
+    // Nightmare's parasites.)
+    parasite?: { seconds: number; enemyId: string; weakEnemyId: string };
+    pattern?: BulletPatternDef;
+    ground?: GroundPatternDef;
+    quarters?: QuartersDef;
     // Boss animation while winding it up (the boss's attackSeq when unset)
     seq?: number;
-    // Cache sound effects when it's used and when it hits
+    // Cache sound effects as it starts winding up, when it's used and when it
+    // hits
+    windupSound?: number;
     sound?: number;
     hitSound?: number;
     effect?: PlayerEffectDef;
@@ -339,15 +484,85 @@ export type BossAttackDef = {
     leap?: boolean;
     // Only used once the boss is enraged
     enraged?: boolean;
+    // Only used in these of the boss's phases (BossDef.phases), counting from 1
+    phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
     // something about
     message?: string;
+    // Blasts: each one leaves a pool that lasts seconds, hurting a player
+    // standing in it every interval seconds, with effect if it's set (Slash
+    // Bash's bile). radius is the pool's; damage is like the attack's.
+    pool?: {
+        seconds: number;
+        radius: number;
+        damage: number;
+        interval: number;
+        effect?: PlayerEffectDef;
+        // Scenery it's drawn as, spread to its radius
+        locId: number;
+    };
+    // Blasts: the last of the spots each bring one of these enemies, unless
+    // the boss still has that kind up; they drop nothing (the Mimic's red,
+    // green and blue candies bring its Third Age minions)
+    candies?: string[];
+    // Blasts: the spot animation of each spot in turn in place of
+    // impactSpotAnim (each candy's colour)
+    impactSpotAnims?: number[];
     // Stopped by the boss's glyph (BossDef.glyph): a swing or blast lands
     // on the player only if the glyph isn't between them and the boss, and
     // projectiles break on it, so the player can hide behind it.
     blockable?: boolean;
+};
+
+// A big entrance: the player can't be hit, the screen goes dark, and everything
+// else stops attacking and runs for the nearest edge of the map and is gone.
+// The boss rises partway through, and the fight starts when it's over.
+export type BossIntroDef = {
+    // How long it all takes, and how far in the boss rises
+    seconds: number;
+    riseAt: number;
+    // Its animation as it rises (its idle when unset), and shown where it does
+    seq?: number;
+    spotAnim?: number;
+    sound?: number;
+    // On the screen as it rises
+    title: string;
+    subtitle?: string;
+    // Played as the screen goes dark
+    darkSound?: number;
+    // Tiles from the player it rises, towards the arena's middle
+    distance: number;
+    // No waves or events until it's dead: it's the two of them
+    alone?: boolean;
+};
+
+// A boss fought in phases: a shield to break, then totems in the arena's
+// corners to charge with hits, whose blast takes away a share of its
+// hitpoints, which nothing else can touch. The last blast ends it.
+export type BossPhasesDef = {
+    // One a phase. shield: of its hitpoints. opener: the attack (by name) it
+    // begins with, before anything else.
+    phases: { shield: number; opener?: string }[];
+    totems: {
+        // The enemies: stands idle, can be charged, and is charged
+        idleId: string;
+        chargingId: string;
+        chargedId: string;
+        // Charge each needs, of the boss's hitpoints
+        charge: number;
+        // Tiles in from the arena's corners
+        margin: number;
+        // Shown on the boss, and played, as they fire; played as one's charged
+        blastSpotAnim?: number;
+        blastSound?: number;
+        chargedSound?: number;
+    };
+    shieldMessage: string;
+    blastMessage: string;
+    // Of the player's hitpoints, given back by each blast
+    blastHeal?: number;
 };
 
 // How a boss fights, after the real fight in OSRS
@@ -358,6 +573,10 @@ export type BossDef = {
     // Ranged bosses stop this many tiles away, and big ones far enough off not
     // to stand over you; other melee ones walk up
     keepDistance?: number;
+    // Standing under it hurts every interval seconds for damage, then a
+    // damage more each time, up to max; stepping out starts it over (the
+    // Mimic's stomp)
+    stomp?: { radius: number; interval: number; damage: number; max: number; sound?: number };
     // Dharok's set effect: hits get stronger as he loses hitpoints, up to
     // this much more at none left (1 = double)
     wretched?: number;
@@ -394,6 +613,14 @@ export type BossDef = {
         speed: number;
         width: number;
     };
+    intro?: BossIntroDef;
+    phases?: BossPhasesDef;
+    // Further than this from the player, it blinks back to about keep tiles
+    // from them (a fight across a big arena stays on the screen)
+    leash?: { distance: number; keep: number; spotAnim?: number };
+    // Its animation as it charges (BossAttackDef surge), and as it stands
+    // winding one up
+    surgeSeq?: number;
 };
 
 // How a character fights, for the weapons only their class can find
@@ -478,6 +705,8 @@ export type WeaponDef = {
     // Weapons of a family (the godswords) share one weapon's chance of being
     // offered, and only one of them is carried
     family?: string;
+    // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
+    pickOnly?: boolean;
     // Used in place of every so many attacks (sweeps and slashes)
     special?: SpecialAttackDef;
     // Bosses and elites are hit again for these fractions of the damage (the
@@ -702,6 +931,10 @@ export type MapDef = {
     iconObjId: number;
     // World tiles: the rectangle collision is built for
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number };
+    // The open square a boss with a fight of its own uses (BossDef.phases: its
+    // totems' corners, its surges' lanes), in world tiles; all of the arena
+    // when unset
+    bossArena?: { baseX: number; baseY: number; size: number };
     // The plane (level) the arena is on: 0, the ground floor, when unset. Some
     // dungeons are higher up (the God Wars Dungeon's main cave is on plane 2);
     // only this plane is drawn, so the ones under it don't show through.
@@ -726,7 +959,12 @@ export type MapDef = {
     fun?: FunMapDef;
     // For development: a run here leaves the save alone
     dev?: boolean;
-    // How the map's drawn, 1 as the game is and lower darker. Dev maps only.
+    // Ground of our own, from the ScapeRune recipe with this id: the game draws it softer
+    // and leaves the world past the arena showing (scaperune/CLAUDE.md)
+    scaperune?: boolean;
+    // A seasonal event: open from the start, outside the campaign's chain
+    seasonal?: boolean;
+    // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;
 };
 
@@ -919,6 +1157,8 @@ export type PowerUpEffect =
           spotAnim: number;
           scale: number;
       }
+    // Opens as a treat or a trick (see trickOrTreat.ts)
+    | { kind: "pumpkin" }
     // Everything within range runs laps around the player at this many times
     // its speed, radius tiles out, and can't attack; a line for the player to
     // shout
@@ -945,8 +1185,10 @@ export type PowerUpDef = {
     objId: number;
     // Scenery drawn on the ground instead (the set-up cannon)
     locId?: number;
-    // Relative chance of being the one that drops
+    // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
+    // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
+    color?: string;
     // Coins the Mysterious Old Man wants for it, at the start of a run
     price: number;
     // Flashes the screen this colour ("#rrggbb") when it's used

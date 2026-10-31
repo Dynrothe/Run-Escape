@@ -1,7 +1,7 @@
 import { MapViewer } from "../../mapviewer/MapViewer";
 import { pixelRatio } from "../../util/DeviceUtil";
 import { CASKETS } from "../content/items";
-import { POWER_UP_COLOR } from "../content/powerups";
+import { POWER_UP_COLOR, getPowerUp } from "../content/powerups";
 import { VISITOR_COLOR } from "../content/randomEvents";
 import { MapDef } from "../content/types";
 import { Sim } from "../core/Sim";
@@ -248,7 +248,7 @@ export class Minimap {
             if (pickup.kind === "casket" && pickup.tier) {
                 color = CASKETS[pickup.tier].color;
             } else if (pickup.kind === "powerUp") {
-                color = POWER_UP_COLOR;
+                color = getPowerUp(pickup.powerUp ?? "").color ?? POWER_UP_COLOR;
             } else {
                 continue;
             }

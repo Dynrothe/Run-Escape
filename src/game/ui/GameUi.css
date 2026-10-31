@@ -1214,6 +1214,40 @@
     background: linear-gradient(#e01010, #800000);
 }
 
+/* A fight in phases: its shield, then its totems filling up */
+.ui-boss-phase {
+    color: #ff9ae6;
+}
+
+.ui-boss-fill-shield {
+    background: linear-gradient(#8fe8ff, #2a9fd6);
+}
+
+.ui-boss-fill-totem {
+    background: linear-gradient(#ffe48f, #d6922a);
+}
+
+.ui-boss-totems {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-boss-totem {
+    flex: 1;
+    min-width: 0;
+}
+
+.ui-boss-status {
+    color: #ffff00;
+    font-size: 16px;
+    text-align: center;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-boss-curse {
+    color: #ff9ae6;
+}
+
 .ui-boss-warning {
     position: absolute;
     top: 70px;

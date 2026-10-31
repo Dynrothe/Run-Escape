@@ -37,8 +37,12 @@ export function getGameSoundIds(): number[] {
         ids.push(enemy.sounds.attack, enemy.sounds.hit, enemy.sounds.death);
         ids.push(enemy.spawnSound ?? -1, enemy.explodes?.sound ?? -1, enemy.blinks?.sound ?? -1);
         for (const attack of enemy.boss?.attacks ?? []) {
-            ids.push(attack.sound ?? -1, attack.hitSound ?? -1);
+            ids.push(attack.windupSound ?? -1, attack.sound ?? -1, attack.hitSound ?? -1);
         }
+        const boss = enemy.boss;
+        ids.push(boss?.intro?.darkSound ?? -1, boss?.intro?.sound ?? -1);
+        ids.push(boss?.phases?.totems.blastSound ?? -1, boss?.phases?.totems.chargedSound ?? -1);
+        ids.push(enemy.shot?.sound ?? -1, enemy.shot?.hitSound ?? -1);
     }
     for (const weapon of WEAPONS) {
         ids.push(weapon.sound, weapon.hitSound, weapon.special?.sound ?? -1);
@@ -180,6 +184,16 @@ export class GameSounds {
                 case "bossEnraged":
                 case "roundStarted":
                     audio.play(SOUNDS.bossSpawn, { volume: 1 });
+                    break;
+                case "bossIntro":
+                case "bossRising":
+                case "totemBlast":
+                    if (event.sound !== -1) {
+                        audio.play(event.sound, { volume: 1 });
+                    }
+                    break;
+                case "bossStage":
+                    audio.play(SOUNDS.bossSpawn, { volume: 0.8 });
                     break;
                 case "coinsStolen":
                 case "coinsReturned":

@@ -26,7 +26,7 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
-import { DEV_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, DEV_MAPS, FUN_MAPS, MAPS, SEASONAL_MAPS, getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
@@ -729,7 +729,7 @@ function AdventurerDetails({
 function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     const save = ui.save;
     const [peek, setPeek] = useState<string>();
-    const beaten = MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
+    const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
         return (
@@ -765,13 +765,20 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             <h2 className="ui-select-heading">
                 Map
                 <span className="ui-select-count">
-                    {beaten} / {MAPS.length} beaten
+                    {beaten} / {CAMPAIGN_MAPS.length} beaten
                 </span>
             </h2>
             <div className="ui-select-scroll">
                 <div className="ui-style-group">
+                    <div className="ui-style-name">
+                        Seasonal
+                        <span className="ui-style-treasure">open from the start</span>
+                    </div>
+                    <div className="ui-map-list">{SEASONAL_MAPS.map(tile)}</div>
+                </div>
+                <div className="ui-style-group">
                     <div className="ui-style-name">Campaign</div>
-                    <div className="ui-map-list">{MAPS.map(tile)}</div>
+                    <div className="ui-map-list">{CAMPAIGN_MAPS.map(tile)}</div>
                 </div>
                 <div className="ui-style-group">
                     <div className="ui-style-name">
@@ -1153,13 +1160,55 @@ function Hud({
                     <div className="ui-boss-name">
                         {hud.boss.name}
                         {hud.boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
+                        {hud.boss.fight && (
+                            <span className="ui-boss-phase">
+                                {" "}
+                                Phase {hud.boss.fight.phase}/{hud.boss.fight.phases}
+                            </span>
+                        )}
                     </div>
-                    <div className="ui-boss-bar">
-                        <div
-                            className="ui-boss-fill"
-                            style={{ width: `${hud.boss.fraction * 100}%` }}
-                        />
-                    </div>
+                    {hud.boss.fight?.stage === "totems" ? (
+                        <div className="ui-boss-totems">
+                            {hud.boss.fight.totems.map((charge, i) => (
+                                <div key={i} className="ui-boss-bar ui-boss-totem">
+                                    <div
+                                        className="ui-boss-fill ui-boss-fill-totem"
+                                        style={{ width: `${charge * 100}%` }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="ui-boss-bar">
+                            <div
+                                className={
+                                    hud.boss.fight
+                                        ? "ui-boss-fill ui-boss-fill-shield"
+                                        : "ui-boss-fill"
+                                }
+                                style={{ width: `${hud.boss.fraction * 100}%` }}
+                            />
+                        </div>
+                    )}
+                    {hud.boss.fight && (
+                        <div className="ui-boss-status">
+                            {hud.boss.fight.stage === "totems"
+                                ? "Charge the totems!"
+                                : "Break her shield!"}
+                            {hud.boss.fight.curseAttacks !== undefined && (
+                                <span className="ui-boss-curse">
+                                    {" "}
+                                    Cursed: {hud.boss.fight.curseAttacks}
+                                </span>
+                            )}
+                            {hud.boss.fight.parasiteSeconds !== undefined && (
+                                <span className="ui-boss-curse">
+                                    {" "}
+                                    Parasite: {Math.ceil(hud.boss.fight.parasiteSeconds)}s
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : (
                 bossIn <= 60 && (
@@ -1231,18 +1280,23 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // The godsword's hilt is picked as the rest of the level up that took it
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
+    const spell = ui.choices.some((choice) => choice.isSpell);
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-levelup">
                 <h2>
-                    {hilt
-                        ? "Your godsword needs a hilt!"
-                        : "Congratulations, you've advanced a level!"}
+                    {spell
+                        ? "Choose your Ancient spell!"
+                        : hilt
+                          ? "Your godsword needs a hilt!"
+                          : "Congratulations, you've advanced a level!"}
                 </h2>
                 <p className="ui-subtle">
-                    {hilt
-                        ? "Pick the god whose hilt it takes, and with it its special attack:"
-                        : `You are now level ${ui.hud?.level}. Choose a reward:`}
+                    {spell
+                        ? "It keeps its level, and it's your only burst this run:"
+                        : hilt
+                          ? "Pick the god whose hilt it takes, and with it its special attack:"
+                          : `You are now level ${ui.hud?.level}. Choose a reward:`}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -1269,7 +1323,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                         <span className="ui-tag ui-tag-evolve">Evolution!</span>
                                     )}
                                     {choice.isHilt && (
-                                        <span className="ui-tag ui-tag-evolve">Hilt</span>
+                                        <span className="ui-tag ui-tag-evolve">
+                                            {choice.isSpell ? "Spell" : "Hilt"}
+                                        </span>
                                     )}
                                 </div>
                                 <div className="ui-card-text">{choice.text}</div>
@@ -1558,6 +1614,11 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         {name} can be found now!
                     </p>
                 ))}
+                {result && result.newTrophies.length > 0 && (
+                    <p className="ui-unlocked">
+                        New in the Collection log: {listNames(result.newTrophies)}
+                    </p>
+                )}
                 {result && result.newGear.length > 0 && (
                     <p className="ui-unlocked">New in the Armoury: {listNames(result.newGear)}</p>
                 )}

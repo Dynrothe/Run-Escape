@@ -238,6 +238,18 @@ describe("evolutions", () => {
 });
 
 describe("hilts", () => {
+    test("having beaten the Desert, a burst picks the run's Ancient spell once", () => {
+        const spells = ["smoke_burst", "shadow_burst", "blood_burst"];
+        const beaten = new Set(spells);
+        expect(hiltChoices(weapon("ice_burst", 2), new Set())).toEqual([]);
+        const choices = hiltChoices(weapon("ice_burst", 2), beaten);
+        expect(choices.map((c) => c.kind === "hilt" && c.into)).toEqual(["ice_burst", ...spells]);
+        expect(hiltChoices(weapon("smoke_burst", 2), beaten).length).toBe(4);
+        // Only at that level, so keeping Ice Burst doesn't ask again
+        expect(hiltChoices(weapon("ice_burst", 1), beaten)).toEqual([]);
+        expect(hiltChoices(weapon("ice_burst", 3), beaten)).toEqual([]);
+    });
+
     test("the godsword's blade offers its hilts at its hilt level, shown as the hilts", () => {
         expect(hiltChoices(weapon("godsword", 1))).toEqual([]);
         const choices = hiltChoices(weapon("godsword", 2));
@@ -315,19 +327,13 @@ describe("unlocks", () => {
         });
     });
 
-    test("a family's chance is shared only among what's unlocked", () => {
-        const bursts = WEAPONS.filter((w) => w.family === "ancient_burst" && !w.evolved).map(
-            (w) => w.id,
-        );
-        expect(bursts.length).toBe(4);
-        const everything = offers("magic", undefined);
-        const anyBurst = bursts.reduce((sum, id) => sum + (everything.get(id) ?? 0), 0);
-        // With only Ice Burst unlocked, it gets the whole family's chance
-        const onlyIce = offers("magic", new Set());
-        expect(onlyIce.get("ice_burst")! / anyBurst).toBeGreaterThan(0.75);
-        expect(onlyIce.get("ice_burst")! / anyBurst).toBeLessThan(1.33);
-        for (const id of bursts.filter((id) => id !== "ice_burst")) {
-            expect(onlyIce.has(id)).toBe(false);
+    test("only Ice Burst is offered: the other Ancient spells come from its pick", () => {
+        for (const unlocked of [undefined, new Set<string>()]) {
+            const offered = offers("magic", unlocked);
+            expect(offered.get("ice_burst")).toBeGreaterThan(0);
+            for (const id of ["smoke_burst", "shadow_burst", "blood_burst"]) {
+                expect(offered.has(id)).toBe(false);
+            }
         }
     });
 });

@@ -117,12 +117,14 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - Set `plane` for dungeons above the ground floor.
 - The game draws one plane, and hides roofs. If a map's roofs are plain scenery rather than the
   roof loc types, or something floats, see `src/mapviewer/webgl/loc/UpperLevels.ts`.
-- Campaign maps unlock in the order of `MAPS`. Rewards come from `unlock` tasks on weapons,
+- Campaign maps unlock in the order of `MAPS`. A `seasonal` map goes last in `MAPS`, is open from
+  the start and has no place in the chain. Rewards come from `unlock` tasks on weapons,
   passives, items and adventurers.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
 - Fun maps don't count towards quests.
-- A map that isn't a slice of the real world is a ScapeRune recipe: see
+- A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
+  `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.
 
 ## Adventurer

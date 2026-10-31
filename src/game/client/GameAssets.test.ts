@@ -27,6 +27,23 @@ describe("enemy bakes", () => {
         }
     });
 
+    test("every spot animation a boss attack shows is in the base bake", () => {
+        const keys = GameAssets.getBaseRequests().map((r) => r.key);
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                for (const id of attack.impactSpotAnims ?? []) {
+                    expect(keys).toContain("spot:" + id);
+                }
+                if (attack.pool) {
+                    expect(keys).toContain("loc:" + attack.pool.locId);
+                }
+            }
+            for (const id of enemy.disguise?.warning?.spotAnims ?? []) {
+                expect(keys).toContain("spot:" + id);
+            }
+        }
+    });
+
     test("aren't in the base bake", () => {
         const keys = GameAssets.getBaseRequests().map((r) => r.key);
         expect(keys).not.toContain("npc:goblin");

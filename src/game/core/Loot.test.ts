@@ -122,6 +122,7 @@ describe("caskets", () => {
             "kourend",
             "god_wars",
             "prifddinas",
+            "halloween",
         ]);
         const cures = new Set(UTILITY.filter((i) => i.use.kind === "cure").map((i) => i.id));
         const rolled = (poison: boolean) => {

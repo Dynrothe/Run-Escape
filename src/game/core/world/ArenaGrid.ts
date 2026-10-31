@@ -47,7 +47,7 @@ export class ArenaGrid {
     readonly sizeY: number;
     readonly plane: number;
     // Whether getHeight follows the two triangles a tile's drawn as, rather than easing
-    // across it. It only shows on steep ground: dev maps (scaperune/CLAUDE.md).
+    // across it. It only shows on steep ground: ScapeRune maps (scaperune/CLAUDE.md).
     exactGround = false;
     // The cache's collision flags, less the locs that draw nothing and can go
     private readonly flags: Int32Array;

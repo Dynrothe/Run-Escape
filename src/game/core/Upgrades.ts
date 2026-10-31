@@ -246,12 +246,17 @@ const NEW_PASSIVE_WEIGHT = 0.5;
 // most passives level on past their last level, so there's always something.
 // The hilts to pick from when a weapon has just reached its hilt level (the
 // godsword's blade), none otherwise
-export function hiltChoices(weapon: WeaponState): UpgradeChoice[] {
+export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>): UpgradeChoice[] {
     const hilts = weapon.def.hilts;
-    if (!hilts || weapon.level < hilts.level) {
+    if (!hilts || weapon.level !== hilts.level) {
         return [];
     }
-    return hilts.into.map(({ weaponId, hiltObjId }) => ({
+    const into = hilts.into.filter(({ weaponId }) => isAvailable(getWeapon(weaponId), unlocked));
+    // Nothing else to pick from yet (Ice Burst before the Desert's beaten)
+    if (into.length < 2) {
+        return [];
+    }
+    return into.map(({ weaponId, hiltObjId }) => ({
         kind: "hilt",
         weaponId: weapon.def.id,
         into: weaponId,
@@ -278,7 +283,7 @@ export function rollChoices(
     // (evolutions are never offered, so they don't count)
     const familySizes = new Map<string, number>();
     for (const weapon of WEAPONS) {
-        if (weapon.family && !weapon.evolved && isAvailable(weapon, unlocked)) {
+        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isAvailable(weapon, unlocked)) {
             familySizes.set(weapon.family, (familySizes.get(weapon.family) ?? 0) + 1);
         }
     }
@@ -309,7 +314,12 @@ export function rollChoices(
     }
     if (weapons.length < maxWeapons) {
         for (const weapon of WEAPONS) {
-            if (weapon.evolved || ownedWeapons.has(weapon.id) || !isAvailable(weapon, unlocked)) {
+            if (
+                weapon.evolved ||
+                weapon.pickOnly ||
+                ownedWeapons.has(weapon.id) ||
+                !isAvailable(weapon, unlocked)
+            ) {
                 continue;
             }
             // Another class's weapon, or a second of a family (one godsword

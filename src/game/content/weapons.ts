@@ -148,6 +148,17 @@ function godsword(
 // The blade takes its hilt at this level
 const HILT_LEVEL = 2;
 
+// Having beaten the Desert, a burst's first level picks the run's Ancient spell
+const ANCIENT_SPELL_PICK = {
+    level: HILT_LEVEL,
+    into: [
+        { weaponId: "ice_burst", hiltObjId: 4675 },
+        { weaponId: "smoke_burst", hiltObjId: 25491 },
+        { weaponId: "shadow_burst", hiltObjId: 25492 },
+        { weaponId: "blood_burst", hiltObjId: 25489 },
+    ],
+};
+
 // An evolved weapon's levels: what it evolves into, then two more steps of
 // damage
 function evolvedLevels(
@@ -427,6 +438,7 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         // One Ancient burst at a time
         family: "ancient_burst",
+        hilts: ANCIENT_SPELL_PICK,
         freezes: true,
         levels: levels(
             {
@@ -494,7 +506,9 @@ export const WEAPONS: WeaponDef[] = [
         hitSound: -1,
         rarity: "common",
         family: "ancient_burst",
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "fareed" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Smoke Burst",
@@ -534,7 +548,9 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         family: "ancient_burst",
         drain: 0.2,
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "damis_risen" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Shadow Burst",
@@ -572,7 +588,9 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "common",
         family: "ancient_burst",
         lifesteal: { chance: 0.05, fraction: 0.5, max: 2, spotAnim: 1542 },
-        unlock: { kind: "killBoss", mapId: "desert", enemyId: "dessous" },
+        hilts: ANCIENT_SPELL_PICK,
+        pickOnly: true,
+        unlock: { kind: "beatMap", mapId: "desert" },
         levels: levels(
             {
                 name: "Blood Burst",
@@ -2193,6 +2211,75 @@ export const WEAPONS: WeaponDef[] = [
             objId: 24425,
             description: "Evolved from the Harmonised nightmare staff with the Amulet of glory.",
         }),
+    },
+    {
+        id: "volatile_nightmare_staff",
+        name: "Volatile Nightmare staff",
+        kind: "missile",
+        description:
+            "Casts Immolate at the toughest enemy in range: slow, and the bigger the target, the harder it burns.",
+        iconObjId: 24424,
+        playerSeq: 8532,
+        sound: FIRE_SURGE.sound,
+        hitSound: FIRE_SURGE.hitSound,
+        rarity: "rare",
+        style: "magic",
+        toughTargets: 1.2,
+        unlock: { kind: "killBoss", mapId: "halloween", enemyId: "the_nightmare" },
+        levels: levels(
+            {
+                ...FIRE_SURGE,
+                castSpotAnim: 1760,
+                impactSpotAnim: 1759,
+                damage: 30,
+                cooldown: 1.7,
+                amount: 1,
+                area: 1,
+                pierce: 0,
+                speed: 16,
+                duration: 0,
+                knockback: 0.3,
+                objId: 24424,
+            },
+            { damage: 36, description: "+6 damage." },
+            { cooldown: 1.5, description: "Casts a little faster." },
+            { area: 1.3, description: "Bigger splash." },
+            { damage: 44, amount: 2, description: "+8 damage; casts one more Immolate." },
+        ),
+    },
+    {
+        id: "inquisitors_mace",
+        name: "Inquisitor's mace",
+        kind: "slash",
+        description:
+            "Crushing blows at the closest enemy, a quarter harder on the undead. Bosses and elites are hit again.",
+        iconObjId: 24417,
+        playerSeq: 4503,
+        // hacksword_slash stands in for the mace's
+        sound: 2500,
+        hitSound: -1,
+        rarity: "rare",
+        style: "melee",
+        slayer: { tags: ["undead"], damage: 0.25 },
+        bigHits: [0.4],
+        unlock: { kind: "killBoss", mapId: "halloween", enemyId: "the_nightmare" },
+        levels: levels(
+            {
+                damage: 26,
+                cooldown: 1,
+                amount: 1,
+                area: 2.4,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 0.4,
+                objId: 24417,
+            },
+            { damage: 32, description: "+6 damage." },
+            { area: 2.7, description: "+13% reach." },
+            { cooldown: 0.9, description: "Swings a little faster." },
+            { damage: 38, amount: 2, description: "+6 damage; also swings behind you." },
+        ),
     },
     {
         id: "sanguinesti_staff",

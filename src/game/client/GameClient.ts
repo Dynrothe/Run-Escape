@@ -16,6 +16,7 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { formatStats } from "../content/stats";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
@@ -163,6 +164,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isNew: choice.kind === "newWeapon" || choice.kind === "newPassive",
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
+            isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
             rarity: rarity && { name: rarity.name, color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
@@ -512,8 +514,8 @@ export class GameClient implements GameFrameHandler {
         }
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
-        this.renderer.setSmoothTerrain(map.dev === true);
-        this.grid.exactGround = map.dev === true;
+        this.renderer.setSmoothTerrain(map.scaperune === true);
+        this.grid.exactGround = map.scaperune === true;
         this.cameraGround = undefined;
         this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
@@ -721,6 +723,9 @@ export class GameClient implements GameFrameHandler {
         const newGear = isDevMap(sim.map.id)
             ? []
             : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newTrophies = isDevMap(sim.map.id)
+            ? []
+            : result.trophies.filter((id) => !this.save.trophies.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
@@ -743,6 +748,7 @@ export class GameClient implements GameFrameHandler {
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
+                newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
             },
         });
@@ -846,9 +852,9 @@ export class GameClient implements GameFrameHandler {
 
         // The world fades out past the edge of the map
         const { baseX, baseY, sizeX, sizeY } = this.grid;
-        // The world fades out past the arena's edge. A dev map's world carries on: it has
-        // scenery there (scaperune/CLAUDE.md).
-        const open = this.sim?.map.dev === true ? OPEN_WORLD_MARGIN : 0;
+        // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+        // has scenery there (scaperune/CLAUDE.md).
+        const open = this.sim?.map.scaperune === true ? OPEN_WORLD_MARGIN : 0;
         const playArea = this.renderer.playArea;
         playArea[0] = baseX - open;
         playArea[1] = baseY - open;
@@ -896,7 +902,7 @@ export class GameClient implements GameFrameHandler {
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
         let ground = this.grid.getHeight(px, py) / 128;
-        if (sim.map.dev) {
+        if (sim.map.scaperune) {
             const last = this.cameraGround ?? ground;
             ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
             this.cameraGround = ground;
@@ -944,6 +950,7 @@ export class GameClient implements GameFrameHandler {
                 case "bossSpawned":
                 case "bossRose":
                 case "bossEnraged":
+                case "bossStage":
                     // Bosses that turn up together say so once (Pest Control's
                     // portals, on the first)
                     if (event.message) {
@@ -1032,11 +1039,28 @@ export class GameClient implements GameFrameHandler {
         let boss: HudView["boss"];
         const shownBoss = sim.shownBoss;
         if (shownBoss) {
+            const phase = shownBoss.bossState?.phase;
+            const parasite = sim.parasite;
             boss = {
                 name: shownBoss.def.name,
                 fraction: shownBoss.dead ? 0 : shownBoss.hp / shownBoss.maxHp,
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
+            if (phase && !shownBoss.dead) {
+                boss.fraction = phase.shield / phase.shieldMax;
+                boss.fight = {
+                    phase: phase.index + 1,
+                    phases: shownBoss.def.boss?.phases?.phases.length ?? 1,
+                    stage: phase.stage,
+                    totems: phase.totems.map((totem) =>
+                        phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
+                    ),
+                    curseAttacks: sim.curse?.attacksLeft,
+                    parasiteSeconds: parasite
+                        ? Math.max(0, (parasite.burstTick - sim.tick) / TICKS_PER_SECOND)
+                        : undefined,
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;

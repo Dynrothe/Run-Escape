@@ -1,4 +1,5 @@
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
@@ -12,6 +13,8 @@ import {
     FREMENNIK_WAVES,
     GOD_WARS_EVENTS,
     GOD_WARS_WAVES,
+    HALLOWEEN_EVENTS,
+    HALLOWEEN_WAVES,
     INFERNO_EVENTS,
     INFERNO_WAVES,
     KARAMJA_EVENTS,
@@ -31,7 +34,8 @@ import {
 } from "./waves";
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
-// are whole map squares (64 tiles), in world tiles.
+// are whole map squares (64 tiles), in world tiles. Seasonal maps go last: they're
+// open from the start, and nothing waits on them.
 export const MAPS: MapDef[] = [
     {
         id: "lumbridge",
@@ -286,7 +290,35 @@ export const MAPS: MapDef[] = [
         finalBossWarning: "The lava churns... three JalTok-Jads are rising!",
         victoryText: "The JalTok-Jads are slain! You are the champion of the Inferno!",
     },
+    {
+        id: "halloween",
+        name: "Hallowed Night",
+        description:
+            "A graveyard hamlet in a pumpkin patch, on the one night its dead won't lie still. " +
+            "Slash Bash and The Mimic come one by one, and The Nightmare rises at the end.",
+        // A pumpkin
+        iconObjId: 1959,
+        arena: getRecipeArena(HALLOWED_NIGHT),
+        // South of the ritual circle
+        spawn: getRecipeWorldTile(HALLOWED_NIGHT, HALLOWED_NIGHT.spawn.x, HALLOWED_NIGHT.spawn.y),
+        difficulty: { hp: 1.25, damage: 1.15 },
+        waves: HALLOWEEN_WAVES,
+        events: HALLOWEEN_EVENTS,
+        finalBossWarning: "The pumpkins go dark... The Nightmare is waking!",
+        victoryText: "The Nightmare is laid to rest!",
+        // The ritual circle: all 192 tiles would put her totems a minute's walk apart
+        bossArena: HALLOWED_BOSS_ARENA,
+        scaperune: true,
+        seasonal: true,
+        brightness: 0.8,
+    },
 ];
+
+// The maps that open one after another
+export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter((map) => !map.seasonal);
+
+// Open from the start, between the campaign and the fun maps
+export const SEASONAL_MAPS: MapDef[] = MAPS.filter((map) => map.seasonal);
 
 // The fun maps (fun/maps.ts): open from the start and endless, outside the
 // campaign's chain
@@ -321,6 +353,7 @@ function createDevMap(recipe: MapRecipe): MapDef {
         victoryText: "",
         fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
         dev: true,
+        scaperune: true,
         ...recipe.mapDef,
     };
 }
@@ -346,6 +379,10 @@ export function isFunMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fun !== undefined;
 }
 
+export function isSeasonalMap(mapId: string): boolean {
+    return MAP_BY_ID.get(mapId)?.seasonal === true;
+}
+
 export function getMap(id: string): MapDef {
     const map = MAP_BY_ID.get(id);
     if (!map) {
@@ -366,14 +403,17 @@ export function getArenaRegion(map: MapDef): {
     return { ...map.arena, plane: map.plane ?? 0 };
 }
 
-// Whether anything on the map poisons you (the King Black Dragon's breath).
-// Antipoisons are only found where something does.
+// Whether anything on the map poisons you (the King Black Dragon's breath) or
+// gives you what stacks up (Slash Bash's disease). Antipoisons are only found
+// where something does.
 export function hasPoison(map: MapDef): boolean {
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
     ];
     return enemyIds.some((id) =>
-        getEnemy(id).boss?.attacks.some((attack) => attack.effect?.kind === "poison"),
+        getEnemy(id).boss?.attacks.some(({ effect }) =>
+            effect?.kind === "debuff" ? effect.stacks !== undefined : effect?.kind === "poison",
+        ),
     );
 }

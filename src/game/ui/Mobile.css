@@ -501,7 +501,8 @@
         display: none;
     }
 
-    .ui-log-card {
+    .ui-log-card,
+    .ui-log-tab {
         min-height: 44px;
     }
 
@@ -581,6 +582,10 @@
 
     .ui-boss-bar {
         height: 10px;
+    }
+
+    .ui-boss-status {
+        font-size: 14px;
     }
 
     .ui-boss-warning {
