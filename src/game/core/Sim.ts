@@ -2830,21 +2830,17 @@ export class Sim {
         }
     }
 
-    // Up it comes, towards the middle of the arena from the player, so it's on
-    // the screen wherever they are
+    // Up it comes beside the player, on the arena's side of them, so it's on the
+    // screen wherever they are
     private riseBoss(intro: BossIntro): void {
         const def = intro.def;
         const rise = def.boss!.intro!;
         const player = this.player;
         const arena = this.bossArena;
-        const dx = (arena.minX + arena.maxX) / 2 - player.x;
-        const dy = (arena.minY + arena.maxY) / 2 - player.y;
-        const length = Math.hypot(dx, dy);
-        // Standing in the middle already, any way will do
-        const dirX = length > 0.001 ? dx / length : 0;
-        const dirY = length > 0.001 ? dy / length : 1;
-        const x = player.x + dirX * rise.distance;
-        const y = player.y + dirY * rise.distance;
+        // East or west, as the screen's wider than it's tall and she's tall
+        // herself: north of the player, she'd be off the top of it
+        const x = player.x + (player.x > (arena.minX + arena.maxX) / 2 ? -1 : 1) * rise.distance;
+        const y = player.y;
         const at = this.canTurnUpAt(def, x, y)
             ? { x, y }
             : (this.findSpotNear(player.x, player.y, rise.distance, def.radius) ??

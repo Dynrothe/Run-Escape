@@ -174,7 +174,7 @@ describe("a boss's entrance", () => {
         expect(Math.hypot(boss.x - sim.player.x, boss.y - sim.player.y)).toBeCloseTo(distance, 0);
     });
 
-    test("she rises on screen, towards the arena's middle, wherever the player is", () => {
+    test("she rises on screen, on the arena's side, wherever the player is", () => {
         const sim = createSim(96);
         sim.player.x = BASE + 12;
         sim.player.y = BASE + 12;
@@ -182,8 +182,9 @@ describe("a boss's entrance", () => {
         run(sim, nightmare().boss!.intro!.riseAt + 0.1);
         const boss = sim.enemies.find((e) => e.finalBoss)!;
         expect(Math.hypot(boss.x - sim.player.x, boss.y - sim.player.y)).toBeLessThan(12);
+        // Beside them, not above: the screen's wider than it's tall
         expect(boss.x).toBeGreaterThan(sim.player.x);
-        expect(boss.y).toBeGreaterThan(sim.player.y);
+        expect(boss.y).toBeCloseTo(sim.player.y);
     });
 
     test("nothing else turns up while she's alone with the player", () => {

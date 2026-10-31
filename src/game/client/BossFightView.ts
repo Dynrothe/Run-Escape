@@ -341,7 +341,7 @@ export class BossFightView {
             const arc = pattern.arc ?? 1;
             ctx.strokeStyle = pattern.color;
             ctx.globalAlpha = 0.3 + 0.5 * t;
-            ctx.lineWidth = Math.max(1.5, 2 * scale);
+            ctx.lineWidth = Math.max(2, 3 * scale);
             for (let i = 0; i < pattern.count; i++) {
                 const angle = base - arc / 2 + (arc * i) / Math.max(1, pattern.count - 1);
                 const from = overlay.project(
@@ -399,13 +399,13 @@ export class BossFightView {
             ctx.stroke();
             return;
         }
-        ctx.fillStyle = `rgba(20, 0, 40, ${0.35 + 0.3 * t})`;
+        ctx.fillStyle = `rgba(20, 0, 40, ${0.15 + 0.25 * t})`;
         ctx.fill();
         ctx.lineWidth = 2;
-        ctx.strokeStyle = `rgba(230, 90, 255, ${0.6 + 0.4 * t})`;
+        ctx.strokeStyle = `rgba(230, 90, 255, ${0.7 + 0.3 * t})`;
         ctx.stroke();
         this.traceCircle(overlay, sim, x, y, radius * t);
-        ctx.fillStyle = `rgba(230, 60, 255, ${0.3 * t})`;
+        ctx.fillStyle = `rgba(230, 60, 255, ${0.28 * t})`;
         ctx.fill();
     }
 
@@ -529,7 +529,7 @@ export class BossFightView {
                 continue;
             }
             const pattern = sim.bulletSources[source[slot]].attack.pattern!;
-            const size = Math.max(8, radius[slot] * 2.6 * pixels);
+            const size = Math.max(8, radius[slot] * 2.2 * pixels);
             ctx.drawImage(
                 this.getSprite(pattern.color),
                 p.x - size / 2,
@@ -676,9 +676,10 @@ export class BossFightView {
         const cx = p.behind ? width / 2 : p.x;
         const cy = p.behind ? height / 2 : p.y;
         const reach = Math.hypot(width, height);
-        const dark = ctx.createRadialGradient(cx, cy, height * 0.12, cx, cy, reach * 0.55);
-        dark.addColorStop(0, `rgba(8, 0, 18, ${0.35 * fade})`);
-        dark.addColorStop(0.5, `rgba(8, 0, 18, ${DARK * fade})`);
+        // A wide light, as she's a big thing, and it reaches the player beside her
+        const dark = ctx.createRadialGradient(cx, cy, height * 0.2, cx, cy, reach * 0.62);
+        dark.addColorStop(0, `rgba(8, 0, 18, ${0.12 * fade})`);
+        dark.addColorStop(0.45, `rgba(8, 0, 18, ${0.5 * fade})`);
         dark.addColorStop(1, `rgba(8, 0, 18, ${DARK * fade})`);
         ctx.fillStyle = dark;
         ctx.fillRect(0, 0, width, height);

@@ -308,7 +308,7 @@ const PHASE_THREE_ATTACKS: BossAttackDef[] = [
             spots: [{ shape: "scatter", count: 12, spread: 10 }],
             radius: 1.5,
             armed: 12,
-            locId: 37738,
+            locId: 37739,
         },
         effect: {
             kind: "drowsy",
@@ -422,7 +422,7 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                 sound: 4262,
                 title: "The Nightmare",
                 subtitle: "of Ashihama",
-                distance: 8,
+                distance: 6,
                 alone: true,
             },
             phases: {
