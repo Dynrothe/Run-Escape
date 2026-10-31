@@ -18,24 +18,29 @@ collision, flow field, minimap and bot get them with no idea they aren't real.
 The recipe runs once, on the main thread, the first time the map's played. `GameClient.loadGrid` calls
 `installRecipe`, and scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 
-| File           | What                                                                   |
-| -------------- | ---------------------------------------------------------------------- |
-| `recipe.ts`    | `MapRecipe`, `BuildContext`                                            |
-| `Ground.ts`    | a map being built: paint overlays, stamp prefabs, place locs           |
-| `format.ts`    | the tile grid, and reading and writing both file formats               |
-| `prefab.ts`    | cut a rectangle out of the real world, turn it                         |
-| `prefabs.ts`   | the named rectangles, a starter set                                    |
-| `biomes.ts`    | what each kind of ground is made of, and its rock                      |
-| `generator.ts` | the random generator                                                   |
-| `terrain.ts`   | the height layer: floats per corner, pins, slope limits                |
-| `landforms.ts` | the shape of the land: hills, ranges, mesas, canyons, volcanoes        |
-| `roadGrades.ts`| how high every road runs, worked out together                          |
-| `collision.ts` | collision from a grid, reachability                                    |
-| `paths.ts`     | cheapest path, for roads and fords                                     |
-| `noise.ts`     | seeded random numbers, noise, fractal and ridged noise, distance       |
-| `palette.ts`   | everything the generator can use, on one map                           |
-| `squares.ts`   | turns a recipe into squares, and installs them                         |
-| `maps/`        | the maps: `devMaps.ts` lists them, `terrainTest.ts` is a hand-made one, `cliffGallery.ts` shows rock locs |
+| File             | What                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `recipe.ts`      | `MapRecipe`, `BuildContext`                                                                               |
+| `Ground.ts`      | a map being built: paint overlays, stamp prefabs, place locs                                              |
+| `format.ts`      | the tile grid, and reading and writing both file formats                                                  |
+| `prefab.ts`      | cut a rectangle out of the real world, turn it                                                            |
+| `prefabs.ts`     | the named rectangles, a starter set                                                                       |
+| `biomes.ts`      | what each kind of ground is made of, and its rock                                                         |
+| `generator.ts`   | the random generator: the order things happen, scatter, reachability                                      |
+| `mapBuild.ts`    | what's kept while a map's built, and what its parts share                                                 |
+| `rivers.ts`      | rivers, lakes and the sea: where they go, how high they stand                                             |
+| `mountains.ts`   | passes, what can be walked, rock, snow, caves, lava                                                       |
+| `roads.ts`       | roads and bridges                                                                                         |
+| `settlements.ts` | where buildings go, and their plots                                                                       |
+| `terrain.ts`     | the height layer: floats per corner, pins, slope limits                                                   |
+| `landforms.ts`   | the shape of the land: hills, ranges, mesas, canyons, volcanoes                                           |
+| `roadGrades.ts`  | how high every road runs, worked out together                                                             |
+| `collision.ts`   | collision from a grid, reachability                                                                       |
+| `paths.ts`       | cheapest path, for roads and fords                                                                        |
+| `noise.ts`       | seeded random numbers, noise, fractal and ridged noise, distance                                          |
+| `palette.ts`     | everything the generator can use, on one map                                                              |
+| `squares.ts`     | turns a recipe into squares, and installs them                                                            |
+| `maps/`          | the maps: `devMaps.ts` lists them, `terrainTest.ts` is a hand-made one, `cliffGallery.ts` shows rock locs |
 
 ## The map generator screen (temporary)
 
@@ -250,15 +255,15 @@ walkable. That one idea does cuttings, embankments, plots and the ground round b
 
 **The limits, measured:**
 
-| What                                     | Number                                                                     |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| A height                                 | 0 to 255, one byte, a step of 8 scene units. 1 reads as 0.                 |
-| Tallest ground                           | 255 is 2040 scene units, 16 tiles. Real peaks use it (Trollheim, Cam Torum) |
-| What gets drawn                          | `MapManager` culls squares with a box 18.75 tiles up: all of it fits       |
-| Real slopes                              | up to 44+ a tile, blocked, with a rock overlay; `getTileSlope` measures    |
-| Tiles                                    | two triangles, split south-east to north-west                              |
-| Light                                    | from the south-west. 11 to 181 against 84 on the flat, so it can't overflow; camera-facing slopes are bright |
-| Actors                                   | stand on `getHeight` at their middle. They don't tilt.                     |
+| What            | Number                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| A height        | 0 to 255, one byte, a step of 8 scene units. 1 reads as 0.                                                   |
+| Tallest ground  | 255 is 2040 scene units, 16 tiles. Real peaks use it (Trollheim, Cam Torum)                                  |
+| What gets drawn | `MapManager` culls squares with a box 18.75 tiles up: all of it fits                                         |
+| Real slopes     | up to 44+ a tile, blocked, with a rock overlay; `getTileSlope` measures                                      |
+| Tiles           | two triangles, split south-east to north-west                                                                |
+| Light           | from the south-west. 11 to 181 against 84 on the flat, so it can't overflow; camera-facing slopes are bright |
+| Actors          | stand on `getHeight` at their middle. They don't tilt.                                                       |
 
 **The camera.** It's fixed: it looks north, at 70° (pitch -400), from 18 tiles (10 to 44 with the wheel), 45° field of
 view, so at the default zoom it sees about 27 by 16 tiles. So:
@@ -315,14 +320,14 @@ read as rock is the light on the ridges, stones all over, and at Karuulm, facete
 Those fill their tile and follow the ground (contour), which is what the old grey ramp was missing. `RockDef` in
 `biomes.ts` says what a biome's made of. To look for more, `scaperune_cliffs` shows locs on a steep band.
 
-| Locs                                             | What                                                   |
-| ------------------------------------------------ | ------------------------------------------------------ |
-| 34384, 34372, 42352 (type 10)                    | full tile rock: near-black green, olive, black. The good ones |
-| 42097, 42098, 6617, 52795, 48627, 57476 (type 22) | flat patterned decals: brown, tan, maroon, green. They look like brickwork |
-| 34385, 34388, 34391, 34392, 42353 (type 10)      | broken facets, with holes                              |
-| 53538 (wall), 53543 (diagonal)                   | snow on a wall; ice shards, which look terrible        |
-| Rockslide 11434 grey, 11922 white, 18894 amber, 11933 dark, 3718 mossy | heaps of rock, 2 by 2                 |
-| 185, 3703, 11439, 3614, 321, 3706 (type 22)      | stones                                                 |
+| Locs                                                                   | What                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 34384, 34372, 42352 (type 10)                                          | full tile rock: near-black green, olive, black. The good ones              |
+| 42097, 42098, 6617, 52795, 48627, 57476 (type 22)                      | flat patterned decals: brown, tan, maroon, green. They look like brickwork |
+| 34385, 34388, 34391, 34392, 42353 (type 10)                            | broken facets, with holes                                                  |
+| 53538 (wall), 53543 (diagonal)                                         | snow on a wall; ice shards, which look terrible                            |
+| Rockslide 11434 grey, 11922 white, 18894 amber, 11933 dark, 3718 mossy | heaps of rock, 2 by 2                                                      |
+| 185, 3703, 11439, 3614, 321, 3706 (type 22)                            | stones                                                                     |
 
 To add a landform, add a function to `landforms.ts` that adds to `terrain.height` and marks `mountain`, call it from
 `createRelief`, add its setting, and add a line to `SWEEP` at its extreme.

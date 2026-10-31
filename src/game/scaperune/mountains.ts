@@ -1,0 +1,351 @@
+import { TILE_BLOCKED, TILE_BRIDGE } from "./format";
+import {
+    Build,
+    LOC_NORMAL,
+    SPAWN_CLEAR,
+    createClimb,
+    hasRelief,
+    lerp,
+    refreshTileHeights,
+    settleTerrain,
+} from "./mapBuild";
+import { createRng } from "./noise";
+import { Point, smoothPath } from "./paths";
+import { RoadLine, gradeRoads } from "./roadGrades";
+import { ROAD_STEEPEST } from "./roads";
+import { GeneratorSettings } from "./settings";
+import { getTileSlope, limitNorthFaces } from "./terrain";
+
+// What the land's shape comes to: passes through it, what can be walked, rock and caves.
+
+// A pass climbs a little steeper than a road, as a share of what's walkable
+const PASS_GRADE = 0.6;
+
+const PASS_CLIFF_COST = 5;
+
+// Pieces of ground this big that cliffs cut off get a pass. Smaller ones stay out of reach.
+const MIN_PASS_PIECE = 300;
+
+// Tiles a pass runs on past the cliffs at each end
+const PASS_RUN_OUT = 7;
+
+const PASSES_A_SQUARE = 4;
+
+// How steep a cliff can drop away to the north, in height units a tile. The camera looks
+// north from high up, at 70 degrees, which is 45 units a tile: anything steeper hides
+// the ground at its foot. This leaves a margin for the top of the screen.
+const NORTH_FACE_SLOPE = 30;
+
+// Snow starts this high, with the setting at its least and its most
+const SNOW_LINE_HIGH = 235;
+
+const SNOW_LINE_LOW = 110;
+
+// How much steeper than walkable a tile is before it gets a rock face
+const FACE_SLOPE = 2;
+
+const CAVES_A_SQUARE = 1.5;
+
+const CAVE_WIDTH = 3;
+
+const CAVE_DEPTH = 2;
+
+// How much higher the ground has to rise behind a cave for there to be a cliff to go in
+const CAVE_CLIFF = 24;
+
+// The ground round the spawn is level and walkable, whatever the land's doing there
+function pinSpawn(build: Build): void {
+    const { terrain, spawn, cliffs, sizeX, settings } = build;
+    if (!hasRelief(settings)) {
+        return;
+    }
+    const height = Math.round(terrain.getHeight(spawn.x, spawn.y));
+    const reach = SPAWN_CLEAR + 1;
+    for (let y = spawn.y - reach; y <= spawn.y + reach; y++) {
+        for (let x = spawn.x - reach; x <= spawn.x + reach; x++) {
+            if (Math.hypot(x - spawn.x, y - spawn.y) <= reach) {
+                terrain.pin(x, y, height, 0);
+                cliffs[x + y * sizeX] = 0;
+            }
+        }
+    }
+}
+
+// Pieces of open ground, by tile: 0 for cliff and outside the arena
+function findGroundPieces(build: Build): {
+    labels: Int32Array;
+    sizes: number[];
+    // A tile of each, and how far it is from the spawn
+    starts: number[];
+} {
+    const { cliffs, arena, sizeX } = build;
+    const labels = new Int32Array(cliffs.length);
+    const sizes = [0];
+    const starts = [0];
+    const stack: number[] = [];
+    for (let y = arena.y0; y <= arena.y1; y++) {
+        for (let x = arena.x0; x <= arena.x1; x++) {
+            const start = x + y * sizeX;
+            if (labels[start] || cliffs[start]) {
+                continue;
+            }
+            const label = sizes.length;
+            let size = 0;
+            labels[start] = label;
+            stack.push(start);
+            while (stack.length > 0) {
+                const i = stack.pop()!;
+                size++;
+                const tx = i % sizeX;
+                const ty = (i - tx) / sizeX;
+                for (const [nx, ny] of [
+                    [tx - 1, ty],
+                    [tx + 1, ty],
+                    [tx, ty - 1],
+                    [tx, ty + 1],
+                ]) {
+                    if (nx < arena.x0 || ny < arena.y0 || nx > arena.x1 || ny > arena.y1) {
+                        continue;
+                    }
+                    const j = nx + ny * sizeX;
+                    if (!labels[j] && !cliffs[j]) {
+                        labels[j] = label;
+                        stack.push(j);
+                    }
+                }
+            }
+            sizes.push(size);
+            starts.push(start);
+        }
+    }
+    return { labels, sizes, starts };
+}
+
+// Cuts a pass to each big piece of ground the cliffs have cut off from the spawn: a graded
+// way through, that roads can then use
+export function cutPasses(build: Build): RoadLine[] {
+    const { terrain, cliffs, arena, spawn, finder, settings, sizeX } = build;
+    const passes: RoadLine[] = [];
+    if (!hasRelief(settings)) {
+        return passes;
+    }
+    pinSpawn(build);
+    settleTerrain(build);
+    const { labels, sizes, starts } = findGroundPieces(build);
+    const joined = new Uint8Array(sizes.length);
+    joined[labels[spawn.x + spawn.y * sizeX]] = 1;
+    const inset = 3;
+    const cost = (x: number, y: number) => {
+        const inside =
+            x >= arena.x0 + inset &&
+            y >= arena.y0 + inset &&
+            x <= arena.x1 - inset &&
+            y <= arena.y1 - inset;
+        if (!inside) {
+            return Infinity;
+        }
+        return cliffs[x + y * sizeX] ? PASS_CLIFF_COST : 1;
+    };
+    refreshTileHeights(build);
+    const passGrade = settings.walkSlope * PASS_GRADE;
+    const climb = createClimb(build, passGrade, 2);
+    // Nearest first, so that each has something near to join
+    const toSpawn = (label: number) => {
+        const x = starts[label] % sizeX;
+        return Math.hypot(x - spawn.x, Math.floor(starts[label] / sizeX) - spawn.y);
+    };
+    const order = sizes
+        .map((size, label) => ({ size, label }))
+        .filter(({ size, label }) => label > 0 && size >= MIN_PASS_PIECE)
+        .sort((a, b) => toSpawn(a.label) - toSpawn(b.label));
+    const maxPasses = settings.squaresX * settings.squaresY * PASSES_A_SQUARE;
+    for (const { label } of order) {
+        if (joined[label] || passes.length >= maxPasses) {
+            continue;
+        }
+        const start = starts[label];
+        const path = finder.find(
+            { x: start % sizeX, y: Math.floor(start / sizeX) },
+            cost,
+            (i) => joined[labels[i]] !== 0,
+            climb,
+        );
+        if (path.length === 0) {
+            continue;
+        }
+        for (const i of path) {
+            joined[labels[i]] = 1;
+        }
+        // Only where it needs cutting, and a little either side, to ease into the ground
+        const firstCliff = path.findIndex((i) => cliffs[i]);
+        const lastCliff = path.length - 1 - [...path].reverse().findIndex((i) => cliffs[i]);
+        const cut = path.slice(
+            Math.max(firstCliff - PASS_RUN_OUT, 0),
+            lastCliff + PASS_RUN_OUT + 1,
+        );
+        const raw = cut.map((i) => ({ x: (i % sizeX) + 0.5, y: Math.floor(i / sizeX) + 0.5 }));
+        const points = smoothPath(raw, 4, 4);
+        passes.push({ points, lead: 0, halfWidth: settings.passWidth / 2, grade: passGrade });
+    }
+    // Cut now, so that roads find them. They're graded again with the roads at the end.
+    gradeRoads(terrain, passes, [], 0, settings.walkSlope * ROAD_STEEPEST);
+    settleTerrain(build);
+    terrain.clearPins();
+    pinSpawn(build);
+    const after = findGroundPieces(build).labels;
+    const home = after[spawn.x + spawn.y * sizeX];
+    for (let i = 0; i < after.length; i++) {
+        build.mainland[i] = after[i] === home ? 1 : 0;
+    }
+    return passes;
+}
+
+// How high snow starts, in height units: past the top of everything with no snow
+export function getSnowLine(settings: GeneratorSettings): number {
+    return settings.snow > 0 ? lerp(SNOW_LINE_HIGH, SNOW_LINE_LOW, settings.snow) : Infinity;
+}
+
+// Lava in the craters
+export function paintLava(build: Build): void {
+    const { ground, relief, corners, biomeAt, sizeX, sizeY } = build;
+    if (relief.craters.length === 0) {
+        return;
+    }
+    const field = new Float32Array(corners.x * corners.y).fill(-4);
+    for (const { x, y, radius } of relief.craters) {
+        const reach = Math.ceil(radius) + 4;
+        for (let cy = Math.round(y) - reach; cy <= Math.round(y) + reach; cy++) {
+            for (let cx = Math.round(x) - reach; cx <= Math.round(x) + reach; cx++) {
+                const at = cx + cy * corners.x;
+                field[at] = Math.max(field[at], radius - Math.hypot(cx - x, cy - y));
+            }
+        }
+    }
+    ground.paintField(field, biomeAt(sizeX >> 1, sizeY >> 1).rock.lava, true);
+}
+
+// The rock on everything too steep to walk, and rock faces over the steepest. It's painted
+// after the roads, and goes round them.
+export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
+    const { ground, settings, sizeX, sizeY, corners, cliffs, biomeAt, terrain } = build;
+    if (!hasRelief(settings)) {
+        return new Uint8Array(sizeX * sizeY);
+    }
+    const { heights, flags } = ground.level0;
+    const middle = biomeAt(sizeX >> 1, sizeY >> 1).rock;
+    const snowLine = getSnowLine(settings);
+    const rock = new Uint8Array(sizeX * sizeY);
+    const snowy = new Uint8Array(sizeX * sizeY);
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            if (!(flags[i] & TILE_BLOCKED) || skip[i]) {
+                continue;
+            }
+            const steep = getTileSlope(heights, corners.x, x, y) > settings.walkSlope;
+            if (steep || cliffs[i]) {
+                const high = terrain.height[terrain.corner(x, y)] > snowLine;
+                (high ? snowy : rock)[i] = 1;
+            }
+        }
+    }
+    ground.paintOverlay(rock, middle.overlay, false, skip);
+
+    const roll = createRng(settings.seed + 200);
+    const faced = new Uint8Array(sizeX * sizeY);
+    for (let y = 1; y < sizeY - 1; y++) {
+        for (let x = 1; x < sizeX - 1; x++) {
+            const i = x + y * sizeX;
+            const slope = getTileSlope(heights, corners.x, x, y);
+            faced[i] = (rock[i] || snowy[i]) && slope >= settings.walkSlope + FACE_SLOPE ? 1 : 0;
+        }
+    }
+    for (let y = 1; y < sizeY - 1; y++) {
+        for (let x = 1; x < sizeX - 1; x++) {
+            const i = x + y * sizeX;
+            if (!faced[i] || roll() >= settings.rockFaces) {
+                continue;
+            }
+            const inner = faced[i - 1] && faced[i + 1] && faced[i - sizeX] && faced[i + sizeX];
+            const { faces, edgeFaces } = biomeAt(x, y).rock;
+            const list = inner ? faces : edgeFaces;
+            ground.grid.locs.push({
+                id: list[Math.floor(roll() * list.length)],
+                type: LOC_NORMAL,
+                rotation: Math.floor(roll() * 4),
+                level: 0,
+                x,
+                y,
+            });
+        }
+    }
+    return rock;
+}
+
+// Cave mouths, for looks: in the foot of a cliff that faces the camera
+export function placeCaves(build: Build, rock: Uint8Array): Point[] {
+    const { settings, ground, arena, biomeAt, sizeX, corners } = build;
+    const caves: Point[] = [];
+    const { heights, flags } = ground.level0;
+    const wanted = Math.round(
+        settings.caves * settings.squaresX * settings.squaresY * CAVES_A_SQUARE,
+    );
+    const roll = createRng(settings.seed + 201);
+    const fits = (x: number, y: number) => {
+        for (let tx = x; tx < x + CAVE_WIDTH; tx++) {
+            const i = tx + y * sizeX;
+            if (!rock[i] || !(flags[i + sizeX] & TILE_BLOCKED) || flags[i - sizeX] & TILE_BLOCKED) {
+                return false;
+            }
+        }
+        const rise =
+            heights[x + 1 + (y + CAVE_DEPTH + 1) * corners.x] - heights[x + 1 + y * corners.x];
+        return rise >= CAVE_CLIFF;
+    };
+    let placed = 0;
+    for (let attempt = 0; attempt < wanted * 300 && placed < wanted; attempt++) {
+        const x = Math.floor(lerp(arena.x0, arena.x1 - CAVE_WIDTH, roll()));
+        const y = Math.floor(lerp(arena.y0 + 1, arena.y1 - CAVE_DEPTH - 2, roll()));
+        if (fits(x, y)) {
+            caves.push({ x, y });
+            ground.place(
+                { id: biomeAt(x, y).rock.cave, type: LOC_NORMAL, rotation: 0, level: 0, x, y },
+                CAVE_WIDTH,
+                CAVE_DEPTH,
+            );
+            for (let ty = y; ty < y + CAVE_DEPTH; ty++) {
+                rock.fill(0, x + ty * sizeX, x + CAVE_WIDTH + ty * sizeX);
+            }
+            placed++;
+        }
+    }
+    return caves;
+}
+
+// Ground's height and what's walkable, once everything's been placed on it
+export function finishHeights(build: Build): void {
+    const { terrain, ground, corners, heldCorners } = build;
+    settleTerrain(build);
+    const fixed = Uint8Array.from(heldCorners);
+    terrain.markPinned(fixed);
+    limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
+    terrain.write((x, y, height) => ground.setHeight(x, y, height));
+}
+
+// Tiles too steep to walk are blocked, going by the heights as they'll be drawn, and so is
+// what's left of the cliffs. Bridges are walked on a level up.
+export function blockSteepGround(build: Build): void {
+    const { ground, settings, cliffs, sizeX, sizeY, corners } = build;
+    const { heights, flags } = ground.level0;
+    const bridges = ground.grid.levels[1].flags;
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            const steep = getTileSlope(heights, corners.x, x, y) > settings.walkSlope;
+            if ((steep || cliffs[i]) && !(bridges[i] & TILE_BRIDGE)) {
+                flags[i] |= TILE_BLOCKED;
+                ground.reserved[i] = 1;
+            }
+        }
+    }
+}

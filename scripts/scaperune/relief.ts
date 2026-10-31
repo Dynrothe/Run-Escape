@@ -168,4 +168,6 @@ function main(): void {
     );
 }
 
-main();
+if (process.argv[1]?.endsWith("relief.ts")) {
+    main();
+}
