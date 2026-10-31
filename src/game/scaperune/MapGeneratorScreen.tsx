@@ -18,6 +18,7 @@ import {
     formatSettings,
     getSettingsError,
     parseSettings,
+    randomSettings,
 } from "./settings";
 
 // Temporary and dev-only: a screen to try the generator's settings. To remove it,
@@ -256,6 +257,14 @@ function MapGeneratorScreen({
                     onClick={() => change({ seed: settings.seed, ...DEFAULT_SETTINGS })}
                 >
                     Reset to defaults
+                </button>
+                <button
+                    className="ui-button"
+                    onClick={() =>
+                        change({ ...randomSettings(settings, Math.random), seed: randomSeed() })
+                    }
+                >
+                    Randomize
                 </button>
             </div>
             <div className="ui-mapgen-body">

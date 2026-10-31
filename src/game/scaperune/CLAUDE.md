@@ -47,7 +47,8 @@ The recipe runs once, on the main thread, the first time the map's played. `Game
 ## The map generator screen (temporary)
 
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random,
-Reset, copying and pasting the settings as JSON, Generate with a preview from above, and Play. It's temporary,
+Reset, Randomize (rolls every setting that shapes the map, within its limits, but keeps the size, heightmap, start and
+waves), copying and pasting the settings as JSON, Generate with a preview from above, and Play. It's temporary,
 there to try settings, so it's built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`,
 then the `MapGeneratorButton` line in `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`. A production
 build never shows it.

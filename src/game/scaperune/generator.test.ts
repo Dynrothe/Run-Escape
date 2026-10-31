@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
-import type { BiomeId } from "./biomes";
+import { BIOMES, BiomeId } from "./biomes";
 import { findReachable, findStranded, getCollisionFlags } from "./collision";
 import { createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
@@ -25,7 +25,9 @@ import {
     getGeneratedSpawn,
     getSettingsError,
     parseSettings,
+    randomSettings,
 } from "./generator";
+import { createRng } from "./noise";
 import type { BuildContext } from "./recipe";
 
 // A world with no cache behind it, where everything cut from it is walled rooms
@@ -85,6 +87,33 @@ describe("generateMap", () => {
         }
     });
 
+    // Rising from west to east
+    const ramp = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) =>
+        Math.round(((i % HEIGHTMAP_SIZE) / (HEIGHTMAP_SIZE - 1)) * 255),
+    );
+
+    it("rolls random settings inside the limits, keeping the map's size and how it plays", () => {
+        const start = settings({
+            squaresX: 5,
+            squaresY: 3,
+            heightmap: encodeHeightmap(ramp),
+            waveSet: "karamja",
+        });
+        const roll = createRng(7);
+        const biomes = new Set<string>();
+        for (let i = 0; i < 300; i++) {
+            const random = randomSettings(start, roll);
+            expect(getSettingsError(random)).toBeUndefined();
+            expect(random.seed).toBe(start.seed);
+            expect(random.squaresX).toBe(5);
+            expect(random.squaresY).toBe(3);
+            expect(random.heightmap).toBe(start.heightmap);
+            expect(random.waveSet).toBe("karamja");
+            biomes.add(random.biome);
+        }
+        expect(biomes.size).toBe(Object.keys(BIOMES).length);
+    });
+
     it("reads back the settings it writes, and refuses what aren't settings", () => {
         const full = settings({ seed: 42, boundary: "forest", squaresX: 7, houses: false });
         expect(parseSettings(formatSettings(full))).toEqual(full);
@@ -95,11 +124,6 @@ describe("generateMap", () => {
         expect(() => parseSettings('{"rivers":99}')).toThrow(/Rivers/);
         expect(() => parseSettings('{"biome":"moon"}')).toThrow(/moon/);
     });
-
-    // Rising from west to east
-    const ramp = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) =>
-        Math.round(((i % HEIGHTMAP_SIZE) / (HEIGHTMAP_SIZE - 1)) * 255),
-    );
 
     it("takes the ground's height from a heightmap", () => {
         const full = settings({ heightmap: encodeHeightmap(ramp), ponds: 0, boundary: "forest" });

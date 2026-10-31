@@ -1,4 +1,5 @@
 import { BIOMES, BiomeId } from "./biomes";
+import type { Rng } from "./noise";
 
 // Everything the generator can be told, in one place: the map generator's screen,
 // the checks and the error messages are all built from SETTINGS.
@@ -728,6 +729,66 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         props: 0.8,
     },
 };
+
+// What Randomize leaves as it is: the map's size, which is what makes one slow to build, an
+// uploaded image, and how a run plays rather than how the map looks
+const KEPT_BY_RANDOM: readonly SettingKey[] = [
+    "squaresX",
+    "squaresY",
+    "heightmap",
+    "spawnX",
+    "spawnY",
+    "waveSet",
+    "enemyDensity",
+    "brightness",
+];
+
+// What Randomize leaves out half the time, or every map would be the same crowded mix of them
+const SOMETIMES_NONE: readonly SettingKey[] = [
+    "secondBiome",
+    "waterLevel",
+    "mountains",
+    "plateaus",
+    "mesas",
+    "canyons",
+    "volcanoes",
+    "rivers",
+    "lakes",
+    "towns",
+];
+
+// The most Randomize picks where the full range mostly leaves too little ground to play on
+const RANDOM_MOST: Partial<Record<SettingKey, number>> = {
+    waterLevel: 0.4,
+    island: 0.6,
+    boundaryDepth: 16,
+    plateaus: 3,
+    mesas: 6,
+    volcanoes: 1,
+    rivers: 3,
+    lakes: 4,
+};
+
+// Every setting rolled within its limits, so a new setting joins in by being in the table
+export function randomSettings(settings: GeneratorSettings, roll: Rng): GeneratorSettings {
+    const next: Record<string, unknown> = { ...settings };
+    for (const [key, def] of Object.entries(SETTINGS) as [SettingKey, SettingDef][]) {
+        if (KEPT_BY_RANDOM.includes(key) || def.kind === "heightmap") {
+            continue;
+        }
+        const none = SOMETIMES_NONE.includes(key) && roll() < 0.5;
+        if (def.kind === "flag") {
+            next[key] = roll() < 0.5;
+        } else if (def.kind === "choice") {
+            next[key] = none ? "none" : def.options[Math.floor(roll() * def.options.length)];
+        } else {
+            const most = RANDOM_MOST[key] ?? def.max;
+            const steps = Math.floor(roll() * (Math.round((most - def.min) / def.step) + 1));
+            next[key] = none ? 0 : Number((def.min + steps * def.step).toFixed(2));
+        }
+    }
+    return next as GeneratorSettings;
+}
 
 // A heightmap as a setting: bytes, a row at a time, HEIGHTMAP_SIZE a side
 export function encodeHeightmap(heights: Uint8Array): string {
