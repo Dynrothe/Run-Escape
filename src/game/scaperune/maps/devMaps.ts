@@ -7,6 +7,7 @@ import {
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { CLIFF_GALLERY } from "./cliffGallery";
+import { KALUAS_WAKE } from "./kaluasWake";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { TERRAIN_TEST } from "./terrainTest";
 
@@ -116,6 +117,7 @@ export const DEV_MAP_SETTINGS: Record<string, GeneratorSettings> = Object.fromEn
 
 export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     TERRAIN_TEST,
+    KALUAS_WAKE,
     ...GENERATED.map(([id, mapX, , mapY]) =>
         generatedRecipe(id, mapX, mapY ?? 104, DEV_MAP_SETTINGS[id]),
     ),
