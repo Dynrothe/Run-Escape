@@ -373,14 +373,17 @@ export function getArenaRegion(map: MapDef): {
     return { ...map.arena, plane: map.plane ?? 0 };
 }
 
-// Whether anything on the map poisons you (the King Black Dragon's breath).
-// Antipoisons are only found where something does.
+// Whether anything on the map poisons you (the King Black Dragon's breath) or
+// gives you what stacks up (Slash Bash's disease). Antipoisons are only found
+// where something does.
 export function hasPoison(map: MapDef): boolean {
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
     ];
     return enemyIds.some((id) =>
-        getEnemy(id).boss?.attacks.some((attack) => attack.effect?.kind === "poison"),
+        getEnemy(id).boss?.attacks.some(({ effect }) =>
+            effect?.kind === "debuff" ? effect.stacks !== undefined : effect?.kind === "poison",
+        ),
     );
 }

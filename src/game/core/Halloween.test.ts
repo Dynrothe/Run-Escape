@@ -1,4 +1,5 @@
 import { getEnemy } from "../content/enemies";
+import { getMap, hasPoison } from "../content/maps";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { QUESTS } from "../content/quests";
 import { PUMPKIN_ID, PUMPKIN_OUTCOMES } from "../content/trickOrTreat";
@@ -78,6 +79,10 @@ describe("Slash Bash", () => {
         expect(sim.debuffs[0].stacks).toBe(4);
         expect(sim.debuffs[0].name).toContain("x4");
         expect(sim.stats.moveSpeed).toBeCloseTo(speed - 0.32);
+    });
+
+    test("a map with him has cures among its casket items", () => {
+        expect(hasPoison(getMap("halloween"))).toBe(true);
     });
 
     test("other debuffs still replace themselves", () => {

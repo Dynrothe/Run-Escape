@@ -58,7 +58,7 @@ export const HALLOWEEN_STUB_ENEMIES: EnemyDef[] = [
 
 // On Lumbridge's ground, with the bosses a minute apart for trying them out.
 // Not a dev map, so its runs reach the save and the results screen as the real
-// one's will; it's on no map screen, only `game.selectMap("halloween")`.
+// one's will; it's on no map screen, only `game.store.set({ mapId: "halloween" })`.
 export function getHalloweenStubMap(maps: MapDef[]): MapDef[] {
     if (maps.some((map) => map.id === "halloween")) {
         return [];

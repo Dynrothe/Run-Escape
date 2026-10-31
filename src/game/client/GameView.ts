@@ -4,6 +4,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import {
@@ -81,6 +82,8 @@ const HITSPLAT_SPRITE_SCALE = 0.85;
 const SLASH_MS = 180;
 // A disguised boss's beam, once it's shaking
 const DISGUISE_COLOR = "#ff3020";
+// Tiles round it that its warning covers: about what the boss fills
+const DISGUISE_RING = 3;
 // Bosses' pools: ticks they take to spread, seconds they take to dry up
 const POOL_GROW_TICKS = 12;
 const POOL_FADE_SECONDS = 1;
@@ -713,6 +716,7 @@ export class GameView {
         }
 
         this.drawPools(overlay, sim, now);
+        this.drawOpeningCaskets(overlay, sim);
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
         this.drawAuras(overlay, sim, now);
@@ -879,6 +883,27 @@ export class GameView {
             ctx.lineWidth = 2;
             ctx.strokeStyle = `rgba(190, 240, 70, ${0.8 * fade})`;
             ctx.stroke();
+        }
+    }
+
+    // A disguised boss about to come out: a red ring filling in round its
+    // casket, for stepping back from
+    private drawOpeningCaskets(overlay: Overlay, sim: Sim): void {
+        const ctx = overlay.ctx;
+        for (const pickup of sim.pickups) {
+            const disguise = pickup.disguise;
+            if (!disguise || disguise.openTick === -1) {
+                continue;
+            }
+            const shake = getEnemy(disguise.enemyId).disguise!.shake * TICKS_PER_SECOND;
+            const t = Math.min(1, 1 - (disguise.openTick - sim.tick) / shake);
+            this.traceGroundCircle(overlay, sim, pickup.x, pickup.y, DISGUISE_RING);
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255, 60, 40, ${0.6 + 0.4 * t})`;
+            ctx.stroke();
+            this.traceGroundCircle(overlay, sim, pickup.x, pickup.y, DISGUISE_RING * t);
+            ctx.fillStyle = `rgba(255, 40, 20, ${0.15 + 0.2 * t})`;
+            ctx.fill();
         }
     }
 
