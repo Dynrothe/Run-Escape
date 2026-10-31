@@ -6,6 +6,7 @@ import {
     WALL_NORTH,
     WALL_SOUTH,
     WALL_WEST,
+    getTileList,
     lerp,
     pick,
 } from "./mapBuild";
@@ -397,9 +398,11 @@ function placeMaze(
     for (let ty = 0; ty < size; ty++) {
         for (let tx = 0; tx < size; tx++) {
             if (hedge[tx + ty * size]) {
+                // Along its line: they're longer than they're wide
+                const rotation = hedge[tx + 1 + ty * size] || hedge[tx - 1 + ty * size] ? 1 : 0;
                 const id = pick(rng, piece.hedges);
                 ground.place(
-                    { id, type: LOC_NORMAL, rotation: 0, level: 0, x: x + tx, y: y + ty },
+                    { id, type: LOC_NORMAL, rotation, level: 0, x: x + tx, y: y + ty },
                     1,
                     1,
                 );
@@ -584,7 +587,7 @@ export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[]
     if (wanted === 0) {
         return placed;
     }
-    const tiles = [...water.keys()].filter((i) => water[i]);
+    const tiles = getTileList(water);
     if (tiles.length === 0) {
         return placed;
     }

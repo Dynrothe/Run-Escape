@@ -111,6 +111,17 @@ export function hasRelief(settings: GeneratorSettings): boolean {
     );
 }
 
+// The indexes of the tiles a mask has
+export function getTileList(tiles: Uint8Array): number[] {
+    const list: number[] = [];
+    tiles.forEach((tile, i) => {
+        if (tile) {
+            list.push(i);
+        }
+    });
+    return list;
+}
+
 // The tiles a corner field has anything of
 export function getTouchedTiles(field: Float32Array, sizeX: number, sizeY: number): Uint8Array {
     const cornersX = sizeX + 1;

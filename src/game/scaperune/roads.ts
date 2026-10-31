@@ -26,7 +26,7 @@ const ROAD_WIDEN = 6;
 const TRAIL_MARGIN = 0.8;
 
 // How far past a road's edge the square at the spawn reaches
-const SPAWN_SQUARE = 2.5;
+const SPAWN_SQUARE = 1.6;
 
 // Tiles past a road's edge that scatter keeps off
 const ROAD_CLEAR_MARGIN = 0.3;

@@ -16,6 +16,7 @@ import {
     WALL_SOUTH,
     WALL_WEST,
     WaterPaint,
+    getTileList,
     getTouchedTiles,
     hasRelief,
     lerp,
@@ -365,7 +366,7 @@ function groupTiles(tiles: number[], sizeX: number, count: number): number[][] {
 // each piece of water is all one kind: the kind of the biome most of it's in.
 function getWaterOverlay(build: Build, tiles: Uint8Array): (x: number, y: number) => number {
     const { ground, sizeX, biomeAt } = build;
-    const list = [...tiles.keys()].filter((i) => tiles[i]);
+    const list = getTileList(tiles);
     const kinds = new Map<number, number>();
     for (const piece of groupTiles(list, sizeX, tiles.length)) {
         const counts = new Map<BiomeDef, number>();
