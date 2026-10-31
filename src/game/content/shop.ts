@@ -174,6 +174,15 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         maxRank: 2,
         baseCost: 7500,
     },
+    {
+        id: "runecraft",
+        name: "Runecraft",
+        description: "+15% power-up drops",
+        stat: "powerUpRate",
+        perRank: 0.15,
+        maxRank: 3,
+        baseCost: 800,
+    },
 ];
 
 export const SHOP_UPGRADE_BY_ID: Map<string, ShopUpgradeDef> = new Map(

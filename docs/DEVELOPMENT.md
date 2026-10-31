@@ -61,7 +61,7 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 ```
 src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
-            of gear upgrades into), power-ups and thralls, characters, shop, maps
+            of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
             (what each map's tasks bring in); quests (what each asks for and pays)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
@@ -81,7 +81,8 @@ src/game/
   client/   GameClient (run flow, camera, input), GameView (3D actors + 2D overlay),
             GameAssets (what gets baked), GameStore (state for the React UI)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
-  ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon
+  ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
+            offer), ItemIcon
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per pass

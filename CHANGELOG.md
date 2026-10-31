@@ -5,6 +5,27 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.19.2 - 2026-10-31
+
+### Fixed
+
+- The Mysterious Old Man's and Quiz Master's screens have room between their choices and buttons.
+- Random event visitors come and go in a puff of smoke, not a flash of purple on the ground.
+
+## 0.19.1 - 2026-10-31
+
+### Added
+
+- Random events: every few minutes someone turns up near you for 30 seconds. Walk up to them to see
+  what they want.
+- The Mysterious Old Man sells power-ups for coins, and his prices climb as the run goes on.
+- The Quiz Master asks which item is the odd one out, with a power-up for the right answer.
+- The Genie grants experience, Rick Turpentine drops a casket, and a Strange plant's fruit makes you
+  faster and safe from poison for 20 seconds.
+- The Sandwich lady heals you, but ignore her and she throws her baguette at you.
+- The Highwayman ambushes you later in a run and steals coins until you take them back.
+- New shop upgrade, Runecraft: power-ups drop more often.
+
 ## 0.19.0 - 2026-10-31
 
 ### Added

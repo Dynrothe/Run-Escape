@@ -1273,6 +1273,12 @@
     flex: 1;
 }
 
+/* Sold, or more than the coins carried */
+.ui-choice:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 /* A weapon's stats or what its level changes, small under the card's text */
 .ui-choice-stats {
     display: flex;
@@ -1337,6 +1343,12 @@
     display: flex;
     justify-content: center;
     gap: 10px;
+}
+
+/* A level up's buttons bring their own margin, in .ui-reroll */
+.ui-event-actions {
+    align-items: center;
+    margin-top: 10px;
 }
 
 .ui-pause {
