@@ -517,6 +517,8 @@ export type BossPhasesDef = {
     blastMessage: string;
     // Stands like this in place of its idle while its shield's down
     stunnedSeq?: number;
+    // Of the player's hitpoints, given back by each blast
+    blastHeal?: number;
 };
 
 // How a boss fights, after the real fight in OSRS

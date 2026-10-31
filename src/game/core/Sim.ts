@@ -210,7 +210,7 @@ const LEAVE_MIN_SCALE = 2;
 const LEAVE_MARGIN_TICKS = 25;
 // Ticks an armed spot takes to go off once it's stepped on
 const HAZARD_FUSE_TICKS = 15;
-const BULLET_GRACE_TICKS = 30;
+const BULLET_GRACE_TICKS = 50;
 // Tiles from the player that what holds them turns up
 const SUMMON_BESIDE = 1.8;
 // Tiles from a boss that what's walking to it is absorbed
@@ -2882,7 +2882,10 @@ export class Sim {
         const charge = Math.max(1, Math.round(boss.maxHp * phases.totems.charge));
         for (const x of [arena.minX + margin, arena.maxX - margin]) {
             for (const y of [arena.minY + margin, arena.maxY - margin]) {
-                const spot = findFreeSpot(this.grid, x, y, idle.radius);
+                // Where the player can get to, whatever's in that corner
+                const spot = findFreeSpot(this.grid, x, y, PLAYER_RADIUS, (tileX, tileY) =>
+                    this.isWalkableTile(tileX, tileY),
+                );
                 const totem = this.spawnEnemy(idle, "normal", spot);
                 if (totem) {
                     totem.totemOf = boss;
@@ -2950,6 +2953,8 @@ export class Sim {
         if (totemsDef.blastSpotAnim !== undefined) {
             this.addEffect(totemsDef.blastSpotAnim, boss.x, boss.y, 0, 60, boss.uid);
         }
+        // There's no food in a fight this long with nothing else in it
+        this.heal(Math.round(this.player.maxHp * (phases.blastHeal ?? 0)));
         const next = phases.phases[phase.index + 1];
         if (!next) {
             boss.shieldEnd = 0;

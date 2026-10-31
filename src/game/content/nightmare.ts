@@ -422,7 +422,8 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                 sound: 4262,
                 title: "The Nightmare",
                 subtitle: "of Ashihama",
-                distance: 6,
+                // In view of a phone's closer camera too
+                distance: 5,
                 alone: true,
             },
             phases: {
@@ -432,6 +433,7 @@ export const NIGHTMARE_ENEMIES: EnemyDef[] = [
                     { shield: 0.3, opener: "Sleepwalkers (more)" },
                 ],
                 stunnedSeq: STUNNED_SEQ,
+                blastHeal: 0.4,
                 totems: {
                     idleId: "nightmare_totem",
                     chargingId: "nightmare_totem_charging",

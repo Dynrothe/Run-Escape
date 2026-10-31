@@ -328,6 +328,16 @@ describe("her phases", () => {
         expect(sim.bullets.count).toBe(0);
     });
 
+    test("each blast gives the player some hitpoints back, as nothing else will", () => {
+        const sim = createSim();
+        const boss = startFight(sim);
+        sim.player.hp = 5;
+        breakShield(sim, boss);
+        chargeTotems(sim, boss);
+        const heal = nightmare().boss!.phases!.blastHeal!;
+        expect(sim.player.hp).toBe(5 + Math.round(sim.player.maxHp * heal));
+    });
+
     test("a phase's openers come first, and each phase has its own attacks", () => {
         const sim = createSim();
         const boss = startFight(sim);

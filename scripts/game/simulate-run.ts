@@ -12,7 +12,9 @@
 //   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
-//   DODGE=1 ...     # also keeps off what a phased boss marks on the ground (bullets it can't dodge)
+//   DODGE=1 ...     # also keeps off what a phased boss marks on the ground, and sidesteps bullets
+//   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
+//   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -27,6 +29,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
@@ -72,7 +75,10 @@ if (finalBoss) {
     }
 }
 console.time(`${map.name} arena`);
-const grid = new ArenaGrid(loadRegionData(map));
+const grid =
+    process.env.FLAT === "1"
+        ? makeGrid(new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)), ARENA.baseX, ARENA.baseY)
+        : new ArenaGrid(loadRegionData(map));
 console.timeEnd(`${map.name} arena`);
 
 // Like a person might: take evolutions, fill the weapon slots, then upgrade;
@@ -231,6 +237,29 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 quarters.y + (quarters.safe & 2 ? 3 : -3),
             );
         }
+        // Sidesteps what's about to reach it, the nearer the more. A person reads
+        // the arms of a spiral far sooner than this does.
+        let awayX = 0;
+        let awayY = 0;
+        const { bullets } = sim;
+        for (let i = 0; i < bullets.count; i++) {
+            const slot = bullets.order[i];
+            const dx = player.x - bullets.x[slot];
+            const dy = player.y - bullets.y[slot];
+            const distSq = dx * dx + dy * dy;
+            // Only those coming this way
+            if (distSq < 9 && dx * bullets.vx[slot] + dy * bullets.vy[slot] > 0) {
+                const weight = 1 / Math.max(distSq, 0.1);
+                // Across its path, to whichever side it's already nearer
+                const side = dx * bullets.vy[slot] - dy * bullets.vx[slot] >= 0 ? 1 : -1;
+                awayX += bullets.vy[slot] * side * weight;
+                awayY += -bullets.vx[slot] * side * weight;
+            }
+        }
+        if (awayX !== 0 || awayY !== 0) {
+            const length = Math.hypot(awayX, awayY);
+            return { x: awayX / length, y: awayY / length };
+        }
         for (const hazard of sim.hazards) {
             const away = Math.hypot(player.x - hazard.x, player.y - hazard.y);
             if (away < hazard.radius + 1.2) {
@@ -348,6 +377,9 @@ function runOnce(characterId: string, seed: number) {
             }
             lastX = sim.player.x;
             lastY = sim.player.y;
+        }
+        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned) {
+            sim.player.hp = sim.player.maxHp;
         }
         const pressed = uncursed(sim, move);
         sim.step(pressed.x, pressed.y);
