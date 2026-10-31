@@ -44,11 +44,30 @@ export function isAnyMapOn(env = process.env, argv = process.argv) {
     );
 }
 
+// Rooms on the relay at once: MULTIPLAYER_MAX_ROOMS=1000 or --max-rooms=1000,
+// or MAX_ROOMS. Each room of four is about 12 KB/s each way through the relay.
+export function maxRoomsSetting(env = process.env, argv = process.argv) {
+    const flag = argv.find((arg) => arg.startsWith("--max-rooms="))?.slice("--max-rooms=".length);
+    const value = flag ?? env.MULTIPLAYER_MAX_ROOMS;
+    if (value === undefined || value.trim() === "") {
+        return MAX_ROOMS;
+    }
+    const rooms = Number(value);
+    if (!Number.isInteger(rooms) || rooms < 1) {
+        console.warn(
+            `MULTIPLAYER_MAX_ROOMS "${value}" isn't a whole number of rooms: taking ${MAX_ROOMS}.`,
+        );
+        return MAX_ROOMS;
+    }
+    return rooms;
+}
+
 const MAX_PARTY = 4;
 // No game has more maps than this
 const MAX_UNLOCKED_MAPS = 200;
-// Rooms on the relay at once; past that, a new one waits for one to go
-const MAX_ROOMS = 2000;
+// Rooms on the relay at once unless the server sets it (see maxRoomsSetting);
+// past that, a new one waits for one to go
+const MAX_ROOMS = 500;
 // Limits on each address (see client-ip.mjs for who a connection's from), so
 // one machine can't take the relay over. Generous enough for a household or
 // a LAN party behind one address.
@@ -156,6 +175,12 @@ class Connection {
         switch (opcode) {
             case 0x0:
             case 0x1: {
+                if (opcode === 0x1 && fin) {
+                    // The whole message in one frame, as nearly all are
+                    this.fragments = [];
+                    this.receiveMessage(payload);
+                    return;
+                }
                 if (opcode === 0x1) {
                     this.fragments = [];
                 }
@@ -166,21 +191,9 @@ class Connection {
                     return;
                 }
                 if (fin) {
-                    const text = Buffer.concat(this.fragments).toString("utf8");
+                    const whole = Buffer.concat(this.fragments);
                     this.fragments = [];
-                    if (this.overLimit()) {
-                        this.close(1008);
-                        return;
-                    }
-                    let message;
-                    try {
-                        message = JSON.parse(text);
-                    } catch {
-                        return;
-                    }
-                    if (message && typeof message === "object") {
-                        this.onMessage(message);
-                    }
+                    this.receiveMessage(whole);
                 }
                 return;
             }
@@ -199,6 +212,24 @@ class Connection {
         }
     }
 
+    // A whole message: its JSON, with the bytes it came as (to pass on as they
+    // are, rather than encoding it again)
+    receiveMessage(payload) {
+        if (this.overLimit()) {
+            this.close(1008);
+            return;
+        }
+        let message;
+        try {
+            message = JSON.parse(payload.toString("utf8"));
+        } catch {
+            return;
+        }
+        if (message && typeof message === "object" && !Array.isArray(message)) {
+            this.onMessage(message, payload);
+        }
+    }
+
     overLimit() {
         const second = Math.floor(Date.now() / 1000);
         if (second !== this.second) {
@@ -209,25 +240,14 @@ class Connection {
     }
 
     sendFrame(opcode, payload) {
-        if (this.closed) {
-            return;
+        this.write(encodeFrame(opcode, payload));
+    }
+
+    // A frame from encodeFrame, which can go to any number of connections
+    write(frame) {
+        if (!this.closed) {
+            this.socket.write(frame);
         }
-        const length = payload.length;
-        let header;
-        if (length < 126) {
-            header = Buffer.from([0x80 | opcode, length]);
-        } else if (length < 65536) {
-            header = Buffer.alloc(4);
-            header[0] = 0x80 | opcode;
-            header[1] = 126;
-            header.writeUInt16BE(length, 2);
-        } else {
-            header = Buffer.alloc(10);
-            header[0] = 0x80 | opcode;
-            header[1] = 127;
-            header.writeBigUInt64BE(BigInt(length), 2);
-        }
-        this.socket.write(Buffer.concat([header, payload]));
     }
 
     send(message) {
@@ -266,6 +286,39 @@ class Connection {
     }
 }
 
+// A whole, unmasked frame (as a server sends them), header and payload in
+// one buffer
+function encodeFrame(opcode, payload) {
+    const length = payload.length;
+    const headerLength = length < 126 ? 2 : length < 65536 ? 4 : 10;
+    const frame = Buffer.allocUnsafe(headerLength + length);
+    frame[0] = 0x80 | opcode;
+    if (length < 126) {
+        frame[1] = length;
+    } else if (length < 65536) {
+        frame[1] = 126;
+        frame.writeUInt16BE(length, 2);
+    } else {
+        frame[1] = 127;
+        frame.writeBigUInt64BE(BigInt(length), 2);
+    }
+    payload.copy(frame, headerLength);
+    return frame;
+}
+
+// A message as it came (a JSON object), with one more field put last, so it
+// wins over any field of that name already in it (JSON.parse keeps the last)
+function withField(payload, name, value) {
+    let end = payload.length - 1;
+    while (end > 0 && payload[end] !== 0x7d) {
+        end--;
+    }
+    return Buffer.concat([
+        payload.subarray(0, end),
+        Buffer.from(`,${JSON.stringify(name)}:${JSON.stringify(value)}}`, "utf8"),
+    ]);
+}
+
 function acceptKey(key) {
     return createHash("sha1")
         .update(key + WS_GUID)
@@ -299,7 +352,7 @@ function cleanId(id) {
 // ones); the rest are as above
 export function createRelay(limits = {}) {
     const {
-        maxRooms = MAX_ROOMS,
+        maxRooms = maxRoomsSetting(),
         connectionsPerAddress = MAX_CONNECTIONS_PER_ADDRESS,
         roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
         createsPerMinute = MAX_CREATES_PER_MINUTE,
@@ -517,7 +570,8 @@ export function createRelay(limits = {}) {
         return undefined;
     }
 
-    function handle(client, message) {
+    // payload: the message's bytes as they came, for passing on
+    function handle(client, message, payload) {
         const room = client.room;
         if (room) {
             room.lastActive = Date.now();
@@ -717,20 +771,23 @@ export function createRelay(limits = {}) {
                     broadcastRoom(room);
                 }
                 return;
+            // The game's own traffic, nearly all of what comes through, goes on
+            // as it came rather than encoded again: the same JSON, so every
+            // player reads what the relay did
             case "up":
-                // A guest's input, for the host
+                // A guest's input, for the host, saying who it's from
                 if (room?.started && !isHost) {
                     const host = room.members.find((m) => m.id === room.hostId);
-                    host?.connection.send({ t: "up", from: client.id, d: message.d });
+                    host?.connection.write(encodeFrame(0x1, withField(payload, "from", client.id)));
                 }
                 return;
             case "down":
-                // The host's frames, for everyone else
+                // The host's frames, for everyone else: one frame for them all
                 if (isHost && room.started) {
-                    const forwarded = { t: "down", d: message.d };
+                    const frame = encodeFrame(0x1, payload);
                     for (const member of room.members) {
                         if (member !== client) {
-                            member.connection.send(forwarded);
+                            member.connection.write(frame);
                         }
                     }
                 }
@@ -781,7 +838,7 @@ export function createRelay(limits = {}) {
         };
         client.connection = new Connection(
             socket,
-            (message) => handle(client, message),
+            (message, payload) => handle(client, message, payload),
             () => {
                 clients.delete(client);
                 const left = (connectionsFrom.get(address) ?? 1) - 1;

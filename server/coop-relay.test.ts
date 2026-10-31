@@ -1,7 +1,13 @@
 import { Server, createServer } from "node:http";
 import { AddressInfo } from "node:net";
 
-import { RELAY_PATH, createRelay, isAnyMapOn, isMultiplayerOn } from "./coop-relay.mjs";
+import {
+    RELAY_PATH,
+    createRelay,
+    isAnyMapOn,
+    isMultiplayerOn,
+    maxRoomsSetting,
+} from "./coop-relay.mjs";
 
 type Message = { t: string; [key: string]: any };
 
@@ -76,6 +82,16 @@ describe("multiplayer toggle", () => {
         expect(isAnyMapOn({}, [])).toBe(false);
         expect(isAnyMapOn({ MULTIPLAYER_ANY_MAP: "on" }, [])).toBe(true);
         expect(isAnyMapOn({}, ["--any-map"])).toBe(true);
+    });
+
+    it("takes 500 rooms unless the server says otherwise", () => {
+        expect(maxRoomsSetting({}, [])).toBe(500);
+        expect(maxRoomsSetting({ MULTIPLAYER_MAX_ROOMS: "1200" }, [])).toBe(1200);
+        expect(maxRoomsSetting({ MULTIPLAYER_MAX_ROOMS: "50" }, ["--max-rooms=80"])).toBe(80);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        expect(maxRoomsSetting({ MULTIPLAYER_MAX_ROOMS: "lots" }, [])).toBe(500);
+        expect(maxRoomsSetting({ MULTIPLAYER_MAX_ROOMS: "0" }, [])).toBe(500);
+        warn.mockRestore();
     });
 });
 
@@ -273,6 +289,9 @@ describe("co-op relay", () => {
         const up = await host.next("up");
         expect(up.d).toEqual({ m: [1, 0] });
         expect(up.from).toBe(room.members[1].id);
+        // Passed on as it came, but not with a made-up sender
+        guests[0].send({ t: "up", from: room.members[0].id, d: { m: [0, 1] } });
+        expect((await host.next("up")).from).toBe(room.members[1].id);
         host.send({ t: "down", d: { n: 3 } });
         expect((await guests[0].next("down")).d).toEqual({ n: 3 });
     });

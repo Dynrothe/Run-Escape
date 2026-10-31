@@ -112,15 +112,21 @@ adds proxies elsewhere, and `CLOUDFLARE_IPS` replaces the list of Cloudflare's a
 
 Its limits, at the top of `server/coop-relay.mjs`:
 
-| What                          | Limit                                                                       |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| Rooms on the relay            | 2,000; past that, making one says they're all taken (and the menu shows it) |
-| Connections from one address  | 16 (a household or LAN party behind one address)                            |
-| Rooms hosted from one address | 4                                                                           |
-| Rooms made from one address   | 10 a minute                                                                 |
-| A room with nothing happening | closed after 30 minutes                                                     |
-| A player's loadout            | 16 KB, or it's dropped                                                      |
-| A message                     | 256 KB, and 400 a second from one connection                                |
+| What                          | Limit                                                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it) |
+| Connections from one address  | 16 (a household or LAN party behind one address)                                                      |
+| Rooms hosted from one address | 4                                                                                                     |
+| Rooms made from one address   | 10 a minute                                                                                           |
+| A room with nothing happening | closed after 30 minutes                                                                               |
+| A player's loadout            | 16 KB, or it's dropped                                                                                |
+| A message                     | 256 KB, and 400 a second from one connection                                                          |
+
+A room of four is about 12 KB/s through the relay, both ways, and about 0.15% of a core: 500 rooms
+is around 50 Mbit/s and three quarters of one core. Set `MULTIPLAYER_MAX_ROOMS` (or
+`--max-rooms=`) to what the server's bandwidth and CPU can take. The relay passes the game's own
+messages on as they came rather than decoding and encoding them again, so what's left of its CPU is
+mostly Node writing to sockets.
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
 else. `npm start` and `npm run preview` run a relay of their own at `/coop`

@@ -8,6 +8,8 @@
 //                                          # see client-ip.mjs)
 //   ... -- --any-map                       # rooms take players without their map
 //                                          # (or MULTIPLAYER_ANY_MAP=on; see coop-relay.mjs)
+//   ... -- --max-rooms=1000                # rooms at once, 500 unless it's set
+//                                          # (or MULTIPLAYER_MAX_ROOMS=1000)
 //
 // Without a slim cache in the build it serves the full one from caches/, like
 // `vite preview` does.
@@ -21,7 +23,13 @@ import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { proxyMode } from "./client-ip.mjs";
-import { RELAY_PATH, createRelay, isAnyMapOn, isMultiplayerOn } from "./coop-relay.mjs";
+import {
+    RELAY_PATH,
+    createRelay,
+    isAnyMapOn,
+    isMultiplayerOn,
+    maxRoomsSetting,
+} from "./coop-relay.mjs";
 
 const REPO = resolve(fileURLToPath(import.meta.url), "../..");
 const ROOT = resolve(process.env.DIST ?? join(REPO, "dist"));
@@ -144,6 +152,7 @@ server.listen(PORT, HOST, () => {
     console.log(
         MULTIPLAYER
             ? `Multiplayer on: co-op relay at ${RELAY_PATH}, proxy in front: ${proxyMode()}, ` +
+                  `up to ${maxRoomsSetting()} rooms, ` +
                   (isAnyMapOn()
                       ? "rooms take anyone (MULTIPLAYER_ANY_MAP)"
                       : "rooms take only players with their map unlocked")
