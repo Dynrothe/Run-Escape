@@ -107,6 +107,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
 - Fun maps don't count towards quests.
+- A map that isn't a slice of the real world is a ScapeRune recipe: see
+  `src/game/scaperune/CLAUDE.md`, which also has a random generator.
 
 ## Adventurer
 

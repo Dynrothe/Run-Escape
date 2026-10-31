@@ -11,7 +11,7 @@ import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
-import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { MAPS, getArenaRegion, getMap, isDevMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
@@ -42,6 +42,7 @@ import {
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig } from "../render/CameraRig";
 import { GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { installRecipe } from "../scaperune/squares";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import {
     GameAssets,
@@ -82,7 +83,12 @@ const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
 const RUN_PITCH = -400;
+// Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
+const OPEN_WORLD_MARGIN = 56;
 const RUN_DISTANCE = 18;
+// How long the camera takes to follow the ground up a slope on a dev map, in ms: without this,
+// it lurches at every crease in tall ground
+const CAMERA_GROUND_EASE = 110;
 // Closer on a phone held sideways: it shows as much to each side as a desktop
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
@@ -223,6 +229,8 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    // Where the camera thinks the ground is, on a dev map
+    private cameraGround: number | undefined;
     private shownDps = 0;
     private shownDpsTick = 0;
     private appearanceVersion = -1;
@@ -434,6 +442,7 @@ export class GameClient implements GameFrameHandler {
     private async loadGrid(mapId: string): Promise<ArenaGrid> {
         let grid = this.grids.get(mapId);
         if (!grid) {
+            await installRecipe(this.mapViewer, mapId);
             const region = await this.mapViewer.workerPool.queueLoad<
                 RegionDataInput,
                 RegionData,
@@ -445,8 +454,12 @@ export class GameClient implements GameFrameHandler {
         return grid;
     }
 
-    async startRun(): Promise<void> {
-        const { mapId } = this.store.getSnapshot();
+    // Forgets a map's collision, for a map that's changed
+    forgetGrid(mapId: string): void {
+        this.grids.delete(mapId);
+    }
+
+    async startRun(mapId: string = this.store.getSnapshot().mapId): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
@@ -493,6 +506,10 @@ export class GameClient implements GameFrameHandler {
         }
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(map.dev === true);
+        this.grid.exactGround = map.dev === true;
+        this.cameraGround = undefined;
+        this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
         const music = map.music && MUSIC[map.music];
         if (music) {
@@ -637,6 +654,8 @@ export class GameClient implements GameFrameHandler {
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
+        this.renderer.setSmoothTerrain(false);
+        this.renderer.setBrightness(1);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -666,7 +685,9 @@ export class GameClient implements GameFrameHandler {
         );
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
-        const newGear = result.gearFound.filter((id) => !this.save.foundGear.includes(id));
+        const newGear = isDevMap(sim.map.id)
+            ? []
+            : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
@@ -698,7 +719,7 @@ export class GameClient implements GameFrameHandler {
     // quest pays out, once the run is over, however it ends (beating the map
     // shows on the results instead)
     private announceTasks(sim: Sim): void {
-        if (sim.runOver) {
+        if (sim.runOver || isDevMap(sim.map.id)) {
             return;
         }
         const result = sim.getResult();
@@ -788,11 +809,14 @@ export class GameClient implements GameFrameHandler {
 
         // The world fades out past the edge of the map
         const { baseX, baseY, sizeX, sizeY } = this.grid;
+        // The world fades out past the arena's edge. A dev map's world carries on: it has
+        // scenery there (scaperune/CLAUDE.md).
+        const open = this.sim?.map.dev === true ? OPEN_WORLD_MARGIN : 0;
         const playArea = this.renderer.playArea;
-        playArea[0] = baseX;
-        playArea[1] = baseY;
-        playArea[2] = baseX + sizeX;
-        playArea[3] = baseY + sizeY;
+        playArea[0] = baseX - open;
+        playArea[1] = baseY - open;
+        playArea[2] = baseX + sizeX + open;
+        playArea[3] = baseY + sizeY + open;
 
         const sim = this.sim;
         if (!sim) {
@@ -834,7 +858,13 @@ export class GameClient implements GameFrameHandler {
         const px = player.prevX + (player.x - player.prevX) * alpha;
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
-        this.cameraRig.apply(camera, px, this.grid.getHeight(px, py) / 128 - 0.6, py);
+        let ground = this.grid.getHeight(px, py) / 128;
+        if (sim.map.dev) {
+            const last = this.cameraGround ?? ground;
+            ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
+            this.cameraGround = ground;
+        }
+        this.cameraRig.apply(camera, px, ground - 0.6, py);
     }
 
     private getAlpha(): number {

@@ -6,6 +6,7 @@ import { deserialize, serialize } from "v8";
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { getArenaRegion } from "../../src/game/content/maps";
 import { MapDef } from "../../src/game/content/types";
+import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
 import { RegionData } from "../../src/mapviewer/worker/RegionData";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
@@ -22,21 +23,28 @@ function getSnapshotPath(map: MapDef): string {
     return join("caches", "collision", GAME_CACHE_NAME, name);
 }
 
+function buildMapRegionData(map: MapDef): RegionData {
+    const cache = loadGameCache();
+    const sceneBuilder = createSceneBuilder(cache);
+    installRecipeInSceneBuilder(sceneBuilder, map.id);
+    return buildRegionData(sceneBuilder, createVarManager(cache), getArenaRegion(map));
+}
+
 // A sim only needs one map's collision and heights, but building them loads the
 // whole game cache, about 600 MB of memory. So the first run on a map saves them
 // to a small file, which every later run starts from. It's Node's format, so a
 // snapshot won't read in Bun.
 export function loadRegionData(map: MapDef): RegionData {
+    // A dev map changes with its recipe and the generator, which the hash can't see, so
+    // it's always built, from its recipe
+    if (map.dev) {
+        return buildMapRegionData(map);
+    }
     const path = getSnapshotPath(map);
     if (existsSync(path)) {
         return deserialize(readFileSync(path));
     }
-    const cache = loadGameCache();
-    const data = buildRegionData(
-        createSceneBuilder(cache),
-        createVarManager(cache),
-        getArenaRegion(map),
-    );
+    const data = buildMapRegionData(map);
     mkdirSync(dirname(path), { recursive: true });
     // Moved into place, as another sim may be starting on the same map
     const partial = `${path}.${process.pid}`;

@@ -74,6 +74,12 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         }
     }
 
+    // 1 is as the game is; lower is darker. The shader's a power, so the sum's upside
+    // down.
+    setBrightness(amount: number): void {
+        this.brightness = 1 / amount;
+    }
+
     getActorRenderer(): Promise<ActorRenderer> {
         return this.actorRendererReady;
     }

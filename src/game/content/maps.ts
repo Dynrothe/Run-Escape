@@ -1,3 +1,5 @@
+import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { MapDef } from "./types";
@@ -290,10 +292,54 @@ export const MAPS: MapDef[] = [
 // campaign's chain
 export { FUN_MAPS };
 
+// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
+// own rather than a slice of the real world (scaperune/CLAUDE.md)
+const showDevMaps =
+    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
+    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
+function createDevMap(recipe: MapRecipe): MapDef {
+    const play = recipe.play;
+    const source = play && MAPS.find((map) => map.id === play.waveSet);
+    const density = play?.enemyDensity ?? 1;
+    return {
+        id: recipe.id,
+        name: recipe.id,
+        description: "ScapeRune test map, for development.",
+        iconObjId: 1351,
+        arena: getRecipeArena(recipe),
+        spawn: getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y),
+        difficulty: source?.difficulty ?? { hp: 1, damage: 1 },
+        waves: (source?.waves ?? LUMBRIDGE_WAVES).map((wave) => ({
+            ...wave,
+            spawnRate: wave.spawnRate * density,
+            minAlive: Math.round(wave.minAlive * density),
+            maxAlive: Math.round(wave.maxAlive * density),
+        })),
+        brightness: play?.brightness,
+        events: [],
+        finalBossWarning: "",
+        victoryText: "",
+        fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
+        dev: true,
+    };
+}
+
+const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
+
 // Every map, the campaign's and the fun ones
-export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS];
+export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
+
+// The map generator's latest map (scaperune/MapGeneratorScreen.tsx). A new object
+// each time, which is how the minimap knows it's another map.
+export function setGeneratedMap(recipe: MapRecipe): void {
+    MAP_BY_ID.set(recipe.id, createDevMap(recipe));
+}
+
+export function isDevMap(mapId: string): boolean {
+    return MAP_BY_ID.get(mapId)?.dev === true;
+}
 
 export function isFunMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fun !== undefined;

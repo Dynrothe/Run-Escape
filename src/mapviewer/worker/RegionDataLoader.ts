@@ -179,6 +179,7 @@ export function buildRegionData(
             sizeY + BORDER * 2,
             false,
             LocLoadType.NO_MODELS,
+            false,
         );
     } finally {
         sceneBuilder.onCollisionLoc = undefined;

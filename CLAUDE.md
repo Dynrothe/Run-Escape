@@ -39,6 +39,7 @@ go stale. Add anything that cost you time to work out.
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
+| ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`          |
 | What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`   |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
@@ -99,7 +100,8 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 - Sims don't need the game cache after the first run on a map: `scripts/game/collision-snapshot.ts`
   saves that map's collision to `caches/collision/` (gitignored). A snapshot rebuilds by itself when
   the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
-  else, delete that folder.
+  else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
+  recipes.
 
 After a content change, also run the checks that apply:
 
