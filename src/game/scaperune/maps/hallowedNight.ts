@@ -59,8 +59,8 @@ const RITUAL = 194;
 const RIDGE = 14;
 const FURROW = 427;
 
-// Plain pumpkins, and now and then a carved one. Both are made big in LocOverrides.ts, and both
-// are ordinary locs (type 10) that block nothing.
+// Plain pumpkins, and now and then a carved one, made big and solid in LocOverrides.ts. One tile
+// each and SPOT tiles apart, so you can walk between them and along the furrows.
 // Four sizes, the middle ones most often.
 const FIELD_PUMPKINS = [46263, 46263, 46264, 46264, 46264, 46272, 46272, 46266, 46267];
 const FIELD_VINE = 55617;
@@ -198,6 +198,16 @@ const TRACK = 2;
 const ROW = 3;
 const SPOT = 3;
 const GATE = 3;
+// The shortest run of fence worth standing, in tiles past its first
+const MIN_FENCE = 3;
+// Wall loc types: a post on a corner of its tile, and two sides of a tile
+const LOC_FENCE_POST = 1;
+const LOC_FENCE_CORNER = 2;
+// A post's rotation is the corner of the tile it's on, and a corner piece's is the corner it turns
+const CORNER_NW = 0;
+const CORNER_NE = 1;
+const CORNER_SE = 2;
+const CORNER_SW = 3;
 // How high a ridge stands. Twelve a tile can't be walked, so this is nowhere near it.
 const RIDGE_HEIGHT = 3;
 
@@ -483,8 +493,8 @@ function placeHollow(night: Night): void {
 }
 
 // A planted field: rows run east to west, each a ridge of tilled soil two tiles wide with a
-// pumpkin every few tiles, and a furrow between them. Everything's walked through, so a field
-// can lie across a lane; its fence can't, and stops short of one.
+// pumpkin every few tiles, and a furrow between them. A field can lie across a lane, but what's
+// solid can't: its pumpkins and fence stop short of one.
 function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
     const { rng, ground } = night;
     const { underlays, overlays, shapes, rotations } = ground.level0;
@@ -522,7 +532,8 @@ function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
             const standing = scarecrows.some(
                 ([sx, sy]) => Math.abs(sx - x) < 2 && sy - y >= 0 && sy - y < ROW,
             );
-            if (!standing) {
+            // They're solid, and a lane has to stay free: it runs through as bare soil
+            if (!standing && !isLane(x, y)) {
                 ground.grid.locs.push({
                     id: pick(rng, FIELD_PUMPKINS),
                     type: LOC_NORMAL,
@@ -554,20 +565,101 @@ function placeField(night: Night, { x0, y0, x1, y1 }: Field): void {
             );
         }
     }
-    // Fence round the track, with a gate's width left in the middle of each side
-    const fence = (x: number, y: number, rotation: number, along: number, mid: number) => {
-        if (!isLane(x, y) && Math.abs(along - mid) > GATE) {
-            ground.grid.locs.push({ id: FIELD_FENCE, type: LOC_WALL, rotation, level: 0, x, y });
+    placeFieldFence(night, { x0, y0, x1, y1 }, midX, midY);
+}
+
+// One side of a field's fence, from its west or south end. A rotation is a corner of the tile
+// for a post, and it's the one that meets the wall next to it.
+type FenceSide = {
+    tile(along: number): [x: number, y: number];
+    wall: number;
+    firstPost: number;
+    lastPost: number;
+    mid: number;
+};
+
+// Fence round the track, with a gate's width left in the middle of each side, and none in a
+// lane. Two runs that meet turn a corner, and any other end of a run is a post: a tile takes one
+// wall, so two straight pieces on a corner lose one, and a run that just stops looks sawn off.
+function placeFieldFence(night: Night, { x0, y0, x1, y1 }: Field, midX: number, midY: number) {
+    const { locs } = night.ground.grid;
+    const put = (x: number, y: number, type: number, rotation: number) =>
+        locs.push({ id: FIELD_FENCE, type, rotation, level: 0, x, y });
+    const left = x0 - TRACK;
+    const right = x1 + TRACK;
+    const bottom = y0 - TRACK;
+    const top = y1 + TRACK;
+    const across = (y: number, wall: number, firstPost: number, lastPost: number): FenceSide => ({
+        tile: (along) => [along, y],
+        wall,
+        firstPost,
+        lastPost,
+        mid: midX,
+    });
+    const upright = (x: number, wall: number, firstPost: number, lastPost: number): FenceSide => ({
+        tile: (along) => [x, along],
+        wall,
+        firstPost,
+        lastPost,
+        mid: midY,
+    });
+    const south = across(bottom, WALL_SOUTH, CORNER_SE, CORNER_SW);
+    const north = across(top, WALL_NORTH, CORNER_NE, CORNER_NW);
+    const west = upright(left, WALL_WEST, CORNER_NW, CORNER_SW);
+    const east = upright(right, WALL_EAST, CORNER_NE, CORNER_SE);
+    const fenced = ({ tile, mid }: FenceSide, along: number) => {
+        const [x, y] = tile(along);
+        return !isLane(x, y) && Math.abs(along - mid) > GATE;
+    };
+    // Each corner turns if both of the sides it joins reach it
+    const corner = (x: number, y: number, a: boolean, b: boolean, rotation: number) => {
+        const turns = a && b && !isLane(x, y);
+        if (turns) {
+            put(x, y, LOC_FENCE_CORNER, rotation);
+        }
+        return turns;
+    };
+    const sw = corner(left, bottom, fenced(south, left + 1), fenced(west, bottom + 1), CORNER_SW);
+    const se = corner(right, bottom, fenced(south, right - 1), fenced(east, bottom + 1), CORNER_SE);
+    const nw = corner(left, top, fenced(north, left + 1), fenced(west, top - 1), CORNER_NW);
+    const ne = corner(right, top, fenced(north, right - 1), fenced(east, top - 1), CORNER_NE);
+    const run = (
+        side: FenceSide,
+        first: number,
+        last: number,
+        joinsFirst: boolean,
+        joinsLast: boolean,
+    ) => {
+        for (let along = first; along <= last; along++) {
+            if (!fenced(side, along)) {
+                continue;
+            }
+            const start = along;
+            while (along < last && fenced(side, along + 1)) {
+                along++;
+            }
+            const end = along;
+            const fromCorner = joinsFirst && start === first;
+            const toCorner = joinsLast && end === last;
+            if (end - start < MIN_FENCE && !fromCorner && !toCorner) {
+                continue;
+            }
+            for (let tile = start; tile <= end; tile++) {
+                const [x, y] = side.tile(tile);
+                if (tile === start && !fromCorner) {
+                    put(x, y, LOC_FENCE_POST, side.firstPost);
+                } else if (tile === end && !toCorner) {
+                    put(x, y, LOC_FENCE_POST, side.lastPost);
+                } else {
+                    put(x, y, LOC_WALL, side.wall);
+                }
+            }
         }
     };
-    for (let x = x0 - TRACK; x <= x1 + TRACK; x++) {
-        fence(x, y0 - TRACK, WALL_SOUTH, x, midX);
-        fence(x, y1 + TRACK, WALL_NORTH, x, midX);
-    }
-    for (let y = y0 - TRACK; y <= y1 + TRACK; y++) {
-        fence(x0 - TRACK, y, WALL_WEST, y, midY);
-        fence(x1 + TRACK, y, WALL_EAST, y, midY);
-    }
+    run(south, left + 1, right - 1, sw, se);
+    run(north, left + 1, right - 1, nw, ne);
+    run(west, bottom + 1, top - 1, sw, nw);
+    run(east, bottom + 1, top - 1, se, ne);
 }
 
 // What's left of the arena: bones, lanterns, candles and scrub underfoot, and dead trees

@@ -561,6 +561,10 @@ export class LocType extends Type {
         if (override) {
             this.models = override.models ? [override.models] : this.models;
             this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+            if (override.solid) {
+                this.clipType = 2;
+                this.blocksProjectile = false;
+            }
         }
         if (this.isInteractive === -1) {
             this.isInteractive = 0;
