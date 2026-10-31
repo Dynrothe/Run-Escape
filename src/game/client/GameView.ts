@@ -44,6 +44,9 @@ const SHIELDED_TINT = 0xd0b8ff;
 // far from the boss, in tiles
 const SHELTER_LENGTH = 30;
 const CANNON_SCALE = 0.75;
+// From this many tiles' radius, a dev map stands something on more than its middle
+const BIG_ACTOR_RADIUS = 0.95;
+const BIG_ACTOR_LIFT = 0.6;
 // Yaws face the way NPC models do (south at 0); the cannon's barrel points
 // north in its model, so it's turned half a turn to aim where it shoots
 const CANNON_YAW_OFFSET = 1024;
@@ -277,6 +280,25 @@ export class GameView {
 
     private ground(sim: Sim, x: number, y: number): number {
         return sim.grid.getHeight(x, y) / 128;
+    }
+
+    // The ground for something big on a dev map, whose slopes are too steep to stand it by its
+    // middle alone: it'd sink into the hill on one side. It's lifted part of the way to the
+    // highest ground under it.
+    private groundUnder(sim: Sim, x: number, y: number, radius: number): number {
+        const middle = this.ground(sim, x, y);
+        if (!sim.map.dev || radius < BIG_ACTOR_RADIUS) {
+            return middle;
+        }
+        const reach = radius * 0.7;
+        // Negative is up
+        const top = Math.min(
+            this.ground(sim, x - reach, y - reach),
+            this.ground(sim, x + reach, y - reach),
+            this.ground(sim, x - reach, y + reach),
+            this.ground(sim, x + reach, y + reach),
+        );
+        return middle + Math.min(top - middle, 0) * BIG_ACTOR_LIFT;
     }
 
     submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
@@ -647,7 +669,9 @@ export class GameView {
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }
-        const height = this.ground(sim, x, y) + (sink * model.height * enemy.scale) / 128;
+        const height =
+            this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
+            (sink * model.height * enemy.scale) / 128;
         let tint = enemy.tint;
         if (enemy.frozen > 0 && !enemy.dead) {
             tint = FROZEN_TINT;
