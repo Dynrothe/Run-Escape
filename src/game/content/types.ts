@@ -176,8 +176,16 @@ export type EnemyDef = {
     // Bosses: turns up as a reward casket of this tier instead, lying near the
     // player with its beam like any other (the Mimic). Walking onto it, or
     // leaving it for seconds, sets it shaking, and shake seconds later it opens
-    // and the boss comes out, playing seq.
-    disguise?: { casket: CasketTier; seconds: number; shake: number; seq?: number };
+    // and the boss comes out, playing seq. warning: spot animations spinning in
+    // a ring ringRadius tiles round it while it shakes, for stepping back from
+    // (the Mimic's sweets).
+    disguise?: {
+        casket: CasketTier;
+        seconds: number;
+        shake: number;
+        seq?: number;
+        warning?: { spotAnims: number[]; count: number; ringRadius: number };
+    };
     // Bosses: the caskets it drops, in place of the usual one (elite, now and
     // then master). The flag carrier's flag is worth a second; a Pest Control
     // portal's is smaller, as there are four of them.
@@ -484,6 +492,8 @@ export type BossAttackDef = {
         damage: number;
         interval: number;
         effect?: PlayerEffectDef;
+        // Scenery it's drawn as, spread to its radius
+        locId: number;
     };
     // Blasts: the last of the spots each bring one of these enemies, unless
     // the boss still has that kind up; they drop nothing (the Mimic's red,

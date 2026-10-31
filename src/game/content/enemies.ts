@@ -95,6 +95,7 @@ const BILE_POOL: BossAttackDef["pool"] = {
     damage: 1.5,
     interval: 0.8,
     effect: DISEASED,
+    locId: 33423,
 };
 
 // Stand-ins: the Mimic's animations don't say what it sounds like
@@ -8172,17 +8173,24 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 1200,
         sounds: MIMIC_SOUNDS,
-        // Five tiles across in OSRS
-        scale: 0.8,
+        // Five tiles across, as in OSRS
+        scale: 1.2,
         knockbackResist: 1,
         spawnMessage: "Trick! The casket was a Mimic!",
-        disguise: { casket: "master", seconds: 25, shake: 1.5, seq: 8309 },
+        disguise: {
+            casket: "master",
+            seconds: 25,
+            shake: 1.5,
+            seq: 8309,
+            // Its four sweets
+            warning: { spotAnims: [1670, 1671, 1672, 1673], count: 12, ringRadius: 3.6 },
+        },
         // Its bonus loot
         caskets: ["master"],
         boss: {
             attackInterval: 2.2,
-            keepDistance: 3.5,
-            stomp: { radius: 2, interval: 0.6, damage: 1, max: 3, sound: MIMIC_SOUNDS.attack },
+            keepDistance: 4.5,
+            stomp: { radius: 3, interval: 0.6, damage: 1, max: 3, sound: MIMIC_SOUNDS.attack },
             enrage: { message: "The Mimic gnashes its lid!" },
             attacks: [
                 {
@@ -8191,8 +8199,8 @@ export const ENEMIES: EnemyDef[] = [
                     damage: 7,
                     windup: 0.8,
                     cooldown: 0,
-                    range: 3.9,
-                    radius: 3.8,
+                    range: 4.7,
+                    radius: 4.5,
                     weight: 3,
                     sound: MIMIC_SOUNDS.attack,
                 },
@@ -8221,8 +8229,8 @@ export const ENEMIES: EnemyDef[] = [
                     windup: 1.1,
                     cooldown: 6,
                     range: 12,
-                    minRange: 4,
-                    radius: 2.6,
+                    minRange: 5,
+                    radius: 3.4,
                     weight: 2,
                     leap: true,
                     seq: 8309,
@@ -8258,7 +8266,6 @@ export const ENEMIES: EnemyDef[] = [
     // The Nightmare and all that comes with her (nightmare.ts)
     ...NIGHTMARE_ENEMIES,
 ];
-
 
 export const ENEMY_BY_ID: Map<string, EnemyDef> = new Map(ENEMIES.map((e) => [e.id, e]));
 

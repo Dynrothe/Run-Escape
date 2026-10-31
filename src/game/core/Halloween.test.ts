@@ -163,6 +163,23 @@ describe("The Mimic", () => {
         expect(sim.takeEvents().some((e) => e.type === "bossSpawned")).toBe(true);
     });
 
+    test("a ring of its sweets warns of it while it shakes, and goes as it opens", () => {
+        const sim = createSim();
+        const casket = layMimic(sim);
+        const { spotAnims, count, ringRadius } = getEnemy("the_mimic").disguise!.warning!;
+        expect(sim.effects.filter((e) => spotAnims.includes(e.spotAnim))).toHaveLength(0);
+        sim.player.x = casket.x;
+        sim.player.y = casket.y;
+        run(sim, 0.1);
+        const ring = sim.effects.filter((e) => spotAnims.includes(e.spotAnim));
+        expect(ring).toHaveLength(count);
+        for (const sweet of ring) {
+            expect(Math.hypot(sweet.x - casket.x, sweet.y - casket.y)).toBeCloseTo(ringRadius);
+        }
+        run(sim, getEnemy("the_mimic").disguise!.shake + 0.1);
+        expect(sim.effects.some((e) => spotAnims.includes(e.spotAnim))).toBe(false);
+    });
+
     test("left alone it opens anyway, and a magnet doesn't bring it over", () => {
         const sim = createSim();
         const casket = layMimic(sim);
