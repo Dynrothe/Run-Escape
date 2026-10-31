@@ -47,8 +47,8 @@ function build(context: BuildContext): TileGrid {
         ]) {
             put(id, size, 10);
         }
-        for (const [id, type] of biome.rock.faces) {
-            put(id, 1, type);
+        for (const id of [...biome.rock.faces, ...biome.rock.edgeFaces]) {
+            put(id, 1, 10);
         }
         for (const id of [...biome.decor, ...biome.rock.stones]) {
             put(id, 1, 22);
@@ -73,7 +73,6 @@ function build(context: BuildContext): TileGrid {
             [biome.water, true],
             [biome.road, false],
             [rock.overlay, true],
-            [rock.snowOverlay, true],
             [rock.lava, true],
         ] as const) {
             const block = new Uint8Array(SIZE * SIZE);

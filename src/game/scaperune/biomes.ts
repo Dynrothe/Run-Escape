@@ -9,15 +9,16 @@ export type RockDef = {
     // Underlay on the mountains, and overlay on what's too steep to walk
     ground: number;
     overlay: number;
-    // Locs with a model that fills their tile and follows the ground (contour): [id, type]
-    faces: [number, number][];
+    // Locs with a model that fills their tile and follows the ground (contour)
+    faces: number[];
+    // The same with broken edges, for the outside of a cliff: whole tiles make stairs
+    edgeFaces: number[];
     // Heaps of rock, [loc id, tiles a side], that block
     rubble: [number, number][];
     // Stones on the ground (loc type 22)
     stones: number[];
-    // Underlay and cliff overlay above the snow line
+    // Underlay above the snow line, where cliffs have no overlay: none of them is as white
     snowGround: number;
-    snowOverlay: number;
     // What fills a volcano's crater, blocked
     lava: number;
     // A cave's mouth, 3 by 2 tiles, turned to face south at rotation 0
@@ -49,15 +50,13 @@ export type BiomeDef = {
     rock: RockDef;
 };
 
-const LOC_NORMAL = 10;
-
 // Lava, as in Karamja's volcano
 const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
-const SNOW = { snowGround: 58, snowOverlay: 1 };
+const SNOW = 58;
 
-function rock(def: Omit<RockDef, "snowGround" | "snowOverlay" | "lava">): RockDef {
-    return { ...def, ...SNOW, lava: LAVA };
+function rock(def: Omit<RockDef, "snowGround" | "lava">): RockDef {
+    return { ...def, snowGround: SNOW, lava: LAVA };
 }
 
 export const BIOMES: Record<BiomeId, BiomeDef> = {
@@ -85,10 +84,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 92,
             overlay: 83,
-            faces: [
-                [34384, LOC_NORMAL],
-                [34372, LOC_NORMAL],
-            ],
+            faces: [34384, 34372],
+            edgeFaces: [34388, 34391, 34392],
             rubble: [
                 [11434, 2],
                 [3718, 2],
@@ -122,7 +119,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 68,
             overlay: 26,
-            faces: [[34372, LOC_NORMAL]],
+            faces: [34372],
+            edgeFaces: [34373],
             rubble: [
                 [18894, 2],
                 [18893, 2],
@@ -154,12 +152,10 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         flowers: [1299, 1300, 4055, 4056, 4057],
         buildings: ["canifis_house"],
         rock: rock({
-            ground: 72,
+            ground: 94,
             overlay: 222,
-            faces: [
-                [42352, LOC_NORMAL],
-                [34384, LOC_NORMAL],
-            ],
+            faces: [42352, 34384],
+            edgeFaces: [42353, 34388],
             rubble: [
                 [11933, 2],
                 [4605, 2],
@@ -192,7 +188,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 92,
             overlay: 3,
-            faces: [[34384, LOC_NORMAL]],
+            faces: [34384],
+            edgeFaces: [34388, 34391, 34392],
             rubble: [
                 [11922, 2],
                 [11434, 2],

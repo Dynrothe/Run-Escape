@@ -1040,28 +1040,33 @@ function paintRock(build: Build, skip: Uint8Array): Uint8Array {
         }
     }
     ground.paintOverlay(rock, middle.overlay, false, skip);
-    ground.paintOverlay(snowy, middle.snowOverlay, false, skip);
 
     const roll = createRng(settings.seed + 200);
+    const faced = new Uint8Array(sizeX * sizeY);
     for (let y = 1; y < sizeY - 1; y++) {
         for (let x = 1; x < sizeX - 1; x++) {
             const i = x + y * sizeX;
             const slope = getTileSlope(heights, corners.x, x, y);
-            if ((!rock[i] && !snowy[i]) || slope < settings.walkSlope + FACE_SLOPE) {
+            faced[i] = (rock[i] || snowy[i]) && slope >= settings.walkSlope + FACE_SLOPE ? 1 : 0;
+        }
+    }
+    for (let y = 1; y < sizeY - 1; y++) {
+        for (let x = 1; x < sizeX - 1; x++) {
+            const i = x + y * sizeX;
+            if (!faced[i] || roll() >= settings.rockFaces) {
                 continue;
             }
-            if (roll() < settings.rockFaces) {
-                const { faces } = biomeAt(x, y).rock;
-                const [id, type] = faces[Math.floor(roll() * faces.length)];
-                ground.grid.locs.push({
-                    id,
-                    type,
-                    rotation: Math.floor(roll() * 4),
-                    level: 0,
-                    x,
-                    y,
-                });
-            }
+            const inner = faced[i - 1] && faced[i + 1] && faced[i - sizeX] && faced[i + sizeX];
+            const { faces, edgeFaces } = biomeAt(x, y).rock;
+            const list = inner ? faces : edgeFaces;
+            ground.grid.locs.push({
+                id: list[Math.floor(roll() * list.length)],
+                type: LOC_NORMAL,
+                rotation: Math.floor(roll() * 4),
+                level: 0,
+                x,
+                y,
+            });
         }
     }
     return rock;

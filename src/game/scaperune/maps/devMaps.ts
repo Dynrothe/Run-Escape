@@ -76,6 +76,13 @@ const GENERATED: [id: string, mapX: number, settings: Partial<GeneratorSettings>
             },
             110,
         ],
+        [
+            "scaperune_canyon",
+            76,
+            { seed: 5, ...SETTING_PRESETS.Canyon, squaresX: 3, squaresY: 3 },
+            110,
+        ],
+        ["scaperune_volcano", 81, { seed: 6, ...SETTING_PRESETS.Volcano }, 110],
     ];
 
 export const DEV_MAP_SETTINGS: Record<string, GeneratorSettings> = Object.fromEntries(

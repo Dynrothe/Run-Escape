@@ -150,6 +150,10 @@ function main(): void {
     );
     console.log(`heights by 50: ${share.join(" ")}%`);
 
+    for (const pass of map.passes) {
+        const middle = pass.points[pass.points.length >> 1];
+        console.log(`pass at ${Math.round(middle.x)},${Math.round(middle.y)}`);
+    }
     const flags = getCollisionFlags(grid, STUB_CONTEXT.locs);
     const reached = findReachable(flags, sizeX, sizeY, arena, spawn.x, spawn.y);
     const stranded = findStranded(flags, sizeX, arena, reached).length;
