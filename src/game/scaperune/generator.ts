@@ -553,7 +553,9 @@ export function generateMapDetail(
 
     const bridgeZone = new Uint8Array(waterTiles.length);
     const roads = new RoadNetwork(build, waterTiles, bridgeZone);
-    const bridgeStarts = placeBridges(build, rivers, waterTiles, bridgeZone);
+    // With no roads to meet them, rivers are crossed by fords
+    const bridgeStarts =
+        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone) : [];
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>

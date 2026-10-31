@@ -19,10 +19,13 @@ import {
     HEIGHTMAP_SIZE,
     SETTING_PRESETS,
     encodeHeightmap,
+    formatSettings,
     generateMapDetail,
     generatedRecipe,
+    randomSettings,
 } from "../../src/game/scaperune/generator";
 import { DEV_MAP_SETTINGS, SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
+import { createRng } from "../../src/game/scaperune/noise";
 import {
     BuildContext,
     MapRecipe,
@@ -46,6 +49,7 @@ const CHECKS = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) => {
 
 // Everywhere it can go wrong: every boundary and biome, and each setting at its worst,
 // on small arenas and long thin ones
+const RANDOM_MAPS = 12;
 const SWEEP: Partial<GeneratorSettings>[] = [
     { biome: "meadow", island: 0, rivers: 2 },
     { biome: "desert", boundary: "forest", rivers: 1 },
@@ -144,6 +148,7 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     { biome: "astral", island: 0.3, shoreRoughness: 1, landmarks: 1, buildings: 1 },
     { biome: "astral", island: 0.1, waterLevel: 0.5, squaresX: 3, squaresY: 3, rivers: 1 },
     { biome: "autumn", secondBiome: "astral", biomeMix: 0.5, landmarks: 1, squaresX: 3 },
+    { rivers: 2, riverWidth: 14, roads: 0 },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -569,6 +574,18 @@ for (const [name, preset] of Object.entries(SETTING_PRESETS)) {
     const settings: GeneratorSettings = { seed: 3, ...DEFAULT_SETTINGS, ...preset };
     const recipe = generatedRecipe("preset", 70, 134, settings);
     const passed = checkMap(name, (context) => generateMapDetail(settings, context), recipe);
+    failed = !passed || failed;
+}
+// What the screen's Randomize can come up with: refusing for too little ground is fine
+const roll = createRng(1);
+for (let i = 0; i < RANDOM_MAPS; i++) {
+    const settings = randomSettings({ seed: 100 + i, ...DEFAULT_SETTINGS }, roll);
+    const recipe = generatedRecipe("random", 70, 134, settings);
+    const passed = checkMap(
+        `random ${i} ${formatSettings(settings)}`,
+        (context) => generateMapDetail(settings, context),
+        recipe,
+    );
     failed = !passed || failed;
 }
 if (failed) {

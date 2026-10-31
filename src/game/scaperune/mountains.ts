@@ -58,12 +58,20 @@ const CAVE_CLIFF = 24;
 
 // The ground round the spawn is level and walkable, whatever the land's doing there
 function pinSpawn(build: Build): void {
-    const { terrain, spawn, cliffs, sizeX, settings } = build;
+    const { terrain, spawn, cliffs, plots, sizeX, settings } = build;
     if (!hasRelief(settings)) {
         return;
     }
     const height = Math.round(terrain.getHeight(spawn.x, spawn.y));
     const reach = SPAWN_CLEAR + 1;
+    // A plot, or a road out of here is graded as if the ground's free to move
+    plots.push({
+        x: spawn.x - reach,
+        y: spawn.y - reach,
+        sizeX: reach * 2,
+        sizeY: reach * 2,
+        height,
+    });
     for (let y = spawn.y - reach; y <= spawn.y + reach; y++) {
         for (let x = spawn.x - reach; x <= spawn.x + reach; x++) {
             if (Math.hypot(x - spawn.x, y - spawn.y) <= reach) {
