@@ -138,7 +138,10 @@ function getSpotAnimIds(): number[] {
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
+            add(attack.ground?.spotAnim);
         }
+        add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
+        add(enemy.boss?.phases?.totems.blastSpotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);
         add(enemy.revives?.spotAnim, enemy.splits?.spotAnim, enemy.explodes?.spotAnim);
         add(enemy.blinks?.castSpotAnim, enemy.blinks?.impactSpotAnim);
@@ -287,6 +290,9 @@ export class GameAssets {
             enemy.revives?.seq ?? -1,
             enemy.blinks?.seq ?? -1,
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
+            enemy.boss?.intro?.seq ?? -1,
+            enemy.boss?.surgeSeq ?? -1,
+            enemy.boss?.phases?.stunnedSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -309,6 +315,15 @@ export class GameAssets {
                 npcId: shielded.npcId,
                 seqIds: [shielded.idleSeq],
             });
+        }
+        // Scenery its attacks grow, here rather than in what every run bakes
+        for (const attack of enemy.boss?.attacks ?? []) {
+            const quarters = attack.quarters;
+            for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
+                if (locId !== undefined) {
+                    requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
+                }
+            }
         }
         return requests;
     }

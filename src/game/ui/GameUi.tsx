@@ -1151,13 +1151,55 @@ function Hud({
                     <div className="ui-boss-name">
                         {hud.boss.name}
                         {hud.boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
+                        {hud.boss.fight && (
+                            <span className="ui-boss-phase">
+                                {" "}
+                                Phase {hud.boss.fight.phase}/{hud.boss.fight.phases}
+                            </span>
+                        )}
                     </div>
-                    <div className="ui-boss-bar">
-                        <div
-                            className="ui-boss-fill"
-                            style={{ width: `${hud.boss.fraction * 100}%` }}
-                        />
-                    </div>
+                    {hud.boss.fight?.stage === "totems" ? (
+                        <div className="ui-boss-totems">
+                            {hud.boss.fight.totems.map((charge, i) => (
+                                <div key={i} className="ui-boss-bar ui-boss-totem">
+                                    <div
+                                        className="ui-boss-fill ui-boss-fill-totem"
+                                        style={{ width: `${charge * 100}%` }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="ui-boss-bar">
+                            <div
+                                className={
+                                    hud.boss.fight
+                                        ? "ui-boss-fill ui-boss-fill-shield"
+                                        : "ui-boss-fill"
+                                }
+                                style={{ width: `${hud.boss.fraction * 100}%` }}
+                            />
+                        </div>
+                    )}
+                    {hud.boss.fight && (
+                        <div className="ui-boss-status">
+                            {hud.boss.fight.stage === "totems"
+                                ? "Charge the totems!"
+                                : "Break her shield!"}
+                            {hud.boss.fight.curseAttacks !== undefined && (
+                                <span className="ui-boss-curse">
+                                    {" "}
+                                    Cursed: {hud.boss.fight.curseAttacks}
+                                </span>
+                            )}
+                            {hud.boss.fight.parasiteSeconds !== undefined && (
+                                <span className="ui-boss-curse">
+                                    {" "}
+                                    Parasite: {Math.ceil(hud.boss.fight.parasiteSeconds)}s
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : (
                 bossIn <= 60 && (

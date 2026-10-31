@@ -25,6 +25,7 @@ import {
     SimEvent,
     Thrall,
 } from "../core/entities";
+import { BossFightView } from "./BossFightView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -57,6 +58,9 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+
+// What's running from a boss's entrance fades out this many ticks before it goes
+const LEAVING_FADE_TICKS = 20;
 
 // Heights above the ground, in tiles
 const PROJECTILE_HEIGHT = 0.9;
@@ -173,9 +177,14 @@ export class GameView {
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
     private enemiesByUid = new Map<number, Enemy>();
 
-    constructor(readonly assets: GameAssets) {}
+    private readonly fight: BossFightView;
+
+    constructor(readonly assets: GameAssets) {
+        this.fight = new BossFightView(assets);
+    }
 
     reset(): void {
+        this.fight.reset();
         this.hitsplats = [];
         this.slashes = [];
         this.auras = [];
@@ -200,6 +209,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
+            this.fight.onEvent(event, now);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
@@ -258,6 +268,10 @@ export class GameView {
                     break;
                 case "blast":
                     this.blasts.push({ x: event.x, y: event.y, radius: event.radius, start: now });
+                    break;
+                case "bossAbsorbBlast":
+                    // Everywhere: there's no getting out of it
+                    this.flash = { color: "#ff40c0", start: now };
                     break;
                 case "powerUp": {
                     const powerUp = getPowerUp(event.id);
@@ -435,6 +449,8 @@ export class GameView {
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
+
+        this.fight.submitActors(actors, sim);
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -666,7 +682,13 @@ export class GameView {
         } else {
             const moving =
                 Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
-            anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
+            const stunned =
+                enemy.bossState?.phase?.stage === "totems"
+                    ? def.boss?.phases?.stunnedSeq
+                    : undefined;
+            anim = model.getAnim(
+                stunned ?? (moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq),
+            );
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }
@@ -676,9 +698,17 @@ export class GameView {
         let tint = enemy.tint;
         if (enemy.frozen > 0 && !enemy.dead) {
             tint = FROZEN_TINT;
-        } else if (enemy.shieldEnd > tick) {
+        } else if (
+            enemy.shieldEnd > tick &&
+            !enemy.leaving &&
+            !enemy.totemOf &&
+            enemy.risingEnd === 0
+        ) {
             tint = SHIELDED_TINT;
         }
+        // Fading out as it reaches the edge
+        const leaving = enemy.leaving;
+        const fade = leaving ? Math.min(1, (leaving.endTick - tick) / LEAVING_FADE_TICKS) : 1;
         // The boss is hit all the time; a full flash would leave him white
         const flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
         actors.draw(model, anim, frame, x, height, y, enemy.yaw, {
@@ -686,6 +716,7 @@ export class GameView {
             tint,
             flash,
             silhouette: enemy.boss,
+            alpha: Math.max(0, fade),
         });
     }
 
@@ -701,6 +732,7 @@ export class GameView {
 
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
+        this.fight.drawGround(overlay, sim, alpha, now, scale);
         this.drawAuras(overlay, sim, now);
         this.drawBlasts(overlay, sim, now, scale);
         this.drawRockTargets(overlay, sim, now, scale);
@@ -708,6 +740,7 @@ export class GameView {
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
+        this.fight.drawBullets(overlay, sim, alpha);
 
         // Health bars over hurt elites; with hundreds of enemies bars on all of
         // them are just noise (hitsplats show the damage), and the boss has his
@@ -744,6 +777,7 @@ export class GameView {
 
         this.drawHitsplats(overlay, sim, alpha, now, scale);
         this.drawShouts(overlay, sim, alpha, now, scale);
+        this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
     }
 
@@ -868,6 +902,16 @@ export class GameView {
                 ),
             );
             const kind = windup.attack.kind;
+            // Those that mark the ground themselves (BossFightView)
+            if (
+                kind === "ground" ||
+                kind === "quarters" ||
+                kind === "surge" ||
+                kind === "pattern" ||
+                windup.attack.cone !== undefined
+            ) {
+                continue;
+            }
             if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
                 // Where to hide instead of where it hits (it hits everywhere else)
                 continue;

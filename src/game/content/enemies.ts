@@ -1,5 +1,6 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { FUN_ENEMIES } from "./fun/enemies";
+import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -7982,6 +7983,9 @@ export const ENEMIES: EnemyDef[] = [
 
     // The fun maps' players (fun/enemies.ts)
     ...FUN_ENEMIES,
+
+    // The Nightmare and all that comes with her (nightmare.ts)
+    ...NIGHTMARE_ENEMIES,
 ];
 
 export const ENEMY_BY_ID: Map<string, EnemyDef> = new Map(ENEMIES.map((e) => [e.id, e]));
