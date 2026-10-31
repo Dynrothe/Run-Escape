@@ -140,6 +140,9 @@ export function GameApp(): JSX.Element {
                 setClient(gameClient);
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
+                    import("./render/FrameProbe").then(({ FrameProbe }) => {
+                        (window as any).frameProbe = new FrameProbe(loaded.renderer, gameClient);
+                    });
                 }
             })
             .catch((e) => {
