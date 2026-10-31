@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- A DPS meter under the quests shows how much damage you've been dealing, from everything, over
+  the last 8 seconds.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added

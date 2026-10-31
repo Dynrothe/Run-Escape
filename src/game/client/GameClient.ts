@@ -61,6 +61,8 @@ import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
 const MAX_TICKS_PER_FRAME = 10;
 const HUD_INTERVAL_MS = 100;
+// The damage meter's number holds this long, so it can be read
+const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
@@ -215,6 +217,8 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    private shownDps = 0;
+    private shownDpsTick = 0;
     private appearanceVersion = -1;
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
@@ -486,6 +490,8 @@ export class GameClient implements GameFrameHandler {
         this.runRecorded = false;
         this.tasksAnnounced.clear();
         this.accumulator = 0;
+        this.shownDps = 0;
+        this.shownDpsTick = 0;
         this.appearanceVersion = -1;
         this.view.reset();
         this.cameraRig.pitch = RUN_PITCH;
@@ -923,6 +929,10 @@ export class GameClient implements GameFrameHandler {
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
         }
+        if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
+            this.shownDps = sim.dps;
+            this.shownDpsTick = sim.tick;
+        }
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
@@ -938,6 +948,7 @@ export class GameClient implements GameFrameHandler {
             seconds: sim.seconds,
             kills: sim.kills,
             coins: sim.coins,
+            dps: this.shownDps,
             maxWeapons: sim.maxWeapons,
             maxPassives: sim.maxPassives,
             weapons: sim.weapons.map((w) => {

@@ -353,6 +353,9 @@ version and how to run it.
   run that finishes it ends; one finished mid-run rings the bell. The list is coloured like the
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got.
+- **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
+  8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
+  for a blocked one).
 - The **UI** grows with the window: it's laid out for one about 720 pixels tall, and drawn up
   to twice the size on bigger ones (about 1.35x in a 1080p browser window).
 - **Sound**: every enemy, spell and pickup plays its OSRS sound effect, synthesized from the

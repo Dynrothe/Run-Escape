@@ -109,6 +109,8 @@ export type HudView = {
     seconds: number;
     kills: number;
     coins: number;
+    // Damage a second just now, every source counted
+    dps: number;
     maxWeapons: number;
     maxPassives: number;
     weapons: SlotView[];

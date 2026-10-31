@@ -1081,6 +1081,9 @@ function Hud({
                     {hud.quests.length > 0 && (
                         <QuestTracker quests={hud.quests} open={questTracker} client={client} />
                     )}
+                    <div className="ui-dps">
+                        <span className="ui-dps-label">DPS</span> {formatPerSecond(hud.dps)}
+                    </div>
                 </div>
             </div>
             {hud.boss ? (

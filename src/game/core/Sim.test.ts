@@ -19,7 +19,7 @@ import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/po
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import { LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
+import { DPS_WINDOW_SECONDS, LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { TestLoc, makeGrid } from "./world/testGrid";
 import { endlessXpForLevel, runXpForLevel } from "./xp";
@@ -4276,5 +4276,184 @@ describe("extra slots from the shop", () => {
         expect(sim.passives.length).toBe(5);
         const offers = Array.from({ length: 50 }, () => sim["roll"]()).flat();
         expect(offers.some((choice) => choice.kind === "newPassive")).toBe(true);
+    });
+});
+
+describe("the damage meter", () => {
+    const windowTicks = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
+    // What the results screen would say the run has dealt
+    const totalDamage = (sim: Sim) =>
+        sim.getRunStats().sources.reduce((sum, row) => sum + row.damage, 0);
+
+    function quietSim(): Sim {
+        const sim = createSim();
+        sim.weapons = [];
+        sim.player.invulnerable = 1e6;
+        return sim;
+    }
+
+    function dummy(sim: Sim, hp = 1e9): Enemy {
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x + 4,
+            y: sim.player.y,
+        })!;
+        enemy.hp = enemy.maxHp = hp;
+        enemy.frozen = 1e6;
+        return enemy;
+    }
+
+    function hit(sim: Sim, enemy: Enemy, damage = 1000): void {
+        sim.damageEnemy(enemy, damage, 0, sim.player.x, sim.player.y);
+    }
+
+    function steps(sim: Sim, ticks: number): void {
+        for (let i = 0; i < ticks; i++) {
+            sim.step(0, 0);
+        }
+    }
+
+    test("is damage a second over the window, back to 0 once you stop hitting", () => {
+        const sim = quietSim();
+        const enemy = dummy(sim);
+        expect(sim.dps).toBe(0);
+        hit(sim, enemy);
+        const dealt = totalDamage(sim);
+        expect(dealt).toBeGreaterThan(0);
+        expect(sim.dps).toBe(dealt / DPS_WINDOW_SECONDS);
+        steps(sim, windowTicks - 1);
+        expect(sim.dps).toBe(dealt / DPS_WINDOW_SECONDS);
+        steps(sim, 1);
+        expect(sim.dps).toBe(0);
+    });
+
+    test("only counts the window, however long the run's been hitting", () => {
+        const sim = quietSim();
+        const enemy = dummy(sim);
+        const hits: number[] = [];
+        for (let second = 0; second < 3 * DPS_WINDOW_SECONDS; second++) {
+            const before = totalDamage(sim);
+            hit(sim, enemy);
+            hits.push(totalDamage(sim) - before);
+            const recent = hits.slice(-DPS_WINDOW_SECONDS).reduce((a, b) => a + b, 0);
+            expect(sim.dps).toBe(recent / DPS_WINDOW_SECONDS);
+            steps(sim, TICKS_PER_SECOND);
+        }
+    });
+
+    test("counts every source, the same as the results screen", () => {
+        const setups: [string, (sim: Sim, enemy: Enemy) => void][] = [
+            ["weapon:scimitar", (sim) => sim.addWeapon("scimitar")],
+            [
+                "weapon:toxic_blowpipe",
+                (sim, enemy) => {
+                    enemy.venom = 40;
+                    enemy.venomEnd = sim.tick + 1000;
+                    enemy.venomNext = sim.tick + 1;
+                    enemy.venomSource = "weapon:toxic_blowpipe";
+                },
+            ],
+            ["powerUp:cannon", (sim) => sim.usePowerUp(getPowerUp("cannon"))],
+            ["powerUp:thrall", (sim) => sim.usePowerUp(getPowerUp("thrall"))],
+            ["powerUp:giant_essence", (sim) => sim.usePowerUp(getPowerUp("giant_essence"))],
+            ["powerUp:evil_bob", (sim) => sim.usePowerUp(getPowerUp("evil_bob"))],
+            [
+                "item:black_chinchompa",
+                (sim) => {
+                    sim.stash("black_chinchompa");
+                    sim.useItem(0);
+                },
+            ],
+            [
+                "recoil",
+                (sim, enemy) => {
+                    sim.player.invulnerable = 0;
+                    sim.player.maxHp = sim.player.hp = 1e6;
+                    sim.equip("ring_of_recoil");
+                    enemy.frozen = 0;
+                    enemy.x = sim.player.x + 0.4;
+                },
+            ],
+        ];
+        for (const [source, setUp] of setups) {
+            const sim = quietSim();
+            const enemy = dummy(sim);
+            enemy.x = sim.player.x + 1.5;
+            setUp(sim, enemy);
+            runFor(sim, DPS_WINDOW_SECONDS / 2, "still");
+            expect(sim.damageBySource[source] ?? 0, source).toBeGreaterThan(0);
+            expect(sim.dps * DPS_WINDOW_SECONDS, source).toBe(totalDamage(sim));
+        }
+    });
+
+    test("agrees with the results screen all through a real run", () => {
+        const sim = createSim("warrior", 3);
+        sim.player.maxHp = sim.player.hp = 1e6;
+        const totals = new Map<number, number>();
+        let checked = 0;
+        for (let i = 0; i < 6000; i++) {
+            runFor(sim, 1 / TICKS_PER_SECOND);
+            totals.set(sim.tick, totalDamage(sim));
+            const earlier = totals.get(sim.tick - windowTicks);
+            if (earlier !== undefined) {
+                expect(sim.dps * DPS_WINDOW_SECONDS).toBe(totalDamage(sim) - earlier);
+                checked++;
+            }
+        }
+        expect(checked).toBeGreaterThan(5000);
+        expect(totalDamage(sim)).toBeGreaterThan(0);
+    });
+
+    test("counts overkill, and not what's blocked or already dead", () => {
+        const sim = quietSim();
+        const small = dummy(sim, 5);
+        hit(sim, small, 1e6);
+        expect(small.dead).toBe(true);
+        const dealt = totalDamage(sim);
+        // Like the results screen: the whole hit, not the 5 hitpoints it took
+        expect(dealt).toBeGreaterThan(5);
+        expect(sim.dps * DPS_WINDOW_SECONDS).toBe(dealt);
+
+        hit(sim, small, 1e6);
+        const shielded = dummy(sim);
+        shielded.shieldEnd = sim.tick + 1e6;
+        hit(sim, shielded, 1e6);
+        expect(totalDamage(sim)).toBe(dealt);
+        expect(sim.dps * DPS_WINDOW_SECONDS).toBe(dealt);
+    });
+
+    test("stands still while the run waits, then carries on where it was", () => {
+        const sim = quietSim();
+        const enemy = dummy(sim);
+        hit(sim, enemy);
+        steps(sim, windowTicks - 10);
+        const dps = sim.dps;
+        expect(dps).toBeGreaterThan(0);
+
+        sim.openCasket("easy");
+        expect(sim.state).toBe("chest");
+        steps(sim, 5 * windowTicks);
+        expect(sim.dps).toBe(dps);
+        sim.resolveChest("alch");
+
+        sim.state = "levelUp";
+        steps(sim, 5 * windowTicks);
+        expect(sim.dps).toBe(dps);
+        sim.state = "playing";
+
+        steps(sim, 9);
+        expect(sim.dps).toBe(dps);
+        steps(sim, 1);
+        expect(sim.dps).toBe(0);
+    });
+
+    test("comes out the same for the same seed", () => {
+        const run = () => {
+            const sim = createSim("warrior", 7);
+            runFor(sim, 30);
+            return sim.dps;
+        };
+        const dps = run();
+        expect(dps).toBeGreaterThan(0);
+        expect(run()).toBe(dps);
     });
 });
