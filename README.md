@@ -78,6 +78,9 @@ the browser's cache storage, so later loads are quick.
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or hides the quest tracker, **M** mutes and the
 mouse wheel zooms.
 
+On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
+use your items, and everything else is a tap.
+
 ### Tests and tools
 
 ```sh

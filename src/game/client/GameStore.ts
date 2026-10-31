@@ -112,6 +112,8 @@ export type HudView = {
     seconds: number;
     kills: number;
     coins: number;
+    // Damage a second just now, every source counted
+    dps: number;
     maxWeapons: number;
     maxPassives: number;
     weapons: SlotView[];
@@ -259,7 +261,7 @@ export class GameStore {
             toasts: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
-            display: { menuSpin: true, pauseOnBlur: true, questTracker: true },
+            display: { menuSpin: true, pauseOnBlur: true, questTracker: true, autoAlch: false },
         };
     }
 

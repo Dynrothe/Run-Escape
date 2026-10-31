@@ -50,8 +50,8 @@ export const CAPPED_STATS: ReadonlySet<StatKey> = new Set<StatKey>([
 // drop only has this chance to (a round's master casket always does), and no
 // more than this many lie on the ground at once
 export const LATE_CASKET_SECONDS = 15 * 60;
-export const LATE_CASKET_CHANCE = 0.05;
-export const LATE_CASKET_LIMIT = 10;
+export const LATE_CASKET_CHANCE = 0.25;
+export const LATE_CASKET_LIMIT = 25;
 
 // What a round multiplies a base value by
 export function roundScale(base: number, round: number): number {

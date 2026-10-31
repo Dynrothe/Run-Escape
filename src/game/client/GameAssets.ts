@@ -4,7 +4,7 @@ import {
     ActorBakeResult,
     BakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
-import { ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
 import {
     SpriteDataInput,
@@ -273,6 +273,9 @@ export class GameAssets {
     readonly sprites = new Map<number, HTMLCanvasElement>();
 
     private readonly players: PlayerBake[] = [];
+    // The current map's enemies
+    private enemyPages: ActorPage[] = [];
+    private readonly requestedEnemies = new Set<string>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -280,42 +283,52 @@ export class GameAssets {
         readonly actors: ActorRenderer,
     ) {}
 
+    // One enemy's models: its NPC, or one per outfit, and its shielded look
+    private static getEnemyBakes(enemy: EnemyDef): BakeRequest[] {
+        const seqIds = [
+            enemy.walkSeq,
+            enemy.idleSeq,
+            enemy.attackSeq,
+            enemy.deathSeq,
+            enemy.jumpSeq ?? -1,
+            enemy.shot?.seq ?? -1,
+            enemy.revives?.seq ?? -1,
+            enemy.blinks?.seq ?? -1,
+            ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
+        ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
+        if (enemy.outfits) {
+            return enemy.outfits.map(
+                (outfit, variant): BakeRequest => ({
+                    kind: "player",
+                    key: getEnemyModelKey(enemy, variant),
+                    appearance: getOutfitAppearance(outfit),
+                    seqIds,
+                }),
+            );
+        }
+        const requests: BakeRequest[] = [
+            { kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds },
+        ];
+        const shielded = enemy.shield?.look;
+        if (shielded) {
+            requests.push({
+                kind: "npc",
+                key: getShieldedModelKey(enemy),
+                npcId: shielded.npcId,
+                seqIds: [shielded.idleSeq],
+            });
+        }
+        return requests;
+    }
+
+    static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
+        return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // What every run needs. Enemies are baked for the map (loadEnemies): they
+    // take up most of the memory, and a map only uses a few of them.
     static getBaseRequests(): BakeRequest[] {
         const requests: BakeRequest[] = [];
-        for (const enemy of ENEMIES) {
-            const seqIds = [
-                enemy.walkSeq,
-                enemy.idleSeq,
-                enemy.attackSeq,
-                enemy.deathSeq,
-                enemy.jumpSeq ?? -1,
-                enemy.shot?.seq ?? -1,
-                enemy.revives?.seq ?? -1,
-                enemy.blinks?.seq ?? -1,
-                ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
-            ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
-            if (enemy.outfits) {
-                enemy.outfits.forEach((outfit, variant) => {
-                    requests.push({
-                        kind: "player",
-                        key: getEnemyModelKey(enemy, variant),
-                        appearance: getOutfitAppearance(outfit),
-                        seqIds,
-                    });
-                });
-                continue;
-            }
-            requests.push({ kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds });
-            const shielded = enemy.shield?.look;
-            if (shielded) {
-                requests.push({
-                    kind: "npc",
-                    key: getShieldedModelKey(enemy),
-                    npcId: shielded.npcId,
-                    seqIds: [shielded.idleSeq],
-                });
-            }
-        }
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
         }
@@ -401,33 +414,93 @@ export class GameAssets {
         return models;
     }
 
-    // Splits the bake over the workers, one page each
     async loadBase(onProgress?: (done: number, total: number) => void): Promise<void> {
         const requests = GameAssets.getBaseRequests();
+        await this.bakeOverWorkers(requests, onProgress);
+    }
+
+    hasEnemies(enemies: EnemyDef[]): boolean {
+        return GameAssets.getEnemyRequests(enemies).every((r) => this.models.has(r.key));
+    }
+
+    // Bakes the enemies a run needs in place of the last run's. A map played
+    // again has them already.
+    async loadEnemies(
+        enemies: EnemyDef[],
+        onProgress?: (done: number, total: number) => void,
+    ): Promise<void> {
+        if (this.hasEnemies(enemies)) {
+            return;
+        }
+        const requests = GameAssets.getEnemyRequests(enemies);
+        // Freed first, so the two lots aren't in memory together
+        this.dropEnemyPages();
+        this.enemyPages = await this.bakeOverWorkers(requests, onProgress);
+    }
+
+    // A model that isn't baked is baked now, for a run with an enemy the map's
+    // list doesn't have (the console's spawnBoss). It shows up when it's ready.
+    requestEnemy(enemy: EnemyDef): void {
+        if (this.requestedEnemies.has(enemy.id)) {
+            return;
+        }
+        this.requestedEnemies.add(enemy.id);
+        console.warn(`${enemy.id} isn't baked for this map`);
+        this.bakeOverWorkers(GameAssets.getEnemyRequests([enemy]))
+            .then((pages) => this.enemyPages.push(...pages))
+            .catch(console.error);
+    }
+
+    private dropEnemyPages(): void {
+        for (const page of this.enemyPages) {
+            this.actors.removePage(page);
+        }
+        for (const [key, model] of this.models) {
+            if (this.enemyPages.includes(model.page)) {
+                this.models.delete(key);
+            }
+        }
+        this.enemyPages = [];
+        this.requestedEnemies.clear();
+    }
+
+    // Splits a bake over the workers, one page each
+    private async bakeOverWorkers(
+        requests: BakeRequest[],
+        onProgress?: (done: number, total: number) => void,
+    ): Promise<ActorPage[]> {
         const chunks: BakeRequest[][] = [];
         const chunkCount = this.workerPool.size;
         for (let i = 0; i < chunkCount; i++) {
             chunks.push([]);
         }
         requests.forEach((request, i) => chunks[i % chunkCount].push(request));
+        const filled = chunks.filter((chunk) => chunk.length > 0);
         let done = 0;
         const started = performance.now();
         const bakes = await Promise.all(
-            chunks.map(async (chunk) => {
+            filled.map(async (chunk) => {
                 const bake = await this.bake(chunk);
-                onProgress?.(++done, chunks.length);
+                onProgress?.(++done, filled.length);
                 return bake;
             }),
         );
         let bytes = 0;
+        const pages: ActorPage[] = [];
         for (const bake of bakes) {
             bytes += bake.vertices.byteLength + bake.indices.byteLength;
-            this.addBake(bake);
+            const models = this.addBake(bake);
+            for (const model of models.values()) {
+                if (!pages.includes(model.page)) {
+                    pages.push(model.page);
+                }
+            }
         }
         console.log(
             `baked ${requests.length} actor models in ${(performance.now() - started).toFixed(0)}ms, ` +
                 `${(bytes / 1024 / 1024).toFixed(1)}MB`,
         );
+        return pages;
     }
 
     async loadSprites(spriteIds: number[]): Promise<void> {

@@ -5,11 +5,13 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import massacre from "../../media/music/massacre.ogg";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
+import { isCoarsePointer } from "../../util/DeviceUtil";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
+import { getMapEnemies } from "../content/mapEnemies";
 import { FUN_MAPS, MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { getPowerUp } from "../content/powerups";
@@ -72,6 +74,8 @@ const MAX_TICKS_PER_FRAME = 10;
 // A co-op guest that's fallen well behind the host catches up this fast
 const MAX_CATCH_UP_TICKS = 30;
 const HUD_INTERVAL_MS = 100;
+// The damage meter's number holds this long, so it can be read
+const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
@@ -90,6 +94,10 @@ const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
 const RUN_PITCH = -400;
 const RUN_DISTANCE = 18;
+// Closer on a phone held sideways: it shows as much to each side as a desktop
+// window does, and the player stays big enough to see
+const PHONE_RUN_DISTANCE = 15;
+const PHONE_MAX_HEIGHT = 520;
 
 // The level up's rewards, as the UI shows them
 // What a new endless round brings, for its toast
@@ -261,8 +269,13 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    private shownDps = 0;
+    private shownDpsTick = 0;
     // Each hero's look, as last baked
     private appearanceVersions: number[] = [];
+    // The casket Auto alch last sent off (a co-op one takes a frame to come
+    // back, and shouldn't go twice)
+    private autoAlchedUid = -1;
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
@@ -600,6 +613,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ pauseOnBlur: !this.display.pauseOnBlur });
     }
 
+    toggleAutoAlch(): void {
+        this.setDisplay({ autoAlch: !this.display.autoAlch });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -666,19 +683,23 @@ export class GameClient implements GameFrameHandler {
         return grid;
     }
 
-    // Loads a map's collision for a run, with the loading screen if it takes
-    // a moment. False if it couldn't.
+    // Loads a map's collision and enemies for a run, with the loading screen if
+    // it takes a moment. False if it couldn't.
     private async travelTo(mapId: string, back: Screen): Promise<boolean> {
         const map = getMap(mapId);
-        if (!this.grids.has(mapId)) {
+        const enemies = getMapEnemies(map);
+        if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
                 loadingText: `Travelling to ${map.name}`,
-                loadingProgress: 50,
+                loadingProgress: 25,
             });
         }
         try {
             this.grid = await this.loadGrid(mapId);
+            await this.assets.loadEnemies(enemies, (done, total) => {
+                this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
+            });
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -794,13 +815,18 @@ export class GameClient implements GameFrameHandler {
         this.runRecorded = false;
         this.tasksAnnounced.clear();
         this.accumulator = 0;
+        this.shownDps = 0;
+        this.shownDpsTick = 0;
         this.appearanceVersions = [];
         this.decisionKey = "";
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
         this.cameraRig.pitch = RUN_PITCH;
-        this.cameraRig.distance = RUN_DISTANCE;
+        this.cameraRig.distance =
+            isCoarsePointer && window.innerHeight <= PHONE_MAX_HEIGHT
+                ? PHONE_RUN_DISTANCE
+                : RUN_DISTANCE;
         this.cameraRig.yaw = 0;
         this.store.set({
             screen: "run",
@@ -1184,10 +1210,11 @@ export class GameClient implements GameFrameHandler {
                 this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
-                if (!sim.runOver) {
+                this.syncOverlay();
+                // Auto alch can have the run going again, with no time lost
+                if (!sim.runOver && this.store.getSnapshot().overlay !== "none") {
                     this.accumulator = 0;
                 }
-                this.syncOverlay();
             }
         }
 
@@ -1404,6 +1431,14 @@ export class GameClient implements GameFrameHandler {
                 case "heroDown":
                     this.store.toast("You're down! Watch the rest of your party fight on.", 5000);
                     break;
+                case "alch":
+                    // There was no casket screen to show what it was
+                    if (this.display.autoAlch) {
+                        this.store.toast(
+                            `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                        );
+                    }
+                    break;
             }
         }
     }
@@ -1442,6 +1477,14 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
+        } else if (sim.state === "chest" && sim.chest && this.display.autoAlch) {
+            // As if the High alch button had been clicked; this comes back here
+            // for whatever's next. Co-op's comes back a frame later, so once
+            // for each casket.
+            if (sim.chest.uid !== this.autoAlchedUid) {
+                this.autoAlchedUid = sim.chest.uid;
+                this.resolveChest("alch");
+            }
         } else if (sim.state === "chest" && sim.chest) {
             const chest = getChestView(sim);
             const shown = this.store.getSnapshot();
@@ -1484,6 +1527,10 @@ export class GameClient implements GameFrameHandler {
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
         }
+        if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
+            this.shownDps = sim.dps;
+            this.shownDpsTick = sim.tick;
+        }
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
@@ -1499,6 +1546,7 @@ export class GameClient implements GameFrameHandler {
             seconds: sim.seconds,
             kills: sim.kills,
             coins: sim.coins,
+            dps: this.shownDps,
             maxWeapons: sim.maxWeapons,
             maxPassives: sim.maxPassives,
             weapons: sim.weapons.map((w) => {

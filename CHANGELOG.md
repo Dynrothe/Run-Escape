@@ -12,6 +12,31 @@ the version in the corner).
   adventurer and progress, levels are shared with a pick each, and the run goes on while anyone's
   still standing. Winning on a map you haven't reached yet in a friend's party opens it for you.
 
+## 0.19.0 - 2026-10-31
+
+### Added
+
+- Early support for phones and tablets: drag anywhere to move, and tap on-screen buttons to pause
+  and use items.
+- Every screen now fits a phone held sideways, with a nudge to turn it if it's held upright.
+- A DPS meter under the quests shows how much damage you've been dealing, from everything, over
+  the last 8 seconds.
+- New setting, Auto alch: high alch every chest as you open it, with no chest screen and no pause.
+
+### Changed
+
+- Past 15 minutes in an endless run, chests are five times as likely to drop (25%, up from 5%), and 25
+  can lie on the ground at once, up from 10.
+- The game draws far less of the map on busy maps: only what's on screen, not everything nearby.
+- The game starts much faster and uses far less memory. Each map's monsters now load when you set
+  off for it, so the first run on a map takes a moment longer to start.
+
+### Fixed
+
+- Sound starts properly from the first tap on touch screens.
+- Losing the graphics, which phones can do to a game in the background, now says so instead of
+  leaving a black screen.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added

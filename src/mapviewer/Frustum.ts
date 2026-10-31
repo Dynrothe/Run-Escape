@@ -73,6 +73,36 @@ export class Frustum {
         setComponents(this.planes[5], me3 + me2, me7 + me6, me11 + me10, me15 + me14);
     }
 
+    // Like intersectsBox, for a box stored at boxes[offset...]: min x, y, z, then
+    // max x, y, z
+    intersectsBoxAt(boxes: Float32Array, offset: number): boolean {
+        const planes = this.planes;
+        for (let i = 0; i < 6; i++) {
+            const plane = planes[i];
+            const a = plane[0];
+            const b = plane[1];
+            const c = plane[2];
+            const x = boxes[a > 0 ? offset + 3 : offset];
+            const y = boxes[b > 0 ? offset + 4 : offset + 1];
+            const z = boxes[c > 0 ? offset + 5 : offset + 2];
+            if (a * x + b * y + c * z + plane[3] < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    intersectsSphere(x: number, y: number, z: number, radius: number): boolean {
+        const planes = this.planes;
+        for (let i = 0; i < 6; i++) {
+            const plane = planes[i];
+            if (plane[0] * x + plane[1] * y + plane[2] * z + plane[3] < -radius) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     intersectsBox(box: number[][]) {
         for (let i = 0; i < 6; i++) {
             const plane = this.planes[i];

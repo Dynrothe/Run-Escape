@@ -8,11 +8,16 @@ import PicoGL, {
     VertexBuffer,
 } from "picogl";
 
+import { Frustum } from "../../Frustum";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
 const TEXELS_PER_INSTANCE = 2;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
+
+// Tiles added to an actor's reach before it's culled, for the depth nudge in its
+// shader and rounding
+const CULL_MARGIN = 0.25;
 
 export const NO_TINT = 0xffffff;
 
@@ -68,6 +73,8 @@ export class ActorModel {
         // Model units (1/128 tile)
         readonly height: number,
         readonly radius: number,
+        // Furthest any frame gets from its origin
+        readonly reach: number,
         readonly anims: ActorAnim[],
     ) {
         anims.forEach((anim, i) => {
@@ -95,6 +102,8 @@ export type ActorDrawOptions = {
 
 class InstanceList {
     count = 0;
+    // Elements to draw in the alpha pass, over all of them
+    alphaElements = 0;
     data = new Float32Array(64 * FLOATS_PER_INSTANCE);
     opaqueOffsets = new Int32Array(64);
     opaqueCounts = new Int32Array(64);
@@ -105,6 +114,7 @@ class InstanceList {
 
     reset(): void {
         this.count = 0;
+        this.alphaElements = 0;
     }
 
     push(
@@ -128,6 +138,7 @@ class InstanceList {
         this.opaqueCounts[i] = ranges[r + 1];
         this.alphaOffsets[i] = ranges[r + 2];
         this.alphaCounts[i] = ranges[r + 3];
+        this.alphaElements += ranges[r + 3];
 
         const o = i * FLOATS_PER_INSTANCE;
         const data = this.data;
@@ -201,6 +212,8 @@ export class ActorRenderer {
     dataTexture: Texture;
     dataArray: Float32Array;
 
+    private frustum?: Frustum;
+
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
 
@@ -269,7 +282,10 @@ export class ActorRenderer {
                 (anim: BakedAnim) =>
                     new ActorAnim(anim.seqId, anim.ranges, anim.frameLengths, anim.looping),
             );
-            models.set(set.key, new ActorModel(page, set.key, set.height, set.radius, anims));
+            models.set(
+                set.key,
+                new ActorModel(page, set.key, set.height, set.radius, set.reach, anims),
+            );
         }
         return models;
     }
@@ -282,7 +298,10 @@ export class ActorRenderer {
         }
     }
 
-    beginFrame(): void {
+    // Actors outside the frustum aren't drawn. Models are tested as a sphere,
+    // which covers every frame at any yaw.
+    beginFrame(frustum?: Frustum): void {
+        this.frustum = frustum;
         for (const page of this.pages) {
             page.instances.reset();
             page.silhouettes.reset();
@@ -303,6 +322,13 @@ export class ActorRenderer {
         options?: ActorDrawOptions,
     ): void {
         const scale = options?.scale ?? 1;
+        if (this.frustum) {
+            const biggest = scale * Math.max(options?.outline ?? 1, 1);
+            const reach = (model.reach * biggest) / 128 + CULL_MARGIN;
+            if (!this.frustum.intersectsSphere(x, y, z, reach)) {
+                return;
+            }
+        }
         const flash = options?.flash ?? 0;
         const tint = options?.tint ?? NO_TINT;
         const alpha = options?.alpha ?? 1;
@@ -402,7 +428,9 @@ export class ActorRenderer {
     renderAlpha(): void {
         for (const page of this.pages) {
             const list = page.instances;
-            this.drawList(page.drawCall, list, list.alphaOffsets, list.alphaCounts);
+            if (list.alphaElements > 0) {
+                this.drawList(page.drawCall, list, list.alphaOffsets, list.alphaCounts);
+            }
         }
     }
 

@@ -5,6 +5,9 @@ version and how to run it.
 
 - **WASD** or the arrow keys to move. Weapons fire on their own. **1-4** use your utility items.
   **Esc** pauses. **Q** shows or hides the quest tracker. The mouse wheel zooms.
+- On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
+  screen to pause and use items, with the thumb still on the stick if you like. Phones play
+  sideways, with gear and quests in the pause menu.
 - Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
@@ -170,9 +173,12 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
-  would drop only has a 5% chance to, and only 10 can lie on the ground at once. A round's master
+  would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
   would've been a chest".
+- **Auto alch** (off by default, in Settings and the pause menu) high alchs every casket as it's
+  opened, gear and rare finds included, with a line saying what it was and no casket screen. It's
+  the same as clicking High alch: alching a piece of a set you've started stops that set too.
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
@@ -380,6 +386,9 @@ version and how to run it.
   run that finishes it ends; one finished mid-run rings the bell. The list is coloured like the
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got.
+- **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
+  8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
+  for a blocked one).
 - The **UI** grows with the window: it's laid out for one about 720 pixels tall, and drawn up
   to twice the size on bigger ones (about 1.35x in a 1080p browser window).
 - **Sound**: every enemy, spell and pickup plays its OSRS sound effect, synthesized from the

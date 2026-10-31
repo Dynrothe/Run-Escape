@@ -8,6 +8,7 @@ import { WEBGL } from "../mapviewer/MapViewerRenderers";
 import { RenderDataWorkerPool } from "../mapviewer/worker/RenderDataWorkerPool";
 import { DownloadProgress } from "../rs/cache/CacheFiles";
 import { formatBytes } from "../util/BytesUtil";
+import { isCoarsePointer } from "../util/DeviceUtil";
 import "./GameApp.css";
 import { GAME_CACHE_NAME, deleteOtherGameCaches, findGameCache } from "./cache";
 import { GameClient } from "./client/GameClient";
@@ -24,7 +25,8 @@ WebFont.load({
     },
 });
 
-const workerPool = RenderDataWorkerPool.create(4);
+// Each worker has its own heap, and a phone has little memory to spare for them
+const workerPool = RenderDataWorkerPool.create(isCoarsePointer ? 2 : 4);
 
 if (import.meta.hot) {
     // The renderer, workers and a run in progress can't be swapped out live, so
@@ -140,6 +142,9 @@ export function GameApp(): JSX.Element {
                 setClient(gameClient);
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
+                    import("./render/FrameProbe").then(({ FrameProbe }) => {
+                        (window as any).frameProbe = new FrameProbe(loaded.renderer, gameClient);
+                    });
                 }
             })
             .catch((e) => {
@@ -151,6 +156,16 @@ export function GameApp(): JSX.Element {
             created?.dispose();
         };
     }, [loaded, store, saveStore]);
+
+    // A phone can take the GPU back from a game it's put away. There's no getting
+    // that back without loading everything again.
+    useEffect(() => {
+        const canvas = loaded?.renderer.canvas;
+        const onLost = () =>
+            setErrorMessage("The game lost its graphics. Reload the page to carry on.");
+        canvas?.addEventListener("webglcontextlost", onLost);
+        return () => canvas?.removeEventListener("webglcontextlost", onLost);
+    }, [loaded]);
 
     return (
         <div className="game-root">
