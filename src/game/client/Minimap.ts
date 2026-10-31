@@ -21,6 +21,8 @@ const ENEMY_COLOR = "#ffff00";
 const ELITE_COLOR = "#ffa020";
 const BOSS_COLOR = "#ff3030";
 const PLAYER_COLOR = "#ffffff";
+// Co-op teammates, green like friends on the client's minimap
+const TEAMMATE_COLOR = "#00ff80";
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
@@ -159,7 +161,8 @@ export class Minimap {
         }
     }
 
-    draw(canvas: HTMLCanvasElement, sim: Sim, alpha: number): void {
+    // Centred on this hero (the camera's)
+    draw(canvas: HTMLCanvasElement, sim: Sim, alpha: number, viewHero = sim.focus): void {
         this.loadImages();
         // Its size on screen, after the UI's zoom (clientWidth is before it)
         const size = Math.round(canvas.getBoundingClientRect().width * pixelRatio);
@@ -175,7 +178,7 @@ export class Minimap {
         const ctx = canvas.getContext("2d")!;
         const half = size / 2;
         const scale = TILE_PIXELS * pixel;
-        const player = sim.player;
+        const player = sim.heroes[viewHero]?.player ?? sim.player;
         const px = lerp(player.prevX, player.x, alpha);
         const py = lerp(player.prevY, player.y, alpha);
         // World tiles to minimap pixels
@@ -239,6 +242,19 @@ export class Minimap {
                 marker + outline * 2,
             );
             drawDot(ctx, x, y, marker, outline, BOSS_COLOR);
+        }
+        for (const hero of sim.heroes) {
+            if (hero.index === viewHero || hero.left) {
+                continue;
+            }
+            const marker = Math.round(dot * 1.4);
+            const [x, y] = onRim(
+                half,
+                toX(lerp(hero.player.prevX, hero.player.x, alpha)),
+                toY(lerp(hero.player.prevY, hero.player.y, alpha)),
+                marker + outline * 2,
+            );
+            drawDot(ctx, x, y, marker, outline, TEAMMATE_COLOR);
         }
         drawDot(ctx, half, half, Math.round(dot * 1.4), outline, PLAYER_COLOR);
     }

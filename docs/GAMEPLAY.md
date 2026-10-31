@@ -346,6 +346,28 @@ version and how to run it.
   rarity of what it becomes, and an upgrade into a piece still locked behind a map task waits
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
+- **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
+  (friends join with its five-letter code or the invite link) or open to anyone browsing the
+  rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
+  Armoury and unlocked items; the host picks the map and endless, and starts once everyone (the
+  host too) is ready, which can be a party of one. The host can open or close the room, kick a
+  player and disband it. A pasted invite link in the code box leaves just its code.
+    - A win counts for everyone, and opens the map it was on for a player who hadn't got that far
+      (along with the next), but not the maps before it.
+    - The run's **level is shared**: every level up gives each player their own three choices, and
+      the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
+      shared too, and everyone banks the run's coins.
+    - The crowd is **bigger and tougher** for each player past the first (more of them about at
+      once, and more hitpoints; bosses more again).
+    - Enemies go for whoever's **nearest**, and pickups fly to whoever's nearest.
+    - A player who falls with no ring of life left (it saves you as it does on your own) is
+      **down** and out for the rest of the run, watching a teammate who's still up. The run goes
+      on while anyone's standing, without waiting on the downed for level ups, and ends when
+      everyone's down.
+    - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
+      leaving ends it for everyone.
+    - Teammates show with their names in green, an arrow at the edge of the screen when they're out
+      of view, green dots on the minimap and their hitpoints down the left of the screen.
 - **Quests** (on the title screen) pay banked coins: each is named for an OSRS quest and asks
   for kills (Goblin Diplomacy, 300 goblins), a boss (Vampyre Slayer, Count Draynor; Desert
   Treasure I, Fareed, Dessous and Damis) or caskets opened (Pirate's Treasure). They count over

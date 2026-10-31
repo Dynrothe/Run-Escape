@@ -1,0 +1,218 @@
+import { Server, createServer } from "node:http";
+import { AddressInfo } from "node:net";
+
+import { RELAY_PATH, createRelay } from "./coop-relay.mjs";
+
+type Message = { t: string; [key: string]: any };
+
+// A player's connection, with what's come in waiting to be taken
+class TestClient {
+    readonly messages: Message[] = [];
+    private waiters: { type: string; resolve: (m: Message) => void }[] = [];
+    readonly socket: WebSocket;
+
+    constructor(url: string) {
+        this.socket = new WebSocket(url);
+        this.socket.onmessage = (event) => {
+            const message = JSON.parse(String(event.data)) as Message;
+            const waiter = this.waiters.find((w) => w.type === message.t);
+            if (waiter) {
+                this.waiters = this.waiters.filter((w) => w !== waiter);
+                waiter.resolve(message);
+            } else {
+                this.messages.push(message);
+            }
+        };
+    }
+
+    send(message: Message): void {
+        this.socket.send(JSON.stringify(message));
+    }
+
+    // The next message of this type (one that came already, or the next in)
+    next(type: string): Promise<Message> {
+        const index = this.messages.findIndex((m) => m.t === type);
+        if (index !== -1) {
+            return Promise.resolve(this.messages.splice(index, 1)[0]);
+        }
+        return new Promise((resolve) => this.waiters.push({ type, resolve }));
+    }
+
+    // The first room update that's like this, dropping the ones before it
+    async roomWhere(test: (room: any) => boolean): Promise<Message> {
+        for (;;) {
+            const update = await this.next("room");
+            if (test(update.room)) {
+                return update;
+            }
+        }
+    }
+
+    // The latest room update, after dropping older ones
+    async room(): Promise<Message> {
+        let room = await this.next("room");
+        for (;;) {
+            const index = this.messages.findIndex((m) => m.t === "room");
+            if (index === -1) {
+                return room;
+            }
+            room = this.messages.splice(index, 1)[0];
+        }
+    }
+}
+
+describe("co-op relay", () => {
+    let server: Server;
+    let relay: ReturnType<typeof createRelay>;
+    let url: string;
+    const clients: TestClient[] = [];
+
+    beforeEach(async () => {
+        relay = createRelay();
+        server = createServer((req, res) => {
+            if (!relay.handleRequest(req, res)) {
+                res.writeHead(404);
+                res.end();
+            }
+        });
+        relay.attach(server);
+        await new Promise<void>((resolve) => server.listen(0, resolve));
+        url = `ws://localhost:${(server.address() as AddressInfo).port}${RELAY_PATH}`;
+    });
+
+    afterEach(async () => {
+        for (const client of clients.splice(0)) {
+            client.socket.close();
+        }
+        relay.close();
+        await new Promise((resolve) => server.close(resolve));
+    });
+
+    async function connect(): Promise<TestClient> {
+        const client = new TestClient(url);
+        clients.push(client);
+        await client.next("welcome");
+        return client;
+    }
+
+    // A host with a room, and guests in it
+    async function party(guests: number, open = false) {
+        const host = await connect();
+        host.send({ t: "create", open, me: { name: "Host", characterId: "warrior" } });
+        const { room } = await host.room();
+        const others: TestClient[] = [];
+        for (let i = 0; i < guests; i++) {
+            const guest = await connect();
+            guest.send({ t: "join", code: room.code, me: { name: `Guest ${i + 1}` } });
+            await guest.room();
+            others.push(guest);
+        }
+        return { host, guests: others, code: room.code as string };
+    }
+
+    it("puts players in a room by its code", async () => {
+        const { host, code } = await party(1);
+        const { room, you } = await host.room();
+        expect(room.code).toBe(code);
+        expect(room.members.map((m: { name: string }) => m.name)).toEqual(["Host", "Guest 1"]);
+        expect(room.hostId).toBe(you);
+    });
+
+    it("lists open rooms and not invite-only ones", async () => {
+        const open = await party(0, true);
+        await party(0, false);
+        const browser = await connect();
+        browser.send({ t: "list" });
+        const { rooms } = await browser.next("rooms");
+        expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
+        expect(rooms[0].host).toBe("Host");
+    });
+
+    it("says when a code's wrong or a room's full", async () => {
+        const client = await connect();
+        client.send({ t: "join", code: "ZZZZZ" });
+        expect((await client.next("error")).message).toMatch(/no room/);
+        const { code } = await party(3);
+        client.send({ t: "join", code });
+        expect((await client.next("error")).message).toMatch(/full/);
+    });
+
+    it("lets the host kick someone and disband the room", async () => {
+        const { host, guests } = await party(2);
+        const { room } = await host.room();
+        host.send({ t: "kick", id: room.members[1].id });
+        expect((await guests[0].next("gone")).reason).toBe("kicked");
+        await host.roomWhere((r) => r.members.length === 2);
+        host.send({ t: "disband" });
+        expect((await guests[1].next("gone")).reason).toBe("disbanded");
+        expect((await host.next("gone")).reason).toBe("disbanded");
+        expect(relay.roomCount).toBe(0);
+    });
+
+    it("only lets the host change the room", async () => {
+        const { host, guests } = await party(1);
+        guests[0].send({ t: "settings", mapId: "barrows" });
+        guests[0].send({ t: "kick", id: "p1" });
+        host.send({ t: "settings", mapId: "draynor", open: true });
+        const { room } = await guests[0].roomWhere((r) => r.mapId === "draynor");
+        expect(room.mapId).toBe("draynor");
+        expect(room.open).toBe(true);
+        expect(room.members).toHaveLength(2);
+    });
+
+    it("hands the room on when the host leaves the lobby", async () => {
+        const { host, guests } = await party(2);
+        host.send({ t: "leave" });
+        await host.next("gone");
+        const { room } = await guests[0].roomWhere((r) => r.members.length === 2);
+        expect(room.hostId).toBe(room.members[0].id);
+    });
+
+    it("keeps players' readiness and passes the game between host and guests", async () => {
+        const { host, guests } = await party(1);
+        guests[0].send({ t: "me", ready: true, characterId: "wizard" });
+        const { room } = await host.roomWhere((r) => r.members[1].ready);
+        expect(room.members[1]).toMatchObject({ ready: true, characterId: "wizard" });
+        host.send({ t: "start", game: { seed: 5 } });
+        expect((await guests[0].next("start")).game).toEqual({ seed: 5 });
+        guests[0].send({ t: "up", d: { m: [1, 0] } });
+        const up = await host.next("up");
+        expect(up.d).toEqual({ m: [1, 0] });
+        expect(up.from).toBe(room.members[1].id);
+        host.send({ t: "down", d: { n: 3 } });
+        expect((await guests[0].next("down")).d).toEqual({ n: 3 });
+    });
+
+    it("ends the run for everyone if the host goes mid-run", async () => {
+        const { host, guests } = await party(2);
+        host.send({ t: "start", game: {} });
+        await guests[0].next("start");
+        host.socket.close();
+        expect((await guests[0].next("gone")).reason).toBe("hostLeft");
+        expect((await guests[1].next("gone")).reason).toBe("hostLeft");
+    });
+
+    it("tells the host when a guest goes mid-run", async () => {
+        const { host, guests } = await party(2);
+        host.send({ t: "start", game: {} });
+        await guests[1].next("start");
+        const { room } = await host.room();
+        guests[0].socket.close();
+        expect((await host.next("left")).id).toBe(room.members[1].id);
+    });
+
+    it("takes big messages in one piece", async () => {
+        const { host, guests } = await party(1);
+        const loadout = { items: "x".repeat(70_000) };
+        host.send({ t: "start", game: { loadout } });
+        expect((await guests[0].next("start")).game.loadout.items).toHaveLength(70_000);
+    });
+
+    it("says it's there to a plain request, for the game to offer co-op", async () => {
+        await party(1);
+        const response = await fetch(url.replace("ws:", "http:"));
+        expect(response.headers.get("access-control-allow-origin")).toBe("*");
+        expect(await response.json()).toEqual({ coop: true, players: 2, rooms: 1 });
+        expect((await fetch(url.replace("ws:", "http:") + "/nope")).status).toBe(404);
+    });
+});

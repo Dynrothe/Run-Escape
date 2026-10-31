@@ -5,6 +5,13 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Co-op: play a run with up to three friends. Make a room that's invite only (by its code or an
+  invite link) or open to anyone, ready up, and the host picks the map. Everyone brings their own
+  adventurer and progress, levels are shared with a pick each, and the run goes on while anyone's
+  still standing. Winning on a map you haven't reached yet in a friend's party opens it for you.
+
 ## 0.18.0 - 2026-10-30
 
 ### Added

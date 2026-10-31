@@ -56,6 +56,43 @@ Header set Cross-Origin-Embedder-Policy "require-corp"
 It needs HTTPS (or localhost) for the browser's cache storage, and a folder's address with its
 trailing slash (`/game/`, not `/game`), or the relative paths point at the parent folder.
 
+### Co-op relay
+
+The simplest way to host everything: `npm run serve` (`node server/serve.mjs`, no packages) serves
+`dist/` with the headers above and runs the co-op relay in the same process, on `PORT` (8080). Run
+`npm run build` first; with no slim cache in `dist/caches` it serves the full one from `caches/`,
+so it also works for trying a build locally (http://localhost:8080).
+`COOP=off` runs it without the relay, and the game hides co-op: it only offers it when a relay
+answers. Put something that does HTTPS in front of it, like Caddy
+(`caddy reverse-proxy --from game.example.com --to localhost:8080`).
+
+The relay is light: in a test, 400 players (100 rooms of four) took 10-30% of one core and about
+60 MB, at about 15 KB/s a room. A small VPS runs it easily; serving the game itself (about 26 MB
+for each new player) is the bigger cost.
+
+Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
+packages, so copy the one file to the server and run it.
+
+```
+PORT=8787 node server/coop-relay.mjs
+```
+
+The game looks for it at `coop` beside the page (`wss://example.com/game/coop` for a game at
+`/game/`), so proxy that path to it. With nginx:
+
+```
+location /game/coop {
+    proxy_pass http://127.0.0.1:8787/coop;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 120s;
+}
+```
+
+Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
+else. `npm start` and `npm run preview` run a relay of their own at `/coop`.
+
 ## Code
 
 ```
@@ -70,6 +107,8 @@ src/game/
                       levels
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
                       FlowField (Dijkstra from the player, how hundreds of enemies find a way)
+    lockstep.ts       co-op's frame events, applying them, and the check that copies agree
+    fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
@@ -77,8 +116,12 @@ src/game/
                       quests (and the kills and caskets they count)
   client/   GameClient (run flow, camera, input), GameView (3D actors + 2D overlay),
             GameAssets (what gets baked), GameStore (state for the React UI)
+    coop/     CoopLobby (the relay connection and the room), CoopRun (a run's lockstep, host or
+              guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
-  ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon
+  ui/       React screens and HUD, ChestModal (the casket opening), ItemIcon, CoopScreen (the
+            rooms, the lobby, the party in a run)
+server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per pass
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one
@@ -124,10 +167,45 @@ scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 
 Tests: `npm test`.
 
-URL flags: `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
+URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed. F3
 shows collision and stats.
+
+### Co-op
+
+Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from the same seed and
+everyone's loadout (`GameStart`), and only what the players do goes over the network. The host
+numbers the ticks (frames) and sends, every frame or two, what happened at each: who changed what
+they're pressing (as whole numbers, so every copy moves the same) and who chose what. Guests step
+only as far as the host has sent, sending their own input to the host to go in a frame. Nothing
+waits on a slow guest; they see the run a little behind. Every 50 frames the host sends a hash of
+its run, and a guest whose run differs says so. The host waits for everyone's map to load before
+the first frame, and a host whose tab is hidden keeps stepping off a worker's timer.
+
+For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
+trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
+runs are as they were), and in co-op versions built from `+ - * /` and `sqrt`, which every engine
+rounds the same. Use `fm.sin`, `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos` and `fm.pow` in
+`core/`, never `Math`'s (`Math.sqrt`, `floor`, `round` and the like are fine).
+
+The sim's player state is split into `Hero`s, one a player. `sim.player`, `sim.weapons`,
+`sim.stats` and the rest are the current hero's: whichever one the sim is working on (an enemy's
+target, a projectile's owner, whoever's picking something up), and between ticks the one this
+browser plays (`focus`). Something that belongs to a hero (a projectile, a thrall, burning ground,
+venom) remembers whose with `hero`, and the sim works as them when it acts. Co-op actions go
+through `sim.as(hero, ...)`. Events that are a hero's own (a hit taken, a pickup, a casket) carry
+`hero` in co-op, so the client shows its own and leaves the rest. A solo run has one hero and
+plays exactly as before.
+
+`server/coop-relay.mjs` holds the rooms (code, open or invite only, host, map, members and their
+ready state and loadout) and forwards `up` messages from guests to the host and `down` messages
+from the host to everyone else. The host leaving a run ends it for everyone; in the lobby the
+room goes to the next player. How much bigger the crowd gets for each player is in
+`content/coop.ts`. The balance bot plays solo runs only.
+
+To try it locally, open the game in two windows (one private, for a save of its own), make a room
+in one and join it from the other.
 
 ### Notice
 

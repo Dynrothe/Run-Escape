@@ -17,27 +17,30 @@ go stale. Add anything that cost you time to work out.
 
 ## Where things are
 
-| Looking for                                           | Go to                                   |
-| ----------------------------------------------------- | --------------------------------------- |
-| How the code is laid out, scripts, URL flags, hosting | `docs/DEVELOPMENT.md`                   |
-| What's in the game, map by map                        | `docs/GAMEPLAY.md`                      |
-| Getting it running, controls, cache version           | `README.md`                             |
-| What changed in each version                          | `CHANGELOG.md`                          |
-| How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`       |
-| Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                     |
-| The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                  |
-| Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
-| Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
-| Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
-| Save data and migrations                              | `src/game/core/save.ts`                 |
-| Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
-| 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
-| React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
-| Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
-| How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
-| Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
-| Balance bot                                           | `scripts/game/simulate-run.ts`          |
-| Finding ids in the cache                              | `scripts/cache/`                        |
+| Looking for                                           | Go to                                    |
+| ----------------------------------------------------- | ---------------------------------------- |
+| How the code is laid out, scripts, URL flags, hosting | `docs/DEVELOPMENT.md`                    |
+| What's in the game, map by map                        | `docs/GAMEPLAY.md`                       |
+| Getting it running, controls, cache version           | `README.md`                              |
+| What changed in each version                          | `CHANGELOG.md`                           |
+| How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`        |
+| Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                      |
+| The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                   |
+| Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`              |
+| Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`         |
+| Caskets and the inventory                             | `src/game/core/Loot.ts`                  |
+| Save data and migrations                              | `src/game/core/save.ts`                  |
+| Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`          |
+| 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`            |
+| React screens and the HUD                             | `src/game/ui/GameUi.tsx`                 |
+| Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`        |
+| How the player stands and runs with each weapon       | `src/game/content/stances.ts`            |
+| Stat names and types                                  | `src/game/content/stats.ts`, `types.ts`  |
+| Balance bot                                           | `scripts/game/simulate-run.ts`           |
+| Co-op: how it works, hosting its relay                | `docs/DEVELOPMENT.md` (Co-op)            |
+| Co-op relay server                                    | `server/coop-relay.mjs`                  |
+| Co-op lockstep and rooms; the lobby UI                | `src/game/client/coop/`, `ui/CoopScreen` |
+| Finding ids in the cache                              | `scripts/cache/`                         |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
@@ -52,6 +55,7 @@ npm test                   # vitest
 npx tsc --noEmit -p .      # type check
 npx prettier --write <files>
 npm run build && npm run slim-cache    # build for hosting (only when deploying)
+npm run serve              # serve the build with co-op's relay (COOP=off without it)
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.
@@ -132,5 +136,10 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
   names should be spelled as the cache spells them.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
   New shop upgrades, ids and optional fields don't need one.
-- **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`.
+- **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
+  on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
+  `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.
+- **Heroes**: `sim.player`, `sim.stats`, `sim.weapons` and the like are the current hero's (one for
+  each co-op player). Anything a hero leaves behind (a projectile, a thrall) keeps a `hero` index.
+  A solo run must play exactly as before; co-op's tests are in `core/coop.test.ts`.
 - **Licence**: the cache belongs to Jagex and stays out of the repository.

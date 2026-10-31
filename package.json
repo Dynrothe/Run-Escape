@@ -36,6 +36,7 @@
         "build": "vite build",
         "test": "vitest run",
         "preview": "vite preview",
+        "serve": "node server/serve.mjs",
         "lint": "prettier --write \"./**/*.{js,ts,jsx,tsx,css,md}\"",
         "download-caches": "node scripts/download-caches.cjs",
         "export-textures": "npx tsx scripts/cache/export-textures.ts",

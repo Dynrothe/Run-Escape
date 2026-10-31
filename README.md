@@ -33,6 +33,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
+- **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
+  adventurer, shared levels, and the run going on while anyone's standing.
 - **Endless mode** for every map you've beaten, **skills** to train with the coins you bank, and
   **quests** that pay out over many runs.
 
@@ -100,7 +102,10 @@ writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only
 reads, about 26 MB instead of 227 MB). The page has to be served with
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
 HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples.
+examples. `npm run serve` serves the build with those headers and co-op's relay from one Node
+process with no packages (`COOP=off` leaves co-op out, and the game hides it). The game only
+offers co-op where a relay answers, so a plain static host serves it as a single-player game; see
+[Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 
 ## Contributing
 

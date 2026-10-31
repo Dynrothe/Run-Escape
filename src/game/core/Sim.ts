@@ -1,5 +1,6 @@
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { getCharacter } from "../content/characters";
+import { PartyScale, getPartyScale } from "../content/coop";
 import {
     LATER_ROUND_START,
     LATE_CASKET_CHANCE,
@@ -104,6 +105,7 @@ import {
     WeaponState,
     projectileSource,
 } from "./entities";
+import { fm } from "./fmath";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlowField, canWalkStraight } from "./world/FlowField";
@@ -115,6 +117,8 @@ export const TICKS_PER_SECOND = 50;
 const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
+// A co-op party's others start this many tiles from the spawn
+const PARTY_SPREAD = 1.5;
 // Rerolls every run has, before the shop's
 const BASE_REROLLS = 1;
 // Skipping a level up's rewards costs coins from the run, doubling each time:
@@ -284,6 +288,29 @@ const SPLIT_RANGE = 6;
 const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
+// The events that are one hero's own, which co-op tags with who: what they
+// did, what happened to them, what they picked up
+const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
+    "weapon",
+    "slash",
+    "aura",
+    "playerHit",
+    "playerPoisoned",
+    "pickup",
+    "revive",
+    "chest",
+    "equip",
+    "stash",
+    "alch",
+    "itemUsed",
+    "evolved",
+    "powerUp",
+    "powerUpEnded",
+    "playerShout",
+    "heroDown",
+    "heroLeft",
+]);
+
 // levelUp and chest wait for the player to choose
 export type SimState = "playing" | "levelUp" | "chest" | "dead" | "victory";
 
@@ -307,6 +334,11 @@ export type SimOptions = {
     // The pieces upgraded in the Armoury, which caskets give as what they've
     // become (none when unset)
     armoury?: ArmouryUpgrades;
+    // Co-op: everyone in the run, in the same order on every player's copy
+    // (characterId, metaStats, unlockedItems and armoury are then unused), and
+    // which of them this copy plays
+    party?: HeroOptions[];
+    focus?: number;
 };
 
 export type RunResult = {
@@ -345,14 +377,92 @@ export type RunStats = {
     bossKills: { enemyId: string; seconds: number }[];
 };
 
+// One adventurer in a run: everything that's theirs rather than the party's.
+// A run on your own has one; co-op has one for each player, and the run's
+// level, XP, coins and kills are shared.
+export type Hero = {
+    // Where it is in Sim.heroes
+    index: number;
+    name: string;
+    characterId: string;
+    // Permanent bonuses from their shop, their map tasks' items, and their
+    // Armoury (see SimOptions)
+    metaStats: Stats;
+    unlockedItems: ReadonlySet<string> | undefined;
+    armoury: ArmouryUpgrades | undefined;
+    player: Player;
+    stats: Stats;
+    weapons: WeaponState[];
+    passives: PassiveState[];
+    // Item id worn in each slot, and how many times it's upgraded (gear from
+    // an endless run's later rounds)
+    gear: Partial<Record<GearSlot, string>>;
+    // The sets whose bonus the worn gear gives
+    activeSets: string[];
+    gearUpgrades: Partial<Record<GearSlot, number>>;
+    // The weapons evolved into this run
+    evolutionsMade: string[];
+    // Utility items; slots keep their place (they're used with 1-4)
+    inventory: (InventorySlot | null)[];
+    buffs: Buff[];
+    // Stats lowered by boss attacks
+    debuffs: Debuff[];
+    // Opened caskets waiting for a decision, the first one on screen
+    chests: ChestOffer[];
+    pendingLevelUps: number;
+    choices: UpgradeChoice[];
+    // Gear out of caskets this run, rerolled away or not
+    gearFound: Set<string>;
+    // Sets caskets have stopped bringing the missing pieces of
+    declinedSets: Set<string>;
+    revivesLeft: number;
+    // For a level up's rewards or a casket's item, shared
+    rerollsLeft: number;
+    // Rerolls the run started with, for how many were used
+    rerollsAtStart: number;
+    // Level ups skipped this run, which make the next skip dearer
+    skips: number;
+    // For the run's stats: damage dealt and kills by what did it (a
+    // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
+    // each weapon was taken up
+    damageBySource: Record<string, number>;
+    killsBySource: Record<string, number>;
+    damageTaken: number;
+    healed: number;
+    highestHit: number;
+    weaponSince: Record<string, number>;
+    // Bumped whenever their look changes (new weapon tier, gear)
+    appearanceVersion: number;
+    // Enemies after this hero find their way to them with it
+    flowField: FlowField;
+    regenAccumulator: number;
+    // When a hit next gets the Amulet of blood fury's roll to heal
+    bloodFuryRollTick: number;
+    // While the sled lasts: how much faster they go, and until when
+    sledEndTick: number;
+    sledSpeed: number;
+    // What they're pressing, for the next tick
+    moveX: number;
+    moveY: number;
+    // Co-op: down with no revives left (out of the run, watching the rest),
+    // or gone from the game
+    down: boolean;
+    left: boolean;
+};
+
+// A player in a co-op run, as SimOptions.party has them
+export type HeroOptions = {
+    name: string;
+    characterId: string;
+    metaStats: Stats;
+    unlockedItems?: ReadonlySet<string>;
+    armoury?: ArmouryUpgrades;
+};
+
 export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
     readonly rng: Rng;
-    readonly characterId: string;
-    readonly unlockedItems: ReadonlySet<string> | undefined;
-    private readonly armoury: ArmouryUpgrades | undefined;
-    readonly metaStats: Stats;
     readonly endless: boolean;
 
     tick = 0;
@@ -360,25 +470,14 @@ export class Sim {
     endTick = -1;
     state: SimState = "playing";
 
-    player: Player;
-    stats: Stats = emptyStats();
-    weapons: WeaponState[] = [];
-    passives: PassiveState[] = [];
-    // Item id worn in each slot, and how many times it's upgraded (gear from
-    // an endless run's later rounds)
-    gear: Partial<Record<GearSlot, string>> = {};
-    // The sets whose bonus the worn gear gives
-    activeSets: string[] = [];
-    gearUpgrades: Partial<Record<GearSlot, number>> = {};
-    // The weapons evolved into this run
-    evolutionsMade: string[] = [];
-    // Utility items; slots keep their place (they're used with 1-4)
-    inventory: (InventorySlot | null)[] = new Array(MAX_INVENTORY).fill(null);
-    buffs: Buff[] = [];
-    // Stats lowered by boss attacks
-    debuffs: Debuff[] = [];
-    // Opened caskets waiting for a decision, the first one on screen
-    chests: ChestOffer[] = [];
+    // Everyone in the run, one on your own. The fields below that are a
+    // hero's (player, stats, weapons...) are the current hero's: the one the
+    // sim is working on at the moment, and between ticks the one this client
+    // plays (focus), so the UI reads its own player's.
+    readonly heroes: Hero[] = [];
+    private hero!: Hero;
+    // The hero this client plays
+    readonly focus: number;
 
     enemies: Enemy[] = [];
     projectiles: Projectile[] = [];
@@ -403,35 +502,13 @@ export class Sim {
 
     xp = 0;
     level = 1;
-    pendingLevelUps = 0;
-    choices: UpgradeChoice[] = [];
     kills = 0;
     // Enemy id -> times killed (a boss that rose again as its second form's)
     enemyKills: Record<string, number> = {};
     bossesKilled: string[] = [];
-    // Gear out of caskets this run, rerolled away or not
-    readonly gearFound = new Set<string>();
-    // Sets caskets have stopped bringing the missing pieces of
-    readonly declinedSets = new Set<string>();
     coins = 0;
     casketsOpened = 0;
-    revivesLeft = 0;
-    // For a level up's rewards or a casket's item, shared
-    rerollsLeft = 0;
-    // Level ups skipped this run, which make the next skip dearer
-    skips = 0;
-    // For the run's stats: damage dealt and kills by what did it (a
-    // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
-    // each weapon was taken up
-    readonly damageBySource: Record<string, number> = {};
-    readonly killsBySource: Record<string, number> = {};
-    damageTaken = 0;
-    healed = 0;
-    highestHit = 0;
-    readonly weaponSince: Record<string, number> = {};
     readonly bossKills: { enemyId: string; seconds: number }[] = [];
-    // Rerolls the run started with, for how many were used
-    private readonly rerollsAtStart: number;
     // What's dealing damage now, for damageBySource: set before each source
     // gets its turn
     private damageSource: DamageSource = "other";
@@ -442,29 +519,21 @@ export class Sim {
     round = 1;
     roundStartTick = 0;
 
-    // Bumped whenever the player's look changes (new weapon tier, gear)
-    appearanceVersion = 0;
-
     events: SimEvent[] = [];
 
-    readonly flowField = new FlowField(FLOW_FIELD_SIZE);
+    // Co-op's bigger, tougher crowds (content/coop.ts), all 1 on your own
+    private readonly partyScale: PartyScale;
     private readonly enemyHash = new SpatialHash<Enemy>(2);
     private readonly pileHash = new SpatialHash<Pickup>(PILE_RADIUS);
     private nextUid = 1;
     private spawnAccumulator = 0;
     private eventIndex = 0;
-    private regenAccumulator = 0;
-    // When a hit next gets the Amulet of blood fury's roll to heal
-    private bloodFuryRollTick = 0;
     // When the last power-up dropped; the longer ago, the likelier the next
     private lastPowerUpTick = 0;
     // What dropped last, which doesn't drop twice in a row
     private lastPowerUpId?: string;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
-    // While the sled lasts: how much faster the player goes, and until when
-    private sledEndTick = 0;
-    private sledSpeed = 1;
     // While a Drill Demon lasts
     private lapsEndTick = 0;
     private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
@@ -483,17 +552,197 @@ export class Sim {
     private factionBaseAngle?: number;
     private readonly temp = { x: 0, y: 0 };
 
+    // ---- The current hero's ----
+
+    get characterId(): string {
+        return this.hero.characterId;
+    }
+    get metaStats(): Stats {
+        return this.hero.metaStats;
+    }
+    get unlockedItems(): ReadonlySet<string> | undefined {
+        return this.hero.unlockedItems;
+    }
+    private get armoury(): ArmouryUpgrades | undefined {
+        return this.hero.armoury;
+    }
+    get player(): Player {
+        return this.hero.player;
+    }
+    get stats(): Stats {
+        return this.hero.stats;
+    }
+    set stats(stats: Stats) {
+        this.hero.stats = stats;
+    }
+    get weapons(): WeaponState[] {
+        return this.hero.weapons;
+    }
+    set weapons(weapons: WeaponState[]) {
+        this.hero.weapons = weapons;
+    }
+    get passives(): PassiveState[] {
+        return this.hero.passives;
+    }
+    set passives(passives: PassiveState[]) {
+        this.hero.passives = passives;
+    }
+    get gear(): Partial<Record<GearSlot, string>> {
+        return this.hero.gear;
+    }
+    set gear(gear: Partial<Record<GearSlot, string>>) {
+        this.hero.gear = gear;
+    }
+    get activeSets(): string[] {
+        return this.hero.activeSets;
+    }
+    set activeSets(sets: string[]) {
+        this.hero.activeSets = sets;
+    }
+    get gearUpgrades(): Partial<Record<GearSlot, number>> {
+        return this.hero.gearUpgrades;
+    }
+    set gearUpgrades(upgrades: Partial<Record<GearSlot, number>>) {
+        this.hero.gearUpgrades = upgrades;
+    }
+    get evolutionsMade(): string[] {
+        return this.hero.evolutionsMade;
+    }
+    get inventory(): (InventorySlot | null)[] {
+        return this.hero.inventory;
+    }
+    set inventory(inventory: (InventorySlot | null)[]) {
+        this.hero.inventory = inventory;
+    }
+    get buffs(): Buff[] {
+        return this.hero.buffs;
+    }
+    set buffs(buffs: Buff[]) {
+        this.hero.buffs = buffs;
+    }
+    get debuffs(): Debuff[] {
+        return this.hero.debuffs;
+    }
+    set debuffs(debuffs: Debuff[]) {
+        this.hero.debuffs = debuffs;
+    }
+    get chests(): ChestOffer[] {
+        return this.hero.chests;
+    }
+    get pendingLevelUps(): number {
+        return this.hero.pendingLevelUps;
+    }
+    set pendingLevelUps(count: number) {
+        this.hero.pendingLevelUps = count;
+    }
+    get choices(): UpgradeChoice[] {
+        return this.hero.choices;
+    }
+    set choices(choices: UpgradeChoice[]) {
+        this.hero.choices = choices;
+    }
+    get gearFound(): Set<string> {
+        return this.hero.gearFound;
+    }
+    get declinedSets(): Set<string> {
+        return this.hero.declinedSets;
+    }
+    get revivesLeft(): number {
+        return this.hero.revivesLeft;
+    }
+    set revivesLeft(count: number) {
+        this.hero.revivesLeft = count;
+    }
+    get rerollsLeft(): number {
+        return this.hero.rerollsLeft;
+    }
+    set rerollsLeft(count: number) {
+        this.hero.rerollsLeft = count;
+    }
+    get skips(): number {
+        return this.hero.skips;
+    }
+    set skips(count: number) {
+        this.hero.skips = count;
+    }
+    get damageBySource(): Record<string, number> {
+        return this.hero.damageBySource;
+    }
+    get killsBySource(): Record<string, number> {
+        return this.hero.killsBySource;
+    }
+    get damageTaken(): number {
+        return this.hero.damageTaken;
+    }
+    set damageTaken(amount: number) {
+        this.hero.damageTaken = amount;
+    }
+    get healed(): number {
+        return this.hero.healed;
+    }
+    set healed(amount: number) {
+        this.hero.healed = amount;
+    }
+    get highestHit(): number {
+        return this.hero.highestHit;
+    }
+    set highestHit(amount: number) {
+        this.hero.highestHit = amount;
+    }
+    get weaponSince(): Record<string, number> {
+        return this.hero.weaponSince;
+    }
+    get appearanceVersion(): number {
+        return this.hero.appearanceVersion;
+    }
+    set appearanceVersion(version: number) {
+        this.hero.appearanceVersion = version;
+    }
+    get flowField(): FlowField {
+        return this.hero.flowField;
+    }
+    private get regenAccumulator(): number {
+        return this.hero.regenAccumulator;
+    }
+    private set regenAccumulator(amount: number) {
+        this.hero.regenAccumulator = amount;
+    }
+    private get bloodFuryRollTick(): number {
+        return this.hero.bloodFuryRollTick;
+    }
+    private set bloodFuryRollTick(tick: number) {
+        this.hero.bloodFuryRollTick = tick;
+    }
+    private get sledEndTick(): number {
+        return this.hero.sledEndTick;
+    }
+    private set sledEndTick(tick: number) {
+        this.hero.sledEndTick = tick;
+    }
+    private get sledSpeed(): number {
+        return this.hero.sledSpeed;
+    }
+    private set sledSpeed(speed: number) {
+        this.hero.sledSpeed = speed;
+    }
+
     constructor(options: SimOptions) {
         this.grid = options.grid;
         this.map = getMap(options.mapId ?? "lumbridge");
         this.rng = new Rng(options.seed);
-        this.characterId = options.characterId;
-        this.unlockedItems = options.unlockedItems;
-        this.armoury = options.armoury;
-        this.metaStats = options.metaStats;
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
-        this.flowField.ditchY = this.map.ditch?.y;
+        const party: HeroOptions[] = options.party ?? [
+            {
+                name: "",
+                characterId: options.characterId,
+                metaStats: options.metaStats,
+                unlockedItems: options.unlockedItems,
+                armoury: options.armoury,
+            },
+        ];
+        this.partyScale = getPartyScale(party.length);
+        this.focus = Math.min(options.focus ?? 0, party.length - 1);
         const fun = this.map.fun;
         if (fun) {
             this.nextFunBossSeconds = fun.bosses.firstAt;
@@ -501,37 +750,190 @@ export class Sim {
                 this.nextPlayerChatSeconds = this.rng.range(...fun.playerChat.every);
             }
         }
-        const start = findFreeSpot(this.grid, options.spawnX, options.spawnY, PLAYER_RADIUS);
-        this.player = {
-            x: start.x,
-            y: start.y,
-            prevX: start.x,
-            prevY: start.y,
-            radius: PLAYER_RADIUS,
-            facingX: 0,
-            facingY: -1,
-            yaw: 0,
-            moving: false,
-            hp: PLAYER_BASE_HP,
-            maxHp: PLAYER_BASE_HP,
-            attackSeq: -1,
-            attackStart: 0,
-            deathTick: -1,
-            moveStart: 0,
-            invulnerable: 0,
-            flash: 0,
-            frozen: 0,
-            poisonDamage: 0,
-            poisonEnd: -1,
+        party.forEach((hero, index) => {
+            this.heroes.push(this.createHero(hero, index, options.spawnX, options.spawnY));
+        });
+        for (const hero of this.heroes) {
+            this.use(hero);
+            this.addWeapon(getCharacter(hero.characterId).startingWeapon);
+            this.updateStats();
+            hero.player.hp = hero.player.maxHp;
+            hero.revivesLeft = hero.stats.revival;
+            hero.rerollsLeft = BASE_REROLLS + hero.stats.reroll;
+            hero.rerollsAtStart = hero.rerollsLeft;
+            this.updateFlowField();
+        }
+        this.use(this.heroes[this.focus]);
+    }
+
+    // A hero at the spawn, or for a party's others, around it
+    private createHero(options: HeroOptions, index: number, spawnX: number, spawnY: number): Hero {
+        const angle = (index / 4) * Math.PI * 2;
+        const offset = index === 0 ? 0 : PARTY_SPREAD;
+        const start = findFreeSpot(
+            this.grid,
+            spawnX + Math.cos(angle) * offset,
+            spawnY + Math.sin(angle) * offset,
+            PLAYER_RADIUS,
+        );
+        const flowField = new FlowField(FLOW_FIELD_SIZE);
+        flowField.ditchY = this.map.ditch?.y;
+        return {
+            index,
+            name: options.name,
+            characterId: options.characterId,
+            metaStats: options.metaStats,
+            unlockedItems: options.unlockedItems,
+            armoury: options.armoury,
+            player: {
+                x: start.x,
+                y: start.y,
+                prevX: start.x,
+                prevY: start.y,
+                radius: PLAYER_RADIUS,
+                facingX: 0,
+                facingY: -1,
+                yaw: 0,
+                moving: false,
+                hp: PLAYER_BASE_HP,
+                maxHp: PLAYER_BASE_HP,
+                attackSeq: -1,
+                attackStart: 0,
+                deathTick: -1,
+                moveStart: 0,
+                invulnerable: 0,
+                flash: 0,
+                frozen: 0,
+                poisonDamage: 0,
+                poisonEnd: -1,
+            },
+            stats: emptyStats(),
+            weapons: [],
+            passives: [],
+            gear: {},
+            activeSets: [],
+            gearUpgrades: {},
+            evolutionsMade: [],
+            inventory: new Array(MAX_INVENTORY).fill(null),
+            buffs: [],
+            debuffs: [],
+            chests: [],
+            pendingLevelUps: 0,
+            choices: [],
+            gearFound: new Set(),
+            declinedSets: new Set(),
+            revivesLeft: 0,
+            rerollsLeft: 0,
+            rerollsAtStart: 0,
+            skips: 0,
+            damageBySource: {},
+            killsBySource: {},
+            damageTaken: 0,
+            healed: 0,
+            highestHit: 0,
+            weaponSince: {},
+            appearanceVersion: 0,
+            flowField,
+            regenAccumulator: 0,
+            bloodFuryRollTick: 0,
+            sledEndTick: 0,
+            sledSpeed: 1,
+            moveX: 0,
+            moveY: 0,
+            down: false,
+            left: false,
         };
-        const character = getCharacter(options.characterId);
-        this.addWeapon(character.startingWeapon);
-        this.updateStats();
-        this.player.hp = this.player.maxHp;
-        this.revivesLeft = this.stats.revival;
-        this.rerollsLeft = BASE_REROLLS + this.stats.reroll;
-        this.rerollsAtStart = this.rerollsLeft;
-        this.updateFlowField();
+    }
+
+    // Makes this the current hero (see heroes)
+    private use(hero: Hero): void {
+        this.hero = hero;
+    }
+
+    // Does something as one of the party (a co-op player's choice, as it came
+    // in over the network), then goes back to the focus
+    as<T>(heroIndex: number, action: () => T): T {
+        const hero = this.heroes[heroIndex];
+        if (!hero) {
+            return action();
+        }
+        this.use(hero);
+        try {
+            return action();
+        } finally {
+            this.use(this.heroes[this.focus]);
+        }
+    }
+
+    // Whether a hero is still in the fight: not down, and still in the game
+    isUp(hero: Hero): boolean {
+        return !hero.down && !hero.left;
+    }
+
+    // The hero nearest a spot that's still in the fight, for enemies to go
+    // after and pickups to fly to (the current one if nobody is)
+    private nearestHero(x: number, y: number): Hero {
+        if (this.heroes.length === 1) {
+            return this.heroes[0];
+        }
+        let nearest: Hero | undefined;
+        let best = Infinity;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            const dx = hero.player.x - x;
+            const dy = hero.player.y - y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < best) {
+                best = distSq;
+                nearest = hero;
+            }
+        }
+        return nearest ?? this.hero;
+    }
+
+    // Picks one of the heroes still in the fight for a crowd to turn up
+    // around, each as likely (the only one, on your own)
+    private useSpawnHero(): void {
+        if (this.heroes.length === 1) {
+            return;
+        }
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        if (up.length > 0) {
+            this.use(up[this.rng.int(up.length)]);
+        }
+    }
+
+    // Makes the hero something belongs to the current one (what a projectile,
+    // thrall or venom does is theirs: their stats, their run's numbers)
+    private useHeroAt(index: number | undefined): void {
+        const hero = index !== undefined ? this.heroes[index] : undefined;
+        if (hero) {
+            this.use(hero);
+        }
+    }
+
+    // Does something as each hero an attack could land on (the one, on your
+    // own), then goes back to the hero it was working on
+    private forEachHeroInReach(action: () => void): void {
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (this.heroes.length > 1 && !this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            action();
+        }
+        this.use(current);
+    }
+
+    // Co-op tags the events that are a hero's own with who (SimEvent.hero)
+    private emit(event: SimEvent, personal = PERSONAL_EVENTS.has(event.type)): void {
+        if (personal && this.heroes.length > 1) {
+            event.hero = this.hero.index;
+        }
+        this.events.push(event);
     }
 
     // Enemies find their way to the player's tile, or when they're standing on
@@ -553,7 +955,7 @@ export class Sim {
                         ) {
                             continue;
                         }
-                        const distance = Math.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
+                        const distance = fm.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
                         if (distance < best) {
                             best = distance;
                             tileX = x;
@@ -638,7 +1040,7 @@ export class Sim {
             damageTaken: this.damageTaken,
             healed: this.healed,
             highestHit: this.highestHit,
-            rerollsUsed: Math.max(0, this.rerollsAtStart - this.rerollsLeft),
+            rerollsUsed: Math.max(0, this.hero.rerollsAtStart - this.rerollsLeft),
             skips: this.skips,
             bossKills: [...this.bossKills],
         };
@@ -664,10 +1066,13 @@ export class Sim {
         for (const set of sets) {
             addStats(stats, set.stats ?? {});
             if (!this.activeSets.includes(set.id)) {
-                this.events.push({
-                    type: "notice",
-                    message: `${set.name} set bonus: ${set.bonus}!`,
-                });
+                this.emit(
+                    {
+                        type: "notice",
+                        message: `${set.name} set bonus: ${set.bonus}!`,
+                    },
+                    true,
+                );
             }
         }
         this.activeSets = sets.map((set) => set.id);
@@ -715,7 +1120,7 @@ export class Sim {
     }
 
     choose(index: number): void {
-        if (this.state !== "levelUp") {
+        if (!this.isChoosing(this.hero)) {
             return;
         }
         const choice = this.choices[index];
@@ -743,8 +1148,44 @@ export class Sim {
         if (this.pendingLevelUps > 0) {
             this.choices = this.roll();
         } else {
-            this.state = this.chests.length > 0 ? "chest" : "playing";
+            this.settle();
         }
+    }
+
+    // Whether a hero (the current one by default) has a level up's rewards to
+    // choose now. Co-op's downed heroes are out of the run, so the run doesn't
+    // wait on them.
+    isChoosing(hero: Hero = this.hero): boolean {
+        return this.state === "levelUp" && hero.pendingLevelUps > 0 && this.isUp(hero);
+    }
+
+    // Anyone up with a level up to choose
+    private anyoneToChoose(): boolean {
+        return this.heroes.some((hero) => hero.pendingLevelUps > 0 && this.isUp(hero));
+    }
+
+    // What the run waits on now: anyone's level up, then anyone's casket, or
+    // nothing (co-op waits for everyone)
+    private settle(): void {
+        if (this.anyoneToChoose()) {
+            this.state = "levelUp";
+        } else if (this.heroes.some((hero) => hero.chests.length > 0)) {
+            this.state = "chest";
+        } else {
+            this.state = "playing";
+        }
+    }
+
+    // Co-op: the heroes the run is waiting on to choose a level up's rewards
+    // or decide on a casket
+    get waitingOn(): Hero[] {
+        if (this.state === "levelUp") {
+            return this.heroes.filter((hero) => this.isChoosing(hero));
+        }
+        if (this.state === "chest") {
+            return this.heroes.filter((hero) => hero.chests.length > 0);
+        }
+        return [];
     }
 
     // What skipping the level up's rewards costs now (coins are worth less in
@@ -802,7 +1243,7 @@ export class Sim {
         if (this.rerollsLeft <= 0 || this.choosingHilt) {
             return false;
         }
-        if (this.state === "levelUp") {
+        if (this.state === "levelUp" && this.pendingLevelUps > 0) {
             this.choices = this.roll();
         } else if (this.state === "chest" && chest) {
             this.declineSetPiece(chest.itemId);
@@ -847,11 +1288,14 @@ export class Sim {
                     if (!this.evolutionsMade.includes(choice.into)) {
                         this.evolutionsMade.push(choice.into);
                     }
-                    this.events.push({ type: "evolved", weaponId: choice.into });
-                    this.events.push({
-                        type: "notice",
-                        message: `Evolved: ${getWeapon(choice.into).name}!`,
-                    });
+                    this.emit({ type: "evolved", weaponId: choice.into });
+                    this.emit(
+                        {
+                            type: "notice",
+                            message: `Evolved: ${getWeapon(choice.into).name}!`,
+                        },
+                        true,
+                    );
                     this.weapons[index] = {
                         def: getWeapon(choice.into),
                         level: 1,
@@ -937,7 +1381,7 @@ export class Sim {
             this.applyChest(chest, action);
         }
         // A blast from the casket can end the run (it can hit the boss)
-        if (this.runOver || this.chests.length > 0) {
+        if (this.runOver || this.heroes.some((hero) => hero.chests.length > 0)) {
             return;
         }
         this.state = "playing";
@@ -950,7 +1394,7 @@ export class Sim {
             this.declineSetPiece(item.id);
             const coins = this.alchValue(item.id, chest.upgrades);
             this.coins += coins;
-            this.events.push({ type: "alch", itemId: item.id, coins });
+            this.emit({ type: "alch", itemId: item.id, coins });
             return;
         }
         if (item.kind === "gear") {
@@ -984,7 +1428,7 @@ export class Sim {
         this.gearUpgrades[item.slot] = upgrades;
         this.updateStats();
         this.appearanceVersion++;
-        this.events.push({ type: "equip", itemId, replacedId, coins });
+        this.emit({ type: "equip", itemId, replacedId, coins });
     }
 
     // Puts a utility item in the inventory; false when there's no room
@@ -999,14 +1443,14 @@ export class Sim {
         } else {
             this.inventory[index] = { itemId, count: 1 };
         }
-        this.events.push({ type: "stash", itemId });
+        this.emit({ type: "stash", itemId });
         return true;
     }
 
     // Uses the utility item in an inventory slot (0-3) while playing
     useItem(index: number): boolean {
         const slot = this.inventory[index];
-        if (this.state !== "playing" || !slot) {
+        if (this.state !== "playing" || !slot || !this.isUp(this.hero)) {
             return false;
         }
         const item = getItem(slot.itemId);
@@ -1025,7 +1469,7 @@ export class Sim {
     private useUtility(item: UtilityDef): void {
         const player = this.player;
         const use = item.use;
-        this.events.push({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
+        this.emit({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
         this.damageSource = `item:${item.id}`;
         switch (use.kind) {
             case "heal":
@@ -1054,11 +1498,10 @@ export class Sim {
                 break;
             case "blast": {
                 const radius = use.radius * (1 + this.stats.area);
-                this.events.push({ type: "blast", x: player.x, y: player.y, radius });
+                this.emit({ type: "blast", x: player.x, y: player.y, radius });
                 // Not the spatial hash: this can run between ticks, when it's stale
                 const hit = this.enemies.filter(
-                    (e) =>
-                        !e.dead && Math.hypot(e.x - player.x, e.y - player.y) <= radius + e.radius,
+                    (e) => !e.dead && fm.hypot(e.x - player.x, e.y - player.y) <= radius + e.radius,
                 );
                 hit.forEach((enemy, i) => {
                     if (i < MAX_BLAST_EFFECTS) {
@@ -1141,7 +1584,54 @@ export class Sim {
 
     // ---- Tick ----
 
-    step(moveX: number, moveY: number): void {
+    // A tick of the run. On your own, with what's pressed; co-op sets each
+    // hero's input (setInput) and leaves these out.
+    step(moveX?: number, moveY?: number): void {
+        if (moveX !== undefined && moveY !== undefined) {
+            this.setInput(this.focus, moveX, moveY);
+        }
+        // Each part of the tick works on its own heroes. Until one does, the
+        // first, so every co-op player's copy starts from the same one.
+        this.use(this.heroes[0]);
+        this.stepRun();
+        this.use(this.heroes[this.focus]);
+    }
+
+    // What a hero is pressing, from the next tick on
+    setInput(heroIndex: number, moveX: number, moveY: number): void {
+        const hero = this.heroes[heroIndex];
+        if (hero) {
+            hero.moveX = moveX;
+            hero.moveY = moveY;
+        }
+    }
+
+    // Co-op: a player has left the game. Their hero's gone from the run, and
+    // anything that was waiting on them goes on without them.
+    leave(heroIndex: number): void {
+        const hero = this.heroes[heroIndex];
+        if (!hero || hero.left) {
+            return;
+        }
+        hero.left = true;
+        hero.pendingLevelUps = 0;
+        hero.choices = [];
+        hero.chests = [];
+        this.as(heroIndex, () => this.emit({ type: "heroLeft" }));
+        if (this.runOver) {
+            return;
+        }
+        if (!this.heroes.some((other) => this.isUp(other))) {
+            this.endRun("dead");
+        } else if (this.state !== "playing") {
+            this.settle();
+            if ((this.state as SimState) === "playing") {
+                this.as(this.focus, () => this.checkLevelUp());
+            }
+        }
+    }
+
+    private stepRun(): void {
         if (this.runOver) {
             // Keep the clock going so death animations play out
             this.tick++;
@@ -1151,14 +1641,30 @@ export class Sim {
             return;
         }
         this.tick++;
-        this.stepBuffs();
-        this.stepPlayer(moveX, moveY);
+        for (const hero of this.heroes) {
+            if (!hero.left) {
+                this.use(hero);
+                this.stepBuffs();
+            }
+        }
+        this.stepPowerUps();
+        for (const hero of this.heroes) {
+            if (this.isUp(hero)) {
+                this.use(hero);
+                this.stepPlayer(hero.moveX, hero.moveY);
+            }
+        }
         if (this.runOver) {
             // Poison finished them
             return;
         }
         if (this.tick % FLOW_FIELD_INTERVAL === 0) {
-            this.updateFlowField();
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.updateFlowField();
+                }
+            }
         }
         // A fun map's round turns over every fifteen minutes of waves (there's
         // no final boss to kill for it)
@@ -1170,7 +1676,13 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
-        this.stepWeapons();
+        for (const hero of this.heroes) {
+            // On your own, weapons still fire in the tick the player falls in
+            if (this.isUp(hero) || this.heroes.length === 1) {
+                this.use(hero);
+                this.stepWeapons();
+            }
+        }
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
@@ -1195,9 +1707,14 @@ export class Sim {
             this.debuffs = this.debuffs.filter((d) => d.endTick > tick);
             this.updateStats();
         }
+    }
+
+    private stepPowerUps(): void {
+        const tick = this.tick;
         for (const active of this.powerUps) {
             if (active.endTick <= tick) {
-                this.events.push({ type: "powerUpEnded", id: active.id });
+                this.useHeroAt(active.hero);
+                this.emit({ type: "powerUpEnded", id: active.id });
             }
         }
         this.powerUps = this.powerUps.filter((p) => p.endTick > tick);
@@ -1216,7 +1733,7 @@ export class Sim {
             const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
             const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
             moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
-            const len = Math.hypot(moveX, moveY);
+            const len = fm.hypot(moveX, moveY);
             player.facingX = moveX / len;
             player.facingY = moveY / len;
             player.yaw = yawFromVector(moveX, moveY);
@@ -1258,7 +1775,7 @@ export class Sim {
             const amount = player.poisonDamage;
             player.hp -= amount;
             this.damageTaken += amount;
-            this.events.push({ type: "playerPoisoned", amount });
+            this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
             }
@@ -1293,6 +1810,7 @@ export class Sim {
         const events = this.map.events;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
+            this.useSpawnHero();
             if (event.kind === "elite") {
                 this.spawnEnemy(getEnemy(event.enemyId), "elite");
             } else if (event.kind === "ring") {
@@ -1308,6 +1826,7 @@ export class Sim {
         if (fun?.bosses.together && this.seconds >= this.nextFunBossSeconds) {
             // All at once, each on its own spot; the next lot is due once
             // they're all dead
+            this.useSpawnHero();
             this.funBossGroup = fun.bosses.pool.flatMap((id) => {
                 const boss = this.spawnBoss(getEnemy(id), "boss", undefined);
                 return boss ? [boss] : [];
@@ -1319,6 +1838,7 @@ export class Sim {
             const pool = fun.bosses.pool;
             const choices = pool.length > 1 ? pool.filter((id) => id !== this.lastFunBoss) : pool;
             const id = choices[this.rng.int(choices.length)];
+            this.useSpawnHero();
             if (this.spawnBoss(getEnemy(id), "boss", undefined)) {
                 this.lastFunBoss = id;
                 this.nextFunBossSeconds = this.seconds + this.rng.range(...fun.bosses.every);
@@ -1326,8 +1846,9 @@ export class Sim {
         }
 
         const wave = this.currentWave();
-        // Endless runs' later rounds bring bigger crowds
-        const crowd = roundCrowd(this.round);
+        // Endless runs' later rounds bring bigger crowds, and so do co-op's
+        // players
+        const crowd = roundCrowd(this.round) * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
         const minAlive = Math.min(Math.round(wave.minAlive * crowd), maxAlive);
@@ -1342,6 +1863,7 @@ export class Sim {
         }
         const weights = wave.enemies.map((e) => e.weight);
         for (let i = 0; i < toSpawn && alive + i < maxAlive; i++) {
+            this.useSpawnHero();
             const pick = wave.enemies[this.rng.weightedIndex(weights)];
             this.spawnEnemy(getEnemy(pick.id), "normal");
         }
@@ -1357,6 +1879,7 @@ export class Sim {
         if (fun.chatEvery !== undefined && this.tick >= this.nextChatTick) {
             this.nextChatTick =
                 this.tick + Math.round(fun.chatEvery * this.rng.range(0.6, 1.4) * TICKS_PER_SECOND);
+            this.useSpawnHero();
             const player = this.player;
             let speaker: Enemy | undefined;
             let seen = 0;
@@ -1364,7 +1887,7 @@ export class Sim {
                 if (
                     enemy.dead ||
                     !enemy.def.chat ||
-                    Math.hypot(enemy.x - player.x, enemy.y - player.y) > CHAT_RANGE
+                    fm.hypot(enemy.x - player.x, enemy.y - player.y) > CHAT_RANGE
                 ) {
                     continue;
                 }
@@ -1377,12 +1900,12 @@ export class Sim {
             const lines = speaker?.def.chat;
             if (speaker && lines) {
                 const text = lines[this.rng.int(lines.length)];
-                this.events.push({ type: "bossShout", enemyUid: speaker.uid, text });
+                this.emit({ type: "bossShout", enemyUid: speaker.uid, text });
             }
         }
         if (fun.playerChat && this.seconds >= this.nextPlayerChatSeconds && !this.runOver) {
             const lines = fun.playerChat.lines;
-            this.events.push({ type: "playerShout", text: lines[this.rng.int(lines.length)] });
+            this.emit({ type: "playerShout", text: lines[this.rng.int(lines.length)] });
             this.nextPlayerChatSeconds = this.seconds + this.rng.range(...fun.playerChat.every);
         }
     }
@@ -1410,8 +1933,8 @@ export class Sim {
                     ? angle + this.rng.range(-0.6, 0.6)
                     : this.rng.range(0, Math.PI * 2);
             const distance = this.rng.range(minDistance, maxDistance);
-            const x = Math.floor(player.x + Math.cos(a) * distance) + 0.5;
-            const y = Math.floor(player.y + Math.sin(a) * distance) + 0.5;
+            const x = Math.floor(player.x + fm.cos(a) * distance) + 0.5;
+            const y = Math.floor(player.y + fm.sin(a) * distance) + 0.5;
             if (this.canTurnUpAt(def, x, y)) {
                 return { x, y };
             }
@@ -1447,7 +1970,7 @@ export class Sim {
             if (def.spawnSpotAnim !== undefined) {
                 this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
             }
-            this.events.push({
+            this.emit({
                 type: "bossSpawned",
                 enemyId: def.id,
                 name: def.name,
@@ -1494,7 +2017,8 @@ export class Sim {
         const bossDamage = difficulty.damage * this.roundDamage;
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
-            this.roundHp;
+            this.roundHp *
+            (boss ? this.partyScale.bossHp : this.partyScale.hp);
         // What its hits are multiplied by: its touch, a boss's attacks, its
         // explosion
         let hitScale = bossDamage * (boss ? 1 : damageScale);
@@ -1619,8 +2143,8 @@ export class Sim {
         const radius = 12;
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
-            const x = player.x + Math.cos(angle) * radius;
-            const y = player.y + Math.sin(angle) * radius;
+            const x = player.x + fm.cos(angle) * radius;
+            const y = player.y + fm.sin(angle) * radius;
             if (this.canTurnUpAt(def, x, y)) {
                 this.spawnEnemy(def, "normal", { x, y });
             }
@@ -1639,7 +2163,7 @@ export class Sim {
     }
 
     private stepEnemies(): void {
-        const player = this.player;
+        let player = this.player;
         const grid = this.grid;
         const step = this.temp;
         for (const enemy of this.enemies) {
@@ -1659,12 +2183,16 @@ export class Sim {
             }
             if (enemy.venomEnd >= this.tick && this.tick >= enemy.venomNext) {
                 enemy.venomNext += TICKS_PER_SECOND;
+                this.useHeroAt(enemy.venomHero);
                 this.damageSource = enemy.venomSource ?? "other";
                 this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
                 if (enemy.dead) {
                     continue;
                 }
             }
+            // It goes for whoever's nearest
+            this.use(this.nearestHero(enemy.x, enemy.y));
+            player = this.player;
 
             if (enemy.jump) {
                 this.stepJump(enemy);
@@ -1673,7 +2201,7 @@ export class Sim {
 
             let dx = player.x - enemy.x;
             let dy = player.y - enemy.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
 
             // The final boss waits for the player, and what can't move stays
             // put; anything else left behind comes back
@@ -1721,7 +2249,7 @@ export class Sim {
                     // enemies off corners
                     const tx = tileX + step.x + 0.5 - enemy.x;
                     const ty = tileY + step.y + 0.5 - enemy.y;
-                    const len = Math.hypot(tx, ty);
+                    const len = fm.hypot(tx, ty);
                     if (len > 0.001) {
                         dirX = tx / len;
                         dirY = ty / len;
@@ -1772,7 +2300,7 @@ export class Sim {
                     // reach (the hit itself is the touch below)
                     const fx = fighting.x - enemy.x;
                     const fy = fighting.y - enemy.y;
-                    const length = Math.hypot(fx, fy);
+                    const length = fm.hypot(fx, fy);
                     const reach = enemy.radius + fighting.radius + 0.05;
                     dirX = length > reach ? fx / length : 0;
                     dirY = length > reach ? fy / length : 0;
@@ -1785,7 +2313,7 @@ export class Sim {
                     const hx = healTarget.x - enemy.x;
                     const hy = healTarget.y - enemy.y;
                     const reach = enemy.def.heals!.range * 0.8 + healTarget.radius;
-                    const length = Math.hypot(hx, hy);
+                    const length = fm.hypot(hx, hy);
                     dirX = dirY = 0;
                     if (length > reach) {
                         dirX = hx / length;
@@ -1934,8 +2462,8 @@ export class Sim {
         const awayX = distance > 0.001 ? -dx / distance : 1;
         const awayY = distance > 0.001 ? -dy / distance : 0;
         for (const turn of FLEE_TURNS) {
-            const cos = Math.cos(turn);
-            const sin = Math.sin(turn);
+            const cos = fm.cos(turn);
+            const sin = fm.sin(turn);
             const x = awayX * cos - awayY * sin;
             const y = awayX * sin + awayY * cos;
             const aheadX = enemy.x + x * FLEE_LOOKAHEAD;
@@ -2003,7 +2531,7 @@ export class Sim {
         const toward = Math.max(-1, Math.min(1, (distance - this.laps!.radius) / LAP_PULL_TILES));
         const x = -dy / length + (dx / length) * toward;
         const y = dx / length + (dy / length) * toward;
-        const size = Math.hypot(x, y);
+        const size = fm.hypot(x, y);
         out.x = x / size;
         out.y = y / size;
     }
@@ -2014,7 +2542,7 @@ export class Sim {
         const player = this.player;
         const side = behind ? -1 : 1;
         const angle = player.moving
-            ? Math.atan2(player.facingY * side, player.facingX * side)
+            ? fm.atan2(player.facingY * side, player.facingX * side)
             : undefined;
         const pos = this.findSpawnPoint(enemy.def, SPAWN_MIN_DISTANCE, SPAWN_MAX_DISTANCE, angle);
         if (pos) {
@@ -2048,7 +2576,7 @@ export class Sim {
         if (shot.castSpotAnim !== undefined) {
             this.addEffect(shot.castSpotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
         }
-        this.events.push({
+        this.emit({
             type: "bossAttack",
             enemyId: enemy.def.id,
             sound: shot.sound ?? -1,
@@ -2068,13 +2596,16 @@ export class Sim {
         ignoreArmor = false,
     ): number {
         const player = this.player;
+        if (this.hero.down && !this.runOver) {
+            return 0;
+        }
         const armor = ignoreArmor ? 0 : this.stats.armor;
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
         this.damageTaken += amount;
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
-        this.events.push({ type: "playerHit", amount, enemyId, elite, sound });
+        this.emit({ type: "playerHit", amount, enemyId, elite, sound });
         if (player.hp <= 0) {
             this.playerDied();
         }
@@ -2114,7 +2645,7 @@ export class Sim {
         if (
             current &&
             !current.dead &&
-            Math.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
+            fm.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
         ) {
             return this.chaseFoe(enemy, current);
         }
@@ -2193,7 +2724,7 @@ export class Sim {
         if (!foe.aggro) {
             foe.foe ??= enemy;
         }
-        this.events.push({
+        this.emit({
             type: "damage",
             x: foe.x,
             y: foe.y,
@@ -2276,8 +2807,8 @@ export class Sim {
                 attempt === 0
                     ? (index / count) * Math.PI * 2 + this.rng.range(0, 0.5)
                     : this.rng.range(0, Math.PI * 2);
-            const x = enemy.x + Math.cos(angle) * radius;
-            const y = enemy.y + Math.sin(angle) * radius;
+            const x = enemy.x + fm.cos(angle) * radius;
+            const y = enemy.y + fm.sin(angle) * radius;
             if (this.canTurnUpAt(def, x, y)) {
                 return this.spawnEnemy(def, "normal", { x, y });
             }
@@ -2300,7 +2831,7 @@ export class Sim {
             return;
         }
         const reach = heals.range + target.radius;
-        if (Math.hypot(target.x - enemy.x, target.y - enemy.y) > reach) {
+        if (fm.hypot(target.x - enemy.x, target.y - enemy.y) > reach) {
             return;
         }
         abilities.nextHeal = tick + secondsToTicks(heals.interval);
@@ -2347,8 +2878,8 @@ export class Sim {
         const seek = heals.seek ?? HEAL_SEEK;
         const player = this.player;
         return (
-            Math.hypot(other.x - enemy.x, other.y - enemy.y) <= seek + other.radius &&
-            Math.hypot(other.x - player.x, other.y - player.y) + heals.range < RELOCATE_DISTANCE
+            fm.hypot(other.x - enemy.x, other.y - enemy.y) <= seek + other.radius &&
+            fm.hypot(other.x - player.x, other.y - player.y) + heals.range < RELOCATE_DISTANCE
         );
     }
 
@@ -2408,7 +2939,7 @@ export class Sim {
                 this.addEffect(blinks.castSpotAnim, enemy.x, enemy.y, 0, 60);
             }
             if (blinks.sound !== undefined) {
-                this.events.push({
+                this.emit({
                     type: "bossAttack",
                     enemyId: enemy.def.id,
                     sound: blinks.sound,
@@ -2449,8 +2980,8 @@ export class Sim {
     ): { x: number; y: number } | undefined {
         for (let attempt = 0; attempt < 12; attempt++) {
             const angle = this.rng.range(0, Math.PI * 2);
-            const spotX = x + Math.cos(angle) * distance;
-            const spotY = y + Math.sin(angle) * distance;
+            const spotX = x + fm.cos(angle) * distance;
+            const spotY = y + fm.sin(angle) * distance;
             const tileX = Math.floor(spotX);
             const tileY = Math.floor(spotY);
             if (
@@ -2468,7 +2999,7 @@ export class Sim {
         enemy.shieldEnd = 0;
         const message = enemy.def.shield?.message;
         if (message) {
-            this.events.push({ type: "notice", message });
+            this.emit({ type: "notice", message });
         }
     }
 
@@ -2478,7 +3009,7 @@ export class Sim {
             return;
         }
         enemy.blockedTick = this.tick;
-        this.events.push({
+        this.emit({
             type: "damage",
             x: enemy.x,
             y: enemy.y,
@@ -2495,7 +3026,7 @@ export class Sim {
         const player = this.player;
         let dirX = player.x - boss.x;
         let dirY = player.y - boss.y;
-        const length = Math.hypot(dirX, dirY);
+        const length = fm.hypot(dirX, dirY);
         if (length > 0.001) {
             dirX /= length;
             dirY /= length;
@@ -2566,7 +3097,7 @@ export class Sim {
         if (t <= 0 || t >= 1) {
             return false;
         }
-        return Math.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
+        return fm.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
     }
 
     // ---- Bosses ----
@@ -2625,10 +3156,10 @@ export class Sim {
         enemy.animStart = this.tick;
         enemy.attackSeq = attack.seq ?? enemy.def.attackSeq;
         if (attack.shout) {
-            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
+            this.emit({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
         if (attack.message) {
-            this.events.push({ type: "notice", message: attack.message });
+            this.emit({ type: "notice", message: attack.message });
         }
     }
 
@@ -2640,7 +3171,7 @@ export class Sim {
         state.enraged = true;
         enemy.speed *= ENRAGED_SPEED;
         enemy.tint = ENRAGED_TINT;
-        this.events.push({
+        this.emit({
             type: "bossEnraged",
             enemyId: enemy.def.id,
             message: enrage.message,
@@ -2648,7 +3179,7 @@ export class Sim {
             y: enemy.y,
         });
         if (enrage.shout) {
-            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: enrage.shout });
+            this.emit({ type: "bossShout", enemyUid: enemy.uid, text: enrage.shout });
         }
     }
 
@@ -2660,8 +3191,8 @@ export class Sim {
             const angle = this.rng.range(0, Math.PI * 2);
             const distance = this.rng.range(1, Math.max(1, attack.spread ?? 2));
             targets.push({
-                x: player.x + Math.cos(angle) * distance,
-                y: player.y + Math.sin(angle) * distance,
+                x: player.x + fm.cos(angle) * distance,
+                y: player.y + fm.sin(angle) * distance,
             });
         }
         return targets;
@@ -2674,9 +3205,8 @@ export class Sim {
     }
 
     private landBossAttack(enemy: Enemy, windup: BossWindup): void {
-        const player = this.player;
         const attack = windup.attack;
-        this.events.push({
+        this.emit({
             type: "bossAttack",
             enemyId: enemy.def.id,
             sound: attack.sound ?? -1,
@@ -2691,24 +3221,29 @@ export class Sim {
                 this.leapTo(enemy, spots[0]);
             }
             const radius = attack.radius ?? 2;
-            let hit = false;
             for (const { x, y } of spots) {
-                this.events.push({ type: "bossSwing", x, y, radius });
+                this.emit({ type: "bossSwing", x, y, radius });
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
                     this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
                 }
-                hit ||= Math.hypot(player.x - x, player.y - y) <= radius + player.radius;
             }
-            if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
-                // Behind the glyph: it takes the blow
-                hit = false;
-                this.glyphBlocked(enemy, attack);
-            }
-            if (hit) {
-                // A blast's impact is already showing where it landed
-                const damage = this.getBossDamage(enemy, attack);
-                this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
-            }
+            // Co-op: on anyone it lands on
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                let hit = spots.some(
+                    ({ x, y }) => fm.hypot(player.x - x, player.y - y) <= radius + player.radius,
+                );
+                if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
+                    // Behind the glyph: it takes the blow
+                    hit = false;
+                    this.glyphBlocked(enemy, attack);
+                }
+                if (hit && !this.runOver) {
+                    // A blast's impact is already showing where it landed
+                    const damage = this.getBossDamage(enemy, attack);
+                    this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
+                }
+            });
             return;
         }
         if (attack.kind === "teleport") {
@@ -2733,13 +3268,13 @@ export class Sim {
         crowd: boolean,
     ): void {
         const player = this.player;
-        const base = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        const base = fm.atan2(player.y - enemy.y, player.x - enemy.x);
         const count = attack.count ?? 1;
         const speed = (attack.speed ?? 10) / TICKS_PER_SECOND;
         for (let i = 0; i < count; i++) {
             const angle = base + (i - (count - 1) / 2) * (attack.spread ?? 0);
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed;
+            const vx = fm.cos(angle) * speed;
+            const vy = fm.sin(angle) * speed;
             this.enemyProjectiles.push({
                 uid: this.nextUid++,
                 enemyUid: enemy.uid,
@@ -2814,7 +3349,7 @@ export class Sim {
             state.enraged = false;
             state.summonsDone = 0;
         }
-        this.events.push({
+        this.emit({
             type: "bossRose",
             enemyId: enemy.def.id,
             message: rises.message,
@@ -2848,10 +3383,10 @@ export class Sim {
             }
             state.summonsDone++;
             if (summon.message) {
-                this.events.push({ type: "notice", message: summon.message });
+                this.emit({ type: "notice", message: summon.message });
             }
             if (summon.shout) {
-                this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: summon.shout });
+                this.emit({ type: "bossShout", enemyUid: enemy.uid, text: summon.shout });
             }
         }
     }
@@ -2891,22 +3426,24 @@ export class Sim {
     }
 
     private stepEnemyProjectiles(): void {
-        const player = this.player;
         for (const projectile of this.enemyProjectiles) {
             projectile.prevX = projectile.x;
             projectile.prevY = projectile.y;
             projectile.life--;
+            // At whoever's nearest
+            this.use(this.nearestHero(projectile.x, projectile.y));
+            const player = this.player;
             const dx = player.x - projectile.x;
             const dy = player.y - projectile.y;
             if (projectile.homing > 0) {
                 // Turn towards the player, a little each tick
-                const heading = Math.atan2(projectile.vy, projectile.vx);
-                let turn = Math.atan2(dy, dx) - heading;
-                turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+                const heading = fm.atan2(projectile.vy, projectile.vx);
+                let turn = fm.atan2(dy, dx) - heading;
+                turn = fm.atan2(fm.sin(turn), fm.cos(turn));
                 const angle =
                     heading + Math.max(-projectile.homing, Math.min(projectile.homing, turn));
-                projectile.vx = Math.cos(angle) * projectile.speed;
-                projectile.vy = Math.sin(angle) * projectile.speed;
+                projectile.vx = fm.cos(angle) * projectile.speed;
+                projectile.vy = fm.sin(angle) * projectile.speed;
                 projectile.yaw = yawFromVector(projectile.vx, projectile.vy);
             }
             projectile.x += projectile.vx;
@@ -2918,7 +3455,7 @@ export class Sim {
             const reach = projectile.radius + player.radius;
             if (
                 projectile.life > 0 &&
-                Math.hypot(player.x - projectile.x, player.y - projectile.y) <= reach
+                fm.hypot(player.x - projectile.x, player.y - projectile.y) <= reach
             ) {
                 projectile.life = 0;
                 // A crowd's shot doesn't land on a player just hit (bosses' do)
@@ -2943,10 +3480,7 @@ export class Sim {
         if (!glyph || width === undefined) {
             return false;
         }
-        if (
-            Math.hypot(projectile.x - glyph.x, projectile.y - glyph.y) >
-            width + projectile.radius
-        ) {
+        if (fm.hypot(projectile.x - glyph.x, projectile.y - glyph.y) > width + projectile.radius) {
             return false;
         }
         const impact = projectile.attack.impactSpotAnim;
@@ -2967,7 +3501,7 @@ export class Sim {
         showImpact = true,
     ): void {
         const player = this.player;
-        if (this.reviving) {
+        if (this.reviving || (this.hero.down && !this.runOver)) {
             return;
         }
         if (showImpact && attack.impactSpotAnim !== undefined) {
@@ -3002,7 +3536,7 @@ export class Sim {
             if (state && amount > 0 && !enemy.dead) {
                 this.coins -= amount;
                 state.stolenCoins += amount;
-                this.events.push({ type: "coinsStolen", enemyId: enemy.def.id, amount });
+                this.emit({ type: "coinsStolen", enemyId: enemy.def.id, amount });
             }
             return;
         }
@@ -3061,7 +3595,7 @@ export class Sim {
             const player = this.player;
             let nearest = Infinity;
             for (const boss of this.funBossGroup) {
-                const distance = Math.hypot(boss.x - player.x, boss.y - player.y);
+                const distance = fm.hypot(boss.x - player.x, boss.y - player.y);
                 if (!boss.dead && distance < nearest) {
                     nearest = distance;
                     shown = boss;
@@ -3083,12 +3617,23 @@ export class Sim {
             this.revivesLeft--;
             player.hp = player.maxHp;
             player.invulnerable = 3 * TICKS_PER_SECOND;
-            this.events.push({ type: "revive" });
+            this.emit({ type: "revive" });
             return;
         }
         player.hp = 0;
         player.deathTick = this.tick;
-        this.endRun("dead");
+        this.hero.down = true;
+        if (!this.heroes.some((hero) => this.isUp(hero))) {
+            this.endRun("dead");
+            return;
+        }
+        // Co-op: they're out for the rest of the run, and the rest fight on
+        player.prevX = player.x;
+        player.prevY = player.y;
+        player.moving = false;
+        player.poisonEnd = -1;
+        player.poisonDamage = 0;
+        this.emit({ type: "heroDown" });
     }
 
     // Returns the damage done (0 if it was already dead). mightScale
@@ -3131,7 +3676,7 @@ export class Sim {
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
         this.highestHit = Math.max(this.highestHit, damage);
-        this.events.push({
+        this.emit({
             type: "damage",
             x: enemy.x,
             y: enemy.y,
@@ -3144,7 +3689,7 @@ export class Sim {
         if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
             const dx = enemy.x - fromX;
             const dy = enemy.y - fromY;
-            const len = Math.hypot(dx, dy);
+            const len = fm.hypot(dx, dy);
             if (len > 0.001) {
                 const k = (knockback * (1 - resist)) / 4;
                 enemy.vx += (dx / len) * k;
@@ -3183,7 +3728,7 @@ export class Sim {
             // victory screen
             this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
         }
-        this.events.push({
+        this.emit({
             type: "kill",
             enemyUid: enemy.uid,
             enemyId: enemy.def.id,
@@ -3221,7 +3766,7 @@ export class Sim {
         if (stolen > 0) {
             this.coins += stolen;
             enemy.bossState!.stolenCoins = 0;
-            this.events.push({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
+            this.emit({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
         }
 
         // With the last of the final bosses (the Inferno has three)
@@ -3247,7 +3792,7 @@ export class Sim {
         }
         this.funBossGroup = [];
         this.dropCasketOfTier(together.casket, enemy.x - 0.4, enemy.y + 0.4);
-        this.events.push({ type: "notice", message: together.message });
+        this.emit({ type: "notice", message: together.message });
         this.nextFunBossSeconds = this.seconds + this.rng.range(...this.map.fun!.bosses.every);
     }
 
@@ -3283,9 +3828,9 @@ export class Sim {
         if (explodes.spotAnim !== undefined) {
             this.addEffect(explodes.spotAnim, enemy.x, enemy.y, 0, 40);
         }
-        this.events.push({ type: "blast", x: enemy.x, y: enemy.y, radius: explodes.radius });
+        this.emit({ type: "blast", x: enemy.x, y: enemy.y, radius: explodes.radius });
         if (explodes.sound !== undefined) {
-            this.events.push({
+            this.emit({
                 type: "bossAttack",
                 enemyId: enemy.def.id,
                 sound: explodes.sound,
@@ -3293,14 +3838,16 @@ export class Sim {
                 y: enemy.y,
             });
         }
-        const player = this.player;
-        if (
-            !this.runOver &&
-            !this.reviving &&
-            Math.hypot(player.x - enemy.x, player.y - enemy.y) <= explodes.radius + player.radius
-        ) {
-            this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
-        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                !this.runOver &&
+                !this.reviving &&
+                fm.hypot(player.x - enemy.x, player.y - enemy.y) <= explodes.radius + player.radius
+            ) {
+                this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
+            }
+        });
     }
 
     // Bones, and now and then a casket, coins, food or a power-up
@@ -3349,7 +3896,7 @@ export class Sim {
         const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
         this.eventIndex = first === -1 ? events.length : first;
         this.bossSpawned = false;
-        this.events.push({ type: "roundStarted", round: this.round });
+        this.emit({ type: "roundStarted", round: this.round });
     }
 
     private endRun(state: "dead" | "victory"): void {
@@ -3446,7 +3993,7 @@ export class Sim {
                 ? this.cooldownTicks(level.cooldown, this.setBoosts(weapon.def).speed)
                 : 10;
             if (fired) {
-                this.events.push({
+                this.emit({
                     type: "weapon",
                     weaponId: weapon.def.id,
                     sound: special?.sound ?? level.sound ?? weapon.def.sound,
@@ -3528,7 +4075,7 @@ export class Sim {
         if (nearest) {
             const dx = nearest.x - player.x;
             const dy = nearest.y - player.y;
-            const len = Math.hypot(dx, dy);
+            const len = fm.hypot(dx, dy);
             if (len > 0.001) {
                 return { x: dx / len, y: dy / len };
             }
@@ -3556,7 +4103,7 @@ export class Sim {
         for (let side = 0; side < sides; side++) {
             const dirX = side === 0 ? aim.x : -aim.x;
             const dirY = side === 0 ? aim.y : -aim.y;
-            this.events.push({
+            this.emit({
                 type: "slash",
                 x: player.x,
                 y: player.y,
@@ -3605,7 +4152,7 @@ export class Sim {
         for (let side = 0; side < sides; side++) {
             const dirX = side === 0 ? aim.x : -aim.x;
             const dirY = side === 0 ? aim.y : -aim.y;
-            this.events.push({
+            this.emit({
                 type: "slash",
                 x: player.x,
                 y: player.y,
@@ -3619,14 +4166,14 @@ export class Sim {
             this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
-                const dist = Math.hypot(ox, oy);
+                const dist = fm.hypot(ox, oy);
                 if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
                     return;
                 }
                 // Anything right on top of the player is in the way of the
                 // swing, whichever way it goes
                 const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
-                const angle = Math.acos(Math.max(-1, Math.min(1, along)));
+                const angle = fm.acos(Math.max(-1, Math.min(1, along)));
                 if (dist > 0.8 && angle > arc + enemy.radius / dist) {
                     return;
                 }
@@ -3646,7 +4193,7 @@ export class Sim {
     ): void {
         const player = this.player;
         const radius = aoe.radius * (1 + this.stats.area);
-        this.events.push({
+        this.emit({
             type: "slash",
             x: player.x,
             y: player.y,
@@ -3661,7 +4208,7 @@ export class Sim {
         this.enemyHash.query(player.x, player.y, radius + 1, (enemy) => {
             if (
                 !enemy.dead &&
-                Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
             ) {
                 hit.push(enemy);
             }
@@ -3703,6 +4250,7 @@ export class Sim {
             // The rest of a multi-hit weapon's hits land a moment apart
             hits.slice(1).forEach((fraction, i) => {
                 this.pendingHits.push({
+                    hero: this.hero.index,
                     enemy,
                     weapon: def,
                     damage: enemyDamage * fraction,
@@ -3766,7 +4314,7 @@ export class Sim {
                     enemy.dead ||
                     done.has(enemy) ||
                     !hasTag(enemy, chain.tags) ||
-                    Math.hypot(enemy.x - from.x, enemy.y - from.y) > chain.range
+                    fm.hypot(enemy.x - from.x, enemy.y - from.y) > chain.range
                 ) {
                     return;
                 }
@@ -3790,11 +4338,12 @@ export class Sim {
         if (this.pendingHits.length === 0) {
             return;
         }
-        const player = this.player;
         this.pendingHits = this.pendingHits.filter((hit) => {
             if (hit.tick > this.tick) {
                 return true;
             }
+            this.useHeroAt(hit.hero);
+            const player = this.player;
             this.damageSource = `weapon:${hit.weapon.id}`;
             const dealt = this.damageEnemy(
                 hit.enemy,
@@ -3860,6 +4409,7 @@ export class Sim {
         enemy.venom = Math.max(enemy.venom, venom);
         enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
         enemy.venomSource = this.damageSource;
+        enemy.venomHero = this.hero.index;
     }
 
     // A hit's chance of healing the player: the weapon's (the Sanguinesti
@@ -3946,8 +4496,7 @@ export class Sim {
     private unvenomedEnemies(x: number, y: number, range: number, count: number): Enemy[] {
         const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
         const later = (enemy: Enemy) =>
-            enemy.venomEnd >= this.tick ||
-            Math.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
+            enemy.venomEnd >= this.tick || fm.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
         // Sorting is stable, so each half stays nearest first
         return near.sort((a, b) => Number(later(a)) - Number(later(b))).slice(0, count);
     }
@@ -3974,7 +4523,7 @@ export class Sim {
                 def,
                 level,
                 target,
-                Math.atan2(target.y - player.y, target.x - player.x),
+                fm.atan2(target.y - player.y, target.x - player.x),
             );
         }
         return true;
@@ -3986,8 +4535,8 @@ export class Sim {
         // At the nearest enemy close by, otherwise the way the player faces
         const nearest = this.nearestEnemies(player.x, player.y, 9, 1)[0];
         const base = nearest
-            ? Math.atan2(nearest.y - player.y, nearest.x - player.x)
-            : Math.atan2(player.facingY, player.facingX);
+            ? fm.atan2(nearest.y - player.y, nearest.x - player.x)
+            : fm.atan2(player.facingY, player.facingX);
         for (let i = 0; i < amount; i++) {
             // Fan out: 0, +1, -1, +2, -2 ... steps of 7 degrees
             const offset = Math.ceil(i / 2) * (i % 2 === 0 ? -1 : 1) * 0.12;
@@ -4005,7 +4554,7 @@ export class Sim {
         }
         for (let i = 0; i < amount; i++) {
             const target = targets[i % targets.length];
-            const angle = Math.atan2(target.y - player.y, target.x - player.x);
+            const angle = fm.atan2(target.y - player.y, target.x - player.x);
             this.addProjectile("axe", def, level, target, angle);
         }
         return true;
@@ -4020,7 +4569,9 @@ export class Sim {
             if (enemy.dead || projectile.hit.has(enemy.uid) || enemy.shieldEnd > this.tick) {
                 continue;
             }
-            const distSq = (enemy.x - from.x) ** 2 + (enemy.y - from.y) ** 2;
+            const bx = enemy.x - from.x;
+            const by = enemy.y - from.y;
+            const distSq = bx * bx + by * by;
             if (distSq <= best) {
                 best = distSq;
                 next = enemy;
@@ -4048,14 +4599,15 @@ export class Sim {
         // A little less than the time one takes to come round again, so
         // whatever's in the way is hit once a pass
         const rehitTicks = Math.max(5, Math.round(((2 * Math.PI) / angularSpeed) * 0.6));
-        const start = Math.atan2(player.facingY, player.facingX);
+        const start = fm.atan2(player.facingY, player.facingX);
         const objIds = def.orbitObjIds ?? [];
         for (let i = 0; i < amount; i++) {
             const angle = start + (i / amount) * Math.PI * 2;
-            const x = player.x + Math.cos(angle) * radius;
-            const y = player.y + Math.sin(angle) * radius;
+            const x = player.x + fm.cos(angle) * radius;
+            const y = player.y + fm.sin(angle) * radius;
             this.projectiles.push({
                 uid: this.nextUid++,
+                hero: this.hero.index,
                 kind: "rune",
                 weapon: def,
                 x,
@@ -4077,7 +4629,7 @@ export class Sim {
                 splash: 0,
                 knockback: level.knockback,
                 hit: new Set(),
-                yaw: yawFromVector(-Math.sin(angle), Math.cos(angle)),
+                yaw: yawFromVector(-fm.sin(angle), fm.cos(angle)),
                 spotAnim: -1,
                 impactSpotAnim: -1,
                 hitSound: -1,
@@ -4100,14 +4652,15 @@ export class Sim {
         const range = kind === "knife" ? 18 : 24;
         this.projectiles.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             kind,
             weapon: def,
             x: fromX,
             y: fromY,
             prevX: fromX,
             prevY: fromY,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
+            vx: fm.cos(angle) * speed,
+            vy: fm.sin(angle) * speed,
             speed,
             targetUid: target?.uid ?? 0,
             damage: level.damage,
@@ -4120,7 +4673,7 @@ export class Sim {
             splash: level.area > 0 ? level.area * (1 + this.stats.area) : 0,
             knockback: level.knockback,
             hit: new Set(),
-            yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+            yaw: yawFromVector(fm.cos(angle), fm.sin(angle)),
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
@@ -4145,16 +4698,17 @@ export class Sim {
         const perTick = (speed * (1 + this.stats.speed)) / TICKS_PER_SECOND;
         const dx = target.x - fromX;
         const dy = target.y - fromY;
-        const angle = Math.atan2(dy, dx);
+        const angle = fm.atan2(dy, dx);
         this.projectiles.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             kind,
             x: fromX,
             y: fromY,
             prevX: fromX,
             prevY: fromY,
-            vx: Math.cos(angle) * perTick,
-            vy: Math.sin(angle) * perTick,
+            vx: fm.cos(angle) * perTick,
+            vy: fm.sin(angle) * perTick,
             speed: perTick,
             targetUid: target.uid,
             damage,
@@ -4190,6 +4744,7 @@ export class Sim {
         }
         const turret: Turret = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             x,
             y,
             yaw: player.yaw,
@@ -4202,7 +4757,7 @@ export class Sim {
             interval: this.cooldownTicks(effect.interval),
         };
         this.turrets.push(turret);
-        this.events.push({ type: "cannonSetup", x, y });
+        this.emit({ type: "cannonSetup", x, y });
     }
 
     private stepTurrets(): void {
@@ -4210,6 +4765,7 @@ export class Sim {
             if (this.tick < turret.nextShot || this.tick >= turret.endTick) {
                 continue;
             }
+            this.useHeroAt(turret.hero);
             const targets = this.nearestEnemies(turret.x, turret.y, turret.range, turret.amount);
             if (targets.length === 0) {
                 turret.nextShot = this.tick + 5;
@@ -4217,7 +4773,7 @@ export class Sim {
             }
             turret.nextShot = this.tick + turret.interval;
             turret.yaw = yawFromVector(targets[0].x - turret.x, targets[0].y - turret.y);
-            this.events.push({ type: "cannonFire", x: turret.x, y: turret.y });
+            this.emit({ type: "cannonFire", x: turret.x, y: turret.y });
             for (const target of targets) {
                 this.shootAt(
                     "cannonball",
@@ -4240,6 +4796,7 @@ export class Sim {
         const player = this.player;
         const thrall: Thrall = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             def,
             x: player.x,
             y: player.y,
@@ -4258,9 +4815,10 @@ export class Sim {
     }
 
     private stepThralls(): void {
-        const player = this.player;
         this.thralls = this.thralls.filter((t) => this.tick < t.endTick);
         this.thralls.forEach((thrall, index) => {
+            this.useHeroAt(thrall.hero);
+            const player = this.player;
             const def = thrall.def;
             thrall.prevX = thrall.x;
             thrall.prevY = thrall.y;
@@ -4285,15 +4843,15 @@ export class Sim {
             } else {
                 const side = index % 2 === 0 ? 1 : -1;
                 const angle =
-                    Math.atan2(-player.facingY, -player.facingX) +
+                    fm.atan2(-player.facingY, -player.facingX) +
                     side * (0.7 + Math.floor(index / 2) * 0.5);
-                goalX = player.x + Math.cos(angle) * THRALL_FOLLOW_DISTANCE;
-                goalY = player.y + Math.sin(angle) * THRALL_FOLLOW_DISTANCE;
+                goalX = player.x + fm.cos(angle) * THRALL_FOLLOW_DISTANCE;
+                goalY = player.y + fm.sin(angle) * THRALL_FOLLOW_DISTANCE;
                 stop = 0.3;
             }
             const dx = goalX - thrall.x;
             const dy = goalY - thrall.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             thrall.moving = distance > stop;
             if (thrall.moving) {
                 const move = Math.min(THRALL_SPEED, distance - stop);
@@ -4308,7 +4866,7 @@ export class Sim {
                 thrall.yaw = yawFromVector(dx, dy);
             }
             // Stuck behind a wall: back beside the player
-            if (Math.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
+            if (fm.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
                 thrall.x = thrall.prevX = player.x;
                 thrall.y = thrall.prevY = player.y;
             }
@@ -4319,13 +4877,13 @@ export class Sim {
             const tx = target.x - thrall.x;
             const ty = target.y - thrall.y;
             const reach = melee ? THRALL_RADIUS + target.radius + 0.4 : def.range;
-            if (Math.hypot(tx, ty) > reach) {
+            if (fm.hypot(tx, ty) > reach) {
                 return;
             }
             thrall.cooldown = this.cooldownTicks(def.interval);
             thrall.attackStart = this.tick;
             thrall.yaw = yawFromVector(tx, ty);
-            this.events.push({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
+            this.emit({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
             if (melee) {
                 this.damageSource = "powerUp:thrall";
                 this.damageEnemy(target, thrall.damage, def.knockback, thrall.x, thrall.y);
@@ -4348,10 +4906,10 @@ export class Sim {
     private fireAura(def: WeaponDef, level: WeaponDef["levels"][number]): void {
         const player = this.player;
         const radius = level.area * (1 + this.stats.area);
-        this.events.push({ type: "aura", x: player.x, y: player.y, radius });
+        this.emit({ type: "aura", x: player.x, y: player.y, radius });
         const hit: Enemy[] = [];
         this.enemyHash.query(player.x, player.y, radius + 0.5, (enemy) => {
-            if (Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
+            if (fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
         });
@@ -4393,7 +4951,7 @@ export class Sim {
         const radius = level.area * (1 + this.stats.area) * burns.radius;
         const damage = level.damage * burns.damage;
         const same = this.fires.find(
-            (fire) => Math.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
+            (fire) => fm.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
         );
         if (same) {
             same.endTick = Math.max(same.endTick, endTick);
@@ -4408,10 +4966,11 @@ export class Sim {
             // One in the middle, the rest around it
             const angle = (i / (FIRE_FLAMES - 1)) * Math.PI * 2;
             const r = i === 0 ? 0 : radius * 0.6;
-            flames.push({ x: x + Math.cos(angle) * r, y: y + Math.sin(angle) * r });
+            flames.push({ x: x + fm.cos(angle) * r, y: y + fm.sin(angle) * r });
         }
         this.fires.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             source: this.damageSource,
             x,
             y,
@@ -4435,9 +4994,10 @@ export class Sim {
                 continue;
             }
             fire.nextTick += FIRE_INTERVAL;
+            this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
             this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
-                if (Math.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
+                if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
             });
@@ -4464,7 +5024,7 @@ export class Sim {
             this.enemyHash.query(tx, ty, radius + 0.5, (enemy) => {
                 if (
                     enemy === target ||
-                    Math.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
+                    fm.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
                 ) {
                     if (def.freezes) {
                         this.freezeEnemy(enemy, level.duration);
@@ -4490,6 +5050,7 @@ export class Sim {
             projectile.prevX = projectile.x;
             projectile.prevY = projectile.y;
             projectile.life--;
+            this.useHeroAt(projectile.hero);
             if (projectile.orbit) {
                 this.stepOrbit(projectile, projectile.orbit);
                 continue;
@@ -4501,7 +5062,7 @@ export class Sim {
             if (target) {
                 const dx = target.x - projectile.x;
                 const dy = target.y - projectile.y;
-                const len = Math.hypot(dx, dy);
+                const len = fm.hypot(dx, dy);
                 if (len > 0.001) {
                     projectile.vx = (dx / len) * projectile.speed;
                     projectile.vy = (dy / len) * projectile.speed;
@@ -4527,7 +5088,7 @@ export class Sim {
                     return;
                 }
                 const reach = projectile.radius + enemy.radius;
-                if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+                if (fm.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
                     return;
                 }
                 projectile.hit.add(enemy.uid);
@@ -4551,15 +5112,15 @@ export class Sim {
     private stepOrbit(projectile: Projectile, orbit: NonNullable<Projectile["orbit"]>): void {
         const player = this.player;
         const angle = orbit.angle + (this.tick - projectile.startTick) * orbit.angularSpeed;
-        projectile.x = player.x + Math.cos(angle) * orbit.radius;
-        projectile.y = player.y + Math.sin(angle) * orbit.radius;
-        projectile.yaw = yawFromVector(-Math.sin(angle), Math.cos(angle));
+        projectile.x = player.x + fm.cos(angle) * orbit.radius;
+        projectile.y = player.y + fm.sin(angle) * orbit.radius;
+        projectile.yaw = yawFromVector(-fm.sin(angle), fm.cos(angle));
         this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
             if (enemy.dead || (orbit.nextHit.get(enemy.uid) ?? 0) > this.tick) {
                 return;
             }
             const reach = projectile.radius + enemy.radius;
-            if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+            if (fm.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
                 return;
             }
             orbit.nextHit.set(enemy.uid, this.tick + orbit.rehitTicks);
@@ -4582,7 +5143,7 @@ export class Sim {
             this.addEffect(projectile.impactSpotAnim, enemy.x, enemy.y, 0, 30, enemy.uid);
         }
         if (projectile.hitSound !== -1) {
-            this.events.push({
+            this.emit({
                 type: "impact",
                 sound: projectile.hitSound,
                 x: enemy.x,
@@ -4636,7 +5197,7 @@ export class Sim {
             const x = enemy.x;
             const y = enemy.y;
             this.enemyHash.query(x, y, projectile.splash + 0.5, (other) => {
-                if (other !== enemy && Math.hypot(other.x - x, other.y - y) <= projectile.splash) {
+                if (other !== enemy && fm.hypot(other.x - x, other.y - y) <= projectile.splash) {
                     this.damageEnemy(
                         other,
                         projectile.damage * 0.5,
@@ -4683,11 +5244,11 @@ export class Sim {
         const targets = this.nearestEnemies(from.x, from.y, SPLIT_RANGE, split.count + 1).filter(
             (e) => e !== from,
         );
-        const ahead = Math.atan2(projectile.vy, projectile.vx);
+        const ahead = fm.atan2(projectile.vy, projectile.vx);
         for (let i = 0; i < split.count; i++) {
             const target = targets[i];
             const angle = target
-                ? Math.atan2(target.y - from.y, target.x - from.x)
+                ? fm.atan2(target.y - from.y, target.x - from.x)
                 : ahead + (i - (split.count - 1) / 2) * 0.6;
             this.projectiles.push({
                 ...projectile,
@@ -4696,14 +5257,14 @@ export class Sim {
                 y: from.y,
                 prevX: from.x,
                 prevY: from.y,
-                vx: Math.cos(angle) * projectile.speed,
-                vy: Math.sin(angle) * projectile.speed,
+                vx: fm.cos(angle) * projectile.speed,
+                vy: fm.sin(angle) * projectile.speed,
                 targetUid: target?.uid ?? 0,
                 damage: projectile.damage * split.damage,
                 pierce: split.pierce,
                 life: Math.ceil((SPLIT_RANGE * 2) / Math.max(projectile.speed, 0.01)),
                 hit: new Set([from.uid]),
-                yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+                yaw: yawFromVector(fm.cos(angle), fm.sin(angle)),
                 startTick: this.tick,
                 split: undefined,
             });
@@ -4751,7 +5312,7 @@ export class Sim {
             }
             const onGround = this.pickups.filter((pickup) => pickup.kind === "casket").length;
             if (onGround >= LATE_CASKET_LIMIT) {
-                this.events.push({
+                this.emit({
                     type: "notice",
                     message: "You have a funny feeling there would've been a chest",
                 });
@@ -4760,7 +5321,7 @@ export class Sim {
         }
         const spot = this.walkableSpot(x, y);
         this.dropPickup("casket", spot.x, spot.y, 1, { tier });
-        this.events.push({ type: "casketDropped", tier, x: spot.x, y: spot.y });
+        this.emit({ type: "casketDropped", tier, x: spot.x, y: spot.y });
     }
 
     // Where to put something that needs walking over: what dropped it can be
@@ -4830,8 +5391,6 @@ export class Sim {
     }
 
     private stepPickups(): void {
-        const player = this.player;
-        const magnet = BASE_MAGNET * (1 + this.stats.magnet);
         // For bones and coins on their way to a bigger pile
         const pilesByUid = this.pickups.some((p) => p.pileUid !== 0)
             ? new Map(this.pickups.map((p) => [p.uid, p]))
@@ -4847,9 +5406,13 @@ export class Sim {
                 pickup.value = -1;
                 continue;
             }
+            // Whoever's nearest gets it
+            this.use(this.nearestHero(pickup.x, pickup.y));
+            const player = this.player;
+            const magnet = BASE_MAGNET * (1 + this.stats.magnet);
             const dx = player.x - pickup.x;
             const dy = player.y - pickup.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             // Caskets and power-ups need walking over
             const magnetic = pickup.kind !== "casket" && pickup.kind !== "powerUp";
             if (!pickup.attracted && magnetic && distance < magnet) {
@@ -4887,8 +5450,10 @@ export class Sim {
     // goes further from the player to join one: bones the player's about to
     // walk over would be dragged away, and the run would level slower.
     private gatherPiles(): void {
-        const player = this.player;
-        const away = (p: Pickup) => Math.hypot(p.x - player.x, p.y - player.y);
+        const away = (p: Pickup) => {
+            const player = this.nearestHero(p.x, p.y).player;
+            return fm.hypot(p.x - player.x, p.y - player.y);
+        };
         const loose = this.pickups.filter(
             (p) =>
                 (p.kind === "bones" || p.kind === "coins") &&
@@ -4916,7 +5481,7 @@ export class Sim {
                     other.kind === pile.kind &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
-                    Math.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
+                    fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
                 ) {
                     other.pileUid = pile.uid;
                     other.speed = 0;
@@ -4936,7 +5501,7 @@ export class Sim {
         }
         const dx = pile.x - pickup.x;
         const dy = pile.y - pickup.y;
-        const distance = Math.hypot(dx, dy);
+        const distance = fm.hypot(dx, dy);
         pickup.speed = Math.min(pickup.speed + 0.02, 0.3);
         if (distance <= pickup.speed) {
             pile.value += pickup.value;
@@ -4948,7 +5513,7 @@ export class Sim {
     }
 
     private collect(pickup: Pickup): void {
-        this.events.push({ type: "pickup", kind: pickup.kind, value: pickup.value });
+        this.emit({ type: "pickup", kind: pickup.kind, value: pickup.value });
         switch (pickup.kind) {
             case "bones":
                 this.xp += pickup.value * (1 + this.stats.growth);
@@ -5066,6 +5631,7 @@ export class Sim {
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 this.rings.push({
                     uid: this.nextUid++,
+                    hero: this.hero.index,
                     x: player.x,
                     y: player.y,
                     startTick: this.tick,
@@ -5082,14 +5648,20 @@ export class Sim {
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 this.lapsEndTick = endTick;
                 this.laps = effect;
-                this.events.push({ type: "playerShout", text: effect.shout });
+                this.emit({ type: "playerShout", text: effect.shout });
                 message = effect.shout;
                 break;
         }
         if (endTick > this.tick) {
-            this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
+            this.powerUps.push({
+                uid: this.nextUid++,
+                hero: this.hero.index,
+                id: def.id,
+                startTick: this.tick,
+                endTick,
+            });
         }
-        this.events.push({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+        this.emit({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
     }
 
     // The middle of the thickest crowd within range of the player, going by
@@ -5103,7 +5675,7 @@ export class Sim {
         for (const enemy of this.nearestEnemies(player.x, player.y, range, MAX_CROWD_CHECKS)) {
             let count = 0;
             this.enemyHash.query(enemy.x, enemy.y, radius, (other) => {
-                if (Math.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
+                if (fm.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
                     count++;
                 }
             });
@@ -5120,6 +5692,7 @@ export class Sim {
         const landTick = this.tick + Math.round(effect.delay * TICKS_PER_SECOND);
         this.rocks.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             powerUpId: def.id,
             x,
             y,
@@ -5138,6 +5711,7 @@ export class Sim {
     private stepRocks(): void {
         for (const rock of this.rocks) {
             if (rock.landTick === this.tick) {
+                this.useHeroAt(rock.hero);
                 this.landRock(rock);
             }
         }
@@ -5146,12 +5720,12 @@ export class Sim {
 
     private landRock(rock: FallingRock): void {
         const { x, y, radius } = rock;
-        this.events.push({ type: "blast", x, y, radius });
-        this.events.push({ type: "powerUpHit", id: rock.powerUpId, x, y });
+        this.emit({ type: "blast", x, y, radius });
+        this.emit({ type: "powerUpHit", id: rock.powerUpId, x, y });
         this.addEffect(rock.spotAnim, x, y, 0, 60);
         const hit: Enemy[] = [];
         this.enemyHash.query(x, y, radius + 1, (enemy) => {
-            if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
+            if (fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
         });
@@ -5176,6 +5750,7 @@ export class Sim {
         const y = player.y - player.facingY * RAMPAGE_START_DISTANCE;
         const rampage: Rampage = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             powerUpId: def.id,
             x,
             y,
@@ -5207,17 +5782,17 @@ export class Sim {
         const crowd = this.thickestCrowd(RAMPAGE_CROWD_RANGE, rampage.radius * 2);
         let dx = crowd.x - rampage.x;
         let dy = crowd.y - rampage.y;
-        if (Math.hypot(dx, dy) < 1) {
+        if (fm.hypot(dx, dy) < 1) {
             dx = player.x - rampage.x;
             dy = player.y - rampage.y;
         }
-        const length = Math.hypot(dx, dy) || 1;
+        const length = fm.hypot(dx, dy) || 1;
         rampage.goalX = rampage.x + dx + (dx / length) * RAMPAGE_OVERSHOOT;
         rampage.goalY = rampage.y + dy + (dy / length) * RAMPAGE_OVERSHOOT;
         rampage.yaw = yawFromVector(dx, dy);
         rampage.passesLeft--;
         rampage.hit.clear();
-        this.events.push({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
+        this.emit({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
     }
 
     private stepRampages(): void {
@@ -5227,9 +5802,10 @@ export class Sim {
             if (rampage.doneTick !== -1) {
                 continue;
             }
+            this.useHeroAt(rampage.hero);
             const dx = rampage.goalX - rampage.x;
             const dy = rampage.goalY - rampage.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             const move = Math.min(rampage.speed, distance);
             if (distance > 0) {
                 rampage.x += (dx / distance) * move;
@@ -5253,7 +5829,7 @@ export class Sim {
         const { x, y, radius, hit } = rampage;
         const caught: Enemy[] = [];
         this.enemyHash.query(x, y, radius + 1, (enemy) => {
-            if (!hit.has(enemy.uid) && Math.hypot(enemy.x - x, enemy.y - y) <= radius) {
+            if (!hit.has(enemy.uid) && fm.hypot(enemy.x - x, enemy.y - y) <= radius) {
                 caught.push(enemy);
             }
         });
@@ -5276,6 +5852,7 @@ export class Sim {
     private stepRings(): void {
         for (const ring of this.rings) {
             if (this.tick >= ring.nextPulse) {
+                this.useHeroAt(ring.hero);
                 ring.nextPulse = this.tick + RING_PULSE_TICKS;
                 this.pulseRing(ring);
             }
@@ -5292,7 +5869,7 @@ export class Sim {
                 !enemy.boss &&
                 !enemy.def.stationary &&
                 !enemy.jump &&
-                Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
+                fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
             ) {
                 caught.push(enemy);
             }
@@ -5346,7 +5923,7 @@ export class Sim {
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
-        this.events.push({ type: "chest", tier, itemId, coins });
+        this.emit({ type: "chest", tier, itemId, coins });
         if (this.state === "playing") {
             this.state = "chest";
         }
@@ -5388,22 +5965,35 @@ export class Sim {
         return getItem(itemId).kind === "gear" ? this.gearUpgradesFound : 0;
     }
 
+    // The run's level is shared: each level up gives every hero a pick
     private checkLevelUp(): void {
         const level = this.endless
             ? endlessLevelForXp(this.xp, this.level)
             : runLevelForXp(this.xp);
         if (level > this.level) {
-            this.pendingLevelUps += level - this.level;
+            const gained = level - this.level;
             this.level = level;
-            if (this.stats.levelMight !== 0) {
-                this.updateStats();
+            for (const hero of this.heroes) {
+                if (hero.left) {
+                    continue;
+                }
+                this.use(hero);
+                hero.pendingLevelUps += gained;
+                if (this.stats.levelMight !== 0) {
+                    this.updateStats();
+                }
+                this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
             }
-            this.events.push({ type: "levelUp", level });
-            this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
+            this.emit({ type: "levelUp", level });
         }
-        if (this.pendingLevelUps > 0 && this.state === "playing") {
+        if (this.state === "playing" && this.anyoneToChoose()) {
             this.state = "levelUp";
-            this.choices = this.roll();
+            for (const hero of this.heroes) {
+                if (this.isChoosing(hero) && hero.choices.length === 0) {
+                    this.use(hero);
+                    this.choices = this.roll();
+                }
+            }
         }
     }
 
@@ -5451,7 +6041,10 @@ export class Sim {
         if (this.runOver) {
             return undefined;
         }
-        return this.powerUps.map((p) => getPowerUp(p.id)).find((p) => p.look);
+        return this.powerUps
+            .filter((p) => p.hero === this.hero.index)
+            .map((p) => getPowerUp(p.id))
+            .find((p) => p.look);
     }
 
     // Until this round's final boss
@@ -5504,7 +6097,7 @@ function pingPong(distance: number, half: number): number {
 
 // RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
 export function yawFromVector(dx: number, dy: number): number {
-    return Math.round((Math.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
+    return Math.round((fm.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
 }
 
 export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };
