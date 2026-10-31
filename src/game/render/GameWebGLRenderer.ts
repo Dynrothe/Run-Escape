@@ -33,6 +33,8 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
 
     // Dev: to compare frames with another cell size, or none (0)
     cullCellSizeOverride?: number;
+    // Dev: off draws every actor, on screen or not
+    cullActors = true;
 
     actorProgram?: Program;
     actorSilhouetteProgram?: Program;
@@ -81,6 +83,9 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
     }
 
     override async queueLoadMap(mapX: number, mapY: number): Promise<void> {
+        // The first squares are asked for before the renderer's up, and what
+        // they're baked like depends on whether it has multi draw
+        await this.actorRendererReady;
         this.cullCellSize =
             this.cullCellSizeOverride ??
             (this.hasMultiDraw ? CULL_CELL_SIZE : CULL_CELL_SIZE_NO_MULTI_DRAW);
@@ -121,7 +126,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         const camera = this.mapViewer.camera;
         const actors = this.actorRenderer;
         if (actors) {
-            actors.beginFrame();
+            actors.beginFrame(this.cullActors ? camera.frustum : undefined);
             this.game?.submitActors(actors, camera);
             actors.upload();
         }

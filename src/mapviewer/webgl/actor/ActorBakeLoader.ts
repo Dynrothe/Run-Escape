@@ -43,12 +43,26 @@ function getModelBounds(model: Model): { height: number; radius: number } {
     return { height, radius };
 }
 
+function getModelReach(model: Model): number {
+    let reach = 0;
+    for (let i = 0; i < model.verticesCount; i++) {
+        const x = model.verticesX[i];
+        const y = model.verticesY[i];
+        const z = model.verticesZ[i];
+        const squared = x * x + y * y + z * z;
+        if (squared > reach) {
+            reach = squared;
+        }
+    }
+    return Math.sqrt(reach);
+}
+
 function bakeAnim(
     state: WorkerState,
     sceneBuf: SceneBuffer,
     getModel: ModelSource,
     seqId: number,
-): { anim: BakedAnim; firstFrame: Model | undefined } {
+): { anim: BakedAnim; firstFrame: Model | undefined; reach: number } {
     const seqType = seqId !== -1 ? state.seqTypeLoader.load(seqId) : undefined;
 
     let frameCount = 1;
@@ -66,6 +80,7 @@ function bakeAnim(
     const ranges = new Int32Array(frameCount * 4);
     const frameLengths = new Uint16Array(frameCount);
     let firstFrame: Model | undefined;
+    let reach = 0;
 
     for (let i = 0; i < frameCount; i++) {
         const model = seqType ? getModel(seqId, i) : getModel(-1, -1);
@@ -73,6 +88,7 @@ function bakeAnim(
             if (i === 0) {
                 firstFrame = model;
             }
+            reach = Math.max(reach, getModelReach(model));
             // Posed vertices are rarely shared between frames, so don't let the
             // dedupe map grow over the whole bake.
             sceneBuf.vertexBuf.vertexIndices.clear();
@@ -98,6 +114,7 @@ function bakeAnim(
             looping: seqType ? seqType.looping || seqType.frameStep !== -1 : true,
         },
         firstFrame,
+        reach,
     };
 }
 
@@ -110,14 +127,16 @@ function bakeSet(
 ): BakedSet {
     const anims: BakedAnim[] = [];
     let bounds = { height: 0, radius: 0 };
+    let setReach = 0;
     for (const seqId of seqIds.length > 0 ? seqIds : [-1]) {
-        const { anim, firstFrame } = bakeAnim(state, sceneBuf, getModel, seqId);
+        const { anim, firstFrame, reach } = bakeAnim(state, sceneBuf, getModel, seqId);
         if (anims.length === 0 && firstFrame) {
             bounds = getModelBounds(firstFrame);
         }
+        setReach = Math.max(setReach, reach);
         anims.push(anim);
     }
-    return { key, height: bounds.height, radius: bounds.radius, anims };
+    return { key, height: bounds.height, radius: bounds.radius, reach: setReach, anims };
 }
 
 function npcModelSource(npcModelLoader: NpcModelLoader, npcType: NpcType): ModelSource {
