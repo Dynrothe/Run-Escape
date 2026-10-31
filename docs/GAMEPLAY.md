@@ -173,6 +173,9 @@ version and how to run it.
   would drop only has a 10% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
   would've been a chest".
+- **Auto alch** (off by default, in Settings and the pause menu) high alchs every casket as it's
+  opened, gear and rare finds included, with a line saying what it was and no casket screen. It's
+  the same as clicking High alch: alching a piece of a set you've started stops that set too.
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the

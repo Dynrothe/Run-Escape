@@ -253,6 +253,18 @@ function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting name="Auto alch" text="High alch every casket as you open it, without stopping">
+            <Toggle
+                on={ui.display.autoAlch}
+                label="Auto alch"
+                onToggle={() => client.toggleAutoAlch()}
+            />
+        </Setting>
+    );
+}
+
 // The community server's invite
 const DISCORD_INVITE = "https://discord.gg/82gBtKz2Xx";
 
@@ -362,6 +374,7 @@ function SettingsPanel({
                         />
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
+                    <AutoAlchSetting ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>Save</h3>
@@ -1414,6 +1427,7 @@ function PauseModal({
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <AutoPauseSetting ui={ui} client={client} />
+                        <AutoAlchSetting ui={ui} client={client} />
                     </div>
                 </div>
                 <div className="ui-row">

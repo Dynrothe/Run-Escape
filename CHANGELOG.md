@@ -9,6 +9,7 @@ the version in the corner).
 
 - A DPS meter under the quests shows how much damage you've been dealing, from everything, over
   the last 8 seconds.
+- New setting, Auto alch: high alch every chest as you open it, with no chest screen and no pause.
 
 ### Changed
 

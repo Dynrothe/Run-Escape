@@ -369,6 +369,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ pauseOnBlur: !this.display.pauseOnBlur });
     }
 
+    toggleAutoAlch(): void {
+        this.setDisplay({ autoAlch: !this.display.autoAlch });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -793,10 +797,11 @@ export class GameClient implements GameFrameHandler {
                 this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
-                if (!sim.runOver) {
+                this.syncOverlay();
+                // Auto alch can have the run going again, with no time lost
+                if (!sim.runOver && this.store.getSnapshot().overlay !== "none") {
                     this.accumulator = 0;
                 }
-                this.syncOverlay();
             }
         }
 
@@ -883,6 +888,14 @@ export class GameClient implements GameFrameHandler {
                 case "notice":
                     this.store.toast(event.message);
                     break;
+                case "alch":
+                    // There was no casket screen to show what it was
+                    if (this.display.autoAlch) {
+                        this.store.toast(
+                            `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                        );
+                    }
+                    break;
             }
         }
     }
@@ -900,6 +913,10 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined });
             this.updateHud(true);
+        } else if (sim.state === "chest" && this.display.autoAlch) {
+            // As if the High alch button had been clicked; this comes back here
+            // for whatever's next
+            this.resolveChest("alch");
         } else if (sim.state === "chest") {
             this.store.set({ overlay: "chest", chest: getChestView(sim), choices: [] });
         } else if (sim.state === "levelUp") {
