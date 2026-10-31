@@ -208,6 +208,9 @@ function playerRequest(key: string, appearance: PlayerAppearance, seqIds: number
     return { kind: "player", key, appearance, seqIds };
 }
 
+// Bake requests to put through one buffer
+const BAKE_BATCH = 25;
+
 // The map loader logs every square
 async function quietly<T>(load: () => Promise<T>): Promise<T> {
     const { log, time, timeEnd } = console;
@@ -249,8 +252,13 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
     ];
     const bakeLoader = new ActorBakeLoader();
     const enemyRequests = GameAssets.getEnemyRequests(ENEMIES);
-    for (const requests of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
-        await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
+    for (const all of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
+        // The game bakes a map's worth at a time. Everything in one buffer is more
+        // than an array can hold (Invalid array length).
+        for (let i = 0; i < all.length; i += BAKE_BATCH) {
+            const requests = all.slice(i, i + BAKE_BATCH);
+            await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
+        }
     }
 
     await load(new SoundLoader(), { ids: getGameSoundIds() });
