@@ -166,14 +166,18 @@ const RUIN_WALLS = 0.45;
 export class PrefabKit {
     private readonly turned = new Map<string, { prefab: TileGrid; exits: Exit[] }>();
 
-    constructor(readonly context: BuildContext) {}
+    // A map can bring prefabs of its own, which the generator won't then pick
+    constructor(
+        readonly context: BuildContext,
+        private readonly defs: Record<string, PrefabDef> = PREFABS,
+    ) {}
 
     get(name: string, turns: number): { prefab: TileGrid; exits: Exit[] } {
         const key = `${name}:${turns}`;
         let entry = this.turned.get(key);
         if (!entry) {
             const prefab = rotatePrefab(
-                loadPrefab(this.context, PREFABS[name]),
+                loadPrefab(this.context, this.defs[name]),
                 turns,
                 this.context.locs,
             );

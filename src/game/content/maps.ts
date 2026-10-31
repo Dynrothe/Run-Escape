@@ -321,10 +321,11 @@ function createDevMap(recipe: MapRecipe): MapDef {
         victoryText: "",
         fun: { bosses: { pool: ["giant_rat"], firstAt: 3600, every: [3600, 3600] } },
         dev: true,
+        ...recipe.mapDef,
     };
 }
 
-const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
+export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDevMap) : [];
 
 // Every map, the campaign's and the fun ones
 export const ALL_MAPS: MapDef[] = [...MAPS, ...FUN_MAPS, ...DEV_MAPS];

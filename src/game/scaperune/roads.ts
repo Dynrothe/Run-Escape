@@ -157,7 +157,7 @@ export class RoadNetwork {
         return touches;
     }
 
-    private add(line: RoadLine, width: (point: number) => number, trail: boolean): void {
+    add(line: RoadLine, width: (point: number) => number, trail: boolean): void {
         const { ground, corners } = this.build;
         const { points } = line;
         addPathToField(this.road, corners.x, corners.y, points, width);
@@ -307,7 +307,8 @@ export class RoadNetwork {
         return runs;
     }
 
-    private addRun(run: Point[]): void {
+    // Lays a road exactly along a line that's already smooth, for a map that's drawn its own
+    addRun(run: Point[]): void {
         const { ground } = this.build;
         this.add(
             { points: run, lead: 0, halfWidth: this.halfWidth, grade: ROAD_GRADE },

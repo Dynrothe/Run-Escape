@@ -26,7 +26,7 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
-import { FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { DEV_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
@@ -779,6 +779,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                     <div className="ui-map-list">{FUN_MAPS.map(tile)}</div>
                 </div>
+                {DEV_MAPS.length > 0 && (
+                    <div className="ui-style-group">
+                        <div className="ui-style-name">
+                            Dev maps
+                            <span className="ui-style-treasure">dev server only</span>
+                        </div>
+                        <div className="ui-map-list">{DEV_MAPS.map(tile)}</div>
+                    </div>
+                )}
             </div>
             <MapDetails save={save} map={getMap(peek ?? ui.mapId)} />
         </div>
