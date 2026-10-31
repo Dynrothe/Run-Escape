@@ -35,6 +35,7 @@ import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/it
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
+import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { WEAPONS } from "../../src/game/content/weapons";
@@ -185,6 +186,7 @@ function getContentObjIds(): number[] {
             ITEMS,
             CASKETS,
             POWER_UPS,
+            RANDOM_EVENTS,
             THRALLS,
             ALL_MAPS,
             SHOP_UPGRADES,

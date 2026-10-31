@@ -29,6 +29,7 @@ go stale. Add anything that cost you time to work out.
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
 | Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
+| Random events: who turns up, what they do             | `src/game/content/randomEvents.ts`      |
 | Save data and migrations                              | `src/game/core/save.ts`                 |
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
@@ -124,6 +125,11 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
   console, takes a moment to show up.
 - Headless Chromium needs `--use-angle=swiftshader --enable-unsafe-swiftshader`, and a persistent
   profile, or the cache won't fit in its storage quota. The cache can take a while to load.
+- A small window isn't a phone: `Mobile.css` needs `(pointer: coarse)` too. Over DevTools,
+  `Emulation.setTouchEmulationEnabled` only lasts as long as the session that set it, so keep that
+  session open while you test.
+- The desktop app's browser pane can stop drawing while it's hidden, and the game then sits at
+  "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,
