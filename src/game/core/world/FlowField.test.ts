@@ -1,5 +1,38 @@
-import { FlowField, canStep } from "./FlowField";
+import { FlowField, canStep, canWalkStraight } from "./FlowField";
 import { makeGrid } from "./testGrid";
+
+describe("canWalkStraight", () => {
+    const grid = makeGrid([
+        //
+        ".......",
+        ".|.....",
+        "...#...",
+        ".......",
+    ]);
+
+    test("across open ground, any way round", () => {
+        expect(canWalkStraight(grid, 100.5, 200.5, 106.5, 200.5)).toBe(true);
+        expect(canWalkStraight(grid, 106.5, 200.5, 100.5, 200.5)).toBe(true);
+        expect(canWalkStraight(grid, 104.5, 200.5, 106.5, 203.5)).toBe(true);
+        expect(canWalkStraight(grid, 102.2, 200.7, 102.2, 200.1)).toBe(true);
+    });
+
+    test("not through something solid", () => {
+        expect(canWalkStraight(grid, 100.5, 201.5, 106.5, 201.5)).toBe(false);
+        expect(canWalkStraight(grid, 106.5, 201.5, 100.5, 201.5)).toBe(false);
+        expect(canWalkStraight(grid, 103.5, 200.5, 103.5, 203.5)).toBe(false);
+    });
+
+    test("not through a wall, from either side", () => {
+        expect(canWalkStraight(grid, 100.5, 202.5, 103.5, 202.5)).toBe(false);
+        expect(canWalkStraight(grid, 103.5, 202.5, 100.5, 202.5)).toBe(false);
+    });
+
+    test("not by a corner it can't get round", () => {
+        expect(canWalkStraight(grid, 102.5, 200.5, 103.5, 201.5)).toBe(false);
+        expect(canWalkStraight(grid, 102.5, 201.5, 103.5, 200.5)).toBe(false);
+    });
+});
 
 describe("canStep", () => {
     const grid = makeGrid([".....", ".|...", "....."]);

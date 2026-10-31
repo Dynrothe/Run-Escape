@@ -45,7 +45,6 @@ import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./Dis
 import {
     GameAssets,
     HITSPLAT_SPRITES,
-    PLAYER_SEQS,
     getCharacterAppearance,
     getRunAppearance,
 } from "./GameAssets";
@@ -1012,7 +1011,7 @@ export class GameClient implements GameFrameHandler {
         // Title screen: just the character
         const model = this.assets.getPlayer();
         if (model) {
-            const anim = model.getAnim(PLAYER_SEQS.idle);
+            const anim = model.getAnim(this.assets.getPlayerStance().idle);
             const tick = Math.floor(this.attractTick);
             actors.draw(
                 model,

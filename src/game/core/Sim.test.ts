@@ -3,6 +3,9 @@ import { CHARACTERS } from "../content/characters";
 import {
     ENDLESS_COINS,
     LATER_ROUND_START,
+    LATE_CASKET_CHANCE,
+    LATE_CASKET_LIMIT,
+    LATE_CASKET_SECONDS,
     ROUND_DAMAGE,
     ROUND_HP,
     ROUND_XP,
@@ -12,7 +15,7 @@ import {
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKET_GEAR, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { FUN_MAPS, MAPS, getArenaRegion, getMap } from "../content/maps";
-import { POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, POWER_UP_LIFETIME, THRALLS, getPowerUp } from "../content/powerups";
 import { EnemyDef, emptyStats } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -368,6 +371,23 @@ describe("power-ups", () => {
         expect(dropped()).toBe(1);
     });
 
+    test("the same one never drops twice in a row", () => {
+        const sim = createSim();
+        sim.weapons = [];
+        const seen: string[] = [];
+        // A kill with the odds of a drop nearly certain, over and over
+        sim.stats.luck = 1e6;
+        for (let i = 0; i < 300; i++) {
+            sim.tick += 60 * TICKS_PER_SECOND;
+            sim.damageEnemy(goblin(sim, 1040.5, 1036.5, 1), 1e9, 0, 0, 0);
+            const pickup = sim.pickups.filter((p) => p.kind === "powerUp").pop();
+            seen.push(pickup!.powerUp!);
+            sim.pickups.length = 0;
+        }
+        expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
+        expect(new Set(seen).size).toBe(POWER_UPS.length);
+    });
+
     test("are walked over to use them, and don't wait around", () => {
         const sim = createSim();
         sim.dropPowerUp("magnet", sim.player.x + 1.5, sim.player.y);
@@ -383,6 +403,486 @@ describe("power-ups", () => {
         expect(sim.powerUps.map((p) => p.id)).toEqual(["stopwatch"]);
         const used = sim.takeEvents().find((e) => e.type === "powerUp");
         expect(used).toMatchObject({ id: "stopwatch", message: "Time stands still!" });
+    });
+
+    describe("the sled", () => {
+        const SECONDS = 8;
+        const TICKS = SECONDS * TICKS_PER_SECOND;
+
+        function ride(sim: Sim): void {
+            sim.usePowerUp(getPowerUp("sled"));
+        }
+
+        test("is more than twice as fast, then back to normal", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const distance = (ticks: number) => {
+                const start = sim.player.x;
+                for (let i = 0; i < ticks; i++) {
+                    sim.step(1, 0);
+                }
+                return sim.player.x - start;
+            };
+            const walking = distance(20);
+            ride(sim);
+            expect(distance(20) / walking).toBeCloseTo(2.2);
+            runFor(sim, SECONDS, "still");
+            expect(distance(20) / walking).toBeCloseTo(1);
+        });
+
+        test("lasts 8 seconds whatever Effect duration says", () => {
+            const sim = createSim();
+            sim.stats.duration = 2;
+            ride(sim);
+            expect(sim.powerUps[0].endTick - sim.tick).toBe(TICKS);
+        });
+
+        test("nothing hurts the player: crowds, poison, bosses, any of it", () => {
+            const sim = createSim("warrior");
+            sim.weapons = [];
+            const { player } = sim;
+            player.poisonDamage = 3;
+            player.poisonEnd = sim.tick + 20 * TICKS_PER_SECOND;
+            for (let i = 0; i < 40; i++) {
+                const angle = (i / 40) * Math.PI * 2;
+                goblin(sim, player.x + Math.cos(angle), player.y + Math.sin(angle));
+            }
+            sim.spawnEnemy(getEnemy("kalphite_queen"), "boss", { x: player.x + 2, y: player.y });
+            ride(sim);
+            const hp = player.hp;
+            for (let i = 1; i < TICKS; i++) {
+                sim.step(0, 0);
+                // Bosses and poison stop at more than a hit's worth, and more
+                // than 30 would blink the player the whole ride
+                expect(player.invulnerable).toBeGreaterThan(12);
+                expect(player.invulnerable).toBeLessThanOrEqual(30);
+            }
+            expect(player.hp).toBe(hp);
+            expect(sim.takeEvents().some((e) => e.type === "playerHit")).toBe(false);
+        });
+
+        test("doesn't cut a ring of life's longer protection short", () => {
+            const sim = createSim();
+            sim.player.invulnerable = TICKS * 2;
+            ride(sim);
+            sim.step(0, 0);
+            expect(sim.player.invulnerable).toBe(TICKS * 2 - 1);
+        });
+
+        test("the player can be hurt again once it's over", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            ride(sim);
+            runFor(sim, SECONDS, "still");
+            const hp = sim.player.hp;
+            goblin(sim, sim.player.x + 1, sim.player.y);
+            runFor(sim, 3, "still");
+            expect(sim.player.hp).toBeLessThan(hp);
+        });
+
+        test("frees a frozen player", () => {
+            const sim = createSim();
+            sim.player.frozen = 500;
+            ride(sim);
+            expect(sim.player.frozen).toBe(0);
+            const x = sim.player.x;
+            sim.step(1, 0);
+            expect(sim.player.x).toBeGreaterThan(x);
+        });
+
+        test("shoves the crowd aside without hurting it", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            // Just off the line it rides, so it goes to one side
+            const inTheWay = goblin(sim, player.x + 4, player.y + 0.2);
+            ride(sim);
+            for (let i = 0; i < 80; i++) {
+                sim.step(1, 0);
+            }
+            expect(player.x).toBeGreaterThan(inTheWay.x);
+            expect(inTheWay.hp).toBe(inTheWay.maxHp);
+        });
+
+        test("wearing it lasts as long as the ride, with one sound at the end", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            ride(sim);
+            expect(sim.wornPowerUp?.id).toBe("sled");
+            sim.takeEvents();
+            for (let i = 1; i < TICKS; i++) {
+                sim.step(0, 0);
+            }
+            expect(sim.wornPowerUp?.id).toBe("sled");
+            expect(sim.takeEvents().some((e) => e.type === "powerUpEnded")).toBe(false);
+            sim.step(0, 0);
+            expect(sim.wornPowerUp).toBeUndefined();
+            expect(sim.takeEvents().filter((e) => e.type === "powerUpEnded")).toEqual([
+                { type: "powerUpEnded", id: "sled" },
+            ]);
+        });
+
+        test("comes off when the player dies or the run ends, and ends silently", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            ride(sim);
+            sim.takeEvents();
+            // Only a run's end can get past it, like the final boss falling
+            (sim as unknown as { playerDied(): void }).playerDied();
+            expect(sim.runOver).toBe(true);
+            expect(sim.wornPowerUp).toBeUndefined();
+            runFor(sim, SECONDS + 1, "still");
+            sim.step(0, 0);
+            expect(sim.takeEvents().some((e) => e.type === "powerUpEnded")).toBe(false);
+
+            const won = createSim();
+            ride(won);
+            won.state = "victory";
+            expect(won.wornPowerUp).toBeUndefined();
+        });
+    });
+
+    describe("the giant rune essence", () => {
+        const rock = () => getPowerUp("giant_essence");
+
+        test("lands on the thickest crowd after a moment, hitting all of it", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.player.invulnerable = 10000;
+            const alone = goblin(sim, x - 6, y);
+            const crowd = [0, 1, 2, 3].map((i) => goblin(sim, x + 7 + i * 0.3, y + i * 0.3));
+            const outOfReach = goblin(sim, x + 20, y);
+            for (const enemy of [alone, ...crowd, outOfReach]) {
+                enemy.frozen = 1000;
+            }
+            sim.usePowerUp(rock());
+            expect(sim.rocks[0].x).toBeCloseTo(crowd[0].x, 0);
+            sim.takeEvents();
+
+            for (let i = 1; i < 1.2 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(crowd[0].hp).toBe(crowd[0].maxHp);
+            sim.step(0, 0);
+            const events = sim.takeEvents();
+            expect(events.some((e) => e.type === "powerUpHit")).toBe(true);
+            expect(events.filter((e) => e.type === "blast")).toHaveLength(1);
+            for (const enemy of crowd) {
+                expect(enemy.hp).toBeLessThan(enemy.maxHp);
+            }
+            expect(alone.hp).toBe(alone.maxHp);
+            expect(outOfReach.hp).toBe(outOfReach.maxHp);
+        });
+
+        test("kills what it can, throws survivors back and takes a share of a boss", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            const { x, y } = sim.player;
+            const weak = goblin(sim, x + 8, y, 10);
+            const tough = goblin(sim, x + 9, y, 1e5);
+            weak.frozen = 1000;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x + 10, y })!;
+            boss.frozen = 1000;
+            boss.hp = boss.maxHp = 10000;
+            const toughX = tough.x;
+            sim.usePowerUp(rock());
+            runFor(sim, 2, "still");
+            expect(weak.dead).toBe(true);
+            expect(tough.hp).toBeLessThan(tough.maxHp);
+            expect(Math.abs(tough.x - toughX)).toBeGreaterThan(0.5);
+            expect(boss.maxHp - boss.hp).toBeGreaterThan(10000 * 0.08 * 0.8);
+            expect(boss.maxHp - boss.hp).toBeLessThan(10000 * 0.08 * 1.2);
+        });
+
+        test("never hurts the player, and comes down nearby with no one about", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.enemies = [];
+            const { x, y } = sim.player;
+            const hp = sim.player.hp;
+            sim.usePowerUp(rock());
+            expect(Math.hypot(sim.rocks[0].x - x, sim.rocks[0].y - y)).toBeLessThan(5);
+            for (let i = 0; i < 4 * TICKS_PER_SECOND; i++) {
+                sim.enemies = [];
+                sim.step(0, 0);
+            }
+            expect(sim.rocks).toHaveLength(0);
+            expect(sim.player.hp).toBe(hp);
+        });
+
+        test("its damage counts for the run's stats", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 10000;
+            const enemy = goblin(sim, sim.player.x + 6, sim.player.y);
+            enemy.frozen = 1000;
+            sim.usePowerUp(rock());
+            runFor(sim, 2, "still");
+            expect(sim.damageBySource["powerUp:giant_essence"]).toBeGreaterThan(0);
+        });
+    });
+
+    describe("Evil Bob", () => {
+        const bob = () => getPowerUp("evil_bob");
+        const seconds = 7;
+
+        function crowd(sim: Sim, hp = 1e6): Enemy[] {
+            const { x, y } = sim.player;
+            return [0, 1, 2, 3, 4, 5].map((i) => {
+                const enemy = goblin(sim, x + 6 + i * 0.4, y + (i % 2) * 0.4, hp);
+                enemy.frozen = 10000;
+                return enemy;
+            });
+        }
+
+        test("charges through the crowd three times, hitting each one once a pass", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const enemies = crowd(sim);
+            sim.usePowerUp(bob());
+            const damages: number[] = [];
+            for (let i = 0; i < seconds * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                damages.push(
+                    ...sim
+                        .takeEvents()
+                        .filter((e) => e.type === "damage" && e.enemyUid === enemies[0].uid)
+                        .map((e) => (e as { amount: number }).amount),
+                );
+            }
+            expect(damages.length).toBeGreaterThanOrEqual(1);
+            expect(damages.length).toBeLessThanOrEqual(3);
+            expect(sim.damageBySource["powerUp:evil_bob"]).toBeGreaterThan(0);
+            for (const damage of damages) {
+                expect(damage).toBeGreaterThanOrEqual(60 * 0.8);
+            }
+            for (const enemy of enemies) {
+                expect(enemy.hp).toBeLessThan(enemy.maxHp);
+            }
+        });
+
+        test("is gone with its timer in the time it's given", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            crowd(sim);
+            sim.usePowerUp(bob());
+            expect(sim.rampages).toHaveLength(1);
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["evil_bob"]);
+            sim.takeEvents();
+            runFor(sim, seconds + 1, "still");
+            expect(sim.rampages).toHaveLength(0);
+            expect(sim.powerUps).toHaveLength(0);
+        });
+
+        test("makes the same passes with nothing there, and never hurts the player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.enemies = [];
+            const hp = sim.player.hp;
+            sim.usePowerUp(bob());
+            for (let i = 0; i < (seconds + 1) * TICKS_PER_SECOND; i++) {
+                sim.enemies = [];
+                sim.step(0, 0);
+            }
+            expect(sim.rampages).toHaveLength(0);
+            expect(sim.player.hp).toBe(hp);
+        });
+    });
+
+    describe("the fairy ring", () => {
+        const ring = () => getPowerUp("fairy_ring");
+
+        test("warps away what walks into it, far from the player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            sim.usePowerUp(ring());
+            const walker = goblin(sim, x + 4, y);
+            const warpedFrom: number[] = [];
+            for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                const before = { x: walker.x, y: walker.y };
+                sim.step(0, 0);
+                if (Math.hypot(walker.x - before.x, walker.y - before.y) > 5) {
+                    warpedFrom.push(Math.hypot(before.x - x, before.y - y));
+                }
+            }
+            expect(warpedFrom).toHaveLength(1);
+            expect(warpedFrom[0]).toBeLessThan(4);
+            expect(Math.hypot(walker.x - x, walker.y - y)).toBeGreaterThan(8);
+            expect(walker.hp).toBe(walker.maxHp);
+        });
+
+        test("stays where it opened while the player walks off, for its time", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.usePowerUp(ring());
+            const { x, y } = sim.rings[0];
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["fairy_ring"]);
+            sim.player.invulnerable = 100000;
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                sim.step(1, 0);
+            }
+            expect(sim.rings[0]).toMatchObject({ x, y });
+            runFor(sim, 11, "still");
+            expect(sim.rings).toHaveLength(0);
+        });
+
+        test("leaves bosses and what can't move alone", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x + 1, y })!;
+            boss.frozen = 10000;
+            const portal = sim.spawnEnemy({ ...getEnemy("goblin"), stationary: true }, "normal", {
+                x: x - 1,
+                y,
+            })!;
+            const bossX = boss.x;
+            sim.usePowerUp(ring());
+            runFor(sim, 1, "still");
+            expect(Math.abs(boss.x - bossX)).toBeLessThan(1);
+            expect(portal.x).toBeCloseTo(x - 1);
+        });
+
+        test("puts what it warps behind a moving player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            sim.usePowerUp(ring());
+            const { x, y } = sim.rings[0];
+            let ahead = 0;
+            let behind = 0;
+            for (let i = 0; i < 60; i++) {
+                const enemy = goblin(sim, x, y);
+                sim.step(1, 0);
+                sim.step(1, 0);
+                if (Math.abs(enemy.x - x) > 5) {
+                    if (enemy.x > sim.player.x) {
+                        ahead++;
+                    } else {
+                        behind++;
+                    }
+                }
+                sim.enemies = [];
+                sim.player.x = sim.player.prevX = x + 3;
+            }
+            expect(behind).toBeGreaterThan(ahead * 3);
+        });
+    });
+
+    describe("the Drill Demon", () => {
+        const drill = () => getPowerUp("drill_demon");
+
+        test("the crowd runs round the player instead of attacking", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const enemies = [0, 1, 2, 3, 4, 5].map((i) => {
+                const angle = (i / 6) * Math.PI * 2;
+                const x = player.x + Math.cos(angle) * 2;
+                return goblin(sim, x, player.y + Math.sin(angle) * 2);
+            });
+            sim.usePowerUp(drill());
+            const hp = player.hp;
+            const angleOf = (e: Enemy) => Math.atan2(e.y - player.y, e.x - player.x);
+            let turned = 0;
+            let angle = angleOf(enemies[0]);
+            for (let i = 0; i < 8 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                const now = angleOf(enemies[0]);
+                turned += Math.atan2(Math.sin(now - angle), Math.cos(now - angle));
+                angle = now;
+            }
+            expect(player.hp).toBe(hp);
+            // Well round the ring, not just standing back
+            expect(Math.abs(turned)).toBeGreaterThan(Math.PI);
+            for (const enemy of enemies) {
+                const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+                expect(distance).toBeGreaterThan(4);
+                expect(distance).toBeLessThan(8);
+            }
+        });
+
+        test("what's right on top of the player runs out too", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            const onTop = goblin(sim, x, y);
+            onTop.x = x;
+            onTop.y = y;
+            sim.usePowerUp(drill());
+            runFor(sim, 4, "still");
+            expect(Math.hypot(onTop.x - x, onTop.y - y)).toBeGreaterThan(3);
+        });
+
+        test("shooters hold their fire", () => {
+            const sim = createSim("warrior", 1, "east_varrock");
+            sim.weapons = [];
+            const ranger = sim.spawnEnemy(getEnemy("f2p_ranger"), "normal", {
+                x: sim.player.x + 5,
+                y: sim.player.y,
+            })!;
+            expect(ranger).toBeDefined();
+            sim.usePowerUp(drill());
+            for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(sim.enemyProjectiles).toHaveLength(0);
+        });
+
+        test("bosses, what can't move and what's far off carry on", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const post = sim.spawnEnemy({ ...getEnemy("goblin"), stationary: true }, "normal", {
+                x: x + 3,
+                y,
+            })!;
+            const far = goblin(sim, x + 16, y);
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", { x: x - 6, y })!;
+            sim.usePowerUp(drill());
+            const bossDistance = Math.hypot(boss.x - x, boss.y - y);
+            const farDistance = Math.hypot(far.x - x, far.y - y);
+            for (let i = 0; i < 20; i++) {
+                sim.step(0, 0);
+            }
+            expect(post.x).toBeCloseTo(x + 3);
+            expect(Math.hypot(far.x - x, far.y - y)).toBeLessThan(farDistance);
+            expect(Math.hypot(boss.x - x, boss.y - y)).toBeLessThanOrEqual(bossDistance);
+        });
+
+        test("what turns up meanwhile joins in, and it all stops when it's over", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.usePowerUp(drill());
+            sim.takeEvents();
+            sim.step(0, 0);
+            const late = goblin(sim, sim.player.x + 3, sim.player.y);
+            for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+            }
+            expect(Math.hypot(late.x - sim.player.x, late.y - sim.player.y)).toBeGreaterThan(5);
+            const hp = sim.player.hp;
+            runFor(sim, 16, "still");
+            expect(sim.player.hp).toBeLessThan(hp);
+        });
+
+        test("shouts its line", () => {
+            const sim = createSim();
+            sim.usePowerUp(drill());
+            expect(sim.takeEvents()).toContainEqual({
+                type: "playerShout",
+                text: "Run laps, maggots!",
+            });
+        });
     });
 
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
@@ -1551,6 +2051,265 @@ describe("enemy mechanics", () => {
         player.y = bandos.y;
         play(sim, 0.5);
         expect(bandos.foe).toBeUndefined();
+    });
+
+    describe("a foe it can't get at", () => {
+        // Two armies either side of the wall at x 1030: they can't touch, and
+        // the player's out of it
+        function acrossTheWall(sim: Sim, faction: string, x: number): Enemy {
+            const def = variant("goblin", { id: "test_" + faction, faction, damage: 1 });
+            const enemy = sim.spawnEnemy(def, "normal", { x, y: 1036.5 })!;
+            enemy.hp = enemy.maxHp = 1e6;
+            return enemy;
+        }
+        function setUp() {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.x = sim.player.prevX = 1015.5;
+            return sim;
+        }
+
+        test("after 3 seconds it goes for the player for good", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const zamorak = acrossTheWall(sim, "zamorak", 1032);
+            play(sim, 2.5);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            play(sim, 1);
+            expect(bandos.aggro).toBe(true);
+            expect(bandos.foe).toBeUndefined();
+            play(sim, 1);
+            // It stays that way with the foe still there
+            expect(bandos.aggro).toBe(true);
+            expect(bandos.foe).toBeUndefined();
+            expect(Math.hypot(bandos.x - sim.player.x, bandos.y - sim.player.y)).toBeLessThan(
+                Math.hypot(1029 - sim.player.x, 1036.5 - sim.player.y),
+            );
+        });
+
+        test("open ground doesn't count, however long it's been", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            // A long walk off for something this slow, with nothing in the way
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", speed: 0.1 });
+            const bandos = sim.spawnEnemy(def, "normal", { x: 1040.5, y: 1060.5 })!;
+            bandos.hp = bandos.maxHp = 1e6;
+            const zamorak = acrossTheWall(sim, "zamorak", 1046.5);
+            zamorak.y = zamorak.prevY = 1060.5;
+            zamorak.frozen = 1e6;
+            play(sim, 6);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            expect(bandos.foeWait).toBe(0);
+        });
+
+        test("nor does a crowd of its own side in the way", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const at = (faction: string, x: number, y: number) => {
+                const enemy = acrossTheWall(sim, faction, x);
+                enemy.y = enemy.prevY = y;
+                return enemy;
+            };
+            const zamorak = at("zamorak", 1046.5, 1060.5);
+            zamorak.frozen = 1e6;
+            // A wall of bandos between it and the foe, that can't move
+            for (let y = 1056.5; y <= 1064.5; y += 0.6) {
+                at("bandos", 1043.5, y).frozen = 1e6;
+            }
+            const behind = at("bandos", 1041.5, 1060.5);
+            play(sim, 6);
+            expect(behind.foe).toBe(zamorak);
+            expect(behind.aggro).toBe(false);
+        });
+
+        test("nor does a wall to a ghost, which walks through it", () => {
+            const sim = setUp();
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", ghost: true });
+            const bandos = sim.spawnEnemy(def, "normal", { x: 1029, y: 1036.5 })!;
+            bandos.hp = bandos.maxHp = 1e6;
+            const zamorak = acrossTheWall(sim, "zamorak", 1032);
+            zamorak.frozen = 1e6;
+            play(sim, 4);
+            expect(bandos.aggro).toBe(false);
+            expect(zamorak.hp).toBeLessThan(zamorak.maxHp);
+        });
+
+        test("landing hits keeps it at the fight", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const at = (faction: string, x: number) => {
+                const enemy = acrossTheWall(sim, faction, x);
+                enemy.y = enemy.prevY = 1060.5;
+                return enemy;
+            };
+            const bandos = at("bandos", 1040.5);
+            const zamorak = at("zamorak", 1041.2);
+            play(sim, 8);
+            expect(bandos.foe).toBe(zamorak);
+            expect(bandos.aggro).toBe(false);
+            expect(zamorak.aggro).toBe(false);
+        });
+
+        test("flipping between foes doesn't put it off", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const others = [
+                acrossTheWall(sim, "zamorak", 1032),
+                acrossTheWall(sim, "saradomin", 1032),
+            ];
+            for (const other of others) {
+                other.frozen = 1e6;
+            }
+            let swaps = 0;
+            for (let i = 0; i < 3.5 * TICKS_PER_SECOND; i++) {
+                if (sim.state === "levelUp") {
+                    sim.choose(0);
+                }
+                sim.player.invulnerable = 100;
+                // Whichever it's after moves out of its range, the other back in
+                const foe = bandos.foe;
+                if (foe && i % 30 === 29) {
+                    const other = foe === others[0] ? others[1] : others[0];
+                    foe.y = foe.prevY = 1046.5;
+                    other.y = other.prevY = bandos.y;
+                    bandos.nextFoeLook = 0;
+                    swaps++;
+                }
+                sim.step(0, 0);
+            }
+            expect(swaps).toBeGreaterThan(1);
+            expect(bandos.aggro).toBe(true);
+        });
+
+        test("a new foe gets the full 3 seconds once the last's dead", () => {
+            const sim = setUp();
+            const bandos = acrossTheWall(sim, "bandos", 1029);
+            const first = acrossTheWall(sim, "zamorak", 1032);
+            play(sim, 2.5);
+            expect(bandos.foe).toBe(first);
+            first.dead = true;
+            acrossTheWall(sim, "saradomin", 1032);
+            play(sim, 2.5);
+            expect(bandos.aggro).toBe(false);
+            expect(bandos.foe?.def.faction).toBe("saradomin");
+        });
+
+        test("a shooter's shots at the player don't count as hitting its foe", () => {
+            const sim = setUp();
+            const shot = { ...getEnemy("f2p_ranger").shot!, range: 40, interval: 0.5 };
+            const def = variant("goblin", { id: "test_bandos", faction: "bandos", shot });
+            const shooter = sim.spawnEnemy(def, "normal", { x: 1029, y: 1036.5 })!;
+            shooter.hp = shooter.maxHp = 1e6;
+            acrossTheWall(sim, "zamorak", 1032);
+            const shots = play(sim, 3.5).filter((event) => event.type === "bossAttack");
+            expect(shots.length).toBeGreaterThan(0);
+            expect(shooter.aggro).toBe(true);
+        });
+    });
+
+    describe("where they turn up", () => {
+        // A sealed room to the east of the player's spot, in reach of a ring
+        // of enemies (12 tiles off) on one side and of the waves (19 to 24
+        // off) on the other
+        const ROOM = { x0: 1045, y0: 1026, x1: 1062, y1: 1046 };
+        const inRoom = ({ x, y }: { x: number; y: number }) =>
+            x >= ROOM.x0 && x <= ROOM.x1 + 1 && y >= ROOM.y0 && y <= ROOM.y1 + 1;
+        function walledIn(): Sim {
+            const { x0, y0, x1, y1 } = ROOM;
+            const grid = makeGrid(openField(), 1000, 1000, [
+                { x: x0 - 1, y: y0 - 1, sizeX: x1 - x0 + 3, sizeY: 1 },
+                { x: x0 - 1, y: y1 + 1, sizeX: x1 - x0 + 3, sizeY: 1 },
+                { x: x0 - 1, y: y0, sizeX: 1, sizeY: y1 - y0 + 1 },
+                { x: x1 + 1, y: y0, sizeX: 1, sizeY: y1 - y0 + 1 },
+            ]);
+            const sim = new Sim({
+                grid,
+                characterId: "warrior",
+                metaStats: emptyStats(),
+                seed: 1,
+                spawnX: 1036.5,
+                spawnY: 1036.5,
+            });
+            sim.weapons = [];
+            return sim;
+        }
+        const ghost = variant("goblin", { id: "test_ghost", ghost: true });
+
+        test("a ring round the player leaves out what's walled off", () => {
+            for (const def of [getEnemy("goblin"), ghost]) {
+                const sim = walledIn();
+                sim["spawnRing"](def, 40);
+                expect(sim.enemies.length).toBeGreaterThan(20);
+                expect(sim.enemies.length).toBeLessThan(40);
+                expect(sim.enemies.filter(inRoom)).toEqual([]);
+            }
+        });
+
+        test("a wave never lands there, ghosts included", () => {
+            for (const def of [getEnemy("goblin"), ghost]) {
+                const sim = walledIn();
+                for (let i = 0; i < 300; i++) {
+                    sim.spawnEnemy(def, "normal");
+                }
+                expect(sim.enemies.length).toBeGreaterThan(200);
+                expect(sim.enemies.filter(inRoom)).toEqual([]);
+                for (const enemy of sim.enemies) {
+                    const tile = [Math.floor(enemy.x), Math.floor(enemy.y)] as const;
+                    expect(sim.grid.isSolid(...tile)).toBe(false);
+                }
+            }
+        });
+
+        test("nor does what something calls in beside the wall", () => {
+            const sim = walledIn();
+            const caller = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                x: ROOM.x0 - 2.5,
+                y: 1036.5,
+            })!;
+            for (let i = 0; i < 100; i++) {
+                sim["spawnNear"](caller, getEnemy("goblin"), 5, i, 100, 3);
+            }
+            expect(sim.enemies.length).toBeGreaterThan(30);
+            expect(sim.enemies.filter(inRoom)).toEqual([]);
+        });
+
+        test("nothing's brought back behind the wall", () => {
+            const sim = walledIn();
+            const reviver = variant("goblin", {
+                revives: { interval: 1, range: 50 },
+            });
+            const caller = sim.spawnEnemy(reviver, "normal", { x: ROOM.x0 - 2.5, y: 1036.5 })!;
+            sim["deaths"].push({ def: ghost, x: 1050.5, y: 1036.5, variant: 0, tick: sim.tick });
+            expect(sim["revive"](caller, reviver.revives!)).toBe(false);
+        });
+
+        test("the far side of a ditch counts where enemies can jump it, and only there", () => {
+            const map = getMap("east_varrock");
+            const ditchY = map.ditch!.y;
+            const baseX = map.spawn.x - 36.5;
+            const baseY = ditchY - 31;
+            const rows = openField().map((row, i) => {
+                const y = baseY + 71 - i;
+                return y === ditchY || y === ditchY + 1 ? row.replace(/\./g, "#") : row;
+            });
+            const ring = (mapId: string) => {
+                const sim = new Sim({
+                    grid: makeGrid(rows, baseX, baseY),
+                    mapId,
+                    characterId: "warrior",
+                    metaStats: emptyStats(),
+                    seed: 1,
+                    spawnX: map.spawn.x,
+                    spawnY: map.spawn.y,
+                });
+                sim["spawnRing"](getEnemy("clan_noob"), 40);
+                return sim.enemies.filter((enemy) => enemy.y < ditchY).length;
+            };
+            expect(ring("east_varrock")).toBeGreaterThan(0);
+            expect(ring("lumbridge")).toBe(0);
+        });
     });
 
     test("each faction's army comes from its own side", () => {
@@ -2773,7 +3532,11 @@ describe("the new weapons", () => {
         const events = attackOnce(sim, 2);
         // The pulse, then the fire every half second while it burns
         expect(hitsOn(events, goblin).length).toBeGreaterThanOrEqual(4);
-        expect(sim.effects.some((e) => e.spotAnim === 1347 && e.loop)).toBe(true);
+        expect(sim.fires.length).toBeGreaterThan(0);
+        expect(sim.fires[0].locId).toBe(getWeapon("toktz_mej_tal").burns!.locId);
+        expect(sim.fires[0].flames.length).toBeGreaterThan(4);
+        // It takes up no effect slots, so it can't crowd out anything else
+        expect(sim.effects.filter((e) => e.loop)).toEqual([]);
         // Then it goes out
         for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
             sim.player.invulnerable = 100;
@@ -2816,6 +3579,72 @@ describe("endless runs", () => {
         })!;
         sim.damageEnemy(boss, 1e12, 0, sim.player.x, sim.player.y);
     }
+
+    describe("past fifteen minutes", () => {
+        const countCaskets = (sim: Sim) => sim.pickups.filter((p) => p.kind === "casket").length;
+
+        function lateRun(endless = true): Sim {
+            const sim = createSim("warrior", 1, "lumbridge", emptyStats(), endless);
+            sim.tick = LATE_CASKET_SECONDS * TICKS_PER_SECOND;
+            return sim;
+        }
+
+        test("a casket only has a small chance to drop", () => {
+            const sim = lateRun();
+            let dropped = 0;
+            for (let i = 0; i < 2000; i++) {
+                sim.dropCasket(1040.5, 1036.5, true);
+                dropped += countCaskets(sim);
+                sim.pickups.length = 0;
+            }
+            expect(dropped / 2000).toBeCloseTo(LATE_CASKET_CHANCE, 1);
+            expect(dropped).toBeGreaterThan(0);
+        });
+
+        test("drop as usual before then, and outside endless runs", () => {
+            const early = createEndless();
+            early.tick = (LATE_CASKET_SECONDS - 1) * TICKS_PER_SECOND;
+            const normal = lateRun(false);
+            for (const sim of [early, normal]) {
+                for (let i = 0; i < 20; i++) {
+                    sim.dropCasket(1040.5, 1036.5, true);
+                }
+                expect(countCaskets(sim)).toBe(20);
+            }
+        });
+
+        test("no more than the limit lie on the ground, and the rest raise an alert", () => {
+            const sim = lateRun();
+            sim.rng.chance = () => true;
+            for (let i = 0; i < LATE_CASKET_LIMIT + 2; i++) {
+                sim.dropCasket(1040.5, 1036.5, true);
+            }
+            expect(countCaskets(sim)).toBe(LATE_CASKET_LIMIT);
+            const alerts = sim.takeEvents().filter((e) => e.type === "notice");
+            expect(alerts).toEqual(
+                Array(2).fill({
+                    type: "notice",
+                    message: "You have a funny feeling there would've been a chest",
+                }),
+            );
+        });
+
+        test("a round's master casket doesn't roll for it, but keeps to the limit", () => {
+            const sim = lateRun();
+            sim.rng.chance = () => false;
+            beatRound(sim);
+            expect(sim.pickups.some((p) => p.kind === "casket" && p.tier === "master")).toBe(true);
+
+            const full = lateRun();
+            full.rng.chance = () => true;
+            for (let i = 0; i < LATE_CASKET_LIMIT; i++) {
+                full.dropCasket(1040.5, 1036.5, true);
+            }
+            beatRound(full);
+            expect(countCaskets(full)).toBe(LATE_CASKET_LIMIT);
+            expect(full.pickups.some((p) => p.tier === "master")).toBe(false);
+        });
+    });
 
     test("killing the final boss starts the next round instead of winning", () => {
         const sim = createEndless();

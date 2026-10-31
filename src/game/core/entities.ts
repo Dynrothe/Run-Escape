@@ -139,11 +139,13 @@ export type Enemy = {
     // Brought back by a reviver: it drops nothing when it dies again
     noDrops: boolean;
     // An enemy of another faction it's gone to fight (EnemyDef.faction)
-    // instead of the player, and the tick it next looks for one
+    // instead of the player, the tick it next looks for one, and how many
+    // ticks it's been after foes with no way to them and no hit landed
     foe?: Enemy;
     nextFoeLook: number;
-    // The player's hit it: it's after the player from now on, not the other
-    // factions
+    foeWait: number;
+    // The player's hit it, or it's given up on a foe it had no way to: it's
+    // after the player from now on, not the other factions
     aggro: boolean;
     // Called in by a spawner that says so (EnemySpawnsDef.bonesOnly): it
     // drops its bones and nothing else
@@ -334,6 +336,66 @@ export type Thrall = {
     endTick: number;
 };
 
+// A rock falling from a power-up, then lying where it landed until endTick
+export type FallingRock = {
+    uid: number;
+    powerUpId: string;
+    x: number;
+    y: number;
+    startTick: number;
+    landTick: number;
+    endTick: number;
+    locId: number;
+    spotAnim: number;
+    radius: number;
+    damage: number;
+    knockback: number;
+    // Of a boss's hitpoints
+    bossDamage: number;
+};
+
+// A giant NPC from a power-up, charging through the crowd
+export type Rampage = {
+    uid: number;
+    powerUpId: string;
+    x: number;
+    y: number;
+    prevX: number;
+    prevY: number;
+    yaw: number;
+    // Where this pass ends
+    goalX: number;
+    goalY: number;
+    passesLeft: number;
+    // Uids of what this pass has hit
+    hit: Set<number>;
+    damage: number;
+    // Tiles a tick
+    speed: number;
+    radius: number;
+    knockback: number;
+    startTick: number;
+    endTick: number;
+    // The tick it left, -1 while it's still charging
+    doneTick: number;
+    walkSeq: number;
+    scale: number;
+};
+
+// A ring from a power-up, warping away what comes near until endTick
+export type FairyRing = {
+    uid: number;
+    x: number;
+    y: number;
+    startTick: number;
+    endTick: number;
+    nextPulse: number;
+    radius: number;
+    locId: number;
+    spotAnim: number;
+    scale: number;
+};
+
 // A power-up that lasts a while, for the timers on screen
 export type ActivePowerUp = {
     uid: number;
@@ -383,8 +445,9 @@ export type GroundFire = {
     damage: number;
     nextTick: number;
     endTick: number;
-    // Its flames' effects
-    effectUids: number[];
+    // Scenery for its flames, and where they stand
+    locId: number;
+    flames: { x: number; y: number }[];
 };
 
 // A hit still to land, a moment after the swing (the Dragon claws' later
@@ -444,6 +507,9 @@ export type SimEvent =
     | { type: "cannonFire"; x: number; y: number }
     // A power-up was picked up and used; message says what it did
     | { type: "powerUp"; id: string; message: string; x: number; y: number }
+    | { type: "powerUpEnded"; id: string }
+    // A power-up landed a blow (PowerUpDef.hitSound)
+    | { type: "powerUpHit"; id: string; x: number; y: number }
     | { type: "thrallAttack"; sound: number; x: number; y: number }
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }

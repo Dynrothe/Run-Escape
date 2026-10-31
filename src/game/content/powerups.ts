@@ -74,6 +74,105 @@ export const POWER_UPS: PowerUpDef[] = [
         sound: 168,
         effect: { kind: "freeze", seconds: 8 },
     },
+    {
+        id: "sled",
+        name: "Sled",
+        description: "Ride for 8 seconds, far faster and with nothing able to hurt you.",
+        // The waxed sled from Troll Romance, which both sits on the ground and
+        // is ridden
+        objId: 4084,
+        weight: 2,
+        // sled_start, sled_stop
+        sound: 1868,
+        endSound: 1869,
+        // trollromance_toboggan_ready, trollromance_toboggan_moving
+        look: { objId: 4084, idleSeq: 1461, moveSeq: 1462 },
+        effect: { kind: "sled", seconds: 8, speed: 2.2 },
+    },
+    {
+        id: "giant_essence",
+        name: "Giant rune essence",
+        description:
+            "A huge rock falls on the thickest crowd nearby. Bosses lose 8% of their hitpoints.",
+        objId: 1436,
+        weight: 2,
+        // star_meteor_landing, toa_human_boulder_impact_01
+        sound: 4930,
+        hitSound: 6033,
+        effect: {
+            kind: "rock",
+            delay: 1.2,
+            range: 12,
+            radius: 5,
+            damage: 150,
+            knockback: 3,
+            bossDamage: 0.08,
+            // big_essence_rock, wild_falloff_meteor_blast
+            locId: 16687,
+            spotAnim: 659,
+        },
+    },
+    {
+        id: "evil_bob",
+        name: "Evil Bob",
+        description: "Evil Bob charges through the crowd three times, throwing it aside.",
+        // Pet cat: Evil Bob has no item of his own
+        objId: 1561,
+        weight: 2,
+        // cat_hiss, cat_angry
+        sound: 335,
+        hitSound: 1161,
+        effect: {
+            kind: "rampage",
+            seconds: 7,
+            passes: 3,
+            speed: 12,
+            radius: 2.5,
+            damage: 60,
+            knockback: 3,
+            npcId: 390,
+            walkSeq: 314,
+            scale: 4,
+        },
+    },
+    {
+        id: "fairy_ring",
+        name: "Fairy ring",
+        description: "A ring opens at your feet for 12 seconds and warps away whatever comes near.",
+        // Dramen staff, what it takes to use one
+        objId: 772,
+        weight: 2,
+        // lotg_fairy_teleport
+        sound: 5324,
+        effect: {
+            kind: "ring",
+            seconds: 12,
+            radius: 2.5,
+            // The ring of mushrooms in the game, then teleport_other_impact
+            locId: 12003,
+            spotAnim: 342,
+            scale: 5,
+        },
+    },
+    {
+        id: "drill_demon",
+        name: "Drill Demon",
+        description: "For 9 seconds everything nearby runs laps around you and can't attack.",
+        // Camo helmet, from Sergeant Damien's random event
+        objId: 6656,
+        weight: 2,
+        // whistle
+        sound: 1569,
+        effect: {
+            kind: "laps",
+            seconds: 9,
+            range: 12,
+            // Close enough to stay on screen all the way round
+            radius: 6,
+            speed: 1.5,
+            shout: "Run laps, maggots!",
+        },
+    },
 ];
 
 // The Arceuus greater thralls; the Book of the Dead raises one at random. They

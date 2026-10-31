@@ -2359,8 +2359,8 @@ export const WEAPONS: WeaponDef[] = [
         hitSound: -1,
         rarity: "rare",
         style: "magic",
-        // Flames, looping on the burning ground
-        burns: { damage: 0.3, radius: 0.8, spotAnim: 1347 },
+        // Fire, the plain flames with no logs or stones under them
+        burns: { damage: 0.3, radius: 0.8, locId: 5499 },
         levels: levels(
             {
                 damage: 7,

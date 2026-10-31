@@ -34,6 +34,7 @@ go stale. Add anything that cost you time to work out.
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
 | React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
 | Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
+| How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
 | Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
 | Balance bot                                           | `scripts/game/simulate-run.ts`          |
 | Finding ids in the cache                              | `scripts/cache/`                        |
@@ -92,6 +93,13 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
   Treat its numbers as a comparison, not as how a player would do.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
+- **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
+  use `MAP=x ... "" 3` rather than a process per run.
+- Sims don't need the game cache after the first run on a map: `scripts/game/collision-snapshot.ts`
+  saves that map's collision to `caches/collision/` (gitignored). A snapshot rebuilds by itself when
+  the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
+  else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
+  recipes.
 
 After a content change, also run the checks that apply:
 

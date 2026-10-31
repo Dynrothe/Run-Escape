@@ -169,6 +169,10 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
+- **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
+  would drop only has a 5% chance to, and only 10 can lie on the ground at once. A round's master
+  casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
+  would've been a chest".
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
@@ -177,7 +181,8 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. Their damage keeps up with the enemies' hitpoints.
+  after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
+  drops twice in a row.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
@@ -186,9 +191,25 @@ version and how to run it.
     - **Magnet**: every drop on the ground flies to you, caskets and power-ups included.
     - **Giant stopwatch**: everything but bosses stands still for 8 seconds, even what turns up
       meanwhile.
+    - **Sled**: you ride at 2.2 times your speed for 8 seconds and nothing can hurt you, poison and
+      bosses included. It shoves enemies aside without hurting them, your weapons keep firing, and
+      it frees you if you're frozen. Effect duration doesn't stretch it.
+    - **Giant rune essence**: a moment after you pick it up, a huge rock lands on the thickest
+      crowd within 12 tiles, marked in cyan. It hits everything within 5 tiles and throws
+      survivors back, and bosses lose 8% of their hitpoints. It can't hurt you.
+    - **Evil Bob**: a giant Evil Bob charges through the thickest crowd three times, over walls and
+      all. Everything in his way is hit once a pass and thrown aside.
+    - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
+      within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
+      opened, and shots still come through.
+    - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
+      in a big circle, faster than usual, and can't attack, though shots already on their way still
+      land. Bosses, what can't move and flag carriers carry on.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
-  adventurers. Each map's monsters are from its part of the world:
+  adventurers. Enemies only turn up where you could stand and walk to, never behind a wall or in
+  rock, ghosts included (East Varrock's come from both sides of the ditch, which they jump). Each
+  map's monsters are from its part of the world:
     - **Lumbridge**: chickens, rats, goblins, cows and imps, the swamp's giant rats and frogs,
       Draynor's dark wizards, and the zombies, skeletons, ghosts, spiders and bats of Draynor
       Manor.
@@ -216,7 +237,8 @@ version and how to run it.
     - **God Wars Dungeon**: the armies of Bandos, Armadyl, Saradomin and Zamorak, who march in
       from their own sides and fight each other as much as you: goblins, orks and cyclopes,
       aviansies, knights and priests, imps, hellhounds and bloodvelds, and the gods' spiritual
-      warriors.
+      warriors. Anything with a wall between it and the army it's after for 3 seconds gives up
+      and comes for you for good; a crowd in the way or a long walk doesn't count.
     - **Prifddinas**: the Gauntlet's crystalline rats, bats, spiders, scorpions, wolves, bears
       and dark beasts, the city's guards, the Iorwerth's warriors and archers and Zulrah's
       snakelings, and the corrupted ones late on.

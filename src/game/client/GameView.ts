@@ -9,11 +9,22 @@ import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from ".
 import {
     DEATH_SINK_TICKS,
     MAX_DEATH_ANIM_TICKS,
+    RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
     yawFromVector,
 } from "../core/Sim";
-import { Enemy, Glyph, Pickup, SimEvent, Thrall } from "../core/entities";
+import {
+    Enemy,
+    FairyRing,
+    FallingRock,
+    Glyph,
+    GroundFire,
+    Pickup,
+    Rampage,
+    SimEvent,
+    Thrall,
+} from "../core/entities";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -37,6 +48,12 @@ const CANNON_SCALE = 0.75;
 // north in its model, so it's turned half a turn to aim where it shoots
 const CANNON_YAW_OFFSET = 1024;
 const PLAYER_HIT_TINT = 0xff9090;
+// Burning ground's flames are drawn this much bigger than a camp fire's, to
+// read as a patch of fire from the game's camera, and are this far out of step
+// and turned this far from each other (of 2048)
+const FLAME_SCALE = 2;
+const FLAME_STEP_TICKS = 7;
+const FLAME_TURN = 683;
 
 // Heights above the ground, in tiles
 const PROJECTILE_HEIGHT = 0.9;
@@ -87,6 +104,16 @@ const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
+// A rock's size, and how far up it starts (tiles)
+const ROCK_SCALE = 5;
+const ROCK_FALL_HEIGHT = 14;
+const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// How long a fairy ring takes to open
+const RING_OPEN_TICKS = 20;
+// A charging NPC's legs go this much faster than its walk, and it's lit up so
+// a black cat shows on the darker maps
+const RAMPAGE_ANIM_SPEED = 2;
+const RAMPAGE_FLASH = 0.25;
 // Thralls are small next to a top-down player; they fade out over their last
 // second
 const THRALL_SCALE = 1.5;
@@ -367,6 +394,22 @@ export class GameView {
             actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
         }
 
+        for (const rock of sim.rocks) {
+            this.drawRock(actors, sim, rock);
+        }
+
+        for (const rampage of sim.rampages) {
+            this.drawRampage(actors, sim, rampage, alpha);
+        }
+
+        for (const ring of sim.rings) {
+            this.drawRing(actors, sim, ring);
+        }
+
+        for (const fire of sim.fires) {
+            this.drawFire(actors, sim, fire);
+        }
+
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
@@ -381,6 +424,82 @@ export class GameView {
             const height = this.ground(sim, effect.x, effect.y) - effect.height;
             actors.draw(model, anim, frame, effect.x, height, effect.y, 0);
         }
+    }
+
+    // Falling faster and faster, then fading away where it landed
+    private drawRock(actors: ActorRenderer, sim: Sim, rock: FallingRock): void {
+        const model = this.assets.get("loc:" + rock.locId);
+        if (!model) {
+            return;
+        }
+        const t = Math.min(1, (sim.tick - rock.startTick) / (rock.landTick - rock.startTick));
+        const height = this.ground(sim, rock.x, rock.y) - ROCK_FALL_HEIGHT * (1 - t * t);
+        const fade = Math.min(1, (rock.endTick - sim.tick) / ROCK_FADE_TICKS);
+        actors.draw(model, model.anims[0], 0, rock.x, height, rock.y, (rock.uid * 331) & 2047, {
+            scale: ROCK_SCALE,
+            alpha: Math.max(0, fade),
+        });
+    }
+
+    // Black cats are lost on the darker maps, so always with the silhouette and
+    // lit up a little
+    private drawRampage(actors: ActorRenderer, sim: Sim, rampage: Rampage, alpha: number): void {
+        const model = this.assets.get("rampage:" + rampage.powerUpId);
+        // The clock runs on when the run's over, but nothing moves
+        if (!model || sim.runOver) {
+            return;
+        }
+        const anim = model.getAnim(rampage.walkSeq);
+        const x = lerp(rampage.prevX, rampage.x, alpha);
+        const y = lerp(rampage.prevY, rampage.y, alpha);
+        const faded =
+            rampage.doneTick === -1 ? 0 : (sim.tick - rampage.doneTick) / RAMPAGE_FADE_TICKS;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame((sim.tick - rampage.startTick) * RAMPAGE_ANIM_SPEED),
+            x,
+            this.ground(sim, x, y),
+            y,
+            rampage.yaw,
+            {
+                scale: rampage.scale,
+                alpha: Math.max(0, 1 - faded),
+                silhouette: true,
+                flash: RAMPAGE_FLASH,
+            },
+        );
+    }
+
+    // Opening and closing quickly, at either end of its time
+    private drawRing(actors: ActorRenderer, sim: Sim, ring: FairyRing): void {
+        const model = this.assets.get("loc:" + ring.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= ring.endTick) {
+            return;
+        }
+        const open = Math.min(sim.tick - ring.startTick, ring.endTick - sim.tick);
+        const height = this.ground(sim, ring.x, ring.y);
+        actors.draw(model, model.anims[0], 0, ring.x, height, ring.y, 0, {
+            scale: ring.scale * Math.min(1, 0.4 + open / RING_OPEN_TICKS),
+        });
+    }
+
+    // Each flame turned and a little out of step with the next, so they don't
+    // flicker as one
+    private drawFire(actors: ActorRenderer, sim: Sim, fire: GroundFire): void {
+        const model = this.assets.get("loc:" + fire.locId);
+        // The clock runs on past its end when the run's over
+        if (!model || sim.tick >= fire.endTick) {
+            return;
+        }
+        const anim = model.anims[0];
+        fire.flames.forEach(({ x, y }, i) => {
+            const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
+                scale: FLAME_SCALE,
+            });
+        });
     }
 
     // A boss's glyph, idling as it slides, facing the boss
@@ -429,7 +548,11 @@ export class GameView {
     }
 
     private drawPlayer(actors: ActorRenderer, sim: Sim, alpha: number): void {
-        const model = this.assets.getPlayer();
+        // A power-up's look replaces the player's usual model and everything it does
+        const powerUp = sim.wornPowerUp;
+        const look = powerUp?.look;
+        const lookModel = powerUp && this.assets.getPlayerLook(powerUp.id);
+        const model = lookModel ?? this.assets.getPlayer();
         if (!model) {
             return;
         }
@@ -438,7 +561,10 @@ export class GameView {
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
-        if (player.deathTick !== -1) {
+        if (look && lookModel) {
+            anim = model.getAnim(player.moving ? look.moveSeq : look.idleSeq);
+            frame = anim.getFrame(tick - player.moveStart);
+        } else if (player.deathTick !== -1) {
             // The death animation holds its last frame (lying down)
             anim = model.getAnim(PLAYER_SEQS.death);
             frame = anim.getFrame(Math.min(tick - player.deathTick, MAX_DEATH_ANIM_TICKS), false);
@@ -451,7 +577,8 @@ export class GameView {
             anim = attack;
             frame = anim.getFrame(tick - player.attackStart, false);
         } else {
-            anim = model.getAnim(player.moving ? PLAYER_SEQS.run : PLAYER_SEQS.idle);
+            const stance = this.assets.getPlayerStance();
+            anim = model.getAnim(player.moving ? stance.run : stance.idle);
             frame = anim.getFrame(tick - player.moveStart);
         }
         const x = lerp(player.prevX, player.x, alpha);
@@ -551,6 +678,8 @@ export class GameView {
         this.drawBossWindups(overlay, sim, alpha);
         this.drawAuras(overlay, sim, now);
         this.drawBlasts(overlay, sim, now, scale);
+        this.drawRockTargets(overlay, sim, now, scale);
+        this.drawRingReach(overlay, sim, now, scale);
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
@@ -950,6 +1079,35 @@ export class GameView {
             ctx.fill();
             ctx.lineWidth = 10 * scale * (1 - t) + 2;
             ctx.strokeStyle = `rgba(255, 220, 120, ${0.9 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // Where a rock's coming down, in the power-up colour so it doesn't read as
+    // something to run from
+    private drawRockTargets(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const rock of sim.rocks) {
+            if (rock.landTick <= sim.tick) {
+                continue;
+            }
+            const pulse = 0.75 + 0.25 * Math.sin(now / 60);
+            this.traceGroundCircle(overlay, sim, rock.x, rock.y, rock.radius);
+            ctx.fillStyle = withAlpha(POWER_UP_COLOR, 0.15 * pulse);
+            ctx.fill();
+            ctx.lineWidth = 3 * scale;
+            ctx.strokeStyle = withAlpha(POWER_UP_COLOR, 0.9 * pulse);
+            ctx.stroke();
+        }
+    }
+
+    // How far a fairy ring reaches
+    private drawRingReach(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const ring of sim.rings) {
+            this.traceGroundCircle(overlay, sim, ring.x, ring.y, ring.radius);
+            ctx.lineWidth = 2 * scale;
+            ctx.strokeStyle = withAlpha(POWER_UP_COLOR, 0.45 + 0.15 * Math.sin(now / 200));
             ctx.stroke();
         }
     }

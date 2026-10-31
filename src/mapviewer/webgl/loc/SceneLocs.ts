@@ -10,6 +10,7 @@ import { INVALID_HSL_COLOR } from "../../../rs/util/ColorUtil";
 import { InteractType } from "../../webgl/InteractType";
 import { ContourGroundType, SceneModel } from "../buffer/SceneBuffer";
 import { SceneLocEntity } from "./SceneLocEntity";
+import { isRoofLoc, isTileDrawn } from "./UpperLevels";
 
 export type SceneLocs = {
     locs: SceneModel[];
@@ -130,28 +131,6 @@ export function createSceneLocEntity(
     };
 }
 
-// Whether a tile's locs are drawn when looking at floors up to maxLevel. What
-// belongs to those floors always is, even stored a level up (the Grand
-// Exchange's walls are). Upper floors only there because the ground floor is
-// flagged to show them (Prifddinas) are left out over a tile that's under a
-// roof, so you can see into buildings.
-export function isTileDrawn(
-    scene: Scene,
-    tileMinLevel: number,
-    level: number,
-    tileX: number,
-    tileY: number,
-    maxLevel: number,
-): boolean {
-    if (tileMinLevel <= maxLevel) {
-        return true;
-    }
-    return (
-        scene.isPlayerLevel(level, tileX, tileY, maxLevel) &&
-        !scene.isInside(maxLevel, tileX, tileY)
-    );
-}
-
 export function getSceneLocs(
     locTypeLoader: LocTypeLoader,
     scene: Scene,
@@ -180,7 +159,9 @@ export function getSceneLocs(
                     continue;
                 }
 
-                if (tile.floorDecoration) {
+                const isHidden = (loc: SceneLoc) => tile.minLevel > maxLevel && isRoofLoc(loc);
+
+                if (tile.floorDecoration && !isHidden(tile.floorDecoration)) {
                     if (tile.floorDecoration.entity instanceof Model) {
                         locs.push(
                             createSceneModel(
@@ -211,7 +192,7 @@ export function getSceneLocs(
                     }
                 }
 
-                if (tile.wall) {
+                if (tile.wall && !isHidden(tile.wall)) {
                     if (tile.wall.entity0 instanceof Model) {
                         locs.push(
                             createSceneModel(
@@ -271,7 +252,7 @@ export function getSceneLocs(
                     }
                 }
 
-                if (tile.wallDecoration) {
+                if (tile.wallDecoration && !isHidden(tile.wallDecoration)) {
                     const offsetX = tile.wallDecoration.offsetX;
                     const offsetY = tile.wallDecoration.offsetY;
                     if (tile.wallDecoration.entity0 instanceof Model) {
@@ -334,7 +315,7 @@ export function getSceneLocs(
                 }
 
                 for (const loc of tile.locs) {
-                    if (loc.startX !== tileX || loc.startY !== tileY) {
+                    if (loc.startX !== tileX || loc.startY !== tileY || isHidden(loc)) {
                         continue;
                     }
 

@@ -5,6 +5,42 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.18.0 - 2026-10-30
+
+### Added
+
+- New power-up: the Sled. Ride for 8 seconds at more than twice the speed, shoving the crowd aside
+  with nothing able to hurt you.
+- New power-up: the Giant rune essence. A huge rock lands on the thickest crowd nearby.
+- New power-up: Evil Bob. A giant cat charges through the crowd three times, throwing it aside.
+- New power-up: the Fairy ring. A ring opens at your feet for 12 seconds and warps away whatever
+  walks into it.
+- New power-up: the Drill Demon. Everything nearby runs laps around you for 9 seconds and can't
+  attack.
+
+### Changed
+
+- The player now stands and runs the way their weapon does in OSRS: a two-handed run with 2h swords
+  and godswords, staves held out, crossbows at the ready, and so on.
+- The same power-up no longer drops twice in a row.
+- Toktz-mej-tal's burning ground is real fire now, flickering, with more flames across each patch.
+- Past 15 minutes in an endless run, a chest that would drop only has a 5% chance to, and only 10
+  can lie on the ground at once. A round's master casket always rolls through, though not past the
+  limit.
+
+### Fixed
+
+- Two-handed weapons no longer leave a shield strapped to your arm. The shield still counts, it's
+  just not shown while you hold one.
+- Prifddinas's walkways and bridges are whole again instead of leaving pieces floating in the air.
+  Only the buildings' roofs and the towers' domes are gone. A few stray roof edges went from
+  Barrows too.
+- Enemies only turn up where you could stand and walk to, so rings of enemies, summons and ghosts
+  no longer appear behind walls or inside rock. East Varrock's enemies still come from both sides
+  of the ditch, since they jump it.
+- In the God Wars Dungeon and Castle Wars, an enemy with a wall between it and the other side for 3
+  seconds gives up and comes for you for good, rather than standing at the wall.
+
 ## 0.17.2 - 2026-10-30
 
 ### Fixed
