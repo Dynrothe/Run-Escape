@@ -126,7 +126,7 @@ describe("co-op relay", () => {
         const { host, code } = await party(1);
         const { room, you } = await host.room();
         expect(room.code).toBe(code);
-        expect(room.members.map((m: { name: string }) => m.name)).toEqual(["Host", "Guest 1"]);
+        expect(room.members.map((m: { name: string }) => m.name)).toEqual(["host", "guest"]);
         expect(room.hostId).toBe(you);
     });
 
@@ -137,7 +137,16 @@ describe("co-op relay", () => {
         browser.send({ t: "list" });
         const { rooms } = await browser.next("rooms");
         expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
-        expect(rooms[0].host).toBe("Host");
+        expect(rooms[0].host).toBe("host");
+    });
+
+    it("cleans up names, and won't show a banned one", async () => {
+        const client = await connect();
+        client.send({ t: "create", open: true, me: { name: "Sh1t Lord" } });
+        expect((await client.room()).room.members[0].name).toBe("adventurer");
+        client.send({ t: "me", name: "Lumby Lad 99" });
+        const { room } = await client.roomWhere((r) => r.members[0].name !== "adventurer");
+        expect(room.members[0].name).toBe("lumbylad");
     });
 
     it("lists the open rooms a page at a time, fullest first", async () => {

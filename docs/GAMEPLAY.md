@@ -351,7 +351,8 @@ version and how to run it.
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
   Armoury and unlocked items; the host picks the map and endless, and starts once everyone (the
   host too) is ready, which can be a party of one. The host can open or close the room, kick a
-  player and disband it. A pasted invite link in the code box leaves just its code.
+  player and disband it. A pasted invite link in the code box leaves just its code. Names are
+  lowercase letters only (no spaces), and offensive ones aren't allowed.
     - A win counts for everyone, and opens the map it was on for a player who hadn't got that far
       (along with the next), but not the maps before it.
     - The run's **level is shared**: every level up gives each player their own three choices, and

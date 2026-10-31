@@ -14,6 +14,8 @@ import { createHash, randomInt } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_NAME, playerName } from "./names.mjs";
+
 export const RELAY_PATH = "/coop";
 
 // Whether multiplayer's been turned on for a server that has the relay in it
@@ -38,7 +40,6 @@ const MAX_MESSAGE_BYTES = 256 * 1024;
 // A client sending more than this many messages a second is dropped
 const MAX_MESSAGES_PER_SECOND = 400;
 const PING_MS = 20_000;
-const NAME_LENGTH = 16;
 // Room codes leave out letters and digits that look alike
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 5;
@@ -243,11 +244,6 @@ function acceptKey(key) {
 
 // ---- Rooms ----
 
-function cleanName(name) {
-    const clean = typeof name === "string" ? name.replace(/[^\p{L}\p{N} _'-]/gu, "").trim() : "";
-    return clean.slice(0, NAME_LENGTH) || "Adventurer";
-}
-
 // A whole number from a message, kept within min and max
 function clampInt(value, min, max, fallback) {
     const n = Number.isInteger(value) ? value : fallback;
@@ -377,7 +373,7 @@ export function createRelay() {
 
     function setMember(client, message) {
         if (message.name !== undefined) {
-            client.name = cleanName(message.name);
+            client.name = playerName(message.name);
         }
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
@@ -556,7 +552,7 @@ export function createRelay() {
         );
         const client = {
             id: `p${nextId++}`,
-            name: "Adventurer",
+            name: DEFAULT_NAME,
             characterId: "",
             ready: false,
             loadout: undefined,

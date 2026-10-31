@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { DEFAULT_NAME } from "../../../server/names.mjs";
 import { GameClient } from "../client/GameClient";
 import { TeammateView, UiSnapshot } from "../client/GameStore";
 import { parseRoomCode } from "../client/coop/CoopLobby";
@@ -31,7 +32,10 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
     const coop = ui.coop;
     const [code, setCode] = useState("");
     const [open, setOpen] = useState(false);
+    // A banned name can't make or join a room until it's changed
+    const nameOk = coop.nameAllowed;
     const online = coop.status === "online";
+    const canJoin = online && nameOk;
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.code === "Escape" && !(e.target instanceof HTMLInputElement)) {
@@ -55,8 +59,10 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         <input
                             className="ui-coop-input"
                             value={coop.name}
-                            maxLength={16}
-                            placeholder="Adventurer"
+                            placeholder={DEFAULT_NAME}
+                            spellCheck={false}
+                            autoCapitalize="none"
+                            // Lowercase a-z only, kept that way as it's typed
                             onChange={(e) => client.setCoopName(e.target.value)}
                         />
                     </label>
@@ -84,7 +90,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         </div>
                         <button
                             className="ui-button ui-button-go"
-                            disabled={!online}
+                            disabled={!canJoin}
                             onClick={() => client.createRoom(open)}
                         >
                             Create
@@ -110,7 +116,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                         <button
                             className="ui-button"
                             type="submit"
-                            disabled={!online || code.trim().length === 0}
+                            disabled={!canJoin || code.trim().length === 0}
                         >
                             Join
                         </button>
@@ -142,6 +148,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             </span>
                             <button
                                 className="ui-button ui-button-small"
+                                disabled={!nameOk}
                                 onClick={() => client.joinRoom(listing.code)}
                             >
                                 Join
@@ -185,6 +192,9 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             ›
                         </button>
                     </div>
+                )}
+                {!nameOk && (
+                    <div className="ui-coop-error">That name isn't allowed. Pick another.</div>
                 )}
                 {coop.error && <div className="ui-coop-error">{coop.error}</div>}
                 <div className="ui-row">

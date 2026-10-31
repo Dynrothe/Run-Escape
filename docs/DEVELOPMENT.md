@@ -73,7 +73,8 @@ more browsing the room list) took at most 13% of one core and 64 MB. A small VPS
 serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
-packages, so copy the one file to the server and run it.
+packages, so copy it and `server/names.mjs` (the name rules, which the game uses too) to the server
+and run it.
 
 ```
 PORT=8787 node server/coop-relay.mjs
@@ -200,6 +201,11 @@ venom) remembers whose with `hero`, and the sim works as them when it acts. Co-o
 through `sim.as(hero, ...)`. Events that are a hero's own (a hit taken, a pickup, a casket) carry
 `hero` in co-op, so the client shows its own and leaves the rest. A solo run has one hero and
 plays exactly as before.
+
+Player names, which the open rooms list shows anyone, are lowercase a-z only and checked against a
+banned list (with digits and symbols standing in for letters read as letters) in
+`server/names.mjs`. The game cleans them as they're typed and won't make or join a room with a
+banned one, and the relay cleans every name it's sent, giving a banned one the default.
 
 `server/coop-relay.mjs` holds the rooms (code, open or invite only, host, map, members and their
 ready state and loadout) and forwards `up` messages from guests to the host and `down` messages
