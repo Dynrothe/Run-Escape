@@ -18,26 +18,37 @@ collision, flow field, minimap and bot get them with no idea they aren't real.
 The recipe runs once, on the main thread, the first time the map's played. `GameClient.loadGrid` calls
 `installRecipe`, and scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 
-| File           | What                                                                   |
-| -------------- | ---------------------------------------------------------------------- |
-| `recipe.ts`    | `MapRecipe`, `BuildContext`                                            |
-| `Ground.ts`    | a map being built: paint overlays, stamp prefabs, place locs           |
-| `format.ts`    | the tile grid, and reading and writing both file formats               |
-| `prefab.ts`    | cut a rectangle out of the real world, turn it                         |
-| `prefabs.ts`   | the named rectangles, a starter set                                    |
-| `biomes.ts`    | what each kind of ground is made of                                    |
-| `generator.ts` | the random generator                                                   |
-| `collision.ts` | collision from a grid, reachability                                    |
-| `paths.ts`     | cheapest path, for roads and fords                                     |
-| `noise.ts`     | seeded random numbers and noise, distance to a mask                    |
-| `palette.ts`   | everything the generator can use, on one map                           |
-| `squares.ts`   | turns a recipe into squares, and installs them                         |
-| `maps/`        | the maps: `devMaps.ts` lists them, `terrainTest.ts` is a hand-made one |
+| File             | What                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `recipe.ts`      | `MapRecipe`, `BuildContext`                                                                               |
+| `Ground.ts`      | a map being built: paint overlays, stamp prefabs, place locs                                              |
+| `format.ts`      | the tile grid, and reading and writing both file formats                                                  |
+| `prefab.ts`      | cut a rectangle out of the real world, turn it                                                            |
+| `prefabs.ts`     | the named rectangles: buildings from all over the world                                                   |
+| `biomes.ts`      | what each kind of ground is made of, and its rock                                                         |
+| `generator.ts`   | the random generator: the order things happen, scatter, reachability                                      |
+| `mapBuild.ts`    | what's kept while a map's built, and what its parts share                                                 |
+| `rivers.ts`      | rivers, lakes and the sea: where they go, how high they stand                                             |
+| `mountains.ts`   | passes, what can be walked, rock, snow, caves, lava                                                       |
+| `roads.ts`       | roads and bridges                                                                                         |
+| `settlements.ts` | where buildings go, and their plots                                                                       |
+| `structures.ts`  | set pieces, wrecks and drowned towns, town walls, waymarkers                                              |
+| `falls.ts`       | waterfalls off cliffs, with their pools                                                                   |
+| `terrain.ts`     | the height layer: floats per corner, pins, slope limits                                                   |
+| `landforms.ts`   | the shape of the land: hills, ranges, mesas, canyons, volcanoes                                           |
+| `roadGrades.ts`  | how high every road runs, worked out together                                                             |
+| `collision.ts`   | collision from a grid, reachability                                                                       |
+| `paths.ts`       | cheapest path, for roads and fords                                                                        |
+| `noise.ts`       | seeded random numbers, noise, fractal and ridged noise, distance                                          |
+| `palette.ts`     | everything the generator can use, on one map                                                              |
+| `squares.ts`     | turns a recipe into squares, and installs them                                                            |
+| `maps/`          | the maps: `devMaps.ts` lists them, `terrainTest.ts` is a hand-made one, `cliffGallery.ts` shows rock locs |
 
 ## The map generator screen (temporary)
 
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random,
-Reset, copying and pasting the settings as JSON, Generate with a preview from above, and Play. It's temporary,
+Reset, Randomize (rolls every setting that shapes the map, within its limits, but keeps the size, heightmap, start and
+waves), copying and pasting the settings as JSON, Generate with a preview from above, and Play. It's temporary,
 there to try settings, so it's built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`,
 then the `MapGeneratorButton` line in `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`. A production
 build never shows it.
@@ -73,15 +84,97 @@ doesn't change the map. A setting that only matters with another (`when`) hides 
 ```
 
 The same seed and settings always give the same map. It's generated at load from a fixed palette (`BIOMES`,
-`PREFABS` and `BRIDGE`); nothing is baked to a file.
+`PREFABS` and `BRIDGES`); nothing is baked to a file.
 
-What it does, in order: rivers, sea and lakes, heights, floors, bridges, main roads, buildings with their roads,
-ruins, the boundary, scatter, then reachability. Anything it can't connect gets blocked (see below).
+What it does, in order: the land's shape (`landforms.ts`), rivers down its valleys, sea and lakes, cliffs, passes,
+floors, bridges, main roads, buildings with their roads, set pieces, ruins, pools for waterfalls, town squares, then the
+heights are finished (`gradeRoads`, `settle`), what's too steep is blocked, then rock, the falls, the boundary, town
+walls, waymarkers, what stands in water, scatter, and reachability. Anything it can't connect gets blocked (see below).
 
 **Boundaries.** Only `sea` makes an island. With the others, land runs on past the arena on all sides, scattered
 out to the edge of the margin, so the world looks like it carries on. The arena's edge is still what stops you,
 so each one puts something there: `forest` a thick belt of trees either side of it, `hills` ground rising away
-with a line of boulders on it, `fence` a fence `boundaryDepth` tiles in, with gaps where roads go through.
+with a line of boulders on it, `fence` a fence `boundaryDepth` tiles in, with gaps where roads go through,
+`mountains` a ring of rock rising from `boundaryDepth` tiles in.
+
+## Biomes
+
+Each is an entry in `BIOMES` (`biomes.ts`): its ground, water, trees, scatter, big props, buildings, set pieces, fence,
+town wall, waymarker and rock. There's a preset that shows each one off, and a dev map, `scaperune_<id>`, 2 squares a side.
+
+| Biome       | From                                        | Buildings                         | Set pieces                                       |
+| ----------- | ------------------------------------------- | --------------------------------- | ------------------------------------------------ |
+| `meadow`    | Lumbridge                                   | Lumbridge, Varrock                | stone circle, redwoods, hedge maze, fort, wrecks |
+| `desert`    | Kharidian Desert                            | Al Kharid, Pollnivneach, Sophanem | sandstone circle, great skeleton, fort, wrecks   |
+| `swamp`     | Lumbridge Swamp, Morytania                  | Canifis, Burgh de Rott            | toadstools, mushroom grove, great tree           |
+| `snow`      | Trollweiss, with ice from the north seas    | Rellekka                          | longship, stone circle, fort                     |
+| `jungle`    | Karamja, Varlamore's stumps                 | Tai Bwo Wannai                    | great stumps, idol, wrecks                       |
+| `tropical`  | the Sailing islands                         | Ape Atoll, Tai Bwo Wannai         | great skeleton, wrecks                           |
+| `ash`       | Fossil Island, the Wilderness. Water's lava | Lovakengj, Shayzien               | craters, black crystal                           |
+| `autumn`    | maples, on gold ground                      | Hosidius, Shayzien                | redwoods, stone circle, hedge maze, fort         |
+| `deadlands` | Morytania past the Salve                    | Darkmeyer, Burgh de Rott          | graveyard, Blisterwood tree, dark crystal, fort  |
+| `elven`     | Tirannwn, Prifddinas's crystal              | Prifddinas                        | crystal, crystal field, drowned town             |
+| `fairy`     | Zanaris. Nothing's built                    | none, ruins only                  | giant mushroom, mushroom grove, toadstools       |
+| `darkwood`  | the Darkwood                                | Darkmeyer                         | dark crystal, great tree, black trees            |
+| `astral`    | nowhere: land over the stars                | Prifddinas                        | crystal, stone circle, hedge maze                |
+
+To add one: find what a place is made of with the tools below, give it an entry, a preset and a line in `SWEEP`
+(`check-maps.ts`), add it to `GENERATED` in `maps/devMaps.ts`, and look at it. The palette picks it up.
+
+**Mixed maps.** `biomeAt` says what's where, and roads, rock and lava go tile by tile. Water doesn't: a step in its colour
+would show as a line across it, so each piece of water is the kind of the biome most of it's in. What's scattered uses
+`biomeNear`, which frays the line between two biomes by about 8 tiles, so that woods run into each other.
+
+**Chasms.** A biome with `chasm` has a drop for a sea. The ground comes down in `CHASM_EDGE` tiles rather than `SHORE_REACH`,
+so its edge is a cliff, and the "water" is overlay 39, the Cosmic Plane's stars. `hasRelief` is true for these, so all the
+rock logic runs on the edge. Fords can't cross it, so anything the sea cuts off is blocked and only looked at, and that
+can leave too little to play on: a river cuts the land in two for good, and its water's stars too, so `Sky islands` has
+none.
+
+**Finding what a place is made of**, all without a browser:
+
+```sh
+npx tsx scripts/scaperune/world-index.ts world.json         # every square's locs and floors, once
+npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22 # draws locs, about as the play camera sees them
+npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle of the world from above
+npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
+```
+
+The index is JSON: a few lines of anything will list a region's commonest locs, which is the quick way to choose. A loc's
+name is often `null`, so look at them. Sheets are close, not exact: textures are their average colour, and big things are
+scaled to fit.
+
+Things worth knowing about in the cache, found this way: `60436` to `60444`, big round grey boulders that work on any
+ground; `58541` to `58543`, palms; `40754`, a bright orange maple; `40788` on, the Darkwood's trees; `60467` to `60479`,
+wrecks made for the sea; `43129` to `43131`, mushroom trees up to 9 tiles across; `48327`, a sunken steeple; `59324`, a skeleton
+7 tiles long; `27878` and `27879`, crystals 5 across; `60404` and `60405`, ice; `60390` to `60399`, flat blue ice.
+
+Floors that are more than a colour: overlay `20` grey stone, `32` dark rock, `12` cobbles, `39` stars on black, `52`
+planks, `174` flagstones, `196` ice, `84` sandstone. Overlay `42` isn't drawn at all, as in caves. `floors` of the Darkwood
+(629 on) couldn't be read by the overlay loader in Node, so its road's an older one.
+
+## Set pieces
+
+`SET_PIECES` in `structures.ts`, named in a biome's `landmarks`. There's `landmarks` to say how many. The kinds:
+
+- `single`, one big loc. `ring`, stones round a circle. `grove`, a loose crowd. `rows`, as in a graveyard.
+- `maze`, hedges a tile thick round corridors 3 wide: a tree of corridors with a fifth of its walls knocked through and a
+  way in on each side, because a crowd has to fit and it shouldn't be a trap. `fort`, the biome's wall round a yard, with
+  a gate on each side.
+- `wreck`, in the water near a shore. `sunken`, a steeple in deep water with pillars round it: they're only placed if
+  all of their tiles are water, so there's none on a map without a lake or sea big enough.
+
+On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a big loc on a slope shows its underside, and
+`check-maps.ts` holds them to it. Big locs aren't contoured unless their definition says so.
+
+**Town walls.** `townWalls` is the share of towns with one. It's a rectangle a little way out from a town's buildings, open
+where roads go through and with a gate on each side, in the biome's `wall`, and inside it roads are cobbled and there's a
+square with a fountain. A wall loc is a thin thing on a tile's side, so it costs nothing, and reachability needs no help.
+
+**Cities.** A town with walls is laid out in districts, a wedge each for houses, shops and churches, as far as the biome
+has them. `Walled city` is the preset.
+
+**Waymarkers** stand beside roads, turn about, every 16 tiles at 1.
 
 **The game fades the world to black past the arena's edge**, over 6 tiles (`playAreaFog`). Real maps keep that. It
 would hide all of the above, so `GameClient` moves it out by `OPEN_WORLD_MARGIN` on dev maps. A map that ships
@@ -111,7 +204,7 @@ npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=snow boundary=forest s
 
 ## How big a map can be
 
-Numbers from a Node run, 400 enemies in the Sim, on this VM:
+Numbers from a Node run, 400 enemies in the Sim, on this VM, with no mountains:
 
 | Squares a side | Tiles in the grid | Generate     | Start a run | Browser peak | Sim tick, 400 enemies |
 | -------------- | ----------------- | ------------ | ----------- | ------------ | --------------------- |
@@ -132,6 +225,9 @@ is there before a map is built. Some of it is left from earlier runs in a sessio
   for a moment in one worker. In Node at 28 they each added about 400 MB.
 - **The hard limit is the world**: 28 is what fits at x 70 to 99, because `MapManager.MAX_MAP_X` is 100. Raising
   that is one line, but past 28 this VM's 2.4 GB cap would stop it, so it hasn't been tried.
+- **Mountains cost more to build**, in time, not at run time: with `mountains` at 0.75 it took 8.5 s at 8 squares, 22 s
+  at 16 and 65 s at 28, in Node with no cache behind it, peaking at 720 MB. It's noise on every corner, passes (nearly 600
+  at 28) and fords. A map's run time is the same: 0.12 ms a tick with 66 enemies on `scaperune_alpine`.
 - **Three things had to change to get here**: the collision build drew tile models it never read
   (`buildScene`'s `tileModels`), the minimap kept a 205 MB canvas and asked for every square's image at once (big
   arenas are coarser, and ask for what's near), and the preview drew every square (past 5 by 5 it draws the grid).
@@ -230,22 +326,142 @@ into world tiles.
 - **Ids are as the map files store them, the cache's id plus one.** `find-prefabs.ts` prints them this way,
   so copy from there.
 - **Heights** are one byte per tile corner, going up, 8 scene units each. A tile is 128 units across, so 16
-  a tile is 45°. Real surface ground stays between about 0 and 80. `setHeight` rounds and clamps for you.
+  a tile is 45°. Real lowland stays between about 0 and 80, and real mountains use all of 0 to 255. `setHeight`
+  rounds and clamps for you. The generator works in floats in `Terrain`: see [Height](#height).
 - Look at what a kind of ground is made of with `find-prefabs.ts` on a real square, then use those ids.
   That's how `biomes.ts` was made.
+
+## Height
+
+Height's a layer of its own while a map's built: `Terrain` holds a float per corner, and only the finished heights go
+into the grid. Nothing writes heights directly. Whatever needs the ground to be a certain height **pins** it, and
+`settle` brings the ground round it to meet that, cutting and building no steeper than `SETTLE_SLOPE` of what's
+walkable. That one idea does cuttings, embankments, plots and the ground round bridges.
+
+**The limits, measured:**
+
+| What            | Number                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| A height        | 0 to 255, one byte, a step of 8 scene units. 1 reads as 0.                                                   |
+| Tallest ground  | 255 is 2040 scene units, 16 tiles. Real peaks use it (Trollheim, Cam Torum)                                  |
+| What gets drawn | `MapManager` culls squares with a box 18.75 tiles up: all of it fits                                         |
+| Real slopes     | up to 44+ a tile, blocked, with a rock overlay; `getTileSlope` measures                                      |
+| Tiles           | two triangles, split south-east to north-west                                                                |
+| Light           | from the south-west. 11 to 181 against 84 on the flat, so it can't overflow; camera-facing slopes are bright |
+| Actors          | stand on `getHeight` at their middle. They don't tilt.                                                       |
+
+**The camera.** It's fixed: it looks north, at 70° (pitch -400), from 18 tiles (10 to 44 with the wheel), 45° field of
+view, so at the default zoom it sees about 27 by 16 tiles. So:
+
+- **A mountain's something you walk under, not something you see.** What reads as height in that window is light, cliffs
+  and ledges a dozen tiles across, not peaks a hundred across. `terraces` is what does that.
+- **Only drops to the north can hide anything**, because the camera's south of what it's looking at. 70° is 44 height
+  units a tile, so a face steeper than that hides its own foot. `limitNorthFaces` keeps them to 30 (`NORTH_FACE_SLOPE`),
+  and `check-maps.ts` counts open tiles hidden from the camera, which must be 0. The rest of the view runs from 92° at
+  the bottom of the screen to 48° at the top, so a tall ridge can hide a tile or two near the top until you get closer.
+- **It doesn't clip.** Over any slope within that limit it stays at least 15% of its distance over the ground.
+- **It'd lurch** at creases on tall ground, so on dev maps it eases after the ground (`CAMERA_GROUND_EASE`).
+
+**Walkable.** A tile steeper than `walkSlope` (12 by default) is blocked with the same floor flag as water. That goes by
+the rounded heights in the grid, so `getCollisionFlags` and the game's scene agree, and `check-maps.ts` compares every
+tile. Enemies need nothing new: to the flow field a cliff's a wall. They only turn up where they can reach you
+(`canTurnUpAt`), so one on the far side of a long cliff doesn't stand there.
+
+Cliffs are picked in `shapeCliffs`: tiles over `walkSlope`, without specks, and without ledges too thin to walk. Then
+slopes that are left are eased under the limit, so all the height that's lost there goes into the cliffs, and a
+hillside comes out as ground you can walk on and cliffs you can't, with nothing in between. **A blocked tile always
+looks it**: everything blocked gets the rock overlay.
+
+**Reachability.** `cutPasses` cuts a graded pass to any piece of ground over `MIN_PASS_PIECE` the cliffs cut off, before
+roads go down, so roads use them. Anything smaller stays out of reach, which is fine on top of a mesa. Nothing's built
+off the `mainland`.
+
+**Roads.** Routes are found with a cost per step (`climb`), so they go round or wind up a slope rather than straight up
+it. Their heights are worked out **all together, last** (`roadGrades.ts`): every point's a node, linked along the
+road and to anything near it, with leads and plots pinned, and the grade limited along every link. Doing them one
+at a time doesn't work, however careful: a road's height depends on what it meets and what it passes, and those can
+come later. Then the ground's pinned to them across their width.
+
+**Rivers** (`findValley`) follow the low ground, seam-carved a column at a time, so a river's still a function of how far
+along it is and all the bridge logic stands. Their level only falls toward their lower end, is level for
+`LEVEL_AT_CROSSING` tiles round a crossing, and banks come down over `riverValley`'s slope: sheer gorges at 0 and wide
+valleys at 1. Fresh water's corners are held: nothing moves them.
+
+**Bridges** stand with their banks `bankHeight` over the water (a prefab's river bed is at 0), pinned from the prefab's own
+heights, because the deck's stored relative to the ground under it. There are three in `BRIDGES`, and a biome names one:
+Lumbridge's stone, its twin in Tirannwn with elven lamps, and Varlamore's red timber. They can stand in for each other
+because all of them have an 11 tile deck, 2 wide, at the same place in an 18 by 6 rectangle. There are dozens of other bridges
+in the cache, but with their own banks: most run into cliffs or are flat with the water, and a few end in blocked tiles.
+
+**Buildings** stand on a flat plot (`pinPlot`) with a level step out of the door. They only go where the ground rises
+less than `MAX_PLOT_RISE` over the plot, away from cliffs and with room to get down to water, and where their road can
+reach what it joins at a walkable grade.
+
+**Actors on slopes.** On dev maps `getHeight` follows the triangles a tile's drawn with (`ArenaGrid.exactGround`), since
+easing across a tile can be 0.4 tiles out on a steep one, and anything with a radius over a tile is lifted part of the way
+to the highest ground under it (`groundUnder`).
+
+### Rock
+
+Real mountains are mostly just height and a rock overlay: Trollheim's overlay 83, Ice Mountain's 22. What makes them
+read as rock here is a textured overlay, stone (20) or dark rock (32), which takes the light on a slope, with big boulders
+along the edge of the cliff (`boulders`, one tile each but standing over two or three, about a third of the tiles). A line
+of them reads as a rock wall. Faceted rock locs as at Karuulm were tried first, and on a green map they came out as black
+shards. `RockDef` in `biomes.ts` says what a biome's made of. To look for more, `scaperune_cliffs` shows locs on a steep band.
+
+A dark underlay bleeds a long way into white (11 tiles), which is where snow's dark smears came from, so `snow` has a pale
+`ground` (underlay 16).
+
+| Locs                                                                   | What                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 60436, 60437, 60438, 60439 (type 10)                                   | big round grey boulders: what biomes use                                   |
+| 34384, 34372, 42352 (type 10)                                          | full tile rock: near-black green, olive, black. Look like shards on green  |
+| 42097, 42098, 6617, 52795, 48627, 57476 (type 22)                      | flat patterned decals: brown, tan, maroon, green. They look like brickwork |
+| 34385, 34388, 34391, 34392, 42353 (type 10)                            | broken facets, with holes                                                  |
+| 53538 (wall), 53543 (diagonal)                                         | snow on a wall; ice shards, which look terrible                            |
+| Rockslide 11434 grey, 11922 white, 18894 amber, 11933 dark, 3718 mossy | heaps of rock, 2 by 2                                                      |
+| 185, 3703, 11439, 3614, 321, 3706 (type 22)                            | stones                                                                     |
+
+**Waterfalls.** Rivers gather their fall into single drops at least `WATERFALL_SPACING` apart, with foam across the river.
+Most don't fall far in the arena, because they look for the low ground, so these are rare and mostly in the margin. What
+you'll see are `cliffFalls` (`falls.ts`): loc 51484, from Varlamore, on a cliff that faces the camera, into a pool made for
+it. That loc's contoured, so it climbs whatever's behind it and fits any cliff of 28 units or more. The pool's made
+before the heights settle, because it needs level corners, and the cliff behind it is held meanwhile, or the pool would
+cut it back. It's let go before `limitNorthFaces`, or that can't do its job round it.
+
+**Caves** are decoration: a mouth 3 by 2 tiles at rotation 0 (facing south), set into the foot of a cliff that faces the
+camera. Nothing goes in them. They're on tiles that are blocked anyway.
+
+**Tried and dropped:** deeper water away from shores, with overlays 448 to 454. A tile can only hold one, so each band's edge
+is a staircase of whole tiles, and it looked like one. A rope bridge over a gorge. The cache's (21509, on Neitiznot) is a thin wall loc with no deck, so
+it'd need a walkable deck built from nothing, and from above it's a line. `53543` ice shards look terrible as a snow
+face, and no overlay's as white as the snow underlay, so snowy cliffs are bare underlay with dark faces.
+
+**A heightmap** replaces hills and ranges (`heightmap`): the screen shrinks an image to `HEIGHTMAP_SIZE` a side, and it
+travels in the settings as base64, so it's in the JSON too. Black is the floor of the land and white is `peakHeight`.
+Everything after that treats it as any other land.
+
+To add a landform, add a function to `landforms.ts` that adds to `terrain.height` and marks `mountain`, call it from
+`createRelief`, add its setting, say so in `hasRelief` (`mapBuild.ts`), and add a line to `SWEEP` at its extreme. To give
+a new biome its mountains, fill in `rock` in `biomes.ts`: the palette picks it up.
+
+`npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3` draws a map's height in a second or two without
+the cache, which is the quick way to work on shapes. Fake prefabs stand in, so buildings aren't right.
 
 ## Water
 
 Paint it with an overlay and `blocked: true`. The blocked flag is what stops you, not the overlay.
-Water overlays: 6 and 442 (rivers and sea), 7 (swamp). Sink the ground under it, or at least level it:
-heights near water should come down to the bed over a few tiles (`distanceTo` gives you the distance).
+Water overlays: 6 and 442 (rivers and sea), 7 (swamp), 5 (lava). There's no water plane: water's drawn at the height of
+its tiles' corners, so keep them level, and bring heights near water down to it over a few tiles (`distanceTo` gives
+you the distance).
 
 ## Prefabs
 
 There's no building entity in the cache. A building is its locs and floor tiles, so a prefab is a
 rectangle of the real world.
 
-1. **Find one.** `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with
+1. **Find one.** `find-buildings.ts` finds whole buildings in a block of squares, and `loc-sheet.ts` draws what it finds.
+   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with
    world coordinates down the side. Pick a rectangle that holds the whole building and nothing else.
 2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles. The rectangle must
    take in every wall of the building, with nothing else in it. A rectangle a row short loses that wall, and the
@@ -294,7 +510,17 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
 - **The minimap doesn't draw trees or rocks**, so a preview shows neither.
 - **Enemies only path 48 tiles.** The flow field's window is 96 tiles across (`FLOW_FIELD_SIZE` in
   `Sim.ts`), so keep river crossings closer than that to wherever the fight is, or enemies on the far side
-  stand at the bank.
+  stand at the bank. A long cliff's the same, but they only turn up where they can reach you, so it just means
+  they come from your side of it.
+- **Two parallel roads merge if they're close.** Roads are smoothed as a field before they're painted, so one 4 rows
+  from a bridge's road adds a third row beside it. `BRIDGE_ROAD_CLEAR` is what keeps them apart.
+- **A setting that adds rock must say so to `hasRelief`**, or rivers won't look for a valley and main roads won't route.
+- **Pins made before a pass are let go** (`cutPasses` clears them, having cut the ground), so anything pinned for good
+  comes after it.
+- **The camera's fixed, so faces aren't equal.** It only ever sees faces looking south. A rock face on a north-facing
+  cliff's mostly lost, and anything that has to be seen (a cave's mouth) has to look south.
+- **The map's seed order matters for water**: rivers come after the land's shape and before water's levels, and levels
+  need the sea sunk first, or a river's lowest point isn't known.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
   first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
@@ -302,6 +528,9 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   so does the map.
 - **One plane is drawn.** The game hides everything above the arena's plane, so roofs and upper floors vanish,
   as on real maps. Bridges still draw: their deck is on level 1 with a flag on level 1's tiles.
+- **Round buildings have empty corners.** Their plot's a rectangle but only what's inside the walls is reserved, so
+  `fitsBuilding` looks at plots as well, or one plot lands on another's corner and a building ends up on a slope.
+- **Ruins have no floor.** A floor with half its walls gone is a slab with nothing round it.
 - **Doors are closed, or open and turned.** A stamped building with a door has a sealed inside unless you drop
   the door. An open door stands on another side of its tile, off the wall, so don't read a way out from a door's
   rotation: `findExits` goes by the gap. Curtains are doors too.
@@ -314,8 +543,6 @@ check, so use `findReachable` and `findStranded` from `collision.ts`, or `previe
   Run a road down that line with a half width of 1 to 1.3 and it fills the gap with its edges on the tiles.
   `check-maps.ts` holds generated bridges to this. A river where the road can't run straight off both ends for
   6 tiles past the stamp gets a ford instead.
-- **Cliffs are weak.** Steep blocked tiles with a rock overlay collide, but look like a grey ramp. Real
-  mountains use wall-type rock locs along their edges (14622-14626 and others).
 - **Roads have an overlay down the middle of a soft underlay.** Underlays blend over 11 tiles, which hides the
   tile grid but can't be narrow, so an underlay alone is a wide faint stain, not a road. An overlay alone has
   a hard edge. Together the stain takes the contrast out of the edge. It needs ground with some colour in it:

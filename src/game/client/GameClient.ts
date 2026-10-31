@@ -82,6 +82,9 @@ const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
 const RUN_DISTANCE = 18;
+// How long the camera takes to follow the ground up a slope on a dev map, in ms: without this,
+// it lurches at every crease in tall ground
+const CAMERA_GROUND_EASE = 110;
 
 // The level up's rewards, as the UI shows them
 // What a new endless round brings, for its toast
@@ -218,6 +221,8 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    // Where the camera thinks the ground is, on a dev map
+    private cameraGround: number | undefined;
     private appearanceVersion = -1;
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
@@ -484,6 +489,8 @@ export class GameClient implements GameFrameHandler {
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.dev === true);
+        this.grid.exactGround = map.dev === true;
+        this.cameraGround = undefined;
         this.renderer.setBrightness(map.brightness ?? 1);
         this.minimap.setMap(map);
         const music = map.music && MUSIC[map.music];
@@ -827,7 +834,13 @@ export class GameClient implements GameFrameHandler {
         const px = player.prevX + (player.x - player.prevX) * alpha;
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
-        this.cameraRig.apply(camera, px, this.grid.getHeight(px, py) / 128 - 0.6, py);
+        let ground = this.grid.getHeight(px, py) / 128;
+        if (sim.map.dev) {
+            const last = this.cameraGround ?? ground;
+            ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
+            this.cameraGround = ground;
+        }
+        this.cameraRig.apply(camera, px, ground - 0.6, py);
     }
 
     private getAlpha(): number {

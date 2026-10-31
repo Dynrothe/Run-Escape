@@ -43,6 +43,81 @@ export function createNoise(seed: number, scales: 1 | 2 | 3 = 3): Noise {
     };
 }
 
+// Gradient noise, about -1 to 1. Unlike createNoise it shows no grid of hills, which
+// matters once it's ridges you're looking at.
+export function createGradientNoise(seed: number): Noise {
+    const hash = (x: number, y: number): number => {
+        let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1274126177);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return (h ^ (h >>> 16)) >>> 0;
+    };
+    const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+    const dot = (ix: number, iy: number, x: number, y: number) => {
+        const angle = (hash(ix, iy) / 0x100000000) * Math.PI * 2;
+        return Math.cos(angle) * (x - ix) + Math.sin(angle) * (y - iy);
+    };
+    return (x, y) => {
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        const fx = fade(x - ix);
+        const fy = fade(y - iy);
+        const south = dot(ix, iy, x, y) + (dot(ix + 1, iy, x, y) - dot(ix, iy, x, y)) * fx;
+        const north =
+            dot(ix, iy + 1, x, y) + (dot(ix + 1, iy + 1, x, y) - dot(ix, iy + 1, x, y)) * fx;
+        return (south + (north - south) * fy) * 1.5;
+    };
+}
+
+// Layers of gradient noise, each twice as fine and gain times as strong: about -1 to 1
+export function createFractal(seed: number, octaves: number, gain: number): Noise {
+    const layers = Array.from({ length: octaves }, (_, i) => createGradientNoise(seed + i * 31));
+    return (x, y) => {
+        let sum = 0;
+        let strength = 1;
+        let total = 0;
+        let scale = 1;
+        for (const layer of layers) {
+            sum += layer(x * scale + 3.1, y * scale + 1.7) * strength;
+            total += strength;
+            strength *= gain;
+            scale *= 2.03;
+        }
+        return sum / total;
+    };
+}
+
+// Ridged noise, 0 to 1: sharp crests along the lines where noise crosses 0. Fine layers
+// only show near the crests, which is what makes it look like eroded rock rather than
+// wrinkles all over.
+export function createRidged(seed: number, octaves: number, gain: number): Noise {
+    const layers = Array.from({ length: octaves }, (_, i) => createGradientNoise(seed + i * 37));
+    return (x, y) => {
+        let sum = 0;
+        let strength = 1;
+        let total = 0;
+        let scale = 1;
+        let weight = 1;
+        for (const layer of layers) {
+            const crest = Math.max(1 - Math.abs(layer(x * scale, y * scale)) * 1.5, 0);
+            const value = crest * crest * weight;
+            sum += value * strength;
+            total += strength;
+            weight = Math.min(value * 2, 1);
+            strength *= gain;
+            scale *= 2.03;
+        }
+        return sum / total;
+    };
+}
+
+// Noise read at a pushed about position, which bends straight features into natural ones.
+// amount's in the same units as x and y.
+export function warpNoise(noise: Noise, seed: number, amount: number): Noise {
+    const pushX = createFractal(seed, 2, 0.5);
+    const pushY = createFractal(seed + 11, 2, 0.5);
+    return (x, y) => noise(x + pushX(x, y) * amount, y + pushY(x, y) * amount);
+}
+
 // Evens out a field, per grid point (3 by 3, a few times over), which takes off
 // bumps too small to draw
 export function smoothField(

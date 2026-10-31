@@ -1,19 +1,23 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
-import type { BiomeId } from "./biomes";
+import { BIOMES, BiomeId } from "./biomes";
 import { findReachable, findStranded, getCollisionFlags } from "./collision";
 import { createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
+    HEIGHTMAP_SIZE,
     MAX_ARENA_SQUARES,
     SETTINGS,
     SETTING_PRESETS,
     SETTING_SECTIONS,
     SettingKey,
+    decodeHeightmap,
+    encodeHeightmap,
     formatSettings,
     generateMap,
     generatedRecipe,
@@ -21,7 +25,9 @@ import {
     getGeneratedSpawn,
     getSettingsError,
     parseSettings,
+    randomSettings,
 } from "./generator";
+import { createRng } from "./noise";
 import type { BuildContext } from "./recipe";
 
 // A world with no cache behind it, where everything cut from it is walled rooms
@@ -81,6 +87,33 @@ describe("generateMap", () => {
         }
     });
 
+    // Rising from west to east
+    const ramp = new Uint8Array(HEIGHTMAP_SIZE * HEIGHTMAP_SIZE).map((_, i) =>
+        Math.round(((i % HEIGHTMAP_SIZE) / (HEIGHTMAP_SIZE - 1)) * 255),
+    );
+
+    it("rolls random settings inside the limits, keeping the map's size and how it plays", () => {
+        const start = settings({
+            squaresX: 5,
+            squaresY: 3,
+            heightmap: encodeHeightmap(ramp),
+            waveSet: "karamja",
+        });
+        const roll = createRng(7);
+        const biomes = new Set<string>();
+        for (let i = 0; i < 300; i++) {
+            const random = randomSettings(start, roll);
+            expect(getSettingsError(random)).toBeUndefined();
+            expect(random.seed).toBe(start.seed);
+            expect(random.squaresX).toBe(5);
+            expect(random.squaresY).toBe(3);
+            expect(random.heightmap).toBe(start.heightmap);
+            expect(random.waveSet).toBe("karamja");
+            biomes.add(random.biome);
+        }
+        expect(biomes.size).toBe(Object.keys(BIOMES).length);
+    });
+
     it("reads back the settings it writes, and refuses what aren't settings", () => {
         const full = settings({ seed: 42, boundary: "forest", squaresX: 7, houses: false });
         expect(parseSettings(formatSettings(full))).toEqual(full);
@@ -90,6 +123,21 @@ describe("generateMap", () => {
         expect(() => parseSettings('{"wibble":1}')).toThrow(/wibble/);
         expect(() => parseSettings('{"rivers":99}')).toThrow(/Rivers/);
         expect(() => parseSettings('{"biome":"moon"}')).toThrow(/moon/);
+    });
+
+    it("takes the ground's height from a heightmap", () => {
+        const full = settings({ heightmap: encodeHeightmap(ramp), ponds: 0, boundary: "forest" });
+        const grid = generateMap(full, context);
+        const arena = getGeneratedArena(full);
+        const heightAt = (x: number) =>
+            grid.levels[0].heights[x + ((arena.y0 + arena.y1) >> 1) * (grid.sizeX + 1)];
+        expect(heightAt(arena.x1 - 4)).toBeGreaterThan(heightAt(arena.x0 + 4) + 80);
+        expect(decodeHeightmap(encodeHeightmap(ramp))).toEqual(ramp);
+    });
+
+    it("won't take something that isn't a heightmap", () => {
+        expect(getSettingsError(settings({ heightmap: "nonsense" }))).toBeDefined();
+        expect(getSettingsError(settings({ heightmap: 5 as unknown as string }))).toBeDefined();
     });
 
     // What to change, on top of what makes the setting count at all
@@ -107,8 +155,30 @@ describe("generateMap", () => {
         hillScale: [70],
         waterLevel: [0.5],
         groundPatches: [36],
+        walkSlope: [8, { mountains: 0.6, rivers: 1 }],
+        mountains: [0.6],
+        peakHeight: [255, { mountains: 0.6 }],
+        ridgeScale: [80, { mountains: 0.6 }],
+        ruggedness: [1, { mountains: 0.6 }],
+        warp: [1, { mountains: 0.6 }],
+        terraces: [1, { mountains: 0.6 }],
+        terraceHeight: [50, { mountains: 0.6 }],
+        rockFaces: [0, { mountains: 0.6 }],
+        rubble: [1, { mountains: 0.6 }],
+        snow: [0.8, { mountains: 0.6 }],
+        passWidth: [12, { mountains: 0.8 }],
+        heightmap: [encodeHeightmap(ramp)],
+        plateaus: [2],
+        mesas: [3],
+        canyons: [1],
+        canyonWidth: [14, { canyons: 1 }],
+        volcanoes: [1],
+        caves: [1, { mountains: 0.8, squaresX: 3, squaresY: 3 }],
         rivers: [1],
         riverWidth: [18, { rivers: 1 }],
+        riverValley: [0, { rivers: 1, mountains: 0.6 }],
+        waterfalls: [0, { rivers: 2, mountains: 1, peakHeight: 255, squaresX: 3, squaresY: 3 }],
+        cliffFalls: [1, { mountains: 0.8, squaresX: 3, squaresY: 3 }],
         lakes: [2],
         ponds: [6],
         trees: [1],
@@ -118,6 +188,7 @@ describe("generateMap", () => {
         rockMix: [1],
         grass: [1],
         flowers: [1],
+        props: [1],
         roads: [0],
         roadStyle: ["spine", { roads: 1 }],
         roadWidth: [6, { roadStyle: "ring" }],
@@ -131,6 +202,9 @@ describe("generateMap", () => {
         anyBuildings: [true, { buildings: 1 }],
         gardens: [1, { buildings: 1 }],
         ruins: [1],
+        landmarks: [1],
+        townWalls: [1, { towns: 1, buildings: 1 }],
+        waymarkers: [1, { roads: 1 }],
         spawnX: [0.1],
         spawnY: [0.1],
         waveSet: ["karamja"],
@@ -254,19 +328,22 @@ describe("generateMap", () => {
 // Against the game's real collision and the real prefabs, when there's a cache.
 // In a script, because the cache's loaders don't load under vitest.
 describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () => {
-    it("reach everywhere with the game's own collision", () => {
-        const output = execFileSync("npx", ["tsx", "scripts/scaperune/check-maps.ts"], {
-            encoding: "utf8",
-            timeout: 280000,
-        });
-        expect(output).toContain("All open tiles reach the spawn");
-    }, 290000);
+    // Not to block the test runner, which gives up on a worker that goes quiet for a minute
+    const run = promisify(execFile);
 
-    it("have every prefab's floor, in every rotation", () => {
-        const output = execFileSync("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
+    it("reach everywhere with the game's own collision", async () => {
+        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-maps.ts"], {
+            encoding: "utf8",
+            timeout: 400000,
+        });
+        expect(stdout).toContain("All open tiles reach the spawn");
+    }, 410000);
+
+    it("have every prefab's floor, in every rotation", async () => {
+        const { stdout } = await run("npx", ["tsx", "scripts/scaperune/check-prefabs.ts"], {
             encoding: "utf8",
             timeout: 60000,
         });
-        expect(output).toContain("check out in all 4 rotations");
+        expect(stdout).toContain("check out in all 4 rotations");
     }, 70000);
 });
