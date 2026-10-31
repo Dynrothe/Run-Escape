@@ -1,0 +1,262 @@
+import { getPartyScale } from "../content/coop";
+import { getEnemy } from "../content/enemies";
+import { emptyStats } from "../content/types";
+import { HeroOptions, Sim, TICKS_PER_SECOND } from "./Sim";
+import { fm, usePortableMath } from "./fmath";
+import { makeGrid } from "./world/testGrid";
+
+function openField(): string[] {
+    const size = 72;
+    const rows: string[] = [];
+    for (let y = 0; y < size; y++) {
+        let row = "";
+        for (let x = 0; x < size; x++) {
+            const edge = x === 0 || y === 0 || x === size - 1 || y === size - 1;
+            row += edge ? "#" : ".";
+        }
+        rows.push(row);
+    }
+    return rows;
+}
+
+function hero(characterId: string, name = characterId): HeroOptions {
+    return { name, characterId, metaStats: emptyStats() };
+}
+
+function createParty(characters: string[], seed = 1, focus = 0): Sim {
+    return new Sim({
+        grid: makeGrid(openField(), 1000, 1000),
+        characterId: "",
+        metaStats: emptyStats(),
+        seed,
+        spawnX: 1036.5,
+        spawnY: 1036.5,
+        party: characters.map((id) => hero(id)),
+        focus,
+    });
+}
+
+// Plays both heroes round in circles, everyone taking their first choice
+function play(sim: Sim, ticks: number): void {
+    for (let i = 0; i < ticks && !sim.runOver; i++) {
+        for (const h of sim.heroes) {
+            if (h.pendingLevelUps > 0) {
+                sim.as(h.index, () => sim.choose(0));
+            }
+            if (h.chests.length > 0) {
+                sim.as(h.index, () => sim.resolveChest("take"));
+            }
+            const angle = (sim.tick / TICKS_PER_SECOND) * 0.8 + h.index;
+            sim.setInput(h.index, fm.cos(angle), fm.sin(angle));
+        }
+        sim.step();
+        sim.takeEvents();
+    }
+}
+
+// What two copies of a run have to agree on
+function fingerprint(sim: Sim): string {
+    return JSON.stringify({
+        tick: sim.tick,
+        xp: sim.xp,
+        kills: sim.kills,
+        coins: sim.coins,
+        state: sim.state,
+        heroes: sim.heroes.map((h) => [h.player.x, h.player.y, h.player.hp, h.weapons.length]),
+        enemies: sim.enemies.map((e) => [e.uid, e.x, e.y, e.hp]),
+    });
+}
+
+describe("co-op", () => {
+    afterEach(() => usePortableMath(false));
+
+    it("gives each player a hero of their own, apart at the start", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        expect(sim.heroes).toHaveLength(2);
+        const [a, b] = sim.heroes;
+        expect(a.weapons[0].def.id).not.toBe(b.weapons[0].def.id);
+        expect(Math.hypot(a.player.x - b.player.x, a.player.y - b.player.y)).toBeGreaterThan(1);
+        // The fields read the focus hero's
+        expect(sim.player).toBe(a.player);
+        expect(createParty(["warrior", "wizard"], 1, 1).player).not.toBe(a.player);
+    });
+
+    it("has enemies go for whoever's nearest", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        b.player.x = b.player.prevX = a.player.x + 20;
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: b.player.x + 4,
+            y: b.player.y,
+        })!;
+        const start = Math.hypot(enemy.x - b.player.x, enemy.y - b.player.y);
+        for (let i = 0; i < 25; i++) {
+            sim.step();
+        }
+        expect(Math.hypot(enemy.x - b.player.x, enemy.y - b.player.y)).toBeLessThan(start);
+    });
+
+    it("waits for everyone's level up, each with their own choices", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        sim.xp = 1e4;
+        sim.step();
+        expect(sim.state).toBe("levelUp");
+        const [a, b] = sim.heroes;
+        expect(a.choices.length).toBeGreaterThan(0);
+        expect(b.choices.length).toBeGreaterThan(0);
+        expect(a.pendingLevelUps).toBe(b.pendingLevelUps);
+        while (a.pendingLevelUps > 0) {
+            sim.as(0, () => sim.choose(0));
+        }
+        expect(sim.state).toBe("levelUp");
+        expect(sim.waitingOn).toEqual([b]);
+        while (b.pendingLevelUps > 0) {
+            sim.as(1, () => sim.choose(0));
+        }
+        expect(sim.state).toBe("playing");
+    });
+
+    it("carries on while anyone's up, and the fallen stay down", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        b.revivesLeft = 0;
+        b.player.hp = 1;
+        b.player.poisonDamage = 5;
+        b.player.poisonEnd = sim.tick + TICKS_PER_SECOND + 1;
+        for (let i = 0; i < TICKS_PER_SECOND + 2; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(true);
+        expect(sim.runOver).toBe(false);
+        expect(sim.takeEvents().some((e) => e.type === "heroDown" && e.hero === 1)).toBe(true);
+        // Standing over them doesn't bring them back
+        a.player.x = b.player.x + 0.5;
+        a.player.y = b.player.y;
+        for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(true);
+        expect(b.player.hp).toBe(0);
+    });
+
+    it("gives a ring of life's revive before going down", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const b = sim.heroes[1];
+        b.revivesLeft = 1;
+        b.player.hp = 1;
+        b.player.poisonDamage = 5;
+        b.player.poisonEnd = sim.tick + TICKS_PER_SECOND + 1;
+        for (let i = 0; i < TICKS_PER_SECOND + 2; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(false);
+        expect(b.revivesLeft).toBe(0);
+        expect(b.player.hp).toBe(b.player.maxHp);
+    });
+
+    it("ends the run when everyone's down or gone", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        sim.leave(1);
+        expect(sim.heroes[1].left).toBe(true);
+        expect(sim.runOver).toBe(false);
+        sim.leave(0);
+        expect(sim.state).toBe("dead");
+    });
+
+    it("doesn't wait on a downed player's level ups", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        b.revivesLeft = 0;
+        b.player.hp = 1;
+        b.player.poisonDamage = 5;
+        b.player.poisonEnd = sim.tick + TICKS_PER_SECOND + 1;
+        for (let i = 0; i < TICKS_PER_SECOND + 2; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(true);
+        sim.xp = 1e4;
+        sim.step();
+        expect(sim.waitingOn).toEqual([a]);
+        expect(b.choices).toEqual([]);
+        // Choosing does nothing for them
+        const weapons = b.weapons.length;
+        sim.as(1, () => sim.choose(0));
+        expect(b.weapons).toHaveLength(weapons);
+        while (a.pendingLevelUps > 0) {
+            sim.as(0, () => sim.choose(0));
+        }
+        expect(sim.state).toBe("playing");
+    });
+
+    it("doesn't wait on a player who left", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        sim.xp = 1e4;
+        sim.step();
+        while (sim.heroes[0].pendingLevelUps > 0) {
+            sim.as(0, () => sim.choose(0));
+        }
+        expect(sim.state).toBe("levelUp");
+        sim.leave(1);
+        expect(sim.state).toBe("playing");
+    });
+
+    it("tags a hero's own events with who they're about", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        sim.dropPickup("coins", sim.heroes[1].player.x, sim.heroes[1].player.y, 5);
+        sim.step();
+        const pickup = sim.takeEvents().find((e) => e.type === "pickup");
+        expect(pickup?.hero).toBe(1);
+    });
+
+    it("makes the crowd bigger and tougher for each player", () => {
+        expect(getPartyScale(1)).toEqual({ crowd: 1, hp: 1, bossHp: 1, damage: 1, xp: 1 });
+        const two = getPartyScale(2);
+        expect(two.crowd).toBeGreaterThan(1);
+        expect(getPartyScale(4).hp).toBeGreaterThan(two.hp);
+        // Bosses keep up with a party's damage (about a player's worth each)
+        expect(getPartyScale(4).bossHp).toBeGreaterThanOrEqual(4);
+        const solo = createParty(["warrior"]);
+        const duo = createParty(["warrior", "wizard"]);
+        const goblin = getEnemy("goblin");
+        const alone = solo.spawnEnemy(goblin, "normal")!;
+        const together = duo.spawnEnemy(goblin, "normal")!;
+        expect(together.maxHp).toBeGreaterThan(alone.maxHp);
+        expect(together.damage).toBeGreaterThanOrEqual(alone.damage);
+        expect(together.damageScale).toBeGreaterThan(alone.damageScale);
+        // A bigger crowd's bones are worth a little less each
+        expect(together.xp).toBeLessThan(alone.xp);
+    });
+
+    it("plays out the same on every player's copy", () => {
+        usePortableMath(true);
+        const host = createParty(["warrior", "wizard", "ranger"], 9, 0);
+        const guest = createParty(["warrior", "wizard", "ranger"], 9, 2);
+        play(host, 90 * TICKS_PER_SECOND);
+        play(guest, 90 * TICKS_PER_SECOND);
+        expect(host.kills).toBeGreaterThan(0);
+        expect(fingerprint(guest)).toBe(fingerprint(host));
+    });
+});
+
+describe("portable math", () => {
+    afterEach(() => usePortableMath(false));
+
+    it("is as good as the browser's", () => {
+        usePortableMath(true);
+        for (let i = -2000; i <= 2000; i++) {
+            const x = i * 0.0731;
+            expect(fm.sin(x)).toBeCloseTo(Math.sin(x), 13);
+            expect(fm.cos(x)).toBeCloseTo(Math.cos(x), 13);
+            const y = (i % 37) - 18.3;
+            expect(fm.atan2(y, x)).toBeCloseTo(Math.atan2(y, x), 13);
+            expect(fm.hypot(x, y)).toBeCloseTo(Math.hypot(x, y), 12);
+        }
+        for (let i = -100; i <= 100; i++) {
+            expect(fm.acos(i / 100)).toBeCloseTo(Math.acos(i / 100), 7);
+        }
+        expect(fm.atan2(0, -1)).toBeCloseTo(Math.PI, 15);
+        expect(fm.atan2(1, 0)).toBeCloseTo(Math.PI / 2, 15);
+        expect(fm.pow(3.3, 4)).toBeCloseTo(3.3 ** 4, 12);
+        expect(fm.pow(2, -2)).toBe(0.25);
+    });
+});

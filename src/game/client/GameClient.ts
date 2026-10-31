@@ -6,21 +6,27 @@ import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import massacre from "../../media/music/massacre.ogg";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { MAX_PARTY } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
 import { CASKETS, getItem } from "../content/items";
-import { MAPS, getArenaRegion, getMap, isFunMap } from "../content/maps";
+import { FUN_MAPS, MAPS, MAP_BY_ID, getArenaRegion, getMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
+import { getPowerUp } from "../content/powerups";
 import { QUESTS, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
+import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
+import { Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
 import { ChestAction } from "../core/Loot";
-import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
+import { usePortableMath } from "../core/fmath";
+import { CoopAction, applyAction } from "../core/lockstep";
 import {
     SaveData,
     SaveStore,
@@ -56,10 +62,15 @@ import { getBuffViews, getChestView, getGearViews, getInventoryViews } from "./I
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
+import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
+import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
+import { GameStart, GoneReason, Loadout, Unlocks } from "./coop/protocol";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
 const MAX_TICKS_PER_FRAME = 10;
+// A co-op guest that's fallen well behind the host catches up this fast
+const MAX_CATCH_UP_TICKS = 30;
 const HUD_INTERVAL_MS = 100;
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
@@ -150,6 +161,33 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
     });
 }
 
+// What a co-op player's loadout gives their hero, no more than the shop can
+// (another player's game could send anything)
+function loadoutStats(loadout: Loadout | undefined): Stats {
+    const stats = emptyStats();
+    for (const [key, value] of Object.entries(loadout?.metaStats ?? {})) {
+        if (key in stats && typeof value === "number" && Number.isFinite(value)) {
+            const most = SHOP_MAX[key as keyof Stats] ?? 0;
+            stats[key as keyof Stats] = Math.max(Math.min(0, most), Math.min(most, value));
+        }
+    }
+    return stats;
+}
+
+// Each stat with every shop upgrade for it bought
+const SHOP_MAX: Partial<Stats> = {};
+for (const upgrade of SHOP_UPGRADES) {
+    SHOP_MAX[upgrade.stat] = (SHOP_MAX[upgrade.stat] ?? 0) + upgrade.perRank * upgrade.maxRank;
+}
+
+// Why a co-op run ended early, on its results
+const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
+    idle: "The room closed after half an hour with nothing happening.",
+    kicked: "The host removed you from the party.",
+    disbanded: "The host disbanded the party.",
+    hostLeft: "The host left, so the run's over.",
+};
+
 export type GameClientOptions = {
     // Extra goblins at the start of a run, for performance testing
     stress: number;
@@ -212,10 +250,19 @@ export class GameClient implements GameFrameHandler {
     sim?: Sim;
     paused = false;
     save: SaveData;
+    // Co-op: the room and its relay, and the run being played with it
+    readonly coop: CoopLobby;
+    private coopRun?: CoopRun;
+    // The hero the camera follows: this player's, or in co-op while they're
+    // down, a teammate's
+    private viewHero = 0;
+    // What the run's waiting on, last shown (co-op choices come in frames)
+    private decisionKey = "";
 
     private accumulator = 0;
     private lastHudUpdate = 0;
-    private appearanceVersion = -1;
+    // Each hero's look, as last baked
+    private appearanceVersions: number[] = [];
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
@@ -256,21 +303,37 @@ export class GameClient implements GameFrameHandler {
         this.input.onBlur = () => {
             this.accumulator = 0;
             // With auto-pause off the run carries on (though a hidden tab
-            // stops drawing, so it waits there until it's back)
+            // stops drawing, so it waits there until it's back). Co-op never
+            // pauses for one player.
             if (
                 this.sim &&
+                !this.coopRun &&
                 this.display.pauseOnBlur &&
                 this.store.getSnapshot().overlay === "none"
             ) {
                 this.pause();
             }
         };
+        this.coop = new CoopLobby(store);
+        this.coop.onStart = (game) => this.beginCoopRun(game);
+        this.coop.onUp = (from, message) => this.coopRun?.receiveUp(from, message);
+        this.coop.onDown = (message) => this.coopRun?.receiveDown(message);
+        this.coop.onLeft = (id) => this.coopRun?.playerLeft(id);
+        this.coop.onGone = (reason) => this.onCoopGone(reason);
+        this.coop.onClosed = () => this.onCoopClosed();
+        // Co-op's offered only where there's a relay to play it through
+        this.coop.checkAvailable();
+        document.addEventListener("visibilitychange", this.onVisibilityChange);
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
 
+        // An invite link (?room=CODE) goes straight to the room
+        const invite = new URLSearchParams(window.location.search).get("room");
         if (options.autostart) {
             this.store.set({ characterId: options.autostart });
             this.startRun();
+        } else if (invite) {
+            this.openCoop().then(() => this.joinRoom(invite));
         } else {
             this.showScreen("title");
         }
@@ -281,6 +344,9 @@ export class GameClient implements GameFrameHandler {
     }
 
     dispose(): void {
+        document.removeEventListener("visibilitychange", this.onVisibilityChange);
+        this.stopBackgroundTicker();
+        this.coop.close();
         this.input.dispose();
         this.audio.dispose();
         if (this.renderer.game === this) {
@@ -302,12 +368,16 @@ export class GameClient implements GameFrameHandler {
         if (!this.sim) {
             this.assets.setPlayerAppearance(getCharacterAppearance(characterId));
         }
+        this.coop.setMe({ characterId });
     }
 
     selectMap(mapId: string): void {
         if (isMapUnlocked(this.save, mapId)) {
             const endless = this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId);
             this.store.set({ mapId, endless });
+            if (this.coop.isHost) {
+                this.coop.setMap(mapId, endless);
+            }
         }
     }
 
@@ -316,7 +386,172 @@ export class GameClient implements GameFrameHandler {
         const { mapId, endless } = this.store.getSnapshot();
         if (endless || isEndlessUnlocked(this.save, mapId)) {
             this.store.set({ endless: !endless });
+            if (this.coop.isHost) {
+                this.coop.setMap(mapId, !endless);
+            }
         }
+    }
+
+    // ---- Co-op menus ----
+
+    // The co-op screen, connected to the relay
+    async openCoop(): Promise<void> {
+        this.showScreen("coop");
+        this.coop.setMe({
+            characterId: this.store.getSnapshot().characterId,
+            loadout: this.getLoadout(),
+            unlocks: this.getUnlocks(),
+        });
+        await this.coop.connect();
+    }
+
+    // Back to the title, out of any room
+    closeCoop(): void {
+        if (this.coop.room) {
+            this.coop.leave();
+        }
+        this.coop.close();
+        this.showScreen("title");
+    }
+
+    setCoopName(name: string): void {
+        this.coop.setName(name);
+    }
+
+    // A room of this player's, for the map picked
+    createRoom(open: boolean): void {
+        const { mapId, endless } = this.store.getSnapshot();
+        this.coop.create(open, mapId, endless);
+    }
+
+    // Another page of the open rooms
+    showRoomsPage(page: number): void {
+        this.coop.refresh(page);
+    }
+
+    joinRoom(code: string): void {
+        this.coop.join(code);
+    }
+
+    leaveRoom(): void {
+        this.coop.leave();
+    }
+
+    setCoopReady(ready: boolean): void {
+        this.coop.setReady(ready);
+    }
+
+    setRoomOpen(open: boolean): void {
+        this.coop.setOpen(open);
+    }
+
+    kickPlayer(id: string): void {
+        this.coop.kick(id);
+    }
+
+    disbandRoom(): void {
+        this.coop.disband();
+    }
+
+    // The invite link for the room, for its code
+    getInviteLink(code: string): string {
+        const url = new URL(window.location.href);
+        url.search = "";
+        url.searchParams.set("room", code);
+        return url.toString();
+    }
+
+    // What this player brings to a co-op run
+    // The maps this player has, and has endless for, which rooms go by
+    private getUnlocks(): Unlocks {
+        const ids = [...MAPS, ...FUN_MAPS].map((m) => m.id);
+        return {
+            maps: ids.filter((id) => isMapUnlocked(this.save, id)),
+            endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
+        };
+    }
+
+    private getLoadout(): Loadout {
+        return makeLoadout(getMetaStats(this.save), [...this.save.unlockedItems], {
+            ...this.save.armoury,
+        });
+    }
+
+    // The host's Start: everyone's ready, so off to the room's map. The relay
+    // sends the start back to everyone (this player too), and the run begins
+    // there.
+    startCoopRun(): void {
+        const room = this.coop.room;
+        if (!room || !this.coop.isHost) {
+            return;
+        }
+        // Everyone's ready, the host too (on their own, that's a party of one)
+        if (room.members.some((m) => !m.ready) || room.members.length > MAX_PARTY) {
+            this.sounds.denied();
+            return;
+        }
+        const map = getMap(room.mapId);
+        if (!isMapUnlocked(this.save, map.id)) {
+            this.sounds.denied();
+            return;
+        }
+        const game: GameStart = {
+            seed: (Math.random() * 0x7fffffff) | 0,
+            mapId: map.id,
+            endless:
+                map.fun !== undefined || (room.endless && isEndlessUnlocked(this.save, map.id)),
+            heroes: room.members.map((member) => ({
+                id: member.id,
+                name: member.name,
+                characterId:
+                    map.fun?.character ??
+                    (CHARACTERS.some((c) => c.id === member.characterId)
+                        ? member.characterId
+                        : CHARACTERS[0].id),
+                loadout: member.loadout ?? makeLoadout({}, [], {}),
+            })),
+        };
+        this.coop.start(game);
+    }
+
+    // Kicked or disbanded, or the host left: a run that was going ends
+    private onCoopGone(reason: GoneReason): void {
+        if (reason !== "left") {
+            this.store.toast(ENDED_EARLY[reason] ?? "You left the party.", 5000);
+        }
+        if (this.coopRun && this.sim && !this.sim.runOver) {
+            this.endCoopRunEarly(ENDED_EARLY[reason] ?? "You left the party.");
+        }
+    }
+
+    private onCoopClosed(): void {
+        const sim = this.sim;
+        const run = this.coopRun;
+        if (!sim || !run || sim.runOver) {
+            return;
+        }
+        if (run.isHost) {
+            // The run's this copy's: it goes on without the others
+            for (const hero of sim.heroes) {
+                if (hero.index !== sim.focus) {
+                    sim.leave(hero.index);
+                }
+            }
+            this.coopRun = undefined;
+            this.store.toast(
+                "Lost the connection to the others. The run goes on without them.",
+                6000,
+            );
+        } else {
+            this.endCoopRunEarly("Lost the connection to the co-op server.");
+        }
+    }
+
+    // A guest's run that can't go on: what was done counts, as if they'd quit
+    private endCoopRunEarly(why: string): void {
+        this.finishRun(why);
+        this.store.set({ overlay: "dead", choices: [], chest: undefined, waitingOn: [] });
+        this.updateHud(true);
     }
 
     buyUpgrade(upgradeId: string): void {
@@ -431,6 +666,28 @@ export class GameClient implements GameFrameHandler {
         return grid;
     }
 
+    // Loads a map's collision for a run, with the loading screen if it takes
+    // a moment. False if it couldn't.
+    private async travelTo(mapId: string, back: Screen): Promise<boolean> {
+        const map = getMap(mapId);
+        if (!this.grids.has(mapId)) {
+            this.store.set({
+                screen: "loading",
+                loadingText: `Travelling to ${map.name}`,
+                loadingProgress: 50,
+            });
+        }
+        try {
+            this.grid = await this.loadGrid(mapId);
+            return true;
+        } catch (e) {
+            console.error("Failed to load map", mapId, e);
+            this.store.set({ screen: back });
+            this.store.toast(`Couldn't get to ${map.name}.`);
+            return false;
+        }
+    }
+
     async startRun(): Promise<void> {
         const { mapId } = this.store.getSnapshot();
         if (!isMapUnlocked(this.save, mapId)) {
@@ -443,21 +700,10 @@ export class GameClient implements GameFrameHandler {
             map.fun !== undefined ||
             (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
         const characterId = map.fun?.character ?? this.store.getSnapshot().characterId;
-        if (!this.grids.has(mapId)) {
-            this.store.set({
-                screen: "loading",
-                loadingText: `Travelling to ${map.name}`,
-                loadingProgress: 50,
-            });
-        }
-        try {
-            this.grid = await this.loadGrid(mapId);
-        } catch (e) {
-            console.error("Failed to load map", mapId, e);
-            this.store.set({ screen: "characters" });
-            this.store.toast(`Couldn't get to ${map.name}.`);
+        if (!(await this.travelTo(mapId, "characters"))) {
             return;
         }
+        usePortableMath(false);
         const sim = new Sim({
             grid: this.grid,
             mapId,
@@ -473,6 +719,68 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
+        this.enterRun(sim);
+    }
+
+    // A co-op run, as the host started it: everyone builds the same Sim, each
+    // playing their own hero
+    private async beginCoopRun(game: GameStart): Promise<void> {
+        const you = this.coop.id;
+        const focus = game.heroes.findIndex((hero) => hero.id === you);
+        const room = this.coop.room;
+        if (focus === -1 || !room) {
+            return;
+        }
+        // A map or adventurer this game hasn't got (another player's game
+        // could be newer, or made up): it can't play along
+        if (
+            !MAP_BY_ID.has(game.mapId) ||
+            !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
+        ) {
+            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.coop.leave();
+            return;
+        }
+        if (this.sim) {
+            // Still on the last run's results
+            this.leaveRun(false);
+        }
+        if (!(await this.travelTo(game.mapId, "coop"))) {
+            this.coop.leave();
+            return;
+        }
+        // Every copy has to work out the same numbers, to the bit
+        usePortableMath(true);
+        const map = getMap(game.mapId);
+        const party: HeroOptions[] = game.heroes.map((hero) => ({
+            name: hero.name,
+            characterId: hero.characterId,
+            metaStats: loadoutStats(hero.loadout),
+            unlockedItems: new Set(hero.loadout?.unlockedItems ?? []),
+            armoury: { ...(hero.loadout?.armoury ?? {}) },
+        }));
+        const sim = new Sim({
+            grid: this.grid,
+            mapId: game.mapId,
+            characterId: party[focus].characterId,
+            metaStats: party[focus].metaStats,
+            seed: game.seed,
+            spawnX: map.spawn.x,
+            spawnY: map.spawn.y,
+            endless: game.endless,
+            party,
+            focus,
+        });
+        const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
+        this.coopRun = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        this.enterRun(sim);
+        if (!this.coop.isHost) {
+            this.coop.sendUp({ loaded: true });
+        }
+    }
+
+    private enterRun(sim: Sim): void {
+        const map = sim.map;
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
         this.minimap.setMap(map);
@@ -486,7 +794,10 @@ export class GameClient implements GameFrameHandler {
         this.runRecorded = false;
         this.tasksAnnounced.clear();
         this.accumulator = 0;
-        this.appearanceVersion = -1;
+        this.appearanceVersions = [];
+        this.decisionKey = "";
+        this.viewHero = sim.focus;
+        this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
         this.cameraRig.pitch = RUN_PITCH;
         this.cameraRig.distance = RUN_DISTANCE;
@@ -498,30 +809,89 @@ export class GameClient implements GameFrameHandler {
             chest: undefined,
             result: undefined,
             toasts: [],
+            party: [],
+            waitingOn: [],
         });
+        this.updateHud(true);
+        if (this.coopRun?.isHost && this.coopRun.waitingForLoad) {
+            this.store.toast("Waiting for everyone to arrive...", 3000);
+        }
+    }
+
+    // Co-op sends what the player does to the host, to be done in the frame
+    // it goes in (on every copy at once); on your own it's done now. Returns
+    // false when it can't be done.
+    private act(action: CoopAction): boolean {
+        const sim = this.sim;
+        if (!sim) {
+            return false;
+        }
+        if (this.coopRun) {
+            this.coopRun.act(action);
+            return true;
+        }
+        const done = applyAction(sim, action);
+        this.afterAction(action, done);
+        return done;
+    }
+
+    // What follows something the player did, once it's done
+    private afterAction(action: CoopAction, done: boolean): void {
+        const sim = this.sim;
+        if (!sim) {
+            return;
+        }
+        switch (action.kind) {
+            case "choose":
+                this.syncOverlay();
+                break;
+            case "chest":
+                this.handleEvents(sim, sim.takeEvents());
+                this.syncOverlay();
+                break;
+            case "reroll":
+                if (done) {
+                    this.afterReroll(sim);
+                } else {
+                    this.sounds.denied();
+                }
+                break;
+            case "skip":
+                if (done) {
+                    this.sounds.buy();
+                    this.syncOverlay();
+                } else {
+                    this.sounds.denied();
+                }
+                break;
+            case "item":
+                if (done) {
+                    this.handleEvents(sim, sim.takeEvents());
+                    if (sim.state !== "playing") {
+                        // A lamp's level up, or a blast that killed the boss
+                        this.syncOverlay();
+                    }
+                }
+                break;
+        }
         this.updateHud(true);
     }
 
     choose(index: number): void {
         const sim = this.sim;
-        if (!sim || sim.state !== "levelUp") {
+        if (!sim || !sim.isChoosing()) {
             return;
         }
-        sim.choose(index);
-        this.syncOverlay();
-        this.updateHud(true);
+        this.act({ kind: "choose", index });
     }
 
     // What the player chose with the open casket's item
     resolveChest(action: ChestAction): void {
         const sim = this.sim;
-        if (!sim || sim.state !== "chest") {
+        if (!sim || sim.state !== "chest" || !sim.chest) {
             return;
         }
-        sim.resolveChest(action);
-        this.handleEvents(sim, sim.takeEvents());
-        this.syncOverlay();
-        this.updateHud(true);
+        this.act({ kind: "chest", action });
     }
 
     // Rolls the level up's rewards or the open casket's item again, for one of
@@ -531,10 +901,14 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return false;
         }
-        if (!sim.reroll()) {
+        if (this.coopRun && sim.rerollsLeft <= 0) {
             this.sounds.denied();
             return false;
         }
+        return this.act({ kind: "reroll" });
+    }
+
+    private afterReroll(sim: Sim): void {
         if (sim.state === "chest") {
             const chest = getChestView(sim);
             // The UI bursts the casket open again for the new item
@@ -546,8 +920,6 @@ export class GameClient implements GameFrameHandler {
             this.sounds.reroll();
             this.store.set({ choices: getChoiceViews(sim) });
         }
-        this.updateHud(true);
-        return true;
     }
 
     // Takes none of the level up's rewards, for coins from the run. False when
@@ -557,28 +929,20 @@ export class GameClient implements GameFrameHandler {
         if (!sim || sim.state !== "levelUp") {
             return false;
         }
-        if (!sim.skip()) {
+        if (this.coopRun && (!sim.canSkip || sim.coins < sim.skipCost)) {
             this.sounds.denied();
             return false;
         }
-        this.sounds.buy();
-        this.syncOverlay();
-        this.updateHud(true);
-        return true;
+        return this.act({ kind: "skip" });
     }
 
     // Uses the utility item in an inventory slot (0-3)
     useItem(index: number): void {
         const sim = this.sim;
-        if (!sim || this.paused || !sim.useItem(index)) {
+        if (!sim || (this.paused && !this.coopRun) || !sim.inventory[index]) {
             return;
         }
-        this.handleEvents(sim, sim.takeEvents());
-        if (sim.state !== "playing") {
-            // A lamp's level up, or a blast that killed the boss
-            this.syncOverlay();
-        }
-        this.updateHud(true);
+        this.act({ kind: "item", index });
     }
 
     // The opening animation's sounds, timed by the UI
@@ -586,6 +950,7 @@ export class GameClient implements GameFrameHandler {
         this.sounds.chest(cue, rarity);
     }
 
+    // Co-op's menu doesn't stop the run: the others play on
     pause(): void {
         if (this.sim && !this.sim.runOver) {
             this.paused = true;
@@ -599,16 +964,31 @@ export class GameClient implements GameFrameHandler {
         this.syncOverlay();
     }
 
-    // Ends the run where it stands (from the pause menu); coins found are kept
+    // Ends the run where it stands (from the pause menu); coins found are kept.
+    // In co-op that's leaving the party (the host's leaving ends it for
+    // everyone).
     quitRun(): void {
         if (this.sim) {
             this.finishRun();
         }
+        if (this.coopRun) {
+            this.coop.leave();
+        }
         this.leaveRun();
     }
 
-    // Back to the title screen after the results
-    leaveRun(): void {
+    // Back to the title screen after the results, or after a co-op run, back
+    // to the room. show: false when the next run's starting straight away.
+    leaveRun(show = true): void {
+        const wasCoop = this.coopRun !== undefined;
+        if (wasCoop && show && this.coop.isHost) {
+            // The room's open for the next run
+            this.coop.end();
+        }
+        this.coopRun = undefined;
+        this.stopBackgroundTicker();
+        usePortableMath(false);
+        this.assets.dropPlayers(1);
         this.sim = undefined;
         this.paused = false;
         this.audio.stopMusic();
@@ -620,17 +1000,23 @@ export class GameClient implements GameFrameHandler {
         this.assets.setPlayerAppearance(
             getCharacterAppearance(this.store.getSnapshot().characterId),
         );
+        if (!show) {
+            return;
+        }
         this.store.set({
-            screen: "title",
+            screen: wasCoop && this.coop.room ? "coop" : "title",
             overlay: "none",
             hud: undefined,
             choices: [],
             chest: undefined,
             result: undefined,
+            party: [],
+            waitingOn: [],
         });
     }
 
-    private finishRun(): void {
+    // endedEarly: why a co-op run ended before anyone won or fell
+    private finishRun(endedEarly?: string): void {
         const sim = this.sim;
         if (!sim || this.runRecorded) {
             return;
@@ -667,8 +1053,14 @@ export class GameClient implements GameFrameHandler {
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                ...(sim.heroes.length > 1 && {
+                    party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
+                }),
+                endedEarly,
             },
         });
+        // The room sees this player's new unlocks and upgrades next run
+        this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
     }
 
     // A task or quest done mid-run: the adventurer or item joins, and the
@@ -742,6 +1134,9 @@ export class GameClient implements GameFrameHandler {
             if (index >= 0 && index < sim.choices.length) {
                 this.choose(index);
             }
+        } else if (overlay === "paused" && this.coopRun && code.startsWith("Digit")) {
+            // The run goes on behind co-op's menu
+            this.useItem(parseInt(code.slice(5)) - 1);
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
@@ -777,7 +1172,9 @@ export class GameClient implements GameFrameHandler {
             return;
         }
 
-        if (!this.paused && (sim.state === "playing" || sim.runOver)) {
+        if (this.coopRun) {
+            this.updateCoop(deltaTimeMs, sim, this.coopRun);
+        } else if (!this.paused && (sim.state === "playing" || sim.runOver)) {
             const wasOver = sim.runOver;
             this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
             while (this.accumulator >= TICK_MS && (sim.state === "playing" || sim.runOver)) {
@@ -794,9 +1191,11 @@ export class GameClient implements GameFrameHandler {
             }
         }
 
-        if (sim.appearanceVersion !== this.appearanceVersion) {
-            this.appearanceVersion = sim.appearanceVersion;
-            this.assets.setPlayerAppearance(getRunAppearance(sim));
+        for (const hero of sim.heroes) {
+            if (hero.appearanceVersion !== this.appearanceVersions[hero.index]) {
+                this.appearanceVersions[hero.index] = hero.appearanceVersion;
+                this.assets.setPlayerAppearance(getRunAppearance(sim, hero.index), hero.index);
+            }
         }
 
         const now = performance.now();
@@ -805,20 +1204,140 @@ export class GameClient implements GameFrameHandler {
             this.announceTasks(sim);
         }
 
+        this.viewHero = this.getViewHero(sim);
+        this.view.viewHero = this.viewHero;
         const alpha = this.getAlpha();
-        const player = sim.player;
+        const player = sim.heroes[this.viewHero].player;
         const px = player.prevX + (player.x - player.prevX) * alpha;
         const py = player.prevY + (player.y - player.prevY) * alpha;
         // Aim at the player's chest, not their feet
         this.cameraRig.apply(camera, px, this.grid.getHeight(px, py) / 128 - 0.6, py);
     }
 
+    // A co-op run: frames step at the run's pace, the host's whenever it
+    // likes, a guest's as the host's arrive (catching up if it's fallen
+    // behind). The menu doesn't stop it, and neither does a level up: the
+    // frames carry everyone's choices.
+    private updateCoop(deltaTimeMs: number, sim: Sim, run: CoopRun): void {
+        const move = this.input.getMoveVector(this.move);
+        // Standing still while choosing (the menu doesn't stop the run, so
+        // moving goes on behind it)
+        const deciding = this.store.getSnapshot().overlay !== "none" && !this.paused;
+        run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
+        this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
+        const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
+        let steps = 0;
+        while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
+            if (this.accumulator >= TICK_MS) {
+                this.accumulator -= TICK_MS;
+            } else if (steps >= catchUp) {
+                break;
+            }
+            steps++;
+            const events = run.stepFrame();
+            this.handleEvents(sim, sim.takeEvents());
+            for (const event of events) {
+                if (event.action && event.hero === sim.focus) {
+                    this.afterCoopAction(sim, event.action);
+                }
+            }
+        }
+        if (!run.canStep()) {
+            // Waiting on the host: no time to make up once it's back
+            this.accumulator = Math.min(this.accumulator, TICK_MS);
+        }
+        run.flush();
+        if (run.desynced && !this.desyncToasted) {
+            this.desyncToasted = true;
+            this.store.toast("Your game has fallen out of step with the host's.", 6000);
+        }
+        // Choices and caskets come and go with the frames
+        const key = this.getDecisionKey(sim);
+        if (key !== this.decisionKey) {
+            this.decisionKey = key;
+            this.syncOverlay();
+        }
+    }
+
+    private desyncToasted = false;
+    // Ticks for a co-op host whose tab is hidden (see onVisibilityChange)
+    private backgroundTicker?: Worker;
+    private backgroundTime = 0;
+
+    // A hidden tab isn't drawn, and its frames stop with it, so a co-op host
+    // keeps the run going for everyone off a worker's timer (a page's own
+    // timers are slowed right down in a hidden tab, a worker's aren't)
+    private onVisibilityChange = (): void => {
+        if (document.hidden && this.coopRun?.isHost) {
+            this.backgroundTime = performance.now();
+            const source = `setInterval(() => postMessage(0), ${TICK_MS});`;
+            const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+            this.backgroundTicker = new Worker(url);
+            URL.revokeObjectURL(url);
+            this.backgroundTicker.onmessage = () => {
+                const sim = this.sim;
+                const run = this.coopRun;
+                const now = performance.now();
+                if (sim && run && document.hidden) {
+                    this.updateCoop(now - this.backgroundTime, sim, run);
+                }
+                this.backgroundTime = now;
+            };
+        } else {
+            this.stopBackgroundTicker();
+        }
+    };
+
+    private stopBackgroundTicker(): void {
+        this.backgroundTicker?.terminate();
+        this.backgroundTicker = undefined;
+    }
+
+    // A co-op action of this player's, now it's been done in its frame
+    private afterCoopAction(sim: Sim, action: CoopAction): void {
+        if (action.kind === "reroll") {
+            this.afterReroll(sim);
+        } else if (action.kind === "skip") {
+            this.sounds.buy();
+        }
+        this.updateHud(true);
+    }
+
+    // What the run's waiting on, in a form that changes when any of it does
+    private getDecisionKey(sim: Sim): string {
+        const hero = sim.heroes[sim.focus];
+        return [
+            sim.state,
+            hero.down,
+            hero.pendingLevelUps,
+            hero.choices.map((c) => c.kind + ("weaponId" in c ? c.weaponId : "")).join(),
+            sim.chest?.uid ?? 0,
+            sim.chest?.itemId ?? "",
+            sim.waitingOn.map((h) => h.index).join(),
+        ].join("|");
+    }
+
+    // The camera's on this player, or on a teammate who's still up while
+    // they're down
+    private getViewHero(sim: Sim): number {
+        const own = sim.heroes[sim.focus];
+        if (sim.isUp(own) || sim.runOver) {
+            return sim.focus;
+        }
+        const current = sim.heroes[this.viewHero];
+        if (current && current !== own && sim.isUp(current)) {
+            return current.index;
+        }
+        const up = sim.heroes.find((hero) => sim.isUp(hero));
+        return up?.index ?? sim.focus;
+    }
+
     private getAlpha(): number {
         const sim = this.sim;
-        if (!sim || this.paused || sim.state !== "playing") {
+        if (!sim || (this.paused && !this.coopRun) || sim.state !== "playing") {
             return 1;
         }
-        return this.accumulator / TICK_MS;
+        return Math.min(1, this.accumulator / TICK_MS);
     }
 
     // Title screen: the character idles in the courtyard while the camera
@@ -844,8 +1363,13 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.view.onEvents(sim, events);
-        this.sounds.onEvents(sim, events);
+        this.sounds.onEvents(sim, events, this.viewHero);
         for (const event of events) {
+            // Co-op: a teammate's own events, said with their name if at all
+            if (event.hero !== undefined && event.hero !== sim.focus) {
+                this.teammateToast(sim, sim.heroes[event.hero].name, event);
+                continue;
+            }
             switch (event.type) {
                 case "casketDropped":
                     this.store.toast(`A ${CASKETS[event.tier].name.toLowerCase()} drops!`);
@@ -877,7 +1401,27 @@ export class GameClient implements GameFrameHandler {
                 case "notice":
                     this.store.toast(event.message);
                     break;
+                case "heroDown":
+                    this.store.toast("You're down! Watch the rest of your party fight on.", 5000);
+                    break;
             }
+        }
+    }
+
+    private teammateToast(sim: Sim, name: string, event: SimEvent): void {
+        switch (event.type) {
+            case "heroDown":
+                this.store.toast(`${name} is down!`, 5000);
+                break;
+            case "heroLeft":
+                this.store.toast(`${name} left the game.`);
+                break;
+            case "revive":
+                this.store.toast(`${name}'s ring of life saves them!`);
+                break;
+            case "powerUp":
+                this.store.toast(`${name} picked up the ${getPowerUp(event.id).name}!`);
+                break;
         }
     }
 
@@ -887,22 +1431,39 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return;
         }
+        // Co-op: who else the run's waiting on
+        const waitingOn = sim.waitingOn
+            .filter((hero) => hero.index !== sim.focus)
+            .map((hero) => hero.name);
         if (sim.state === "dead" || sim.state === "victory") {
             if (sim.state === "dead" && !this.runRecorded) {
                 this.sounds.playerDied();
             }
             this.finishRun();
-            this.store.set({ overlay: sim.state, choices: [], chest: undefined });
+            this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
-        } else if (sim.state === "chest") {
-            this.store.set({ overlay: "chest", chest: getChestView(sim), choices: [] });
-        } else if (sim.state === "levelUp") {
-            this.sounds.levelUp();
-            this.store.set({ overlay: "levelUp", choices: getChoiceViews(sim), chest: undefined });
+        } else if (sim.state === "chest" && sim.chest) {
+            const chest = getChestView(sim);
+            const shown = this.store.getSnapshot();
+            // Co-op: the same casket again keeps its animation where it is
+            if (!this.coopRun || shown.overlay !== "chest" || chest?.uid !== shown.chest?.uid) {
+                this.store.set({ overlay: "chest", chest, choices: [], waitingOn });
+            }
+        } else if (sim.isChoosing()) {
+            const was = this.store.getSnapshot().overlay;
+            if (was !== "levelUp" || !this.coopRun) {
+                this.sounds.levelUp();
+            }
+            this.store.set({
+                overlay: "levelUp",
+                choices: getChoiceViews(sim),
+                chest: undefined,
+                waitingOn,
+            });
         } else if (this.paused) {
-            this.store.set({ overlay: "paused", choices: [], chest: undefined });
+            this.store.set({ overlay: "paused", choices: [], chest: undefined, waitingOn });
         } else {
-            this.store.set({ overlay: "none", choices: [], chest: undefined });
+            this.store.set({ overlay: "none", choices: [], chest: undefined, waitingOn });
         }
     }
 
@@ -983,6 +1544,21 @@ export class GameClient implements GameFrameHandler {
         if (force || !previous || JSON.stringify(previous) !== JSON.stringify(hud)) {
             this.store.set({ hud });
         }
+        if (sim.heroes.length > 1) {
+            const party = sim.heroes
+                .filter((hero) => hero.index !== sim.focus)
+                .map((hero) => ({
+                    name: hero.name,
+                    characterId: hero.characterId,
+                    hp: Math.max(0, Math.round(hero.player.hp)),
+                    maxHp: hero.player.maxHp,
+                    down: hero.down,
+                    left: hero.left,
+                }));
+            if (JSON.stringify(party) !== JSON.stringify(this.store.getSnapshot().party)) {
+                this.store.set({ party });
+            }
+        }
     }
 
     submitActors(actors: ActorRenderer, _camera: Camera): void {
@@ -1015,7 +1591,7 @@ export class GameClient implements GameFrameHandler {
         if (sim) {
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
-                this.minimap.draw(this.minimapCanvas, sim, this.getAlpha());
+                this.minimap.draw(this.minimapCanvas, sim, this.getAlpha(), this.viewHero);
             }
         }
         if (this.store.getSnapshot().debug) {

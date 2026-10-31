@@ -8,6 +8,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import {
     DEATH_SINK_TICKS,
+    Hero,
     MAX_DEATH_ANIM_TICKS,
     RAMPAGE_FADE_TICKS,
     Sim,
@@ -38,6 +39,10 @@ import {
 import { Overlay, ScreenPoint } from "./Overlay";
 
 const FROZEN_TINT = 0xa8d8ff;
+// Co-op teammates' names and arrows, like a friend's name in the client, and
+// the name of one who's down (out of the run)
+export const TEAMMATE_COLOR = "#00ff80";
+const TEAMMATE_DOWN_COLOR = "#9a9a9a";
 // Shielded enemies (that can't be hurt yet) are washed in lilac
 const SHIELDED_TINT = 0xd0b8ff;
 // A blockable attack winding up shows the shelter behind the glyph out this
@@ -127,9 +132,9 @@ type Hitsplat = {
     y: number;
     amount: number;
     start: number;
-    // Follows this enemy, or the player when onPlayer
+    // Follows this enemy, or this hero (Sim.heroes, -1 for none)
     enemyUid: number;
-    onPlayer: boolean;
+    hero: number;
     height: number;
 };
 type SlashFx = {
@@ -143,13 +148,14 @@ type SlashFx = {
     start: number;
     // r, g, b; white when unset
     color?: string;
+    // Whose swing it is, which it follows
+    hero: number;
 };
-type AuraFx = { x: number; y: number; radius: number; start: number };
+type AuraFx = { x: number; y: number; radius: number; start: number; hero: number };
 type BlastFx = { x: number; y: number; radius: number; start: number };
 type SwingFx = { x: number; y: number; radius: number; start: number };
-// enemyUid 0: the player (enemies' uids start at 1)
+// enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1)
 type Shout = { enemyUid: number; text: string; start: number };
-const PLAYER_SHOUT = 0;
 type FlashFx = { color: string; start: number };
 
 function lerp(a: number, b: number, t: number): number {
@@ -169,6 +175,9 @@ export class GameView {
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
     private enemiesByUid = new Map<number, Enemy>();
+    // The hero the camera's on: the focus, or in co-op while they're down, a
+    // teammate (GameClient sets it)
+    viewHero = 0;
 
     constructor(readonly assets: GameAssets) {}
 
@@ -189,9 +198,9 @@ export class GameView {
         this.hitsplats.push({ ...hitsplat, start: performance.now() + this.rngDelay() });
     }
 
-    // Where hitsplats on the player go, in tiles above the ground
-    private playerHitsplatHeight(): number {
-        return ((this.assets.getPlayer()?.height ?? 200) / 128) * 0.6;
+    // Where hitsplats on a hero go, in tiles above the ground
+    private playerHitsplatHeight(hero: number): number {
+        return ((this.assets.getPlayer(hero)?.height ?? 200) / 128) * 0.6;
     }
 
     onEvents(sim: Sim, events: SimEvent[]): void {
@@ -209,23 +218,26 @@ export class GameView {
                         y: event.y,
                         amount: event.amount,
                         enemyUid: event.enemyUid,
-                        onPlayer: false,
+                        hero: -1,
                         height: height * 0.6,
                     });
                     break;
                 }
                 case "playerHit":
-                case "playerPoisoned":
+                case "playerPoisoned": {
+                    const hero = event.hero ?? sim.focus;
+                    const player = sim.heroes[hero].player;
                     this.addHitsplat({
                         kind: event.type === "playerHit" ? "damage" : "poison",
-                        x: sim.player.x,
-                        y: sim.player.y,
+                        x: player.x,
+                        y: player.y,
                         amount: event.amount,
                         enemyUid: 0,
-                        onPlayer: true,
-                        height: this.playerHitsplatHeight(),
+                        hero,
+                        height: this.playerHitsplatHeight(hero),
                     });
                     break;
+                }
                 case "bossSwing":
                     this.swings.push({ x: event.x, y: event.y, radius: event.radius, start: now });
                     break;
@@ -234,10 +246,12 @@ export class GameView {
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
                     this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
                     break;
-                case "playerShout":
-                    this.shouts = this.shouts.filter((s) => s.enemyUid !== PLAYER_SHOUT);
-                    this.shouts.push({ enemyUid: PLAYER_SHOUT, text: event.text, start: now });
+                case "playerShout": {
+                    const key = -(event.hero ?? sim.focus);
+                    this.shouts = this.shouts.filter((s) => s.enemyUid !== key);
+                    this.shouts.push({ enemyUid: key, text: event.text, start: now });
                     break;
+                }
                 case "slash":
                     this.slashes.push({
                         x: event.x,
@@ -248,10 +262,17 @@ export class GameView {
                         arc: event.arc,
                         start: now,
                         color: SLASH_COLORS[event.weaponId],
+                        hero: event.hero ?? sim.focus,
                     });
                     break;
                 case "aura":
-                    this.auras.push({ x: event.x, y: event.y, radius: event.radius, start: now });
+                    this.auras.push({
+                        x: event.x,
+                        y: event.y,
+                        radius: event.radius,
+                        start: now,
+                        hero: event.hero ?? sim.focus,
+                    });
                     break;
                 case "blast":
                     this.blasts.push({ x: event.x, y: event.y, radius: event.radius, start: now });
@@ -281,7 +302,11 @@ export class GameView {
 
     submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
         const tick = sim.tick;
-        this.drawPlayer(actors, sim, alpha);
+        for (const hero of sim.heroes) {
+            if (!hero.left) {
+                this.drawPlayer(actors, sim, hero.index, alpha);
+            }
+        }
 
         for (const enemy of sim.enemies) {
             this.drawEnemy(actors, sim, enemy, alpha);
@@ -547,16 +572,16 @@ export class GameView {
         });
     }
 
-    private drawPlayer(actors: ActorRenderer, sim: Sim, alpha: number): void {
+    private drawPlayer(actors: ActorRenderer, sim: Sim, hero: number, alpha: number): void {
         // A power-up's look replaces the player's usual model and everything it does
-        const powerUp = sim.wornPowerUp;
+        const powerUp = sim.as(hero, () => sim.wornPowerUp);
         const look = powerUp?.look;
-        const lookModel = powerUp && this.assets.getPlayerLook(powerUp.id);
-        const model = lookModel ?? this.assets.getPlayer();
+        const lookModel = powerUp && this.assets.getPlayerLook(powerUp.id, hero);
+        const model = lookModel ?? this.assets.getPlayer(hero);
         if (!model) {
             return;
         }
-        const player = sim.player;
+        const player = sim.heroes[hero].player;
         const tick = sim.tick;
         let anim: ActorAnim;
         let frame: number;
@@ -577,7 +602,7 @@ export class GameView {
             anim = attack;
             frame = anim.getFrame(tick - player.attackStart, false);
         } else {
-            const stance = this.assets.getPlayerStance();
+            const stance = this.assets.getPlayerStance(hero);
             anim = model.getAnim(player.moving ? stance.run : stance.idle);
             frame = anim.getFrame(tick - player.moveStart);
         }
@@ -704,20 +729,16 @@ export class GameView {
             }
         }
 
-        // The player's own bar over their head, gone when they die like in the game
-        const player = sim.player;
-        if (player.deathTick === -1) {
-            const model = this.assets.getPlayer();
-            const px = lerp(player.prevX, player.x, alpha);
-            const py = lerp(player.prevY, player.y, alpha);
-            const top = this.ground(sim, px, py) - (model?.height ?? 200) / 128 - HEALTH_BAR_GAP;
-            const p = overlay.project(px, top, py, this.screen);
-            if (p.visible) {
-                drawHealthBar(ctx, p.x, p.y, scale, player.hp / player.maxHp);
-            }
+        // The players' bars over their heads, gone when they die like in the
+        // game; co-op's others have their names over them too
+        for (const hero of sim.heroes) {
+            this.drawHeroBar(overlay, sim, hero, alpha, scale);
         }
 
         this.drawHitsplats(overlay, sim, alpha, now, scale);
+        if (sim.heroes.length > 1) {
+            this.drawTeammateArrows(overlay, sim, alpha, now, scale);
+        }
         this.drawShouts(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
     }
@@ -755,11 +776,15 @@ export class GameView {
             let x: number;
             let y: number;
             let height: number;
-            if (shout.enemyUid === PLAYER_SHOUT) {
-                const player = sim.player;
+            if (shout.enemyUid <= 0) {
+                const hero = -shout.enemyUid;
+                const player = sim.heroes[hero]?.player;
+                if (!player) {
+                    continue;
+                }
                 x = lerp(player.prevX, player.x, alpha);
                 y = lerp(player.prevY, player.y, alpha);
-                height = this.assets.getPlayer()?.height ?? 200;
+                height = this.assets.getPlayer(hero)?.height ?? 200;
             } else {
                 const enemy = this.enemiesByUid.get(shout.enemyUid);
                 if (!enemy || enemy.dead) {
@@ -799,14 +824,14 @@ export class GameView {
         ctx.font = `${16 * pixel}px "OSRS Small", sans-serif`;
         // The splat is scaled down a little, so smooth it
         ctx.imageSmoothingQuality = "high";
-        const player = sim.player;
         for (const hitsplat of this.hitsplats) {
             const t = (now - hitsplat.start) / HITSPLAT_MS;
             if (t < 0) {
                 continue;
             }
             const enemy = this.enemiesByUid.get(hitsplat.enemyUid);
-            if (hitsplat.onPlayer) {
+            const player = sim.heroes[hitsplat.hero]?.player;
+            if (player) {
                 hitsplat.x = lerp(player.prevX, player.x, alpha);
                 hitsplat.y = lerp(player.prevY, player.y, alpha);
             } else if (enemy) {
@@ -999,8 +1024,9 @@ export class GameView {
         for (const slash of this.slashes) {
             const t = (now - slash.start) / SLASH_MS;
             // Follows the player, like the weapon does
-            const cx = sim.player.x;
-            const cy = sim.player.y;
+            const player = sim.heroes[slash.hero]?.player ?? sim.player;
+            const cx = player.x;
+            const cy = player.y;
             const base = Math.atan2(slash.dirY, slash.dirX);
             const sweep = slash.arc;
             // Enough points for a wide sweep to stay round
@@ -1058,7 +1084,8 @@ export class GameView {
         for (const aura of this.auras) {
             const t = (now - aura.start) / AURA_MS;
             const radius = aura.radius * (0.5 + t * 0.5);
-            this.traceGroundCircle(overlay, sim, sim.player.x, sim.player.y, radius);
+            const player = sim.heroes[aura.hero]?.player ?? sim.player;
+            this.traceGroundCircle(overlay, sim, player.x, player.y, radius);
             ctx.fillStyle = `rgba(150, 210, 255, ${0.18 * (1 - t)})`;
             ctx.fill();
             ctx.lineWidth = 3;
@@ -1139,7 +1166,16 @@ export class GameView {
             const ground = this.ground(sim, pickup.x, pickup.y);
             const base = overlay.project(pickup.x, ground, pickup.y, this.screen);
             if (!base.visible) {
-                this.drawEdgeArrow(overlay, sim, pickup, alpha, color, pulse, scale);
+                const distance = this.drawEdgeArrow(
+                    overlay,
+                    sim,
+                    pickup,
+                    alpha,
+                    color,
+                    pulse,
+                    scale,
+                );
+                this.drawArrowLabel(overlay, `${Math.round(distance)}`, color, scale);
                 continue;
             }
             const grow = Math.min(1, Math.max(0, (sim.tick - landTick) / 20));
@@ -1180,24 +1216,28 @@ export class GameView {
         }
     }
 
+    // An arrow at the edge of the screen pointing at something out of view,
+    // from the hero the camera's on. Returns how far away it is, and leaves
+    // where to put a label for drawArrowLabel.
     private drawEdgeArrow(
         overlay: Overlay,
         sim: Sim,
-        pickup: Pickup,
+        target: { x: number; y: number },
         alpha: number,
         color: string,
         pulse: number,
         scale: number,
-    ): void {
+    ): number {
         const ctx = overlay.ctx;
-        const player = sim.player;
+        const player = sim.heroes[this.viewHero]?.player ?? sim.player;
         const px = lerp(player.prevX, player.x, alpha);
         const py = lerp(player.prevY, player.y, alpha);
-        const dx = pickup.x - px;
-        const dy = pickup.y - py;
+        const dx = target.x - px;
+        const dy = target.y - py;
         const distance = Math.hypot(dx, dy);
+        this.arrowLabel = undefined;
         if (distance < 0.001) {
-            return;
+            return distance;
         }
         // Which way it is on screen: from the player towards it, a couple of
         // tiles along (both ends stay on screen, unlike the casket itself)
@@ -1211,7 +1251,7 @@ export class GameView {
         let dirY = to.y - fromY;
         const len = Math.hypot(dirX, dirY);
         if (!from.visible || len < 0.001) {
-            return;
+            return distance;
         }
         dirX /= len;
         dirY /= len;
@@ -1245,15 +1285,102 @@ export class GameView {
         ctx.strokeStyle = "#000000";
         ctx.stroke();
         ctx.restore();
+        this.arrowLabel = { x: x - dirX * size * 1.9, y: y - dirY * size * 1.9 };
+        return distance;
+    }
+
+    // Where the last edge arrow wants its label, if it drew one
+    private arrowLabel?: { x: number; y: number };
+
+    private drawArrowLabel(overlay: Overlay, text: string, color: string, scale: number): void {
+        const label = this.arrowLabel;
+        if (!label) {
+            return;
+        }
+        const ctx = overlay.ctx;
         ctx.font = `${Math.round(14 * scale)}px "OSRS Small", sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const labelX = x - dirX * size * 1.9;
-        const labelY = y - dirY * size * 1.9;
         ctx.fillStyle = "#000000";
-        ctx.fillText(`${Math.round(distance)}`, labelX + 1, labelY + 1);
+        ctx.fillText(text, label.x + 1, label.y + 1);
         ctx.fillStyle = color;
-        ctx.fillText(`${Math.round(distance)}`, labelX, labelY);
+        ctx.fillText(text, label.x, label.y);
+    }
+
+    // A hero's health bar over their head, and in co-op a teammate's name
+    // over that; a downed teammate just has their name, greyed
+    private drawHeroBar(
+        overlay: Overlay,
+        sim: Sim,
+        hero: Hero,
+        alpha: number,
+        scale: number,
+    ): void {
+        const player = hero.player;
+        const teammate = sim.heroes.length > 1 && hero.index !== sim.focus;
+        if (hero.left || (player.deathTick !== -1 && !teammate)) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const model = this.assets.getPlayer(hero.index);
+        const px = lerp(player.prevX, player.x, alpha);
+        const py = lerp(player.prevY, player.y, alpha);
+        // Lying down, the bar goes lower
+        const height = hero.down ? 0.8 : (model?.height ?? 200) / 128;
+        const top = this.ground(sim, px, py) - height - HEALTH_BAR_GAP;
+        const p = overlay.project(px, top, py, this.screen);
+        if (!p.visible) {
+            return;
+        }
+        if (!hero.down) {
+            drawHealthBar(ctx, p.x, p.y, scale, player.hp / player.maxHp);
+        }
+        if (!teammate) {
+            return;
+        }
+        const pixel = Math.max(1, Math.round(scale));
+        ctx.font = `${16 * pixel}px "OSRS Small", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        const text = hero.down ? `${hero.name} (down)` : hero.name;
+        const y = p.y - 7 * pixel;
+        ctx.fillStyle = "#000000";
+        ctx.fillText(text, p.x + pixel, y + pixel);
+        ctx.fillStyle = hero.down ? TEAMMATE_DOWN_COLOR : TEAMMATE_COLOR;
+        ctx.fillText(text, p.x, y);
+    }
+
+    // An arrow at the edge of the screen for each teammate still in the fight
+    // and out of view, with their name
+    private drawTeammateArrows(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+    ): void {
+        const pulse = 0.75 + 0.25 * Math.sin(now / 180);
+        for (const hero of sim.heroes) {
+            if (hero.left || hero.down || hero.index === this.viewHero) {
+                continue;
+            }
+            const player = hero.player;
+            const x = lerp(player.prevX, player.x, alpha);
+            const y = lerp(player.prevY, player.y, alpha);
+            const p = overlay.project(x, this.ground(sim, x, y), y, this.screen);
+            const margin = 20 * scale;
+            if (
+                p.visible &&
+                p.x > margin &&
+                p.y > margin &&
+                p.x < overlay.width - margin &&
+                p.y < overlay.height - margin
+            ) {
+                continue;
+            }
+            this.drawEdgeArrow(overlay, sim, { x, y }, alpha, TEAMMATE_COLOR, pulse, scale);
+            this.drawArrowLabel(overlay, hero.name, TEAMMATE_COLOR, scale);
+        }
     }
 }
 
