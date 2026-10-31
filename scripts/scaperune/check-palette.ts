@@ -88,6 +88,18 @@ async function main(): Promise<void> {
         { biome: "desert", island: 0, buildings: 1, trees: 1, rocks: 1 },
         { biome: "swamp", rivers: 1, ponds: 5, buildings: 1 },
         { biome: "snow", rivers: 1, buildings: 1, trees: 1, rocks: 1 },
+        { biome: "meadow", mountains: 0.8, snow: 0.8, rubble: 1, caves: 1, buildings: 1 },
+        { biome: "desert", mesas: 8, canyons: 2, rubble: 1, caves: 1, boundary: "mountains" },
+        {
+            biome: "swamp",
+            volcanoes: 1,
+            mountains: 0.6,
+            rubble: 1,
+            caves: 1,
+            squaresX: 3,
+            squaresY: 3,
+        },
+        { biome: "snow", mountains: 0.8, snow: 1, rubble: 1, caves: 1 },
     ];
     let missing = 0;
     for (let i = 0; i < maps.length; i++) {
