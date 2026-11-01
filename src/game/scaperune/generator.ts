@@ -73,6 +73,7 @@ import {
     placeWaymarkers,
 } from "./structures";
 import { limitSlope } from "./terrain";
+import { placeVignettes } from "./vignettes";
 
 export * from "./settings";
 
@@ -588,6 +589,7 @@ export function generateMapDetail(
         }
     }
     const buildings = placeBuildings(build, roads, waterTiles);
+    placeVignettes(build, buildings);
     const landmarks = placeSetPieces(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
     const falls = placeFallPools(build, water);

@@ -35,6 +35,8 @@ const ROAD_PER_100 = 35;
 const LEAST_PER_100 = 25;
 // On a floor the world doesn't use: decorations per 100 tiles, of the biome's own
 const BIOME_DECOR_PER_100 = 30;
+// The foot of a cliff has more on it than open ground: 29 to 93 per 100 in the real world
+const FOOT_CHANCE = 0.4;
 // Land beside water with a stone on it, and water beside land with a reed in it
 const SHORE_CHANCE = 0.7;
 const REED_CHANCE = 0.14;
@@ -207,7 +209,10 @@ export function dressGround(ground: Ground, dressing: GroundDressing): void {
             const kit = kitAt(i);
             const least = overlays[i] !== 0 ? ROAD_PER_100 : LEAST_PER_100;
             const per100 = Math.max(kit?.per100 ?? BIOME_DECOR_PER_100, least);
-            const chance = near.some(isWater) ? SHORE_CHANCE : (per100 / 100) * DRESS_SHARE;
+            const byRock = near.some((j) => flags[j] & TILE_BLOCKED);
+            const chance = near.some(isWater)
+                ? SHORE_CHANCE
+                : Math.max((per100 / 100) * DRESS_SHARE, byRock ? FOOT_CHANCE : 0);
             if (roll() < chance * density) {
                 const ids = kit?.ids ?? biomeDecor(x, y);
                 const id = ids[Math.floor(roll() * ids.length)];

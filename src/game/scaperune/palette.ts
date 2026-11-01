@@ -8,6 +8,7 @@ import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
 import { KIT_FENCES } from "./settlements";
 import { FOUNTAIN, PAVING, SET_PIECES, getPieceLocs } from "./structures";
+import { VIGNETTES } from "./vignettes";
 
 // Everything the generator can ask the cache for, on one map: each biome's
 // floors and locs, and every prefab. The slim cache only keeps what a map reads,
@@ -123,10 +124,14 @@ function build(context: BuildContext): TileGrid {
     });
     y += (Math.ceil(dressing.length / 100) + 1) * 2;
     REEDS.forEach((id, i) => put1(id, 2 + i * 2, y));
+    const vignettes = [...new Set(Object.values(VIGNETTES).flat(2))];
+    vignettes.forEach((id, i) => {
+        put1(id, 2 + (i % 100) * 2, y + 2 + Math.floor(i / 100) * 2);
+    });
     Object.values(KIT_FENCES).forEach((id, i) => {
         ground.grid.locs.push({ id, type: 0, rotation: 0, level: 0, x: 20 + i * 2, y });
     });
-    y += 2;
+    y += (Math.ceil(vignettes.length / 100) + 1) * 2;
     // Set pieces, each on a row of its own: they're big
     let x = 2;
     for (const piece of Object.values(SET_PIECES)) {
