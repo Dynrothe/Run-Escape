@@ -110,6 +110,14 @@ packages, co-op's relay included (`npm run serve:singleplayer` leaves it out). T
 Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
 [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 
+## Desktop
+
+There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
+[release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
+plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
+and Export and Import in Settings carry one across.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
+
 ## Contributing
 
 Issues and pull requests are welcome.

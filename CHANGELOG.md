@@ -11,6 +11,7 @@ the version in the corner).
   invite link) or open to anyone, ready up, and the host picks the map. Everyone brings their own
   adventurer and progress, levels are shared with a pick each, and the run goes on while anyone's
   still standing. Winning on a map you haven't reached yet in a friend's party opens it for you.
+- A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
 
 ## 0.20.0 - 2026-10-31
 

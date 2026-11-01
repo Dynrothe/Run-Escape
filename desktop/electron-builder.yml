@@ -1,0 +1,31 @@
+# The Windows zip: Run Escape.exe, the Electron runtime and the game. npm run desktop:dist makes it.
+# appId and productName don't decide where saves are: that's main.ts.
+appId: com.dynrothe.run-escape
+productName: Run Escape
+directories:
+    output: release
+# The main process is bundled into desktop/out, so no node_modules ship: the game's dependencies
+# are already in dist/, and these would only add to the download.
+files:
+    - desktop/out/**
+    - desktop/splash.html
+    - package.json
+    - "!node_modules/**"
+# Outside the asar, so the game server reads them as plain files. dist/ only: never caches/.
+extraResources:
+    - from: dist
+      to: game
+      filter:
+          - "**/*"
+          - "!**/*.map"
+          - "!**/.htaccess"
+npmRebuild: false
+electronLanguages:
+    - en-US
+win:
+    icon: desktop/icon.png
+    target:
+        - target: zip
+          arch: x64
+    artifactName: Run-Escape-${version}-win-${arch}.${ext}
+publish: null
