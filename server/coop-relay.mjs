@@ -213,7 +213,8 @@ class Connection {
             case 0x1: {
                 // A continuation with nothing to continue, or a new message
                 // before the last one's finished
-                if ((opcode === 0x0) !== (this.fragments.length > 0)) {
+                const continuing = this.fragments.length > 0;
+                if ((opcode === 0x0) !== continuing) {
                     this.close(1002);
                     return;
                 }
@@ -224,7 +225,10 @@ class Connection {
                 }
                 this.fragments.push(payload);
                 this.fragmentBytes += payload.length;
-                if (this.fragmentBytes > MAX_MESSAGE_BYTES || this.fragments.length > MAX_FRAGMENTS) {
+                if (
+                    this.fragmentBytes > MAX_MESSAGE_BYTES ||
+                    this.fragments.length > MAX_FRAGMENTS
+                ) {
                     this.close(1009);
                     return;
                 }
@@ -397,7 +401,11 @@ export function addressKey(address) {
     const all =
         tail === undefined
             ? before
-            : [...before, ...Array(Math.max(0, 8 - before.length - after.length)).fill("0"), ...after];
+            : [
+                  ...before,
+                  ...Array(Math.max(0, 8 - before.length - after.length)).fill("0"),
+                  ...after,
+              ];
     return `${all
         .slice(0, 4)
         .map((group) => parseInt(group, 16).toString(16))
@@ -650,8 +658,10 @@ export function createRelay(limits = {}) {
     // Whether this address has tried too many codes that don't exist lately
     function guessing(address) {
         const now = Date.now();
-        return (wrongCodesFrom.get(address) ?? []).filter((t) => now - t < 60_000).length >=
-            wrongCodesPerMinute;
+        return (
+            (wrongCodesFrom.get(address) ?? []).filter((t) => now - t < 60_000).length >=
+            wrongCodesPerMinute
+        );
     }
 
     function setMember(client, message) {
