@@ -815,7 +815,7 @@ contoured, so pin it a plot too, and use `level` kits (`yanille`) on flat ground
 
 **What they cost.** Triangles a tile of wall, both faces and both rails: `falador` 634, `civitas` 512, `varrock` 550, `kourend`
 558, `shayzien` 468, `yanille` 76, and `jatizso` 366 for its one face. A screen is 27 tiles across, so a stretch of Falador's
-wall along the middle of one is about 17,000 triangles, the most any one thing there adds.
+wall along the middle of one is about 17,000 triangles.
 
 **Adding a kit.** `wall-survey.ts`'s `runs` reads a section, and `dump` the rest. It wants a wall type in the face's and the rail's
 `types`, with 1 and 9 for cut corners and 2 for square ones (`model-bounds.ts` prints them). Add it to `sweep` by being in
