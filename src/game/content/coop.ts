@@ -4,11 +4,15 @@
 // between the players, so its hits are harder too. The run's level is shared
 // (every level up gives each player their own pick) and a bigger crowd drops
 // more bones, so each is worth a little less, and the party levels about as
-// fast as a player on their own. It's worked out again from the players
-// still up whenever one goes down or leaves, so the last of them isn't
-// facing a crowd made for four.
+// fast as a player on their own. It's worked out again whenever a player
+// goes down or leaves, counting each of them as half a player (PLAYER_GONE),
+// so the rest have it easier but not as easy as a party that size.
 
 export const MAX_PARTY = 4;
+
+// How much of a player one who's down or gone still counts for in the
+// party's scale
+export const PLAYER_GONE = 0.5;
 
 export type PartyScale = {
     // Multiplies the waves' spawn rate and how many are about at once
@@ -32,7 +36,7 @@ const HP_PER_PLAYER = 0.5;
 const BOSS_HP_PER_PLAYER = 1.1;
 const DAMAGE_PER_PLAYER = 0.1;
 const XP_PER_PLAYER = -0.12;
-const CASKETS_PER_PLAYER = 0.4;
+const CASKETS_PER_PLAYER = 0.2;
 
 export function getPartyScale(players: number): PartyScale {
     const extra = Math.max(0, Math.min(players, MAX_PARTY) - 1);

@@ -1,6 +1,6 @@
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { getCharacter } from "../content/characters";
-import { PartyScale, getPartyScale } from "../content/coop";
+import { PLAYER_GONE, PartyScale, getPartyScale } from "../content/coop";
 import {
     LATER_ROUND_START,
     LATE_CASKET_CHANCE,
@@ -4980,9 +4980,11 @@ export class Sim {
         this.rescaleParty();
     }
 
-    // Co-op: the crowd and its bosses as they'd be for the players still up
+    // Co-op: the crowd and its bosses for the players still up, and half of
+    // each one who's down or gone
     private rescaleParty(): void {
-        this.partyScale = getPartyScale(this.heroes.filter((hero) => this.isUp(hero)).length);
+        const up = this.heroes.filter((hero) => this.isUp(hero)).length;
+        this.partyScale = getPartyScale(up + (this.heroes.length - up) * PLAYER_GONE);
     }
 
     // Returns the damage done (0 if it was already dead). mightScale

@@ -332,7 +332,7 @@ describe("co-op", () => {
         expect(b.player.hp).toBeLessThan(b.player.maxHp);
     });
 
-    it("scales the crowd to the players still up", () => {
+    it("scales the crowd down when a player goes, though not all the way", () => {
         const duo = createParty(["warrior", "wizard"]);
         const goblin = getEnemy("goblin");
         const before = duo.spawnEnemy(goblin, "normal")!;
@@ -340,7 +340,7 @@ describe("co-op", () => {
         const after = duo.spawnEnemy(goblin, "normal")!;
         const solo = createParty(["warrior"]).spawnEnemy(goblin, "normal")!;
         expect(after.maxHp).toBeLessThan(before.maxHp);
-        expect(after.maxHp).toBe(solo.maxHp);
+        expect(after.maxHp).toBeGreaterThan(solo.maxHp);
     });
 
     it("plays out the same on every player's copy", () => {

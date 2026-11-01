@@ -463,8 +463,8 @@ When adding to the sim:
 - Trigonometry goes through `fm`. `core/fmath.test.ts` fails on `Math.sin` and the like in
   `core/`.
 
-How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again from the
-players still up whenever one goes down or leaves.
+How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
+one goes down or leaves, with each of those still counting as half a player (`PLAYER_GONE`).
 
 Rooms only take players who've unlocked their map (and its endless, for an endless room), and the
 host can only pick maps everyone in the room has, so nobody skips ahead: someone without it is told
