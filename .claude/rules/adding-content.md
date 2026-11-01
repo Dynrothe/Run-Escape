@@ -109,6 +109,17 @@ animations, sounds and stats. Tests check that every enemy a map or boss refers 
 that every boss attacks. It's baked for the maps that use it (`getMapEnemies` finds its id wherever
 a map, or an enemy on that map, mentions it), so that needs nothing added.
 
+A new boss attack in `Sim.ts` that hits where the player stands has to hit each player in co-op:
+check them with `forEachHeroInReach`, and keep anything it leaves on a player on their `Hero`.
+`coop.test.ts` has a test to copy.
+
+## Anything in the sim, for co-op
+
+Co-op in `docs/DEVELOPMENT.md` has the rules: a player's own state goes on `Hero`, something that
+lingers carries `hero` and acts through `useHeroAt`, a new event about one player goes in
+`PERSONAL_EVENTS`, `this.player` means nothing outside a loop over the heroes, and trigonometry
+goes through `fm`. A solo run has to play exactly as before: compare a sim with `main`'s.
+
 ## Map
 
 Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in `waves.ts`.

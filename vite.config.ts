@@ -1,13 +1,32 @@
 import react from "@vitejs/plugin-react";
+import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+
+import { createRelay, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
 
 // Shown on the title screen, beside CHANGELOG.md
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
+
+// Which build this is, for co-op: copies of a run from different builds fall
+// out of step, so a room only takes players on the host's. The commit, or
+// when the server started without one.
+function buildId(): string {
+    try {
+        const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+        return `${version}-${commit}`;
+    } catch {
+        return `${version}-${Date.now().toString(36)}`;
+    }
+}
 
 const MIME_TYPES: Record<string, string> = {
     ".dat": "application/octet-stream",
@@ -101,6 +120,33 @@ function serveCachesPlugin(): Plugin {
     };
 }
 
+// Runs the co-op relay (server/coop-relay.mjs) at /coop on the dev server and
+// `vite preview`, unless multiplayer's turned off (npm run start:singleplayer,
+// or MULTIPLAYER=off). Off, the game hides co-op.
+function coopRelayPlugin(): Plugin {
+    const start = (httpServer: HttpServer | null, middlewares: Connect.Server) => {
+        if (!httpServer || !isMultiplayerOn()) {
+            return;
+        }
+        const relay = createRelay();
+        relay.attach(httpServer);
+        middlewares.use((req, res, next) => {
+            if (!relay.handleRequest(req, res)) {
+                next();
+            }
+        });
+    };
+    return {
+        name: "coop-relay",
+        configureServer(server) {
+            start(server.httpServer as HttpServer | null, server.middlewares);
+        },
+        configurePreviewServer(server) {
+            start(server.httpServer as HttpServer, server.middlewares);
+        },
+    };
+}
+
 // Routes bare `.wasm` imports (e.g. the Emscripten `require("./module.wasm")`
 // hack inside @foxglove/wasm-bz2) through Vite's `?url` asset handling so they
 // resolve to an asset URL string, matching webpack's behaviour. Imports that
@@ -168,12 +214,14 @@ export default defineConfig({
         react(),
         glslIncludesPlugin(),
         serveCachesPlugin(),
+        coopRelayPlugin(),
         wasmAssetUrlPlugin(),
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),
+        __BUILD_ID__: JSON.stringify(buildId()),
     },
     resolve: {
         // ".web.*" takes precedence so browser-specific variants (e.g. Gzip.web.ts)

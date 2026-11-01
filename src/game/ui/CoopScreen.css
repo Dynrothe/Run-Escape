@@ -1,0 +1,365 @@
+/* Co-op: the room browser, the room before a run, and the party in a run */
+
+.ui-coop {
+    width: min(520px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-coop > h2,
+.ui-coop > .ui-subtle,
+.ui-coop > .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-coop-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* A label, its control, and a button on the right */
+.ui-coop-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.ui-coop-label {
+    flex: 0 0 92px;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
+.ui-coop-input {
+    flex: 1;
+    min-width: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    background: rgba(0, 0, 0, 0.35);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    padding: 5px 8px;
+    outline: none;
+}
+
+.ui-coop-input:focus {
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+.ui-coop-input::placeholder {
+    color: #7d705b;
+}
+
+/* The name the relay gave this player */
+.ui-coop-name {
+    flex: 1;
+    min-width: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ui-coop-code-input {
+    font-family: "OSRS Bold", sans-serif;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+.ui-coop-choice {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+}
+
+.ui-coop-choice .ui-button {
+    flex: 1;
+}
+
+.ui-coop-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 14px 0 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-coop-rooms {
+    min-height: 64px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.35);
+}
+
+.ui-coop-room {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px 3px 6px;
+    background: var(--ui-card);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-coop-room-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.ui-coop-room-host {
+    color: var(--ui-white);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ui-coop-room-map,
+.ui-coop-room-count {
+    color: #b8aa8a;
+}
+
+/* The room's code, to read out to a friend */
+.ui-coop-room-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #8a7e66;
+}
+
+.ui-coop-hint {
+    margin-top: 8px;
+    text-align: center;
+    color: #b8aa8a;
+}
+
+/* Under the list when there's more than a page of rooms */
+.ui-coop-pages {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+    color: #b8aa8a;
+}
+
+.ui-coop-empty {
+    margin: auto;
+    text-align: center;
+    color: #8a7e66;
+}
+
+.ui-coop-error {
+    margin-top: 8px;
+    text-align: center;
+    color: #ff6050;
+}
+
+/* The room: its code and who can get in, then the party */
+
+.ui-coop-code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-coop-code-label {
+    color: #b8aa8a;
+}
+
+.ui-coop-code-value {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    color: var(--ui-yellow);
+    user-select: all;
+}
+
+.ui-coop-open {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    color: #b8aa8a;
+}
+
+.ui-coop-members {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-coop-member {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    background: var(--ui-card);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+}
+
+.ui-coop-member-empty {
+    justify-content: center;
+    color: #7d705b;
+    background: rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.3);
+}
+
+.ui-coop-member-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
+}
+
+.ui-coop-member-name > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-coop-you {
+    font-family: "OSRS Small", sans-serif;
+    color: #b8aa8a;
+}
+
+.ui-coop-status {
+    color: #8a7e66;
+}
+
+.ui-coop-status-ready {
+    color: var(--ui-green);
+}
+
+.ui-coop-kick:hover:not(:disabled) {
+    color: #ff6050;
+}
+
+.ui-coop-maps {
+    max-height: 168px;
+}
+
+/* In a run: the rest of the party down the left, and who it's waiting on */
+
+.ui-party {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-party-member {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 150px;
+    padding: 3px 6px;
+    box-sizing: border-box;
+}
+
+/* Down or gone */
+.ui-party-left {
+    opacity: 0.55;
+}
+
+.ui-party-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.ui-party-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    color: #00ff80;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-party-note {
+    font-size: 14px;
+    color: #8a7e66;
+}
+
+/* Like the HUD's hitpoints bar, smaller */
+.ui-party-bar {
+    position: relative;
+    height: 13px;
+    background: #8a0000;
+    border: 1px solid #000;
+}
+
+.ui-party-fill {
+    height: 100%;
+    background: #1f9e1f;
+}
+
+.ui-party-bar span {
+    position: absolute;
+    inset: 0;
+    font-size: 13px;
+    line-height: 13px;
+    text-align: center;
+    color: var(--ui-white);
+}
+
+.ui-waiting {
+    position: absolute;
+    top: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 16px;
+    color: var(--ui-yellow);
+    white-space: nowrap;
+}
+
+/* Co-op's menu: the run carries on behind it, so it's not darkened */
+.ui-modal.ui-modal-clear {
+    background: transparent;
+}
+
+@media (max-width: 759px) {
+    .ui-coop-label {
+        flex-basis: 70px;
+    }
+
+    .ui-party-member {
+        width: 120px;
+    }
+}
+
+/* Over on the right of the room's bar, by Start (after the endless switch
+   when there is one) */
+.ui-coop-ready {
+    margin-left: auto;
+}
+
+.ui-endless + .ui-coop-ready {
+    margin-left: 0;
+}

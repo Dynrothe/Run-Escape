@@ -46,6 +46,7 @@ import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { CoopScreen, PartyFrames, WaitingNote } from "./CoopScreen";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { ItemIcon } from "./ItemIcon";
@@ -123,6 +124,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
         case "collectionLog":
             screen = <CollectionLogScreen ui={ui} client={client} />;
             break;
+        case "coop":
+            screen = <CoopScreen ui={ui} client={client} />;
+            break;
         case "run":
             screen = <RunScreen ui={ui} client={client} />;
             break;
@@ -162,7 +166,7 @@ function Setting({
     );
 }
 
-function Toggle({
+export function Toggle({
     on,
     label,
     onToggle,
@@ -474,8 +478,16 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             client.showScreen("characters");
                         }}
                     >
-                        Start
+                        Singleplayer
                     </button>
+                    {ui.coop.available && (
+                        <button
+                            className="ui-button ui-button-big"
+                            onClick={() => client.openCoop()}
+                        >
+                            Multiplayer
+                        </button>
+                    )}
                     <button
                         className="ui-button ui-button-big"
                         onClick={() => client.showScreen("shop")}
@@ -543,7 +555,7 @@ function getClassTreasure(style: CombatStyle) {
     return WEAPONS.find((w) => w.style === style && w.rarity === "veryRare");
 }
 
-function getStartingWeaponIcon(character: CharacterDef): number {
+export function getStartingWeaponIcon(character: CharacterDef): number {
     const weapon = getWeapon(character.startingWeapon);
     return weapon.levels[0].objId ?? weapon.iconObjId;
 }
@@ -619,7 +631,7 @@ function stopPeeking(setPeek: (id: undefined) => void): (() => void) | undefined
 // pointed at (or tapped, so a locked one can say what it takes) until the
 // pointer leaves the panel, then the one picked. Only moving the pointer
 // changes it: the list scrolling under a still pointer doesn't.
-function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
+export function AdventurerPanel({ ui, client }: ScreenProps): JSX.Element {
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
     const opened = CHARACTERS.filter((c) => unlocked.includes(c.id)).length;
@@ -932,6 +944,10 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div className="ui-fill ui-run">
             {hud && <Hud hud={hud} client={client} questTracker={ui.display.questTracker} />}
+            {ui.party.length > 0 && <PartyFrames party={ui.party} />}
+            {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
+                <WaitingNote names={ui.waitingOn} />
+            )}
             {isCoarsePointer && hud && (
                 <TouchControls hud={hud} overlay={ui.overlay} client={client} />
             )}
@@ -1429,10 +1445,18 @@ function PauseModal({
     hud: HudView;
     client: GameClient;
 }): JSX.Element {
+    // Co-op's menu doesn't stop the run
+    const coop = ui.party.length > 0;
+    // The host can remove anyone still in the run (one who's stopped playing)
+    const kickable =
+        coop && ui.coop.room?.hostId === ui.coop.you
+            ? ui.party.filter((member) => member.id && !member.left)
+            : [];
     return (
-        <div className="ui-modal">
+        <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
             <div className="ui-panel rs-border rs-background ui-pause">
-                <h2>Paused</h2>
+                <h2>{coop ? "Menu" : "Paused"}</h2>
+                {coop && <p className="ui-subtle">The run carries on while you're in here.</p>}
                 <div className="ui-pause-columns">
                     <div className="ui-pause-column">
                         <div className="ui-pause-list">
@@ -1525,6 +1549,26 @@ function PauseModal({
                                 </div>
                             </>
                         )}
+                        {kickable.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">Party</h3>
+                                <div className="ui-pause-list">
+                                    {kickable.map((member) => (
+                                        <div key={member.id} className="ui-pause-item">
+                                            <span className="ui-pause-name">{member.name}</span>
+                                            <button
+                                                className="ui-button ui-button-small ui-coop-kick"
+                                                title={`Remove ${member.name} from the run`}
+                                                aria-label={`Kick ${member.name}`}
+                                                onClick={() => client.kickPlayer(member.id!)}
+                                            >
+                                                Kick
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                         <h3 className="ui-pause-heading">Settings</h3>
                         <SoundSettings
                             ui={ui}
@@ -1536,8 +1580,16 @@ function PauseModal({
                     </div>
                 </div>
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.quitRun()}>
-                        Give up
+                    <button
+                        className="ui-button"
+                        title={
+                            coop && ui.coop.room?.hostId === ui.coop.you
+                                ? "You're the host: leaving ends the run for everyone"
+                                : undefined
+                        }
+                        onClick={() => client.quitRun()}
+                    >
+                        {coop ? "Leave the run" : "Give up"}
                     </button>
                     <button className="ui-button ui-button-go" onClick={() => client.resume()}>
                         Resume
@@ -1547,6 +1599,9 @@ function PauseModal({
         </div>
     );
 }
+
+// Co-op's results name everyone else
+const MAX_LISTED_TEAMMATES = 3;
 
 // "Coif, Rune boots and Seers ring", or the first few "and 5 more"
 function listNames(names: string[], most = 3): string {
@@ -1594,8 +1649,13 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 <h2 className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
                         ? getMap(result.mapId).victoryText
-                        : "Oh dear, you are dead!"}
+                        : (result?.endedEarly ?? "Oh dear, you are dead!")}
                 </h2>
+                {result?.party && (
+                    <p className="ui-subtle">
+                        With {listNames(result.party, MAX_LISTED_TEAMMATES)}
+                    </p>
+                )}
                 {result?.endlessRecord && (
                     <p className="ui-unlocked">
                         Your furthest endless run in {getMap(result.mapId).name}!
@@ -1763,7 +1823,7 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 )}
                 <div className="ui-row">
                     <button className="ui-button ui-button-go" onClick={() => client.leaveRun()}>
-                        Back to the title
+                        {ui.coop.room ? "Back to the party" : "Back to the title"}
                     </button>
                 </div>
             </div>

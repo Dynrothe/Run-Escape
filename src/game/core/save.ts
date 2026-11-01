@@ -446,13 +446,18 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
 }
 
 // The first map is always open; each after it opens once the one before it
-// has been beaten. The fun and seasonal maps are open from the start.
+// has been beaten, or once it's been beaten itself (a co-op guest can win on
+// a map the host had open). The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
     if (isFunMap(mapId) || isSeasonalMap(mapId)) {
         return true;
     }
     const index = MAPS.findIndex((m) => m.id === mapId);
-    return index === 0 || (index > 0 && (save.mapVictories[MAPS[index - 1].id] ?? 0) > 0);
+    return (
+        index === 0 ||
+        (index > 0 && (save.mapVictories[MAPS[index - 1].id] ?? 0) > 0) ||
+        (save.mapVictories[mapId] ?? 0) > 0
+    );
 }
 
 // A map can be played endless once it's been beaten; the fun maps are only

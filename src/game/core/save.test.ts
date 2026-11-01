@@ -129,6 +129,17 @@ describe("save", () => {
         expect(isMapUnlocked(save, "nowhere")).toBe(false);
     });
 
+    test("a map won in a co-op run opens, with the one after it", () => {
+        const save = createSave();
+        const map = MAPS[3];
+        expect(isMapUnlocked(save, map.id)).toBe(false);
+        recordRun(save, run(map.id, { victory: true, seconds: 900, level: 40 }));
+        expect(isMapUnlocked(save, map.id)).toBe(true);
+        expect(isMapUnlocked(save, MAPS[4].id)).toBe(true);
+        // What came before it stays as it was
+        expect(isMapUnlocked(save, MAPS[2].id)).toBe(false);
+    });
+
     test("a seasonal map is open from the start and opens nothing", () => {
         const save = createSave();
         expect(isMapUnlocked(save, "halloween")).toBe(true);

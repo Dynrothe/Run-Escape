@@ -17,34 +17,37 @@ go stale. Add anything that cost you time to work out.
 
 ## Where things are
 
-| Looking for                                           | Go to                                   |
-| ----------------------------------------------------- | --------------------------------------- |
-| How the code is laid out, scripts, URL flags, hosting | `docs/DEVELOPMENT.md`                   |
-| The Windows app, its game updates, releases           | `docs/DEVELOPMENT.md`, Desktop          |
-| The app's main process and update code                | `desktop/`                              |
-| The release workflow                                  | `.github/workflows/release.yml`         |
-| What's in the game, map by map                        | `docs/GAMEPLAY.md`                      |
-| Getting it running, controls, cache version           | `README.md`                             |
-| What changed in each version                          | `CHANGELOG.md`                          |
-| How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`       |
-| Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                     |
-| The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                  |
-| Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`             |
-| Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`        |
-| Caskets and the inventory                             | `src/game/core/Loot.ts`                 |
-| Random events: who turns up, what they do             | `src/game/content/randomEvents.ts`      |
-| Save data and migrations                              | `src/game/core/save.ts`                 |
-| Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`         |
-| 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`           |
-| Touch screens: the stick, its buttons, phone layouts  | `docs/DEVELOPMENT.md`, Touch screens    |
-| React screens and the HUD                             | `src/game/ui/GameUi.tsx`                |
-| Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`       |
-| How the player stands and runs with each weapon       | `src/game/content/stances.ts`           |
-| Stat names and types                                  | `src/game/content/stats.ts`, `types.ts` |
-| Balance bot                                           | `scripts/game/simulate-run.ts`          |
-| Finding ids in the cache                              | `scripts/cache/`                        |
-| ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`          |
-| What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`   |
+| Looking for                                           | Go to                                    |
+| ----------------------------------------------------- | ---------------------------------------- |
+| How the code is laid out, scripts, URL flags, hosting | `docs/DEVELOPMENT.md`                    |
+| The Windows app, its game updates, releases           | `docs/DEVELOPMENT.md`, Desktop           |
+| The app's main process and update code                | `desktop/`                               |
+| The release workflow                                  | `.github/workflows/release.yml`          |
+| What's in the game, map by map                        | `docs/GAMEPLAY.md`                       |
+| Getting it running, controls, cache version           | `README.md`                              |
+| What changed in each version                          | `CHANGELOG.md`                           |
+| How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`        |
+| Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                      |
+| The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                   |
+| Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`              |
+| Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`         |
+| Caskets and the inventory                             | `src/game/core/Loot.ts`                  |
+| Random events: who turns up, what they do             | `src/game/content/randomEvents.ts`       |
+| Save data and migrations                              | `src/game/core/save.ts`                  |
+| Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`          |
+| 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`            |
+| Touch screens: the stick, its buttons, phone layouts  | `docs/DEVELOPMENT.md`, Touch screens     |
+| React screens and the HUD                             | `src/game/ui/GameUi.tsx`                 |
+| Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`        |
+| How the player stands and runs with each weapon       | `src/game/content/stances.ts`            |
+| Stat names and types                                  | `src/game/content/stats.ts`, `types.ts`  |
+| Balance bot                                           | `scripts/game/simulate-run.ts`           |
+| Co-op: how it works, hosting its relay                | `docs/DEVELOPMENT.md` (Co-op)            |
+| Co-op relay server                                    | `server/coop-relay.mjs`                  |
+| Co-op lockstep and rooms; the lobby UI                | `src/game/client/coop/`, `ui/CoopScreen` |
+| Finding ids in the cache                              | `scripts/cache/`                         |
+| ScapeRune: making maps that aren't in OSRS            | `src/game/scaperune/CLAUDE.md`           |
+| What a frame costs, and what's culled                 | `docs/DEVELOPMENT.md`, `scripts/dev/`    |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
@@ -54,11 +57,13 @@ changes the sim directly.
 ```sh
 npm install
 npm run download-caches    # the game's cache, into caches/
-npm start                  # dev server on http://localhost:5173
+npm start                  # dev server on http://localhost:5173, with co-op's relay
+npm run start:singleplayer # the same without it (or MULTIPLAYER=off): no Multiplayer button
 npm test                   # vitest
 npx tsc --noEmit -p .      # type check
 npx prettier --write <files>
 npm run build && npm run slim-cache    # build for hosting (only when deploying)
+npm run serve              # serve the build, co-op's relay too (serve:singleplayer without)
 npm run desktop            # the Windows app, on that build
 npm run desktop:dist       # the app's zip, game zip and manifest, into release/
 ```
@@ -89,6 +94,7 @@ MAP=barrows npx tsx scripts/game/simulate-run.ts "" 3        # everyone on one m
 MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # everything bought
 ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
+PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # co-op
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real
@@ -97,6 +103,8 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
   the old and new code. `META=max` buys every shop upgrade, so a new one changes those results.
 - **Run every map that's affected**, not only Lumbridge. A change can help one map and hurt another.
 - For a change to one combat style, compare all three styles, so you can see the gap between them.
+- For a change to co-op's balance (`content/coop.ts`, or anything a party does differently), run
+  `PARTY=2` and `PARTY=4` too. The bot plays each player on their own, with no teamwork.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
@@ -157,7 +165,12 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
   names should be spelled as the cache spells them.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
   New shop upgrades, ids and optional fields don't need one.
-- **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`.
+- **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
+  on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
+  `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.
+- **Heroes**: `sim.player`, `sim.stats`, `sim.weapons` and the like are the current hero's (one for
+  each co-op player). Anything a hero leaves behind (a projectile, a thrall) keeps a `hero` index.
+  A solo run must play exactly as before; co-op's tests are in `core/coop.test.ts`.
 - **Licence**: the cache belongs to Jagex and stays out of the repository.
 - **The desktop app's address**: `GAME_ORIGIN`, the user data folder's name and `GAME_PARTITION` are
   where its players' saves are, so never change them. It can't use a custom scheme: the Cache API

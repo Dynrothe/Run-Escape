@@ -72,11 +72,30 @@ export function getGameSoundIds(): number[] {
 export class GameSounds {
     constructor(readonly audio: GameAudio) {}
 
-    onEvents(sim: Sim, events: SimEvent[]): void {
+    // viewHero: where to hear from (the camera's hero)
+    onEvents(sim: Sim, events: SimEvent[], viewHero = sim.focus): void {
         const audio = this.audio;
-        const px = sim.player.x;
-        const py = sim.player.y;
+        const listener = sim.heroes[viewHero]?.player ?? sim.player;
+        const px = listener.x;
+        const py = listener.y;
         for (const event of events) {
+            // Co-op: what happens to a teammate is theirs to hear, but for
+            // their weapons, heard from where they are, and power-ups (which
+            // mostly do something to everyone)
+            if (event.hero !== undefined && event.hero !== sim.focus) {
+                if (event.type === "weapon") {
+                    audio.playAt(event.sound, event.x, event.y, px, py, {
+                        volume: 0.3,
+                        minGap: 60,
+                    });
+                } else if (event.type === "powerUp") {
+                    audio.playAt(getPowerUp(event.id).sound, event.x, event.y, px, py, {
+                        volume: 0.8,
+                        minGap: 0,
+                    });
+                }
+                continue;
+            }
             switch (event.type) {
                 case "weapon":
                     audio.play(event.sound, { volume: 0.5, minGap: 60 });

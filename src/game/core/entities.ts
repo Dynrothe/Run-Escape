@@ -73,7 +73,8 @@ export type BossSurge = {
     lane: SurgeLane;
     startTick: number;
     endTick: number;
-    hit: boolean;
+    // The heroes it's gone through (by index), each hit once
+    hit: number[];
 };
 
 // Where a boss fought in phases (BossDef.phases) has got to
@@ -279,8 +280,9 @@ export type Enemy = {
     venom: number;
     venomNext: number;
     venomEnd: number;
-    // What envenomed it, for the run's stats
+    // What envenomed it, for the run's stats, and the hero who did
     venomSource?: DamageSource;
+    venomHero?: number;
     flash: number;
     dead: boolean;
     // Tick it died, for the death animation and fade
@@ -362,6 +364,8 @@ export type Orbit = {
 
 export type Projectile = {
     uid: number;
+    // The hero it's from (Sim.heroes), whose stats its hits use
+    hero: number;
     kind: ProjectileKind;
     // None for a cannon's or a thrall's
     weapon?: WeaponDef;
@@ -499,6 +503,7 @@ export type Effect = {
 // A multicannon set up by a power-up
 export type Turret = {
     uid: number;
+    hero: number;
     x: number;
     y: number;
     yaw: number;
@@ -516,6 +521,8 @@ export type Turret = {
 // A thrall raised by a power-up, fighting beside the player until endTick
 export type Thrall = {
     uid: number;
+    // The hero it follows and fights for
+    hero: number;
     def: ThrallDef;
     x: number;
     y: number;
@@ -534,6 +541,7 @@ export type Thrall = {
 // A rock falling from a power-up, then lying where it landed until endTick
 export type FallingRock = {
     uid: number;
+    hero: number;
     powerUpId: string;
     x: number;
     y: number;
@@ -552,6 +560,7 @@ export type FallingRock = {
 // A giant NPC from a power-up, charging through the crowd
 export type Rampage = {
     uid: number;
+    hero: number;
     powerUpId: string;
     x: number;
     y: number;
@@ -580,6 +589,7 @@ export type Rampage = {
 // A ring from a power-up, warping away what comes near until endTick
 export type FairyRing = {
     uid: number;
+    hero: number;
     x: number;
     y: number;
     startTick: number;
@@ -612,11 +622,15 @@ export type EventOffer = {
     uid: number;
     def: RandomEventDef;
     options: EventOption[];
+    // The hero who met the visitor, who chooses (co-op)
+    hero: number;
 };
 
 // A power-up that lasts a while, for the timers on screen
 export type ActivePowerUp = {
     uid: number;
+    // Who picked it up (whose look it is, for one with a look)
+    hero: number;
     id: string;
     startTick: number;
     endTick: number;
@@ -655,6 +669,7 @@ export type WeaponState = {
 // often until endTick
 export type GroundFire = {
     uid: number;
+    hero: number;
     // The weapon that left it, for the run's stats
     source: DamageSource;
     x: number;
@@ -671,6 +686,7 @@ export type GroundFire = {
 // A hit still to land, a moment after the swing (the Dragon claws' later
 // slashes)
 export type PendingHit = {
+    hero: number;
     enemy: Enemy;
     weapon: WeaponDef;
     damage: number;
@@ -710,7 +726,11 @@ export type PassiveState = {
     value: number;
 };
 
-export type SimEvent =
+// hero: in co-op, the hero (Sim.heroes) it happened to or was done by, for
+// the events that are someone's (a hit taken, a pickup, a casket)
+export type SimEvent = SimEventBody & { hero?: number };
+
+type SimEventBody =
     | {
           type: "damage";
           x: number;
@@ -826,4 +846,8 @@ export type SimEvent =
     // Said over the visitor's head
     | { type: "visitorShout"; text: string }
     // An endless run's final boss is down and the next round has begun
-    | { type: "roundStarted"; round: number };
+    | { type: "roundStarted"; round: number }
+    // Co-op: a hero went down with no revives left (out for the rest of the
+    // run, which goes on while anyone's standing), or left the game
+    | { type: "heroDown" }
+    | { type: "heroLeft" };

@@ -1,7 +1,12 @@
 // A boss's bullets: hundreds at once, so they live in flat arrays rather than
 // as objects, and a spent one's slot goes straight back to the free list. The
-// tick allocates nothing, and the only thing a bullet tests against is the
-// player.
+// tick allocates nothing, and the only things a bullet tests against are the
+// players.
+import { fm } from "./fmath";
+
+// A player a bullet can hit; spared ones (just hit, or reviving) it passes
+// through
+export type BulletTarget = { x: number; y: number; radius: number; spare: boolean };
 
 export const MAX_BULLETS = 1024;
 
@@ -25,6 +30,8 @@ export class BulletPool {
     readonly source = new Uint16Array(MAX_BULLETS);
     readonly order = new Uint16Array(MAX_BULLETS);
     count = 0;
+    // What step hit, for each of its targets: a bullet's slot, or -1
+    readonly hits: number[] = [];
 
     constructor() {
         for (let i = 0; i < MAX_BULLETS; i++) {
@@ -53,8 +60,8 @@ export class BulletPool {
         this.y[slot] = this.prevY[slot] = y;
         this.vx[slot] = vx;
         this.vy[slot] = vy;
-        this.turnCos[slot] = Math.cos(turn);
-        this.turnSin[slot] = Math.sin(turn);
+        this.turnCos[slot] = fm.cos(turn);
+        this.turnSin[slot] = fm.sin(turn);
         this.radius[slot] = radius;
         this.damage[slot] = damage;
         this.life[slot] = life;
@@ -63,13 +70,14 @@ export class BulletPool {
         return slot;
     }
 
-    // Moves them all a tick. Returns the slot of one touching (px, py) with
-    // radius pr, -1 for none; the rest still move, and one that hit is spent.
-    // spare: true while the player can't be hit, when they pass straight
-    // through rather than being used up.
-    step(px: number, py: number, pr: number, spare: boolean): number {
-        const { x, y, prevX, prevY, vx, vy, turnCos, turnSin, radius, life, order } = this;
-        let hit = -1;
+    // Moves them all a tick. Each target is hit by one at most, whose slot ends
+    // up in hits (-1 for none); the rest still move, and one that hit is spent.
+    // A spared target can't be hit, and they pass straight through it rather
+    // than being used up.
+    step(targets: readonly BulletTarget[]): void {
+        const { x, y, prevX, prevY, vx, vy, turnCos, turnSin, radius, life, order, hits } = this;
+        hits.length = targets.length;
+        hits.fill(-1);
         let i = 0;
         while (i < this.count) {
             const slot = order[i];
@@ -85,12 +93,20 @@ export class BulletPool {
             x[slot] += vx[slot];
             y[slot] += vy[slot];
             life[slot]--;
-            const dx = px - x[slot];
-            const dy = py - y[slot];
-            const reach = radius[slot] + pr;
-            if (hit === -1 && !spare && dx * dx + dy * dy <= reach * reach) {
-                hit = slot;
-                life[slot] = 0;
+            // The first of them it reaches that it hasn't hit yet this tick
+            for (let t = 0; t < targets.length; t++) {
+                const target = targets[t];
+                if (hits[t] !== -1 || target.spare) {
+                    continue;
+                }
+                const dx = target.x - x[slot];
+                const dy = target.y - y[slot];
+                const reach = radius[slot] + target.radius;
+                if (dx * dx + dy * dy <= reach * reach) {
+                    hits[t] = slot;
+                    life[slot] = 0;
+                    break;
+                }
             }
             if (life[slot] <= 0) {
                 this.removeAt(i);
@@ -98,7 +114,6 @@ export class BulletPool {
                 i++;
             }
         }
-        return hit;
     }
 
     clear(): void {

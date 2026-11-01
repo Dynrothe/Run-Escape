@@ -973,6 +973,7 @@ describe("the bullet pool", () => {
     function add(pool: BulletPool, x: number, vx = 0, life = 100): number {
         return pool.add(x, 0, vx, 0, 0, 0.25, 1, life, 0, 0);
     }
+    const at = (x: number, y: number, spare = false) => ({ x, y, radius: 0.1, spare });
 
     test("spent bullets' slots are used again", () => {
         const pool = new BulletPool();
@@ -981,8 +982,8 @@ describe("the bullet pool", () => {
                 expect(add(pool, 100, 0, 2)).toBeGreaterThanOrEqual(0);
             }
             expect(pool.count).toBe(MAX_BULLETS);
-            pool.step(0, 0, 0.1, false);
-            pool.step(0, 0, 0.1, false);
+            pool.step([at(0, 0)]);
+            pool.step([at(0, 0)]);
             expect(pool.count).toBe(0);
         }
     });
@@ -1004,7 +1005,7 @@ describe("the bullet pool", () => {
             add(pool, 20, 1, 1),
             add(pool, 30, 1, 5),
         ];
-        pool.step(1000, 1000, 0.1, false);
+        pool.step([at(1000, 1000)]);
         expect(pool.count).toBe(2);
         expect(pool.x[slots[1]]).toBe(11);
         expect(pool.x[slots[3]]).toBe(31);
@@ -1013,16 +1014,28 @@ describe("the bullet pool", () => {
     test("a hit spends the bullet and says which; sparing the target leaves them", () => {
         const pool = new BulletPool();
         const slot = add(pool, 0);
-        expect(pool.step(0, 0, 0.1, true)).toBe(-1);
+        pool.step([at(0, 0, true)]);
+        expect(pool.hits).toEqual([-1]);
         expect(pool.count).toBe(1);
-        expect(pool.step(0, 0, 0.1, false)).toBe(slot);
+        pool.step([at(0, 0)]);
+        expect(pool.hits).toEqual([slot]);
         expect(pool.count).toBe(0);
+    });
+
+    test("each player is hit by one at most, and a bullet hits one at most", () => {
+        const pool = new BulletPool();
+        const first = add(pool, 0);
+        const second = add(pool, 0);
+        add(pool, 50);
+        pool.step([at(0, 0), at(0, 0), at(0, 0)]);
+        expect(pool.hits).toEqual([first, second, -1]);
+        expect(pool.count).toBe(1);
     });
 
     test("it curves", () => {
         const pool = new BulletPool();
         const slot = pool.add(0, 0, 1, 0, Math.PI / 2, 0.25, 1, 100, 0, 0);
-        pool.step(1000, 1000, 0.1, false);
+        pool.step([at(1000, 1000)]);
         expect(pool.vx[slot]).toBeCloseTo(0);
         expect(pool.vy[slot]).toBeCloseTo(1);
     });

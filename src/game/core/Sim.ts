@@ -1,5 +1,6 @@
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { getCharacter } from "../content/characters";
+import { PLAYER_GONE, PartyScale, getPartyScale } from "../content/coop";
 import {
     LATER_ROUND_START,
     LATE_CASKET_CHANCE,
@@ -78,7 +79,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
-import { BulletPool } from "./BulletPool";
+import { BulletPool, BulletTarget } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
     ChestAction,
@@ -148,6 +149,7 @@ import {
     projectileSource,
     quarterOf,
 } from "./entities";
+import { fm } from "./fmath";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlowField, canWalkStraight } from "./world/FlowField";
@@ -163,6 +165,8 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
+// A co-op party's others start this many tiles from the spawn
+const PARTY_SPREAD = 1.5;
 // Rerolls every run has, before the shop's
 const BASE_REROLLS = 1;
 // Skipping a level up's rewards costs coins from the run, doubling each time:
@@ -369,6 +373,30 @@ const SPLIT_RANGE = 6;
 const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
+// The events that are one hero's own, which co-op tags with who: what they
+// did, what happened to them, what they picked up
+const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
+    "weapon",
+    "slash",
+    "aura",
+    "playerHit",
+    "playerPoisoned",
+    "pickup",
+    "revive",
+    "chest",
+    "equip",
+    "stash",
+    "alch",
+    "itemUsed",
+    "evolved",
+    "powerUp",
+    "powerUpEnded",
+    "playerShout",
+    "heroDown",
+    "heroLeft",
+    "playerCursed",
+]);
+
 // levelUp and chest wait for the player to choose
 export type SimState = "playing" | "levelUp" | "chest" | "event" | "dead" | "victory";
 
@@ -392,6 +420,11 @@ export type SimOptions = {
     // The pieces upgraded in the Armoury, which caskets give as what they've
     // become (none when unset)
     armoury?: ArmouryUpgrades;
+    // Co-op: everyone in the run, in the same order on every player's copy
+    // (characterId, metaStats, unlockedItems and armoury are then unused), and
+    // which of them this copy plays
+    party?: HeroOptions[];
+    focus?: number;
 };
 
 export type RunResult = {
@@ -432,14 +465,106 @@ export type RunStats = {
     bossKills: { enemyId: string; seconds: number }[];
 };
 
+// One adventurer in a run: everything that's theirs rather than the party's.
+// A run on your own has one; co-op has one for each player, and the run's
+// level, XP, coins and kills are shared.
+export type Hero = {
+    // Where it is in Sim.heroes
+    index: number;
+    name: string;
+    characterId: string;
+    // Permanent bonuses from their shop, their map tasks' items, and their
+    // Armoury (see SimOptions)
+    metaStats: Stats;
+    unlockedItems: ReadonlySet<string> | undefined;
+    armoury: ArmouryUpgrades | undefined;
+    player: Player;
+    stats: Stats;
+    weapons: WeaponState[];
+    passives: PassiveState[];
+    // Item id worn in each slot, and how many times it's upgraded (gear from
+    // an endless run's later rounds)
+    gear: Partial<Record<GearSlot, string>>;
+    // The sets whose bonus the worn gear gives
+    activeSets: string[];
+    gearUpgrades: Partial<Record<GearSlot, number>>;
+    // The weapons evolved into this run
+    evolutionsMade: string[];
+    // Utility items; slots keep their place (they're used with 1-4)
+    inventory: (InventorySlot | null)[];
+    buffs: Buff[];
+    // Stats lowered by boss attacks
+    debuffs: Debuff[];
+    // Opened caskets waiting for a decision, the first one on screen
+    chests: ChestOffer[];
+    pendingLevelUps: number;
+    choices: UpgradeChoice[];
+    // Gear out of caskets this run, rerolled away or not
+    gearFound: Set<string>;
+    // Sets caskets have stopped bringing the missing pieces of
+    declinedSets: Set<string>;
+    // Collection log items found (see trophies.ts)
+    trophies: Set<string>;
+    revivesLeft: number;
+    // For a level up's rewards or a casket's item, shared
+    rerollsLeft: number;
+    // Rerolls the run started with, for how many were used
+    rerollsAtStart: number;
+    // Level ups skipped this run, which make the next skip dearer
+    skips: number;
+    // For the run's stats: damage dealt and kills by what did it (a
+    // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
+    // each weapon was taken up
+    damageBySource: Record<string, number>;
+    // The same damage by the tick it was dealt, for dps: a ring of the last
+    // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
+    recentDamage: Float64Array;
+    killsBySource: Record<string, number>;
+    damageTaken: number;
+    healed: number;
+    highestHit: number;
+    weaponSince: Record<string, number>;
+    // Bumped whenever their look changes (new weapon tier, gear)
+    appearanceVersion: number;
+    // Enemies after this hero find their way to them with it
+    flowField: FlowField;
+    regenAccumulator: number;
+    // When a hit next gets the Amulet of blood fury's roll to heal
+    bloodFuryRollTick: number;
+    // While the sled lasts: how much faster they go, and until when
+    sledEndTick: number;
+    sledSpeed: number;
+    // What a boss has done to them
+    curse?: PlayerCurse;
+    parasite?: PlayerParasite;
+    hold?: PlayerHold;
+    drowsyEndTick: number;
+    drowsyInterval: number;
+    // Bullets pass through them until this tick, so a mistake costs one of
+    // them rather than the whole of a volley
+    bulletGraceEnd: number;
+    // What they're pressing, for the next tick
+    moveX: number;
+    moveY: number;
+    // Co-op: down with no revives left (out of the run, watching the rest),
+    // or gone from the game
+    down: boolean;
+    left: boolean;
+};
+
+// A player in a co-op run, as SimOptions.party has them
+export type HeroOptions = {
+    name: string;
+    characterId: string;
+    metaStats: Stats;
+    unlockedItems?: ReadonlySet<string>;
+    armoury?: ArmouryUpgrades;
+};
+
 export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
     readonly rng: Rng;
-    readonly characterId: string;
-    readonly unlockedItems: ReadonlySet<string> | undefined;
-    private readonly armoury: ArmouryUpgrades | undefined;
-    readonly metaStats: Stats;
     readonly endless: boolean;
 
     tick = 0;
@@ -447,25 +572,14 @@ export class Sim {
     endTick = -1;
     state: SimState = "playing";
 
-    player: Player;
-    stats: Stats = emptyStats();
-    weapons: WeaponState[] = [];
-    passives: PassiveState[] = [];
-    // Item id worn in each slot, and how many times it's upgraded (gear from
-    // an endless run's later rounds)
-    gear: Partial<Record<GearSlot, string>> = {};
-    // The sets whose bonus the worn gear gives
-    activeSets: string[] = [];
-    gearUpgrades: Partial<Record<GearSlot, number>> = {};
-    // The weapons evolved into this run
-    evolutionsMade: string[] = [];
-    // Utility items; slots keep their place (they're used with 1-4)
-    inventory: (InventorySlot | null)[] = new Array(MAX_INVENTORY).fill(null);
-    buffs: Buff[] = [];
-    // Stats lowered by boss attacks
-    debuffs: Debuff[] = [];
-    // Opened caskets waiting for a decision, the first one on screen
-    chests: ChestOffer[] = [];
+    // Everyone in the run, one on your own. The fields below that are a
+    // hero's (player, stats, weapons...) are the current hero's: the one the
+    // sim is working on at the moment, and between ticks the one this client
+    // plays (focus), so the UI reads its own player's.
+    readonly heroes: Hero[] = [];
+    private hero!: Hero;
+    // The hero this client plays
+    readonly focus: number;
     // A random event's visitor waiting around, and what one's offering while
     // the run waits
     visitor?: Visitor;
@@ -490,9 +604,8 @@ export class Sim {
     readonly bullets = new BulletPool();
     readonly bulletSources: { attack: BossAttackDef; enemy: Enemy }[] = [];
     private emitters: BulletEmitter[] = [];
-    // Bullets pass through the player until this tick, so a mistake costs one
-    // of them rather than the whole of a volley
-    private bulletGraceEnd = 0;
+    // Where each hero is for the bullets, kept from tick to tick
+    private readonly bulletTargets: BulletTarget[] = [];
     // What a boss has marked on the ground, and its corpse flowers
     hazards: GroundHazard[] = [];
     quarters?: BossQuarters;
@@ -500,12 +613,6 @@ export class Sim {
     // (BossIntroDef.alone), for as long as it's up
     intro?: BossIntro;
     private aloneWith?: Enemy;
-    // What a boss has done to the player
-    curse?: PlayerCurse;
-    parasite?: PlayerParasite;
-    hold?: PlayerHold;
-    private drowsyEndTick = 0;
-    private drowsyInterval = 1;
     // Burning ground left by weapons
     fires: GroundFire[] = [];
     // Pools left by bosses' attacks
@@ -517,42 +624,15 @@ export class Sim {
 
     xp = 0;
     level = 1;
-    pendingLevelUps = 0;
-    choices: UpgradeChoice[] = [];
     kills = 0;
     // Enemy id -> times killed (a boss that rose again as its second form's)
     enemyKills: Record<string, number> = {};
     bossesKilled: string[] = [];
-    // Gear out of caskets this run, rerolled away or not
-    readonly gearFound = new Set<string>();
-    // Collection log items found (see trophies.ts)
-    readonly trophies = new Set<string>();
     // When the next trick or treat pumpkin can drop
     private nextPumpkinTick = 0;
-    // Sets caskets have stopped bringing the missing pieces of
-    readonly declinedSets = new Set<string>();
     coins = 0;
     casketsOpened = 0;
-    revivesLeft = 0;
-    // For a level up's rewards or a casket's item, shared
-    rerollsLeft = 0;
-    // Level ups skipped this run, which make the next skip dearer
-    skips = 0;
-    // For the run's stats: damage dealt and kills by what did it (a
-    // DamageSource), damage taken, hitpoints healed, the biggest hit, and when
-    // each weapon was taken up
-    readonly damageBySource: Record<string, number> = {};
-    // The same damage by the tick it was dealt, for dps: a ring of the last
-    // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
-    private readonly recentDamage = new Float64Array(DPS_WINDOW_TICKS);
-    readonly killsBySource: Record<string, number> = {};
-    damageTaken = 0;
-    healed = 0;
-    highestHit = 0;
-    readonly weaponSince: Record<string, number> = {};
     readonly bossKills: { enemyId: string; seconds: number }[] = [];
-    // Rerolls the run started with, for how many were used
-    private readonly rerollsAtStart: number;
     // What's dealing damage now, for damageBySource: set before each source
     // gets its turn
     private damageSource: DamageSource = "other";
@@ -563,35 +643,30 @@ export class Sim {
     round = 1;
     roundStartTick = 0;
 
-    // Bumped whenever the player's look changes (new weapon tier, gear)
-    appearanceVersion = 0;
-
     events: SimEvent[] = [];
 
-    readonly flowField = new FlowField(FLOW_FIELD_SIZE);
+    // Co-op's bigger, tougher crowds (content/coop.ts), all 1 on your own
+    private partyScale: PartyScale;
+    // What each bone's worth for the party: its scale's experience, made up
+    // for when the crowd's cap leaves no room for all of the party's extra
+    private partyXp = 1;
     private readonly enemyHash = new SpatialHash<Enemy>(2);
     private readonly pileHash = new SpatialHash<Pickup>(PILE_RADIUS);
     private nextUid = 1;
     private spawnAccumulator = 0;
     private eventIndex = 0;
-    private regenAccumulator = 0;
-    // When a hit next gets the Amulet of blood fury's roll to heal
-    private bloodFuryRollTick = 0;
     // When the last power-up dropped; the longer ago, the likelier the next
     private lastPowerUpTick = 0;
     // What dropped last, which doesn't drop twice in a row
     private lastPowerUpId?: string;
     // Random events roll on their own, so a run only goes differently for
     // what they do and not for them being there
-    private readonly eventRng: Rng;
+    readonly eventRng: Rng;
     // Run second the next random event is due, and the last one (not twice running)
     private nextRandomEventSeconds: number;
     private lastRandomEventId?: string;
     // Enemies (other than bosses) stand still until then, new ones too
     private freezeEndTick = 0;
-    // While the sled lasts: how much faster the player goes, and until when
-    private sledEndTick = 0;
-    private sledSpeed = 1;
     // While a Drill Demon lasts
     private lapsEndTick = 0;
     private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
@@ -610,17 +685,237 @@ export class Sim {
     private factionBaseAngle?: number;
     private readonly temp = { x: 0, y: 0 };
 
+    // ---- The current hero's ----
+
+    get characterId(): string {
+        return this.hero.characterId;
+    }
+    get metaStats(): Stats {
+        return this.hero.metaStats;
+    }
+    get unlockedItems(): ReadonlySet<string> | undefined {
+        return this.hero.unlockedItems;
+    }
+    private get armoury(): ArmouryUpgrades | undefined {
+        return this.hero.armoury;
+    }
+    get player(): Player {
+        return this.hero.player;
+    }
+    get stats(): Stats {
+        return this.hero.stats;
+    }
+    set stats(stats: Stats) {
+        this.hero.stats = stats;
+    }
+    get weapons(): WeaponState[] {
+        return this.hero.weapons;
+    }
+    set weapons(weapons: WeaponState[]) {
+        this.hero.weapons = weapons;
+    }
+    get passives(): PassiveState[] {
+        return this.hero.passives;
+    }
+    set passives(passives: PassiveState[]) {
+        this.hero.passives = passives;
+    }
+    get gear(): Partial<Record<GearSlot, string>> {
+        return this.hero.gear;
+    }
+    set gear(gear: Partial<Record<GearSlot, string>>) {
+        this.hero.gear = gear;
+    }
+    get activeSets(): string[] {
+        return this.hero.activeSets;
+    }
+    set activeSets(sets: string[]) {
+        this.hero.activeSets = sets;
+    }
+    get gearUpgrades(): Partial<Record<GearSlot, number>> {
+        return this.hero.gearUpgrades;
+    }
+    set gearUpgrades(upgrades: Partial<Record<GearSlot, number>>) {
+        this.hero.gearUpgrades = upgrades;
+    }
+    get evolutionsMade(): string[] {
+        return this.hero.evolutionsMade;
+    }
+    get inventory(): (InventorySlot | null)[] {
+        return this.hero.inventory;
+    }
+    set inventory(inventory: (InventorySlot | null)[]) {
+        this.hero.inventory = inventory;
+    }
+    get buffs(): Buff[] {
+        return this.hero.buffs;
+    }
+    set buffs(buffs: Buff[]) {
+        this.hero.buffs = buffs;
+    }
+    get debuffs(): Debuff[] {
+        return this.hero.debuffs;
+    }
+    set debuffs(debuffs: Debuff[]) {
+        this.hero.debuffs = debuffs;
+    }
+    get chests(): ChestOffer[] {
+        return this.hero.chests;
+    }
+    get pendingLevelUps(): number {
+        return this.hero.pendingLevelUps;
+    }
+    set pendingLevelUps(count: number) {
+        this.hero.pendingLevelUps = count;
+    }
+    get choices(): UpgradeChoice[] {
+        return this.hero.choices;
+    }
+    set choices(choices: UpgradeChoice[]) {
+        this.hero.choices = choices;
+    }
+    get gearFound(): Set<string> {
+        return this.hero.gearFound;
+    }
+    get declinedSets(): Set<string> {
+        return this.hero.declinedSets;
+    }
+    get trophies(): Set<string> {
+        return this.hero.trophies;
+    }
+    get revivesLeft(): number {
+        return this.hero.revivesLeft;
+    }
+    set revivesLeft(count: number) {
+        this.hero.revivesLeft = count;
+    }
+    get rerollsLeft(): number {
+        return this.hero.rerollsLeft;
+    }
+    set rerollsLeft(count: number) {
+        this.hero.rerollsLeft = count;
+    }
+    get skips(): number {
+        return this.hero.skips;
+    }
+    set skips(count: number) {
+        this.hero.skips = count;
+    }
+    get damageBySource(): Record<string, number> {
+        return this.hero.damageBySource;
+    }
+    get killsBySource(): Record<string, number> {
+        return this.hero.killsBySource;
+    }
+    get damageTaken(): number {
+        return this.hero.damageTaken;
+    }
+    set damageTaken(amount: number) {
+        this.hero.damageTaken = amount;
+    }
+    get healed(): number {
+        return this.hero.healed;
+    }
+    set healed(amount: number) {
+        this.hero.healed = amount;
+    }
+    get highestHit(): number {
+        return this.hero.highestHit;
+    }
+    set highestHit(amount: number) {
+        this.hero.highestHit = amount;
+    }
+    get weaponSince(): Record<string, number> {
+        return this.hero.weaponSince;
+    }
+    get appearanceVersion(): number {
+        return this.hero.appearanceVersion;
+    }
+    set appearanceVersion(version: number) {
+        this.hero.appearanceVersion = version;
+    }
+    get flowField(): FlowField {
+        return this.hero.flowField;
+    }
+    private get regenAccumulator(): number {
+        return this.hero.regenAccumulator;
+    }
+    private set regenAccumulator(amount: number) {
+        this.hero.regenAccumulator = amount;
+    }
+    private get bloodFuryRollTick(): number {
+        return this.hero.bloodFuryRollTick;
+    }
+    private set bloodFuryRollTick(tick: number) {
+        this.hero.bloodFuryRollTick = tick;
+    }
+    private get sledEndTick(): number {
+        return this.hero.sledEndTick;
+    }
+    private set sledEndTick(tick: number) {
+        this.hero.sledEndTick = tick;
+    }
+    private get sledSpeed(): number {
+        return this.hero.sledSpeed;
+    }
+    private set sledSpeed(speed: number) {
+        this.hero.sledSpeed = speed;
+    }
+    get curse(): PlayerCurse | undefined {
+        return this.hero.curse;
+    }
+    set curse(curse: PlayerCurse | undefined) {
+        this.hero.curse = curse;
+    }
+    get parasite(): PlayerParasite | undefined {
+        return this.hero.parasite;
+    }
+    set parasite(parasite: PlayerParasite | undefined) {
+        this.hero.parasite = parasite;
+    }
+    get hold(): PlayerHold | undefined {
+        return this.hero.hold;
+    }
+    set hold(hold: PlayerHold | undefined) {
+        this.hero.hold = hold;
+    }
+    private get drowsyEndTick(): number {
+        return this.hero.drowsyEndTick;
+    }
+    private set drowsyEndTick(tick: number) {
+        this.hero.drowsyEndTick = tick;
+    }
+    private get drowsyInterval(): number {
+        return this.hero.drowsyInterval;
+    }
+    private set drowsyInterval(interval: number) {
+        this.hero.drowsyInterval = interval;
+    }
+    private get bulletGraceEnd(): number {
+        return this.hero.bulletGraceEnd;
+    }
+    private set bulletGraceEnd(tick: number) {
+        this.hero.bulletGraceEnd = tick;
+    }
+
     constructor(options: SimOptions) {
         this.grid = options.grid;
         this.map = getMap(options.mapId ?? "lumbridge");
         this.rng = new Rng(options.seed);
-        this.characterId = options.characterId;
-        this.unlockedItems = options.unlockedItems;
-        this.armoury = options.armoury;
-        this.metaStats = options.metaStats;
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
-        this.flowField.ditchY = this.map.ditch?.y;
+        const party: HeroOptions[] = options.party ?? [
+            {
+                name: "",
+                characterId: options.characterId,
+                metaStats: options.metaStats,
+                unlockedItems: options.unlockedItems,
+                armoury: options.armoury,
+            },
+        ];
+        this.partyScale = getPartyScale(party.length);
+        this.partyXp = this.partyScale.xp;
+        this.focus = Math.min(options.focus ?? 0, party.length - 1);
         this.eventRng = new Rng(options.seed ^ RANDOM_EVENT_SEED);
         this.nextRandomEventSeconds = this.eventRng.range(...RANDOM_EVENT_FIRST);
         const fun = this.map.fun;
@@ -630,37 +925,195 @@ export class Sim {
                 this.nextPlayerChatSeconds = this.rng.range(...fun.playerChat.every);
             }
         }
-        const start = findFreeSpot(this.grid, options.spawnX, options.spawnY, PLAYER_RADIUS);
-        this.player = {
-            x: start.x,
-            y: start.y,
-            prevX: start.x,
-            prevY: start.y,
-            radius: PLAYER_RADIUS,
-            facingX: 0,
-            facingY: -1,
-            yaw: 0,
-            moving: false,
-            hp: PLAYER_BASE_HP,
-            maxHp: PLAYER_BASE_HP,
-            attackSeq: -1,
-            attackStart: 0,
-            deathTick: -1,
-            moveStart: 0,
-            invulnerable: 0,
-            flash: 0,
-            frozen: 0,
-            poisonDamage: 0,
-            poisonEnd: -1,
+        party.forEach((hero, index) => {
+            this.heroes.push(this.createHero(hero, index, options.spawnX, options.spawnY));
+        });
+        for (const hero of this.heroes) {
+            this.use(hero);
+            this.addWeapon(getCharacter(hero.characterId).startingWeapon);
+            this.updateStats();
+            hero.player.hp = hero.player.maxHp;
+            hero.revivesLeft = hero.stats.revival;
+            hero.rerollsLeft = BASE_REROLLS + hero.stats.reroll;
+            hero.rerollsAtStart = hero.rerollsLeft;
+            this.updateFlowField();
+        }
+        this.use(this.heroes[this.focus]);
+    }
+
+    // A hero at the spawn, or for a party's others, around it
+    private createHero(options: HeroOptions, index: number, spawnX: number, spawnY: number): Hero {
+        const angle = (index / 4) * Math.PI * 2;
+        const offset = index === 0 ? 0 : PARTY_SPREAD;
+        const start = findFreeSpot(
+            this.grid,
+            spawnX + fm.cos(angle) * offset,
+            spawnY + fm.sin(angle) * offset,
+            PLAYER_RADIUS,
+        );
+        const flowField = new FlowField(FLOW_FIELD_SIZE);
+        flowField.ditchY = this.map.ditch?.y;
+        return {
+            index,
+            name: options.name,
+            characterId: options.characterId,
+            metaStats: options.metaStats,
+            unlockedItems: options.unlockedItems,
+            armoury: options.armoury,
+            player: {
+                x: start.x,
+                y: start.y,
+                prevX: start.x,
+                prevY: start.y,
+                radius: PLAYER_RADIUS,
+                facingX: 0,
+                facingY: -1,
+                yaw: 0,
+                moving: false,
+                hp: PLAYER_BASE_HP,
+                maxHp: PLAYER_BASE_HP,
+                attackSeq: -1,
+                attackStart: 0,
+                deathTick: -1,
+                moveStart: 0,
+                invulnerable: 0,
+                flash: 0,
+                frozen: 0,
+                poisonDamage: 0,
+                poisonEnd: -1,
+            },
+            stats: emptyStats(),
+            weapons: [],
+            passives: [],
+            gear: {},
+            activeSets: [],
+            gearUpgrades: {},
+            evolutionsMade: [],
+            inventory: new Array(MAX_INVENTORY).fill(null),
+            buffs: [],
+            debuffs: [],
+            chests: [],
+            pendingLevelUps: 0,
+            choices: [],
+            gearFound: new Set(),
+            declinedSets: new Set(),
+            trophies: new Set(),
+            revivesLeft: 0,
+            rerollsLeft: 0,
+            rerollsAtStart: 0,
+            skips: 0,
+            damageBySource: {},
+            recentDamage: new Float64Array(DPS_WINDOW_TICKS),
+            killsBySource: {},
+            damageTaken: 0,
+            healed: 0,
+            highestHit: 0,
+            weaponSince: {},
+            appearanceVersion: 0,
+            flowField,
+            regenAccumulator: 0,
+            bloodFuryRollTick: 0,
+            sledEndTick: 0,
+            sledSpeed: 1,
+            drowsyEndTick: 0,
+            drowsyInterval: 1,
+            bulletGraceEnd: 0,
+            moveX: 0,
+            moveY: 0,
+            down: false,
+            left: false,
         };
-        const character = getCharacter(options.characterId);
-        this.addWeapon(character.startingWeapon);
-        this.updateStats();
-        this.player.hp = this.player.maxHp;
-        this.revivesLeft = this.stats.revival;
-        this.rerollsLeft = BASE_REROLLS + this.stats.reroll;
-        this.rerollsAtStart = this.rerollsLeft;
-        this.updateFlowField();
+    }
+
+    // Makes this the current hero (see heroes)
+    private use(hero: Hero): void {
+        this.hero = hero;
+    }
+
+    // Does something as one of the party (a co-op player's choice, as it came
+    // in over the network), then goes back to the focus
+    as<T>(heroIndex: number, action: () => T): T {
+        const hero = this.heroes[heroIndex];
+        if (!hero) {
+            return action();
+        }
+        this.use(hero);
+        try {
+            return action();
+        } finally {
+            this.use(this.heroes[this.focus]);
+        }
+    }
+
+    // Whether a hero is still in the fight: not down, and still in the game
+    isUp(hero: Hero): boolean {
+        return !hero.down && !hero.left;
+    }
+
+    // The hero nearest a spot that's still in the fight, for enemies to go
+    // after and pickups to fly to (the current one if nobody is)
+    private nearestHero(x: number, y: number): Hero {
+        if (this.heroes.length === 1) {
+            return this.heroes[0];
+        }
+        let nearest: Hero | undefined;
+        let best = Infinity;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            const dx = hero.player.x - x;
+            const dy = hero.player.y - y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < best) {
+                best = distSq;
+                nearest = hero;
+            }
+        }
+        return nearest ?? this.hero;
+    }
+
+    // Picks one of the heroes still in the fight for a crowd to turn up
+    // around, each as likely (the only one, on your own)
+    private useSpawnHero(): void {
+        if (this.heroes.length === 1) {
+            return;
+        }
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        if (up.length > 0) {
+            this.use(up[this.rng.int(up.length)]);
+        }
+    }
+
+    // Makes the hero something belongs to the current one (what a projectile,
+    // thrall or venom does is theirs: their stats, their run's numbers)
+    private useHeroAt(index: number | undefined): void {
+        const hero = index !== undefined ? this.heroes[index] : undefined;
+        if (hero) {
+            this.use(hero);
+        }
+    }
+
+    // Does something as each hero an attack could land on (the one, on your
+    // own), then goes back to the hero it was working on
+    private forEachHeroInReach(action: () => void): void {
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (this.heroes.length > 1 && !this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            action();
+        }
+        this.use(current);
+    }
+
+    // Co-op tags the events that are a hero's own with who (SimEvent.hero)
+    private emit(event: SimEvent, personal = PERSONAL_EVENTS.has(event.type)): void {
+        if (personal && this.heroes.length > 1) {
+            event.hero = this.hero.index;
+        }
+        this.events.push(event);
     }
 
     // Enemies find their way to the player's tile, or when they're standing on
@@ -682,7 +1135,7 @@ export class Sim {
                         ) {
                             continue;
                         }
-                        const distance = Math.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
+                        const distance = fm.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
                         if (distance < best) {
                             best = distance;
                             tileX = x;
@@ -744,7 +1197,7 @@ export class Sim {
     // The player's damage a second just now, from every source
     get dps(): number {
         let damage = 0;
-        for (const dealt of this.recentDamage) {
+        for (const dealt of this.hero.recentDamage) {
             damage += dealt;
         }
         return damage / DPS_WINDOW_SECONDS;
@@ -777,7 +1230,7 @@ export class Sim {
             damageTaken: this.damageTaken,
             healed: this.healed,
             highestHit: this.highestHit,
-            rerollsUsed: Math.max(0, this.rerollsAtStart - this.rerollsLeft),
+            rerollsUsed: Math.max(0, this.hero.rerollsAtStart - this.rerollsLeft),
             skips: this.skips,
             bossKills: [...this.bossKills],
         };
@@ -803,10 +1256,13 @@ export class Sim {
         for (const set of sets) {
             addStats(stats, set.stats ?? {});
             if (!this.activeSets.includes(set.id)) {
-                this.events.push({
-                    type: "notice",
-                    message: `${set.name} set bonus: ${set.bonus}!`,
-                });
+                this.emit(
+                    {
+                        type: "notice",
+                        message: `${set.name} set bonus: ${set.bonus}!`,
+                    },
+                    true,
+                );
             }
         }
         this.activeSets = sets.map((set) => set.id);
@@ -854,7 +1310,7 @@ export class Sim {
     }
 
     choose(index: number): void {
-        if (this.state !== "levelUp") {
+        if (!this.isChoosing(this.hero)) {
             return;
         }
         const choice = this.choices[index];
@@ -882,8 +1338,49 @@ export class Sim {
         if (this.pendingLevelUps > 0) {
             this.choices = this.roll();
         } else {
-            this.state = this.chests.length > 0 ? "chest" : "playing";
+            this.settle();
         }
+    }
+
+    // Whether a hero (the current one by default) has a level up's rewards to
+    // choose now. Co-op's downed heroes are out of the run, so the run doesn't
+    // wait on them.
+    isChoosing(hero: Hero = this.hero): boolean {
+        return this.state === "levelUp" && hero.pendingLevelUps > 0 && this.isUp(hero);
+    }
+
+    // Anyone up with a level up to choose
+    private anyoneToChoose(): boolean {
+        return this.heroes.some((hero) => hero.pendingLevelUps > 0 && this.isUp(hero));
+    }
+
+    // What the run waits on now: anyone's level up, then anyone's casket, or
+    // nothing (co-op waits for everyone)
+    private settle(): void {
+        if (this.offer) {
+            this.state = "event";
+        } else if (this.anyoneToChoose()) {
+            this.state = "levelUp";
+        } else if (this.heroes.some((hero) => hero.chests.length > 0)) {
+            this.state = "chest";
+        } else {
+            this.state = "playing";
+        }
+    }
+
+    // Co-op: the heroes the run is waiting on to choose a level up's rewards
+    // or decide on a casket
+    get waitingOn(): Hero[] {
+        if (this.state === "levelUp") {
+            return this.heroes.filter((hero) => this.isChoosing(hero));
+        }
+        if (this.state === "chest") {
+            return this.heroes.filter((hero) => hero.chests.length > 0);
+        }
+        if (this.state === "event" && this.offer) {
+            return [this.heroes[this.offer.hero]];
+        }
+        return [];
     }
 
     // What skipping the level up's rewards costs now (coins are worth less in
@@ -941,7 +1438,7 @@ export class Sim {
         if (this.rerollsLeft <= 0 || this.choosingHilt) {
             return false;
         }
-        if (this.state === "levelUp") {
+        if (this.state === "levelUp" && this.pendingLevelUps > 0) {
             this.choices = this.roll();
         } else if (this.state === "chest" && chest) {
             this.declineSetPiece(chest.itemId);
@@ -986,11 +1483,14 @@ export class Sim {
                     if (!this.evolutionsMade.includes(choice.into)) {
                         this.evolutionsMade.push(choice.into);
                     }
-                    this.events.push({ type: "evolved", weaponId: choice.into });
-                    this.events.push({
-                        type: "notice",
-                        message: `Evolved: ${getWeapon(choice.into).name}!`,
-                    });
+                    this.emit({ type: "evolved", weaponId: choice.into });
+                    this.emit(
+                        {
+                            type: "notice",
+                            message: `Evolved: ${getWeapon(choice.into).name}!`,
+                        },
+                        true,
+                    );
                     this.weapons[index] = {
                         def: getWeapon(choice.into),
                         level: 1,
@@ -1076,7 +1576,7 @@ export class Sim {
             this.applyChest(chest, action);
         }
         // A blast from the casket can end the run (it can hit the boss)
-        if (this.runOver || this.chests.length > 0) {
+        if (this.runOver || this.heroes.some((hero) => hero.chests.length > 0)) {
             return;
         }
         this.state = "playing";
@@ -1089,7 +1589,7 @@ export class Sim {
             this.declineSetPiece(item.id);
             const coins = this.alchValue(item.id, chest.upgrades);
             this.coins += coins;
-            this.events.push({ type: "alch", itemId: item.id, coins });
+            this.emit({ type: "alch", itemId: item.id, coins });
             return;
         }
         if (item.kind === "gear") {
@@ -1123,7 +1623,7 @@ export class Sim {
         this.gearUpgrades[item.slot] = upgrades;
         this.updateStats();
         this.appearanceVersion++;
-        this.events.push({ type: "equip", itemId, replacedId, coins });
+        this.emit({ type: "equip", itemId, replacedId, coins });
     }
 
     // Puts a utility item in the inventory; false when there's no room
@@ -1138,14 +1638,14 @@ export class Sim {
         } else {
             this.inventory[index] = { itemId, count: 1 };
         }
-        this.events.push({ type: "stash", itemId });
+        this.emit({ type: "stash", itemId });
         return true;
     }
 
     // Uses the utility item in an inventory slot (0-3) while playing
     useItem(index: number): boolean {
         const slot = this.inventory[index];
-        if (this.state !== "playing" || !slot) {
+        if (this.state !== "playing" || !slot || !this.isUp(this.hero)) {
             return false;
         }
         const item = getItem(slot.itemId);
@@ -1164,7 +1664,7 @@ export class Sim {
     private useUtility(item: UtilityDef): void {
         const player = this.player;
         const use = item.use;
-        this.events.push({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
+        this.emit({ type: "itemUsed", itemId: item.id, x: player.x, y: player.y });
         this.damageSource = `item:${item.id}`;
         switch (use.kind) {
             case "heal":
@@ -1193,11 +1693,10 @@ export class Sim {
                 break;
             case "blast": {
                 const radius = use.radius * (1 + this.stats.area);
-                this.events.push({ type: "blast", x: player.x, y: player.y, radius });
+                this.emit({ type: "blast", x: player.x, y: player.y, radius });
                 // Not the spatial hash: this can run between ticks, when it's stale
                 const hit = this.enemies.filter(
-                    (e) =>
-                        !e.dead && Math.hypot(e.x - player.x, e.y - player.y) <= radius + e.radius,
+                    (e) => !e.dead && fm.hypot(e.x - player.x, e.y - player.y) <= radius + e.radius,
                 );
                 hit.forEach((enemy, i) => {
                     if (i < MAX_BLAST_EFFECTS) {
@@ -1280,7 +1779,61 @@ export class Sim {
 
     // ---- Tick ----
 
-    step(moveX: number, moveY: number): void {
+    // A tick of the run. On your own, with what's pressed; co-op sets each
+    // hero's input (setInput) and leaves these out.
+    step(moveX?: number, moveY?: number): void {
+        if (moveX !== undefined && moveY !== undefined) {
+            this.setInput(this.focus, moveX, moveY);
+        }
+        // Each part of the tick works on its own heroes. Until one does, the
+        // first, so every co-op player's copy starts from the same one.
+        this.use(this.heroes[0]);
+        this.stepRun();
+        this.use(this.heroes[this.focus]);
+    }
+
+    // What a hero is pressing, from the next tick on
+    setInput(heroIndex: number, moveX: number, moveY: number): void {
+        const hero = this.heroes[heroIndex];
+        if (hero) {
+            hero.moveX = moveX;
+            hero.moveY = moveY;
+        }
+    }
+
+    // Co-op: a player has left the game. Their hero's gone from the run, and
+    // anything that was waiting on them goes on without them.
+    leave(heroIndex: number): void {
+        const hero = this.heroes[heroIndex];
+        if (!hero || hero.left) {
+            return;
+        }
+        hero.left = true;
+        hero.pendingLevelUps = 0;
+        hero.choices = [];
+        hero.chests = [];
+        if (this.offer?.hero === heroIndex) {
+            this.offer = undefined;
+        }
+        this.as(heroIndex, () => this.emit({ type: "heroLeft" }));
+        if (this.runOver) {
+            return;
+        }
+        this.rescaleParty();
+        if (!this.heroes.some((other) => this.isUp(other))) {
+            this.endRun("dead");
+        } else if (this.state !== "playing") {
+            this.settle();
+            if ((this.state as SimState) === "playing") {
+                this.as(this.focus, () => this.checkLevelUp());
+            } else {
+                // A level up that was waiting behind what's gone with them
+                this.as(this.focus, () => this.rollMissingChoices());
+            }
+        }
+    }
+
+    private stepRun(): void {
         if (this.runOver) {
             // Keep the clock going so death animations play out
             this.tick++;
@@ -1290,15 +1843,30 @@ export class Sim {
             return;
         }
         this.tick++;
-        this.recentDamage[this.tick % DPS_WINDOW_TICKS] = 0;
-        this.stepBuffs();
-        this.stepPlayer(moveX, moveY);
+        for (const hero of this.heroes) {
+            hero.recentDamage[this.tick % DPS_WINDOW_TICKS] = 0;
+            if (!hero.left) {
+                this.use(hero);
+                this.stepBuffs();
+            }
+        }
+        this.stepPowerUps();
+        for (const hero of this.heroes) {
+            if (this.isUp(hero)) {
+                this.use(hero);
+                this.stepPlayer(hero.moveX, hero.moveY);
+            }
+        }
         if (this.runOver) {
             // Poison finished them
             return;
         }
-        if (this.tick % FLOW_FIELD_INTERVAL === 0) {
-            this.updateFlowField();
+        // Each hero's on a tick of its own, so a party's don't all come at once
+        for (const hero of this.heroes) {
+            if ((this.tick + hero.index * 2) % FLOW_FIELD_INTERVAL === 0 && this.isUp(hero)) {
+                this.use(hero);
+                this.updateFlowField();
+            }
         }
         // A fun map's round turns over every fifteen minutes of waves (there's
         // no final boss to kill for it)
@@ -1311,7 +1879,13 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
-        this.stepWeapons();
+        for (const hero of this.heroes) {
+            // On your own, weapons still fire in the tick the player falls in
+            if (this.isUp(hero) || this.heroes.length === 1) {
+                this.use(hero);
+                this.stepWeapons();
+            }
+        }
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
@@ -1339,9 +1913,14 @@ export class Sim {
             this.debuffs = this.debuffs.filter((d) => d.endTick > tick);
             this.updateStats();
         }
+    }
+
+    private stepPowerUps(): void {
+        const tick = this.tick;
         for (const active of this.powerUps) {
             if (active.endTick <= tick) {
-                this.events.push({ type: "powerUpEnded", id: active.id });
+                this.useHeroAt(active.hero);
+                this.emit({ type: "powerUpEnded", id: active.id });
             }
         }
         this.powerUps = this.powerUps.filter((p) => p.endTick > tick);
@@ -1365,7 +1944,7 @@ export class Sim {
         }
         // Held by what's beside them, they can still turn to hit it
         if (frozen && this.hold && (moveX !== 0 || moveY !== 0)) {
-            const len = Math.hypot(moveX, moveY);
+            const len = fm.hypot(moveX, moveY);
             player.facingX = moveX / len;
             player.facingY = moveY / len;
             player.yaw = yawFromVector(moveX, moveY);
@@ -1375,7 +1954,7 @@ export class Sim {
             const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
             const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
             moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
-            const len = Math.hypot(moveX, moveY);
+            const len = fm.hypot(moveX, moveY);
             player.facingX = moveX / len;
             player.facingY = moveY / len;
             player.yaw = yawFromVector(moveX, moveY);
@@ -1424,7 +2003,7 @@ export class Sim {
             const amount = player.poisonDamage;
             player.hp -= amount;
             this.damageTaken += amount;
-            this.events.push({ type: "playerPoisoned", amount });
+            this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
             }
@@ -1466,6 +2045,7 @@ export class Sim {
         const events = this.map.events;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
+            this.useSpawnHero();
             if (event.kind === "elite") {
                 this.spawnEnemy(getEnemy(event.enemyId), "elite");
             } else if (event.kind === "ring") {
@@ -1485,6 +2065,7 @@ export class Sim {
         if (fun?.bosses.together && this.seconds >= this.nextFunBossSeconds) {
             // All at once, each on its own spot; the next lot is due once
             // they're all dead
+            this.useSpawnHero();
             this.funBossGroup = fun.bosses.pool.flatMap((id) => {
                 const boss = this.spawnBoss(getEnemy(id), "boss", undefined);
                 return boss ? [boss] : [];
@@ -1496,6 +2077,7 @@ export class Sim {
             const pool = fun.bosses.pool;
             const choices = pool.length > 1 ? pool.filter((id) => id !== this.lastFunBoss) : pool;
             const id = choices[this.rng.int(choices.length)];
+            this.useSpawnHero();
             if (this.spawnBoss(getEnemy(id), "boss", undefined)) {
                 this.lastFunBoss = id;
                 this.nextFunBossSeconds = this.seconds + this.rng.range(...fun.bosses.every);
@@ -1503,10 +2085,16 @@ export class Sim {
         }
 
         const wave = this.currentWave();
-        // Endless runs' later rounds bring bigger crowds
-        const crowd = roundCrowd(this.round);
+        // Endless runs' later rounds bring bigger crowds, and so do co-op's
+        // players
+        const crowd = roundCrowd(this.round) * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
+        if (this.heroes.length > 1) {
+            const alone = Math.min(wave.maxAlive * roundCrowd(this.round), MAX_ENEMIES);
+            const bigger = Math.min(wave.maxAlive * crowd, MAX_ENEMIES) / alone;
+            this.partyXp = (this.partyScale.crowd * this.partyScale.xp) / bigger;
+        }
         const minAlive = Math.min(Math.round(wave.minAlive * crowd), maxAlive);
         let toSpawn = 0;
         if (alive < minAlive) {
@@ -1519,6 +2107,7 @@ export class Sim {
         }
         const weights = wave.enemies.map((e) => e.weight);
         for (let i = 0; i < toSpawn && alive + i < maxAlive; i++) {
+            this.useSpawnHero();
             const pick = wave.enemies[this.rng.weightedIndex(weights)];
             this.spawnEnemy(getEnemy(pick.id), "normal");
         }
@@ -1534,6 +2123,7 @@ export class Sim {
         if (fun.chatEvery !== undefined && this.tick >= this.nextChatTick) {
             this.nextChatTick =
                 this.tick + Math.round(fun.chatEvery * this.rng.range(0.6, 1.4) * TICKS_PER_SECOND);
+            this.useSpawnHero();
             const player = this.player;
             let speaker: Enemy | undefined;
             let seen = 0;
@@ -1541,7 +2131,7 @@ export class Sim {
                 if (
                     enemy.dead ||
                     !enemy.def.chat ||
-                    Math.hypot(enemy.x - player.x, enemy.y - player.y) > CHAT_RANGE
+                    fm.hypot(enemy.x - player.x, enemy.y - player.y) > CHAT_RANGE
                 ) {
                     continue;
                 }
@@ -1554,12 +2144,12 @@ export class Sim {
             const lines = speaker?.def.chat;
             if (speaker && lines) {
                 const text = lines[this.rng.int(lines.length)];
-                this.events.push({ type: "bossShout", enemyUid: speaker.uid, text });
+                this.emit({ type: "bossShout", enemyUid: speaker.uid, text });
             }
         }
         if (fun.playerChat && this.seconds >= this.nextPlayerChatSeconds && !this.runOver) {
             const lines = fun.playerChat.lines;
-            this.events.push({ type: "playerShout", text: lines[this.rng.int(lines.length)] });
+            this.emit({ type: "playerShout", text: lines[this.rng.int(lines.length)] });
             this.nextPlayerChatSeconds = this.seconds + this.rng.range(...fun.playerChat.every);
         }
     }
@@ -1587,13 +2177,24 @@ export class Sim {
                     ? angle + this.rng.range(-0.6, 0.6)
                     : this.rng.range(0, Math.PI * 2);
             const distance = this.rng.range(minDistance, maxDistance);
-            const x = Math.floor(player.x + Math.cos(a) * distance) + 0.5;
-            const y = Math.floor(player.y + Math.sin(a) * distance) + 0.5;
-            if (this.canTurnUpAt(def, x, y)) {
+            const x = Math.floor(player.x + fm.cos(a) * distance) + 0.5;
+            const y = Math.floor(player.y + fm.sin(a) * distance) + 0.5;
+            if (this.canTurnUpAt(def, x, y) && !this.besideATeammate(x, y, minDistance)) {
                 return { x, y };
             }
         }
         return undefined;
+    }
+
+    // Co-op: whether a spot's closer than this to a player still up
+    private besideATeammate(x: number, y: number, distance: number): boolean {
+        return (
+            this.heroes.length > 1 &&
+            this.heroes.some(
+                (hero) =>
+                    this.isUp(hero) && fm.hypot(hero.player.x - x, hero.player.y - y) < distance,
+            )
+        );
     }
 
     // Whether an enemy can turn up here: only where the player could stand and
@@ -1625,7 +2226,7 @@ export class Sim {
             if (def.spawnSpotAnim !== undefined) {
                 this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
             }
-            this.events.push({
+            this.emit({
                 type: "bossSpawned",
                 enemyId: def.id,
                 name: def.name,
@@ -1672,13 +2273,14 @@ export class Sim {
         const bossDamage = difficulty.damage * this.roundDamage;
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
-            this.roundHp;
+            this.roundHp *
+            (boss ? this.partyScale.bossHp : this.partyScale.hp);
         // What its hits are multiplied by: its touch, a boss's attacks, its
-        // explosion
-        let hitScale = bossDamage * (boss ? 1 : damageScale);
+        // explosion (and in co-op, harder for each player)
+        let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
-        let xp = def.xp * roundScale(ROUND_XP, this.round);
+        let xp = def.xp * roundScale(ROUND_XP, this.round) * this.partyXp;
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -1802,8 +2404,8 @@ export class Sim {
         const radius = 12;
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
-            const x = player.x + Math.cos(angle) * radius;
-            const y = player.y + Math.sin(angle) * radius;
+            const x = player.x + fm.cos(angle) * radius;
+            const y = player.y + fm.sin(angle) * radius;
             if (this.canTurnUpAt(def, x, y)) {
                 this.spawnEnemy(def, "normal", { x, y });
             }
@@ -1822,7 +2424,7 @@ export class Sim {
     }
 
     private stepEnemies(): void {
-        const player = this.player;
+        let player = this.player;
         const grid = this.grid;
         const step = this.temp;
         for (const enemy of this.enemies) {
@@ -1858,12 +2460,16 @@ export class Sim {
             }
             if (enemy.venomEnd >= this.tick && this.tick >= enemy.venomNext) {
                 enemy.venomNext += TICKS_PER_SECOND;
+                this.useHeroAt(enemy.venomHero);
                 this.damageSource = enemy.venomSource ?? "other";
                 this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
                 if (enemy.dead) {
                     continue;
                 }
             }
+            // It goes for whoever's nearest
+            this.use(this.nearestHero(enemy.x, enemy.y));
+            player = this.player;
 
             if (enemy.jump) {
                 this.stepJump(enemy);
@@ -1872,7 +2478,7 @@ export class Sim {
 
             let dx = player.x - enemy.x;
             let dy = player.y - enemy.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
 
             // The final boss waits for the player, and what can't move stays
             // put; anything else left behind comes back
@@ -1920,7 +2526,7 @@ export class Sim {
                     // enemies off corners
                     const tx = tileX + step.x + 0.5 - enemy.x;
                     const ty = tileY + step.y + 0.5 - enemy.y;
-                    const len = Math.hypot(tx, ty);
+                    const len = fm.hypot(tx, ty);
                     if (len > 0.001) {
                         dirX = tx / len;
                         dirY = ty / len;
@@ -1974,7 +2580,7 @@ export class Sim {
                     // reach (the hit itself is the touch below)
                     const fx = fighting.x - enemy.x;
                     const fy = fighting.y - enemy.y;
-                    const length = Math.hypot(fx, fy);
+                    const length = fm.hypot(fx, fy);
                     const reach = enemy.radius + fighting.radius + 0.05;
                     dirX = length > reach ? fx / length : 0;
                     dirY = length > reach ? fy / length : 0;
@@ -1987,7 +2593,7 @@ export class Sim {
                     const hx = healTarget.x - enemy.x;
                     const hy = healTarget.y - enemy.y;
                     const reach = enemy.def.heals!.range * 0.8 + healTarget.radius;
-                    const length = Math.hypot(hx, hy);
+                    const length = fm.hypot(hx, hy);
                     dirX = dirY = 0;
                     if (length > reach) {
                         dirX = hx / length;
@@ -2141,8 +2747,8 @@ export class Sim {
         const awayX = distance > 0.001 ? -dx / distance : 1;
         const awayY = distance > 0.001 ? -dy / distance : 0;
         for (const turn of FLEE_TURNS) {
-            const cos = Math.cos(turn);
-            const sin = Math.sin(turn);
+            const cos = fm.cos(turn);
+            const sin = fm.sin(turn);
             const x = awayX * cos - awayY * sin;
             const y = awayX * sin + awayY * cos;
             const aheadX = enemy.x + x * FLEE_LOOKAHEAD;
@@ -2210,7 +2816,7 @@ export class Sim {
         const toward = Math.max(-1, Math.min(1, (distance - this.laps!.radius) / LAP_PULL_TILES));
         const x = -dy / length + (dx / length) * toward;
         const y = dx / length + (dy / length) * toward;
-        const size = Math.hypot(x, y);
+        const size = fm.hypot(x, y);
         out.x = x / size;
         out.y = y / size;
     }
@@ -2221,7 +2827,7 @@ export class Sim {
         const player = this.player;
         const side = behind ? -1 : 1;
         const angle = player.moving
-            ? Math.atan2(player.facingY * side, player.facingX * side)
+            ? fm.atan2(player.facingY * side, player.facingX * side)
             : undefined;
         const pos = this.findSpawnPoint(enemy.def, SPAWN_MIN_DISTANCE, SPAWN_MAX_DISTANCE, angle);
         if (pos) {
@@ -2255,7 +2861,7 @@ export class Sim {
         if (shot.castSpotAnim !== undefined) {
             this.addEffect(shot.castSpotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
         }
-        this.events.push({
+        this.emit({
             type: "bossAttack",
             enemyId: enemy.def.id,
             sound: shot.sound ?? -1,
@@ -2275,13 +2881,16 @@ export class Sim {
         ignoreArmor = false,
     ): number {
         const player = this.player;
+        if (this.hero.down && !this.runOver) {
+            return 0;
+        }
         const armor = ignoreArmor ? 0 : this.stats.armor;
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
         this.damageTaken += amount;
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
-        this.events.push({ type: "playerHit", amount, enemyId, elite, sound });
+        this.emit({ type: "playerHit", amount, enemyId, elite, sound });
         if (player.hp <= 0) {
             this.playerDied();
         }
@@ -2321,7 +2930,7 @@ export class Sim {
         if (
             current &&
             !current.dead &&
-            Math.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
+            fm.hypot(current.x - enemy.x, current.y - enemy.y) < FOE_RANGE + 1
         ) {
             return this.chaseFoe(enemy, current);
         }
@@ -2392,7 +3001,12 @@ export class Sim {
         }
         const amount = Math.max(
             1,
-            Math.round(enemy.damage * FACTION_DAMAGE * this.rng.range(0.85, 1.15)),
+            Math.round(
+                enemy.damage *
+                    FACTION_DAMAGE *
+                    (this.partyScale.hp / this.partyScale.damage) *
+                    this.rng.range(0.85, 1.15),
+            ),
         );
         foe.hp -= amount;
         foe.flash = 5;
@@ -2400,7 +3014,7 @@ export class Sim {
         if (!foe.aggro) {
             foe.foe ??= enemy;
         }
-        this.events.push({
+        this.emit({
             type: "damage",
             x: foe.x,
             y: foe.y,
@@ -2483,8 +3097,8 @@ export class Sim {
                 attempt === 0
                     ? (index / count) * Math.PI * 2 + this.rng.range(0, 0.5)
                     : this.rng.range(0, Math.PI * 2);
-            const x = enemy.x + Math.cos(angle) * radius;
-            const y = enemy.y + Math.sin(angle) * radius;
+            const x = enemy.x + fm.cos(angle) * radius;
+            const y = enemy.y + fm.sin(angle) * radius;
             if (this.canTurnUpAt(def, x, y)) {
                 return this.spawnEnemy(def, "normal", { x, y });
             }
@@ -2507,7 +3121,7 @@ export class Sim {
             return;
         }
         const reach = heals.range + target.radius;
-        if (Math.hypot(target.x - enemy.x, target.y - enemy.y) > reach) {
+        if (fm.hypot(target.x - enemy.x, target.y - enemy.y) > reach) {
             return;
         }
         abilities.nextHeal = tick + secondsToTicks(heals.interval);
@@ -2563,8 +3177,8 @@ export class Sim {
         const seek = heals.seek ?? HEAL_SEEK;
         const player = this.player;
         return (
-            Math.hypot(other.x - enemy.x, other.y - enemy.y) <= seek + other.radius &&
-            Math.hypot(other.x - player.x, other.y - player.y) + heals.range < RELOCATE_DISTANCE
+            fm.hypot(other.x - enemy.x, other.y - enemy.y) <= seek + other.radius &&
+            fm.hypot(other.x - player.x, other.y - player.y) + heals.range < RELOCATE_DISTANCE
         );
     }
 
@@ -2624,7 +3238,7 @@ export class Sim {
                 this.addEffect(blinks.castSpotAnim, enemy.x, enemy.y, 0, 60);
             }
             if (blinks.sound !== undefined) {
-                this.events.push({
+                this.emit({
                     type: "bossAttack",
                     enemyId: enemy.def.id,
                     sound: blinks.sound,
@@ -2665,8 +3279,8 @@ export class Sim {
     ): { x: number; y: number } | undefined {
         for (let attempt = 0; attempt < 12; attempt++) {
             const angle = this.rng.range(0, Math.PI * 2);
-            const spotX = x + Math.cos(angle) * distance;
-            const spotY = y + Math.sin(angle) * distance;
+            const spotX = x + fm.cos(angle) * distance;
+            const spotY = y + fm.sin(angle) * distance;
             const tileX = Math.floor(spotX);
             const tileY = Math.floor(spotY);
             if (
@@ -2684,7 +3298,7 @@ export class Sim {
         enemy.shieldEnd = 0;
         const message = enemy.def.shield?.message;
         if (message) {
-            this.events.push({ type: "notice", message });
+            this.emit({ type: "notice", message });
         }
     }
 
@@ -2694,7 +3308,7 @@ export class Sim {
             return;
         }
         enemy.blockedTick = this.tick;
-        this.events.push({
+        this.emit({
             type: "damage",
             x: enemy.x,
             y: enemy.y,
@@ -2711,7 +3325,7 @@ export class Sim {
         const player = this.player;
         let dirX = player.x - boss.x;
         let dirY = player.y - boss.y;
-        const length = Math.hypot(dirX, dirY);
+        const length = fm.hypot(dirX, dirY);
         if (length > 0.001) {
             dirX /= length;
             dirY /= length;
@@ -2782,7 +3396,7 @@ export class Sim {
         if (t <= 0 || t >= 1) {
             return false;
         }
-        return Math.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
+        return fm.hypot(boss.x + vx * t - glyph.x, boss.y + vy * t - glyph.y) <= def.width;
     }
 
     // ---- Boss fights: entrances, phases, patterns ----
@@ -2829,7 +3443,7 @@ export class Sim {
         this.clearBossAttacks();
         this.enemyProjectiles = [];
         this.funBossGroup = [];
-        this.events.push({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
+        this.emit({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
     }
 
     // Off to the nearest edge of the map. It can't be hit, and it's gone by
@@ -2905,12 +3519,19 @@ export class Sim {
     private riseBoss(intro: BossIntro): void {
         const def = intro.def;
         const rise = def.boss!.intro!;
+        // Co-op: beside one of the party
+        this.useSpawnHero();
         const player = this.player;
         const arena = this.bossArena;
-        // A fight in a set square starts in the middle of it, under the dark
+        // A fight in a set square starts in the middle of it, under the dark,
+        // a party side by side north to south
         if (this.map.bossArena) {
-            player.x = player.prevX = (arena.minX + arena.maxX) / 2;
-            player.y = player.prevY = (arena.minY + arena.maxY) / 2;
+            const up = this.heroes.filter((hero) => this.heroes.length === 1 || this.isUp(hero));
+            up.forEach((hero, i) => {
+                const one = hero.player;
+                one.x = one.prevX = (arena.minX + arena.maxX) / 2;
+                one.y = one.prevY = (arena.minY + arena.maxY) / 2 + (i - (up.length - 1) / 2) * 1.5;
+            });
         }
         // East or west, as the screen's wider than it's tall and she's tall
         // herself: north of the player, she'd be off the top of it
@@ -2938,7 +3559,7 @@ export class Sim {
         if (rise.alone) {
             this.aloneWith = boss;
         }
-        this.events.push({
+        this.emit({
             type: "bossRising",
             enemyId: def.id,
             sound: rise.sound ?? -1,
@@ -2999,7 +3620,7 @@ export class Sim {
         totem.hp = 0;
         totem.def = getEnemy(phases.totems.chargedId);
         totem.shieldEnd = Infinity;
-        this.events.push({
+        this.emit({
             type: "bossAttack",
             enemyId: boss.def.id,
             sound: phases.totems.chargedSound ?? -1,
@@ -3016,7 +3637,7 @@ export class Sim {
     private totemsBlast(boss: Enemy, phase: BossPhase, phases: BossPhasesDef): void {
         const totemsDef = phases.totems;
         for (const totem of phase.totems) {
-            this.events.push({
+            this.emit({
                 type: "totemBlast",
                 sound: totemsDef.blastSound ?? -1,
                 x: totem.x,
@@ -3029,7 +3650,9 @@ export class Sim {
             this.addEffect(totemsDef.blastSpotAnim, boss.x, boss.y, 0, 60, boss.uid);
         }
         // There's no food in a fight this long with nothing else in it
-        this.heal(Math.round(this.player.maxHp * (phases.blastHeal ?? 0)));
+        this.forEachHeroInReach(() =>
+            this.heal(Math.round(this.player.maxHp * (phases.blastHeal ?? 0))),
+        );
         const next = phases.phases[phase.index + 1];
         if (!next) {
             boss.shieldEnd = 0;
@@ -3056,7 +3679,7 @@ export class Sim {
     }
 
     private pushStage(boss: Enemy, phase: BossPhase, message: string): void {
-        this.events.push({
+        this.emit({
             type: "bossStage",
             enemyId: boss.def.id,
             phase: phase.index + 1,
@@ -3081,18 +3704,23 @@ export class Sim {
         this.clearBossAttacks();
     }
 
-    // Everything a boss had in the air and on the ground, and on the player
+    // Everything a boss had in the air and on the ground, and on the players
     private clearBossAttacks(): void {
         this.bullets.clear();
         this.emitters = [];
         this.hazards = [];
         this.quarters = undefined;
-        this.parasite = undefined;
-        this.hold = undefined;
-        if (this.curse) {
-            this.curse = undefined;
-            this.events.push({ type: "playerCursed", cursed: false });
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            this.use(hero);
+            this.parasite = undefined;
+            this.hold = undefined;
+            if (this.curse) {
+                this.curse = undefined;
+                this.emit({ type: "playerCursed", cursed: false });
+            }
         }
+        this.use(current);
     }
 
     // A fight across a big arena stays on the screen
@@ -3119,7 +3747,7 @@ export class Sim {
         const player = this.player;
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
-        const distance = Math.hypot(dx, dy);
+        const distance = fm.hypot(dx, dy);
         if (distance <= (attack.underRadius ?? 0) + player.radius) {
             return true;
         }
@@ -3127,7 +3755,7 @@ export class Sim {
             return true;
         }
         const along = (dx * windup.dirX + dy * windup.dirY) / distance;
-        return along >= Math.cos(cone / 2);
+        return along >= fm.cos(cone / 2);
     }
 
     // The marks of a ground attack, there from now until they land
@@ -3167,8 +3795,8 @@ export class Sim {
                     for (let i = 0; i < spots.count; i++) {
                         const angle = (i / spots.count) * Math.PI * 2;
                         add(
-                            enemy.x + Math.cos(angle) * spots.distance,
-                            enemy.y + Math.sin(angle) * spots.distance,
+                            enemy.x + fm.cos(angle) * spots.distance,
+                            enemy.y + fm.sin(angle) * spots.distance,
                         );
                     }
                     break;
@@ -3189,8 +3817,8 @@ export class Sim {
                         const angle = this.rng.range(0, Math.PI * 2);
                         const distance = this.rng.range(1, spots.spread);
                         add(
-                            player.x + Math.cos(angle) * distance,
-                            player.y + Math.sin(angle) * distance,
+                            player.x + fm.cos(angle) * distance,
+                            player.y + fm.sin(angle) * distance,
                         );
                     }
                     break;
@@ -3205,14 +3833,14 @@ export class Sim {
         if (!quarters) {
             return;
         }
-        const player = this.player;
+        const middle = this.partyMiddle();
         const arena = this.bossArena;
         const margin = quarters.offset * 2;
         const offset = () => this.rng.range(-quarters.offset, quarters.offset);
         const clamp = (value: number, min: number, max: number) =>
             Math.min(Math.max(value, min + margin), max - margin);
-        const x = clamp(player.x + offset(), arena.minX, arena.maxX);
-        const y = clamp(player.y + offset(), arena.minY, arena.maxY);
+        const x = clamp(middle.x + offset(), arena.minX, arena.maxX);
+        const y = clamp(middle.y + offset(), arena.minY, arena.maxY);
         this.quarters = {
             enemyUid: enemy.uid,
             attack,
@@ -3259,14 +3887,14 @@ export class Sim {
     }
 
     private startSurge(enemy: Enemy, attack: BossAttackDef, lane: SurgeLane): void {
-        const length = Math.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY);
+        const length = fm.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY);
         const speed = attack.speed ?? 24;
         enemy.bossState!.surge = {
             attack,
             lane,
             startTick: this.tick,
             endTick: this.tick + Math.max(1, Math.ceil((length / speed) * TICKS_PER_SECOND)),
-            hit: false,
+            hit: [],
         };
         enemy.anim = "attack";
         enemy.animStart = this.tick;
@@ -3282,9 +3910,13 @@ export class Sim {
         const dy = lane.toY - lane.fromY;
         enemy.x = lane.fromX + dx * f;
         enemy.y = lane.fromY + dy * f;
-        const player = this.player;
-        if (!surge.hit) {
-            const length = Math.max(0.001, Math.hypot(dx, dy));
+        // Through each of them once
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (surge.hit.includes(this.hero.index) || this.runOver) {
+                return;
+            }
+            const length = Math.max(0.001, fm.hypot(dx, dy));
             const px = player.x - enemy.x;
             const py = player.y - enemy.y;
             const along = (px * dx + py * dy) / length;
@@ -3293,10 +3925,10 @@ export class Sim {
                 Math.abs(across) <= lane.halfWidth + player.radius &&
                 Math.abs(along) <= SURGE_BODY + player.radius
             ) {
-                surge.hit = true;
+                surge.hit.push(this.hero.index);
                 this.bossHit(enemy.def.id, enemy, attack, this.getBossDamage(enemy, attack));
             }
-        }
+        });
         if (f >= 1) {
             enemy.bossState!.surge = undefined;
             const spot = findFreeSpot(this.grid, enemy.x, enemy.y, enemy.radius);
@@ -3342,7 +3974,7 @@ export class Sim {
             source,
             nextTick: this.tick,
             volleysLeft: pattern.volleys,
-            angle: aimed ? Math.atan2(windup.dirY, windup.dirX) : this.rng.range(0, Math.PI * 2),
+            angle: aimed ? fm.atan2(windup.dirY, windup.dirX) : this.rng.range(0, Math.PI * 2),
             damage: this.getBossDamage(enemy, attack),
         });
         enemy.bossState!.channelEnd =
@@ -3363,8 +3995,8 @@ export class Sim {
             this.bullets.add(
                 boss.x,
                 boss.y,
-                Math.cos(angle) * speed,
-                Math.sin(angle) * speed,
+                fm.cos(angle) * speed,
+                fm.sin(angle) * speed,
                 turn,
                 pattern.radius,
                 emitter.damage,
@@ -3398,15 +4030,17 @@ export class Sim {
     }
 
     private stepHold(): void {
-        const hold = this.hold;
-        if (!hold) {
-            return;
-        }
-        if (this.tick >= hold.endTick || hold.enemies.every((enemy) => enemy.dead)) {
-            this.hold = undefined;
-            return;
-        }
-        this.player.frozen = Math.max(this.player.frozen, 2);
+        this.forEachHeroInReach(() => {
+            const hold = this.hold;
+            if (!hold) {
+                return;
+            }
+            if (this.tick >= hold.endTick || hold.enemies.every((enemy) => enemy.dead)) {
+                this.hold = undefined;
+                return;
+            }
+            this.player.frozen = Math.max(this.player.frozen, 2);
+        });
     }
 
     private stepEmitters(): void {
@@ -3440,14 +4074,31 @@ export class Sim {
         if (bullets.count === 0) {
             return;
         }
-        const player = this.player;
-        const spare = this.tick < this.bulletGraceEnd || this.reviving;
-        const hit = bullets.step(player.x, player.y, player.radius, spare);
-        if (hit !== -1) {
+        // Each hero by index, one out of reach (down, or gone) spared
+        const targets = this.bulletTargets;
+        for (const hero of this.heroes) {
+            (targets[hero.index] ??= { x: 0, y: 0, radius: 0, spare: true }).spare = true;
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const target = targets[this.hero.index];
+            target.x = player.x;
+            target.y = player.y;
+            target.radius = player.radius;
+            target.spare = this.tick < this.bulletGraceEnd || this.reviving;
+        });
+        bullets.step(targets);
+        const current = this.hero;
+        bullets.hits.forEach((hit, i) => {
+            if (hit === -1 || this.runOver) {
+                return;
+            }
+            this.use(this.heroes[i]);
             const { attack, enemy } = this.bulletSources[bullets.source[hit]];
             this.bulletGraceEnd = this.tick + BULLET_GRACE_TICKS;
             this.bossHit(enemy.def.id, enemy, attack, bullets.damage[hit]);
-        }
+        });
+        this.use(current);
     }
 
     private stepHazards(): void {
@@ -3455,23 +4106,27 @@ export class Sim {
         if (hazards.length === 0) {
             return;
         }
-        const player = this.player;
         const tick = this.tick;
         let spent = false;
-        // However many land on them, it's the one hit
-        let landed = false;
+        // However many land on someone, it's the one hit (by hero)
+        const landed: boolean[] = [];
         for (const hazard of hazards) {
             if (hazard.armed && hazard.fuseTick === -1) {
-                // Waiting to be walked into, until it gives up
+                // Waiting to be walked into, by anyone, until it gives up
                 if (tick >= hazard.endTick) {
                     hazard.endTick = -1;
                     spent = true;
-                } else if (
-                    tick >= hazard.landTick &&
-                    Math.hypot(player.x - hazard.x, player.y - hazard.y) <=
-                        hazard.radius + player.radius
-                ) {
-                    hazard.fuseTick = tick + HAZARD_FUSE_TICKS;
+                } else if (tick >= hazard.landTick) {
+                    let walkedInto = false;
+                    this.forEachHeroInReach(() => {
+                        const player = this.player;
+                        walkedInto ||=
+                            fm.hypot(player.x - hazard.x, player.y - hazard.y) <=
+                            hazard.radius + player.radius;
+                    });
+                    if (walkedInto) {
+                        hazard.fuseTick = tick + HAZARD_FUSE_TICKS;
+                    }
                 }
                 continue;
             }
@@ -3480,7 +4135,7 @@ export class Sim {
             }
             hazard.endTick = -1;
             spent = true;
-            landed = this.landHazard(hazard, landed) || landed;
+            this.landHazard(hazard, landed);
             if (this.runOver) {
                 return;
             }
@@ -3490,25 +4145,33 @@ export class Sim {
         }
     }
 
-    // Returns whether it hit the player
-    private landHazard(hazard: GroundHazard, alreadyHit: boolean): boolean {
+    // landed: the heroes something's landed on this tick, by index, who it
+    // passes by; it adds whoever it hits
+    private landHazard(hazard: GroundHazard, landed: boolean[]): void {
         const { attack, x, y, radius } = hazard;
-        const player = this.player;
         if (attack.impactSpotAnim !== undefined) {
             this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
         } else if (!attack.ground?.spotAnim) {
-            this.events.push({ type: "bossSwing", x, y, radius });
+            this.emit({ type: "bossSwing", x, y, radius });
         }
-        if (Math.hypot(player.x - x, player.y - y) > radius + player.radius || alreadyHit) {
-            return false;
-        }
-        const enemy = this.enemies.find((e) => e.uid === hazard.enemyUid);
-        if (hazard.damage > 0) {
-            this.bossHit(enemy?.def.id ?? "", enemy, attack, hazard.damage, false);
-        } else if (attack.effect && !this.reviving) {
-            this.applyPlayerEffect(attack.effect, enemy);
-        }
-        return true;
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const index = this.hero.index;
+            if (
+                this.runOver ||
+                fm.hypot(player.x - x, player.y - y) > radius + player.radius ||
+                landed[index]
+            ) {
+                return;
+            }
+            landed[index] = true;
+            const enemy = this.enemies.find((e) => e.uid === hazard.enemyUid);
+            if (hazard.damage > 0) {
+                this.bossHit(enemy?.def.id ?? "", enemy, attack, hazard.damage, false);
+            } else if (attack.effect && !this.reviving) {
+                this.applyPlayerEffect(attack.effect, enemy);
+            }
+        });
     }
 
     private stepQuarters(): void {
@@ -3526,14 +4189,23 @@ export class Sim {
         }
         const def = quarters.attack.quarters!;
         quarters.nextHurt = tick + secondsToTicks(def.interval);
-        const player = this.player;
-        if (quarterOf(quarters.x, quarters.y, player.x, player.y) === quarters.safe) {
-            return;
-        }
+        // Everyone outside the safe quarter is hit, and her shield's fed
+        // once if anyone was
         const enemy = this.enemies.find((e) => e.uid === quarters.enemyUid);
-        this.bossHit(enemy?.def.id ?? "", enemy, quarters.attack, quarters.damage, false);
+        let fed = false;
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                this.runOver ||
+                quarterOf(quarters.x, quarters.y, player.x, player.y) === quarters.safe
+            ) {
+                return;
+            }
+            this.bossHit(enemy?.def.id ?? "", enemy, quarters.attack, quarters.damage, false);
+            fed = true;
+        });
         const phase = enemy?.bossState?.phase;
-        if (phase?.stage === "shield") {
+        if (fed && phase?.stage === "shield") {
             phase.shield = Math.min(
                 phase.shieldMax,
                 phase.shield + Math.round(phase.shieldMax * def.heal),
@@ -3541,33 +4213,52 @@ export class Sim {
         }
     }
 
+    // Where the players still up are, on average (the player, on your own)
+    private partyMiddle(): { x: number; y: number } {
+        if (this.heroes.length === 1) {
+            return this.player;
+        }
+        let x = 0;
+        let y = 0;
+        let count = 0;
+        this.forEachHeroInReach(() => {
+            x += this.player.x;
+            y += this.player.y;
+            count++;
+        });
+        return count > 0 ? { x: x / count, y: y / count } : this.player;
+    }
+
     // Out it comes for a big hit, and stays to feed the boss. An antidote
     // weakens it first.
     private stepParasite(): void {
-        const parasite = this.parasite;
-        if (!parasite || this.tick < parasite.burstTick) {
-            return;
-        }
-        this.parasite = undefined;
-        const def = parasite.attack.parasite!;
-        const player = this.player;
-        const boss = this.enemies.find((e) => e.uid === parasite.enemyUid);
-        const weak = this.cured;
-        this.bossHit(boss?.def.id ?? "", boss, parasite.attack, parasite.damage * (weak ? 0.5 : 1));
-        if (this.runOver) {
-            return;
-        }
-        const out = this.spawnNear(
-            player,
-            getEnemy(weak ? def.weakEnemyId : def.enemyId),
-            SUMMON_BESIDE,
-            0,
-            1,
-            6,
-        );
-        if (out) {
-            out.noDrops = true;
-        }
+        this.forEachHeroInReach(() => {
+            const parasite = this.parasite;
+            if (!parasite || this.tick < parasite.burstTick || this.runOver) {
+                return;
+            }
+            this.parasite = undefined;
+            const def = parasite.attack.parasite!;
+            const player = this.player;
+            const boss = this.enemies.find((e) => e.uid === parasite.enemyUid);
+            const weak = this.cured;
+            const damage = parasite.damage * (weak ? 0.5 : 1);
+            this.bossHit(boss?.def.id ?? "", boss, parasite.attack, damage);
+            if (this.runOver) {
+                return;
+            }
+            const out = this.spawnNear(
+                player,
+                getEnemy(weak ? def.weakEnemyId : def.enemyId),
+                SUMMON_BESIDE,
+                0,
+                1,
+                6,
+            );
+            if (out) {
+                out.noDrops = true;
+            }
+        });
     }
 
     // Walking to the boss, through anything in its way
@@ -3582,7 +4273,7 @@ export class Sim {
         }
         const dx = boss.x - enemy.x;
         const dy = boss.y - enemy.y;
-        const distance = Math.hypot(dx, dy);
+        const distance = fm.hypot(dx, dy);
         if (distance <= ABSORB_REACH) {
             const walkers = boss.bossState?.walkers;
             if (walkers) {
@@ -3605,13 +4296,14 @@ export class Sim {
         boss.bossState!.walkers = undefined;
         const attack = walkers.attack;
         const damage = (attack.damage + walkers.absorbed * walkers.perAbsorbed) * boss.damageScale;
-        this.events.push({
+        this.emit({
             type: "bossAbsorbBlast",
             x: boss.x,
             y: boss.y,
             absorbed: walkers.absorbed,
         });
-        this.bossHit(boss.def.id, boss, attack, damage);
+        // On the whole party
+        this.forEachHeroInReach(() => this.bossHit(boss.def.id, boss, attack, damage));
         return false;
     }
 
@@ -3692,7 +4384,7 @@ export class Sim {
         const player = this.player;
         const startTick = this.tick;
         const landTick = startTick + Math.max(1, Math.round(attack.windup * TICKS_PER_SECOND));
-        const toPlayer = Math.max(0.001, Math.hypot(player.x - enemy.x, player.y - enemy.y));
+        const toPlayer = Math.max(0.001, fm.hypot(player.x - enemy.x, player.y - enemy.y));
         const windup: BossWindup = {
             attack,
             startTick,
@@ -3716,7 +4408,7 @@ export class Sim {
         enemy.animStart = this.tick;
         enemy.attackSeq = attack.seq ?? enemy.def.attackSeq;
         if (attack.windupSound !== undefined) {
-            this.events.push({
+            this.emit({
                 type: "bossAttack",
                 enemyId: enemy.def.id,
                 sound: attack.windupSound,
@@ -3724,16 +4416,21 @@ export class Sim {
                 y: enemy.y,
             });
         }
-        const curse = this.curse;
-        if (curse && --curse.attacksLeft <= 0) {
-            this.curse = undefined;
-            this.events.push({ type: "playerCursed", cursed: false });
+        // Each of its attacks wears a curse down, whoever's it is
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (hero.curse && --hero.curse.attacksLeft <= 0) {
+                this.use(hero);
+                this.curse = undefined;
+                this.emit({ type: "playerCursed", cursed: false });
+            }
         }
+        this.use(current);
         if (attack.shout) {
-            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
+            this.emit({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
         if (attack.message) {
-            this.events.push({ type: "notice", message: attack.message });
+            this.emit({ type: "notice", message: attack.message });
         }
     }
 
@@ -3745,7 +4442,7 @@ export class Sim {
         state.enraged = true;
         enemy.speed *= ENRAGED_SPEED;
         enemy.tint = ENRAGED_TINT;
-        this.events.push({
+        this.emit({
             type: "bossEnraged",
             enemyId: enemy.def.id,
             message: enrage.message,
@@ -3753,7 +4450,7 @@ export class Sim {
             y: enemy.y,
         });
         if (enrage.shout) {
-            this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: enrage.shout });
+            this.emit({ type: "bossShout", enemyUid: enemy.uid, text: enrage.shout });
         }
     }
 
@@ -3765,8 +4462,8 @@ export class Sim {
             const angle = this.rng.range(0, Math.PI * 2);
             const distance = this.rng.range(1, Math.max(1, attack.spread ?? 2));
             targets.push({
-                x: player.x + Math.cos(angle) * distance,
-                y: player.y + Math.sin(angle) * distance,
+                x: player.x + fm.cos(angle) * distance,
+                y: player.y + fm.sin(angle) * distance,
             });
         }
         return targets;
@@ -3779,9 +4476,8 @@ export class Sim {
     }
 
     private landBossAttack(enemy: Enemy, windup: BossWindup): void {
-        const player = this.player;
         const attack = windup.attack;
-        this.events.push({
+        this.emit({
             type: "bossAttack",
             enemyId: enemy.def.id,
             sound: attack.sound ?? -1,
@@ -3797,27 +4493,32 @@ export class Sim {
                 this.leapTo(enemy, spots[0]);
             }
             const radius = attack.radius ?? 2;
-            let hit = false;
             for (const { x, y } of spots) {
-                this.events.push({ type: "bossSwing", x, y, radius });
+                this.emit({ type: "bossSwing", x, y, radius });
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
                     this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
                 }
-                hit ||= Math.hypot(player.x - x, player.y - y) <= radius + player.radius;
             }
-            if (hit && attack.cone !== undefined) {
-                hit = this.inCone(enemy, windup, attack, attack.cone);
-            }
-            if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
-                // Behind the glyph: it takes the blow
-                hit = false;
-                this.glyphBlocked(enemy, attack);
-            }
-            if (hit) {
-                // A blast's impact is already showing where it landed
-                const damage = this.getBossDamage(enemy, attack);
-                this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
-            }
+            // Co-op: on anyone it lands on
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                let hit = spots.some(
+                    ({ x, y }) => fm.hypot(player.x - x, player.y - y) <= radius + player.radius,
+                );
+                if (hit && attack.cone !== undefined) {
+                    hit = this.inCone(enemy, windup, attack, attack.cone);
+                }
+                if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
+                    // Behind the glyph: it takes the blow
+                    hit = false;
+                    this.glyphBlocked(enemy, attack);
+                }
+                if (hit && !this.runOver) {
+                    // A blast's impact is already showing where it landed
+                    const damage = this.getBossDamage(enemy, attack);
+                    this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
+                }
+            });
             return;
         }
         if (attack.kind === "teleport") {
@@ -3858,13 +4559,13 @@ export class Sim {
         crowd: boolean,
     ): void {
         const player = this.player;
-        const base = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        const base = fm.atan2(player.y - enemy.y, player.x - enemy.x);
         const count = attack.count ?? 1;
         const speed = (attack.speed ?? 10) / TICKS_PER_SECOND;
         for (let i = 0; i < count; i++) {
             const angle = base + (i - (count - 1) / 2) * (attack.spread ?? 0);
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed;
+            const vx = fm.cos(angle) * speed;
+            const vy = fm.sin(angle) * speed;
             this.enemyProjectiles.push({
                 uid: this.nextUid++,
                 enemyUid: enemy.uid,
@@ -3972,7 +4673,7 @@ export class Sim {
             state.enraged = false;
             state.summonsDone = 0;
         }
-        this.events.push({
+        this.emit({
             type: "bossRose",
             enemyId: enemy.def.id,
             message: rises.message,
@@ -4006,10 +4707,10 @@ export class Sim {
             }
             state.summonsDone++;
             if (summon.message) {
-                this.events.push({ type: "notice", message: summon.message });
+                this.emit({ type: "notice", message: summon.message });
             }
             if (summon.shout) {
-                this.events.push({ type: "bossShout", enemyUid: enemy.uid, text: summon.shout });
+                this.emit({ type: "bossShout", enemyUid: enemy.uid, text: summon.shout });
             }
         }
     }
@@ -4049,22 +4750,24 @@ export class Sim {
     }
 
     private stepEnemyProjectiles(): void {
-        const player = this.player;
         for (const projectile of this.enemyProjectiles) {
             projectile.prevX = projectile.x;
             projectile.prevY = projectile.y;
             projectile.life--;
+            // At whoever's nearest
+            this.use(this.nearestHero(projectile.x, projectile.y));
+            const player = this.player;
             const dx = player.x - projectile.x;
             const dy = player.y - projectile.y;
             if (projectile.homing > 0) {
                 // Turn towards the player, a little each tick
-                const heading = Math.atan2(projectile.vy, projectile.vx);
-                let turn = Math.atan2(dy, dx) - heading;
-                turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+                const heading = fm.atan2(projectile.vy, projectile.vx);
+                let turn = fm.atan2(dy, dx) - heading;
+                turn = fm.atan2(fm.sin(turn), fm.cos(turn));
                 const angle =
                     heading + Math.max(-projectile.homing, Math.min(projectile.homing, turn));
-                projectile.vx = Math.cos(angle) * projectile.speed;
-                projectile.vy = Math.sin(angle) * projectile.speed;
+                projectile.vx = fm.cos(angle) * projectile.speed;
+                projectile.vy = fm.sin(angle) * projectile.speed;
                 projectile.yaw = yawFromVector(projectile.vx, projectile.vy);
             }
             projectile.x += projectile.vx;
@@ -4076,7 +4779,7 @@ export class Sim {
             const reach = projectile.radius + player.radius;
             if (
                 projectile.life > 0 &&
-                Math.hypot(player.x - projectile.x, player.y - projectile.y) <= reach
+                fm.hypot(player.x - projectile.x, player.y - projectile.y) <= reach
             ) {
                 projectile.life = 0;
                 // A crowd's shot doesn't land on a player just hit (bosses' do)
@@ -4101,10 +4804,7 @@ export class Sim {
         if (!glyph || width === undefined) {
             return false;
         }
-        if (
-            Math.hypot(projectile.x - glyph.x, projectile.y - glyph.y) >
-            width + projectile.radius
-        ) {
+        if (fm.hypot(projectile.x - glyph.x, projectile.y - glyph.y) > width + projectile.radius) {
             return false;
         }
         const impact = projectile.attack.impactSpotAnim;
@@ -4125,7 +4825,7 @@ export class Sim {
         showImpact = true,
     ): void {
         const player = this.player;
-        if (this.reviving) {
+        if (this.reviving || (this.hero.down && !this.runOver)) {
             return;
         }
         if (showImpact && attack.impactSpotAnim !== undefined) {
@@ -4156,18 +4856,19 @@ export class Sim {
         const player = this.player;
         if (effect.kind === "steal") {
             const state = enemy?.bossState;
-            const amount = Math.floor(this.coins * effect.fraction);
+            const up = this.heroes.filter((hero) => this.isUp(hero)).length;
+            const amount = Math.floor((this.coins * effect.fraction) / Math.max(1, up));
             if (state && amount > 0 && !enemy.dead) {
                 this.coins -= amount;
                 state.stolenCoins += amount;
-                this.events.push({ type: "coinsStolen", enemyId: enemy.def.id, amount });
+                this.emit({ type: "coinsStolen", enemyId: enemy.def.id, amount });
             }
             return;
         }
         if (effect.kind === "curse") {
             const matrix = CURSE_SHUFFLES[this.rng.int(CURSE_SHUFFLES.length)];
             this.curse = { matrix, attacksLeft: effect.attacks };
-            this.events.push({ type: "playerCursed", cursed: true });
+            this.emit({ type: "playerCursed", cursed: true });
             return;
         }
         if ((effect.kind === "poison" || effect.kind === "debuff") && this.cured) {
@@ -4237,7 +4938,7 @@ export class Sim {
             const player = this.player;
             let nearest = Infinity;
             for (const boss of this.funBossGroup) {
-                const distance = Math.hypot(boss.x - player.x, boss.y - player.y);
+                const distance = fm.hypot(boss.x - player.x, boss.y - player.y);
                 if (!boss.dead && distance < nearest) {
                     nearest = distance;
                     shown = boss;
@@ -4259,12 +4960,31 @@ export class Sim {
             this.revivesLeft--;
             player.hp = player.maxHp;
             player.invulnerable = 3 * TICKS_PER_SECOND;
-            this.events.push({ type: "revive" });
+            this.emit({ type: "revive" });
             return;
         }
         player.hp = 0;
         player.deathTick = this.tick;
-        this.endRun("dead");
+        this.hero.down = true;
+        if (!this.heroes.some((hero) => this.isUp(hero))) {
+            this.endRun("dead");
+            return;
+        }
+        // Co-op: they're out for the rest of the run, and the rest fight on
+        player.prevX = player.x;
+        player.prevY = player.y;
+        player.moving = false;
+        player.poisonEnd = -1;
+        player.poisonDamage = 0;
+        this.emit({ type: "heroDown" });
+        this.rescaleParty();
+    }
+
+    // Co-op: the crowd and its bosses for the players still up, and half of
+    // each one who's down or gone
+    private rescaleParty(): void {
+        const up = this.heroes.filter((hero) => this.isUp(hero)).length;
+        this.partyScale = getPartyScale(up + (this.heroes.length - up) * PLAYER_GONE);
     }
 
     // Returns the damage done (0 if it was already dead). mightScale
@@ -4312,9 +5032,9 @@ export class Sim {
         enemy.flash = 5;
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
-        this.recentDamage[this.tick % DPS_WINDOW_TICKS] += damage;
+        this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += damage;
         this.highestHit = Math.max(this.highestHit, damage);
-        this.events.push({
+        this.emit({
             type: "damage",
             x: enemy.x,
             y: enemy.y,
@@ -4327,7 +5047,7 @@ export class Sim {
         if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
             const dx = enemy.x - fromX;
             const dy = enemy.y - fromY;
-            const len = Math.hypot(dx, dy);
+            const len = fm.hypot(dx, dy);
             if (len > 0.001) {
                 const k = (knockback * (1 - resist)) / 4;
                 enemy.vx += (dx / len) * k;
@@ -4375,7 +5095,7 @@ export class Sim {
             this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
             this.endBossFight(enemy);
         }
-        this.events.push({
+        this.emit({
             type: "kill",
             enemyUid: enemy.uid,
             enemyId: enemy.def.id,
@@ -4413,7 +5133,7 @@ export class Sim {
         if (stolen > 0) {
             this.coins += stolen;
             enemy.bossState!.stolenCoins = 0;
-            this.events.push({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
+            this.emit({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
         }
 
         // With the last of the final bosses (the Inferno has three)
@@ -4439,7 +5159,7 @@ export class Sim {
         }
         this.funBossGroup = [];
         this.dropCasketOfTier(together.casket, enemy.x - 0.4, enemy.y + 0.4);
-        this.events.push({ type: "notice", message: together.message });
+        this.emit({ type: "notice", message: together.message });
         this.nextFunBossSeconds = this.seconds + this.rng.range(...this.map.fun!.bosses.every);
     }
 
@@ -4475,9 +5195,9 @@ export class Sim {
         if (explodes.spotAnim !== undefined) {
             this.addEffect(explodes.spotAnim, enemy.x, enemy.y, 0, 40);
         }
-        this.events.push({ type: "blast", x: enemy.x, y: enemy.y, radius: explodes.radius });
+        this.emit({ type: "blast", x: enemy.x, y: enemy.y, radius: explodes.radius });
         if (explodes.sound !== undefined) {
-            this.events.push({
+            this.emit({
                 type: "bossAttack",
                 enemyId: enemy.def.id,
                 sound: explodes.sound,
@@ -4485,14 +5205,16 @@ export class Sim {
                 y: enemy.y,
             });
         }
-        const player = this.player;
-        if (
-            !this.runOver &&
-            !this.reviving &&
-            Math.hypot(player.x - enemy.x, player.y - enemy.y) <= explodes.radius + player.radius
-        ) {
-            this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
-        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                !this.runOver &&
+                !this.reviving &&
+                fm.hypot(player.x - enemy.x, player.y - enemy.y) <= explodes.radius + player.radius
+            ) {
+                this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
+            }
+        });
     }
 
     // Bones, and now and then a casket, coins, food or a power-up
@@ -4521,7 +5243,10 @@ export class Sim {
                 enemy.y,
                 master,
             );
-        } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
+        } else if (
+            !enemy.boss &&
+            this.rng.chance(CASKET_DROP_CHANCE * luck * this.partyScale.caskets)
+        ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
@@ -4543,7 +5268,7 @@ export class Sim {
         const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
         this.eventIndex = first === -1 ? events.length : first;
         this.bossSpawned = false;
-        this.events.push({ type: "roundStarted", round: this.round });
+        this.emit({ type: "roundStarted", round: this.round });
     }
 
     private endRun(state: "dead" | "victory"): void {
@@ -4640,7 +5365,7 @@ export class Sim {
                 ? this.cooldownTicks(level.cooldown, this.setBoosts(weapon.def).speed)
                 : 10;
             if (fired) {
-                this.events.push({
+                this.emit({
                     type: "weapon",
                     weaponId: weapon.def.id,
                     sound: special?.sound ?? level.sound ?? weapon.def.sound,
@@ -4722,7 +5447,7 @@ export class Sim {
         if (nearest) {
             const dx = nearest.x - player.x;
             const dy = nearest.y - player.y;
-            const len = Math.hypot(dx, dy);
+            const len = fm.hypot(dx, dy);
             if (len > 0.001) {
                 return { x: dx / len, y: dy / len };
             }
@@ -4750,7 +5475,7 @@ export class Sim {
         for (let side = 0; side < sides; side++) {
             const dirX = side === 0 ? aim.x : -aim.x;
             const dirY = side === 0 ? aim.y : -aim.y;
-            this.events.push({
+            this.emit({
                 type: "slash",
                 x: player.x,
                 y: player.y,
@@ -4799,7 +5524,7 @@ export class Sim {
         for (let side = 0; side < sides; side++) {
             const dirX = side === 0 ? aim.x : -aim.x;
             const dirY = side === 0 ? aim.y : -aim.y;
-            this.events.push({
+            this.emit({
                 type: "slash",
                 x: player.x,
                 y: player.y,
@@ -4813,14 +5538,14 @@ export class Sim {
             this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
-                const dist = Math.hypot(ox, oy);
+                const dist = fm.hypot(ox, oy);
                 if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
                     return;
                 }
                 // Anything right on top of the player is in the way of the
                 // swing, whichever way it goes
                 const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
-                const angle = Math.acos(Math.max(-1, Math.min(1, along)));
+                const angle = fm.acos(Math.max(-1, Math.min(1, along)));
                 if (dist > 0.8 && angle > arc + enemy.radius / dist) {
                     return;
                 }
@@ -4840,7 +5565,7 @@ export class Sim {
     ): void {
         const player = this.player;
         const radius = aoe.radius * (1 + this.stats.area);
-        this.events.push({
+        this.emit({
             type: "slash",
             x: player.x,
             y: player.y,
@@ -4855,7 +5580,7 @@ export class Sim {
         this.enemyHash.query(player.x, player.y, radius + 1, (enemy) => {
             if (
                 !enemy.dead &&
-                Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
             ) {
                 hit.push(enemy);
             }
@@ -4897,6 +5622,7 @@ export class Sim {
             // The rest of a multi-hit weapon's hits land a moment apart
             hits.slice(1).forEach((fraction, i) => {
                 this.pendingHits.push({
+                    hero: this.hero.index,
                     enemy,
                     weapon: def,
                     damage: enemyDamage * fraction,
@@ -4960,7 +5686,7 @@ export class Sim {
                     enemy.dead ||
                     done.has(enemy) ||
                     !hasTag(enemy, chain.tags) ||
-                    Math.hypot(enemy.x - from.x, enemy.y - from.y) > chain.range
+                    fm.hypot(enemy.x - from.x, enemy.y - from.y) > chain.range
                 ) {
                     return;
                 }
@@ -4984,11 +5710,12 @@ export class Sim {
         if (this.pendingHits.length === 0) {
             return;
         }
-        const player = this.player;
         this.pendingHits = this.pendingHits.filter((hit) => {
             if (hit.tick > this.tick) {
                 return true;
             }
+            this.useHeroAt(hit.hero);
+            const player = this.player;
             this.damageSource = `weapon:${hit.weapon.id}`;
             const dealt = this.damageEnemy(
                 hit.enemy,
@@ -5054,6 +5781,7 @@ export class Sim {
         enemy.venom = Math.max(enemy.venom, venom);
         enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
         enemy.venomSource = this.damageSource;
+        enemy.venomHero = this.hero.index;
     }
 
     // A hit's chance of healing the player: the weapon's (the Sanguinesti
@@ -5140,8 +5868,7 @@ export class Sim {
     private unvenomedEnemies(x: number, y: number, range: number, count: number): Enemy[] {
         const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
         const later = (enemy: Enemy) =>
-            enemy.venomEnd >= this.tick ||
-            Math.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
+            enemy.venomEnd >= this.tick || fm.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
         // Sorting is stable, so each half stays nearest first
         return near.sort((a, b) => Number(later(a)) - Number(later(b))).slice(0, count);
     }
@@ -5168,7 +5895,7 @@ export class Sim {
                 def,
                 level,
                 target,
-                Math.atan2(target.y - player.y, target.x - player.x),
+                fm.atan2(target.y - player.y, target.x - player.x),
             );
         }
         return true;
@@ -5180,8 +5907,8 @@ export class Sim {
         // At the nearest enemy close by, otherwise the way the player faces
         const nearest = this.nearestEnemies(player.x, player.y, 9, 1)[0];
         const base = nearest
-            ? Math.atan2(nearest.y - player.y, nearest.x - player.x)
-            : Math.atan2(player.facingY, player.facingX);
+            ? fm.atan2(nearest.y - player.y, nearest.x - player.x)
+            : fm.atan2(player.facingY, player.facingX);
         for (let i = 0; i < amount; i++) {
             // Fan out: 0, +1, -1, +2, -2 ... steps of 7 degrees
             const offset = Math.ceil(i / 2) * (i % 2 === 0 ? -1 : 1) * 0.12;
@@ -5199,7 +5926,7 @@ export class Sim {
         }
         for (let i = 0; i < amount; i++) {
             const target = targets[i % targets.length];
-            const angle = Math.atan2(target.y - player.y, target.x - player.x);
+            const angle = fm.atan2(target.y - player.y, target.x - player.x);
             this.addProjectile("axe", def, level, target, angle);
         }
         return true;
@@ -5214,7 +5941,9 @@ export class Sim {
             if (enemy.dead || projectile.hit.has(enemy.uid) || enemy.shieldEnd > this.tick) {
                 continue;
             }
-            const distSq = (enemy.x - from.x) ** 2 + (enemy.y - from.y) ** 2;
+            const bx = enemy.x - from.x;
+            const by = enemy.y - from.y;
+            const distSq = bx * bx + by * by;
             if (distSq <= best) {
                 best = distSq;
                 next = enemy;
@@ -5242,14 +5971,15 @@ export class Sim {
         // A little less than the time one takes to come round again, so
         // whatever's in the way is hit once a pass
         const rehitTicks = Math.max(5, Math.round(((2 * Math.PI) / angularSpeed) * 0.6));
-        const start = Math.atan2(player.facingY, player.facingX);
+        const start = fm.atan2(player.facingY, player.facingX);
         const objIds = def.orbitObjIds ?? [];
         for (let i = 0; i < amount; i++) {
             const angle = start + (i / amount) * Math.PI * 2;
-            const x = player.x + Math.cos(angle) * radius;
-            const y = player.y + Math.sin(angle) * radius;
+            const x = player.x + fm.cos(angle) * radius;
+            const y = player.y + fm.sin(angle) * radius;
             this.projectiles.push({
                 uid: this.nextUid++,
+                hero: this.hero.index,
                 kind: "rune",
                 weapon: def,
                 x,
@@ -5271,7 +6001,7 @@ export class Sim {
                 splash: 0,
                 knockback: level.knockback,
                 hit: new Set(),
-                yaw: yawFromVector(-Math.sin(angle), Math.cos(angle)),
+                yaw: yawFromVector(-fm.sin(angle), fm.cos(angle)),
                 spotAnim: -1,
                 impactSpotAnim: -1,
                 hitSound: -1,
@@ -5294,14 +6024,15 @@ export class Sim {
         const range = kind === "knife" ? 18 : 24;
         this.projectiles.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             kind,
             weapon: def,
             x: fromX,
             y: fromY,
             prevX: fromX,
             prevY: fromY,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
+            vx: fm.cos(angle) * speed,
+            vy: fm.sin(angle) * speed,
             speed,
             targetUid: target?.uid ?? 0,
             damage: level.damage,
@@ -5314,7 +6045,7 @@ export class Sim {
             splash: level.area > 0 ? level.area * (1 + this.stats.area) : 0,
             knockback: level.knockback,
             hit: new Set(),
-            yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+            yaw: yawFromVector(fm.cos(angle), fm.sin(angle)),
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
@@ -5339,16 +6070,17 @@ export class Sim {
         const perTick = (speed * (1 + this.stats.speed)) / TICKS_PER_SECOND;
         const dx = target.x - fromX;
         const dy = target.y - fromY;
-        const angle = Math.atan2(dy, dx);
+        const angle = fm.atan2(dy, dx);
         this.projectiles.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             kind,
             x: fromX,
             y: fromY,
             prevX: fromX,
             prevY: fromY,
-            vx: Math.cos(angle) * perTick,
-            vy: Math.sin(angle) * perTick,
+            vx: fm.cos(angle) * perTick,
+            vy: fm.sin(angle) * perTick,
             speed: perTick,
             targetUid: target.uid,
             damage,
@@ -5384,6 +6116,7 @@ export class Sim {
         }
         const turret: Turret = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             x,
             y,
             yaw: player.yaw,
@@ -5396,7 +6129,7 @@ export class Sim {
             interval: this.cooldownTicks(effect.interval),
         };
         this.turrets.push(turret);
-        this.events.push({ type: "cannonSetup", x, y });
+        this.emit({ type: "cannonSetup", x, y });
     }
 
     private stepTurrets(): void {
@@ -5404,6 +6137,7 @@ export class Sim {
             if (this.tick < turret.nextShot || this.tick >= turret.endTick) {
                 continue;
             }
+            this.useHeroAt(turret.hero);
             const targets = this.nearestEnemies(turret.x, turret.y, turret.range, turret.amount);
             if (targets.length === 0) {
                 turret.nextShot = this.tick + 5;
@@ -5411,7 +6145,7 @@ export class Sim {
             }
             turret.nextShot = this.tick + turret.interval;
             turret.yaw = yawFromVector(targets[0].x - turret.x, targets[0].y - turret.y);
-            this.events.push({ type: "cannonFire", x: turret.x, y: turret.y });
+            this.emit({ type: "cannonFire", x: turret.x, y: turret.y });
             for (const target of targets) {
                 this.shootAt(
                     "cannonball",
@@ -5434,6 +6168,7 @@ export class Sim {
         const player = this.player;
         const thrall: Thrall = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             def,
             x: player.x,
             y: player.y,
@@ -5452,9 +6187,10 @@ export class Sim {
     }
 
     private stepThralls(): void {
-        const player = this.player;
         this.thralls = this.thralls.filter((t) => this.tick < t.endTick);
         this.thralls.forEach((thrall, index) => {
+            this.useHeroAt(thrall.hero);
+            const player = this.player;
             const def = thrall.def;
             thrall.prevX = thrall.x;
             thrall.prevY = thrall.y;
@@ -5479,15 +6215,15 @@ export class Sim {
             } else {
                 const side = index % 2 === 0 ? 1 : -1;
                 const angle =
-                    Math.atan2(-player.facingY, -player.facingX) +
+                    fm.atan2(-player.facingY, -player.facingX) +
                     side * (0.7 + Math.floor(index / 2) * 0.5);
-                goalX = player.x + Math.cos(angle) * THRALL_FOLLOW_DISTANCE;
-                goalY = player.y + Math.sin(angle) * THRALL_FOLLOW_DISTANCE;
+                goalX = player.x + fm.cos(angle) * THRALL_FOLLOW_DISTANCE;
+                goalY = player.y + fm.sin(angle) * THRALL_FOLLOW_DISTANCE;
                 stop = 0.3;
             }
             const dx = goalX - thrall.x;
             const dy = goalY - thrall.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             thrall.moving = distance > stop;
             if (thrall.moving) {
                 const move = Math.min(THRALL_SPEED, distance - stop);
@@ -5502,7 +6238,7 @@ export class Sim {
                 thrall.yaw = yawFromVector(dx, dy);
             }
             // Stuck behind a wall: back beside the player
-            if (Math.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
+            if (fm.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
                 thrall.x = thrall.prevX = player.x;
                 thrall.y = thrall.prevY = player.y;
             }
@@ -5513,13 +6249,13 @@ export class Sim {
             const tx = target.x - thrall.x;
             const ty = target.y - thrall.y;
             const reach = melee ? THRALL_RADIUS + target.radius + 0.4 : def.range;
-            if (Math.hypot(tx, ty) > reach) {
+            if (fm.hypot(tx, ty) > reach) {
                 return;
             }
             thrall.cooldown = this.cooldownTicks(def.interval);
             thrall.attackStart = this.tick;
             thrall.yaw = yawFromVector(tx, ty);
-            this.events.push({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
+            this.emit({ type: "thrallAttack", sound: def.sound, x: thrall.x, y: thrall.y });
             if (melee) {
                 this.damageSource = "powerUp:thrall";
                 this.damageEnemy(target, thrall.damage, def.knockback, thrall.x, thrall.y);
@@ -5542,10 +6278,10 @@ export class Sim {
     private fireAura(def: WeaponDef, level: WeaponDef["levels"][number]): void {
         const player = this.player;
         const radius = level.area * (1 + this.stats.area);
-        this.events.push({ type: "aura", x: player.x, y: player.y, radius });
+        this.emit({ type: "aura", x: player.x, y: player.y, radius });
         const hit: Enemy[] = [];
         this.enemyHash.query(player.x, player.y, radius + 0.5, (enemy) => {
-            if (Math.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
+            if (fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
         });
@@ -5587,7 +6323,7 @@ export class Sim {
         const radius = level.area * (1 + this.stats.area) * burns.radius;
         const damage = level.damage * burns.damage;
         const same = this.fires.find(
-            (fire) => Math.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
+            (fire) => fm.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
         );
         if (same) {
             same.endTick = Math.max(same.endTick, endTick);
@@ -5602,10 +6338,11 @@ export class Sim {
             // One in the middle, the rest around it
             const angle = (i / (FIRE_FLAMES - 1)) * Math.PI * 2;
             const r = i === 0 ? 0 : radius * 0.6;
-            flames.push({ x: x + Math.cos(angle) * r, y: y + Math.sin(angle) * r });
+            flames.push({ x: x + fm.cos(angle) * r, y: y + fm.sin(angle) * r });
         }
         this.fires.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             source: this.damageSource,
             x,
             y,
@@ -5629,9 +6366,10 @@ export class Sim {
                 continue;
             }
             fire.nextTick += FIRE_INTERVAL;
+            this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
             this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
-                if (Math.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
+                if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
             });
@@ -5658,7 +6396,7 @@ export class Sim {
             this.enemyHash.query(tx, ty, radius + 0.5, (enemy) => {
                 if (
                     enemy === target ||
-                    Math.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
+                    fm.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
                 ) {
                     if (def.freezes) {
                         this.freezeEnemy(enemy, level.duration);
@@ -5684,6 +6422,7 @@ export class Sim {
             projectile.prevX = projectile.x;
             projectile.prevY = projectile.y;
             projectile.life--;
+            this.useHeroAt(projectile.hero);
             if (projectile.orbit) {
                 this.stepOrbit(projectile, projectile.orbit);
                 continue;
@@ -5695,7 +6434,7 @@ export class Sim {
             if (target) {
                 const dx = target.x - projectile.x;
                 const dy = target.y - projectile.y;
-                const len = Math.hypot(dx, dy);
+                const len = fm.hypot(dx, dy);
                 if (len > 0.001) {
                     projectile.vx = (dx / len) * projectile.speed;
                     projectile.vy = (dy / len) * projectile.speed;
@@ -5721,7 +6460,7 @@ export class Sim {
                     return;
                 }
                 const reach = projectile.radius + enemy.radius;
-                if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+                if (fm.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
                     return;
                 }
                 projectile.hit.add(enemy.uid);
@@ -5745,15 +6484,15 @@ export class Sim {
     private stepOrbit(projectile: Projectile, orbit: NonNullable<Projectile["orbit"]>): void {
         const player = this.player;
         const angle = orbit.angle + (this.tick - projectile.startTick) * orbit.angularSpeed;
-        projectile.x = player.x + Math.cos(angle) * orbit.radius;
-        projectile.y = player.y + Math.sin(angle) * orbit.radius;
-        projectile.yaw = yawFromVector(-Math.sin(angle), Math.cos(angle));
+        projectile.x = player.x + fm.cos(angle) * orbit.radius;
+        projectile.y = player.y + fm.sin(angle) * orbit.radius;
+        projectile.yaw = yawFromVector(-fm.sin(angle), fm.cos(angle));
         this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
             if (enemy.dead || (orbit.nextHit.get(enemy.uid) ?? 0) > this.tick) {
                 return;
             }
             const reach = projectile.radius + enemy.radius;
-            if (Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
+            if (fm.hypot(enemy.x - projectile.x, enemy.y - projectile.y) > reach) {
                 return;
             }
             orbit.nextHit.set(enemy.uid, this.tick + orbit.rehitTicks);
@@ -5776,7 +6515,7 @@ export class Sim {
             this.addEffect(projectile.impactSpotAnim, enemy.x, enemy.y, 0, 30, enemy.uid);
         }
         if (projectile.hitSound !== -1) {
-            this.events.push({
+            this.emit({
                 type: "impact",
                 sound: projectile.hitSound,
                 x: enemy.x,
@@ -5830,7 +6569,7 @@ export class Sim {
             const x = enemy.x;
             const y = enemy.y;
             this.enemyHash.query(x, y, projectile.splash + 0.5, (other) => {
-                if (other !== enemy && Math.hypot(other.x - x, other.y - y) <= projectile.splash) {
+                if (other !== enemy && fm.hypot(other.x - x, other.y - y) <= projectile.splash) {
                     this.damageEnemy(
                         other,
                         projectile.damage * 0.5,
@@ -5877,11 +6616,11 @@ export class Sim {
         const targets = this.nearestEnemies(from.x, from.y, SPLIT_RANGE, split.count + 1).filter(
             (e) => e !== from,
         );
-        const ahead = Math.atan2(projectile.vy, projectile.vx);
+        const ahead = fm.atan2(projectile.vy, projectile.vx);
         for (let i = 0; i < split.count; i++) {
             const target = targets[i];
             const angle = target
-                ? Math.atan2(target.y - from.y, target.x - from.x)
+                ? fm.atan2(target.y - from.y, target.x - from.x)
                 : ahead + (i - (split.count - 1) / 2) * 0.6;
             this.projectiles.push({
                 ...projectile,
@@ -5890,14 +6629,14 @@ export class Sim {
                 y: from.y,
                 prevX: from.x,
                 prevY: from.y,
-                vx: Math.cos(angle) * projectile.speed,
-                vy: Math.sin(angle) * projectile.speed,
+                vx: fm.cos(angle) * projectile.speed,
+                vy: fm.sin(angle) * projectile.speed,
                 targetUid: target?.uid ?? 0,
                 damage: projectile.damage * split.damage,
                 pierce: split.pierce,
                 life: Math.ceil((SPLIT_RANGE * 2) / Math.max(projectile.speed, 0.01)),
                 hit: new Set([from.uid]),
-                yaw: yawFromVector(Math.cos(angle), Math.sin(angle)),
+                yaw: yawFromVector(fm.cos(angle), fm.sin(angle)),
                 startTick: this.tick,
                 split: undefined,
             });
@@ -5959,7 +6698,7 @@ export class Sim {
                 openTick: -1,
             },
         });
-        this.events.push({ type: "casketDropped", tier: disguise.casket, x, y });
+        this.emit({ type: "casketDropped", tier: disguise.casket, x, y });
         return true;
     }
 
@@ -5968,12 +6707,15 @@ export class Sim {
     private stepDisguise(pickup: Pickup): void {
         const disguise = pickup.disguise!;
         const def = getEnemy(disguise.enemyId);
-        const near =
-            Math.hypot(this.player.x - pickup.x, this.player.y - pickup.y) < DISGUISE_TOUCH;
+        // Anyone walking onto it
+        let near = false;
+        this.forEachHeroInReach(() => {
+            near ||= fm.hypot(this.player.x - pickup.x, this.player.y - pickup.y) < DISGUISE_TOUCH;
+        });
         if (disguise.openTick === -1 && (near || this.tick >= disguise.shakeTick)) {
             const ticks = Math.round(def.disguise!.shake * TICKS_PER_SECOND);
             disguise.openTick = this.tick + ticks;
-            this.events.push({ type: "notice", message: "The casket shudders..." });
+            this.emit({ type: "notice", message: "The casket shudders..." });
             this.showDisguiseWarning(pickup, def, ticks);
         }
         if (disguise.openTick !== -1 && this.tick >= disguise.openTick) {
@@ -5990,8 +6732,8 @@ export class Sim {
         const { spotAnims, count, ringRadius } = warning;
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
-            const x = pickup.x + Math.cos(angle) * ringRadius;
-            const y = pickup.y + Math.sin(angle) * ringRadius;
+            const x = pickup.x + fm.cos(angle) * ringRadius;
+            const y = pickup.y + fm.sin(angle) * ringRadius;
             this.addEffect(spotAnims[i % spotAnims.length], x, y, 0.3, ticks, 0, true);
         }
     }
@@ -6017,7 +6759,7 @@ export class Sim {
         if (def.spawnSpotAnim !== undefined) {
             this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
         }
-        this.events.push({
+        this.emit({
             type: "bossSpawned",
             enemyId: def.id,
             name: def.name,
@@ -6035,21 +6777,39 @@ export class Sim {
             return;
         }
         const state = enemy.bossState!;
-        const player = this.player;
-        if (Math.hypot(player.x - enemy.x, player.y - enemy.y) > stomp.radius) {
+        // Whoever's under it, and of them, who it can hurt now
+        const under: Hero[] = [];
+        const hurt: Hero[] = [];
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (fm.hypot(player.x - enemy.x, player.y - enemy.y) <= stomp.radius) {
+                under.push(this.hero);
+                if (!this.reviving && player.invulnerable <= 0) {
+                    hurt.push(this.hero);
+                }
+            }
+        });
+        if (under.length === 0) {
             state.stomps = 0;
             state.nextStomp = undefined;
             return;
         }
         const interval = Math.round(stomp.interval * TICKS_PER_SECOND);
         state.nextStomp ??= this.tick + interval;
-        if (this.tick < state.nextStomp || this.reviving || player.invulnerable > 0) {
+        if (this.tick < state.nextStomp || hurt.length === 0) {
             return;
         }
         state.stomps = (state.stomps ?? 0) + 1;
         state.nextStomp = this.tick + interval;
         const damage = Math.min(stomp.max, stomp.damage * state.stomps) * enemy.damageScale;
-        this.damagePlayer(damage, enemy.def.id, false, stomp.sound);
+        const current = this.hero;
+        for (const hero of hurt) {
+            if (!this.runOver) {
+                this.use(hero);
+                this.damagePlayer(damage, enemy.def.id, false, stomp.sound);
+            }
+        }
+        this.use(current);
     }
 
     // What a blast leaves behind where it lands, besides its hit
@@ -6116,24 +6876,24 @@ export class Sim {
             return;
         }
         this.pools = this.pools.filter((pool) => pool.endTick > this.tick);
-        const player = this.player;
         for (const pool of this.pools) {
-            const inside =
-                Math.hypot(player.x - pool.x, player.y - pool.y) <= pool.radius + player.radius;
-            if (
-                !inside ||
-                this.tick < pool.nextTick ||
-                player.invulnerable > 0 ||
-                this.reviving ||
-                this.runOver
-            ) {
+            if (this.tick < pool.nextTick) {
                 continue;
             }
-            pool.nextTick = this.tick + pool.interval;
-            this.damagePlayer(pool.damage, pool.enemyId, false);
-            if (pool.effect && !this.runOver && !this.reviving) {
-                this.applyPlayerEffect(pool.effect);
-            }
+            // Each of them standing in it
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const inside =
+                    fm.hypot(player.x - pool.x, player.y - pool.y) <= pool.radius + player.radius;
+                if (!inside || player.invulnerable > 0 || this.reviving || this.runOver) {
+                    return;
+                }
+                pool.nextTick = this.tick + pool.interval;
+                this.damagePlayer(pool.damage, pool.enemyId, false);
+                if (pool.effect && !this.runOver && !this.reviving) {
+                    this.applyPlayerEffect(pool.effect);
+                }
+            });
         }
     }
 
@@ -6179,7 +6939,7 @@ export class Sim {
             ({ from }) => from.kind === "pumpkin" && this.rng.chance(from.chance),
         );
         if (trophy) {
-            this.events.push({ type: "playerShout", text: "Treat!" });
+            this.emit({ type: "playerShout", text: "Treat!" });
             return this.findTrophy(trophy);
         }
         const index = this.rng.weightedIndex(PUMPKIN_OUTCOMES.map((o) => o.weight));
@@ -6210,26 +6970,29 @@ export class Sim {
                 this.applyPlayerEffect(does.effect);
                 break;
         }
-        this.events.push({ type: "playerShout", text: outcome.trick ? "Trick!" : "Treat!" });
+        this.emit({ type: "playerShout", text: outcome.trick ? "Trick!" : "Treat!" });
         return outcome.message;
     }
 
     // Collection log trophies a boss can drop on its map
+    // (each of the party their own)
     private rollBossTrophies(enemy: Enemy): void {
         if (!enemy.boss) {
             return;
         }
-        for (const trophy of TROPHIES) {
-            const { from } = trophy;
-            if (
-                from.kind === "boss" &&
-                from.enemyId === enemy.def.id &&
-                from.mapId === this.map.id &&
-                this.rng.chance(from.chance)
-            ) {
-                this.events.push({ type: "notice", message: this.findTrophy(trophy) });
+        this.forEachHeroInReach(() => {
+            for (const trophy of TROPHIES) {
+                const { from } = trophy;
+                if (
+                    from.kind === "boss" &&
+                    from.enemyId === enemy.def.id &&
+                    from.mapId === this.map.id &&
+                    this.rng.chance(from.chance)
+                ) {
+                    this.emit({ type: "notice", message: this.findTrophy(trophy) }, true);
+                }
             }
-        }
+        });
     }
 
     private findTrophy(trophy: TrophyDef): string {
@@ -6251,7 +7014,7 @@ export class Sim {
             }
             const onGround = this.pickups.filter((pickup) => pickup.kind === "casket").length;
             if (onGround >= LATE_CASKET_LIMIT) {
-                this.events.push({
+                this.emit({
                     type: "notice",
                     message: "You have a funny feeling there would've been a chest",
                 });
@@ -6260,7 +7023,7 @@ export class Sim {
         }
         const spot = this.walkableSpot(x, y);
         this.dropPickup("casket", spot.x, spot.y, 1, { tier });
-        this.events.push({ type: "casketDropped", tier, x: spot.x, y: spot.y });
+        this.emit({ type: "casketDropped", tier, x: spot.x, y: spot.y });
     }
 
     // Where to put something that needs walking over: what dropped it can be
@@ -6330,8 +7093,6 @@ export class Sim {
     }
 
     private stepPickups(): void {
-        const player = this.player;
-        const magnet = BASE_MAGNET * (1 + this.stats.magnet);
         // For bones and coins on their way to a bigger pile
         const pilesByUid = this.pickups.some((p) => p.pileUid !== 0)
             ? new Map(this.pickups.map((p) => [p.uid, p]))
@@ -6351,9 +7112,13 @@ export class Sim {
                 pickup.value = -1;
                 continue;
             }
+            // Whoever's nearest gets it
+            this.use(this.nearestHero(pickup.x, pickup.y));
+            const player = this.player;
+            const magnet = BASE_MAGNET * (1 + this.stats.magnet);
             const dx = player.x - pickup.x;
             const dy = player.y - pickup.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             // Caskets and power-ups need walking over
             const magnetic = pickup.kind !== "casket" && pickup.kind !== "powerUp";
             if (!pickup.attracted && magnetic && distance < magnet) {
@@ -6391,8 +7156,10 @@ export class Sim {
     // goes further from the player to join one: bones the player's about to
     // walk over would be dragged away, and the run would level slower.
     private gatherPiles(): void {
-        const player = this.player;
-        const away = (p: Pickup) => Math.hypot(p.x - player.x, p.y - player.y);
+        const away = (p: Pickup) => {
+            const player = this.nearestHero(p.x, p.y).player;
+            return fm.hypot(p.x - player.x, p.y - player.y);
+        };
         const loose = this.pickups.filter(
             (p) =>
                 (p.kind === "bones" || p.kind === "coins") &&
@@ -6420,7 +7187,7 @@ export class Sim {
                     other.kind === pile.kind &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
-                    Math.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
+                    fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
                 ) {
                     other.pileUid = pile.uid;
                     other.speed = 0;
@@ -6440,7 +7207,7 @@ export class Sim {
         }
         const dx = pile.x - pickup.x;
         const dy = pile.y - pickup.y;
-        const distance = Math.hypot(dx, dy);
+        const distance = fm.hypot(dx, dy);
         pickup.speed = Math.min(pickup.speed + 0.02, 0.3);
         if (distance <= pickup.speed) {
             pile.value += pickup.value;
@@ -6452,7 +7219,7 @@ export class Sim {
     }
 
     private collect(pickup: Pickup): void {
-        this.events.push({ type: "pickup", kind: pickup.kind, value: pickup.value });
+        this.emit({ type: "pickup", kind: pickup.kind, value: pickup.value });
         switch (pickup.kind) {
             case "bones":
                 this.xp += pickup.value * (1 + this.stats.growth);
@@ -6485,7 +7252,8 @@ export class Sim {
             return;
         }
         const minutes = seconds / 60;
-        const chance = POWER_UP_CHANCE * rate ** 3 * minutes * minutes * (1 + this.stats.luck);
+        const chance =
+            POWER_UP_CHANCE * fm.pow(rate, 3) * minutes * minutes * (1 + this.stats.luck);
         if (this.rng.chance(chance)) {
             this.dropPowerUp(this.rollPowerUpId(), x, y);
         }
@@ -6507,7 +7275,7 @@ export class Sim {
 
     // Power-ups' damage keeps up with the enemies' hitpoints
     private powerUpDamageScale(): number {
-        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp;
+        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp * this.partyScale.hp;
     }
 
     private powerUpTicks(seconds: number): number {
@@ -6543,7 +7311,10 @@ export class Sim {
                     pickup.attracted = true;
                     pickup.speed = Math.max(pickup.speed, 0.15);
                 }
-                message = "Everything on the ground flies to you!";
+                message =
+                    this.heroes.length > 1
+                        ? "Everything on the ground flies to whoever's nearest!"
+                        : "Everything on the ground flies to you!";
                 break;
             case "freeze":
                 endTick = Math.max(
@@ -6579,6 +7350,7 @@ export class Sim {
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 this.rings.push({
                     uid: this.nextUid++,
+                    hero: this.hero.index,
                     x: player.x,
                     y: player.y,
                     startTick: this.tick,
@@ -6598,14 +7370,20 @@ export class Sim {
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 this.lapsEndTick = endTick;
                 this.laps = effect;
-                this.events.push({ type: "playerShout", text: effect.shout });
+                this.emit({ type: "playerShout", text: effect.shout });
                 message = effect.shout;
                 break;
         }
         if (endTick > this.tick) {
-            this.powerUps.push({ uid: this.nextUid++, id: def.id, startTick: this.tick, endTick });
+            this.powerUps.push({
+                uid: this.nextUid++,
+                hero: this.hero.index,
+                id: def.id,
+                startTick: this.tick,
+                endTick,
+            });
         }
-        this.events.push({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+        this.emit({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
     }
 
     // The middle of the thickest crowd within range of the player, going by
@@ -6619,7 +7397,7 @@ export class Sim {
         for (const enemy of this.nearestEnemies(player.x, player.y, range, MAX_CROWD_CHECKS)) {
             let count = 0;
             this.enemyHash.query(enemy.x, enemy.y, radius, (other) => {
-                if (Math.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
+                if (fm.hypot(other.x - enemy.x, other.y - enemy.y) <= radius) {
                     count++;
                 }
             });
@@ -6636,6 +7414,7 @@ export class Sim {
         const landTick = this.tick + Math.round(effect.delay * TICKS_PER_SECOND);
         this.rocks.push({
             uid: this.nextUid++,
+            hero: this.hero.index,
             powerUpId: def.id,
             x,
             y,
@@ -6654,6 +7433,7 @@ export class Sim {
     private stepRocks(): void {
         for (const rock of this.rocks) {
             if (rock.landTick === this.tick) {
+                this.useHeroAt(rock.hero);
                 this.landRock(rock);
             }
         }
@@ -6662,12 +7442,12 @@ export class Sim {
 
     private landRock(rock: FallingRock): void {
         const { x, y, radius } = rock;
-        this.events.push({ type: "blast", x, y, radius });
-        this.events.push({ type: "powerUpHit", id: rock.powerUpId, x, y });
+        this.emit({ type: "blast", x, y, radius });
+        this.emit({ type: "powerUpHit", id: rock.powerUpId, x, y });
         this.addEffect(rock.spotAnim, x, y, 0, 60);
         const hit: Enemy[] = [];
         this.enemyHash.query(x, y, radius + 1, (enemy) => {
-            if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
+            if (fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
         });
@@ -6692,6 +7472,7 @@ export class Sim {
         const y = player.y - player.facingY * RAMPAGE_START_DISTANCE;
         const rampage: Rampage = {
             uid: this.nextUid++,
+            hero: this.hero.index,
             powerUpId: def.id,
             x,
             y,
@@ -6723,17 +7504,17 @@ export class Sim {
         const crowd = this.thickestCrowd(RAMPAGE_CROWD_RANGE, rampage.radius * 2);
         let dx = crowd.x - rampage.x;
         let dy = crowd.y - rampage.y;
-        if (Math.hypot(dx, dy) < 1) {
+        if (fm.hypot(dx, dy) < 1) {
             dx = player.x - rampage.x;
             dy = player.y - rampage.y;
         }
-        const length = Math.hypot(dx, dy) || 1;
+        const length = fm.hypot(dx, dy) || 1;
         rampage.goalX = rampage.x + dx + (dx / length) * RAMPAGE_OVERSHOOT;
         rampage.goalY = rampage.y + dy + (dy / length) * RAMPAGE_OVERSHOOT;
         rampage.yaw = yawFromVector(dx, dy);
         rampage.passesLeft--;
         rampage.hit.clear();
-        this.events.push({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
+        this.emit({ type: "powerUpHit", id: rampage.powerUpId, x: rampage.x, y: rampage.y });
     }
 
     private stepRampages(): void {
@@ -6743,9 +7524,10 @@ export class Sim {
             if (rampage.doneTick !== -1) {
                 continue;
             }
+            this.useHeroAt(rampage.hero);
             const dx = rampage.goalX - rampage.x;
             const dy = rampage.goalY - rampage.y;
-            const distance = Math.hypot(dx, dy);
+            const distance = fm.hypot(dx, dy);
             const move = Math.min(rampage.speed, distance);
             if (distance > 0) {
                 rampage.x += (dx / distance) * move;
@@ -6769,7 +7551,7 @@ export class Sim {
         const { x, y, radius, hit } = rampage;
         const caught: Enemy[] = [];
         this.enemyHash.query(x, y, radius + 1, (enemy) => {
-            if (!hit.has(enemy.uid) && Math.hypot(enemy.x - x, enemy.y - y) <= radius) {
+            if (!hit.has(enemy.uid) && fm.hypot(enemy.x - x, enemy.y - y) <= radius) {
                 caught.push(enemy);
             }
         });
@@ -6792,6 +7574,10 @@ export class Sim {
     private stepRings(): void {
         for (const ring of this.rings) {
             if (this.tick >= ring.nextPulse) {
+                this.useHeroAt(ring.hero);
+                if (!this.isUp(this.hero)) {
+                    this.use(this.nearestHero(ring.x, ring.y));
+                }
                 ring.nextPulse = this.tick + RING_PULSE_TICKS;
                 this.pulseRing(ring);
             }
@@ -6808,7 +7594,7 @@ export class Sim {
                 !enemy.boss &&
                 !enemy.def.stationary &&
                 !enemy.jump &&
-                Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
+                fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius
             ) {
                 caught.push(enemy);
             }
@@ -6865,10 +7651,23 @@ export class Sim {
             !this.intro &&
             !this.shownBoss?.def.boss?.phases
         ) {
+            this.useVisitorHero();
             // (none to pick or nowhere to put one: it's due again in a moment)
             this.nextRandomEventSeconds = this.startRandomEvent(this.rollRandomEvent())
                 ? this.seconds + this.eventRng.range(...RANDOM_EVENT_EVERY)
                 : this.seconds + RANDOM_EVENT_RETRY;
+        }
+    }
+
+    // Co-op: one of the heroes still up, for a visitor (or an ambush) to turn
+    // up by, from the events' own rolls
+    private useVisitorHero(): void {
+        if (this.heroes.length === 1) {
+            return;
+        }
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        if (up.length > 0) {
+            this.use(up[this.eventRng.int(up.length)]);
         }
     }
 
@@ -6918,7 +7717,7 @@ export class Sim {
             nextShoutTick: this.tick,
         };
         this.addEffect(VISITOR_SPOTANIM, spot.x, spot.y, 0, 60);
-        this.events.push({ type: "visitor", message: def.arrive ?? "", sound: VISITOR_SOUND });
+        this.emit({ type: "visitor", message: def.arrive ?? "", sound: VISITOR_SOUND });
         return true;
     }
 
@@ -6928,8 +7727,8 @@ export class Sim {
         for (let attempt = 0; attempt < 16; attempt++) {
             const angle = this.eventRng.range(0, Math.PI * 2);
             const distance = this.eventRng.range(...VISITOR_DISTANCE);
-            const x = Math.floor(player.x + Math.cos(angle) * distance) + 0.5;
-            const y = Math.floor(player.y + Math.sin(angle) * distance) + 0.5;
+            const x = Math.floor(player.x + fm.cos(angle) * distance) + 0.5;
+            const y = Math.floor(player.y + fm.sin(angle) * distance) + 0.5;
             const tileX = Math.floor(x);
             const tileY = Math.floor(y);
             if (
@@ -6944,7 +7743,6 @@ export class Sim {
     }
 
     private stepVisitor(visitor: Visitor): void {
-        const player = this.player;
         if (this.tick >= visitor.endTick) {
             this.visitorLeft(visitor);
             return;
@@ -6952,13 +7750,19 @@ export class Sim {
         const shouts = visitor.def.shouts;
         if (shouts && this.tick >= visitor.nextShoutTick) {
             visitor.nextShoutTick = this.tick + VISITOR_SHOUT_EVERY * TICKS_PER_SECOND;
-            this.events.push({ type: "visitorShout", text: this.eventRng.pick(shouts) });
+            this.emit({ type: "visitorShout", text: this.eventRng.pick(shouts) });
         }
         // (a casket opened this tick has the run waiting already)
-        if (
-            this.state === "playing" &&
-            Math.hypot(player.x - visitor.x, player.y - visitor.y) <= VISITOR_REACH
-        ) {
+        if (this.state !== "playing") {
+            return;
+        }
+        const met = this.heroes.find(
+            (hero) =>
+                this.isUp(hero) &&
+                fm.hypot(hero.player.x - visitor.x, hero.player.y - visitor.y) <= VISITOR_REACH,
+        );
+        if (met) {
+            this.use(met);
             this.meetVisitor(visitor);
         }
     }
@@ -6968,14 +7772,21 @@ export class Sim {
         this.nextRandomEventSeconds = this.seconds + this.eventRng.range(...RANDOM_EVENT_EVERY);
         this.visitor = undefined;
         this.addEffect(VISITOR_SPOTANIM, visitor.x, visitor.y, 0, 60);
-        this.events.push({ type: "visitor", message: visitor.def.leave ?? "", sound: -1 });
+        this.emit({ type: "visitor", message: visitor.def.leave ?? "", sound: -1 });
         const effect = visitor.def.effect;
-        if (effect.kind === "heal" && effect.ignoredHit && !this.reviving) {
-            const hit = Math.round(this.player.maxHp * effect.ignoredHit);
-            const amount = Math.min(hit, this.player.hp - 1);
-            if (amount > 0) {
-                this.damagePlayer(amount, visitor.def.id, false, effect.sound, true);
-            }
+        if (effect.kind === "heal" && effect.ignoredHit) {
+            // Everyone still in the fight ignored them
+            const { ignoredHit, sound } = effect;
+            this.forEachHeroInReach(() => {
+                if (this.reviving) {
+                    return;
+                }
+                const hit = Math.round(this.player.maxHp * ignoredHit);
+                const amount = Math.min(hit, this.player.hp - 1);
+                if (amount > 0) {
+                    this.damagePlayer(amount, visitor.def.id, false, sound, true);
+                }
+            });
         }
     }
 
@@ -7010,7 +7821,7 @@ export class Sim {
                 this.addEventBuff(def.id, effect);
                 break;
         }
-        this.events.push({ type: "visitor", message: effect.message, sound: effect.sound });
+        this.emit({ type: "visitor", message: effect.message, sound: effect.sound }, true);
     }
 
     private addEventBuff(id: string, effect: Extract<RandomEventEffect, { kind: "buff" }>): void {
@@ -7025,7 +7836,7 @@ export class Sim {
     }
 
     private openOffer(def: RandomEventDef, options: EventOption[]): void {
-        this.offer = { uid: this.nextUid++, def, options };
+        this.offer = { uid: this.nextUid++, def, options, hero: this.hero.index };
         this.state = "event";
     }
 
@@ -7076,7 +7887,7 @@ export class Sim {
     chooseEventOption(index: number): boolean {
         const offer = this.offer;
         const option = offer?.options[index];
-        if (this.state !== "event" || !offer || !option) {
+        if (this.state !== "event" || !offer || !option || offer.hero !== this.hero.index) {
             return false;
         }
         if (option.kind === "powerUp") {
@@ -7085,7 +7896,7 @@ export class Sim {
             }
             this.coins -= option.price;
             option.sold = true;
-            this.events.push({ type: "visitor", message: "", sound: SOUNDS.buy });
+            this.emit({ type: "visitor", message: "", sound: SOUNDS.buy }, true);
             this.usePowerUp(getPowerUp(option.powerUpId));
             // A bought nuke can finish off a final boss
             if (this.runOver || offer.options.every((o) => o.kind === "powerUp" && o.sold)) {
@@ -7095,11 +7906,14 @@ export class Sim {
         }
         const effect = offer.def.effect;
         if (effect.kind === "quiz") {
-            this.events.push({
-                type: "visitor",
-                message: option.correct ? effect.right : effect.wrong,
-                sound: option.correct ? SOUNDS.levelUp : SOUNDS.denied,
-            });
+            this.emit(
+                {
+                    type: "visitor",
+                    message: option.correct ? effect.right : effect.wrong,
+                    sound: option.correct ? SOUNDS.levelUp : SOUNDS.denied,
+                },
+                true,
+            );
             if (option.correct) {
                 this.usePowerUp(getPowerUp(this.rollPowerUpId()));
             }
@@ -7111,11 +7925,14 @@ export class Sim {
     // Done with what's on offer: on with the run (or a level up or casket that
     // came in meanwhile)
     leaveEvent(): void {
+        if (this.offer && this.offer.hero !== this.hero.index) {
+            return;
+        }
         this.offer = undefined;
         if (this.state !== "event") {
             return;
         }
-        this.state = this.chests.length > 0 ? "chest" : "playing";
+        this.state = this.heroes.some((hero) => hero.chests.length > 0) ? "chest" : "playing";
         this.checkLevelUp();
     }
 
@@ -7131,7 +7948,7 @@ export class Sim {
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
-        this.events.push({ type: "chest", tier, itemId, coins });
+        this.emit({ type: "chest", tier, itemId, coins });
         if (this.state === "playing") {
             this.state = "chest";
         }
@@ -7173,22 +7990,40 @@ export class Sim {
         return getItem(itemId).kind === "gear" ? this.gearUpgradesFound : 0;
     }
 
+    // The run's level is shared: each level up gives every hero a pick
     private checkLevelUp(): void {
         const level = this.endless
             ? endlessLevelForXp(this.xp, this.level)
             : runLevelForXp(this.xp);
         if (level > this.level) {
-            this.pendingLevelUps += level - this.level;
+            const gained = level - this.level;
             this.level = level;
-            if (this.stats.levelMight !== 0) {
-                this.updateStats();
+            for (const hero of this.heroes) {
+                if (hero.left) {
+                    continue;
+                }
+                this.use(hero);
+                hero.pendingLevelUps += gained;
+                if (this.stats.levelMight !== 0) {
+                    this.updateStats();
+                }
+                this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
             }
-            this.events.push({ type: "levelUp", level });
-            this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
+            this.emit({ type: "levelUp", level });
         }
-        if (this.pendingLevelUps > 0 && this.state === "playing") {
+        if (this.state === "playing" && this.anyoneToChoose()) {
             this.state = "levelUp";
-            this.choices = this.roll();
+            this.rollMissingChoices();
+        }
+    }
+
+    // Rewards for everyone choosing a level up who hasn't any yet
+    private rollMissingChoices(): void {
+        for (const hero of this.heroes) {
+            if (this.isChoosing(hero) && hero.choices.length === 0) {
+                this.use(hero);
+                this.choices = this.roll();
+            }
         }
     }
 
@@ -7236,7 +8071,10 @@ export class Sim {
         if (this.runOver) {
             return undefined;
         }
-        return this.powerUps.map((p) => getPowerUp(p.id)).find((p) => p.look);
+        return this.powerUps
+            .filter((p) => p.hero === this.hero.index)
+            .map((p) => getPowerUp(p.id))
+            .find((p) => p.look);
     }
 
     // Until this round's final boss
@@ -7299,7 +8137,7 @@ function pingPong(distance: number, half: number): number {
 
 // RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
 export function yawFromVector(dx: number, dy: number): number {
-    return Math.round((Math.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
+    return Math.round((fm.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
 }
 
 export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };

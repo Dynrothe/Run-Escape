@@ -1,3 +1,4 @@
+import { fm } from "../core/fmath";
 import { GearDef, StatKey, Stats } from "./types";
 
 // Endless runs: a beaten map's fifteen minutes over and over until the player
@@ -54,7 +55,7 @@ export const LATE_CASKET_LIMIT = 25;
 
 // What a round multiplies a base value by
 export function roundScale(base: number, round: number): number {
-    return Math.pow(base, round - 1);
+    return fm.pow(base, round - 1);
 }
 
 // What a round multiplies its waves' crowds and spawn rates by

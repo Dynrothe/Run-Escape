@@ -6,6 +6,7 @@ import { RunResult } from "../core/Sim";
 import { SaveData } from "../core/save";
 import { DisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
+import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
 export type Screen =
     | "loading"
@@ -15,6 +16,8 @@ export type Screen =
     | "armoury"
     | "quests"
     | "collectionLog"
+    // Co-op: finding or making a room, and the room before a run
+    | "coop"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -210,6 +213,20 @@ export type ChoiceView = {
     evolves?: { text: string; held: boolean };
 };
 
+// Co-op: a player in the run besides you, for the party frames
+export type TeammateView = {
+    name: string;
+    characterId: string;
+    hp: number;
+    maxHp: number;
+    // Down with no revives left (out for the rest of the run), or gone from
+    // the game
+    down: boolean;
+    left: boolean;
+    // Their player id in the room, for the host to kick them
+    id?: string;
+};
+
 export type Toast = { id: number; text: string; until: number };
 
 export type UiSnapshot = {
@@ -224,6 +241,11 @@ export type UiSnapshot = {
     endless: boolean;
     hud?: HudView;
     overlay: RunOverlay;
+    // Co-op: the room and its menus, everyone else in the run, and who the
+    // run's waiting on to choose (when it isn't you)
+    coop: CoopView;
+    party: TeammateView[];
+    waitingOn: string[];
     choices: ChoiceView[];
     chest?: ChestView;
     event?: EventView;
@@ -246,6 +268,9 @@ export type UiSnapshot = {
         // The names of the trophies it found for the first time
         newTrophies: string[];
         quests: { name: string; coins: number }[];
+        // Co-op: who else played, and why it ended early if it did
+        party?: string[];
+        endedEarly?: string;
     };
     toasts: Toast[];
     debug: boolean;
@@ -270,6 +295,9 @@ export class GameStore {
             mapId: "lumbridge",
             endless: false,
             overlay: "none",
+            coop: OFFLINE,
+            party: [],
+            waitingOn: [],
             choices: [],
             toasts: [],
             debug: false,
