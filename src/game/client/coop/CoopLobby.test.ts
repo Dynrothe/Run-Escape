@@ -13,7 +13,7 @@ describe("room codes", () => {
 
     it("tidies up a typed one", () => {
         expect(parseRoomCode(" nv-kds ")).toBe("NVKDS");
-        expect(parseRoomCode("ABCDEFG")).toBe("ABCDE");
+        expect(parseRoomCode("ABCDEFGHIJ")).toBe("ABCDEFGH");
         expect(parseRoomCode("")).toBe("");
     });
 });

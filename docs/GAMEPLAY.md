@@ -390,7 +390,7 @@ version and how to run it.
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
-  (friends join with its five-letter code or the invite link) or open to anyone browsing the
+  (friends join with its eight-letter code or the invite link) or open to anyone browsing the
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
   Armoury and unlocked items; the host picks the map and endless, and starts once everyone (the
   host too) is ready, which can be a party of one. The host can open or close the room, kick a

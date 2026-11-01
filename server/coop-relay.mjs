@@ -79,6 +79,11 @@ const MAX_CREATES_PER_MINUTE = 10;
 // Joining's a room update for everyone in it, and so's leaving: enough to look
 // round a few rooms, not enough to flood one by going in and out
 const MAX_JOINS_PER_MINUTE = 12;
+// Connections in all, below a server's usual limit of 1,024 open files
+const MAX_CONNECTIONS = 800;
+// A connection that's in no room and has done nothing for this long is closed
+// (a room left alone goes by IDLE_MS)
+const IDLE_CONNECTION_MS = 10 * 60_000;
 // Room codes that don't exist, tried from one address, before it has to wait
 const MAX_WRONG_CODES_PER_MINUTE = 20;
 // A room nobody's done anything in for this long is closed
@@ -97,6 +102,14 @@ const MAX_LIST_PAGE_SIZE = 20;
 const MAX_MESSAGE_BYTES = 256 * 1024;
 // A client sending more than this many frames a second is dropped
 const MAX_FRAMES_PER_SECOND = 400;
+// Or this many bytes: twice the biggest message, far above what a game sends
+const MAX_BYTES_PER_SECOND = 2 * MAX_MESSAGE_BYTES;
+// A player's inputs for the host, which are tiny and about 15 a second: more
+// or bigger than this goes no further
+const MAX_UP_BYTES = 1024;
+const MAX_UPS_PER_SECOND = 60;
+// What a player says about themselves: a loadout and unlocks at their limits
+const MAX_ME_BYTES = 40 * 1024;
 // A message in more pieces than this isn't from a browser
 const MAX_FRAGMENTS = 16;
 // Deeper than anything the game sends; JSON.stringify of a much deeper one
@@ -111,13 +124,14 @@ const PING_MS = 20_000;
 const MEMBER_UPDATE_MS = 250;
 // Room codes leave out letters and digits that look alike
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 5;
+// Long enough that no number of addresses can guess one
+const CODE_LENGTH = 8;
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 // ---- WebSocket (RFC 6455): just what browsers send ----
 
 class Connection {
-    constructor(socket, onMessage, onClose) {
+    constructor(socket, onMessage, onClose, bytesPerSecond = MAX_BYTES_PER_SECOND) {
         this.socket = socket;
         this.onMessage = onMessage;
         this.onClose = onClose;
@@ -134,6 +148,8 @@ class Connection {
         this.alive = true;
         this.second = 0;
         this.framesThisSecond = 0;
+        this.bytesThisSecond = 0;
+        this.bytesPerSecond = bytesPerSecond;
         socket.setNoDelay(true);
         socket.on("data", (data) => this.receive(data));
         socket.on("close", () => this.finish());
@@ -144,6 +160,12 @@ class Connection {
 
     receive(data) {
         if (this.closed) {
+            return;
+        }
+        this.startSecond();
+        this.bytesThisSecond += data.length;
+        if (this.bytesThisSecond > this.bytesPerSecond) {
+            this.close(1008);
             return;
         }
         this.chunks.push(data);
@@ -296,12 +318,17 @@ class Connection {
         }
     }
 
-    overLimit() {
+    startSecond() {
         const second = Math.floor(Date.now() / 1000);
         if (second !== this.second) {
             this.second = second;
             this.framesThisSecond = 0;
+            this.bytesThisSecond = 0;
         }
+    }
+
+    overLimit() {
+        this.startSecond();
         return ++this.framesThisSecond > MAX_FRAMES_PER_SECOND;
     }
 
@@ -432,6 +459,12 @@ export function addressKey(address) {
         .join(":")}::/64`;
 }
 
+// Who's guessing room codes: an address, or an IPv6 /48, which one person can
+// easily have 65,536 /64s of
+export function guesserKey(address) {
+    return address.endsWith("::/64") ? `${address.split(":").slice(0, 3).join(":")}::/48` : address;
+}
+
 // A whole, unmasked frame (as a server sends them), header and payload in
 // one buffer
 function encodeFrame(opcode, payload) {
@@ -504,6 +537,9 @@ export function createRelay(limits = {}) {
         createsPerMinute = MAX_CREATES_PER_MINUTE,
         wrongCodesPerMinute = MAX_WRONG_CODES_PER_MINUTE,
         joinsPerMinute = MAX_JOINS_PER_MINUTE,
+        maxConnections = MAX_CONNECTIONS,
+        bytesPerSecond = MAX_BYTES_PER_SECOND,
+        idleConnectionMs = IDLE_CONNECTION_MS,
         memberUpdateMs = MEMBER_UPDATE_MS,
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
@@ -702,8 +738,8 @@ export function createRelay(limits = {}) {
     function guessing(address) {
         const now = Date.now();
         return (
-            (wrongCodesFrom.get(address) ?? []).filter((t) => now - t < 60_000).length >=
-            wrongCodesPerMinute
+            (wrongCodesFrom.get(guesserKey(address)) ?? []).filter((t) => now - t < 60_000)
+                .length >= wrongCodesPerMinute
         );
     }
 
@@ -764,12 +800,26 @@ export function createRelay(limits = {}) {
         return undefined;
     }
 
+    // Whether a guest's input is the size and rate a game sends
+    function allowUp(client, payload) {
+        const second = Math.floor(Date.now() / 1000);
+        if (second !== client.upSecond) {
+            client.upSecond = second;
+            client.upsThisSecond = 0;
+        }
+        return payload.length <= MAX_UP_BYTES && ++client.upsThisSecond <= MAX_UPS_PER_SECOND;
+    }
+
     // payload: the message's bytes as they came, for passing on
     function handle(client, message, payload) {
         const room = client.room;
-        // Pings and browsing the list don't keep a room open
-        if (room && message.t !== "ping" && message.t !== "list") {
-            room.lastActive = Date.now();
+        // Pings, browsing the list and a player's own updates don't keep
+        // anything open
+        if (message.t !== "ping" && message.t !== "list" && message.t !== "me") {
+            client.lastActive = Date.now();
+            if (room) {
+                room.lastActive = client.lastActive;
+            }
         }
         const isHost = room !== undefined && room.hostId === client.id;
         const error = (text) => client.connection.send({ t: "error", message: text });
@@ -848,7 +898,7 @@ export function createRelay(limits = {}) {
                     typeof message.code === "string" ? message.code.toUpperCase().slice(0, 16) : "";
                 const target = rooms.get(code);
                 if (!target) {
-                    underLimit(wrongCodesFrom, client.address, Infinity);
+                    underLimit(wrongCodesFrom, guesserKey(client.address), Infinity);
                     error(`There's no room ${code || "with that code"}.`);
                     return;
                 }
@@ -902,7 +952,7 @@ export function createRelay(limits = {}) {
                 leaveRoom(client, "left");
                 return;
             case "me":
-                if (room) {
+                if (room && payload.length <= MAX_ME_BYTES) {
                     setMember(client, message);
                     broadcastMembers(room);
                 }
@@ -1001,7 +1051,7 @@ export function createRelay(limits = {}) {
             // player reads what the relay did
             case "up":
                 // A guest's input, for the host, saying who it's from
-                if (room?.started && !isHost) {
+                if (room?.started && !isHost && allowUp(client, payload)) {
                     const host = room.members.find((m) => m.id === room.hostId);
                     host?.connection.write(encodeFrame(0x1, withField(payload, "from", client.id)));
                 }
@@ -1044,6 +1094,10 @@ export function createRelay(limits = {}) {
             refuse(socket, "429 Too Many Requests");
             return;
         }
+        if (clients.size >= maxConnections) {
+            refuse(socket, "503 Service Unavailable");
+            return;
+        }
         connectionsFrom.set(address, connections + 1);
         socket.write(
             "HTTP/1.1 101 Switching Protocols\r\n" +
@@ -1062,6 +1116,9 @@ export function createRelay(limits = {}) {
             room: undefined,
             connection: undefined,
             address,
+            lastActive: Date.now(),
+            upSecond: 0,
+            upsThisSecond: 0,
         };
         client.connection = new Connection(
             socket,
@@ -1077,6 +1134,7 @@ export function createRelay(limits = {}) {
                 }
                 leaveRoom(client);
             },
+            bytesPerSecond,
         );
         clients.add(client);
         playerNames.add(client.name);
@@ -1104,6 +1162,11 @@ export function createRelay(limits = {}) {
         for (const room of [...rooms.values()]) {
             if (now - room.lastActive > idleMs) {
                 disband(room, "idle");
+            }
+        }
+        for (const client of clients) {
+            if (!client.room && now - client.lastActive > idleConnectionMs) {
+                client.connection.close(1001);
             }
         }
         for (const times of [createdFrom, wrongCodesFrom, joinedFrom]) {
@@ -1180,7 +1243,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         }
     });
     relay.attach(server, path, { closeOthers: true });
-    server.listen(port, () => {
+    server.listen({ port, host: process.env.HOST }, () => {
         console.log(`Co-op relay on ws://localhost:${port}${path}`);
     });
 }

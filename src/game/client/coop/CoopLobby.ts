@@ -86,10 +86,10 @@ function getStatusUrl(): string {
 }
 
 // Room codes are this long (the relay makes them)
-export const ROOM_CODE_LENGTH = 5;
+export const ROOM_CODE_LENGTH = 8;
 
 // A room code from what was typed or pasted: the code, or an invite link
-// with it (https://example.com/?room=ABCDE)
+// with it (https://example.com/?room=ABCDEFGH)
 export function parseRoomCode(text: string): string {
     const code = /[?&]room=([A-Za-z0-9]+)/.exec(text)?.[1] ?? text;
     return code

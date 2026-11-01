@@ -111,6 +111,10 @@ proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve 
 | `local`        | Caddy, nginx or a container in front, on the same machine or a private network | that proxy's: the last address in its `X-Forwarded-For`, which it adds itself (Caddy does by default, nginx with the line above) |
 | `cloudflare`   | Cloudflare in front, with or without a local proxy behind it                   | Cloudflare's `CF-Connecting-IP`, only from Cloudflare's own addresses (and a local proxy's, as `local`)                          |
 
+The relay takes 800 connections in all, so give it room with `LimitNOFILE` if you raise that. A
+connection in no room that's done nothing for 10 minutes is closed, as is a room left alone for
+half an hour. Set `HOST=127.0.0.1` on the standalone relay so only your proxy can reach it.
+
 Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
 proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)
 adds proxies elsewhere. With `cloudflare`, the relay fetches Cloudflare's addresses from

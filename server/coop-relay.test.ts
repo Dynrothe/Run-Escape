@@ -5,6 +5,7 @@ import {
     RELAY_PATH,
     addressKey,
     createRelay,
+    guesserKey,
     isAnyMapOn,
     isMultiplayerOn,
     maxRoomsSetting,
@@ -579,6 +580,7 @@ describe("co-op relay", () => {
         });
 
         it("drops a guest that stops reading, rather than keeping all it's sent", async () => {
+            await restart({ bytesPerSecond: Infinity });
             const { host, code } = await party(0);
             const raw = new RawClient(port());
             await raw.saw("welcome");
@@ -668,6 +670,69 @@ describe("co-op relay", () => {
         expect((await guest.next("error")).message).toMatch(/Wait a minute/);
     });
 
+    it("makes codes too long to guess", async () => {
+        const { code } = await party(0);
+        expect(code).toMatch(/^[A-Z2-9]{8}$/);
+    });
+
+    it("turns connections away past its limit", async () => {
+        await restart({ maxConnections: 1 });
+        await connect();
+        const raw = new RawClient(Number(new URL(url).port));
+        await raw.saw("503 Service Unavailable");
+    });
+
+    it("closes a connection in no room that's done nothing, but not one in a room", async () => {
+        await restart({ idleConnectionMs: 1000 });
+        const { host } = await party(0);
+        const idle = await connect();
+        idle.send({ t: "list" });
+        await idle.next("rooms");
+        relay.sweep(Date.now() + 2000);
+        await new Promise<void>((resolve) => {
+            idle.socket.onclose = () => resolve();
+        });
+        host.send({ t: "ping" });
+        await host.next("pong");
+    });
+
+    it("doesn't let a player's own updates keep a room open", async () => {
+        await restart({ idleMs: 1000 });
+        const { host } = await party(0);
+        const start = Date.now();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        host.send({ t: "me", characterId: "wizard" });
+        await host.roomWhere((r) => r.members[0].characterId === "wizard");
+        relay.sweep(start + 1500);
+        expect((await host.next("gone")).reason).toBe("idle");
+    });
+
+    it("passes on a guest's input only at the size and rate a game sends it", async () => {
+        const { host, guests } = await party(1);
+        host.send({ t: "start", game: { seed: 5 } });
+        await guests[0].next("start");
+        guests[0].send({ t: "up", d: "x".repeat(2000) });
+        for (let i = 0; i < 100; i++) {
+            guests[0].send({ t: "up", n: i });
+        }
+        guests[0].send({ t: "ping" });
+        await guests[0].next("pong");
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        const ups = host.messages.filter((m) => m.t === "up");
+        expect(ups.every((m) => m.d === undefined)).toBe(true);
+        expect(ups.length).toBeLessThanOrEqual(120);
+    });
+
+    it("closes a connection sending too many bytes", async () => {
+        const raw = new RawClient(Number(new URL(url).port));
+        await raw.saw("welcome");
+        const big = RawClient.frame(0x1, JSON.stringify({ t: "ping", d: "x".repeat(200_000) }));
+        for (let i = 0; i < 4; i++) {
+            raw.socket.write(big);
+        }
+        await raw.closed;
+    });
+
     it("keeps a kicked player out, and slows down guessing codes", async () => {
         await restart({ wrongCodesPerMinute: 3 });
         const { host, guests, code } = await party(1);
@@ -687,6 +752,11 @@ describe("co-op relay", () => {
 });
 
 describe("relay limits by address", () => {
+    it("counts guessing IPv6 addresses by the /48", () => {
+        expect(guesserKey("2001:db8:1:2::/64")).toBe("2001:db8:1::/48");
+        expect(guesserKey("203.0.113.9")).toBe("203.0.113.9");
+    });
+
     it("counts an IPv6 address by its /64", () => {
         expect(addressKey("2001:db8:1:2:aaaa::1")).toBe("2001:db8:1:2::/64");
         expect(addressKey("2001:db8:1:2:ffff:1:2:3")).toBe("2001:db8:1:2::/64");
