@@ -113,6 +113,17 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
 - A `blinks.surface` seq is baked like `blinks.seq`, and needs to be one the NPC's model can play.
 
+A new boss attack in `Sim.ts` that hits where the player stands has to hit each player in co-op:
+check them with `forEachHeroInReach`, and keep anything it leaves on a player on their `Hero`.
+`coop.test.ts` has a test to copy.
+
+## Anything in the sim, for co-op
+
+Co-op in `docs/DEVELOPMENT.md` has the rules: a player's own state goes on `Hero`, something that
+lingers carries `hero` and acts through `useHeroAt`, a new event about one player goes in
+`PERSONAL_EVENTS`, `this.player` means nothing outside a loop over the heroes, and trigonometry
+goes through `fm`. A solo run has to play exactly as before: compare a sim with `main`'s.
+
 ## Map
 
 Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in `waves.ts`.

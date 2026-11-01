@@ -110,9 +110,15 @@ jobs:
                   key: osrs-cache-${{ steps.game-cache.outputs.name }}
 
             - run: npm test
+            # Where desktop players find co-op: the COOP_URL repository variable,
+            # wss://example.com/coop. Without it, the app has no Multiplayer.
             - run: npm run build
+              env:
+                  VITE_COOP_URL: ${{ vars.COOP_URL }}
             - run: npm run slim-cache
             - run: npm run desktop:dist
+              env:
+                  VITE_COOP_URL: ${{ vars.COOP_URL }}
 
             - uses: actions/upload-artifact@v7
               with:

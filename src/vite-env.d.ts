@@ -12,6 +12,8 @@ declare global {
 
     // package.json's version, put in by vite.config.ts
     const __APP_VERSION__: string;
+    // The version and commit, for co-op (vite.config.ts)
+    const __BUILD_ID__: string;
 }
 
 declare module "react" {

@@ -79,6 +79,17 @@ export function parseRange(
     return end < start ? undefined : { start, end };
 }
 
+// The address the relay answers plain requests at, from the build's VITE_COOP_URL. The app answers
+// every https request itself, so this one has to be let through for co-op to be offered.
+export function getRelayOrigin(coopUrl: string): string | undefined {
+    try {
+        const url = new URL(coopUrl);
+        return url.protocol === "wss:" ? `https://${url.host}` : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 // Answers a request for the game like the static server it's written for
 export async function serveGame(root: string, request: Request): Promise<Response> {
     const url = new URL(request.url);

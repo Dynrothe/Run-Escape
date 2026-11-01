@@ -392,6 +392,52 @@ version and how to run it.
   rarity of what it becomes, and an upgrade into a piece still locked behind a map task waits
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
+- **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
+  (friends join with its eight-letter code or the invite link) or open to anyone browsing the
+  rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
+  Armoury and unlocked items; the host picks the map and endless, and starts once everyone (the
+  host too) is ready, which can be a party of one. The host can open or close the room, kick a
+  player and disband it. A pasted invite link in the code box leaves just its code. Everyone
+  gets a readable name to play under, like "Plucky Chinchompa", and rooms get one too, like "Moonlit
+  Crossing". **New name** picks another, any time but during a run.
+    - You can only join a room on a map you've unlocked yourself (and its endless, for an endless
+      room), and the host can only pick maps everyone in the room has, so nobody skips ahead. A
+      server can let anyone in instead (`MULTIPLAYER_ANY_MAP`); then a win opens the map it was
+      on for a player who hadn't got that far (along with the next), but not the maps before it.
+    - The run's **level is shared**: every level up gives each player their own three choices, and
+      the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
+      shared too, and everyone banks the run's coins.
+    - A **random event's** visitor turns up by one of the party, and whoever walks up first meets
+      them and gets what they bring. The Mysterious Old Man's and the Quiz Master's offers are
+      theirs to choose from while the run waits, paid for from the shared coins. Ignore the
+      Sandwich lady and everyone still standing gets the baguette.
+    - A **boss's attacks** land on whoever they reach: The Nightmare's bullets, marks, quarters and
+      charge, Slash Bash's pools and The Mimic's stomp hurt each player caught in them, and the blast
+      once her Sleepwalkers reach her hits everyone. A curse,
+      her parasite and being held are on the player they hit. Her fight starts with the whole
+      party in the middle of her square, and each player rolls for their own Collection log drop.
+    - Anyone who keeps the run waiting for 20 seconds (a level up, a casket, a random event's
+      offer) has it decided for them: the first reward, taking the casket, or walking away. The
+      host can kick a player from the menu mid-run, and everyone has to be on the same version of
+      the game.
+    - Caskets drop 20% more often for each player past the first, so there's more gear to go round,
+      and power-ups hit as hard against the tougher crowd. The Highwayman takes his share of the
+      shared coins once, however many of you he hits.
+    - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
+      at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
+      10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party
+      levels about as fast as a player on their own (worth more when the crowd is at its cap and
+      can grow no bigger). It eases off as players go down or leave, each still counting as half
+      a player, so the last one of four standing faces a crowd made for two and a half.
+    - Enemies go for whoever's **nearest**, and pickups fly to whoever's nearest.
+    - A player who falls with no ring of life left (it saves you as it does on your own) is
+      **down** and out for the rest of the run, watching a teammate who's still up. The run goes
+      on while anyone's standing, without waiting on the downed for level ups, and ends when
+      everyone's down.
+    - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
+      leaving ends it for everyone.
+    - Teammates show with their names in green, an arrow at the edge of the screen when they're out
+      of view, green dots on the minimap and their hitpoints down the left of the screen.
 - **Quests** (on the title screen) pay banked coins: each is named for an OSRS quest and asks
   for kills (Goblin Diplomacy, 300 goblins), a boss (Vampyre Slayer, Count Draynor; Desert
   Treasure I, Fareed, Dessous and Damis) or caskets opened (Pirate's Treasure). They count over

@@ -365,32 +365,50 @@
     }
 
     .ui-title-menu {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
         gap: 6px;
-        width: min(380px, 52vw);
-        box-sizing: border-box;
+        width: min(420px, 54vw);
+        padding: 6px 8px;
+    }
+
+    .ui-title-play,
+    .ui-title-tiles {
+        gap: 6px;
     }
 
     .ui-button-big {
-        min-height: 48px;
+        min-height: 50px;
         padding: 4px 6px;
-        font-size: 18px;
+        font-size: 22px;
+    }
+
+    .ui-title-tile {
+        min-height: 48px;
+        padding: 2px 1px;
+        font-size: 14px;
     }
 
     .ui-title-stats {
-        grid-column: 1 / -1;
-        gap: 0;
-        margin-top: 0;
+        gap: 0 10px;
+        padding: 1px 6px;
     }
 
-    .ui-title-links {
+    .ui-title-utils {
+        right: auto;
         left: calc(var(--safe-left) + 10px);
+        bottom: calc(var(--safe-bottom) + 4px);
+    }
+
+    .ui-title-link {
+        padding: 8px;
+    }
+
+    .ui-title-settings {
+        width: 44px;
+        height: 44px;
+        padding: 0;
     }
 
     .ui-version {
-        right: calc(var(--safe-right) + 6px);
-        bottom: 2px;
         min-height: 40px;
     }
 
@@ -770,5 +788,27 @@
 @media (pointer: coarse) and (max-height: 520px) and (min-width: 760px) {
     .ui-quest {
         grid-template-columns: 170px minmax(0, 1fr) 80px 80px;
+    }
+}
+
+/* Co-op's lobby: the party tighter, and one empty place showing rather than
+   all of them, so the host's map list has room below */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-coop-member {
+        min-height: 30px;
+        padding: 1px 6px;
+    }
+
+    .ui-coop-member-empty + .ui-coop-member-empty {
+        display: none;
+    }
+
+    .ui-coop-party .ui-coop-maps {
+        min-height: 60px;
+        max-height: none;
+    }
+
+    .ui-coop-code-value {
+        font-size: 17px;
     }
 }

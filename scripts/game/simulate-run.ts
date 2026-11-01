@@ -61,6 +61,9 @@ const ARENA = map.arena;
 const finalBoss = process.env.FINAL_BOSS;
 const fresh = process.env.FRESH === "1";
 const dodges = process.env.DODGE === "1";
+// A co-op party of this many of the adventurer, each played by the bot on its
+// own (it doesn't play as a team: no regrouping, no waiting for the others)
+const partySize = parseInt(process.env.PARTY ?? "1");
 if (finalBoss) {
     map.events = map.events.map((e) =>
         e.kind === "finalBoss" ? { at: e.at, kind: e.kind, enemyId: finalBoss, hp: e.hp } : e,
@@ -489,8 +492,109 @@ function runOnce(characterId: string, seed: number) {
     return result;
 }
 
+// A co-op run, the bot deciding for each player whenever the run waits on
+// them, and moving each as it would on their own
+function runParty(characterId: string, seed: number) {
+    const sim = new Sim({
+        grid,
+        characterId,
+        metaStats,
+        seed,
+        mapId: map.id,
+        spawnX: map.spawn.x,
+        spawnY: map.spawn.y,
+        endless,
+        party: Array.from({ length: partySize }, (_, i) => ({
+            name: "bot" + (i + 1),
+            characterId,
+            metaStats,
+            unlockedItems,
+            armoury,
+        })),
+    });
+    const maxTicks = (endless ? 90 * 60 : RUN_LENGTH + 120) * TICKS_PER_SECOND;
+    const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
+    let firstDown: number | undefined;
+    let fightTicks = 0;
+    while (sim.tick < maxTicks && !sim.runOver) {
+        if (sim.state !== "playing") {
+            for (const hero of sim.waitingOn) {
+                sim.as(hero.index, () => {
+                    if (sim.state === "levelUp") {
+                        const ranked = sim.choices
+                            .map((choice, index) => ({ choice, index }))
+                            .sort((a, b) => choiceScore(a.choice) - choiceScore(b.choice));
+                        sim.choose(ranked[0].index);
+                    } else if (sim.state === "chest") {
+                        sim.resolveChest(chestAction(sim));
+                    } else {
+                        const choice = eventChoice(sim);
+                        if (choice === -1 || !sim.chooseEventOption(choice)) {
+                            sim.leaveEvent();
+                        }
+                    }
+                });
+            }
+            continue;
+        }
+        for (const hero of sim.heroes) {
+            if (hero.down || hero.left) {
+                continue;
+            }
+            sim.as(hero.index, () => {
+                if (sim.tick % 25 === 0) {
+                    useItems(sim);
+                }
+                if (sim.tick % 5 === 0) {
+                    moves[hero.index] = fightMove(sim) ?? botMove(sim);
+                }
+                const pressed = uncursed(sim, moves[hero.index]);
+                sim.setInput(hero.index, pressed.x, pressed.y);
+            });
+        }
+        sim.step();
+        if (sim.shownBoss?.bossState?.phase) {
+            fightTicks++;
+        }
+        for (const event of sim.takeEvents()) {
+            if (event.type === "heroDown") {
+                firstDown ??= sim.seconds;
+            }
+        }
+    }
+    const result = sim.getResult();
+    const gear = sim.heroes.map((hero) => Object.keys(hero.gear).length);
+    const outcome = result.victory ? "VICTORY" : sim.state === "dead" ? "died" : "timed out";
+    runs++;
+    console.log(
+        characterId +
+            " seed " +
+            seed +
+            " party of " +
+            partySize +
+            ": " +
+            outcome +
+            " at " +
+            formatClock(result.seconds) +
+            ", level " +
+            result.level +
+            ", " +
+            result.kills +
+            " kills, first down " +
+            (firstDown === undefined ? "never" : formatClock(firstDown)) +
+            ", worn gear " +
+            (gear.reduce((a, b) => a + b, 0) / gear.length).toFixed(1) +
+            " each" +
+            (fightTicks > 0 ? ", fight " + (fightTicks / TICKS_PER_SECOND).toFixed(0) + "s" : ""),
+    );
+}
+
 for (const characterId of characters) {
     for (let seed = 1; seed <= seeds; seed++) {
+        if (partySize > 1) {
+            runParty(characterId, seed);
+            continue;
+        }
         console.log(`\n${characterId} seed ${seed}`);
         runOnce(characterId, seed);
     }

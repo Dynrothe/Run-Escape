@@ -5,6 +5,24 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.21.0 - 2026-11-01
+
+### Added
+
+- Co-op, built by trippy22: play a run with up to three friends. Make a room that's invite only
+  (by its code or an invite link) or open to anyone, ready up, and the host picks the map. Everyone
+  brings their own adventurer and progress, levels are shared with a pick each, and the run goes on
+  while anyone's still standing. Winning on a map you haven't reached yet in a friend's party opens
+  it for you. Anyone who keeps everyone waiting for 20 seconds has their pick made for them.
+- Co-op names: everyone gets a readable name to play under, like "Plucky Chinchompa", and rooms get
+  one too. New name picks another.
+- Co-op on the desktop version too, for anyone with the new download.
+
+### Changed
+
+- A tidier main menu: Singleplayer and Multiplayer up front, smaller tiles for Skills, Armoury,
+  Quests and the Collection log, and more of the world in view.
+
 ## 0.20.1 - 2026-11-01
 
 ### Added
