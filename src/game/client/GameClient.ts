@@ -80,6 +80,7 @@ import {
 } from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { getPlayerPose } from "./PlayerPose";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
@@ -1398,9 +1399,15 @@ export class GameClient implements GameFrameHandler {
         this.viewHero = this.getViewHero(sim);
         this.view.viewHero = this.viewHero;
         const alpha = this.getAlpha();
-        const player = sim.heroes[this.viewHero].player;
-        const px = player.prevX + (player.x - player.prevX) * alpha;
-        const py = player.prevY + (player.y - player.prevY) * alpha;
+        this.view.localPlayerPose = this.coopStopped
+            ? undefined
+            : this.coopRun?.prediction?.render();
+        const { x: px, y: py } = getPlayerPose(
+            sim,
+            this.viewHero,
+            alpha,
+            this.view.localPlayerPose,
+        );
         // Aim at the player's chest, not their feet
         let ground = this.grid.getHeight(px, py) / 128;
         if (sim.map.scaperune) {
@@ -1864,7 +1871,13 @@ export class GameClient implements GameFrameHandler {
         if (sim) {
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
-                this.minimap.draw(this.minimapCanvas, sim, this.getAlpha(), this.viewHero);
+                this.minimap.draw(
+                    this.minimapCanvas,
+                    sim,
+                    this.getAlpha(),
+                    this.viewHero,
+                    this.view.localPlayerPose,
+                );
             }
         }
         if (this.store.getSnapshot().debug) {

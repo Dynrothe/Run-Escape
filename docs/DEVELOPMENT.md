@@ -441,6 +441,23 @@ about 15 times a second at most. The host checks what a guest sends (`cleanMove`
 `cleanAction` in `core/lockstep.ts`) before it goes in, since every copy applies it. Nothing
 waits on a slow guest; they see the run a little behind, and catch up at 8 ms a frame at most.
 
+Guests predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. A local
+input sequence (`moveSeq`) rides on movement messages and is echoed in the host's frame event,
+including when queued moves are coalesced. The guest acknowledges it only after stepping that
+frame, then replays a bounded local input history from the confirmed position. A change that
+returns to the last sent direction inside the throttle still sends its new sequence, so a brief
+predicted tap can't remain unacknowledged forever.
+
+Prediction covers the character's position, facing and movement animation, camera, minimap,
+health bar and attached text. `PlayerPose` is presentation state: never write it into `Sim`.
+Combat, pickups, attack effects and all hashes still use confirmed positions. Terrain collision,
+speed, sleds, curses and boss arena limits are mirrored for display; keep these rules aligned with
+`Sim.stepPlayer` when changing movement. Small errors ease toward the confirmed path, while large
+displacements reset prediction. Death, known freezes, decisions and stale connections fall back
+to confirmed presentation. Replay is limited to 300 ms and 128 input changes for one player;
+it never steps a second full simulation or rolls back combat. This improves control response,
+but a hit can still arrive after the local picture appears to have moved clear.
+
 - **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
   while a player's map is still loading is kept and handed over once their copy's made
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't

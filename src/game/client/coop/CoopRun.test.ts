@@ -192,7 +192,7 @@ describe("co-op lockstep", () => {
         // Where it ended up gets there
         clock.now += 100;
         run.setMove(0.9, 0.5);
-        expect(ups.at(-1)).toEqual({ move: [114, 64] });
+        expect(ups.at(-1)).toMatchObject({ move: [114, 64], moveSeq: expect.any(Number) });
     });
 
     it("takes nothing odd from the host", () => {

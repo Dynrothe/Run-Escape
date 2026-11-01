@@ -172,7 +172,7 @@ export const DPS_WINDOW_SECONDS = 8;
 const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
-const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
+export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn

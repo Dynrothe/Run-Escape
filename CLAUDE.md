@@ -54,6 +54,11 @@ go stale. Add anything that cost you time to work out.
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
 
+Co-op guests predict movement only for display (`client/coop/MovementPrediction.ts` and
+`PlayerPose.ts`). Keep predicted positions out of `Sim` and its hashes. Movement sequence echoes
+are acknowledged when their host frame is applied; preserve them when coalescing queued moves.
+If `Sim.stepPlayer` changes, update the prediction's movement rules and delayed-network tests too.
+
 ## Commands
 
 ```sh
