@@ -12,6 +12,8 @@ the version in the corner).
   adventurer and progress, levels are shared with a pick each, and the run goes on while anyone's
   still standing. Winning on a map you haven't reached yet in a friend's party opens it for you.
   Anyone who keeps everyone waiting for 20 seconds has their pick made for them.
+- Co-op names: everyone gets a readable name to play under, like "Plucky Chinchompa", and rooms get
+  one too. New name picks another.
 - A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
 
 ## 0.20.0 - 2026-10-31

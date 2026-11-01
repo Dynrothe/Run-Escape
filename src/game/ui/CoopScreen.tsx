@@ -31,10 +31,8 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
     const coop = ui.coop;
     const [code, setCode] = useState("");
     const [open, setOpen] = useState(false);
-    // Rooms need a name to show, and not a banned one
-    const nameOk = coop.nameAllowed && coop.name.length > 0;
     const online = coop.status === "online";
-    const canJoin = online && nameOk;
+    const canJoin = online;
     // Rooms on maps this game hasn't got (a newer game's) can't be joined
     const rooms = coop.rooms.filter((listing) => MAP_BY_ID.has(listing.mapId));
     // Unless the relay takes anyone, a room on a map this player hasn't got
@@ -62,18 +60,18 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                     adventurer, skills and Armoury.
                 </p>
                 <div className="ui-coop-rows">
-                    <label className="ui-coop-row">
+                    <div className="ui-coop-row">
                         <span className="ui-coop-label">Your name</span>
-                        <input
-                            className="ui-coop-input"
-                            value={coop.name}
-                            placeholder="pick a name"
-                            spellCheck={false}
-                            autoCapitalize="none"
-                            // Lowercase a-z only, kept that way as it's typed
-                            onChange={(e) => client.setCoopName(e.target.value)}
-                        />
-                    </label>
+                        {/* The relay gives everyone a name; another's a click away */}
+                        <span className="ui-coop-name">{coop.name || "..."}</span>
+                        <button
+                            className="ui-button ui-button-small"
+                            disabled={!online}
+                            onClick={() => client.renameCoop()}
+                        >
+                            New name
+                        </button>
+                    </div>
                     <div className="ui-coop-row">
                         <span className="ui-coop-label">New room</span>
                         <div className="ui-coop-choice" role="radiogroup" aria-label="Who can join">
@@ -147,10 +145,14 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                 </h3>
                 <div className="ui-coop-rooms">
                     {rooms.map((listing) => (
-                        <div key={listing.code} className="ui-coop-room">
+                        <div
+                            key={listing.code}
+                            className="ui-coop-room"
+                            title={`Hosted by ${listing.host}`}
+                        >
                             <ItemIcon objId={getMap(listing.mapId).iconObjId} size={20} />
                             <span className="ui-coop-room-name">
-                                <span className="ui-coop-room-host">{listing.host}</span>
+                                <span className="ui-coop-room-host">{listing.name}</span>
                                 <span className="ui-coop-room-code">{listing.code}</span>
                                 <span className="ui-coop-room-map">
                                     {getMap(listing.mapId).name}
@@ -162,7 +164,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             </span>
                             <button
                                 className="ui-button ui-button-small"
-                                disabled={!nameOk || !!missing(listing.mapId, listing.endless)}
+                                disabled={!online || !!missing(listing.mapId, listing.endless)}
                                 title={missing(listing.mapId, listing.endless)}
                                 onClick={() => client.joinRoom(listing.code)}
                             >
@@ -207,12 +209,6 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             ›
                         </button>
                     </div>
-                )}
-                {!coop.nameAllowed && (
-                    <div className="ui-coop-error">That name isn't allowed. Pick another.</div>
-                )}
-                {coop.nameAllowed && coop.name.length === 0 && online && (
-                    <div className="ui-coop-hint">Pick a name to make or join a room.</div>
                 )}
                 {coop.roomsFull && online && (
                     <div className="ui-coop-error">
@@ -265,7 +261,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             <AdventurerPanel ui={ui} client={client} />
             <div className="ui-panel rs-border rs-background ui-select-panel ui-select-maps ui-coop-party">
                 <h2 className="ui-select-heading">
-                    Party
+                    {room.name || "Party"}
                     <span className="ui-select-count">
                         {room.members.length} / {MAX_PARTY}
                     </span>
@@ -333,6 +329,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                         onClick={() => client.kickPlayer(member.id)}
                                     >
                                         Kick
+                                    </button>
+                                )}
+                                {member.id === you && (
+                                    <button
+                                        className="ui-button ui-button-small"
+                                        onClick={() => client.renameCoop()}
+                                    >
+                                        New name
                                     </button>
                                 )}
                             </div>

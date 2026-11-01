@@ -16,32 +16,13 @@
 //   Cloudflare's own addresses.
 import { BlockList, isIP } from "node:net";
 
-// Cloudflare's addresses, from https://www.cloudflare.com/ips/ (they seldom
-// change; CLOUDFLARE_IPS replaces them)
-const CLOUDFLARE_RANGES = [
-    "173.245.48.0/20",
-    "103.21.244.0/22",
-    "103.22.200.0/22",
-    "103.31.4.0/22",
-    "141.101.64.0/18",
-    "108.162.192.0/18",
-    "190.93.240.0/20",
-    "188.114.96.0/20",
-    "197.234.240.0/22",
-    "198.41.128.0/17",
-    "162.158.0.0/15",
-    "104.16.0.0/13",
-    "104.24.0.0/14",
-    "172.64.0.0/13",
-    "131.0.72.0/22",
-    "2400:cb00::/32",
-    "2606:4700::/32",
-    "2803:f800::/32",
-    "2405:b500::/32",
-    "2405:8100::/32",
-    "2a06:98c0::/29",
-    "2c0f:f248::/32",
-];
+// Where Cloudflare publishes its addresses. The relay fetches them when it
+// starts behind Cloudflare and again each day, so there's no list here to go
+// stale. CLOUDFLARE_IPS replaces them, and then nothing's fetched.
+export const CLOUDFLARE_IPS_URL = "https://api.cloudflare.com/client/v4/ips";
+const CLOUDFLARE_REFRESH_MS = 24 * 60 * 60_000;
+// After a failed fetch, the next try
+const CLOUDFLARE_RETRY_MS = 60_000;
 
 // This machine and private networks: only a proxy of the server's own can
 // connect from one
@@ -78,9 +59,62 @@ function envList(name) {
 }
 
 const PROXIES = addressList([...LOCAL_RANGES, ...envList("TRUSTED_PROXIES")]);
-const CLOUDFLARE = addressList(
-    envList("CLOUDFLARE_IPS").length > 0 ? envList("CLOUDFLARE_IPS") : CLOUDFLARE_RANGES,
-);
+// Cloudflare's addresses: CLOUDFLARE_IPS, or what was last fetched. Empty
+// until the first fetch, so until then nobody's taken for Cloudflare.
+let cloudflareList = addressList(envList("CLOUDFLARE_IPS"));
+
+// Cloudflare's address ranges, from its API (CLOUDFLARE_IPS_URL)
+export async function fetchCloudflareRanges(fetchImpl = fetch, url = CLOUDFLARE_IPS_URL) {
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) {
+        throw new Error(`${url} answered ${response.status}`);
+    }
+    const body = await response.json();
+    const ranges = [...(body?.result?.ipv4_cidrs ?? []), ...(body?.result?.ipv6_cidrs ?? [])];
+    if (body?.success !== true || ranges.length === 0) {
+        throw new Error(`${url} gave no addresses`);
+    }
+    return ranges.filter((range) => typeof range === "string");
+}
+
+// Keeps Cloudflare's addresses up to date: fetched now, then each day, and
+// sooner after a failure (keeping the last ones that came). Nothing to do
+// with CLOUDFLARE_IPS set. Returns a function that stops it.
+export function watchCloudflareRanges({
+    fetchImpl = fetch,
+    env = process.env,
+    refreshMs = CLOUDFLARE_REFRESH_MS,
+    retryMs = CLOUDFLARE_RETRY_MS,
+} = {}) {
+    if (env.CLOUDFLARE_IPS) {
+        return () => {};
+    }
+    let timer;
+    let stopped = false;
+    const load = async () => {
+        let next = refreshMs;
+        try {
+            cloudflareList = addressList(await fetchCloudflareRanges(fetchImpl));
+        } catch (e) {
+            next = retryMs;
+            console.warn(
+                `Couldn't get Cloudflare's addresses (${e.message}), so players behind it ` +
+                    `look like Cloudflare for now. Trying again in ${Math.round(retryMs / 1000)}s.`,
+            );
+        }
+        if (!stopped) {
+            timer = setTimeout(load, next);
+            timer.unref?.();
+        }
+    };
+    const loaded = load();
+    const stop = () => {
+        stopped = true;
+        clearTimeout(timer);
+    };
+    stop.loaded = loaded;
+    return stop;
+}
 
 // An address as written in a header or by Node, plain: IPv4 without the
 // IPv6 wrapping or a port, IPv6 without brackets. Undefined if it isn't one.
@@ -134,7 +168,7 @@ export function clientAddress(
     socket,
     mode = "none",
     proxies = PROXIES,
-    cloudflare = CLOUDFLARE,
+    cloudflare = cloudflareList,
 ) {
     let address = plainAddress(socket?.remoteAddress) ?? "unknown";
     if (mode === "none") {

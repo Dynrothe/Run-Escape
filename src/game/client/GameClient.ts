@@ -475,8 +475,9 @@ export class GameClient implements GameFrameHandler {
         this.showScreen("title");
     }
 
-    setCoopName(name: string): void {
-        this.coop.setName(name);
+    // Another name from the relay
+    renameCoop(): void {
+        this.coop.rename();
     }
 
     // A room of this player's, for the map picked

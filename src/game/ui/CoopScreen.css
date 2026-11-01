@@ -56,6 +56,19 @@
     color: #7d705b;
 }
 
+/* The name the relay gave this player */
+.ui-coop-name {
+    flex: 1;
+    min-width: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .ui-coop-code-input {
     font-family: "OSRS Bold", sans-serif;
     letter-spacing: 3px;
