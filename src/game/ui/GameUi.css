@@ -389,35 +389,55 @@
     text-align: right;
 }
 
-/* In the title screen's bottom left corner: Discord's icon in its own blurple,
-   with a slow glow so it catches the eye */
-.ui-discord {
+/* In the title screen's bottom left corner */
+.ui-title-links {
     position: absolute;
     left: 10px;
     bottom: 8px;
+    display: flex;
+    gap: 6px;
+}
+
+.ui-title-link {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 7px;
     pointer-events: auto;
     color: var(--ui-white);
-    background: #5865f2;
     border: 2px solid var(--ui-edge);
-    box-shadow: inset 0 0 0 1px #8b93ff;
     cursor: pointer;
+}
+
+.ui-title-link:hover {
+    color: var(--ui-yellow);
+}
+
+.ui-title-link-logo {
+    width: 26px;
+    height: 26px;
+    fill: currentColor;
+    filter: drop-shadow(1px 1px 0 #000);
+}
+
+.ui-github {
+    background: #24292f;
+    box-shadow: inset 0 0 0 1px #57606a;
+}
+
+.ui-github:hover {
+    background: #32383f;
+}
+
+/* Discord's icon in its own blurple, with a slow glow so it catches the eye */
+.ui-discord {
+    background: #5865f2;
+    box-shadow: inset 0 0 0 1px #8b93ff;
     animation: ui-discord-glow 2.4s ease-in-out infinite;
 }
 
 .ui-discord:hover {
     background: #6d78f5;
-    color: var(--ui-yellow);
-}
-
-.ui-discord-logo {
-    width: 26px;
-    height: 26px;
-    fill: currentColor;
-    filter: drop-shadow(1px 1px 0 #000);
 }
 
 @keyframes ui-discord-glow {
@@ -455,6 +475,14 @@
 .ui-hint {
     color: var(--ui-white);
     opacity: 0.8;
+}
+
+/* A narrow window: wrap rather than run under the corner's links */
+@media (max-width: 700px) and (pointer: fine) {
+    .ui-hint {
+        max-width: calc(100vw - 230px);
+        text-align: center;
+    }
 }
 
 /* In the title screen's corner; it opens the changelog */

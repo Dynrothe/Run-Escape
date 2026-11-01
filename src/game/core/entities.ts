@@ -288,7 +288,8 @@ export type Enemy = {
     xp: number;
     // Takes no damage until this tick (EnemyDef.shield); 0 once it's down
     shieldEnd: number;
-    // Rising (BossDef.intro) until this tick, doing nothing else; 0 once it's up
+    // Rising (BossDef.intro, EnemyBlinksDef.surface) until this tick, doing
+    // nothing else; 0 once it's up
     risingEnd: number;
     // On its way off the map (BossDef.intro)
     leaving?: EnemyLeaving;

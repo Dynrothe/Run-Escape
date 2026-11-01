@@ -50,7 +50,7 @@ export function canStep(grid: StepGrid, x: number, y: number, dx: number, dy: nu
 // Whether a straight walk from one point to another stays on open ground: each
 // tile the line goes through is a step that's allowed from the one before.
 export function canWalkStraight(
-    grid: ArenaGrid,
+    grid: StepGrid,
     fromX: number,
     fromY: number,
     toX: number,
@@ -134,7 +134,7 @@ export class FlowField {
         return this.getCost(tileX, tileY) !== UNREACHED;
     }
 
-    update(grid: ArenaGrid, targetX: number, targetY: number): void {
+    update(grid: StepGrid, targetX: number, targetY: number): void {
         this.targetX = targetX;
         this.targetY = targetY;
         this.originX = targetX - (this.size >> 1);
@@ -193,7 +193,7 @@ export class FlowField {
 
     // How far north (+) or south (-) a jump over the ditch goes from this
     // tile, or 0 when it isn't on the ditch's edge or there's nowhere to land
-    jumpFrom(grid: ArenaGrid, tileX: number, tileY: number): number {
+    jumpFrom(grid: StepGrid, tileX: number, tileY: number): number {
         if (this.ditchY === undefined) {
             return 0;
         }
@@ -212,7 +212,7 @@ export class FlowField {
     // The tile to walk to next from this one, as an offset (three tiles north
     // or south for a jump over the ditch); false when there's no route
     // (outside the window, or walled off).
-    getStep(grid: ArenaGrid, tileX: number, tileY: number, out: { x: number; y: number }): boolean {
+    getStep(grid: StepGrid, tileX: number, tileY: number, out: { x: number; y: number }): boolean {
         if (!this.contains(tileX, tileY)) {
             return false;
         }

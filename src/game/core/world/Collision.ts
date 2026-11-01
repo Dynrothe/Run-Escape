@@ -3,6 +3,9 @@ import { ArenaGrid, Box, SOLID_FLAGS } from "./ArenaGrid";
 
 export type Vec2 = { x: number; y: number };
 
+// What moving a circle needs of a grid
+type BlockGrid = Pick<ArenaGrid, "getFlags" | "getSolidBox">;
+
 const MAX_ITERATIONS = 4;
 
 const solidBox: Box = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -57,7 +60,7 @@ function testBox(pos: Vec2, radius: number, x0: number, y0: number, x1: number, 
     }
 }
 
-function testTile(grid: ArenaGrid, pos: Vec2, radius: number, tileX: number, tileY: number) {
+function testTile(grid: BlockGrid, pos: Vec2, radius: number, tileX: number, tileY: number) {
     const flags = grid.getFlags(tileX, tileY);
     if (flags === 0) {
         return;
@@ -99,7 +102,7 @@ function testTile(grid: ArenaGrid, pos: Vec2, radius: number, tileX: number, til
 }
 
 // Moves a circle out of everything it overlaps.
-export function resolveCircle(grid: ArenaGrid, pos: Vec2, radius: number): void {
+export function resolveCircle(grid: BlockGrid, pos: Vec2, radius: number): void {
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         contact.depth = 0;
         const minX = Math.floor(pos.x - radius) - 1;
@@ -122,7 +125,7 @@ export function resolveCircle(grid: ArenaGrid, pos: Vec2, radius: number): void 
 // Moves a circle by (dx, dy), sliding along whatever it hits. Long moves are
 // split into steps shorter than the radius so nothing thin is skipped over.
 export function moveCircle(
-    grid: ArenaGrid,
+    grid: BlockGrid,
     pos: Vec2,
     dx: number,
     dy: number,
@@ -141,7 +144,7 @@ export function moveCircle(
 }
 
 // Whether a circle at this position overlaps nothing.
-export function isCircleFree(grid: ArenaGrid, x: number, y: number, radius: number): boolean {
+export function isCircleFree(grid: BlockGrid, x: number, y: number, radius: number): boolean {
     const probe = { x, y };
     resolveCircle(grid, probe, radius);
     return Math.abs(probe.x - x) < 1e-6 && Math.abs(probe.y - y) < 1e-6;

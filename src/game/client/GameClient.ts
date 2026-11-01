@@ -13,7 +13,7 @@ import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { MAPS, getArenaRegion, getMap, isDevMap, isFunMap } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
-import { QUESTS, describeQuest } from "../content/quests";
+import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -118,9 +118,7 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
     }
     const run = sim.getResult();
     const quests = QUESTS.filter(
-        (quest) =>
-            (quest.mapId === sim.map.id || quest.mapId === undefined) &&
-            !save.questsDone.includes(quest.id),
+        (quest) => canDoQuestOn(quest, sim.map) && !save.questsDone.includes(quest.id),
     );
     // The map's own first (QUESTS has the ones done all over last)
     return quests.map((quest) => {
