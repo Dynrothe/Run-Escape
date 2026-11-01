@@ -302,6 +302,15 @@ async function fetchCachedFile(
     if (resp.status !== 200 && resp.status !== 206) {
         throw new Error("Failed downloading " + path + ", " + resp.status);
     }
+    if (offset > 0 && resp.status !== 206) {
+        // The server ignored the Range and sent it all: start again from the
+        // top rather than adding the whole file to the part already here
+        await Promise.all(partUrls.map((url) => cache.delete(url)));
+        partUrls.length = 0;
+        parts.length = 0;
+        partCount = 0;
+        offset = 0;
+    }
     const cacheUpdates: Promise<void>[] = [];
     let partCache: Uint8Array[] = [];
     let partCacheLength = 0;

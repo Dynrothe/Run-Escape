@@ -11,8 +11,10 @@
 // GET of the relay's path says it's there, which is how the game knows to
 // offer co-op.
 // The messages are JSON; src/game/client/coop/protocol.ts has their shapes.
+import { isUtf8 } from "node:buffer";
 import { createHash, randomInt } from "node:crypto";
 import { createServer } from "node:http";
+import { isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { clientAddress, proxyMode, viaProxy } from "./client-ip.mjs";
@@ -74,6 +76,8 @@ const MAX_ROOMS = 500;
 const MAX_CONNECTIONS_PER_ADDRESS = 16;
 const MAX_ROOMS_PER_ADDRESS = 4;
 const MAX_CREATES_PER_MINUTE = 10;
+// Room codes that don't exist, tried from one address, before it has to wait
+const MAX_WRONG_CODES_PER_MINUTE = 20;
 // A room nobody's done anything in for this long is closed
 const IDLE_MS = 30 * 60_000;
 // Bigger than any real loadout (the shop's bonuses, unlocked items and
@@ -86,8 +90,16 @@ const LIST_PAGE_SIZE = 8;
 const MAX_LIST_PAGE_SIZE = 20;
 // Bigger than any message the game sends (a start with everyone's loadout)
 const MAX_MESSAGE_BYTES = 256 * 1024;
-// A client sending more than this many messages a second is dropped
-const MAX_MESSAGES_PER_SECOND = 400;
+// A client sending more than this many frames a second is dropped
+const MAX_FRAMES_PER_SECOND = 400;
+// A message in more pieces than this isn't from a browser
+const MAX_FRAGMENTS = 16;
+// Deeper than anything the game sends; JSON.stringify of a much deeper one
+// runs out of stack
+const MAX_DEPTH = 16;
+// What can wait to go out to one connection before it's dropped: a player
+// whose game has stopped reading would otherwise grow the relay's memory
+const MAX_BUFFERED_BYTES = 1024 * 1024;
 const PING_MS = 20_000;
 // Room codes leave out letters and digits that look alike
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -101,13 +113,19 @@ class Connection {
         this.socket = socket;
         this.onMessage = onMessage;
         this.onClose = onClose;
-        this.buffer = Buffer.alloc(0);
-        // A message in pieces (continuation frames)
+        // What's come in and not been read yet, and how much of it the next
+        // frame needs: pieces are only joined once there's a whole frame, so a
+        // frame sent a byte at a time costs no more than one sent at once
+        this.chunks = [];
+        this.buffered = 0;
+        this.need = 2;
+        // A message in pieces (continuation frames), and its size so far
         this.fragments = [];
+        this.fragmentBytes = 0;
         this.closed = false;
         this.alive = true;
         this.second = 0;
-        this.sentThisSecond = 0;
+        this.framesThisSecond = 0;
         socket.setNoDelay(true);
         socket.on("data", (data) => this.receive(data));
         socket.on("close", () => this.finish());
@@ -115,84 +133,105 @@ class Connection {
     }
 
     receive(data) {
-        this.buffer = this.buffer.length === 0 ? data : Buffer.concat([this.buffer, data]);
+        if (this.closed) {
+            return;
+        }
+        this.chunks.push(data);
+        this.buffered += data.length;
+        if (this.buffered < this.need) {
+            return;
+        }
+        const buffer = this.chunks.length === 1 ? this.chunks[0] : Buffer.concat(this.chunks);
+        let at = 0;
         while (!this.closed) {
-            const frame = this.readFrame();
-            if (!frame) {
-                return;
+            const frame = this.readFrame(buffer, at);
+            if (typeof frame === "number") {
+                this.need = frame;
+                break;
             }
+            at = frame.end;
             this.handleFrame(frame);
         }
+        const rest = buffer.subarray(at);
+        this.chunks = rest.length > 0 ? [rest] : [];
+        this.buffered = rest.length;
     }
 
-    // The next whole frame in the buffer, or undefined until there is one
-    readFrame() {
-        const buffer = this.buffer;
-        if (buffer.length < 2) {
-            return undefined;
+    // The frame starting at `at`, or how many bytes from there it needs
+    // before it's whole (closing the connection on one no browser sends)
+    readFrame(buffer, at) {
+        const available = buffer.length - at;
+        if (available < 2) {
+            return 2;
         }
-        const fin = (buffer[0] & 0x80) !== 0;
-        const opcode = buffer[0] & 0x0f;
-        const masked = (buffer[1] & 0x80) !== 0;
-        let length = buffer[1] & 0x7f;
-        let offset = 2;
-        if (length === 126) {
-            if (buffer.length < 4) {
-                return undefined;
-            }
-            length = buffer.readUInt16BE(2);
-            offset = 4;
-        } else if (length === 127) {
-            if (buffer.length < 10) {
-                return undefined;
-            }
-            const big = buffer.readBigUInt64BE(2);
-            if (big > BigInt(MAX_MESSAGE_BYTES)) {
-                this.close(1009);
-                return undefined;
-            }
-            length = Number(big);
-            offset = 10;
+        const first = buffer[at];
+        const second = buffer[at + 1];
+        const fin = (first & 0x80) !== 0;
+        const opcode = first & 0x0f;
+        const short = second & 0x7f;
+        const header = 2 + (short === 126 ? 2 : short === 127 ? 8 : 0) + 4;
+        if (available < header) {
+            return header;
         }
-        if (!masked || length > MAX_MESSAGE_BYTES) {
-            // Browsers always mask what they send
+        let length = short;
+        if (short === 126) {
+            length = buffer.readUInt16BE(at + 2);
+        } else if (short === 127) {
+            const big = buffer.readBigUInt64BE(at + 2);
+            length = big > BigInt(MAX_MESSAGE_BYTES) ? Infinity : Number(big);
+        }
+        // Browsers always mask, never set the extension bits (none are agreed
+        // on), and keep control frames whole and small
+        const control = (opcode & 0x08) !== 0;
+        if ((second & 0x80) === 0 || (first & 0x70) !== 0 || (control && (!fin || length > 125))) {
             this.close(1002);
-            return undefined;
+            return 0;
         }
-        if (buffer.length < offset + 4 + length) {
-            return undefined;
+        if (length > MAX_MESSAGE_BYTES) {
+            this.close(1009);
+            return 0;
         }
-        const mask = buffer.subarray(offset, offset + 4);
-        const payload = Buffer.from(buffer.subarray(offset + 4, offset + 4 + length));
+        if (available < header + length) {
+            return header + length;
+        }
+        const mask = buffer.subarray(at + header - 4, at + header);
+        const payload = Buffer.from(buffer.subarray(at + header, at + header + length));
         for (let i = 0; i < payload.length; i++) {
             payload[i] ^= mask[i & 3];
         }
-        this.buffer = buffer.subarray(offset + 4 + length);
-        return { fin, opcode, payload };
+        return { fin, opcode, payload, end: at + header + length };
     }
 
     handleFrame({ fin, opcode, payload }) {
+        // Every frame counts, so empty ones can't be sent for nothing
+        if (this.overLimit()) {
+            this.close(1008);
+            return;
+        }
         switch (opcode) {
             case 0x0:
             case 0x1: {
+                // A continuation with nothing to continue, or a new message
+                // before the last one's finished
+                if ((opcode === 0x0) !== (this.fragments.length > 0)) {
+                    this.close(1002);
+                    return;
+                }
                 if (opcode === 0x1 && fin) {
                     // The whole message in one frame, as nearly all are
-                    this.fragments = [];
                     this.receiveMessage(payload);
                     return;
                 }
-                if (opcode === 0x1) {
-                    this.fragments = [];
-                }
                 this.fragments.push(payload);
-                const size = this.fragments.reduce((total, part) => total + part.length, 0);
-                if (size > MAX_MESSAGE_BYTES) {
+                this.fragmentBytes += payload.length;
+                if (this.fragmentBytes > MAX_MESSAGE_BYTES || this.fragments.length > MAX_FRAGMENTS) {
                     this.close(1009);
                     return;
                 }
                 if (fin) {
-                    const whole = Buffer.concat(this.fragments);
+                    const whole = Buffer.concat(this.fragments, this.fragmentBytes);
                     this.fragments = [];
+                    this.fragmentBytes = 0;
                     this.receiveMessage(whole);
                 }
                 return;
@@ -213,10 +252,12 @@ class Connection {
     }
 
     // A whole message: its JSON, with the bytes it came as (to pass on as they
-    // are, rather than encoding it again)
+    // are, rather than encoding it again). Anything wrong with one drops this
+    // connection, never the relay.
     receiveMessage(payload) {
-        if (this.overLimit()) {
-            this.close(1008);
+        // Passed on as it is, so it has to be text a browser will take
+        if (!isUtf8(payload)) {
+            this.close(1007);
             return;
         }
         let message;
@@ -225,8 +266,19 @@ class Connection {
         } catch {
             return;
         }
-        if (message && typeof message === "object" && !Array.isArray(message)) {
+        if (!message || typeof message !== "object" || Array.isArray(message)) {
+            return;
+        }
+        // The host's frames go straight on, and are the only ones sent often
+        if (message.t !== "down" && depthOver(payload, MAX_DEPTH)) {
+            this.close(1008);
+            return;
+        }
+        try {
             this.onMessage(message, payload);
+        } catch (e) {
+            console.warn("Co-op relay: dropped a connection over a message it couldn't handle:", e);
+            this.close(1011);
         }
     }
 
@@ -234,9 +286,9 @@ class Connection {
         const second = Math.floor(Date.now() / 1000);
         if (second !== this.second) {
             this.second = second;
-            this.sentThisSecond = 0;
+            this.framesThisSecond = 0;
         }
-        return ++this.sentThisSecond > MAX_MESSAGES_PER_SECOND;
+        return ++this.framesThisSecond > MAX_FRAMES_PER_SECOND;
     }
 
     sendFrame(opcode, payload) {
@@ -245,9 +297,16 @@ class Connection {
 
     // A frame from encodeFrame, which can go to any number of connections
     write(frame) {
-        if (!this.closed) {
-            this.socket.write(frame);
+        if (this.closed) {
+            return;
         }
+        if (this.socket.writableLength > MAX_BUFFERED_BYTES) {
+            // Not reading what it's sent: nothing more will get through
+            this.socket.destroy();
+            this.finish();
+            return;
+        }
+        this.socket.write(frame);
     }
 
     send(message) {
@@ -273,17 +332,76 @@ class Connection {
         this.sendFrame(0x8, payload);
         this.closed = true;
         this.socket.end();
+        // However it's going, it's gone in a few seconds
+        setTimeout(() => this.socket.destroy(), 5000).unref?.();
         this.finish();
     }
 
     finish() {
         this.closed = true;
+        this.chunks = [];
+        this.fragments = [];
         if (this.onClose) {
             const onClose = this.onClose;
             this.onClose = undefined;
             onClose();
         }
     }
+}
+
+// Whether JSON nests deeper than max (a byte scan, so it can't run out of
+// stack however deep it goes)
+function depthOver(payload, max) {
+    let depth = 0;
+    let inString = false;
+    for (let i = 0; i < payload.length; i++) {
+        const c = payload[i];
+        if (inString) {
+            if (c === 0x5c) {
+                i++;
+            } else if (c === 0x22) {
+                inString = false;
+            }
+        } else if (c === 0x22) {
+            inString = true;
+        } else if (c === 0x7b || c === 0x5b) {
+            if (++depth > max) {
+                return true;
+            }
+        } else if (c === 0x7d || c === 0x5d) {
+            depth--;
+        }
+    }
+    return false;
+}
+
+// The path of a request's URL, or undefined for one that isn't a URL
+export function requestPath(req) {
+    try {
+        return new URL(req.url ?? "/", "http://localhost").pathname;
+    } catch {
+        return undefined;
+    }
+}
+
+// Who limits count against: an IPv6 address by its /64, which is what one
+// home or server is given, so it can't just move along its own block
+export function addressKey(address) {
+    if (isIP(address) !== 6) {
+        return address;
+    }
+    const groups = (part) => (part ? part.split(":") : []);
+    const [head, tail] = address.toLowerCase().split("::");
+    const before = groups(head);
+    const after = groups(tail);
+    const all =
+        tail === undefined
+            ? before
+            : [...before, ...Array(Math.max(0, 8 - before.length - after.length)).fill("0"), ...after];
+    return `${all
+        .slice(0, 4)
+        .map((group) => parseInt(group, 16).toString(16))
+        .join(":")}::/64`;
 }
 
 // A whole, unmasked frame (as a server sends them), header and payload in
@@ -356,6 +474,7 @@ export function createRelay(limits = {}) {
         connectionsPerAddress = MAX_CONNECTIONS_PER_ADDRESS,
         roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
         createsPerMinute = MAX_CREATES_PER_MINUTE,
+        wrongCodesPerMinute = MAX_WRONG_CODES_PER_MINUTE,
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
         proxy = proxyMode(),
@@ -369,6 +488,7 @@ export function createRelay(limits = {}) {
     // Connections from each address, and when each made its latest rooms
     const connectionsFrom = new Map();
     const createdFrom = new Map();
+    const wrongCodesFrom = new Map();
     let nextRoomOrder = 1;
     // The open rooms as the list shows them, worked out again only after a
     // room changes (everyone browsing asks every few seconds)
@@ -514,17 +634,24 @@ export function createRelay(limits = {}) {
         return count;
     }
 
-    // Whether this address may make another room now (and if so, notes it)
-    function mayCreate(client) {
+    // Whether this address has done something (made a room, tried a wrong
+    // code) fewer than limit times in the last minute, and if so, notes it
+    function underLimit(times, address, limit) {
         const now = Date.now();
-        const recent = (createdFrom.get(client.address) ?? []).filter((t) => now - t < 60_000);
-        if (recent.length >= createsPerMinute) {
-            createdFrom.set(client.address, recent);
-            return false;
+        const recent = (times.get(address) ?? []).filter((t) => now - t < 60_000);
+        const under = recent.length < limit;
+        if (under) {
+            recent.push(now);
         }
-        recent.push(now);
-        createdFrom.set(client.address, recent);
-        return true;
+        times.set(address, recent);
+        return under;
+    }
+
+    // Whether this address has tried too many codes that don't exist lately
+    function guessing(address) {
+        const now = Date.now();
+        return (wrongCodesFrom.get(address) ?? []).filter((t) => now - t < 60_000).length >=
+            wrongCodesPerMinute;
     }
 
     function setMember(client, message) {
@@ -573,7 +700,8 @@ export function createRelay(limits = {}) {
     // payload: the message's bytes as they came, for passing on
     function handle(client, message, payload) {
         const room = client.room;
-        if (room) {
+        // Pings and browsing the list don't keep a room open
+        if (room && message.t !== "ping" && message.t !== "list") {
             room.lastActive = Date.now();
         }
         const isHost = room !== undefined && room.hostId === client.id;
@@ -623,7 +751,7 @@ export function createRelay(limits = {}) {
                     client.connection.send(hostMissing);
                     return;
                 }
-                if (!mayCreate(client)) {
+                if (!underLimit(createdFrom, client.address, createsPerMinute)) {
                     error("That's a lot of rooms. Wait a minute before making another.");
                     return;
                 }
@@ -640,6 +768,8 @@ export function createRelay(limits = {}) {
                     members: [client],
                     order: nextRoomOrder++,
                     lastActive: Date.now(),
+                    // Addresses the host's kicked, who can't come back
+                    kicked: new Set(),
                 };
                 rooms.set(created.code, created);
                 client.room = created;
@@ -647,10 +777,20 @@ export function createRelay(limits = {}) {
                 return;
             }
             case "join": {
-                const code = typeof message.code === "string" ? message.code.toUpperCase() : "";
+                if (guessing(client.address)) {
+                    error("That's a lot of wrong codes. Wait a minute and try again.");
+                    return;
+                }
+                const code =
+                    typeof message.code === "string" ? message.code.toUpperCase().slice(0, 16) : "";
                 const target = rooms.get(code);
                 if (!target) {
+                    underLimit(wrongCodesFrom, client.address, Infinity);
                     error(`There's no room ${code || "with that code"}.`);
+                    return;
+                }
+                if (target.kicked.has(client.address)) {
+                    error("The host has removed you from that room.");
                     return;
                 }
                 if (target.started) {
@@ -735,6 +875,7 @@ export function createRelay(limits = {}) {
                 }
                 const kicked = room.members.find((m) => m.id === message.id && m !== client);
                 if (kicked) {
+                    room.kicked.add(kicked.address);
                     leaveRoom(kicked, "kicked");
                 }
                 return;
@@ -796,6 +937,7 @@ export function createRelay(limits = {}) {
     }
 
     function handleUpgrade(req, socket, head) {
+        socket.on("error", () => socket.destroy());
         const key = req.headers["sec-websocket-key"];
         if (
             typeof key !== "string" ||
@@ -805,7 +947,7 @@ export function createRelay(limits = {}) {
             socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
             return;
         }
-        const address = clientAddress(req, socket, proxy);
+        const address = addressKey(clientAddress(req, socket, proxy));
         if (proxy === "none" && !warnedProxy && viaProxy(req, socket)) {
             warnedProxy = true;
             console.warn(
@@ -877,21 +1019,26 @@ export function createRelay(limits = {}) {
                 disband(room, "idle");
             }
         }
-        for (const [address, times] of createdFrom) {
-            if (times.every((t) => now - t >= 60_000)) {
-                createdFrom.delete(address);
+        for (const times of [createdFrom, wrongCodesFrom]) {
+            for (const [address, at] of times) {
+                if (at.every((t) => now - t >= 60_000)) {
+                    times.delete(address);
+                }
             }
         }
     }
 
     return {
-        // Takes over an HTTP server's WebSocket upgrades to path (and leaves
-        // the rest, like Vite's own, alone)
-        attach(server, path = RELAY_PATH) {
+        // Takes over an HTTP server's WebSocket upgrades to path, and leaves
+        // the rest, like Vite's own, alone, unless closeOthers (for a server
+        // with nothing else to upgrade to, where they'd hang open)
+        attach(server, path = RELAY_PATH, { closeOthers = false } = {}) {
             server.on("upgrade", (req, socket, head) => {
-                const url = new URL(req.url ?? "/", "http://localhost");
-                if (url.pathname === path) {
+                if (requestPath(req) === path) {
                     handleUpgrade(req, socket, head);
+                } else if (closeOthers) {
+                    socket.on("error", () => socket.destroy());
+                    socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
                 }
             });
         },
@@ -900,8 +1047,7 @@ export function createRelay(limits = {}) {
         // see co-op's there (from another site too, with VITE_COOP_URL).
         // False for any other request, to go to whatever else serves.
         handleRequest(req, res, path = RELAY_PATH) {
-            const url = new URL(req.url ?? "/", "http://localhost");
-            if (url.pathname !== path || (req.method !== "GET" && req.method !== "HEAD")) {
+            if (requestPath(req) !== path || (req.method !== "GET" && req.method !== "HEAD")) {
                 return false;
             }
             res.writeHead(200, {

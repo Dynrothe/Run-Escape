@@ -24,6 +24,12 @@ describe("player names", () => {
         expect(isNameAllowed(cleanName("b1tch"))).toBe(false);
     });
 
+    it("see through letters held down, and ones that sound alike", () => {
+        for (const name of ["fuuuuck", "shiiiit", "faggggot", "niiigger", "phuck", "fuq"]) {
+            expect(isNameAllowed(name)).toBe(false);
+        }
+    });
+
     it("let ordinary names through", () => {
         for (const name of [
             "assassin",
@@ -41,6 +47,13 @@ describe("player names", () => {
             "lightning",
             "accountant",
             "washington",
+            "dickens",
+            "analyst",
+            "spicy",
+            "cockpit",
+            "night",
+            "bookkeeper",
+            "pizza",
         ]) {
             expect(isNameAllowed(name)).toBe(true);
         }

@@ -1,8 +1,9 @@
 import { Server, createServer } from "node:http";
-import { AddressInfo } from "node:net";
+import { AddressInfo, Socket, connect as connectTcp } from "node:net";
 
 import {
     RELAY_PATH,
+    addressKey,
     createRelay,
     isAnyMapOn,
     isMultiplayerOn,
@@ -67,6 +68,53 @@ class TestClient {
     }
 }
 
+// A connection that writes frames by hand, for what no browser would send
+class RawClient {
+    readonly socket: Socket;
+    closed: Promise<void>;
+    private received = Buffer.alloc(0);
+
+    constructor(port: number, path = RELAY_PATH) {
+        this.socket = connectTcp(port, "127.0.0.1");
+        this.socket.on("error", () => {});
+        this.socket.on("data", (data) => (this.received = Buffer.concat([this.received, data])));
+        this.closed = new Promise((resolve) => this.socket.on("close", () => resolve()));
+        this.socket.write(
+            `GET ${path} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+        );
+    }
+
+    // A masked frame (with a mask of zeroes, so the payload goes as it is)
+    static frame(opcode: number, payload: Buffer | string, fin = true): Buffer {
+        const body = Buffer.from(payload);
+        const length = body.length;
+        const first = (fin ? 0x80 : 0) | opcode;
+        const header =
+            length < 126
+                ? Buffer.from([first, 0x80 | length])
+                : Buffer.from([first, 0x80 | 126, length >> 8, length & 0xff]);
+        return Buffer.concat([header, Buffer.alloc(4), body]);
+    }
+
+    send(message: object): void {
+        this.socket.write(RawClient.frame(0x1, JSON.stringify(message)));
+    }
+
+    // Once the relay's sent this (as text, anywhere in what's come in)
+    async saw(text: string): Promise<void> {
+        while (!this.received.toString("latin1").includes(text)) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+    }
+
+    // The close frame's code, once one's come
+    closeCode(): number | undefined {
+        const at = this.received.lastIndexOf(Buffer.from([0x88, 0x02]));
+        return at === -1 ? undefined : this.received.readUInt16BE(at + 2);
+    }
+}
+
 describe("multiplayer toggle", () => {
     it("is on unless it's turned off", () => {
         expect(isMultiplayerOn({}, [])).toBe(true);
@@ -119,7 +167,7 @@ describe("co-op relay", () => {
                 res.end();
             }
         });
-        relay.attach(server);
+        relay.attach(server, RELAY_PATH, { closeOthers: true });
         await new Promise<void>((resolve) => server.listen(0, resolve));
         url = `ws://localhost:${(server.address() as AddressInfo).port}${RELAY_PATH}`;
     }
@@ -426,5 +474,128 @@ describe("co-op relay", () => {
             endless: true,
             who: "vet",
         });
+    });
+
+    describe("against what no browser sends", () => {
+        const port = () => Number(new URL(url).port);
+
+        async function stillWorks(): Promise<void> {
+            const client = await connect();
+            client.send({ t: "ping" });
+            await client.next("pong");
+        }
+
+        it("survives a request path that isn't a URL", async () => {
+            const http = connectTcp(port(), "127.0.0.1");
+            http.on("error", () => {});
+            http.write("GET //[ HTTP/1.1\r\nHost: x\r\n\r\n");
+            const upgrade = new RawClient(port(), "//[");
+            await upgrade.saw("404 Not Found");
+            await upgrade.closed;
+            http.destroy();
+            await stillWorks();
+        });
+
+        it("drops a message nested too deep to encode again", async () => {
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            const deep = "[".repeat(60_000) + "]".repeat(60_000);
+            raw.socket.write(RawClient.frame(0x1, '{"t":"create","me":{"loadout":' + deep + "}}"));
+            await raw.closed;
+            expect(relay.roomCount).toBe(0);
+            await stillWorks();
+        });
+
+        it("drops a message sent in endless empty pieces", async () => {
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            const pieces = [RawClient.frame(0x1, "", false)];
+            for (let i = 0; i < 10_000; i++) {
+                pieces.push(RawClient.frame(0x0, "", false));
+            }
+            raw.socket.write(Buffer.concat(pieces));
+            await raw.closed;
+            expect(raw.closeCode()).toBe(1009);
+            await stillWorks();
+        });
+
+        it("counts every frame, empty ones too, against its rate", async () => {
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            raw.socket.write(
+                Buffer.concat(Array.from({ length: 1000 }, () => RawClient.frame(0x9, ""))),
+            );
+            await raw.closed;
+            expect(raw.closeCode()).toBe(1008);
+        });
+
+        it("turns away text that isn't UTF-8, which a browser would fail on", async () => {
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            const bad = Buffer.concat([
+                Buffer.from('{"t":"ping","x":"'),
+                Buffer.from([0xff]),
+                Buffer.from('"}'),
+            ]);
+            raw.socket.write(RawClient.frame(0x1, bad));
+            await raw.closed;
+            expect(raw.closeCode()).toBe(1007);
+        });
+
+        it("reads a message sent a byte at a time", async () => {
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            for (const byte of RawClient.frame(0x1, JSON.stringify({ t: "ping" }))) {
+                raw.socket.write(Buffer.from([byte]));
+            }
+            await raw.saw("pong");
+            raw.socket.destroy();
+        });
+
+        it("drops a guest that stops reading, rather than keeping all it's sent", async () => {
+            const { host, code } = await party(0);
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            raw.send({ t: "join", code, me: { name: nextName("stuck") } });
+            await host.roomWhere((room) => room.members.length === 2);
+            host.send({ t: "start", game: {} });
+            raw.socket.pause();
+            const big = "x".repeat(200_000);
+            for (let i = 0; i < 300; i++) {
+                host.send({ t: "down", upTo: i, events: [], big });
+                if (i % 10 === 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 5));
+                }
+            }
+            expect((await host.next("left")).id).toMatch(/^p/);
+            raw.socket.destroy();
+        });
+    });
+
+    it("keeps a kicked player out, and slows down guessing codes", async () => {
+        await restart({ wrongCodesPerMinute: 3 });
+        const { host, guests, code } = await party(1);
+        const { room } = await host.room();
+        host.send({ t: "kick", id: room.members[1].id });
+        await guests[0].next("gone");
+        guests[0].send({ t: "join", code, me: { name: nextName("back") } });
+        expect((await guests[0].next("error")).message).toMatch(/removed you/);
+        const guesser = await connect();
+        for (let i = 0; i < 3; i++) {
+            guesser.send({ t: "join", code: "ZZZZZ" });
+            expect((await guesser.next("error")).message).toMatch(/no room/);
+        }
+        guesser.send({ t: "join", code });
+        expect((await guesser.next("error")).message).toMatch(/wrong codes/);
+    });
+});
+
+describe("relay limits by address", () => {
+    it("counts an IPv6 address by its /64", () => {
+        expect(addressKey("2001:db8:1:2:aaaa::1")).toBe("2001:db8:1:2::/64");
+        expect(addressKey("2001:db8:1:2:ffff:1:2:3")).toBe("2001:db8:1:2::/64");
+        expect(addressKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+        expect(addressKey("::1")).toBe("0:0:0:0::/64");
+        expect(addressKey("203.0.113.9")).toBe("203.0.113.9");
     });
 });

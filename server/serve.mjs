@@ -29,6 +29,7 @@ import {
     isAnyMapOn,
     isMultiplayerOn,
     maxRoomsSetting,
+    requestPath,
 } from "./coop-relay.mjs";
 
 const REPO = resolve(fileURLToPath(import.meta.url), "../..");
@@ -102,6 +103,29 @@ function cacheControl(urlPath) {
         : "no-cache";
 }
 
+// A Range header's single span of a file this size: { start, end } (end
+// included), "unsatisfiable", or undefined for the whole file. The cache
+// download resumes with one, and adds what comes back to what it has.
+function parseRange(header, size) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(header?.trim() ?? "");
+    if (!match || (!match[1] && !match[2])) {
+        return undefined;
+    }
+    const last = size - 1;
+    if (!match[1]) {
+        const suffix = Number(match[2]);
+        return suffix === 0 || size === 0
+            ? "unsatisfiable"
+            : { start: Math.max(0, size - suffix), end: last };
+    }
+    const start = Number(match[1]);
+    const end = match[2] ? Math.min(Number(match[2]), last) : last;
+    if (start >= size) {
+        return "unsatisfiable";
+    }
+    return end < start ? undefined : { start, end };
+}
+
 const relay = MULTIPLAYER ? createRelay() : undefined;
 
 const server = createServer((req, res) => {
@@ -113,29 +137,48 @@ const server = createServer((req, res) => {
         res.end();
         return;
     }
-    const urlPath = new URL(req.url ?? "/", "http://localhost").pathname;
-    const found = findFile(urlPath);
+    const urlPath = requestPath(req);
+    const found = urlPath !== undefined ? findFile(urlPath) : undefined;
     if (!found) {
-        res.writeHead(404, { "Content-Type": "text/plain", ...ISOLATION });
-        res.end("Not found\n");
+        res.writeHead(urlPath === undefined ? 400 : 404, {
+            "Content-Type": "text/plain",
+            ...ISOLATION,
+        });
+        res.end(urlPath === undefined ? "Bad request\n" : "Not found\n");
         return;
     }
-    res.writeHead(200, {
-        "Content-Type": MIME_TYPES[extname(found.file).toLowerCase()] ?? "application/octet-stream",
-        "Content-Length": found.size,
-        "Cache-Control": cacheControl(urlPath),
-        ...ISOLATION,
-    });
-    if (req.method === "HEAD") {
+    const range = parseRange(req.headers.range, found.size);
+    if (range === "unsatisfiable") {
+        res.writeHead(416, { "Content-Range": `bytes */${found.size}`, ...ISOLATION });
         res.end();
         return;
     }
-    createReadStream(found.file)
+    const start = range?.start ?? 0;
+    const end = range?.end ?? found.size - 1;
+    res.writeHead(range ? 206 : 200, {
+        "Content-Type": MIME_TYPES[extname(found.file).toLowerCase()] ?? "application/octet-stream",
+        "Content-Length": end - start + 1,
+        "Accept-Ranges": "bytes",
+        ...(range && { "Content-Range": `bytes ${start}-${end}/${found.size}` }),
+        "Cache-Control": cacheControl(urlPath),
+        ...ISOLATION,
+    });
+    if (req.method === "HEAD" || found.size === 0) {
+        res.end();
+        return;
+    }
+    createReadStream(found.file, { start, end })
         .on("error", () => res.destroy())
         .pipe(res);
 });
 
-relay?.attach(server);
+// Nothing else here upgrades, so anything but the relay is turned away
+// rather than left open
+if (relay) {
+    relay.attach(server, RELAY_PATH, { closeOthers: true });
+} else {
+    server.on("upgrade", (_req, socket) => socket.destroy());
+}
 
 if (!existsSync(join(ROOT, "index.html"))) {
     console.error(`No build in ${ROOT}. Run npm run build first.`);

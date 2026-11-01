@@ -80,6 +80,26 @@ const BANNED_STARTS = [
     "fggt",
 ];
 
+// Ordinary words that start with one of BANNED_STARTS (dickens, analyst,
+// spicy, cockpit, cumulus, homogenous, sexton)
+const ALLOWED_STARTS = [
+    "dicken",
+    "dickin",
+    "analog",
+    "analy",
+    "spice",
+    "spicy",
+    "cockpit",
+    "cockatoo",
+    "cockatiel",
+    "cockle",
+    "cockney",
+    "cumul",
+    "cumber",
+    "homogen",
+    "sexton",
+];
+
 // Only as the whole name: short ones that start ordinary names (assassin,
 // titan, fagin's, crappy, hoedown, jewel)
 const BANNED_WHOLE = ["ass", "tit", "tits", "fag", "crap", "hoe", "jew", "kys", "cnt"];
@@ -101,6 +121,16 @@ const LOOKALIKES = {
     "|": "i",
 };
 
+// Letters that sound or look like others, read both ways
+const SOUNDALIKES = [
+    ["ph", "f"],
+    ["ck", "k"],
+    ["q", "k"],
+    ["kk", "k"],
+    ["vv", "w"],
+    ["z", "s"],
+];
+
 // A name as it can be: lowercase a-z, no longer than NAME_LENGTH
 export function cleanName(text) {
     return (typeof text === "string" ? text : "")
@@ -113,18 +143,24 @@ export function cleanName(text) {
 // banned list, with stand-in digits and symbols read as letters too
 export function isNameAllowed(text) {
     const raw = (typeof text === "string" ? text : "").toLowerCase();
-    const readings = [
-        cleanName(raw),
-        raw
-            .split("")
-            .map((c) => LOOKALIKES[c] ?? c)
-            .join("")
-            .replace(/[^a-z]/g, ""),
-    ];
+    const plain = cleanName(raw);
+    const swapped = raw
+        .split("")
+        .map((c) => LOOKALIKES[c] ?? c)
+        .join("")
+        .replace(/[^a-z]/g, "");
+    const readings = [plain, swapped].flatMap((name) => [
+        name,
+        // A letter held down (fuuuck) as one and as two (faggggot)
+        name.replace(/(.)\1{2,}/g, "$1"),
+        name.replace(/(.)\1{2,}/g, "$1$1"),
+        SOUNDALIKES.reduce((text, [from, to]) => text.replaceAll(from, to), name),
+    ]);
     return readings.every(
         (name) =>
             !BANNED_ANYWHERE.some((word) => name.includes(word)) &&
-            !BANNED_STARTS.some((word) => name.startsWith(word)) &&
+            (ALLOWED_STARTS.some((word) => name.startsWith(word)) ||
+                !BANNED_STARTS.some((word) => name.startsWith(word))) &&
             !BANNED_WHOLE.includes(name),
     );
 }
