@@ -103,6 +103,9 @@ const PER_CHURCH = 12;
 const WELL = 884;
 const STALLS = [634, 11729, 11730, 634];
 
+// What a square has in it, for the palette
+export const SQUARE_LOCS = [WELL, ...STALLS];
+
 // A line that buildings stand along: walls on the line, going out from it
 type Frontage = {
     x: number;

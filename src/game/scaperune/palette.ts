@@ -8,6 +8,7 @@ import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
 import { KIT_FENCES } from "./settlements";
 import { FOUNTAIN, PAVING, SET_PIECES, getPieceLocs } from "./structures";
+import { SQUARE_LOCS } from "./townPlan";
 import { VIGNETTES } from "./vignettes";
 
 // Everything the generator can ask the cache for, on one map: each biome's
@@ -127,6 +128,9 @@ function build(context: BuildContext): TileGrid {
     });
     y += (Math.ceil(dressing.length / 100) + 1) * 2;
     REEDS.forEach((id, i) => put1(id, 2 + i * 2, y));
+    SQUARE_LOCS.forEach((id, i) => {
+        ground.place({ id, type: 10, rotation: 0, level: 0, x: 40 + i * 3, y }, 2, 2);
+    });
     const vignettes = [...new Set(Object.values(VIGNETTES).flat(2))];
     vignettes.forEach((id, i) => {
         put1(id, 2 + (i % 100) * 2, y + 2 + Math.floor(i / 100) * 2);
