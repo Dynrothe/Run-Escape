@@ -253,7 +253,14 @@ describe("co-op", () => {
     });
 
     it("makes the crowd bigger and tougher for each player", () => {
-        expect(getPartyScale(1)).toEqual({ crowd: 1, hp: 1, bossHp: 1, damage: 1, xp: 1 });
+        expect(getPartyScale(1)).toEqual({
+            crowd: 1,
+            hp: 1,
+            bossHp: 1,
+            damage: 1,
+            xp: 1,
+            caskets: 1,
+        });
         const two = getPartyScale(2);
         expect(two.crowd).toBeGreaterThan(1);
         expect(getPartyScale(4).hp).toBeGreaterThan(two.hp);
@@ -323,6 +330,17 @@ describe("co-op", () => {
         sim.as(0, () => (sim as unknown as Record<string, Function>).stepWalkers(boss, blast));
         expect(a.player.hp).toBeLessThan(a.player.maxHp);
         expect(b.player.hp).toBeLessThan(b.player.maxHp);
+    });
+
+    it("scales the crowd to the players still up", () => {
+        const duo = createParty(["warrior", "wizard"]);
+        const goblin = getEnemy("goblin");
+        const before = duo.spawnEnemy(goblin, "normal")!;
+        duo.leave(1);
+        const after = duo.spawnEnemy(goblin, "normal")!;
+        const solo = createParty(["warrior"]).spawnEnemy(goblin, "normal")!;
+        expect(after.maxHp).toBeLessThan(before.maxHp);
+        expect(after.maxHp).toBe(solo.maxHp);
     });
 
     it("plays out the same on every player's copy", () => {

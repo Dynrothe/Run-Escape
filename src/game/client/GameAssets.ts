@@ -286,6 +286,12 @@ export class GameAssets {
     readonly sprites = new Map<number, HTMLCanvasElement>();
 
     private readonly players: PlayerBake[] = [];
+    // Looks being baked, by appearance key: players who look alike (all the
+    // same adventurer, on some fun maps) share one bake and one model
+    private readonly bakingLooks = new Map<
+        string,
+        Promise<{ models: Map<string, ActorModel>; stance: PlayerStance }>
+    >();
     // The current map's enemies
     private enemyPages: ActorPage[] = [];
     private readonly requestedEnemies = new Set<string>();
@@ -584,9 +590,14 @@ export class GameAssets {
     // Drops the models of co-op's other players, from this slot on
     dropPlayers(from: number): void {
         for (const bake of this.players.splice(from)) {
-            if (bake?.model) {
-                this.actors.removePage(bake.model.page);
-            }
+            this.releasePlayerModel(bake?.model);
+        }
+    }
+
+    // A player model's gone once no player draws with it any more
+    private releasePlayerModel(model: ActorModel | undefined): void {
+        if (model && !this.players.some((bake) => bake?.model?.page === model.page)) {
+            this.actors.removePage(model.page);
         }
     }
 
@@ -599,36 +610,57 @@ export class GameAssets {
             return;
         }
         player.pendingKey = key;
-        const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
-        // Walk goes first: a model's height comes from its first seq, and a
-        // stance that raises the weapon shouldn't lift the health bar with it
-        const seqIds = [
-            PLAYER_SEQS.walk,
-            stance.idle,
-            stance.run,
-            PLAYER_SEQS.death,
-            ...getPlayerAttackSeqs(),
-        ];
-        const bake = await this.bake([
-            { kind: "player", key: "player", appearance, seqIds },
-            ...getPowerUpLookRequests(appearance),
-        ]);
+        const same = this.players.find((other) => other?.key === key && other.model);
+        const look = same
+            ? { models: same.looks, stance: same.stance }
+            : await this.bakeLook(key, appearance);
         if (player.pendingKey !== key || this.players[slot] !== player) {
             // A newer look was asked for while this one baked, or the player's
-            // gone
+            // gone (and it's no use unless another player's waiting on it)
+            if (!this.players.some((other) => other?.pendingKey === key)) {
+                this.releasePlayerModel(look.models.get("player"));
+            }
             return;
         }
         player.pendingKey = undefined;
         const previous = player.model;
-        this.renderer.updateTextureArray(bake.loadedTextures);
-        const models = this.actors.addBake(bake);
-        player.model = models.get("player");
-        player.looks = models;
-        player.stance = stance;
+        player.model = look.models.get("player");
+        player.looks = look.models;
+        player.stance = look.stance;
         player.key = key;
-        if (previous) {
-            this.actors.removePage(previous.page);
+        this.releasePlayerModel(previous);
+    }
+
+    // A look's models, baked once however many players ask for it at a time
+    private bakeLook(
+        key: string,
+        appearance: PlayerAppearance,
+    ): Promise<{ models: Map<string, ActorModel>; stance: PlayerStance }> {
+        let baking = this.bakingLooks.get(key);
+        if (!baking) {
+            baking = (async () => {
+                const stance =
+                    getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
+                // Walk goes first: a model's height comes from its first seq,
+                // and a stance that raises the weapon shouldn't lift the health
+                // bar with it
+                const seqIds = [
+                    PLAYER_SEQS.walk,
+                    stance.idle,
+                    stance.run,
+                    PLAYER_SEQS.death,
+                    ...getPlayerAttackSeqs(),
+                ];
+                const bake = await this.bake([
+                    { kind: "player", key: "player", appearance, seqIds },
+                    ...getPowerUpLookRequests(appearance),
+                ]);
+                this.renderer.updateTextureArray(bake.loadedTextures);
+                return { models: this.actors.addBake(bake), stance };
+            })().finally(() => this.bakingLooks.delete(key));
+            this.bakingLooks.set(key, baking);
         }
+        return baking;
     }
 }
 

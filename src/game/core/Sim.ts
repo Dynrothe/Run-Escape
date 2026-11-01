@@ -646,7 +646,10 @@ export class Sim {
     events: SimEvent[] = [];
 
     // Co-op's bigger, tougher crowds (content/coop.ts), all 1 on your own
-    private readonly partyScale: PartyScale;
+    private partyScale: PartyScale;
+    // What each bone's worth for the party: its scale's experience, made up
+    // for when the crowd's cap leaves no room for all of the party's extra
+    private partyXp = 1;
     private readonly enemyHash = new SpatialHash<Enemy>(2);
     private readonly pileHash = new SpatialHash<Pickup>(PILE_RADIUS);
     private nextUid = 1;
@@ -911,6 +914,7 @@ export class Sim {
             },
         ];
         this.partyScale = getPartyScale(party.length);
+        this.partyXp = this.partyScale.xp;
         this.focus = Math.min(options.focus ?? 0, party.length - 1);
         this.eventRng = new Rng(options.seed ^ RANDOM_EVENT_SEED);
         this.nextRandomEventSeconds = this.eventRng.range(...RANDOM_EVENT_FIRST);
@@ -1815,6 +1819,7 @@ export class Sim {
         if (this.runOver) {
             return;
         }
+        this.rescaleParty();
         if (!this.heroes.some((other) => this.isUp(other))) {
             this.endRun("dead");
         } else if (this.state !== "playing") {
@@ -1856,12 +1861,11 @@ export class Sim {
             // Poison finished them
             return;
         }
-        if (this.tick % FLOW_FIELD_INTERVAL === 0) {
-            for (const hero of this.heroes) {
-                if (this.isUp(hero)) {
-                    this.use(hero);
-                    this.updateFlowField();
-                }
+        // Each hero's on a tick of its own, so a party's don't all come at once
+        for (const hero of this.heroes) {
+            if ((this.tick + hero.index * 2) % FLOW_FIELD_INTERVAL === 0 && this.isUp(hero)) {
+                this.use(hero);
+                this.updateFlowField();
             }
         }
         // A fun map's round turns over every fifteen minutes of waves (there's
@@ -2086,6 +2090,11 @@ export class Sim {
         const crowd = roundCrowd(this.round) * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
+        if (this.heroes.length > 1) {
+            const alone = Math.min(wave.maxAlive * roundCrowd(this.round), MAX_ENEMIES);
+            const bigger = Math.min(wave.maxAlive * crowd, MAX_ENEMIES) / alone;
+            this.partyXp = (this.partyScale.crowd * this.partyScale.xp) / bigger;
+        }
         const minAlive = Math.min(Math.round(wave.minAlive * crowd), maxAlive);
         let toSpawn = 0;
         if (alive < minAlive) {
@@ -2170,11 +2179,22 @@ export class Sim {
             const distance = this.rng.range(minDistance, maxDistance);
             const x = Math.floor(player.x + fm.cos(a) * distance) + 0.5;
             const y = Math.floor(player.y + fm.sin(a) * distance) + 0.5;
-            if (this.canTurnUpAt(def, x, y)) {
+            if (this.canTurnUpAt(def, x, y) && !this.besideATeammate(x, y, minDistance)) {
                 return { x, y };
             }
         }
         return undefined;
+    }
+
+    // Co-op: whether a spot's closer than this to a player still up
+    private besideATeammate(x: number, y: number, distance: number): boolean {
+        return (
+            this.heroes.length > 1 &&
+            this.heroes.some(
+                (hero) =>
+                    this.isUp(hero) && fm.hypot(hero.player.x - x, hero.player.y - y) < distance,
+            )
+        );
     }
 
     // Whether an enemy can turn up here: only where the player could stand and
@@ -2260,7 +2280,7 @@ export class Sim {
         let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
-        let xp = def.xp * roundScale(ROUND_XP, this.round) * this.partyScale.xp;
+        let xp = def.xp * roundScale(ROUND_XP, this.round) * this.partyXp;
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -2981,7 +3001,12 @@ export class Sim {
         }
         const amount = Math.max(
             1,
-            Math.round(enemy.damage * FACTION_DAMAGE * this.rng.range(0.85, 1.15)),
+            Math.round(
+                enemy.damage *
+                    FACTION_DAMAGE *
+                    (this.partyScale.hp / this.partyScale.damage) *
+                    this.rng.range(0.85, 1.15),
+            ),
         );
         foe.hp -= amount;
         foe.flash = 5;
@@ -3625,7 +3650,9 @@ export class Sim {
             this.addEffect(totemsDef.blastSpotAnim, boss.x, boss.y, 0, 60, boss.uid);
         }
         // There's no food in a fight this long with nothing else in it
-        this.heal(Math.round(this.player.maxHp * (phases.blastHeal ?? 0)));
+        this.forEachHeroInReach(() =>
+            this.heal(Math.round(this.player.maxHp * (phases.blastHeal ?? 0))),
+        );
         const next = phases.phases[phase.index + 1];
         if (!next) {
             boss.shieldEnd = 0;
@@ -3806,14 +3833,14 @@ export class Sim {
         if (!quarters) {
             return;
         }
-        const player = this.player;
+        const middle = this.partyMiddle();
         const arena = this.bossArena;
         const margin = quarters.offset * 2;
         const offset = () => this.rng.range(-quarters.offset, quarters.offset);
         const clamp = (value: number, min: number, max: number) =>
             Math.min(Math.max(value, min + margin), max - margin);
-        const x = clamp(player.x + offset(), arena.minX, arena.maxX);
-        const y = clamp(player.y + offset(), arena.minY, arena.maxY);
+        const x = clamp(middle.x + offset(), arena.minX, arena.maxX);
+        const y = clamp(middle.y + offset(), arena.minY, arena.maxY);
         this.quarters = {
             enemyUid: enemy.uid,
             attack,
@@ -4162,7 +4189,10 @@ export class Sim {
         }
         const def = quarters.attack.quarters!;
         quarters.nextHurt = tick + secondsToTicks(def.interval);
-        // Everyone outside the safe quarter, each of whom feeds her shield
+        // Everyone outside the safe quarter is hit, and her shield's fed
+        // once if anyone was
+        const enemy = this.enemies.find((e) => e.uid === quarters.enemyUid);
+        let fed = false;
         this.forEachHeroInReach(() => {
             const player = this.player;
             if (
@@ -4171,16 +4201,32 @@ export class Sim {
             ) {
                 return;
             }
-            const enemy = this.enemies.find((e) => e.uid === quarters.enemyUid);
             this.bossHit(enemy?.def.id ?? "", enemy, quarters.attack, quarters.damage, false);
-            const phase = enemy?.bossState?.phase;
-            if (phase?.stage === "shield") {
-                phase.shield = Math.min(
-                    phase.shieldMax,
-                    phase.shield + Math.round(phase.shieldMax * def.heal),
-                );
-            }
+            fed = true;
         });
+        const phase = enemy?.bossState?.phase;
+        if (fed && phase?.stage === "shield") {
+            phase.shield = Math.min(
+                phase.shieldMax,
+                phase.shield + Math.round(phase.shieldMax * def.heal),
+            );
+        }
+    }
+
+    // Where the players still up are, on average (the player, on your own)
+    private partyMiddle(): { x: number; y: number } {
+        if (this.heroes.length === 1) {
+            return this.player;
+        }
+        let x = 0;
+        let y = 0;
+        let count = 0;
+        this.forEachHeroInReach(() => {
+            x += this.player.x;
+            y += this.player.y;
+            count++;
+        });
+        return count > 0 ? { x: x / count, y: y / count } : this.player;
     }
 
     // Out it comes for a big hit, and stays to feed the boss. An antidote
@@ -4810,7 +4856,8 @@ export class Sim {
         const player = this.player;
         if (effect.kind === "steal") {
             const state = enemy?.bossState;
-            const amount = Math.floor(this.coins * effect.fraction);
+            const up = this.heroes.filter((hero) => this.isUp(hero)).length;
+            const amount = Math.floor((this.coins * effect.fraction) / Math.max(1, up));
             if (state && amount > 0 && !enemy.dead) {
                 this.coins -= amount;
                 state.stolenCoins += amount;
@@ -4930,6 +4977,12 @@ export class Sim {
         player.poisonEnd = -1;
         player.poisonDamage = 0;
         this.emit({ type: "heroDown" });
+        this.rescaleParty();
+    }
+
+    // Co-op: the crowd and its bosses as they'd be for the players still up
+    private rescaleParty(): void {
+        this.partyScale = getPartyScale(this.heroes.filter((hero) => this.isUp(hero)).length);
     }
 
     // Returns the damage done (0 if it was already dead). mightScale
@@ -5188,7 +5241,10 @@ export class Sim {
                 enemy.y,
                 master,
             );
-        } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
+        } else if (
+            !enemy.boss &&
+            this.rng.chance(CASKET_DROP_CHANCE * luck * this.partyScale.caskets)
+        ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
@@ -7217,7 +7273,7 @@ export class Sim {
 
     // Power-ups' damage keeps up with the enemies' hitpoints
     private powerUpDamageScale(): number {
-        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp;
+        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp * this.partyScale.hp;
     }
 
     private powerUpTicks(seconds: number): number {
@@ -7253,7 +7309,10 @@ export class Sim {
                     pickup.attracted = true;
                     pickup.speed = Math.max(pickup.speed, 0.15);
                 }
-                message = "Everything on the ground flies to you!";
+                message =
+                    this.heroes.length > 1
+                        ? "Everything on the ground flies to whoever's nearest!"
+                        : "Everything on the ground flies to you!";
                 break;
             case "freeze":
                 endTick = Math.max(
@@ -7514,6 +7573,9 @@ export class Sim {
         for (const ring of this.rings) {
             if (this.tick >= ring.nextPulse) {
                 this.useHeroAt(ring.hero);
+                if (!this.isUp(this.hero)) {
+                    this.use(this.nearestHero(ring.x, ring.y));
+                }
                 ring.nextPulse = this.tick + RING_PULSE_TICKS;
                 this.pulseRing(ring);
             }
