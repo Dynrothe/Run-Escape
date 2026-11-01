@@ -309,20 +309,31 @@ describe("generateMap", () => {
     ];
     const SEEDS = [1, 2, 3, 4, 5];
 
-    it.each(CASES)("leaves no open tile cut off from the spawn: %o", (overrides) => {
-        for (const seed of SEEDS) {
-            const full = settings({ ...overrides, seed });
-            const grid = generateMap(full, context);
-            const arena = getGeneratedArena(full);
-            const spawn = getGeneratedSpawn(full);
-            const flags = getCollisionFlags(grid, context.locs);
-            const reached = findReachable(flags, grid.sizeX, grid.sizeY, arena, spawn.x, spawn.y);
-            expect(reached[spawn.x + spawn.y * grid.sizeX]).toBe(1);
-            expect(findStranded(flags, grid.sizeX, arena, reached)).toEqual([]);
-            // And it didn't get there by blocking the whole map
-            expect(reached.reduce((sum, v) => sum + v, 0)).toBeGreaterThanOrEqual(300);
-        }
-    });
+    it.each(CASES)(
+        "leaves no open tile cut off from the spawn: %o",
+        (overrides) => {
+            for (const seed of SEEDS) {
+                const full = settings({ ...overrides, seed });
+                const grid = generateMap(full, context);
+                const arena = getGeneratedArena(full);
+                const spawn = getGeneratedSpawn(full);
+                const flags = getCollisionFlags(grid, context.locs);
+                const reached = findReachable(
+                    flags,
+                    grid.sizeX,
+                    grid.sizeY,
+                    arena,
+                    spawn.x,
+                    spawn.y,
+                );
+                expect(reached[spawn.x + spawn.y * grid.sizeX]).toBe(1);
+                expect(findStranded(flags, grid.sizeX, arena, reached)).toEqual([]);
+                // And it didn't get there by blocking the whole map
+                expect(reached.reduce((sum, v) => sum + v, 0)).toBeGreaterThanOrEqual(300);
+            }
+        },
+        30000,
+    );
 });
 
 // Against the game's real collision and the real prefabs, when there's a cache.

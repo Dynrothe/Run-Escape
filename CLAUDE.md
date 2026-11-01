@@ -125,6 +125,21 @@ npx tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're
 npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
 ```
 
+## Tests on the release build
+
+The release workflow is the only place `npm test` runs on its own, and a failure there stops the
+desktop build.
+
+- **It runs everything, on a busy machine.** It has the game's cache, so `generator.test.ts` runs
+  its long map check. A test that takes a few seconds on your machine can pass the 5 second limit
+  there, so give a long one its own timeout.
+- **"Exit code 1" with no failed test named** means an error with no stack in our code, which
+  vitest's annotations leave out. `Timeout calling "onTaskUpdate"` is one: a worker went a minute
+  without a turn of the event loop. `src/setupTests.ts` yields between tests so that a long file
+  doesn't, which leaves only a single test blocking for that long.
+- **`server/coop-relay.test.ts` needs Node 22's `WebSocket`**, as the workflow has. On Node 21, run
+  with `NODE_OPTIONS=--experimental-websocket`.
+
 ## Testing in the browser
 
 - Anything new on screen needs to work on a phone too: see Touch screens in `docs/DEVELOPMENT.md`.
