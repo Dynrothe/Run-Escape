@@ -929,7 +929,11 @@ off the `mainland`.
 
 **Roads.** Routes are found with a cost per step (`climb`), so they wind up a slope rather than go straight up it. Their heights
 are worked out **all together, last** (`roadGrades.ts`), with leads and plots pinned. One at a time doesn't work: a road's
-height depends on what it meets and passes, and those can come later. Then the ground's pinned to them across their width.
+height depends on what it meets and passes, and those can come later. Then the ground's pinned to them across their width,
+and `pinTiles` pins out to the corners of every tile that'll be painted, or a road's edge stands on a slope. Water can't move
+for a road, so where one runs along a shore the shore gives way, by the tiles that touch the road's. Painting skips anything
+blocked or solid, so that a tile painted as road can be walked, and `clearLocs`, last of all, takes off anything solid that's
+still on one. A hand-made map with a `RoadNetwork` calls both.
 
 **Rivers** (`findValley`) follow the low ground, a column at a time, so a river's a function of how far along it is. They run in
 flat reaches, each at the lowest level it comes to, with all the height they lose at drops (`stepRiver`), `WATERFALL_SPACING` apart

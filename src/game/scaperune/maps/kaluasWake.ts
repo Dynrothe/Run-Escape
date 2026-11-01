@@ -1488,7 +1488,6 @@ function buildMap(context: BuildContext): GeneratedMap {
     placeSurf(build, waterTiles, shape, bridgeZone);
     scatter(build, waterTiles, shape);
     dressCliffs(build, rock, rockSkip, falls);
-    roads.clearLocs();
     shutOffStranded(build);
     dressGround(ground, {
         seed: SEED + 300,
@@ -1496,6 +1495,7 @@ function buildMap(context: BuildContext): GeneratedMap {
         biomeDecor: (x, y) => build.biomeAt(x, y).decor,
     });
 
+    roads.clearLocs(roadTiles);
     return {
         grid: ground.grid,
         footprint: ground.footprint,

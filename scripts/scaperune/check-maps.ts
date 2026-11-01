@@ -537,6 +537,8 @@ function checkBuildingGround(map: GeneratedMap): string[] {
     return problems;
 }
 
+// The floor of a chasm: a drop, for a sea
+const STARS = 39;
 // How far from a fall foam can be: rivers fall across their whole width
 const FOAM_REACH = 14;
 
@@ -703,7 +705,8 @@ function checkRoadsWalkable(
                 for (let x = px - reach; x <= px + reach; x++) {
                     const i = x + y * sizeX;
                     const away = Math.hypot(x + 0.5 - point.x, y + 0.5 - point.y);
-                    const dry = !WATER_OVERLAYS.has(grid.levels[0].overlays[i]);
+                    const floor = grid.levels[0].overlays[i];
+                    const dry = !WATER_OVERLAYS.has(floor) && floor !== STARS;
                     const middle = x === px && y === py && at >= line.lead && dry;
                     const painted = roadTiles[i] !== 0 && away <= line.halfWidth;
                     if ((middle || painted) && isInRect(arena, x, y)) {
@@ -716,7 +719,9 @@ function checkRoadsWalkable(
     const blocked: number[] = [];
     for (let y = arena.y0; y <= arena.y1; y++) {
         for (let x = arena.x0; x <= arena.x1; x++) {
-            const shut = [...closedRoads, ...squares].some((road) => isInRect(road, x, y));
+            const shut =
+                [...closedRoads, ...squares].some((road) => isInRect(road, x, y)) ||
+                map.walled?.some(({ taken }) => taken.has(x + y * sizeX));
             if (onRoad[x + y * sizeX] && steps.isSolid(x, y) && !shut) {
                 blocked.push(x + y * sizeX);
             }
@@ -899,7 +904,6 @@ const LOOK_LEAST = { land: 2000, road: 200, steep: 100, foot: 60 };
 // Land textures, which stretched down a cliff are the bands that started all this
 const TEXTURED_ROCK = new Set([20, 32]);
 const ROCK_OVERLAYS = new Set(Object.values(BIOMES).map(({ rock }) => rock.overlay));
-const STARS = 39;
 const BIG_LOC = 6;
 // 45 degrees
 const STEEP = 16;
@@ -972,6 +976,7 @@ function checkLook(
         }
     }
     const held = new Uint8Array(n);
+    const nearBridge = new Uint8Array(n);
     const hold = (i: number, reach: number) => {
         for (let dy = -reach; dy <= reach; dy++) {
             for (let dx = -reach; dx <= reach; dx++) {
@@ -982,6 +987,11 @@ function checkLook(
     for (let i = 0; i < n; i++) {
         if (arena.levels[1].flags[i] & TILE_BRIDGE) {
             hold(i, BRIDGE_REACH);
+            for (let dy = -BRIDGE_REACH; dy <= BRIDGE_REACH; dy++) {
+                for (let dx = -BRIDGE_REACH; dx <= BRIDGE_REACH; dx++) {
+                    nearBridge[Math.min(Math.max(i + dx + dy * sizeX, 0), n - 1)] = 1;
+                }
+            }
         } else if (WATER_OVERLAYS.has(overlays[i])) {
             hold(i, WATER_REACH);
         }
@@ -993,7 +1003,8 @@ function checkLook(
         if (!held[i] && isLand(i)) {
             steepest = Math.max(steepest, p.slope[i]);
         }
-        if (isLand(i) && p.slope[i] >= STEEP) {
+        // A bridge's banks have nothing on them, and stop where it does
+        if (isLand(i) && p.slope[i] >= STEEP && !nearBridge[i]) {
             steepTiles++;
             steepCovered += covered[i];
         }

@@ -602,8 +602,7 @@ export function generateMapDetail(
     const waterTiles = paintWater(build, waterField);
     const dry = new Uint8Array(waterTiles.length);
     const water: WaterPaint = { field: waterField, tiles: waterTiles, dry };
-    holdWater(build, seaTiles);
-    holdWater(build, freshTiles);
+    holdWater(build, waterTiles);
 
     if (hasRelief(settings)) {
         build.cliffs.set(shapeCliffs(terrain, settings.walkSlope));
@@ -616,7 +615,7 @@ export function generateMapDetail(
     paintFloors(build, toSea);
 
     const bridgeZone = new Uint8Array(waterTiles.length);
-    const roads = new RoadNetwork(build, waterTiles, bridgeZone);
+    const roads = new RoadNetwork(build, waterTiles, bridgeZone, dry);
     keepOffLava(build, roads.offLimits);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
@@ -665,15 +664,15 @@ export function generateMapDetail(
     placeBoundary(build, roadTiles);
     placeTownWalls(build, walled);
     placeWaymarkers(build, roads);
-    landmarks.push(...placeWaterPieces(build, waterTiles));
+    landmarks.push(...placeWaterPieces(build, waterTiles, bridgeZone));
     scatter(build, waterTiles);
-    roads.clearLocs();
     const fords = connectGround(build, water, roads.offLimits);
     dressGround(ground, {
         seed: settings.seed + DRESS_SEED,
         density: settings.dressing,
         biomeDecor: (x, y) => biomeAt(x, y).decor,
     });
+    roads.clearLocs(roadTiles, (x, y) => walled.some(({ taken }) => taken.has(ground.tile(x, y))));
     return {
         grid: ground.grid,
         footprint: ground.footprint,

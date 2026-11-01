@@ -4,14 +4,13 @@ import { PlacedLoc, TILE_BLOCKED, TILE_BRIDGE, TileGrid } from "./format";
 import {
     Build,
     LOC_FLOOR_DECORATION,
-    SETTLE_SLOPE,
     createClimb,
     forTilesNear,
     getTouchedTiles,
     hasRelief,
     lerp,
 } from "./mapBuild";
-import { Noise, createNoise, smoothField } from "./noise";
+import { Noise, createNoise, distanceTo, smoothField } from "./noise";
 import { Point, addPathToField, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
 import {
@@ -80,8 +79,8 @@ export const ROAD_SMOOTHING = 2;
 // Corners past a road's half width that its painted tiles can reach
 const ROAD_PIN_REACH = 3;
 
-// Tiles from water that a road has to come down to it
-const ROAD_WATER_REACH = 3;
+// What a tile beside water costs a road: it eats into the shore
+const ROAD_SHORE_COST = 10;
 
 // Points along a main road between places it's routed to, over rough ground, and how far
 // they can move to find ground to stand on
@@ -107,6 +106,8 @@ export class RoadNetwork {
     private readonly samples: Point[] = [];
     private readonly road: Float32Array;
     private readonly trail: Float32Array;
+    // Tiles from water
+    private readonly shore: Float32Array;
     private readonly wiggle: Noise;
     private readonly curves: number;
     private readonly climb: (from: number, to: number) => number;
@@ -115,6 +116,8 @@ export class RoadNetwork {
         readonly build: Build,
         readonly water: Uint8Array,
         readonly bridgeZone: Uint8Array,
+        // Tiles water's been taken off, for a map that repaints it
+        readonly dry?: Uint8Array,
     ) {
         const { ground, corners, settings, spawn } = build;
         this.tiles = new Uint8Array(ground.sizeX * ground.sizeY);
@@ -122,6 +125,7 @@ export class RoadNetwork {
         this.halfWidth = settings.roadWidth / 2;
         this.road = new Float32Array(corners.x * corners.y).fill(-4);
         this.trail = new Float32Array(corners.x * corners.y).fill(-4);
+        this.shore = distanceTo(water, ground.sizeX, ground.sizeY, 2);
         this.wiggle = createNoise(settings.seed + 5, 1);
         this.curves = settings.roadCurviness;
         this.climb = createClimb(build, ROAD_GRADE, ROAD_CLIMB_COST);
@@ -165,19 +169,21 @@ export class RoadNetwork {
         return (
             1 +
             (this.build.cliffs[i] ? ROAD_CLIFF_COST : 0) +
+            (this.shore[i] <= 1 ? ROAD_SHORE_COST : 0) +
             this.wiggle(x / lerp(24, 7, this.curves), y / lerp(24, 7, this.curves)) *
                 this.curves *
                 9
         );
     }
 
-    // Whether a point of road is on a building, or by a bridge's road where nothing's to go.
-    // A road coming off a bridge starts out next to that, so it's let off (nearBridge).
+    // Whether a point of road is on a building or in water, or by a bridge's road where nothing's
+    // to go. A road coming off a bridge starts out next to that, so it's let off (nearBridge).
     private touchesBuilding(point: Point, nearBridge: boolean): boolean {
         const { ground } = this.build;
         let touches = false;
         forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
-            touches ||= ground.footprint[i] !== 0 || (!nearBridge && this.bridgeZone[i] !== 0);
+            const offBridge = !nearBridge && (this.bridgeZone[i] !== 0 || this.water[i] !== 0);
+            touches ||= ground.footprint[i] !== 0 || offBridge;
         });
         return touches;
     }
@@ -336,7 +342,7 @@ export class RoadNetwork {
     // own width doesn't reach, or a road's edge can stand on a slope too steep to walk. Goes once
     // the roads have heights, and what's pinned already stays.
     pinTiles(): void {
-        const { corners, sizeX, sizeY, terrain } = this.build;
+        const { corners, sizeX, sizeY, terrain, cliffs } = this.build;
         const count = corners.x * corners.y;
         const nearest = new Float32Array(count).fill(Infinity);
         const heights = new Float32Array(count);
@@ -366,6 +372,8 @@ export class RoadNetwork {
                 if (!painted[x + y * sizeX]) {
                     continue;
                 }
+                // What's built on stops being cliff
+                cliffs[x + y * sizeX] = 0;
                 for (const [cx, cy] of [
                     [x, y],
                     [x + 1, y],
@@ -376,35 +384,39 @@ export class RoadNetwork {
                     if (distance === Infinity) {
                         continue;
                     }
+                    this.dryCorner(cx, cy);
                     const height = heights[cx + cy * corners.x];
-                    const met = this.meetWater(cx, cy, height);
-                    // Ahead of the road's own pin, which went in without knowing
-                    const pin = met === height ? Math.max(distance, 0.01) : -0.5;
-                    terrain.pin(cx, cy, met, pin);
+                    terrain.pin(cx, cy, height, Math.max(distance, 0.01));
                 }
             }
         }
     }
 
-    // How high a road can run beside water and still be walked: water can't move to meet it, so
-    // near a shore it comes to the water. A bridge's bank is pinned as it stands.
-    private meetWater(x: number, y: number, height: number): number {
-        const { terrain, settings } = this.build;
-        if (terrain.isHardPinned(x, y)) {
-            return height;
+    // Takes water off a corner of a road's tile. Water can't move to meet a road, so where one
+    // runs along a shore, the shore gives way: its tiles there go, and the corner's the road's.
+    private dryCorner(x: number, y: number): void {
+        const { ground, terrain, heldCorners, sizeX } = this.build;
+        const at = terrain.corner(x, y);
+        if (!terrain.isLocked(at)) {
+            return;
         }
-        const slope = settings.walkSlope * SETTLE_SLOPE;
-        let met = height;
-        for (let ny = y - ROAD_WATER_REACH; ny <= y + ROAD_WATER_REACH; ny++) {
-            for (let nx = x - ROAD_WATER_REACH; nx <= x + ROAD_WATER_REACH; nx++) {
-                if (terrain.insideCorners(nx, ny) && terrain.isLocked(terrain.corner(nx, ny))) {
-                    const reach = slope * Math.hypot(nx - x, ny - y);
-                    const water = terrain.height[terrain.corner(nx, ny)];
-                    met = Math.min(Math.max(met, water - reach), water + reach);
+        const tile = x + y * sizeX;
+        const around = [tile - sizeX - 1, tile - sizeX, tile - 1, tile];
+        const bridges = ground.grid.levels[1].flags;
+        if (around.some((i) => bridges[i] & TILE_BRIDGE)) {
+            return;
+        }
+        for (const i of around) {
+            if (this.water[i]) {
+                this.water[i] = 0;
+                ground.clearOverlay(i);
+                if (this.dry) {
+                    this.dry[i] = 1;
                 }
             }
         }
-        return met;
+        heldCorners[at] = 0;
+        terrain.unlock(at);
     }
 
     // Lays a road exactly along a line that's already smooth, for a map that's drawn its own
@@ -570,25 +582,32 @@ export class RoadNetwork {
         return solid;
     }
 
-    // Takes anything solid off the middle of a road, last of all: what's scattered goes by a
-    // list's size for a loc, and a big one reaches further. A road that's shut keeps what shuts it.
-    clearLocs(shut: TileRect[] = []): void {
+    // Takes anything solid off a road, last of all: what's scattered goes by a list's size for a
+    // loc, and a big one reaches further. keep says what's meant to be there, as a town's gate or
+    // what shuts a road. roadTiles are the tiles paint gave back.
+    clearLocs(roadTiles: Uint8Array, keep?: (x: number, y: number) => boolean): void {
         const { ground } = this.build;
         const bridges = ground.grid.levels[1].flags;
-        const middle = new Uint8Array(ground.sizeX * ground.sizeY);
+        const road = Uint8Array.from(roadTiles);
         for (const { points, lead } of this.lines) {
             for (const point of points.slice(lead)) {
                 const x = Math.floor(point.x);
                 const y = Math.floor(point.y);
-                if (ground.inside(x, y) && !shut.some((rect) => isInRect(rect, x, y))) {
-                    middle[ground.tile(x, y)] = bridges[ground.tile(x, y)] & TILE_BRIDGE ? 0 : 1;
+                if (ground.inside(x, y)) {
+                    road[ground.tile(x, y)] = 1;
                 }
             }
         }
+        const isRoad = (i: number) => {
+            const x = i % ground.sizeX;
+            const y = Math.floor(i / ground.sizeX);
+            const inside = ground.footprint[i] !== 0 || (bridges[i] & TILE_BRIDGE) !== 0;
+            return road[i] !== 0 && !inside && !keep?.(x, y);
+        };
         ground.grid.locs = ground.grid.locs.filter((loc) => {
             let onRoad = false;
             this.forSolidTiles(loc, (i) => {
-                onRoad ||= middle[i] !== 0 && ground.footprint[i] === 0;
+                onRoad ||= isRoad(i);
             });
             return !onRoad;
         });
@@ -645,10 +664,6 @@ function getTurningCircles(lead: Point[]): (x: number, y: number) => boolean {
     }));
     return (x, y) =>
         centres.some((centre) => Math.hypot(x + 0.5 - centre.x, y + 0.5 - centre.y) < radius - 0.7);
-}
-
-function isInRect(rect: TileRect, x: number, y: number): boolean {
-    return x >= rect.x0 && y >= rect.y0 && x <= rect.x1 && y <= rect.y1;
 }
 
 // The tiles that only hide the ground under the bridge's ends, which is the one

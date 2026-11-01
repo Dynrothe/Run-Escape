@@ -69,6 +69,7 @@ const BROWN_ROCK = 92;
 const DRY_ROCK = [171, 172];
 const GREY_ROCK = 111;
 const NEUTRAL_SNOW = 58;
+const SNOW_FROM = 205;
 const FIELD_FENCE = BIOMES.meadow.fence;
 const GREAT_BOULDER = 11433;
 const PARAPET = 1902;
@@ -559,7 +560,9 @@ function paintFloors(build: Build, massif: Float32Array): void {
                           ? DRY_ROCK[patch > 0.5 ? 0 : 1]
                           : BROWN_ROCK;
             }
-            if (height > 188 || y >= 243 || toTarn(x, y) < 30) {
+            // Snow's for the heights: on a lone peak lower down, rock running straight into it
+            // blends through bright green
+            if ((height > 188 && y > SNOW_FROM) || y >= 243 || toTarn(x, y) < 30) {
                 floor = patch > 0.7 ? 218 : 59;
             }
             if (x > CITY.x0 && x < CITY.x1 && y > CITY.y0 && y < CITY.y1) {
@@ -1283,7 +1286,6 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
         seed: SETTINGS.seed + 202,
         share: SETTINGS.rockFaces,
     });
-    roads.clearLocs([ROCKFALL]);
 
     // Anything you can't get to is only to look at
     const flags = getCollisionFlags(ground.grid, context.locs);
@@ -1296,6 +1298,10 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
         density: SETTINGS.dressing,
         biomeDecor: (x, y) => build.biomeAt(x, y).decor,
     });
+    roads.clearLocs(
+        roadTiles,
+        (x, y) => x >= ROCKFALL.x0 && y >= ROCKFALL.y0 && x <= ROCKFALL.x1 && y <= ROCKFALL.y1,
+    );
     return {
         grid: ground.grid,
         footprint: ground.footprint,

@@ -155,13 +155,17 @@ export function cutPasses(build: Build): RoadLine[] {
     const joined = new Uint8Array(sizes.length);
     joined[labels[spawn.x + spawn.y * sizeX]] = 1;
     const inset = 3;
+    // Not through a crater, which lava will fill, or water, which won't move for it
+    const lava = getTouchedTiles(createLavaField(build), build.sizeX, build.sizeY);
+    const { flags } = build.ground.level0;
     const cost = (x: number, y: number) => {
         const inside =
             x >= arena.x0 + inset &&
             y >= arena.y0 + inset &&
             x <= arena.x1 - inset &&
             y <= arena.y1 - inset;
-        if (!inside) {
+        const i = x + y * sizeX;
+        if (!inside || lava[i] || flags[i] & TILE_BLOCKED) {
             return Infinity;
         }
         return cliffs[x + y * sizeX] ? PASS_CLIFF_COST : 1;
