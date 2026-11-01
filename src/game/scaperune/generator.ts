@@ -4,7 +4,13 @@ import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } f
 import { dressGround } from "./dress";
 import { placeFallPools, placeFalls } from "./falls";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
-import { LandformBounds, createRelief, getHillBoundaryRise, shapeCliffs } from "./landforms";
+import {
+    LandformBounds,
+    createRelief,
+    flattenLand,
+    getHillBoundaryRise,
+    shapeCliffs,
+} from "./landforms";
 import {
     Build,
     LOC_FLOOR_DECORATION,
@@ -597,6 +603,9 @@ export function generateMapDetail(
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
     terrain.smoothPins(ROAD_SMOOTHING);
+    // After the roads are graded, so that they don't have levels to fight, and settling then
+    // brings the ground to them
+    flattenLand(terrain, build.cliffs, build.heldCorners, settings.flatness, settings.walkSlope);
     finishHeights(build);
     blockSteepGround(build);
 

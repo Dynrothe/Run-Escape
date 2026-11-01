@@ -57,6 +57,8 @@ export type GeneratorSettings = {
     warp: number;
     // 0 is an even climb; 1 is ledges with cliffs between
     terraces: number;
+    // How much of open ground lies flat on levels, with the height in short ramps between them
+    flatness: number;
     // How tall a ledge's cliff is, in height units
     terraceHeight: number;
     // The steepest ground you can walk on, in height units a tile. 16 is 45 degrees.
@@ -211,6 +213,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     boundaryDepth: number("Boundary depth", 2, 32, 1, { when: notSea }),
     shoreRoughness: share("Shore roughness"),
 
+    flatness: share("Flat land"),
     hills: share("Hills"),
     hillScale: number("Hill spacing", 10, 80, 2),
     waterLevel: share("Water level"),
@@ -307,7 +310,10 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "shoreRoughness",
         ],
     },
-    { name: "Terrain", keys: ["hills", "hillScale", "waterLevel", "groundPatches", "walkSlope"] },
+    {
+        name: "Terrain",
+        keys: ["hills", "hillScale", "flatness", "waterLevel", "groundPatches", "walkSlope"],
+    },
     {
         name: "Mountains",
         keys: [
@@ -392,6 +398,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     ruggedness: 0.5,
     warp: 0.5,
     terraces: 0.75,
+    flatness: 0.75,
     terraceHeight: 30,
     walkSlope: 12,
     rockFaces: 1,
@@ -749,6 +756,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
 const KEPT_BY_RANDOM: readonly SettingKey[] = [
     "squaresX",
     "dressing",
+    "flatness",
     "squaresY",
     "heightmap",
     "spawnX",
