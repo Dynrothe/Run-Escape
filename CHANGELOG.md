@@ -8,6 +8,7 @@ the version in the corner).
 ### Added
 
 - A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
+- A portable Linux desktop version for 64-bit systems.
 
 ## 0.20.0 - 2026-10-31
 

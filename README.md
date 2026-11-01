@@ -107,9 +107,10 @@ examples.
 
 ## Desktop
 
-There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
-[release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
-plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
+The Windows desktop build is available from [releases](https://github.com/Dynrothe/Run-Escape/releases):
+unzip the archive and run `Run Escape.exe`. Linux x64 builds can be made from source for Arch,
+Ubuntu or Linux Mint; extract the resulting `.tar.gz` and run `run-escape` inside. The app plays
+offline and updates the game by itself when it can. Saves are kept apart from a browser's,
 and Export and Import in Settings carry one across.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
 

@@ -58,14 +58,16 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 
 ## Desktop
 
-The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
-the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
+The desktop archives contain the Electron runtime and game, so they play offline on first launch.
+Extract the Windows zip and run `Run Escape.exe`, or extract the Linux x64 tarball on Arch, Ubuntu
+or Linux Mint and run `run-escape`. There's no installer. The launcher lives in
 `desktop/`, apart from the game, which doesn't know it's in an app.
 
 ```
 npm run build && npm run slim-cache
 npm run desktop         # the app, on this build, with no update check
 npm run desktop:dist    # everything a release carries, in release/
+npm run desktop:dist:linux # Linux archive and release files, in release/
 ```
 
 `desktop:dist` stops if `dist/caches` isn't the slim cache. It needs Node 22.12 or later (Electron
@@ -85,7 +87,8 @@ does), and Electron's binary downloads the first time it's run. Dev runs keep th
 
 ### Where things are kept
 
-Saves and updates are under the user data folder, `%APPDATA%\Run Escape`, never beside the exe, so
+Saves and updates are under the user data folder, `%APPDATA%\Run Escape` on Windows or
+`~/.config/Run Escape` on Linux (or `$XDG_CONFIG_HOME/Run Escape`), never beside the executable, so
 they outlast the zip's folder being moved or deleted, and a new launcher zip finds them.
 
 **Three things decide where saves are, and changing any of them loses every player's save:**
@@ -156,9 +159,9 @@ version does nothing, and neither does one while a draft for this version is wai
 tab's Run workflow button (`workflow_dispatch`) does the same but rebuilds a waiting draft, and it
 only appears once the workflow's on `main`.
 
-It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
+It builds the game on Windows, with the OSRS cache kept between runs by `actions/cache` under
 `GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
-`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip` and
+`CHANGELOG.md`, and carries the Windows x64 desktop archive, `game-<version>.zip` and
 `game-manifest.json`. **Publishing the draft by hand is what releases it to players**, and the tag
 only exists from then on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 

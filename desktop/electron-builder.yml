@@ -1,4 +1,4 @@
-# The Windows zip: Run Escape.exe, the Electron runtime and the game. npm run desktop:dist makes it.
+# Desktop archives contain the Electron runtime and the game.
 # appId and productName don't decide where saves are: that's main.ts.
 appId: com.dynrothe.run-escape
 productName: Run Escape
@@ -28,4 +28,10 @@ win:
         - target: zip
           arch: x64
     artifactName: Run-Escape-${version}-win-${arch}.${ext}
+linux:
+    icon: desktop/icon.png
+    target:
+        - target: tar.gz
+          arch: x64
+    artifactName: Run-Escape-${version}-linux-${arch}.${ext}
 publish: null
