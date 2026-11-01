@@ -10,6 +10,11 @@ the version in the corner).
 - Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
   full screen.
 
+### Fixed
+
+- Exporting your save from the home screen on an iPhone or iPad opens the share menu, instead of a
+  tiny sheet you had to scroll inside.
+
 ## 0.21.0 - 2026-11-01
 
 ### Added

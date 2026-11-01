@@ -544,6 +544,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   an installed game its own storage, without the saves or cache from Safari. There's no service
   worker, so it still needs a connection. The icons in `public/icons/` are whole multiples of
   `favicon.png`, to keep its pixels square.
+- `client/saveFile.ts` exports a save. Installed on iOS it uses the share sheet, since a download
+  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
