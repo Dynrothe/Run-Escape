@@ -147,6 +147,22 @@ kiting, so this is where we leave the real world. Raise soft density a lot and s
 decoration, flowers, fence lines and the sides of streets, not more trees and rocks. Keep the view's median at 4 or
 more, and about 5 where a crowd fights. Use streets of 7 to 9, and accept alleys as dead-end cover.
 
+### Four rules for the ground
+
+These come from a playtest, and `check-maps.ts` fails a map that breaks one. They hold on every map, generated or by hand.
+
+1. **Fields are flat.** Every field, its fence and its rows stand on one level plot, pinned. A field that's meant to slope
+   says so in its recipe (`slopes: true` in `fields`). Fields are found by their crops, so leaving a field out of `fields` doesn't
+   get it past the check.
+2. **Roads can be walked.** A road tile in land you can walk on is walkable: nothing solid on it, on a bridge's deck or at its
+   ends, and it doesn't run onto blocked ground. A road that's shut on purpose is marked in the recipe (`closedRoads`) and shown in
+   the world, with a gate, rubble or a broken end.
+3. **Water is flat.** Every corner of a water tile is level, each lake or pond is one level, and a river is flat reaches with its
+   height changing only at a fall. The banks and the ground rise to meet the water, never the other way round: 96.7% of real
+   surface water tiles are dead level. Only the tiles that drop at a real fall can tilt (`waterDrops`).
+4. **A fall is seated in its face.** Level across, its foot in a pool, its top at a lip or a source, with rock at its own heights
+   down both edges. A spot that doesn't fit is refused. See [Water](#water).
+
 ## Building it, step by step
 
 **Use the generator unless the map needs a shape it can't make**, like a coast drawn by hand or a road up a cliff in
@@ -219,8 +235,10 @@ again from `terrain.ts`, as it does, with 30 and 72 as the limits. `maps/vardhel
 ### 3. Water
 
 `rivers`, `riverWidth`, `riverValley`, `lakes`, `ponds`, `waterLevel`, `island`, `shoreRoughness`, `waterfalls`,
-`cliffFalls`. Rivers follow the low ground. A shore gets its dressing from `dressGround`, which covers land beside water
-and puts reeds in fresh water. Hand-made: see [Water](#water), and [Floors and heights](#floors-and-heights) for painting it.
+`cliffFalls`. Rivers follow the low ground, in flat reaches. `waterfalls` is the share of a river's chances to drop that it
+takes, so at 0 a river's one level end to end and its valley's cut down to that. A shore gets its dressing from `dressGround`,
+which covers land beside water and puts reeds in fresh water. Hand-made: see [Water](#water), and
+[Floors and heights](#floors-and-heights) for painting it.
 
 Bridges want about 11 tiles of straight land each side and a crossing of 9. A river without that gets a ford, and fords
 are how the generator joins anything big that's cut off.
@@ -296,7 +314,8 @@ well_yard: {
 Then name it in a biome's `landmarks`. The palette picks it up through `getPieceLocs`. The other kinds are in
 [Set pieces](#set-pieces). `single` is the one to be careful with: it's one big loc, with the biome's small things round it.
 
-Hand-made: `ground.place` a composition yourself, on a flat plot. With a `Build`, `pinPlot` makes the plot.
+Hand-made: `ground.place` a composition yourself, on a flat plot. With a `Build`, `pinPlot` makes the plot. A field's a plot
+too: pin it before the heights finish, and return it in `fields` (`fencedField` in `maps/vardhelm.ts` is the one to copy).
 
 ### 6. Rock
 
@@ -438,7 +457,17 @@ in a big arena still reads low. `steepest` can't see tiles within 2 of water or 
 - `X's road doesn't end at its door`, `turns its door from the road`: lay the road from `exit`, and turn the prefab.
 - `X isn't on flat ground`, `opens onto ground you can't walk on`, `has something under it`: use `pinPlot`, and `markOffLimits`.
 - `gap at x,y off the deck isn't whole road`, `road outside the fences`: run the road down the deck's line for 7 tiles.
-- `the waterfall at x,y has no pool`: `placeFallPools` goes before the heights settle.
+- `the field at x,y isn't level`: `pinPlot` it, before `finishHeights`. If it's meant to slope, say so: `fields` with `slopes: true`.
+- `N water tiles aren't level at x,y`: something's moved water's corners. Nothing can pin them after `holdWater`, so look at what
+  ran before it, at a piece of water that's two levels, and at a fall whose tiles aren't in `waterDrops`.
+- `the water drops at x,y with no fall there`: a tile in `waterDrops` needs a fall within `FOAM_REACH`, in `falls` or `waterfalls`.
+- `road can't be walked: N of M tiles at x,y`: what's on it, or what's blocked it. Blocked for steepness: a pin's too narrow, or the
+  road's grade is. Blocked by hand, as `massif` was on Vardhelm: leave `roads.isRoad` tiles out. Shut on purpose: `closedRoads`.
+- `the road shut at x,y shows no rubble`: it needs something solid on the road inside the rectangle, or for `broken end`, a road
+  that stops there.
+- `the waterfall at x,y has no pool`: its south row has to be water. `placeFallPools` goes before the heights settle.
+- `the waterfall at x,y isn't level across its row N`, `stands on a slope`, `stops N from its lip`: it isn't on a seat. Use
+  `getFallSeat` and `seatFall`, or by hand the rows `getSeatHeight` gives.
 - `the wall at x,y has N gates you can walk through`: under 2. Its sides are in water or cliffs: try another seed, or less
   water near the town.
 - `a road meets the wall at x,y with no gate`: two roads crossed a side closer than a gate and its spacing, or one crossed
@@ -625,7 +654,7 @@ scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 | `vignettes.ts`    | small groups of things against a building's walls                      |
 | `structures.ts`   | set pieces, wrecks and drowned towns, where town walls go, waymarkers  |
 | `cityWalls.ts`    | real city walls as data, and building one round a rectangle            |
-| `falls.ts`        | waterfalls off cliffs, with their pools                                |
+| `falls.ts`        | waterfalls off cliffs, their pools and the seats they stand on         |
 | `terrain.ts`      | the height layer: floats per corner, pins, slope limits                |
 | `landforms.ts`    | the shape of the land, and flat land                                   |
 | `roadGrades.ts`   | how high every road runs, worked out together                          |
@@ -891,8 +920,8 @@ tile always looks it**: everything blocked gets rock's overlay.
 slopes near the limit, cliffs and held corners alone, and runs after roads are graded.
 
 **Faces.** `finishHeights` takes the tops off anything over `STEEPEST_FACE` in any direction (`limitFaces`), and brings
-ground up to a corner held high (`liftFaces`). Only what can't move is left over the bar: a bridge's own heights, a fall in
-a river, and a road pinned where it meets water.
+ground up to a corner held high (`liftFaces`). Only what can't move is left over the bar: a fall in a river, and the bank of a
+bridge, one tile from the water.
 
 **Reachability.** `cutPasses` cuts a graded pass to any piece of ground over `MIN_PASS_PIECE` the cliffs cut off, before
 roads go down, so roads use them. Anything smaller stays out of reach, which is fine on top of a mesa. Nothing's built
@@ -902,14 +931,18 @@ off the `mainland`.
 are worked out **all together, last** (`roadGrades.ts`), with leads and plots pinned. One at a time doesn't work: a road's
 height depends on what it meets and passes, and those can come later. Then the ground's pinned to them across their width.
 
-**Rivers** (`findValley`) follow the low ground, a column at a time, so a river's a function of how far along it is. Their
-level only falls toward their lower end, and is level for `LEVEL_AT_CROSSING` tiles round a crossing. Banks come down over
-`riverValley`'s slope: sheer gorges at 0 and wide valleys at 1. Fresh water's corners are held: nothing moves them.
+**Rivers** (`findValley`) follow the low ground, a column at a time, so a river's a function of how far along it is. They run in
+flat reaches, each at the lowest level it comes to, with all the height they lose at drops (`stepRiver`), `WATERFALL_SPACING` apart
+at the least, or sooner once `WATERFALL_TALL` has built up, and never within `LEVEL_AT_CROSSING` of a crossing. Water's one level to a piece: tiles that touch share corners, so
+wherever two levels meet the lower wins, and only a drop parts them (`createWaterLevels`). A drop with nothing left to drop goes.
+Banks come down over `riverValley`'s slope: sheer gorges at 0 and wide valleys at 1. Water's corners are held and locked
+(`holdWater`): `Terrain.pin` does nothing to them, so a road or a plot beside water meets it, and can't tilt it.
 
-**Bridges** stand with their banks `bankHeight` over the water, pinned from the prefab's own heights, because the deck's
-stored relative to the ground under it. There are three in `BRIDGES`, and a biome names one. They can stand in for each other
-because all have an 11 tile deck, 2 wide, in an 18 by 6 rectangle. The cache's dozens of others have their own banks: most run
-into cliffs or are flat with the water.
+**Bridges** stand with their banks `bankHeight` over the water. A deck's stored relative to the ground under it, and a prefab's
+own river isn't ours, so `seatBridge` leaves the water as it is, levels the bank, and stores the deck again over what's really
+under it. Pinning the ground to the prefab's own heights tilts the water beside the banks. There are three in `BRIDGES`, and a
+biome names one. They can stand in for each other because all have an 11 tile deck, 2 wide, in an 18 by 6 rectangle. The cache's
+dozens of others have their own banks: most run into cliffs or are flat with the water.
 
 **Buildings** stand on a flat plot (`pinPlot`) with a level step out of the door, only where the ground rises less than
 `MAX_PLOT_RISE`, away from cliffs, with room to get down to water, and where their road can reach what it joins.
@@ -961,13 +994,36 @@ Don't reach for rock "walls": 85, 2639, 4451, 44603 and 38848 turn up along clif
 
 Paint it with an overlay and `blocked: true`. The blocked flag is what stops you, not the overlay.
 Water overlays: 6 and 442 (rivers and sea), 7 (swamp), 19 (lava), 547 (`snow`'s), 568 (Ysmar's). There's no water plane:
-water's drawn at the height of its tiles' corners, so keep them level, and bring heights near water down to it over a few
-tiles (`distanceTo` gives you the distance).
+water's drawn at the height of its tiles' corners, so every tile's corners must be level, and the heights near water come to it
+over a few tiles (`distanceTo` gives you the distance). Lava's held to the same rule. By hand: give a piece of water one level,
+sink the ground to it with `sinkFresh`, then `holdWater` its tiles before anything's pinned. List tiles that drop in `waterDrops`.
 
-**Waterfalls.** Rivers gather their fall into single drops at least `WATERFALL_SPACING` apart, with foam across the river. Most
-don't fall far in the arena, so what you'll see are `cliffFalls` (`falls.ts`): loc 51484 on a cliff that faces the camera, into a
-pool made for it. It's contoured, fits any cliff of 28 units or more, and covers about 3 tiles from its foot. The pool's made
-before the heights settle, because it needs level corners, and the cliff behind it is held until `limitNorthFaces`.
+**Waterfalls.** Rivers gather their fall into single drops, with foam across the river. The tiles of a drop are the only water
+that tilts. What you'll mostly see are `cliffFalls` (`falls.ts`): a model on a cliff that faces the camera, into a pool made for it.
+
+How real falls attach, measured with `research/falls.ts`:
+
+| Fall                           | Top                               | Foot                    | Edges                               |
+| ------------------------------ | --------------------------------- | ----------------------- | ----------------------------------- |
+| Baxtorian, 2500,3465           | The river, dead flat to the lip   | Flat water, 150 below   | Rows of the drop level for 24 tiles |
+| 16302, a cave, 3040,4520       | A flat lip, 49 up, 4 rows back    | Flat, level for 9 tiles | Rows level past both edges          |
+| 51484, 1487,9678 and 1512,9685 | Wall locs, the model's own height | Dead flat               | Dead flat floor, wall locs          |
+| 44632, a cave, 3357,11488      | Wall locs                         | Flat                    | Flat floor                          |
+
+So a fall's rows are level across, wider than the fall, and the model carries its own height on flat ground. That matters because
+a contoured model's vertices each go up by the ground under them: 51484 is a sheet 65 tall (44632, 33) from about a tile in from its
+south side, then a shelf at that height to its north edge, always that far over whatever's under it. On a slope its back lifts off
+the cliff and shows. So a fall gets a seat (`getFallSeat`, `seatFall`). In corner rows north of its south row, with `level` the pool:
+
+| Row    | Height                                                                    |
+| ------ | ------------------------------------------------------------------------- |
+| 0 to 2 | `level`: the sheet's front stands on flat ground, in the pool             |
+| 3      | `lip` less the model's height, up to 25 over `level`, 6 under             |
+| 4 to 7 | `lip`, flat, with what feeds the fall on it. A river's own reach does too |
+
+Rock runs 2 columns past each edge at the same heights, and eases back to the ground over 3. A cliff taller than 90 gets a cleft cut
+down to that, and a spot that isn't a straight cliff, or has anything on it, is refused. A drop past that is two falls, one on the
+other's lip: the Silverrun's great fall on `maps/vardhelm.ts` is the one to copy, with falls side by side across a river.
 
 **Caves** are decoration: a mouth 3 by 2 tiles at rotation 0 (facing south), set into the foot of a cliff that faces the
 camera. Nothing goes in them. They're on tiles that are blocked anyway.
