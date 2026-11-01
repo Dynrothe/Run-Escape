@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- A tidier main menu: Singleplayer and Multiplayer up front, smaller tiles for Skills, Armoury,
+  Quests and the Collection log, and more of the world in view.
+
 ## 0.20.1 - 2026-11-01
 
 ### Added
