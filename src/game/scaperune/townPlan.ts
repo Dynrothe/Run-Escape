@@ -30,6 +30,7 @@ import {
     getGateCount,
     getGateLine,
     getGateRange,
+    getWallInside,
     isInsideWall,
     pickWallKit,
     reserveWall,
@@ -107,9 +108,11 @@ const WALL_OFF_STREET = 1.5;
 // And from a square's edge. It paints half a tile further, and a plot has a tile round its walls.
 const WALL_OFF_SQUARE = 2;
 
-// Gaps between buildings along a street: alleys, and a bit more
+// Gaps between buildings along a street: alleys, and a bit more. Side streets close them up by
+// a tile: 44% of West Varrock's buildings have one within 2 tiles.
 const LEAST_GAP = 3;
 const MOST_GAP = 5;
+const CLOSER_GAP = 1;
 
 // Tiles round a building's walls that are its plot, for what's stood against them
 const PLOT_MARGIN = 1;
@@ -143,15 +146,44 @@ const GATE_STRAIGHT = 2;
 // cliffs, which stay as they are
 export const LEVEL_FADE = 6;
 
-// A side street's half width, and tiles along a main street to the first and between them: room
-// for a row of buildings and yards each side. Streets run to the wall, or whatever stops them.
+// A side street's half width, and tiles along a main street to the first and between them, with
+// the setting at its least and most. West Varrock's blocks are 6 to 17 by 9 to 26, and a plot and
+// what two streets paint comes to 18: 20 is a row of buildings each way, and 34 is two with yards.
+// Streets run to the wall.
 const SIDE_STREET_HALF = 2;
 
-const SIDE_STREET_FIRST = 12;
+const SIDE_STREET_FIRST = 18;
 
-const SIDE_STREET_SPACING = 22;
+const SIDE_STREET_APART = 34;
+
+// Tiles short of a main street's end that the last one leaves it, which is to say a gate's clear
+// space, as rows that close to a wall have no room for a plot
+const SIDE_STREET_LAST = 12;
+
+const SIDE_STREET_CLOSE = 20;
 
 const SIDE_STREET_JITTER = 6;
+
+// Past this much of the setting, lanes off side streets, about as wide as a real alley, and
+// buildings stand a tile closer on plots of their own width
+const LANES_FROM = 0.6;
+
+const LANE_HALF = 1.5;
+
+// West Varrock's blocks run to 26 long, with two or three buildings to one: a lane to every block
+// any shorter would only take their room
+const LANE_APART = 30;
+
+const SHORTEST_JOIN = 4;
+
+// How far apart spots are tried in what's left of a block, and how far a door can be from a street
+// there, in steps of road. Doors are a tile or two from a path, and in a real town's back rows more.
+const BLOCK_STEP = 2;
+
+const DOOR_MOST_STEPS = 5;
+
+// A door on a street's line
+const DOOR_STEPS = 3;
 
 // Tiles between a plot and water, so that the ground can get down to it
 const WATER_CLEAR = 6;
@@ -351,9 +383,32 @@ function walkStreet(
     return { points, end, length, wayX, wayY, halfWidth: def.streetHalf };
 }
 
-// Streets off a main street, turning off both sides of it, for the buildings that the main streets
-// leave no room for. A formal middle has looser ground round it, so where each falls is by a roll,
-// and they stop at whatever's there, the wall included.
+// A street that's run into another goes on to meet it, rather than stop short. Tiles to where it
+// does, or 0 if what's ahead isn't a street.
+function findJoin(build: Build, street: Street, reach: number): number {
+    const { ground } = build;
+    const { end, wayX, wayY } = street;
+    for (let step = 1; step <= reach; step++) {
+        const x = end.x + wayX * step;
+        const y = end.y + wayY * step;
+        if (!ground.inside(x, y)) {
+            return 0;
+        }
+        const i = ground.tile(x, y);
+        if (ground.claims.ranks[i] === RESERVE_STREET) {
+            return step + 1;
+        }
+        if (ground.reserved[i]) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
+// Streets off a street, turning off both sides of it, for the buildings that the main streets
+// leave no room for. A formal middle has looser ground round it, so where each falls is by a roll.
+// They run till something stops them: if that's a street they join it, and past the setting's
+// middle a side street has lanes of its own, which is what makes blocks of what would be rows.
 function planSideStreets(
     build: Build,
     roads: RoadNetwork,
@@ -363,17 +418,28 @@ function planSideStreets(
     height: number,
     held: number[],
     roll: () => number,
+    level = 0,
 ): Street[] {
-    const side: KindDef = { ...def, streetHalf: SIDE_STREET_HALF };
+    const { sideStreets } = build.settings;
+    if (sideStreets <= 0) {
+        return [];
+    }
+    const half = level === 0 ? SIDE_STREET_HALF : LANE_HALF;
+    const side: KindDef = { ...def, streetHalf: half };
     const streets: Street[] = [];
-    const last = main.length - GATE_CLEAR_IN;
-    const offset = Math.ceil(def.streetHalf);
+    const spacing =
+        level > 0 ? LANE_APART : lerp(SIDE_STREET_APART, SIDE_STREET_CLOSE, sideStreets);
+    const last = main.length - (level === 0 ? SIDE_STREET_LAST : SHORTEST_STREET);
+    const offset = Math.ceil(main.halfWidth);
     for (const turn of [-1, 1]) {
-        let along = SIDE_STREET_FIRST + Math.floor(roll() * SIDE_STREET_JITTER);
+        const first = level > 0 ? LANE_APART : SIDE_STREET_FIRST;
+        // A short street still gets one, as far along as it can
+        let along = first + Math.floor(roll() * SIDE_STREET_JITTER);
+        along = level > 0 ? along : Math.min(along, last - 1);
         for (
-            ;
+            along = Math.max(along, offset + 1);
             along < last;
-            along += SIDE_STREET_SPACING + Math.floor(roll() * SIDE_STREET_JITTER)
+            along += Math.round(spacing + roll() * SIDE_STREET_JITTER)
         ) {
             const wayX = main.wayY * turn;
             const wayY = main.wayX * turn;
@@ -381,18 +447,33 @@ function planSideStreets(
             // From clear of the main street's own tiles, and joined back on to it after
             const from = { x: at.x + wayX * (offset + 2), y: at.y + wayY * (offset + 2) };
             const walked = walkStreet(build, roads, water, from, wayX, wayY, 99, side, height);
-            if (walked.length < SHORTEST_STREET) {
+            const join = findJoin(build, walked, Math.ceil(half) * 2 + STREET_SHORT + 2);
+            // A short one's only worth having if it gets somewhere
+            if (walked.length + join < (join > 0 ? SHORTEST_JOIN : SHORTEST_STREET)) {
                 continue;
             }
             const back = [0, 1].map((step) => ({
                 x: at.x + wayX * (offset + step),
                 y: at.y + wayY * (offset + step),
             }));
-            const points = [...back, ...walked.points];
-            const street = { ...walked, points, length: points.length - 1 };
-            roads.addStreet(points, SIDE_STREET_HALF, height, held);
-            roads.markJunction(at, Math.max(def.streetHalf, SIDE_STREET_HALF));
+            const on = Array.from({ length: join }, (_, step) => ({
+                x: walked.end.x + wayX * (step + 1),
+                y: walked.end.y + wayY * (step + 1),
+            }));
+            const points = [...back, ...walked.points, ...on];
+            const length = points.length - 1;
+            const street = { ...walked, points, length, end: points[length] };
+            roads.addStreet(points, half, height, held);
+            roads.markJunction(at, Math.max(main.halfWidth, half));
+            if (join > 0) {
+                roads.markJunction(points[length], half + 1);
+            }
             streets.push(street);
+            if (level === 0 && sideStreets > LANES_FROM) {
+                streets.push(
+                    ...planSideStreets(build, roads, water, street, def, height, held, roll, 1),
+                );
+            }
         }
     }
     return streets;
@@ -636,7 +717,12 @@ export function layOutTown(
 
     const sideStreets: Street[] = [];
     if (hasRoads && kind !== "hamlet") {
-        for (const street of kept) {
+        // Ribs off the long way through the town, as West Varrock's run off its main road. From
+        // both ways they'd cut each other into blocks with room for one building each.
+        const eastWest = kept.filter(({ wayX }) => wayX !== 0);
+        const northSouth = kept.filter(({ wayY }) => wayY !== 0);
+        const span = (list: Street[]) => list.reduce((sum, { length }) => sum + length, 0);
+        for (const street of span(eastWest) > span(northSouth) ? eastWest : northSouth) {
             sideStreets.push(
                 ...planSideStreets(build, roads, water, street, def, height, held, roll),
             );
@@ -766,6 +852,7 @@ function fitsPlot(
     sizeY: number,
     height: number,
     wall?: WalledTown,
+    closer = 0,
 ): boolean {
     const { settings, ground, cliffs, mainland, terrain, spawn, toEdge } = build;
     const inset = settings.boundary === "sea" ? 3 : settings.boundaryDepth + 3;
@@ -775,12 +862,13 @@ function fitsPlot(
     if (!isPlotFree(build, plot, wall)) {
         return false;
     }
-    const gap = LEAST_GAP - PLOT_MARGIN;
+    const gap = LEAST_GAP - PLOT_MARGIN - closer;
     if (ground.claims.hasNear(x, y, sizeX, sizeY, gap, RESERVE_PLOT)) {
         return false;
     }
-    for (let ty = y - WALL_CLEAR; ty < y + sizeY + WALL_CLEAR; ty++) {
-        for (let tx = x - WALL_CLEAR; tx < x + sizeX + WALL_CLEAR; tx++) {
+    const clear = WALL_CLEAR - closer;
+    for (let ty = y - clear; ty < y + sizeY + clear; ty++) {
+        for (let tx = x - clear; tx < x + sizeX + clear; tx++) {
             if (!ground.inside(tx, ty)) {
                 return false;
             }
@@ -981,6 +1069,29 @@ export function fillTown(
     const yards = Math.max(settings.gardens, LEAST_YARDS);
     const houses = names.some((name) => getBuildingKind(name) !== "church");
     let churches = 0;
+    const closer = settings.sideStreets > LANES_FROM ? CLOSER_GAP : 0;
+    // Takes a plot, and puts a building on it
+    const stand = (
+        name: string,
+        turns: number,
+        x: number,
+        y: number,
+        exit: Exit,
+        plotRect: TileRect,
+        yard: TileRect | undefined,
+        steps: number,
+    ) => {
+        const { sizeX, sizeY } = kit.get(name, turns).prefab;
+        const lotX = plotRect.x1 - plotRect.x0 + 1;
+        const lotY = plotRect.y1 - plotRect.y0 + 1;
+        ground.claims.take(plotRect.x0, plotRect.y0, lotX, lotY, RESERVE_PLOT);
+        kit.stamp(ground, name, turns, x, y, true);
+        pinPlot(build, x, y, sizeX, sizeY, height, exit);
+        markOffLimits(build, roads, plotRect.x0, plotRect.y0, lotX, lotY, 1);
+        roads.addDoorPath(exit, height, steps);
+        churches += getBuildingKind(name) === "church" ? 1 : 0;
+        placed.push({ name, x, y, sizeX, sizeY, exit, hasRoad: true, town, plot: plotRect, yard });
+    };
     const placeNext = (frontage: Frontage) => {
         // Any order but the same every time: a sort by chance would differ between browsers
         const first = Math.floor(roll() * names.length);
@@ -1008,8 +1119,16 @@ export function fillTown(
                 const x = frontage.outX < 0 ? atX - prefab.sizeX : atX;
                 const y = frontage.outY < 0 ? atY - prefab.sizeY : atY;
                 const { sizeX, sizeY } = prefab;
-                const walls = getPlot(x, y, sizeX, sizeY);
-                if (!fitsPlot(build, water, walls, x, y, sizeX, sizeY, height, wall)) {
+                // Neighbours along a street can stand as close as a gap, with no tile each
+                const whole = getPlot(x, y, sizeX, sizeY);
+                const sides = closer > 0 ? PLOT_MARGIN : 0;
+                const walls = {
+                    x0: whole.x0 + frontage.stepX * sides,
+                    y0: whole.y0 + frontage.stepY * sides,
+                    x1: whole.x1 - frontage.stepX * sides,
+                    y1: whole.y1 - frontage.stepY * sides,
+                };
+                if (!fitsPlot(build, water, walls, x, y, sizeX, sizeY, height, wall, closer)) {
                     continue;
                 }
                 const exit: Exit = { ...door, x: door.x + x, y: door.y + y };
@@ -1018,44 +1137,11 @@ export function fillTown(
                     ? getBackYard(build, { x, y, sizeX, sizeY }, frontage, wall)
                     : undefined;
                 const plotRect = joinRects(walls, yard);
-                ground.claims.take(
-                    plotRect.x0,
-                    plotRect.y0,
-                    plotRect.x1 - plotRect.x0 + 1,
-                    plotRect.y1 - plotRect.y0 + 1,
-                    RESERVE_PLOT,
-                );
-                kit.stamp(ground, name, turns, x, y, true);
-                pinPlot(build, x, y, sizeX, sizeY, height, exit);
-                markOffLimits(
-                    build,
-                    roads,
-                    plotRect.x0,
-                    plotRect.y0,
-                    plotRect.x1 - plotRect.x0 + 1,
-                    plotRect.y1 - plotRect.y0 + 1,
-                    1,
-                );
-                roads.addDoorPath(exit, height);
-                if (getBuildingKind(name) === "church") {
-                    churches++;
-                }
-                placed.push({
-                    name,
-                    x,
-                    y,
-                    sizeX,
-                    sizeY,
-                    exit,
-                    hasRoad: true,
-                    town,
-                    plot: plotRect,
-                    yard,
-                });
+                stand(name, turns, x, y, exit, plotRect, yard, DOOR_STEPS);
                 if (yard) {
                     placeBackYard(build, yard, plotRect, frontage, family);
                 }
-                const gap = LEAST_GAP + Math.floor(roll() * (MOST_GAP - LEAST_GAP + 1));
+                const gap = LEAST_GAP + Math.floor(roll() * (MOST_GAP - LEAST_GAP + 1)) - closer;
                 frontage.along += wide + gap;
                 return;
             }
@@ -1070,6 +1156,54 @@ export function fillTown(
                 placeNext(frontage);
             }
         }
+    }
+
+    // What's left of a block once the lines have had their turn: anywhere a building fits with its
+    // door a few tiles from a street, the nearest the middle first. It's what fills a block.
+    const area = wall ? getWallInside(wall.kit, wall) : getStreetBounds(plan, kept);
+    const spots: Point[] = [];
+    for (let y = area.y0; y <= area.y1 && kind !== "hamlet"; y += BLOCK_STEP) {
+        for (let x = area.x0; x <= area.x1; x += BLOCK_STEP) {
+            spots.push({ x, y });
+        }
+    }
+    const smallest = [...biggest].reverse();
+    const toMiddle = ({ x, y }: Point) => Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2);
+    spots.sort((a, b) => toMiddle(a) - toMiddle(b));
+    const fillSpot = ({ x, y }: Point) => {
+        for (const name of smallest) {
+            if (getBuildingKind(name) === "church" && houses) {
+                continue;
+            }
+            for (let turns = 0; turns < 4; turns++) {
+                const { prefab, exits } = kit.get(name, turns);
+                const { sizeX, sizeY } = prefab;
+                // Close up, a building's plot is what it stands on
+                const walls = getPlot(
+                    x + closer,
+                    y + closer,
+                    sizeX - closer * 2,
+                    sizeY - closer * 2,
+                );
+                if (!fitsPlot(build, water, walls, x, y, sizeX, sizeY, height, wall, closer)) {
+                    continue;
+                }
+                for (const door of exits) {
+                    const exit: Exit = { ...door, x: door.x + x, y: door.y + y };
+                    const steps = roads.getStepsToRoad(exit, DOOR_MOST_STEPS);
+                    if (steps > 0) {
+                        stand(name, turns, x, y, exit, walls, undefined, steps + 1);
+                        return;
+                    }
+                }
+            }
+        }
+    };
+    for (const spot of spots) {
+        if (placed.length >= wanted) {
+            break;
+        }
+        fillSpot(spot);
     }
     return placed;
 }

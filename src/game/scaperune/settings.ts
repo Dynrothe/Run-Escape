@@ -126,6 +126,8 @@ export type GeneratorSettings = {
     towns: number;
     // Tiles from a town's middle to its edge
     townSize: number;
+    // How close together a town's side streets run: 0 has none, and past 0.6 they've lanes too
+    sideStreets: number;
     houses: boolean;
     shops: boolean;
     churches: boolean;
@@ -302,6 +304,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     wallKit: choice("Wall from", ["auto", ...CITY_WALL_IDS], {
         when: (s) => s.towns > 0 && s.buildings > 0 && s.townWalls > 0,
     }),
+    sideStreets: share("Side streets", { when: (s) => s.towns > 0 && s.roads > 0 }),
 };
 
 // In the order the screen shows them
@@ -373,6 +376,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "sites",
             "towns",
             "townSize",
+            "sideStreets",
             "houses",
             "shops",
             "churches",
@@ -452,6 +456,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     sites: 1,
     towns: 0,
     townSize: 30,
+    sideStreets: 0.5,
     houses: true,
     shops: true,
     churches: true,
@@ -599,6 +604,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         buildings: 1,
         towns: 2,
         townSize: 34,
+        sideStreets: 0.8,
         townWalls: 1,
         waymarkers: 0.6,
         roads: 1,
@@ -617,6 +623,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         townSize: 52,
         townWalls: 1,
         wallKit: "falador",
+        sideStreets: 0.8,
         buildings: 0.8,
         roads: 1,
         waymarkers: 0.5,

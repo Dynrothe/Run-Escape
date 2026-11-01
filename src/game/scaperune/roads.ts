@@ -491,6 +491,28 @@ export class RoadNetwork {
         });
     }
 
+    // How many steps straight out of a door there's a road, with nothing spoken for on the way, or
+    // 0 if there isn't one within most
+    getStepsToRoad(exit: Exit, most: number): number {
+        const { ground } = this.build;
+        const { ranks } = ground.claims;
+        for (let step = 1; step <= most; step++) {
+            const x = Math.floor(exit.x + exit.outX * step);
+            const y = Math.floor(exit.y + exit.outY * step);
+            if (!ground.inside(x, y)) {
+                return 0;
+            }
+            const i = ground.tile(x, y);
+            if (this.tiles[i]) {
+                return step;
+            }
+            if (ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
     // Lets other roads join tiles
     openTiles(tiles: number[]): void {
         for (const i of tiles) {
@@ -499,8 +521,8 @@ export class RoadNetwork {
     }
 
     // A door on a street: a step or two of road, to the street's edge
-    addDoorPath(exit: Exit, height: number): void {
-        const points = [0, 1, 2].map((step) => ({
+    addDoorPath(exit: Exit, height: number, steps: number): void {
+        const points = Array.from({ length: steps }, (_, step) => ({
             x: exit.x + exit.outX * step,
             y: exit.y + exit.outY * step,
         }));

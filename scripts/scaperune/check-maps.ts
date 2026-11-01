@@ -225,6 +225,27 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     { towns: 3, townSize: 18, townWalls: 0.5, buildings: 1, gardens: 1, squaresX: 3, squaresY: 3 },
     { towns: 0, sites: 1, buildings: 1, gardens: 1, landmarks: 1, squaresX: 3, squaresY: 3 },
     { towns: 2, townSize: 24, buildings: 1, gardens: 1, roadStyle: "ring", roadWidth: 6 },
+    {
+        towns: 1,
+        townSize: 40,
+        townWalls: 1,
+        sideStreets: 1,
+        buildings: 1,
+        gardens: 1,
+        landmarks: 1,
+        squaresX: 3,
+        squaresY: 3,
+    },
+    { towns: 2, townSize: 30, sideStreets: 1, buildings: 1, rivers: 1, squaresX: 3, squaresY: 3 },
+    {
+        towns: 1,
+        townSize: 40,
+        townWalls: 1,
+        sideStreets: 0,
+        buildings: 1,
+        squaresX: 3,
+        squaresY: 3,
+    },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing

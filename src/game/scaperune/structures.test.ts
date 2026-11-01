@@ -448,6 +448,22 @@ describe("the flow", () => {
         }
     });
 
+    it.each([0, 0.5, 1])("keeps to the rules with side streets at %f", (sideStreets) => {
+        const full = settings({ ...CITY, seed: 2, sideStreets });
+        const map = generateMapDetail(full, context);
+        expect(map.walled?.length).toBeGreaterThan(0);
+        expect(describeClashes(findClashes(map, context.locs))).toEqual([]);
+    });
+
+    it("lays more street, and more buildings on it, with side streets up", () => {
+        const city = (sideStreets: number) =>
+            generateMapDetail(settings({ ...CITY, seed: 2, sideStreets }), context);
+        const roads = (map: ReturnType<typeof city>) => map.roadTiles.reduce((a, b) => a + b, 0);
+        const [none, most] = [city(0), city(1)];
+        expect(roads(most)).toBeGreaterThan(roads(none));
+        expect(most.buildings.length).toBeGreaterThanOrEqual(none.buildings.length);
+    });
+
     it("fits a city's buildings inside its wall, and leaves each gate clear behind it", () => {
         const map = generateMapDetail(settings({ ...CITY, seed: 2 }), context);
         const town = map.walled![0];

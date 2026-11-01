@@ -207,6 +207,7 @@ describe("generateMap", () => {
         ruins: [1],
         landmarks: [1],
         townWalls: [1, { towns: 1, buildings: 1 }],
+        sideStreets: [1, { towns: 1, buildings: 1, townSize: 40, squaresX: 3, squaresY: 3 }],
         wallKit: [
             "varrock",
             {
