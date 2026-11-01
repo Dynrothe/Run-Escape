@@ -1,6 +1,7 @@
 import { getInsideTiles } from "./building";
 import { PlacedLoc, TILE_BLOCKED, TileGrid, TileLevel, createTileGrid } from "./format";
 import { smoothField } from "./noise";
+import { Reservations } from "./reservations";
 import { getCoveredShare, getCoveredSides, getOverlayShape } from "./shapes";
 
 export type StampOptions = {
@@ -51,6 +52,8 @@ export class Ground {
     readonly reserved: Uint8Array;
     // Tiles of buildings, walls included. Nothing else goes on these.
     readonly footprint: Uint8Array;
+    // What's spoken for, and by what: see reservations.ts
+    readonly claims: Reservations;
 
     constructor(sizeX: number, sizeY: number) {
         this.sizeX = sizeX;
@@ -59,6 +62,7 @@ export class Ground {
         this.level0 = this.grid.levels[0];
         this.reserved = new Uint8Array(sizeX * sizeY);
         this.footprint = new Uint8Array(sizeX * sizeY);
+        this.claims = new Reservations(sizeX, sizeY, this.reserved);
     }
 
     inside(x: number, y: number): boolean {

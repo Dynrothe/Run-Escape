@@ -4,7 +4,9 @@
 // a building, that a building's road ends at its door, and that a building without one
 // faces the nearest road. And for height: that collision comes from slopes and agrees with
 // the game's, that roads climb smoothly, that buildings stand on flat ground, and that
-// nothing you can walk on is hidden from the camera. Fails if not.
+// nothing you can walk on is hidden from the camera. And that places keep to the flow: nothing on
+// a wall or in front of a gate, and no roads or fences where they don't belong (clashes.ts). Fails
+// if not.
 //
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
@@ -19,9 +21,10 @@ import {
     CITY_WALL_IDS,
     WALL_SIDES,
     getGateColumns,
-    getWallInset,
+    getSideInsets,
     getWallSide,
 } from "../../src/game/scaperune/cityWalls";
+import { describeClashes, findClashes } from "../../src/game/scaperune/clashes";
 import {
     TileRect,
     countStranded,
@@ -195,6 +198,34 @@ const SWEEP: Partial<GeneratorSettings>[] = [
         squaresX: 3,
         squaresY: 3,
     })),
+    {
+        towns: 1,
+        townSize: 34,
+        townWalls: 1,
+        buildings: 1,
+        gardens: 1,
+        landmarks: 1,
+        ruins: 1,
+        roadStyle: "ring",
+        squaresX: 3,
+        squaresY: 3,
+    },
+    {
+        towns: 1,
+        townSize: 40,
+        townWalls: 1,
+        wallKit: "kourend",
+        buildings: 1,
+        gardens: 1,
+        ruins: 1,
+        roadStyle: "spine",
+        rivers: 1,
+        squaresX: 4,
+        squaresY: 3,
+    },
+    { towns: 3, townSize: 18, townWalls: 0.5, buildings: 1, gardens: 1, squaresX: 3, squaresY: 3 },
+    { towns: 0, sites: 1, buildings: 1, gardens: 1, landmarks: 1, squaresX: 3, squaresY: 3 },
+    { towns: 2, townSize: 24, buildings: 1, gardens: 1, roadStyle: "ring", roadWidth: 6 },
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -413,20 +444,20 @@ function checkWalls(
         if (open.length < 2) {
             problems.push(`the wall at ${x0},${y0} has ${open.length} gates you can walk through`);
         }
-        const inset = getWallInset(kit);
         for (let turn = 0; turn < 4; turn++) {
             const side = getWallSide({ x0, y0, x1, y1 }, turn);
+            const [inset, end] = getSideInsets(kit, town, turn);
             const here = gates.filter((gate) => WALL_SIDES.indexOf(gate.side) === turn);
             const starts = here.map((gate) => getGateColumns(kit, town, gate).start);
             let from = -1;
-            for (let along = inset; along <= side.length - inset + 1; along++) {
+            for (let along = inset; along <= side.length - end + 1; along++) {
                 const i = tile(side.x(along, 0), side.y(along, 0));
-                const onRoad = along <= side.length - inset && roadTiles[i] && !taken.has(i);
+                const onRoad = along <= side.length - end && roadTiles[i] && !taken.has(i);
                 if (onRoad && from < 0) {
                     from = along;
                 } else if (!onRoad && from >= 0) {
-                    const end = along - 1;
-                    if (!starts.some((at) => at <= end && at + kit.gateSize > from)) {
+                    const stop = along - 1;
+                    if (!starts.some((at) => at <= stop && at + kit.gateSize > from)) {
                         const [x, y] = [side.x(from, 0), side.y(from, 0)];
                         problems.push(`a road meets the wall at ${x},${y} with no gate`);
                     }
@@ -828,6 +859,7 @@ function checkMap(
         ...checkLandmarks(map),
         ...checkFalls(map),
         ...checkWalls(map, context, recipe.spawn, gridRect),
+        ...describeClashes(findClashes(map, context.locs)),
         ...(shipped ? [] : checkCatalogue(map)),
         ...(shipped ? [] : checkLook(id, map, recipe.margin, createLocs(locTypeLoader), settings)),
     ];

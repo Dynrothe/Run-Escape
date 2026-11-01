@@ -214,8 +214,10 @@ export const CITY_WALLS: Record<CityWallId, CityWallKit> = KITS;
 
 export const CITY_WALL_IDS = Object.keys(CITY_WALLS) as CityWallId[];
 
-// The middle of a wall's walkway, in tiles: the corners of the rectangle it runs round
-export type WallRect = { x0: number; y0: number; x1: number; y1: number };
+// The middle of a wall's walkway, in tiles: the corners of the rectangle it runs round. Any corner
+// can be cut further than its kit's own, for a shape that's less of a box, by the side that starts
+// there. A kit with towers or square corners stays as it is.
+export type WallRect = { x0: number; y0: number; x1: number; y1: number; cuts?: number[] };
 
 // Which side of a rectangle: its turn from south, clockwise
 export type WallSide = "south" | "west" | "north" | "east";
@@ -251,6 +253,21 @@ export function getWallInset(kit: CityWallKit): number {
     return kit.tower ? getTowerSpan(kit).on : kit.chamfer;
 }
 
+// Whether a kit's corners can be cut further
+export function canCutCorners(kit: CityWallKit): boolean {
+    return !kit.tower && kit.chamfer > 0;
+}
+
+// How far a corner's cut, by the side that starts there
+function getCornerCut(kit: CityWallKit, rect: WallRect, turn: number): number {
+    return canCutCorners(kit) ? (rect.cuts?.[turn & 3] ?? kit.chamfer) : getWallInset(kit);
+}
+
+// How far in from each end of a side its columns start and stop
+export function getSideInsets(kit: CityWallKit, rect: WallRect, turn: number): [number, number] {
+    return [getCornerCut(kit, rect, turn), getCornerCut(kit, rect, turn + 3)];
+}
+
 // Where a gate is on its side: the first of the columns it takes up
 export function getGateColumns(kit: CityWallKit, rect: WallRect, gate: CityGate) {
     const turn = WALL_SIDES.indexOf(gate.side);
@@ -269,9 +286,18 @@ export function forWallTiles(
 ): void {
     for (let turn = 0; turn < 4; turn++) {
         const side = getWallSide(rect, turn);
-        for (let along = -1; along <= side.length + 1; along++) {
+        const [first, last] = getSideInsets(kit, rect, turn);
+        const corner = canCutCorners(kit) ? first : 0;
+        const end = canCutCorners(kit) ? side.length - last : side.length;
+        for (let along = corner - 1; along <= end + 1; along++) {
             for (let across = -1; across <= kit.width; across++) {
                 visit(side.x(along, across), side.y(along, across));
+            }
+        }
+        // Down a cut corner, both faces and what's between them
+        for (let sum = corner - 2; corner > 0 && sum <= corner + 2; sum++) {
+            for (let along = -1; along <= sum + 1; along++) {
+                visit(side.x(along, sum - along), side.y(along, sum - along));
             }
         }
         if (kit.tower) {
@@ -360,7 +386,6 @@ export function placeCityWall(
     skip: (x: number, y: number) => boolean = () => false,
 ): void {
     const { outer, inner, walk, rise, width, chamfer, pier, tower } = kit;
-    const inset = getWallInset(kit);
     const levelUp = ground.grid.levels[1];
     const corners = ground.sizeX + 1;
     const free = (x: number, y: number) => ground.inside(x, y) && !skip(x, y);
@@ -407,7 +432,8 @@ export function placeCityWall(
     // Which columns of each side stand. A column's the tiles across the wall at one along.
     const columns = sides.map((side, turn) => {
         const stands = new Uint8Array(side.length + 1);
-        for (let along = inset; along <= side.length - inset; along++) {
+        const [first, end] = getSideInsets(kit, rect, turn);
+        for (let along = first; along <= side.length - end; along++) {
             let clear = 1;
             for (let across = -1; across <= width; across++) {
                 clear &= free(side.x(along, across), side.y(along, across)) ? 1 : 0;
@@ -427,10 +453,13 @@ export function placeCityWall(
     });
 
     // Whether each side's first corner has room
-    const cornersClear = sides.map((side) => {
-        for (let across = -1; across <= Math.max(chamfer, width) + 1; across++) {
-            for (let along = -1; along <= Math.max(chamfer, width) + 1; along++) {
-                if (!free(side.x(along, across), side.y(along, across))) {
+    const cornersClear = sides.map((side, turn) => {
+        const [cut] = getSideInsets(kit, rect, turn);
+        const reach = Math.max(cut, width) + 1;
+        for (let across = -1; across <= reach; across++) {
+            for (let along = -1; along <= reach; along++) {
+                const onCut = chamfer === 0 || Math.abs(along + across - cut) <= 2;
+                if (onCut && !free(side.x(along, across), side.y(along, across))) {
                     return false;
                 }
             }
@@ -440,9 +469,10 @@ export function placeCityWall(
 
     sides.forEach((side, turn) => {
         const stands = columns[turn];
-        const last = side.length - inset;
+        const [inset, lastInset] = getSideInsets(kit, rect, turn);
+        const last = side.length - lastInset;
         const walkEnd = chamfer > 0 || tower ? last : side.length - width;
-        const innerFrom = tower ? inset : chamfer > 0 ? chamfer + 1 : width + 1;
+        const innerFrom = tower ? inset : chamfer > 0 ? inset + 1 : width + 1;
         const innerTo = tower ? last : chamfer > 0 ? last - 1 : side.length - width - 1;
         const x = side.x;
         const y = side.y;
@@ -551,7 +581,7 @@ export function placeCityWall(
                 face(inner, LOC_INNER_CORNER, SOUTH, width, width);
             }
         } else if (stood) {
-            const c = chamfer;
+            const c = inset;
             if (hasInner) {
                 for (let i = 1; i < c; i++) {
                     solid(x(i, c - i), y(i, c - i));

@@ -1,6 +1,7 @@
 import { BIOMES, BiomeId } from "./biomes";
 import { Build, LOC_NORMAL } from "./mapBuild";
 import { createRng } from "./noise";
+import { RESERVE_PLOT } from "./reservations";
 import { PlacedBuilding } from "./settlements";
 
 // Small things stood together against a wall, away from the door. 30% to 58% of a real town's
@@ -73,15 +74,29 @@ function getWallSides(building: PlacedBuilding): WallSide[] {
     return sides.filter(({ outX, outY }) => !exit || outX !== exit.outX || outY !== exit.outY);
 }
 
-// One or two groups a building, each on a wall without its door. They block, so they keep off
-// roads and leave a tile clear on their open side. Returns how many locs it placed.
+// One or two groups a building, each on a wall without its door. They're part of its plot, so they
+// stand on that and nowhere else, keep off roads and leave a tile clear on their open side. Returns
+// how many locs it placed.
 export function placeVignettes(build: Build, buildings: PlacedBuilding[]): number {
     const { ground, settings, biomeNear } = build;
+    const { ranks } = ground.claims;
     const roll = createRng(settings.seed + VIGNETTE_SEED);
     const biomeIds = Object.keys(VIGNETTES) as BiomeId[];
-    const isOpen = (x: number, y: number) => ground.isClear(x, y, 1, 1);
+    const taken = new Set<number>();
     let placed = 0;
     for (const building of buildings) {
+        const { plot } = building;
+        // Its own tiles are spoken for by itself, so it's asking for tiles with nothing on them yet
+        const isOnPlot = (x: number, y: number) =>
+            !!plot &&
+            x >= plot.x0 &&
+            y >= plot.y0 &&
+            x <= plot.x1 &&
+            y <= plot.y1 &&
+            ranks[ground.tile(x, y)] === RESERVE_PLOT &&
+            !ground.footprint[ground.tile(x, y)] &&
+            !taken.has(ground.tile(x, y));
+        const isOpen = (x: number, y: number) => isOnPlot(x, y) || ground.isClear(x, y, 1, 1);
         const sides = getWallSides(building);
         const count = Math.floor(GROUPS_A_BUILDING + roll());
         for (let group = 0; group < count && sides.length > 0; group++) {
@@ -102,13 +117,14 @@ export function placeVignettes(build: Build, buildings: PlacedBuilding[]): numbe
                 const byDoor = exit && Math.hypot(x + 0.5 - exit.x, y + 0.5 - exit.y) < DOOR_CLEAR;
                 // Away from the wall, which is one way or the other
                 const open =
-                    isOpen(x, y) &&
+                    isOnPlot(x, y) &&
                     (isOpen(x + side.stepY, y + side.stepX) ||
                         isOpen(x - side.stepY, y - side.stepX));
                 if (open && !byDoor) {
                     const loc = kit[Math.floor(roll() * kit.length)];
                     const rotation = Math.floor(roll() * 4);
                     ground.place({ id: loc, type: LOC_NORMAL, rotation, level: 0, x, y }, 1, 1);
+                    taken.add(ground.tile(x, y));
                     placed++;
                 }
             }

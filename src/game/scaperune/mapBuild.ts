@@ -8,6 +8,7 @@ import { PrefabKit } from "./prefabs";
 import { BuildContext } from "./recipe";
 import { Plot } from "./roadGrades";
 import { GeneratorSettings } from "./settings";
+import type { PlacedFence } from "./settlements";
 import { Terrain } from "./terrain";
 import type { PlannedTown } from "./townPlan";
 
@@ -74,6 +75,8 @@ export type Build = {
     towns?: PlannedTown[];
     // Places things gather at, with quieter land between them
     sites?: Point[];
+    // Every fence that's part of a plot or a piece
+    fences?: PlacedFence[];
 };
 
 // The water as painted: repainted when a ford cuts through it

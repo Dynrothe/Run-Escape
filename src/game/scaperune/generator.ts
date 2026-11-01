@@ -64,24 +64,22 @@ import {
     ROAD_STEEPEST,
     RoadNetwork,
     RoadStart,
+    getMainRoadLine,
     layMainRoads,
     placeBridges,
 } from "./roads";
 import { DEFAULT_SETTINGS, GeneratorSettings, getSettingsError } from "./settings";
-import { PlacedBuilding, placeBuildings, placeRuins } from "./settlements";
+import { PlacedBuilding, PlacedFence, placeBuildings, placeRuins, planTowns } from "./settlements";
 import {
     PAVING,
     PlacedPiece,
-    WalledTown,
-    chooseWalledTowns,
-    getPaving,
     placeSetPieces,
-    placeTownWalls,
     placeWaterPieces,
     placeWaymarkers,
 } from "./structures";
 import { limitSlope } from "./terrain";
-import { createPace, createTownFade, getTownPaving } from "./townPlan";
+import { connectTown, createPace, createTownFade, getTownPaving } from "./townPlan";
+import { WalledTown, getPaving, placeTownWalls } from "./townWalls";
 import { placeVignettes } from "./vignettes";
 
 export * from "./settings";
@@ -147,6 +145,13 @@ export type GeneratedMap = {
     waterfalls: Point[];
     // Only the generator's towns: a hand-made map's own wall is its own business
     walled?: WalledTown[];
+    // Fences that are part of a building's plot or a piece
+    fences?: PlacedFence[];
+    // Tiles of buildings a road wanted, which painting stopped it at
+    clippedRoads?: Uint8Array;
+    // Rectangles of tiles a recipe says are designed that way: check-maps.ts lets clashes on these
+    // go. Nothing generated has any.
+    designed?: TileRect[];
 };
 
 export function getGeneratedSize(settings: Pick<GeneratorSettings, "squaresX" | "squaresY">): {
@@ -594,6 +599,12 @@ export function generateMapDetail(
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
         settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone) : [];
+    // The flow every place goes through: see the guide. Site, walls and gates, main streets and
+    // square, in planTowns. The roads between places come next, because gates are where they
+    // arrive. Then plots, lanes, set pieces, and at the end of all this foliage and details.
+    roads.plannedLine = getMainRoadLine(build);
+    roads.arrivalPoints.push(...bridgeStarts.map(({ from }) => from));
+    const plans = planTowns(build, roads, waterTiles);
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>
@@ -602,13 +613,15 @@ export function generateMapDetail(
         for (const { from, lead, height } of bridgeStarts.sort(byDistance)) {
             roads.lay(from, lead, roads.findRoute(from, lead), BRIDGE_ROAD_HALF_WIDTH, height);
         }
+        plans.plans.forEach((plan) => connectTown(build, roads, plan));
+        roads.finishCuts();
     }
-    const buildings = placeBuildings(build, roads, waterTiles);
+    const buildings = placeBuildings(build, roads, waterTiles, plans);
     placeVignettes(build, buildings);
     const landmarks = placeSetPieces(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
     const falls = placeFallPools(build, water);
-    const walled = chooseWalledTowns(build, buildings, roads);
+    const walled = plans.plans.flatMap(({ wall }) => (wall ? [wall] : []));
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
     terrain.smoothPins(ROAD_SMOOTHING);
@@ -656,6 +669,8 @@ export function generateMapDetail(
         caves,
         falls,
         walled,
+        fences: build.fences,
+        clippedRoads: roads.clipped,
         waterfalls: rivers.flatMap((river) =>
             river.drops.map(({ along }) => {
                 const across = riverCentre(river, along);

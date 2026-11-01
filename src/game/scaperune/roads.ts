@@ -11,8 +11,10 @@ import {
     BRIDGE_LENGTH,
     loadPrefab,
 } from "./prefabs";
+import { RESERVE_LANE, RESERVE_PLOT, RESERVE_STREET } from "./reservations";
 import { River, getCrossingLine, riverCentre } from "./rivers";
 import { RoadLine } from "./roadGrades";
+import { getCoveredSides, getOverlayShape } from "./shapes";
 
 // Roads and bridges. How high they run is in roadGrades.ts.
 
@@ -31,8 +33,22 @@ const SPAWN_SQUARE = 1.6;
 // Tiles past a road's edge that scatter keeps off
 const ROAD_CLEAR_MARGIN = 0.3;
 
+// Tiles past a road's edge, from a tile's middle, that it can paint on. A tile's painted if its
+// corner's in, and that's this far from its middle.
+const ROAD_PAINT_MARGIN = 0.75;
+
 // Tiles a road that leads nowhere takes to narrow away
 const ROAD_TAPER = 7;
+
+// Tiles a street takes to narrow to the road through its gate
+const STREET_NARROWS = 5;
+
+// Tiles past a road's end that another road counts as joining it
+const ROAD_JOINS = 2.5;
+
+// Tiles a main road stops short of a wall, for the road to its gate to take over. A road that's
+// left to fade out has room to, before it gets there.
+const WALL_CLEAR = ROAD_TAPER + 1;
 
 // The tightest a road can turn after a straight stretch, in tiles
 const ROAD_TURN_RADIUS = 8;
@@ -81,6 +97,13 @@ export class RoadNetwork {
     // close to, because zones overlap and a spot that's given up on takes its own off
     readonly offLimits: Uint8Array;
     readonly lines: RoadLine[] = [];
+    // Tiles a road wanted, and can't have: a building's in the way. check-maps.ts wants to know.
+    readonly clipped: Uint8Array;
+    // The line the main road means to take, and bridges' ends, for gates to be where they arrive
+    plannedLine: Point[] = [];
+    readonly arrivalPoints: Point[] = [];
+    // The ends of main roads a wall's stopped
+    private readonly cuts: Point[][] = [];
     // Every point of road, to find the nearest. Not the spawn: that's no road.
     private readonly samples: Point[] = [];
     private readonly road: Float32Array;
@@ -97,6 +120,7 @@ export class RoadNetwork {
         const { ground, corners, settings, spawn } = build;
         this.tiles = new Uint8Array(ground.sizeX * ground.sizeY);
         this.offLimits = new Uint8Array(this.tiles.length);
+        this.clipped = new Uint8Array(this.tiles.length);
         this.halfWidth = settings.roadWidth / 2;
         this.road = new Float32Array(corners.x * corners.y).fill(-4);
         this.trail = new Float32Array(corners.x * corners.y).fill(-4);
@@ -149,19 +173,27 @@ export class RoadNetwork {
         );
     }
 
-    // Whether a point of road is on a building, or by a bridge's road where nothing's to go.
-    // A road coming off a bridge starts out next to that, so it's let off (nearBridge).
+    // Whether a point of road is on a building or a wall or anything that's theirs, or by a
+    // bridge's road where nothing's to go. A road coming off a bridge starts out next to that, so
+    // it's let off (nearBridge).
     private touchesBuilding(point: Point, nearBridge: boolean): boolean {
         const { ground } = this.build;
+        const { ranks } = ground.claims;
         let touches = false;
         forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
-            touches ||= ground.footprint[i] !== 0 || (!nearBridge && this.bridgeZone[i] !== 0);
+            touches ||=
+                ground.footprint[i] !== 0 ||
+                (ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT && ranks[i] !== RESERVE_STREET) ||
+                (!nearBridge && this.bridgeZone[i] !== 0);
         });
         return touches;
     }
 
-    add(line: RoadLine, width: (point: number) => number, trail: boolean): void {
+    // join says whether others can join it yet: a town's streets wait till it's been joined up
+    // itself, so that two towns can't end up on a road of their own
+    add(line: RoadLine, width: (point: number) => number, trail: boolean, join = true): void {
         const { ground, corners } = this.build;
+        const { claims } = ground;
         const { points } = line;
         addPathToField(this.road, corners.x, corners.y, points, width);
         if (trail) {
@@ -178,10 +210,17 @@ export class RoadNetwork {
         forTilesNear(this.build, points, clear, (i) => {
             ground.reserved[i] = 1;
         });
-        // A lead's its door's or bridge's alone: others join past it, not against the wall
-        forTilesNear(this.build, points.slice(line.lead), clear, (i) => {
-            this.tiles[i] = 1;
+        // What it can paint, which building has to keep off
+        const widest = Math.max(width(0), width(points.length - 1));
+        forTilesNear(this.build, points, widest + ROAD_PAINT_MARGIN, (i) => {
+            claims.markTile(i, RESERVE_LANE);
         });
+        // A lead's its door's or bridge's alone: others join past it, not against the wall
+        if (join) {
+            forTilesNear(this.build, points.slice(line.lead), clear, (i) => {
+                this.tiles[i] = 1;
+            });
+        }
         this.samples.push(...points);
     }
 
@@ -326,14 +365,18 @@ export class RoadNetwork {
     // Lays a road along a line, leaving out where it can't go, for others to join
     addMainRoad(line: Point[], skip: Uint8Array): void {
         const { ground, settings } = this.build;
+        const lay = (run: Point[]) => {
+            this.addRun(run);
+            this.cuts.push(run.slice(0, 2).reverse(), run.slice(-2));
+        };
         if (hasRelief(settings)) {
-            this.routeThrough(line, skip).forEach((run) => this.addRun(run));
+            this.routeThrough(line, skip).forEach(lay);
             return;
         }
         let run: Point[] = [];
         const finish = () => {
             if (run.length > 3) {
-                this.addRun(run);
+                lay(run);
             }
             run = [];
         };
@@ -347,6 +390,33 @@ export class RoadNetwork {
             }
         }
         finish();
+    }
+
+    // The ends of main roads a wall stopped that nothing came to join fade out, rather than stop
+    // dead
+    finishCuts(): void {
+        const { towns } = this.build;
+        const reach = WALL_CLEAR + 2;
+        for (const end of this.cuts) {
+            const [before, last] = end;
+            const atWall = towns?.some(
+                ({ wall }) =>
+                    wall &&
+                    last.x > wall.x0 - reach &&
+                    last.x < wall.x1 + reach &&
+                    last.y > wall.y0 - reach &&
+                    last.y < wall.y1 + reach,
+            );
+            const joined = this.lines.some(
+                ({ points }) =>
+                    points[points.length - 1] !== last &&
+                    points[0] !== last &&
+                    points.some(({ x, y }) => Math.hypot(x - last.x, y - last.y) < ROAD_JOINS),
+            );
+            if (atWall && !joined && Math.hypot(last.x - before.x, last.y - before.y) > 0) {
+                this.taper(end, this.halfWidth);
+            }
+        }
     }
 
     // Runs a road that leads nowhere on past its end, narrowing away to nothing, so that
@@ -367,15 +437,33 @@ export class RoadNetwork {
         }
     }
 
-    // A town's street, straight and as wide as it wants, for others to join
-    addStreet(points: Point[], halfWidth: number, height: number): void {
+    // A town's street, straight and as wide as it wants, narrowing at its far end to a gate if it
+    // ends at one. Others can join it once its tiles are opened (openTiles).
+    addStreet(
+        points: Point[],
+        halfWidth: number,
+        height: number,
+        held: number[],
+        gateHalfWidth = halfWidth,
+    ): void {
         const { ground } = this.build;
+        const { claims } = ground;
         const line = { points, lead: 0, halfWidth, start: height, grade: ROAD_GRADE };
-        this.add(line, () => halfWidth, true);
+        const last = points.length - 1;
+        const width = (i: number) =>
+            lerp(gateHalfWidth, halfWidth, Math.min((last - i) / STREET_NARROWS, 1));
+        this.add(line, width, true, false);
         forTilesNear(this.build, points, halfWidth + ROAD_CLEAR_MARGIN, (i) => {
-            ground.reserved[i] = 1;
-            this.tiles[i] = 1;
+            claims.takeTile(i, RESERVE_STREET);
+            held.push(i);
         });
+    }
+
+    // Lets other roads join tiles
+    openTiles(tiles: number[]): void {
+        for (const i of tiles) {
+            this.tiles[i] = 1;
+        }
     }
 
     // A door on a street: a step or two of road, to the street's edge
@@ -395,7 +483,7 @@ export class RoadNetwork {
     }
 
     // A rectangle of road, between tile corners, for a town's square
-    addRect(x0: number, y0: number, x1: number, y1: number): void {
+    addRect(x0: number, y0: number, x1: number, y1: number, held: number[]): void {
         const { ground, corners } = this.build;
         for (let y = y0 - 2; y <= y1 + 2; y++) {
             for (let x = x0 - 2; x <= x1 + 2; x++) {
@@ -405,30 +493,13 @@ export class RoadNetwork {
                 this.trail[at] = Math.max(this.trail[at], inside + TRAIL_MARGIN);
             }
         }
+        // It paints half a tile past its edge
+        ground.claims.take(x0 - 1, y0 - 1, x1 - x0 + 2, y1 - y0 + 2, RESERVE_STREET);
         for (let y = y0; y < y1; y++) {
             for (let x = x0; x < x1; x++) {
-                ground.reserved[ground.tile(x, y)] = 1;
-                this.tiles[ground.tile(x, y)] = 1;
+                held.push(ground.tile(x, y));
             }
         }
-    }
-
-    // Whether a tile will be painted as road, streets and squares included
-    isRoad(x: number, y: number): boolean {
-        const { corners, ground } = this.build;
-        if (this.tiles[ground.tile(x, y)]) {
-            return true;
-        }
-        const at = x + y * corners.x;
-        const near = [at, at + 1, at + corners.x, at + corners.x + 1];
-        return near.some((corner) => this.road[corner] > 0);
-    }
-
-    // A straight piece of road, for a gate
-    addStraight(from: Point, to: Point, halfWidth: number): void {
-        const { corners } = this.build;
-        addPathToField(this.road, corners.x, corners.y, [from, to], halfWidth);
-        addPathToField(this.trail, corners.x, corners.y, [from, to], halfWidth + TRAIL_MARGIN);
     }
 
     // A round of road, for a town's square
@@ -470,7 +541,28 @@ export class RoadNetwork {
         }
         const field = smoothField(this.road, corners.x, corners.y, 1);
         const overlay = (x: number, y: number) => paving?.(x, y) ?? biomeAt(x, y).road;
+        this.findClipped(field);
         return ground.paintField(field, overlay, false, skip);
+    }
+
+    // The tiles of buildings a road would have painted, which only looks all right because
+    // painting stops at a wall
+    private findClipped(field: Float32Array): void {
+        const { ground, sizeX, sizeY, corners } = this.build;
+        for (let y = 0; y < sizeY; y++) {
+            for (let x = 0; x < sizeX; x++) {
+                const i = ground.tile(x, y);
+                if (ground.footprint[i]) {
+                    const at = x + y * corners.x;
+                    const sw = field[at];
+                    const se = field[at + 1];
+                    const ne = field[at + corners.x + 1];
+                    const nw = field[at + corners.x];
+                    const sides = getCoveredSides(sw, se, ne, nw);
+                    this.clipped[i] = getOverlayShape(sides, sw + se + ne + nw) ? 1 : 0;
+                }
+            }
+        }
     }
 }
 
@@ -610,18 +702,15 @@ export function placeBridges(
     return starts;
 }
 
-// The ring road or spine, for the others to join
-export function layMainRoads(build: Build, roads: RoadNetwork, bridgeZone: Uint8Array): void {
+// The line the ring road or spine means to take. Nothing's laid yet: towns are planned first, so
+// that a wall's gates can go where it arrives.
+export function getMainRoadLine(build: Build): Point[] {
     const { settings, arena, spawn, sizeX, sizeY } = build;
+    const line: Point[] = [];
     if (settings.roads <= 0 || settings.roadStyle === "branching") {
-        return;
+        return line;
     }
     const wiggle = createNoise(settings.seed + 8, 1);
-    const skip = new Uint8Array(roads.water.length);
-    for (let i = 0; i < skip.length; i++) {
-        skip[i] = roads.water[i] | bridgeZone[i];
-    }
-    const line: Point[] = [];
     if (settings.roadStyle === "ring") {
         const middleX = (arena.x0 + arena.x1) / 2;
         const middleY = (arena.y0 + arena.y1) / 2;
@@ -651,5 +740,39 @@ export function layMainRoads(build: Build, roads: RoadNetwork, bridgeZone: Uint8
             line.push(eastWest ? { x: along, y: across } : { x: across, y: along });
         }
     }
-    roads.addMainRoad(line, skip);
+    return line;
+}
+
+// The ring road or spine, for the others to join, stopping short of a town's wall or its square.
+// The roads out of its gates pick it up from there.
+export function layMainRoads(build: Build, roads: RoadNetwork, bridgeZone: Uint8Array): void {
+    const { ground, towns } = build;
+    if (roads.plannedLine.length === 0) {
+        return;
+    }
+    const skip = new Uint8Array(roads.water.length);
+    for (let i = 0; i < skip.length; i++) {
+        skip[i] = roads.water[i] | bridgeZone[i];
+    }
+    const mark = (x0: number, y0: number, x1: number, y1: number) => {
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                if (ground.inside(x, y)) {
+                    skip[ground.tile(x, y)] = 1;
+                }
+            }
+        }
+    };
+    for (const { x0, y0, x1, y1, wall } of towns ?? []) {
+        mark(x0, y0, x1, y1);
+        if (wall) {
+            const far = WALL_CLEAR;
+            mark(wall.x0 - far, wall.y0 - far, wall.x1 + far, wall.y1 + far);
+        }
+    }
+    const { ranks } = ground.claims;
+    for (let i = 0; i < skip.length; i++) {
+        skip[i] |= ranks[i] !== 0 && ranks[i] < RESERVE_STREET ? 1 : 0;
+    }
+    roads.addMainRoad(roads.plannedLine, skip);
 }

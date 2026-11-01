@@ -4,13 +4,14 @@ ScapeRune makes maps that don't exist in OSRS: our own ground, heights, water an
 cache objects and buildings on top. It's self-contained: everything is in this folder, and nothing
 outside it needs changing to make a map.
 
-| You want                                          | Go to                                                        |
-| ------------------------------------------------- | ------------------------------------------------------------ |
-| To know what makes a map good                     | [Designing a map](#designing-a-map)                          |
-| To know which setting or function to use          | [Building it, step by step](#building-it-step-by-step)       |
-| To know whether it worked, and what to do if not  | [Checking a map](#checking-a-map)                            |
-| Not to spend a round finding out it can't be done | [What the engine can't do yet](#what-the-engine-cant-do-yet) |
-| Everything else                                   | [Reference](#reference), then [Traps](#traps)                |
+| You want                                           | Go to                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| To know what makes a map good                      | [Designing a map](#designing-a-map)                          |
+| To know which setting or function to use           | [Building it, step by step](#building-it-step-by-step)       |
+| To know how a city, town or hamlet is put together | [The flow](#the-flow)                                        |
+| To know whether it worked, and what to do if not   | [Checking a map](#checking-a-map)                            |
+| Not to spend a round finding out it can't be done  | [What the engine can't do yet](#what-the-engine-cant-do-yet) |
+| Everything else                                    | [Reference](#reference), then [Traps](#traps)                |
 
 **Most maps here are dev maps.** Those are in `maps/devMaps.ts`, and only show on the dev server (or with
 `DEV_MAPS=1` in a script). A run on one doesn't touch the save. A build leaves them and the map generator's screen
@@ -237,8 +238,8 @@ are how the generator joins anything big that's cut off.
 - **A wall round a town**: `townWalls`, only for `towns`, and `wallKit` for whose. Hamlets never get one. See
   [City walls](#city-walls).
 
-`buildings` at 1 means 3 buildings a map square. `planTown` picks the kind by how many a town wants, which is what's wanted
-over the whole map shared between its towns:
+Every one of these goes through [the flow](#the-flow). `buildings` at 1 means 3 buildings a map square. `layOutTown` picks the
+kind by how many a town wants, which is what's wanted over the whole map shared between its towns:
 
 | Kind     | Wanted     | Square          | Streets             | In the middle     |
 | -------- | ---------- | --------------- | ------------------- | ----------------- |
@@ -251,10 +252,10 @@ drops to the next kind down if the ground won't take the square: it wants 20 uni
 and the spawn. So try a few seeds, keep `hills` low, and look at the preview. If nothing fits, the buildings go on the loose
 ground round the middle.
 
-The planner puts the biggest building on the square, the rest along the streets 3 to 5 tiles apart with doors onto them,
-one church to every 12 buildings, and a fenced yard behind many. Each gets a step of road to the street, so the rule about
-doors and roads holds. Paving runs over 65% of a market or axis's reach, in the biome's `paving` or Varrock's `171`. Trees
-come back over 32 tiles past that, or 8 from a hamlet (`createTownFade`).
+`fillTown` puts the biggest building on the square, the rest along the streets 3 to 5 tiles apart with doors onto them, one
+church to every 12 buildings, and a fenced yard behind many. Each gets a step of road to the street, so the rule about doors
+and roads holds. Paving runs over 65% of a market or axis's reach, in the biome's `paving` or Varrock's `171`. Trees come back
+over 32 tiles past that, or 8 from a hamlet (`createTownFade`).
 
 **One kit per town** is automatic: a town picks a family of prefabs by the start of their names (`lumbridge_house` is
 `lumbridge`), and its fence goes with it (`KIT_FENCES`). A family with one prefab makes a town of copies: see
@@ -264,10 +265,10 @@ come back over 32 tiles past that, or 8 from a hamlet (`createTownFade`).
 `VIGNETTES`. They're biome by biome, from what its towns really have. They block, so they keep off roads and leave a tile
 clear. `fairy` has none.
 
-Hand-made: `planTown`, `placeVignettes`, `placeSetPieces` and `createPace` all want a `Build`, and the first and third a
-`RoadNetwork`, so they're for a map that has those, as `maps/kaluasWake.ts` does. None of the three hand-made maps calls them
-yet. Without them, stamp prefabs with `PrefabKit` and lay the town out by hand, to the numbers above. Keep to one family,
-and put a square in the middle.
+Hand-made: `layOutTown`, `fillTown`, `placeVignettes`, `placeSetPieces` and `createPace` all want a `Build`, and all but the
+last two a `RoadNetwork`, so they're for a map that has those, as `maps/kaluasWake.ts` does. None of the three hand-made maps
+calls them yet. Without them, stamp prefabs with `PrefabKit` and lay the town out by hand, to the numbers above and in the
+same order: see [By hand](#by-hand). Keep to one family, and put a square in the middle.
 
 ### 5. Landmarks
 
@@ -355,6 +356,84 @@ dressGround(ground, { seed: SEED + 300, density: 1, biomeDecor: (x, y) => [4735,
 
 Next section. Then, for anything more than a dev map, [Shipping a map](#shipping-a-map).
 
+## The flow
+
+**Every city, town and hamlet is built by these steps, in this order, by the one code path.** A hamlet's the same in small, and
+the wall step's skipped when it has no wall. This is the fix for what went wrong before: walls were worked out from the buildings
+afterwards and set pieces got there first, so one stamped over the other, and nothing kept a yard's fence off a road.
+
+| Step | What                    | Where                                            | The rule                                                                      |
+| ---- | ----------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| 1    | Site                    | `fitWall`, `findSquare`                          | Pick the ground first, and level it, so that the wall doesn't fight the land  |
+| 2    | Walls and gates         | `reserveWall`, `planGates`                       | The town's shape comes first. Buildings are fitted to it, never the reverse   |
+| 3    | Main streets and square | `layOutTown`, then `layMainRoads`, `connectTown` | Gate to square to gate, before any building                                   |
+| 4    | Plots                   | `fillTown`, `placeBuilding`                      | A building's plot holds its yard and fence, and they're reserved as one block |
+| 5    | Lanes                   | `placeBuilding`, `addDoorPath`                   | To the doors, after the buildings, round every plot                           |
+| 6    | Set pieces              | `placeSetPieces`, `placeRuins`                   | On whatever's left                                                            |
+| 7    | Foliage and details     | `placeVignettes`, `scatter`, `dressGround`       | Last of all, and they ask like everything else                                |
+
+**The reservation map.** `ground.claims` (`reservations.ts`) holds one rank a tile, and each step asks it before taking ground.
+Nothing later can take a tile from anything earlier, and the rank order is strict:
+
+| Rank | Constant         | What                                    | Asks with                          |
+| ---- | ---------------- | --------------------------------------- | ---------------------------------- |
+| 1    | `RESERVE_WALL`   | A wall's band, towers and all           | Nothing: it's first                |
+| 2    | `RESERVE_GATE`   | A gate's clear space, both sides        | Nothing: gates are planned with it |
+| 3    | `RESERVE_STREET` | Main streets and squares                | `canPave`                          |
+| 4    | `RESERVE_PLOT`   | Buildings with their yards and fences   | `isFree`, `hasNear`                |
+| 5    | `RESERVE_LANE`   | Every other road, out to what it paints | The router, through `reserved`     |
+| 6    | `RESERVE_PIECE`  | Set pieces, landmarks, ruins            | `fitsBuilding`, through `reserved` |
+| 7    | None             | Foliage and details                     | `ground.isClear`                   |
+
+A tile that's taken is also set in `ground.reserved`, so everything that already asks `isClear` is asking this map. `markTile` is
+the one way round that: it marks what a road's edge can paint, past where foliage is kept off, so that buildings keep off the paint
+and flowers can still grow up to it. A vignette is the only thing that stands on a claimed tile, because it's asking for its
+own building's plot.
+
+**The numbers.**
+
+- **A gate keeps 12 tiles clear behind it and 8 in front** (`GATE_CLEAR_IN`, `GATE_CLEAR_OUT`), across its width and 2 tiles past
+  each side. Only its road goes there. 12 is a bit under half a screen, so a gate opens on to a street you can see down.
+- **A wall is as big as its buildings need**: 360 tiles of town a building, which is about a sixth of it indoors, capped at
+  `townSize` and never under 14 from its middle. It's stretched up to 20% either way by the seed, and each side then comes in
+  till it's on ground that takes it.
+- **Gates go where outside roads arrive** (`getArrivals`): where the main road's line crosses, or else facing the spawn, a bridge
+  or another town. A wall has at least 2, and a side 56 or longer gets one anyway. Each lies on a column of the square, so that
+  its street's dead straight.
+- **A plot's** a tile round the walls, plus the yard. Walls stand 1.5 tiles off a street's edge, plots 1 apart, buildings 3 to 5.
+- **A wall has 2 tiles of open ground along its inside** that no plot takes, for a crowd to get round.
+
+**Drop rather than break.** If something doesn't fit, it's left out: a yard before its building, a building before its town, a
+wall that the ground fights before the town it was for. A city gets fewer buildings before it breaks a rule. Nothing's ever
+moved or stamped over to make room.
+
+**What's on the wall's band is the wall.** It only stops short of water, cliffs and bridges, which `reserveWall` finds at the
+start, not of anything that got there first, because nothing can have.
+
+### By hand
+
+A hand-made map follows the same order, and `ground.claims` works on any `Ground`, so it needs no `Build`:
+
+```ts
+const { claims } = ground;
+forWallTiles(kit, rect, (x, y) => claims.takeTile(ground.tile(x, y), RESERVE_WALL)); // the wall, first
+for (const gate of gates) {
+    for (const { x0, y0, x1, y1 } of getGateClear(kit, rect, gate)) {
+        claims.take(x0, y0, x1 - x0 + 1, y1 - y0 + 1, RESERVE_GATE);
+    }
+}
+claims.take(x, y, sizeX, sizeY, RESERVE_STREET); // the square and streets
+if (claims.isFree(px, py, plotX, plotY)) {
+    claims.take(px, py, plotX, plotY, RESERVE_PLOT); // the building, its yard and fence
+    new PrefabKit(context).stamp(ground, name, turns, x, y);
+}
+```
+
+Then lay lanes, then set pieces, then scatter with `ground.isClear`, and `placeCityWall` and `dressGround` once the heights are
+done. To have `check-maps.ts` hold a hand-made map to this, its `detail` passes on `buildings` with a `plot` and `yard` each,
+`fences`, `walled` and `clippedRoads`. Anything that's meant to break a rule, like a fence that a road runs through at a
+gate, goes in `designed`, as rectangles of tiles, which is the only way out of a clash.
+
 ## Checking a map
 
 **A round.** Each of these is cheap, so go round often. On a small machine run anything that loads the cache through your
@@ -439,10 +518,21 @@ in a big arena still reads low. `steepest` can't see tiles within 2 of water or 
 - `X isn't on flat ground`, `opens onto ground you can't walk on`, `has something under it`: use `pinPlot`, and `markOffLimits`.
 - `gap at x,y off the deck isn't whole road`, `road outside the fences`: run the road down the deck's line for 7 tiles.
 - `the waterfall at x,y has no pool`: `placeFallPools` goes before the heights settle.
-- `the wall at x,y has N gates you can walk through`: under 2. Its sides are in water or cliffs: try another seed, or less
-  water near the town.
-- `a road meets the wall at x,y with no gate`: two roads crossed a side closer than a gate and its spacing, or one crossed
-  by a corner. Say what's odd about the map first: `planGates` puts a gate on every crossing it can.
+- `the wall at x,y has N gates you can walk through`: under 2. `planGates` won't plan that, so something's come through since
+  and blocked one. Find what's standing there.
+- `a road meets the wall at x,y with no gate`: something's laid a road without asking. Roads only cross a wall through
+  `connectTown`.
+
+**The flow.** These go by the rule, with how many and the first few places. A generated map should have none, so each is a step
+that didn't ask `ground.claims`:
+
+- `N wall clashes: loc L on a wall at x,y`, or `a building on a wall`: something's on a band. See who placed it, and have it ask.
+- `N gate clashes`: the same, in a gate's clear space.
+- `N road clashes: a road runs into X`: a road's field reaches a building, and painting only hid that by stopping at the wall. A
+  tile-centre test can't see this. `a road on X's yard` or `plot` goes by what's painted, half side by half side.
+- `N fence clashes: a fence across a road`: painted up to that side from both tiles it parts. `a fence on X's plot` is another
+  building's.
+- `N plot clashes`: two plots overlap.
 
 **Reachability:**
 
@@ -547,6 +637,7 @@ Don't spend a round on these.
   between biomes have no dither.
 - **No invisible walls.** The real world seals drops with 85 and 2639, which draw nothing. Nothing here uses them on purpose.
 - **Streets are straight and square to the map.** Town walls are rectangles with their corners cut, and only for `towns`.
+  Main streets don't turn: each runs from a gate straight to its square.
 - **Only rotation.** The map format has no mirror.
 - **One plane is drawn**, so nothing upstairs is seen unless its tiles are flagged `TILE_SHOWN`, as a city wall's top is.
   That draws what's up there. It doesn't let anyone walk on it: all the collision is the ground's.
@@ -621,9 +712,12 @@ scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 | `mountains.ts`    | passes, what can be walked, rock, snow, caves, lava                    |
 | `roads.ts`        | roads and bridges                                                      |
 | `settlements.ts`  | where buildings go, their plots, and sites                             |
-| `townPlan.ts`     | towns laid out from the middle, and pace                               |
+| `townPlan.ts`     | towns laid out in steps, and pace                                      |
+| `townWalls.ts`    | a town's wall: where it goes, its gates and what's kept clear of them  |
+| `reservations.ts` | what's spoken for, tile by tile: the map every step asks               |
+| `clashes.ts`      | what breaks the flow, by what's really painted                         |
 | `vignettes.ts`    | small groups of things against a building's walls                      |
-| `structures.ts`   | set pieces, wrecks and drowned towns, where town walls go, waymarkers  |
+| `structures.ts`   | set pieces, wrecks and drowned towns, waymarkers                       |
 | `cityWalls.ts`    | real city walls as data, and building one round a rectangle            |
 | `falls.ts`        | waterfalls off cliffs, with their pools                                |
 | `terrain.ts`      | the height layer: floats per corner, pins, slope limits                |
@@ -641,10 +735,11 @@ scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 ### The generator's order
 
 `generateMapDetail`, in order: the land's shape (`landforms.ts`), rivers down its valleys, sea and lakes, cliffs, passes,
-floors, bridges, main roads, sites and buildings with their roads, vignettes, set pieces, ruins, pools for waterfalls, walled
-towns' squares, roads graded, flat land, then the heights are finished (`finishHeights`), what's too steep is blocked, roads are
-painted, then rock, caves, lava, the falls, what's on the rock, the boundary, town walls, waymarkers, what stands in water,
-scatter, reachability, and last the ground's dressing. Anything it can't connect gets blocked.
+floors, bridges, towns' sites, walls, gates, squares and main streets (`planTowns`), main roads and bridges' roads, the roads out
+of towns (`connectTown`), buildings on their plots with their lanes, vignettes, set pieces, ruins, pools for waterfalls, roads
+graded, flat land, then the heights are finished (`finishHeights`), what's too steep is blocked, roads are painted, then rock,
+caves, lava, the falls, what's on the rock, the boundary, town walls go up, waymarkers, what stands in water, scatter,
+reachability, and last the ground's dressing. Anything it can't connect gets blocked.
 
 **Boundaries.** Only `sea` makes an island. With the others, land runs on past the arena on all sides, scattered out to
 the edge of the margin, so the world looks like it carries on. The arena's edge is still what stops you, so each one
@@ -773,16 +868,15 @@ level, so collision stays the ground's.
 
 `wallKit` picks one, and `auto` goes by the family of a town's buildings, then its biome (`families` and `biomes` in the kit),
 on a seed of its own. Every biome is covered. Across counts the two tiles the faces stand on. Rough sizes: 2 to 3 tiles tall,
-walkways 1 to 3 wide, and buildings stand `TOWN_WALL_GAP` back from the walkway so that yards fit.
+walkways 1 to 3 wide.
 
-**What the generator does**, in `chooseWalledTowns`, before roads are graded: the wall's rectangle is a little way out from
-the buildings, and each side moves out to where the fewest road tiles lie along it. Towns close enough for their walls to touch
-are merged into one. A road through a side gets a gate where it crosses (`planGates`), a side with none gets one in its middle
-if there's ground to walk on, and that gate gets a road of its own to the nearest road. So a town has a gate on every side that
-can take one, which is what stops a wall being a choke. A gate's ground is a plot, and a straight stretch of road goes through
-it. The band's reserved at once, and `placeTownWalls` puts the wall up after the land's finished, stopping with a cap short of
-water, cliffs, buildings, door steps, bridges and anything that was there first. Inside, roads are paved, and there's a square
-with a fountain unless the town was laid out with one.
+**What the generator does** is [the flow](#the-flow): the wall's shape and gates come before anything else is built, in
+`layOutTown`, and everything else fits inside. A wall that's asked for and can't be had, because the ground fights it or there
+aren't 2 gates with ground to a street, goes, and the town's laid out without one. A town that lands inside a wall that's
+already planned is part of that city. A gate's ground is a plot, a straight road goes through it to its street, and the road goes
+on to the nearest road once it's past the gate's clear space. Main roads stop short of a wall, and the roads out of its gates
+pick them up, so an outside road always comes in by a gate. The ring's level with the town, and `placeTownWalls` puts it up after
+the land's finished. Inside, roads are paved, and the square has a fountain.
 
 `Walled city` is the preset for a big one, in Falador's wall, and `scaperune_city` is that as a dev map. `scaperune_town` has
 two towns inside Varrock's, and `scaperune_walls` (`maps/wallSheet.ts`) has every
@@ -918,7 +1012,7 @@ into cliffs or are flat with the water.
 extremes:
 
 - **A road never goes through a building**, walls included, whichever was placed first. Buildings keep off road
-  tiles; roads and fords can't step within `RoadNetwork.wallGap` of a building (`offLimits`); smoothing that drifts
+  tiles; roads and fords can't step within `RoadNetwork.wallGap` of a building's plot (`offLimits`); smoothing that drifts
   onto one is undone; and painting skips `Ground.footprint`.
 - **A building's door faces a road.** Main roads and bridges go down first, then buildings with roads, each turned
   so a way out faces the nearest road, with its road running straight out of that door. One that can't reach the
@@ -1153,6 +1247,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   a tile of their own. It's why a wall's faces stand on the tiles beside its walkway.
 - **Anything on level 1 needs `TILE_SHOWN` on its tile**, or it won't draw. Yanille's are unflagged in the cache.
 - **Round buildings have empty corners.** Only what's inside the walls is reserved, so `fitsBuilding` looks at plots as well.
+- **Painting hides a road that runs into something.** Roads aren't painted on `Ground.footprint`, so a road through a building
+  shows as two roads stopping at its walls, and a check of what's painted finds nothing. That's what `RoadNetwork.clipped` is for.
 - **Ruins have no floor.** A floor with half its walls gone is a slab with nothing round it.
 - **Doors are closed, or open and turned.** A stamped building with a door has a sealed inside unless you drop
   the door. An open door stands on another side of its tile, off the wall, so don't read a way out from a door's
