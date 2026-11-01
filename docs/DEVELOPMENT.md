@@ -441,7 +441,10 @@ about 15 times a second at most. The host checks what a guest sends (`cleanMove`
 `cleanAction` in `core/lockstep.ts`) before it goes in, since every copy applies it. Nothing
 waits on a slow guest; they see the run a little behind, and catch up at 8 ms a frame at most.
 
-Guests predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. A local
+Guests can predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. It's
+a trial for now: the `movePrediction` display setting (Settings and the pause menu) is off by
+default, and `CoopRun.setPrediction` applies it, mid-run too. Off, a guest has no prediction,
+sends no `moveSeq` and shows only what the host confirms; turned back on, it starts afresh. A local
 input sequence (`moveSeq`) rides on movement messages and is echoed in the host's frame event,
 including when queued moves are coalesced. The guest acknowledges it only after stepping that
 frame, then replays a bounded local input history from the confirmed position. A change that

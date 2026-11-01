@@ -687,6 +687,11 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
 
+    toggleMovePrediction(): void {
+        this.setDisplay({ movePrediction: !this.display.movePrediction });
+        this.coopRun?.setPrediction(this.display.movePrediction);
+    }
+
     private setDisplay(changes: Partial<DisplaySettings>): void {
         this.display = { ...this.display, ...changes };
         saveDisplaySettings(this.display);
@@ -889,6 +894,7 @@ export class GameClient implements GameFrameHandler {
         });
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        run.setPrediction(this.display.movePrediction);
         this.coopRun = run;
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];
