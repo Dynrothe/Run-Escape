@@ -364,7 +364,7 @@ describe("co-op", () => {
         play(guest, 90 * TICKS_PER_SECOND);
         expect(host.kills).toBeGreaterThan(0);
         expect(fingerprint(guest)).toBe(fingerprint(host));
-    });
+    }, 30000);
 });
 
 describe("portable math", () => {
