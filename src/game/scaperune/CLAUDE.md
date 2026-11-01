@@ -573,7 +573,7 @@ Don't spend a round on these.
   a low count. Heavier kits aren't an option.
 - **A family of one makes a town of copies.** Look for a 1 in the [Biomes](#biomes) table. Try another seed, or add prefabs to
   the family.
-- **Big maps build slowly.** 33 s at 16 squares and over 200 s at 28: see [How big a map can be](#how-big-a-map-can-be).
+- **Big maps take a while to build.** 8 s at 16 squares and 26 s at 28: see [How big a map can be](#how-big-a-map-can-be).
 
 **Tried and dropped**
 
@@ -1019,17 +1019,16 @@ into world tiles.
 
 Measured in Node on this VM, on a forest-bound meadow with default settings otherwise, through `preview.ts`:
 
-| Squares a side | Tiles in the grid | Generate   | With `sites: 0` | Node peak |
-| -------------- | ----------------- | ---------- | --------------- | --------- |
-| 8              | 410 k             | 5.6 s      |                 | 670 MB    |
-| 16             | 1.3 M             | 33 s       | 20 s            | 940 MB    |
-| 28             | 3.7 M             | Over 200 s | 64 s            | 1.7 GB    |
+| Squares a side | Tiles in the grid | Generate | With `sites: 0` | Node peak |
+| -------------- | ----------------- | -------- | --------------- | --------- |
+| 8              | 410 k             | 2.3 s    |                 | 640 MB    |
+| 16             | 1.3 M             | 8 s      | 7.3 s           | 1 GB      |
+| 28             | 3.7 M             | 26 s     | 23 s            | 1.7 GB    |
 
-- **Big maps have got slower to build.** They were about 2.5 s, 7.1 s and 14.8 s before sites, town plans and dressing, though
-  not on exactly these settings. At 16 squares `sites` costs 13 s and buildings about 11 s more: with neither it's 9 s. It runs
-  on the main thread, so on the map generator's screen that's a frozen tab. Over `SLOW_ARENA_SQUARES`, use `sites: 0` or few
-  buildings until that's fixed.
-- **Mountains cost more on top**: 43 s at 16 squares with `mountains` at 0.75. It's noise on every corner, passes and fords.
+- **What's left is mostly roads.** At 16 squares buildings cost about 3 s and `sites` next to nothing: with neither it's 4.3 s.
+  At 28, finding the roads to a town's buildings is 7 s of the 24, so `sites: 0` doesn't help any more and few buildings does.
+  It runs on the main thread, so on the map generator's screen that's a frozen tab while it lasts.
+- **Mountains cost more on top**: 15 s at 16 squares with `mountains` at 0.75. It's noise on every corner, passes and fords.
 - **Cost per tick doesn't grow.** The flow field's a fixed 96 tile window round the player, enemies stay near the
   player, and the renderer only loads the squares near the camera (4 to 8 of them). A tick took 0.73 to 0.76 ms with 400
   enemies at every size, before sites and dressing.
