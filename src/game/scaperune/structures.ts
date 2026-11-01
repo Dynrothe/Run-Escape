@@ -31,7 +31,15 @@ export type SetPiece =
     // A loose crowd in a circle
     | { kind: "grove"; locs: PieceLoc[]; count: number; radius: number }
     // Rows, as graves are
-    | { kind: "rows"; locs: PieceLoc[]; across: number; deep: number; gap: number }
+    | {
+          kind: "rows";
+          locs: PieceLoc[];
+          across: number;
+          deep: number;
+          gap: number;
+          // What grows round the outside
+          edge?: PieceLoc[];
+      }
     // In the water, close in to the shore
     | { kind: "wreck"; locs: PieceLoc[] }
     // Out in the water: the top of something tall, and what's left of a town round it
@@ -39,7 +47,25 @@ export type SetPiece =
     // A hedge maze, cells a side, with something to find in the middle
     | { kind: "maze"; hedges: number[]; cells: number; middle: PieceLoc }
     // The biome's wall round a yard, tiles a side, with a gate each way and things inside
-    | { kind: "fort"; size: number; inside: PieceLoc[]; count: number };
+    | { kind: "fort"; size: number; inside: PieceLoc[]; count: number }
+    // Normal things put together, at places on a plot of its own: what a real landmark is
+    | RecipePiece;
+
+// [loc id, tiles across, tiles deep, x and y on the plot, rotation]
+type RecipeLoc = [number, number, number, number, number, number?];
+
+type RecipePiece = {
+    kind: "recipe";
+    sizeX: number;
+    sizeY: number;
+    locs: RecipeLoc[];
+    // Paved, as a town's square is
+    paved?: boolean;
+    // A fence round it, open at a gate in its south side
+    fenced?: boolean;
+    // What grows on the plot, on all that's left of it, in rows
+    crops?: number[];
+};
 
 function single(...locs: PieceLoc[]): SetPiece {
     return { kind: "single", locs };
@@ -59,6 +85,12 @@ const GRAVES: PieceLoc[] = [
     [405, 1, 1],
     [401, 1, 1],
     [400, 1, 1],
+];
+// Real graves stand among bushes: they're 87 to 115 times likelier together than by chance
+const BUSHES: PieceLoc[] = [
+    [1124, 1, 1],
+    [1124, 1, 1],
+    [1393, 1, 1],
 ];
 const MUSHROOM_TREES: PieceLoc[] = [
     [43129, 4, 4],
@@ -90,6 +122,67 @@ export const SET_PIECES: Record<string, SetPiece> = {
         count: 8,
         radius: 5,
         middle: [11100, 2, 2],
+    },
+    market: {
+        kind: "recipe",
+        sizeX: 15,
+        sizeY: 11,
+        paved: true,
+        locs: [
+            [884, 2, 2, 7, 5],
+            [634, 2, 2, 2, 2],
+            [11729, 2, 2, 11, 2, 2],
+            [11730, 2, 2, 2, 7],
+            [634, 2, 2, 11, 7, 2],
+            [362, 1, 1, 4, 2],
+            [357, 1, 1, 10, 3],
+            [365, 1, 1, 4, 8],
+            [358, 1, 1, 10, 7],
+        ],
+    },
+    farm: {
+        kind: "recipe",
+        sizeX: 16,
+        sizeY: 11,
+        fenced: true,
+        crops: [15506, 15507, 15508],
+        locs: [
+            [300, 2, 2, 2, 7],
+            [304, 1, 1, 5, 8],
+            [304, 1, 1, 5, 7],
+        ],
+    },
+    orchard: {
+        kind: "recipe",
+        sizeX: 15,
+        sizeY: 11,
+        fenced: true,
+        locs: [
+            [1276, 2, 2, 2, 2],
+            [1278, 2, 2, 7, 2],
+            [1276, 2, 2, 12, 2],
+            [1278, 2, 2, 2, 7],
+            [1276, 2, 2, 7, 7],
+            [1278, 2, 2, 12, 7],
+            [300, 2, 2, 5, 5],
+        ],
+    },
+    shrine: {
+        kind: "recipe",
+        sizeX: 9,
+        sizeY: 9,
+        paved: true,
+        locs: [
+            [7002, 2, 2, 3, 4],
+            [34780, 1, 1, 1, 1],
+            [34781, 1, 1, 7, 1],
+            [34781, 1, 1, 1, 7],
+            [34780, 1, 1, 7, 7],
+            [1188, 1, 1, 2, 3],
+            [1187, 1, 1, 6, 3],
+            [1188, 1, 1, 2, 6],
+            [1187, 1, 1, 6, 6],
+        ],
     },
     great_skeleton: single([59324, 7, 3]),
     beached_wreck: single([49423, 6, 4], [59372, 6, 3]),
@@ -149,7 +242,7 @@ export const SET_PIECES: Record<string, SetPiece> = {
         count: 4,
         radius: 7,
     },
-    graveyard: { kind: "rows", locs: GRAVES, across: 6, deep: 4, gap: 2 },
+    graveyard: { kind: "rows", locs: GRAVES, across: 6, deep: 4, gap: 2, edge: BUSHES },
     blisterwood: single([37989, 6, 4]),
     redwoods: {
         kind: "grove",
@@ -259,6 +352,14 @@ export const FOUNTAIN = 879;
 // Varrock's street stone, a plain warm grey. Texture's for small patches.
 export const PAVING = 171;
 
+// Small things tried round a big one, and the share of a rectangle's edge that gets one
+const ROUND_A_PIECE = 14;
+
+// Tiles of ground a single big thing keeps round it for them
+const ROUND_TILES = 3;
+
+const EDGE_SHARE = 0.7;
+
 // Tiles along a road between stones, and off its edge
 const MARKER_SPACING = 16;
 
@@ -281,6 +382,13 @@ export function getPieceLocs(piece: SetPiece): PieceLoc[] {
             return [piece.middle, ...piece.hedges.map((id): PieceLoc => [id, 1, 1])];
         case "fort":
             return piece.inside;
+        case "recipe":
+            return [
+                ...piece.locs.map(([id, across, deep]): PieceLoc => [id, across, deep]),
+                ...(piece.crops ?? []).map((id): PieceLoc => [id, 1, 1]),
+            ];
+        case "rows":
+            return [...piece.locs, ...(piece.edge ?? [])];
         default:
             return piece.locs;
     }
@@ -289,10 +397,14 @@ export function getPieceLocs(piece: SetPiece): PieceLoc[] {
 // The rectangle a piece needs
 function getPieceSize(piece: SetPiece): { sizeX: number; sizeY: number } {
     if (piece.kind === "single" || piece.kind === "wreck") {
+        const round = piece.kind === "single" ? ROUND_TILES * 2 : 0;
         return {
-            sizeX: Math.max(...piece.locs.map((loc) => loc[1])),
-            sizeY: Math.max(...piece.locs.map((loc) => loc[2])),
+            sizeX: Math.max(...piece.locs.map((loc) => loc[1])) + round,
+            sizeY: Math.max(...piece.locs.map((loc) => loc[2])) + round,
         };
+    }
+    if (piece.kind === "recipe") {
+        return { sizeX: piece.sizeX, sizeY: piece.sizeY };
     }
     if (piece.kind === "rows") {
         return { sizeX: piece.across * piece.gap, sizeY: piece.deep * piece.gap };
@@ -465,6 +577,9 @@ function placeOnPlot(build: Build, piece: SetPiece, x: number, y: number): void 
     if (piece.kind === "single") {
         const loc = pick(rng, piece.locs);
         putLoc(build, loc, x + ((sizeX - loc[1]) >> 1), y + ((sizeY - loc[2]) >> 1), 0);
+        placeRound(build, x, y, sizeX, sizeY);
+    } else if (piece.kind === "recipe") {
+        placeRecipe(build, piece, x, y);
     } else if (piece.kind === "ring") {
         putRing(build, piece.stones, piece.count, piece.radius, middleX, middleY);
         if (piece.middle) {
@@ -499,10 +614,101 @@ function placeOnPlot(build: Build, piece: SetPiece, x: number, y: number): void 
                 }
             }
         }
+        if (piece.edge) {
+            placeEdge(build, piece.edge, x - 1, y - 1, sizeX + 1, sizeY + 1);
+        }
     } else if (piece.kind === "maze") {
         placeMaze(build, piece, x, y);
     } else if (piece.kind === "fort") {
         placeFort(build, piece, x, y);
+    }
+}
+
+// A single big thing isn't a place by itself: this puts the biome's own small things round it
+function placeRound(build: Build, x: number, y: number, sizeX: number, sizeY: number): void {
+    const { ground, rng, biomeAt } = build;
+    const { flowers } = biomeAt(x + (sizeX >> 1), y + (sizeY >> 1));
+    if (flowers.length === 0) {
+        return;
+    }
+    for (let i = 0; i < ROUND_A_PIECE; i++) {
+        const tx = x + Math.floor(rng() * sizeX);
+        const ty = y + Math.floor(rng() * sizeY);
+        if (ground.isClear(tx, ty, 1, 1)) {
+            putLoc(build, [pick(rng, flowers), 1, 1], tx, ty, Math.floor(rng() * 4));
+        }
+    }
+}
+
+// Things along the outside of a rectangle, with gaps, leaving a way in on every side
+function placeEdge(
+    build: Build,
+    locs: PieceLoc[],
+    x: number,
+    y: number,
+    sizeX: number,
+    sizeY: number,
+): void {
+    const { ground, rng } = build;
+    const put = (tx: number, ty: number) => {
+        if (rng() < EDGE_SHARE && ground.isClear(tx, ty, 1, 1)) {
+            putLoc(build, pick(rng, locs), tx, ty, Math.floor(rng() * 4));
+        }
+    };
+    for (let along = 0; along <= sizeX; along += 2) {
+        put(x + along, y);
+        put(x + along, y + sizeY);
+    }
+    for (let along = 2; along < sizeY; along += 2) {
+        put(x, y + along);
+        put(x + sizeX, y + along);
+    }
+}
+
+function placeRecipe(build: Build, piece: RecipePiece, x: number, y: number): void {
+    const { ground, rng, biomeAt } = build;
+    const { sizeX, sizeY } = piece;
+    const biome = biomeAt(x + (sizeX >> 1), y + (sizeY >> 1));
+    if (piece.paved) {
+        const mask = new Uint8Array(ground.sizeX * ground.sizeY);
+        for (let ty = y; ty < y + sizeY; ty++) {
+            mask.fill(1, ground.tile(x, ty), ground.tile(x + sizeX, ty));
+        }
+        ground.paintOverlay(mask, biome.paving ?? PAVING, false);
+    }
+    for (const [id, across, deep, tx, ty, rotation] of piece.locs) {
+        putLoc(build, [id, across, deep], x + tx, y + ty, rotation ?? 0);
+    }
+    if (piece.crops) {
+        for (let ty = y + 1; ty < y + sizeY - 1; ty += 2) {
+            for (let tx = x + 1; tx < x + sizeX - 1; tx++) {
+                if (ground.isClear(tx, ty, 1, 1)) {
+                    putLoc(build, [pick(rng, piece.crops), 1, 1], tx, ty, 0);
+                }
+            }
+        }
+    }
+    if (piece.fenced) {
+        const post = (tx: number, ty: number, rotation: number) =>
+            ground.grid.locs.push({
+                id: biome.fence,
+                type: LOC_WALL,
+                rotation,
+                level: 0,
+                x: tx,
+                y: ty,
+            });
+        const gate = x + (sizeX >> 1);
+        for (let tx = x; tx < x + sizeX; tx++) {
+            if (Math.abs(tx - gate) > 1) {
+                post(tx, y, WALL_SOUTH);
+            }
+            post(tx, y + sizeY - 1, WALL_NORTH);
+        }
+        for (let ty = y; ty < y + sizeY; ty++) {
+            post(x, ty, WALL_WEST);
+            post(x + sizeX - 1, ty, WALL_EAST);
+        }
     }
 }
 
