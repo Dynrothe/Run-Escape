@@ -63,6 +63,8 @@ export type Build = {
     // Tiles of cliff, and of water, whose corners stay where they are
     cliffs: Uint8Array;
     heldCorners: Uint8Array;
+    // Tiles that are cliff whatever their slope comes to: a fall's seat
+    faces: Uint8Array;
     // Those held only until the ground's settled, not against the limit on north faces
     heldForNow: number[];
     // Ground you can get to from the spawn, as far as cliffs go: anything else stays empty
@@ -79,8 +81,9 @@ export type Build = {
     fences?: PlacedFence[];
 };
 
-// The water as painted: repainted when a ford cuts through it
-export type WaterPaint = { field: Float32Array; tiles: Uint8Array };
+// The water as painted: repainted when a ford cuts through it. dry is tiles it stays off, for
+// the ends of bridges.
+export type WaterPaint = { field: Float32Array; tiles: Uint8Array; dry?: Uint8Array };
 
 export function pick<T>(rng: Rng, list: T[]): T {
     return list[Math.floor(rng() * list.length)];

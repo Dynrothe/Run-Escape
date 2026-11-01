@@ -2,7 +2,7 @@ import { Ground } from "./Ground";
 import { BIOMES, BiomeDef } from "./biomes";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
 import { dressGround } from "./dress";
-import { placeFallPools, placeFalls } from "./falls";
+import { getFallDrop, placeFallPools, placeFalls } from "./falls";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
 import {
     LandformBounds,
@@ -37,6 +37,8 @@ import {
     dressCliffs,
     finishHeights,
     getSnowLine,
+    keepOffLava,
+    levelLava,
     paintLava,
     paintRock,
     placeCaves,
@@ -45,11 +47,13 @@ import { createNoise, createRng, distanceTo } from "./noise";
 import { PathFinder, Point, addPathToField, smoothPath } from "./paths";
 import { PrefabKit } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
+import { RESERVE_WALL } from "./reservations";
 import {
     MAX_BANK,
     createRivers,
     createWaterFields,
     createWaterLevels,
+    getWaterDrops,
     holdWater,
     placeWaterfalls,
     riverCentre,
@@ -77,7 +81,7 @@ import {
     placeWaterPieces,
     placeWaymarkers,
 } from "./structures";
-import { limitSlope } from "./terrain";
+import { limitFaces } from "./terrain";
 import { connectTown, createPace, createTownFade, getTownPaving } from "./townPlan";
 import { WalledTown, getPaving, placeTownWalls } from "./townWalls";
 import { placeVignettes } from "./vignettes";
@@ -126,6 +130,12 @@ const HILL_STONES = 0.34;
 
 export type { RoadLine };
 
+// A field of crops: level ground, unless a recipe says it's meant to slope
+export type PlacedField = TileRect & { slopes?: boolean };
+
+// A road that's shut on purpose, on these tiles, and what shows it in the world
+export type ClosedRoad = TileRect & { shownBy: "gate" | "rubble" | "broken end" };
+
 // A map, and what check-maps.ts needs to hold it to the rules
 export type GeneratedMap = {
     grid: TileGrid;
@@ -143,6 +153,12 @@ export type GeneratedMap = {
     falls: Point[];
     // Rivers' own
     waterfalls: Point[];
+    // The tiles of water that drop at a fall, which are the only ones that can tilt
+    waterDrops?: TileRect[];
+    fields?: PlacedField[];
+    closedRoads?: ClosedRoad[];
+    // Towns' squares: paved, with things standing on them on purpose
+    squares?: TileRect[];
     // Only the generator's towns: a hand-made map's own wall is its own business
     walled?: WalledTown[];
     // Fences that are part of a building's plot or a piece
@@ -460,7 +476,8 @@ function layFord(build: Build, path: number[], water: WaterPaint): void {
         }
     }
     ground.clearOverlay(water.tiles);
-    water.tiles = ground.paintField(water.field, getWaterOverlay(build, water.tiles), true);
+    const overlay = getWaterOverlay(build, water.tiles);
+    water.tiles = ground.paintField(water.field, overlay, true, water.dry);
     blockSteepGround(build);
     ground.grid.locs = ground.grid.locs.filter(
         (loc) =>
@@ -557,6 +574,7 @@ function createBuild(settings: GeneratorSettings, context: BuildContext): Build 
         terrain: relief.terrain,
         cliffs: new Uint8Array(sizeX * sizeY),
         heldCorners: new Uint8Array(corners.x * corners.y),
+        faces: new Uint8Array(sizeX * sizeY),
         heldForNow: [],
         mainland: new Uint8Array(sizeX * sizeY).fill(1),
         tileHeights: new Float32Array(sizeX * sizeY),
@@ -582,29 +600,40 @@ export function generateMapDetail(
     const toSea = distanceTo(seaTiles, sizeX, sizeY, 8);
     const toFresh = distanceTo(freshTiles, sizeX, sizeY, MAX_BANK);
     sinkSea(build, toSea);
-    const levels = createWaterLevels(build, rivers, fields.pools, fields.fresh, fields.flood);
-    sinkFresh(build, toFresh, levels);
+    const levels = createWaterLevels(
+        build,
+        rivers,
+        fields.pools,
+        fields.fresh,
+        fields.flood,
+        seaTiles,
+    );
+    sinkFresh(build, toFresh, levels, toSea);
 
     const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
     const waterTiles = paintWater(build, waterField);
-    const water: WaterPaint = { field: waterField, tiles: waterTiles };
-    holdWater(build, seaTiles);
-    holdWater(build, freshTiles);
+    const dry = new Uint8Array(waterTiles.length);
+    const water: WaterPaint = { field: waterField, tiles: waterTiles, dry };
+    holdWater(build, waterTiles);
 
     if (hasRelief(settings)) {
         build.cliffs.set(shapeCliffs(terrain, settings.walkSlope));
     } else {
-        limitSlope(terrain.height, corners.x, corners.y, settings.walkSlope * 0.92);
+        const slope = settings.walkSlope * 0.92;
+        limitFaces(terrain.height, corners.x, corners.y, slope, build.heldCorners);
     }
     const passes = cutPasses(build);
     refreshTileHeights(build);
     paintFloors(build, toSea);
 
     const bridgeZone = new Uint8Array(waterTiles.length);
-    const roads = new RoadNetwork(build, waterTiles, bridgeZone);
+    const roads = new RoadNetwork(build, waterTiles, bridgeZone, dry);
+    keepOffLava(build, roads.avoid);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
-        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone) : [];
+        settings.roads > 0
+            ? placeBridges(build, rivers, waterTiles, bridgeZone, dry, roads.avoid)
+            : [];
     // The flow every place goes through: see the guide. Site, walls and gates, main streets and
     // square, in planTowns. The roads between places come next, because gates are where they
     // arrive. Then plots, lanes, set pieces, and at the end of all this foliage and details.
@@ -627,14 +656,17 @@ export function generateMapDetail(
     const landmarks = placeSetPieces(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
     const falls = placeFallPools(build, water);
+    levelLava(build);
     const walled = plans.plans.flatMap(({ wall }) => (wall ? [wall] : []));
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
+    roads.pinTiles(passes);
     terrain.smoothPins(ROAD_SMOOTHING);
     // After the roads are graded, so that they don't have levels to fight, and settling then
     // brings the ground to them
     flattenLand(terrain, build.cliffs, build.heldCorners, settings.flatness, settings.walkSlope);
     finishHeights(build);
+    roads.easeTiles(passes);
     blockSteepGround(build);
 
     const paving = (x: number, y: number) =>
@@ -655,7 +687,7 @@ export function generateMapDetail(
     placeBoundary(build, roadTiles);
     placeTownWalls(build, walled);
     placeWaymarkers(build, roads);
-    landmarks.push(...placeWaterPieces(build, waterTiles));
+    landmarks.push(...placeWaterPieces(build, waterTiles, bridgeZone));
     scatter(build, waterTiles);
     const fords = connectGround(build, water, roads.offLimits);
     dressGround(ground, {
@@ -663,11 +695,19 @@ export function generateMapDetail(
         density: settings.dressing,
         biomeDecor: (x, y) => biomeAt(x, y).decor,
     });
+    // What's meant to stand on a road: a gate's own parts, and what's in a square
+    roads.clearLocs(roadTiles, (x, y) => {
+        const onSquare = roads.squares.some(
+            (rect) => x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1,
+        );
+        return onSquare || ground.claims.ranks[ground.tile(x, y)] === RESERVE_WALL;
+    });
     return {
         grid: ground.grid,
         footprint: ground.footprint,
         roadTiles,
         lines: [...roads.lines, ...fords],
+        squares: roads.squares,
         buildings,
         landmarks,
         passes,
@@ -677,6 +717,7 @@ export function generateMapDetail(
         walled,
         fences: build.fences,
         clippedRoads: roads.clipped,
+        waterDrops: [...getWaterDrops(build, rivers), ...falls.map((fall) => getFallDrop(fall))],
         waterfalls: rivers.flatMap((river) =>
             river.drops.map(({ along }) => {
                 const across = riverCentre(river, along);

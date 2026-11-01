@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
 import { BIOMES, BiomeId } from "./biomes";
-import { findReachable, findStranded, getCollisionFlags } from "./collision";
+import { WATER_OVERLAYS } from "./catalogue";
+import { TileRect, findReachable, findStranded, getCollisionFlags } from "./collision";
 import { createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
     DEFAULT_SETTINGS,
@@ -20,6 +21,7 @@ import {
     encodeHeightmap,
     formatSettings,
     generateMap,
+    generateMapDetail,
     generatedRecipe,
     getGeneratedArena,
     getGeneratedSpawn,
@@ -61,6 +63,10 @@ function settings(overrides: Partial<GeneratorSettings>): GeneratorSettings {
 }
 
 describe("generateMap", () => {
+    // These run back to back with nothing to wait for, and vitest's worker gives up on the main
+    // process after a minute without a turn to hear from it
+    afterEach(() => new Promise((resolve) => setTimeout(resolve)));
+
     it("makes the same map from the same seed and settings", () => {
         const a = generateMap(settings({ seed: 5, rivers: 1 }), context);
         const b = generateMap(settings({ seed: 5, rivers: 1 }), context);
@@ -317,6 +323,48 @@ describe("generateMap", () => {
         const count = (overrides: Partial<GeneratorSettings>) =>
             generateMap(settings(overrides), context).locs.filter((loc) => loc.type === 10).length;
         expect(count({ trees: 1, rocks: 1 })).toBeGreaterThan(count({ trees: 0, rocks: 0 }));
+    });
+
+    // Water tiles with corners off level, but for the drops at falls
+    const countTilted = (overrides: Partial<GeneratorSettings>) => {
+        const map = generateMapDetail(settings(overrides), context);
+        const { grid, waterDrops = [] } = map;
+        const { heights, overlays } = grid.levels[0];
+        const cornersX = grid.sizeX + 1;
+        const inDrop = (x: number, y: number) =>
+            waterDrops.some(
+                ({ x0, y0, x1, y1 }: TileRect) => x >= x0 && y >= y0 && x <= x1 && y <= y1,
+            );
+        let tilted = 0;
+        for (let y = 0; y < grid.sizeY; y++) {
+            for (let x = 0; x < grid.sizeX; x++) {
+                const at = x + y * cornersX;
+                const round = [at, at + 1, at + cornersX, at + cornersX + 1].map(
+                    (corner) => heights[corner],
+                );
+                const flat = Math.max(...round) === Math.min(...round);
+                if (WATER_OVERLAYS.has(overlays[x + y * grid.sizeX]) && !flat && !inDrop(x, y)) {
+                    tilted++;
+                }
+            }
+        }
+        return { tilted, drops: waterDrops.length };
+    };
+
+    it.each<Partial<GeneratorSettings>>([
+        { rivers: 2, ponds: 4, hills: 1, squaresX: 3, squaresY: 3 },
+        { rivers: 2, lakes: 3, island: 0.3 },
+        { mountains: 0.8, rivers: 2, peakHeight: 240, squaresX: 3, squaresY: 3 },
+        { waterLevel: 0.6, rivers: 1, ponds: 4 },
+    ])("lays water level, with only falls between levels: %o", (overrides) => {
+        expect(countTilted(overrides).tilted).toBe(0);
+    });
+
+    it("runs a river with no falls at one level, end to end", () => {
+        const flat = { mountains: 0.8, rivers: 1, peakHeight: 240, squaresX: 3, squaresY: 3 };
+        const { tilted, drops } = countTilted({ ...flat, waterfalls: 0, cliffFalls: 0 });
+        expect(tilted).toBe(0);
+        expect(drops).toBe(0);
     });
 
     const CASES: Partial<GeneratorSettings>[] = [

@@ -796,6 +796,7 @@ function placeDrownedWalls(build: Build, radius: number, x: number, y: number): 
 function isAllWater(
     build: Build,
     water: Uint8Array,
+    bridgeZone: Uint8Array,
     x: number,
     y: number,
     sizeX: number,
@@ -804,7 +805,8 @@ function isAllWater(
     const { ground } = build;
     for (let ty = y; ty < y + sizeY; ty++) {
         for (let tx = x; tx < x + sizeX; tx++) {
-            if (!ground.inside(tx, ty) || !water[ground.tile(tx, ty)]) {
+            const i = ground.tile(tx, ty);
+            if (!ground.inside(tx, ty) || !water[i] || bridgeZone[i]) {
                 return false;
             }
         }
@@ -814,7 +816,11 @@ function isAllWater(
 
 // Wrecks close in to the shore, and drowned towns further out, wherever there's water
 // for them: on heights that won't move, so there are no plots
-export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[] {
+export function placeWaterPieces(
+    build: Build,
+    water: Uint8Array,
+    bridgeZone: Uint8Array,
+): PlacedPiece[] {
     const { settings, rng, arena, biomeAt, sizeX, sizeY } = build;
     const placed: PlacedPiece[] = [];
     const wanted = Math.round(settings.landmarks * settings.squaresX * settings.squaresY);
@@ -846,7 +852,7 @@ export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[]
         const clear = placed.every(
             (other) => Math.hypot(other.x - x, other.y - y) > other.sizeX + size.sizeX,
         );
-        if (!clear || !isAllWater(build, water, x, y, size.sizeX, size.sizeY)) {
+        if (!clear || !isAllWater(build, water, bridgeZone, x, y, size.sizeX, size.sizeY)) {
             continue;
         }
         if (piece.kind === "wreck") {

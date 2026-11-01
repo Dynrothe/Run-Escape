@@ -180,6 +180,8 @@ export class Terrain {
     private readonly pins: Float32Array;
     // How far each pin is from the middle of what pinned it, so that the nearest wins
     private readonly pinDistance: Float32Array;
+    // Corners nothing can pin from now on: water's, which everything else has to meet
+    private readonly locked: Uint8Array;
 
     constructor(
         readonly cornersX: number,
@@ -189,6 +191,7 @@ export class Terrain {
         this.height = new Float32Array(count);
         this.pins = new Float32Array(count).fill(NaN);
         this.pinDistance = new Float32Array(count).fill(Infinity);
+        this.locked = new Uint8Array(count);
     }
 
     corner(x: number, y: number): number {
@@ -240,10 +243,28 @@ export class Terrain {
             return;
         }
         const at = this.corner(x, y);
-        if (distance < this.pinDistance[at]) {
+        if (distance < this.pinDistance[at] && !this.locked[at]) {
             this.pins[at] = height;
             this.pinDistance[at] = distance;
         }
+    }
+
+    // Stops a corner being pinned from here on. One that's pinned already stays pinned.
+    lock(at: number): void {
+        this.locked[at] = 1;
+    }
+
+    unlock(at: number): void {
+        this.locked[at] = 0;
+    }
+
+    // Pinned by something that doesn't give way, as a plot does
+    isHardPinned(x: number, y: number): boolean {
+        return this.pinDistance[this.corner(x, y)] <= 0;
+    }
+
+    isLocked(at: number): boolean {
+        return this.locked[at] !== 0;
     }
 
     pinRect(
@@ -274,7 +295,7 @@ export class Terrain {
             for (let y = 1; y + 1 < cornersY; y++) {
                 for (let x = 1; x + 1 < cornersX; x++) {
                     const at = x + y * cornersX;
-                    if (Number.isNaN(from[at]) || pinDistance[at] === 0) {
+                    if (Number.isNaN(from[at]) || pinDistance[at] <= 0) {
                         continue;
                     }
                     let sum = 0;

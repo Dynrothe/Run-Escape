@@ -127,6 +127,7 @@ function isWallGround(build: Build, roads: RoadNetwork, x: number, y: number): b
         !cliffs[i] &&
         mainland[i] !== 0 &&
         !roads.bridgeZone[i] &&
+        !roads.avoid[i] &&
         !ground.reserved[i] &&
         !ground.claims.ranks[i] &&
         Math.hypot(x - spawn.x, y - spawn.y) > SPAWN_CLEAR

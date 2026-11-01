@@ -185,15 +185,22 @@ export class Ground {
         };
     }
 
-    // Takes an overlay off tiles, and what blocked them
-    clearOverlay(tiles: Uint8Array): void {
+    // Takes an overlay off tiles, as a mask or just one, and what blocked them
+    clearOverlay(tiles: Uint8Array | number): void {
         const { overlays, shapes, rotations, flags } = this.level0;
+        const clear = (i: number) => {
+            overlays[i] = 0;
+            shapes[i] = 0;
+            rotations[i] = 0;
+            flags[i] &= ~TILE_BLOCKED;
+        };
+        if (typeof tiles === "number") {
+            clear(tiles);
+            return;
+        }
         for (let i = 0; i < tiles.length; i++) {
             if (tiles[i]) {
-                overlays[i] = 0;
-                shapes[i] = 0;
-                rotations[i] = 0;
-                flags[i] &= ~TILE_BLOCKED;
+                clear(i);
             }
         }
     }

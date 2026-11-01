@@ -270,6 +270,7 @@ function canPave(
         !cliffs[i] &&
         mainland[i] !== 0 &&
         !roads.bridgeZone[i] &&
+        !roads.avoid[i] &&
         !ground.footprint[i] &&
         !ground.reserved[i] &&
         Math.abs(terrain.getHeight(x, y) - height) <= rise
@@ -493,7 +494,7 @@ function levelSite(build: Build, toRough: Float32Array, rect: TileRect, height: 
             const past = Math.max(rect.x0 - x, x - rect.x1, rect.y0 - y, y - rect.y1, 0);
             const rough = ground.inside(x, y) ? toRough[ground.tile(x, y)] : 0;
             const share = smoothstep(1 - past / LEVEL_FADE) * smoothstep(rough / LEVEL_FADE);
-            if (!heldCorners[at]) {
+            if (!heldCorners[at] && !terrain.isLocked(at)) {
                 terrain.height[at] = lerp(terrain.height[at], height, share);
             }
         }

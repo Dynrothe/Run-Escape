@@ -1,5 +1,5 @@
 import { Ground } from "./Ground";
-import { BIOMES, CLIFF_FALL, SNOW_ROCK, WATERFALL } from "./biomes";
+import { BIOMES, CLIFF_FALL, LOW_FALL, SNOW_ROCK, WATERFALL } from "./biomes";
 import { CITY_WALLS, placeCityWall } from "./cityWalls";
 import { REEDS } from "./dress";
 import { FLOOR_KITS } from "./floorKits";
@@ -46,6 +46,7 @@ function build(context: BuildContext): TileGrid {
     const rows = Math.ceil(defs.length / 8);
     ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * rows }, 3, 2);
     ground.place({ id: CLIFF_FALL, type: 10, rotation: 0, level: 0, x: 8, y: PLOT * rows }, 3, 3);
+    ground.place({ id: LOW_FALL, type: 10, rotation: 0, level: 0, x: 12, y: PLOT * rows }, 3, 3);
     SNOW_ROCK.pebbles.forEach((id, i) => {
         ground.place({ id, type: 22, rotation: 0, level: 0, x: 24 + i, y: PLOT * rows }, 1, 1);
     });

@@ -1,11 +1,13 @@
 import type { RunEventDef } from "../../content/types";
 import { RUN_LENGTH, paced } from "../../content/waves";
 import { Ground } from "../Ground";
-import { CLIFF_FALL, WATERFALL } from "../biomes";
-import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
+import { WATERFALL } from "../biomes";
+import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { RockKit, dressGround, dressRock, paintRockFloor } from "../dress";
+import { FALL_WIDTH, forSeatCorners, getFallDrop, getFallSeat } from "../falls";
 import { TILE_BLOCKED, TileGrid } from "../format";
 import { GeneratedMap } from "../generator";
+import { lerp } from "../mapBuild";
 import { Rng, createNoise, createRng, smoothField } from "../noise";
 import { addPathToField, smoothPath } from "../paths";
 import { rotatePrefab } from "../prefab";
@@ -356,6 +358,9 @@ const ROADS: { shard: number; points: Point[]; halfWidth: number; broken?: boole
 // The river, north to south off the Glasswood's edge, with a lake at the head of it. Its
 // straight is where the bridge goes.
 const RIVER_LEVEL = 146;
+// Where a bridge's deck starts and stops, in its stamp's corners
+const DECK_WEST = 4;
+const DECK_EAST = 15;
 const BRIDGE_ROW = 104;
 const RIVER_X = 270;
 const RIVER: Point[] = [
@@ -643,6 +648,8 @@ type BridgeSite = {
     y: number;
     height: number;
     bankHeight: number;
+    // Over the river, rather than the void
+    overWater?: boolean;
 };
 
 function makeLand(map: Map3): void {
@@ -738,23 +745,6 @@ function shapeGround(map: Map3, plots: Plot[]): void {
     // Flat where the Heartkeep stands
     terrain.pinRect(156, 158, 72, 78, KEEP_HEIGHT);
 
-    // The bridges' own ground. The deck's stored over what's under it, so that has to stay
-    // as it was in the prefab, even over the void, where it isn't drawn.
-    for (const bridge of map.bridges) {
-        const cornersOfStamp = bridge.prefab.sizeX + 1;
-        for (let cy = 0; cy <= bridge.prefab.sizeY; cy++) {
-            for (let cx = 0; cx <= bridge.prefab.sizeX; cx++) {
-                const own = bridge.prefab.levels[0].heights[cx + cy * cornersOfStamp];
-                const onDeck = cx >= 4 && cx <= 15;
-                const rise = onDeck ? own - bridge.bankHeight : 0;
-                terrain.pin(bridge.x + cx, bridge.y + cy, bridge.height + rise);
-                if (land[bridge.x + cx + (bridge.y + cy) * CORNERS] <= 0) {
-                    map.spanCorners[bridge.x + cx + (bridge.y + cy) * CORNERS] = 1;
-                }
-            }
-        }
-    }
-
     // Water stands level, with its corners held
     const water = new Float32Array(count).fill(-4);
     const riverLine = smoothLine(RIVER);
@@ -788,6 +778,38 @@ function shapeGround(map: Map3, plots: Plot[]): void {
             }
         }
     }
+    // The bridges' own ground. A deck's stored over what's under it: over the void that stays as
+    // it was in the prefab, where it isn't drawn, and over the river it's stored again once the
+    // heights are done (reseatDecks). Water stays level, and a bank runs level to the deck's ends.
+    for (const bridge of map.bridges) {
+        const cornersOfStamp = bridge.prefab.sizeX + 1;
+        for (let cy = 0; cy <= bridge.prefab.sizeY; cy++) {
+            for (let cx = 0; cx <= bridge.prefab.sizeX; cx++) {
+                const x = bridge.x + cx;
+                const y = bridge.y + cy;
+                const at = x + y * CORNERS;
+                const own = bridge.prefab.levels[0].heights[cx + cy * cornersOfStamp];
+                const onDeck = cx >= DECK_WEST && cx <= DECK_EAST;
+                const rise = onDeck && !bridge.overWater ? own - bridge.bankHeight : 0;
+                const wet =
+                    bridge.overWater &&
+                    cx > DECK_WEST &&
+                    (water[at] > 0 ||
+                        water[at + 1] > 0 ||
+                        water[at - 1] > 0 ||
+                        water[at + CORNERS] > 0 ||
+                        water[at - CORNERS] > 0);
+                if (!wet) {
+                    // Ahead of the water's own margin
+                    terrain.pin(x, y, bridge.height + rise, -1);
+                }
+                if (land[at] <= 0) {
+                    map.spanCorners[at] = 1;
+                }
+            }
+        }
+    }
+
     map.waterField.set(water);
 
     // Causeways, from the height of one end to the other
@@ -1017,8 +1039,15 @@ function paintWays(map: Map3): void {
         }
     }
 
-    // The river and lake, and the blood
-    const waterTiles = ground.paintField(map.waterField, WATER, true);
+    // The river and lake, and the blood. A deck comes down on its banks, so no water at its ends.
+    const deckEnds = new Uint8Array(SIZE * SIZE);
+    for (const { x, y, prefab, overWater } of map.bridges) {
+        for (let ty = y - 1; ty <= y + prefab.sizeY && overWater; ty++) {
+            deckEnds[x + DECK_WEST - 1 + ty * SIZE] = 1;
+            deckEnds[x + DECK_WEST + ty * SIZE] = 1;
+        }
+    }
+    const waterTiles = ground.paintField(map.waterField, WATER, true, deckEnds);
     map.water.set(waterTiles);
     const pool = BLOOD_POOL;
     const blood = new Float32Array(count);
@@ -1123,6 +1152,9 @@ const TERRACE: Point[] = [
 const TERRACE_RISE = 38;
 const TERRACE_RAMP = { y: 161, halfWidth: 3, x0: 279, x1: 293 };
 const FALL = { x: 285, y: 147 };
+const FALL_SEAT = getFallSeat(RIVER_LEVEL, 208)!;
+// Where the river runs off the rock's edge
+const RIVER_EDGE: TileRect = { x0: 260, y0: 68, x1: 268, y1: 80 };
 
 function raiseTerrace(map: Map3): void {
     const { terrain, land } = map;
@@ -1139,6 +1171,11 @@ function raiseTerrace(map: Map3): void {
             terrain.height[at] += TERRACE_RISE * (onRamp ? up : Math.min(inside / 1.2, 1));
         }
     }
+    // The fall's seat, cut into its south edge
+    forSeatCorners(FALL.x, FALL.y, FALL_SEAT, FALL_WIDTH, (x, y, seated, out) => {
+        const at = x + y * CORNERS;
+        terrain.height[at] = lerp(seated, terrain.height[at], out);
+    });
 }
 
 // A field that's above 0 where the ground's over a height, near the keep
@@ -1455,7 +1492,7 @@ function placeSetPieces(map: Map3): void {
     }
 
     // The fall off the terrace, into the lake
-    placeProp(map, CLIFF_FALL, 3, FALL.x, FALL.y);
+    placeProp(map, FALL_SEAT.id, FALL_WIDTH, FALL.x, FALL.y);
 
     // What's on the bits that broke off
     for (const [x, y, , , , prop] of ISLETS) {
@@ -1772,6 +1809,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
                 y: BRIDGE_ROW - 3,
                 height: RIVER_LEVEL + def.bankHeight,
                 bankHeight: def.bankHeight,
+                overWater: true,
             },
             {
                 prefab,
@@ -1804,6 +1842,18 @@ function buildDetail(context: BuildContext): GeneratedMap {
             keepUnderlays: true,
             keepHeights: true,
         });
+        // A deck stands where it stood in the prefab, over whatever's under it now
+        const stampCorners = prefab.sizeX + 1;
+        const decks = ground.grid.levels[1].heights;
+        for (let cy = 0; cy <= prefab.sizeY && bridge.overWater; cy++) {
+            for (let cx = 0; cx <= prefab.sizeX; cx++) {
+                const x = bridge.x + cx;
+                const y = bridge.y + cy;
+                const own = prefab.levels[0].heights[cx + cy * stampCorners];
+                const deck = bridge.height - bridge.bankHeight + own + decks[x + y * CORNERS];
+                decks[x + y * CORNERS] = Math.max(deck - ground.getHeight(x, y), 0);
+            }
+        }
     }
 
     // Ruins in the Heartkeep's yard
@@ -1875,6 +1925,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
         caves: [],
         falls: [FALL],
         waterfalls: RIVER_DROPS,
+        waterDrops: [RIVER_EDGE, getFallDrop(FALL)],
     };
 }
 
