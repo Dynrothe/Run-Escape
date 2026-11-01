@@ -84,6 +84,7 @@ import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, Unlocks, isGameStart } from "./coop/protocol";
+import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -702,16 +703,9 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
-    // Downloads the save as a file
+    // Gives the player the save as a file
     exportSave(): void {
-        const blob = new Blob([exportSave(this.save)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "run-escape-save.json";
-        link.click();
-        // Once the download has its copy
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        saveFile("run-escape-save.json", exportSave(this.save), "application/json");
     }
 
     // Swaps in an imported save in place of this one
