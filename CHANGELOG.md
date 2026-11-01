@@ -9,6 +9,8 @@ the version in the corner).
 
 - Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
   full screen.
+- Hard mode on every map, once you've beaten it (fun maps from the start): more enemies, tougher and
+  harder hitting, twice the elites, bosses that enrage sooner and attack faster, and 25% more coins.
 
 ### Fixed
 

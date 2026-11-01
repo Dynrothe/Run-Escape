@@ -280,7 +280,8 @@ src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
             of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
-            (what each map's tasks bring in); quests (what each asks for and pays)
+            (what each map's tasks bring in); quests (what each asks for and pays); hard (hard
+            mode's numbers, solo only for now: rooms and GameStart don't carry it yet)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
   core/     the game in plain TypeScript (no DOM), tested with vitest
     Sim.ts            fixed 20ms tick: movement, enemies, spawning, weapons, pickups, power-ups,
