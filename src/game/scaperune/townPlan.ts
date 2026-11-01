@@ -130,6 +130,9 @@ const STREET_RISE = 40;
 // Tiles past the inside of a wall that its street runs up to
 const STREET_PAST_WALL = 2;
 
+// Tiles a square keeps off a bridge's road, which needs them to swing away
+const BRIDGE_ROOM = 10;
+
 // Tiles past a street's half width that it stops short of what stopped it
 const STREET_SHORT = 2;
 
@@ -243,6 +246,24 @@ function canPave(
 
 type TownSquare = { x0: number; y0: number; x1: number; y1: number; height: number };
 
+// Whether a square leaves a bridge's road room to swing away, past the straight it's kept clear for
+function isClearOfBridges(
+    roads: RoadNetwork,
+    { ground }: Build,
+    x0: number,
+    y0: number,
+    { squareX, squareY }: KindDef,
+): boolean {
+    for (let y = y0 - BRIDGE_ROOM; y <= y0 + squareY + BRIDGE_ROOM; y++) {
+        for (let x = x0 - BRIDGE_ROOM; x <= x0 + squareX + BRIDGE_ROOM; x++) {
+            if (ground.inside(x, y) && roads.bridgeZone[ground.tile(x, y)]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 function findSquare(
     build: Build,
     roads: RoadNetwork,
@@ -282,7 +303,8 @@ function findSquare(
                     y0 >= inside.y0 &&
                     x0 + def.squareX <= inside.x1 &&
                     y0 + def.squareY <= inside.y1);
-            const height = within ? fits(x0, y0) : undefined;
+            const height =
+                within && isClearOfBridges(roads, build, x0, y0, def) ? fits(x0, y0) : undefined;
             if (height !== undefined) {
                 return { x0, y0, x1: x0 + def.squareX, y1: y0 + def.squareY, height };
             }
