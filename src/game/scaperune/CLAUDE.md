@@ -30,6 +30,9 @@ The recipe runs once, on the main thread, the first time the map's played. `Game
 | `prefab.ts`      | cut a rectangle out of the real world, turn it                                                            |
 | `prefabs.ts`     | the named rectangles: buildings from all over the world                                                   |
 | `biomes.ts`      | what each kind of ground is made of, and its rock                                                         |
+| `catalogue.ts`   | locs that read wrong outside what they were built for                                                     |
+| `dress.ts`       | rock's colour and what's on it, and the small things on all the ground                                    |
+| `floorKits.ts`   | what real ground has on it, by floor                                                                      |
 | `generator.ts`   | the random generator: the order things happen, scatter, reachability                                      |
 | `mapBuild.ts`    | what's kept while a map's built, and what its parts share                                                 |
 | `rivers.ts`      | rivers, lakes and the sea: where they go, how high they stand                                             |
@@ -92,8 +95,9 @@ The same seed and settings always give the same map. It's generated at load from
 
 What it does, in order: the land's shape (`landforms.ts`), rivers down its valleys, sea and lakes, cliffs, passes,
 floors, bridges, main roads, buildings with their roads, set pieces, ruins, pools for waterfalls, town squares, then the
-heights are finished (`gradeRoads`, `settle`), what's too steep is blocked, then rock, the falls, the boundary, town
-walls, waymarkers, what stands in water, scatter, and reachability. Anything it can't connect gets blocked (see below).
+heights are finished (`gradeRoads`, `settle`), what's too steep is blocked, then rock, the falls, what's on the rock, the
+boundary, town walls, waymarkers, what stands in water, scatter, reachability, and last the ground's dressing. Anything it
+can't connect gets blocked (see below).
 
 **Boundaries.** Only `sea` makes an island. With the others, land runs on past the arena on all sides, scattered
 out to the edge of the margin, so the world looks like it carries on. The arena's edge is still what stops you,
@@ -352,6 +356,18 @@ into world tiles.
 - Look at what a kind of ground is made of with `find-prefabs.ts` on a real square, then use those ids.
   That's how `biomes.ts` was made.
 
+**Dressing.** Real ground isn't bare: 26 to 39 small things per 100 tiles over whole regions, and 23 to 96 on roads.
+`dressGround` runs last, on a seed of its own, and puts down what the floor underfoot has in the real world (`FLOOR_KITS`,
+keyed `o14` for an overlay and `u48` for an underlay), falling back on a biome's `decor` on floors the world doesn't use.
+It's all type 22 with a `clipType` other than 1, so that it can't block. `dressing` is its setting. Land beside water gets
+stones, and fresh water beside land gets reeds. A hand-made map should paint rock with `paintRockFloor`, call `dressRock` on it,
+and call `dressGround` last.
+
+**The catalogue.** `BANNED_LOCS` in `catalogue.ts` is a list by hand, not a rule, because plenty of good outdoor locs are
+never placed on the surface. It holds boss arena floors, set pieces of ruins from instances, and sea rocks on land.
+`check-maps.ts` fails a map with any of them, and with blood that draws nothing or foam away from a fall. Shipped maps aren't
+held to it.
+
 ## Height
 
 Height's a layer of its own while a map's built: `Terrain` holds a float per corner, and only the finished heights go
@@ -360,6 +376,12 @@ into the grid. Nothing in the generator writes heights directly. Whatever needs 
 walkable. That one idea does cuttings, embankments, plots and the ground round bridges. On a tie between two pins,
 the first one stays, so a late pin can quietly lose. A pin also beats a held corner.
 
+**Two things decide whether a loc is safe to use**, and `model-bounds.ts` in `scripts/scaperune/research/` prints both:
+whether it's contoured (`contouredGround` is 0 or more), so that it bends to the ground, and how far its model reaches, which
+a footprint says nothing about. Nearly all real ground decoration is contoured, as are most walls. What isn't stands level,
+and shows its underside on the low side of a slope. Check a new loc with that and with `where.ts`, then run `trap-scan.ts`
+and `measure.ts` on the map.
+
 **The limits, measured:**
 
 | What            | Number                                                                                                       |
@@ -367,7 +389,7 @@ the first one stays, so a late pin can quietly lose. A pin also beats a held cor
 | A height        | 0 to 255, one byte, a step of 8 scene units. 1 reads as 0.                                                   |
 | Tallest ground  | 255 is 2040 scene units, 16 tiles. Real peaks use it (Trollheim, Cam Torum)                                  |
 | What gets drawn | `MapManager` culls squares with a box 18.75 tiles up: all of it fits                                         |
-| Real slopes     | up to 44+ a tile, blocked, with a rock overlay; `getTileSlope` measures                                      |
+| Real slopes     | 99.96% of tiles are 80 a tile or under; `getTileSlope` measures, and `STEEPEST_FACE` caps ours at 72         |
 | Tiles           | two triangles, split south-east to north-west                                                                |
 | Light           | from the south-west. 11 to 181 against 84 on the flat, so it can't overflow; camera-facing slopes are bright |
 | Actors          | stand on `getHeight` at their middle. They don't tilt.                                                       |
@@ -393,6 +415,10 @@ Cliffs are picked in `shapeCliffs`: tiles over `walkSlope`, without specks, and 
 slopes that are left are eased under the limit, so all the height that's lost there goes into the cliffs, and a
 hillside comes out as ground you can walk on and cliffs you can't, with nothing in between. **A blocked tile always
 looks it**: everything blocked gets the rock overlay.
+
+**Faces.** `finishHeights` takes the tops off anything over `STEEPEST_FACE` in any direction (`limitFaces`), and brings
+ground up to a corner held high (`liftFaces`). Only what can't move is left over the bar: a bridge's own heights, a fall in
+a river, and a road pinned where it meets water.
 
 **Reachability.** `cutPasses` cuts a graded pass to any piece of ground over `MIN_PASS_PIECE` the cliffs cut off, before
 roads go down, so roads use them. Anything smaller stays out of reach, which is fine on top of a mesa. Nothing's built
@@ -533,6 +559,11 @@ Only rotation is possible. The format has no mirror.
    `game.cameraRig.pitch`: from above, hills barely show.
 4. **Tests**: `npx vitest run src/game/scaperune`.
 5. **A bot run** shows it plays at all: `DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1`.
+
+`check-maps.ts` also holds every map but shipped ones to how it looks (`checkLook`), with the same measures the real world
+was read with: decoration on land and roads, the steepest tile, no textures on rock, what stands on steep ground, rock and
+decoration at a cliff's foot, and how far you can see. It prints a line a map of what's only worth knowing, like objects a
+screen.
 
 The generator guarantees reachability: it floods from the spawn over the same collision the game uses,
 lays a ford across anything big that's cut off, and blocks whatever's left. A hand-made recipe has no such
