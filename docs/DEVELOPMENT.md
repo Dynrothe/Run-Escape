@@ -195,6 +195,8 @@ src/game/
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
+server/     SpacetimeDB Rust module: anti-cheat, cloud persistence, leaderboards, and Authz RBAC
+            (see docs/AUTHENTICATION.md for setup and OAuth configuration)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per pass
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one

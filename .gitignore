@@ -26,3 +26,12 @@ yarn-debug.log*
 yarn-error.log*
 
 caches/
+
+# Rust & SpacetimeDB
+target/
+server/target/
+.spacetime/
+server/.spacetime/
+
+# temp stuff
+tmp/

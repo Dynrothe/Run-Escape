@@ -396,16 +396,22 @@ export type SimOptions = {
 
 export type RunResult = {
     mapId: string;
+    characterId: string;
+    seed: number;
     endless: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
     seconds: number;
+    ticks: number;
     level: number;
+    xp: number;
     kills: number;
     coins: number;
+    casketsOpened: number;
     // Enemy ids of the bosses killed, in order
     bossesKilled: string[];
+    bossKillTicks: number[];
     // The gear that came out of caskets (as found, before the Armoury's
     // upgrades), for the Armoury
     gearFound: string[];
@@ -523,6 +529,7 @@ export class Sim {
     // Enemy id -> times killed (a boss that rose again as its second form's)
     enemyKills: Record<string, number> = {};
     bossesKilled: string[] = [];
+    bossKillTicks: number[] = [];
     // Gear out of caskets this run, rerolled away or not
     readonly gearFound = new Set<string>();
     // Collection log items found (see trophies.ts)
@@ -722,16 +729,23 @@ export class Sim {
     }
 
     getResult(): RunResult {
+        const ticks = this.endTick >= 0 ? this.endTick : this.tick;
         return {
             mapId: this.map.id,
+            characterId: this.characterId,
+            seed: this.seed,
             endless: this.endless,
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
+            ticks,
             level: this.level,
+            xp: Math.floor(this.xp),
             kills: this.kills,
             coins: this.coins,
+            casketsOpened: this.casketsOpened,
             bossesKilled: [...this.bossesKilled],
+            bossKillTicks: [...this.bossKillTicks],
             gearFound: [...this.gearFound],
             evolutionsMade: [...this.evolutionsMade],
             trophies: [...this.trophies],
@@ -4369,6 +4383,7 @@ export class Sim {
         }
         if (enemy.boss) {
             this.bossesKilled.push(enemy.def.id);
+            this.bossKillTicks.push(this.tick);
             this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
             // A boss's glyph goes with it, rather than hanging about on the
             // victory screen

@@ -21,6 +21,7 @@ import {
     isEndlessRecord,
     isEndlessUnlocked,
     isMapUnlocked,
+    mergeSaves,
     migrateSave,
     recordRun,
     refundUpgrades,
@@ -420,6 +421,55 @@ describe("the Armoury", () => {
         // The Coif's line is two upgrades long
         expect(migrated.armoury).toEqual({ coif: 2 });
         expect(migrateSave({ version: 4, coins: 5 }).foundGear).toEqual([]);
+    });
+
+    test("mergeSaves merges local and remote progress safely", () => {
+        const local = createSave();
+        local.coins = 500;
+        local.totalCoins = 2000;
+        local.unlockedCharacters = ["warrior", "wizard", "ranger", "monk"];
+        local.unlockedItems = ["smoke_burst"];
+        local.foundGear = ["coif"];
+        local.armoury = { coif: 1 };
+        local.upgrades = { strength: 2 };
+        local.upgradesSpent = 1000;
+        local.endlessBest = { lumbridge: { round: 2, seconds: 1200 } };
+        local.mapVictories = { lumbridge: 1 };
+        local.victories = 1;
+        local.runs = 5;
+
+        const remote = createSave();
+        remote.coins = 1200;
+        remote.totalCoins = 4000;
+        remote.unlockedCharacters = ["warrior", "wizard", "ranger", "rogue"];
+        remote.unlockedItems = ["blood_burst"];
+        remote.foundGear = ["rune_boots"];
+        remote.armoury = { rune_boots: 1 };
+        remote.upgrades = { strength: 3, hitpoints: 1 };
+        remote.upgradesSpent = 2500;
+        remote.endlessBest = { lumbridge: { round: 3, seconds: 1800 }, barrows: { round: 1, seconds: 600 } };
+        remote.mapVictories = { lumbridge: 2, barrows: 1 };
+        remote.victories = 3;
+        remote.runs = 8;
+
+        const merged = mergeSaves(local, remote);
+        expect(merged.unlockedCharacters).toEqual(
+            expect.arrayContaining(["warrior", "wizard", "ranger", "monk", "rogue"]),
+        );
+        expect(merged.unlockedItems).toEqual(
+            expect.arrayContaining(["smoke_burst", "blood_burst"]),
+        );
+        expect(merged.foundGear).toEqual(
+            expect.arrayContaining(["coif", "rune_boots"]),
+        );
+        expect(merged.armoury).toEqual({ coif: 1, rune_boots: 1 });
+        expect(merged.upgrades).toEqual({ strength: 3, hitpoints: 1 });
+        expect(merged.endlessBest.lumbridge).toEqual({ round: 3, seconds: 1800 });
+        expect(merged.endlessBest.barrows).toEqual({ round: 1, seconds: 600 });
+        expect(merged.mapVictories).toEqual({ lumbridge: 2, barrows: 1 });
+        expect(merged.victories).toBe(3);
+        expect(merged.runs).toBe(8);
+        expect(merged.coins).toBeGreaterThanOrEqual(1200);
     });
 });
 
