@@ -150,6 +150,7 @@ import {
 } from "./entities";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
+import { FlightGrid } from "./world/FlightGrid";
 import { FlowField, canWalkStraight } from "./world/FlowField";
 import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
 
@@ -569,6 +570,9 @@ export class Sim {
     events: SimEvent[] = [];
 
     readonly flowField = new FlowField(FLOW_FIELD_SIZE);
+    private flight: { grid: FlightGrid; field: FlowField } | undefined;
+    // Enemy id -> the tick the next of its kind can go (EnemyBlinksDef.gap)
+    private readonly blinkGapEnd = new Map<string, number>();
     private readonly enemyHash = new SpatialHash<Enemy>(2);
     private readonly pileHash = new SpatialHash<Pickup>(PILE_RADIUS);
     private nextUid = 1;
@@ -694,7 +698,24 @@ export class Sim {
         }
         if (tileX !== this.flowField.targetX || tileY !== this.flowField.targetY) {
             this.flowField.update(this.grid, tileX, tileY);
+            this.flight?.field.update(this.flight.grid, tileX, tileY);
         }
+    }
+
+    // What keeps flying enemies out and their way round it, worked out when the
+    // first turns up: most maps have none
+    private getFlight(): { grid: FlightGrid; field: FlowField } {
+        if (!this.flight) {
+            const grid = new FlightGrid(this.grid);
+            const field = new FlowField(FLOW_FIELD_SIZE);
+            field.update(grid, this.flowField.targetX, this.flowField.targetY);
+            this.flight = { grid, field };
+        }
+        return this.flight;
+    }
+
+    private getMoveGrid(def: EnemyDef): ArenaGrid | FlightGrid {
+        return def.flies ? this.getFlight().grid : this.grid;
     }
 
     // Run time; stops when the run ends, though ticks carry on for animations
@@ -1846,6 +1867,7 @@ export class Sim {
                     continue;
                 }
                 enemy.risingEnd = 0;
+                enemy.vx = enemy.vy = 0;
                 enemy.anim = "walk";
                 enemy.animStart = this.tick;
             }
@@ -1873,6 +1895,7 @@ export class Sim {
             let dx = player.x - enemy.x;
             let dy = player.y - enemy.y;
             const distance = Math.hypot(dx, dy);
+            const flight = enemy.def.flies ? this.getFlight() : undefined;
 
             // The final boss waits for the player, and what can't move stays
             // put; anything else left behind comes back
@@ -1901,17 +1924,27 @@ export class Sim {
                 let dirY = 0;
                 const tileX = Math.floor(enemy.x);
                 const tileY = Math.floor(enemy.y);
-                const jump = enemy.def.ghost ? 0 : this.flowField.jumpFrom(grid, tileX, tileY);
+                const jump =
+                    enemy.def.ghost || flight ? 0 : this.flowField.jumpFrom(grid, tileX, tileY);
                 if (distance < 2.5 && jump !== 0 && Math.sign(dy) === Math.sign(jump)) {
                     // Close, but over the ditch
                     this.startJump(enemy, jump);
                     continue;
-                } else if (enemy.def.ghost || distance < 2.5) {
+                } else if (
+                    enemy.def.ghost ||
+                    distance < 2.5 ||
+                    // A clear flight straight there, and only round terrain if not
+                    (flight && canWalkStraight(flight.grid, enemy.x, enemy.y, player.x, player.y))
+                ) {
                     if (distance > 0.001) {
                         dirX = dx / distance;
                         dirY = dy / distance;
                     }
-                } else if (this.flowField.getStep(grid, tileX, tileY, step)) {
+                } else if (
+                    flight
+                        ? flight.field.getStep(flight.grid, tileX, tileY, step)
+                        : this.flowField.getStep(grid, tileX, tileY, step)
+                ) {
                     if (Math.abs(step.y) > 1) {
                         this.startJump(enemy, step.y);
                         continue;
@@ -2086,7 +2119,7 @@ export class Sim {
                     enemy.x += moveX;
                     enemy.y += moveY;
                 } else {
-                    moveCircle(grid, enemy, moveX, moveY, enemy.radius);
+                    moveCircle(flight?.grid ?? grid, enemy, moveX, moveY, enemy.radius);
                 }
             }
 
@@ -2105,7 +2138,7 @@ export class Sim {
                     enemy.x += ox * push;
                     enemy.y += oy * push;
                 } else {
-                    moveCircle(grid, enemy, ox * push, oy * push, enemy.radius);
+                    moveCircle(flight?.grid ?? grid, enemy, ox * push, oy * push, enemy.radius);
                 }
             }
 
@@ -2149,7 +2182,8 @@ export class Sim {
             const aheadY = enemy.y + y * FLEE_LOOKAHEAD;
             if (
                 this.grid.contains(Math.floor(aheadX), Math.floor(aheadY)) &&
-                (enemy.def.ghost || isCircleFree(this.grid, aheadX, aheadY, enemy.radius))
+                (enemy.def.ghost ||
+                    isCircleFree(this.getMoveGrid(enemy.def), aheadX, aheadY, enemy.radius))
             ) {
                 out.x = x;
                 out.y = y;
@@ -2368,7 +2402,7 @@ export class Sim {
     private chaseFoe(enemy: Enemy, foe: Enemy): Enemy | undefined {
         if (
             enemy.def.ghost ||
-            canWalkStraight(this.grid, enemy.x, enemy.y, foe.x, foe.y) ||
+            canWalkStraight(this.getMoveGrid(enemy.def), enemy.x, enemy.y, foe.x, foe.y) ||
             ++enemy.foeWait < FOE_GIVE_UP_TICKS
         ) {
             return foe;
@@ -2613,8 +2647,15 @@ export class Sim {
     ): boolean {
         const tick = this.tick;
         if (abilities.blinkLand === -1) {
-            if (tick < abilities.nextBlink || distance < blinks.minRange) {
+            if (
+                tick < abilities.nextBlink ||
+                distance < blinks.minRange ||
+                tick < (this.blinkGapEnd.get(enemy.def.id) ?? 0)
+            ) {
                 return false;
+            }
+            if (blinks.gap !== undefined) {
+                this.blinkGapEnd.set(enemy.def.id, tick + secondsToTicks(blinks.gap));
             }
             abilities.blinkLand = tick + secondsToTicks(blinks.windup ?? 0);
             enemy.anim = "attack";
@@ -2651,6 +2692,20 @@ export class Sim {
         enemy.yaw = yawFromVector(player.x - spot.x, player.y - spot.y);
         if (blinks.impactSpotAnim !== undefined) {
             this.addEffect(blinks.impactSpotAnim, spot.x, spot.y, 0, 60);
+        }
+        if (blinks.surface) {
+            enemy.risingEnd = tick + secondsToTicks(blinks.surface.seconds);
+            enemy.anim = "attack";
+            enemy.attackSeq = blinks.surface.seq;
+            if (blinks.sound !== undefined) {
+                this.events.push({
+                    type: "bossAttack",
+                    enemyId: enemy.def.id,
+                    sound: blinks.sound,
+                    x: spot.x,
+                    y: spot.y,
+                });
+            }
         }
         return true;
     }

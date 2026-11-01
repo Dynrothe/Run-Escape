@@ -5,9 +5,24 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.20.1 - 2026-11-01
+
 ### Added
 
 - A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
+- A GitHub link beside the Discord one on the title screen.
+
+### Changed
+
+- The Inferno's Jal-ImKot are fairer: they come up further from you, slowly, one after another, and
+  can't hit until they're up. They also have less health and hit a little softer.
+- Bats and aviansies now go round cave walls and mountains instead of flying over them. They still
+  fly over fences, buildings, trees and water. Only ghosts and the Ankou go through everything.
+
+### Fixed
+
+- The quest tracker no longer shows quests that can't be done on the map you're on, like Ratcatchers
+  in the Inferno.
 
 ## 0.20.0 - 2026-10-31
 

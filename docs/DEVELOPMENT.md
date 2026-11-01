@@ -179,7 +179,9 @@ src/game/
                       levels
     BulletPool.ts     a boss's bullets, in flat arrays: hundreds at once, no allocation in the tick
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
-                      FlowField (Dijkstra from the player, how hundreds of enemies find a way)
+                      FlowField (Dijkstra from the player, how hundreds of enemies find a way),
+                      FlightGrid (the terrain walls that stop what flies: blocked floor that
+                      isn't liquid, and solid clumps too big to be a tree)
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers

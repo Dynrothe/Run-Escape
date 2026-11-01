@@ -273,7 +273,7 @@ export const MAPS: MapDef[] = [
         name: "The Inferno",
         description:
             "Mor Ul Rek's TzHaar and the Inferno's creatures: nibblers, Jal-MejRah bats, Jal-Ak " +
-            "blobs that split, Jal-ImKot that dig up next to you, Jal-Xil, and Jal-Zek that " +
+            "blobs that split, Jal-ImKot that dig up near you, Jal-Xil, and Jal-Zek that " +
             "raise the dead. JalTok-Jad, a Jal-Zek champion and a TzHaar-Ket champion come one " +
             "by one, and three JalTok-Jads at once at the end.",
         // An infernal cape

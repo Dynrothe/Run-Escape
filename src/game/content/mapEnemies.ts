@@ -35,3 +35,15 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     }
     return [...ids].map((id) => ENEMY_BY_ID.get(id)!);
 }
+
+const enemyIdsByMap = new WeakMap<MapDef, Set<string>>();
+
+// getMapEnemies' ids, kept per map for what asks often (the HUD's quests)
+export function getMapEnemyIds(map: MapDef): Set<string> {
+    let ids = enemyIdsByMap.get(map);
+    if (!ids) {
+        ids = new Set(getMapEnemies(map).map((def) => def.id));
+        enemyIdsByMap.set(map, ids);
+    }
+    return ids;
+}

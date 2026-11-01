@@ -4,6 +4,8 @@
 
 export const REGION_TILE_BRIDGE = 0x1;
 export const REGION_TILE_INSIDE = 0x2;
+// Under a textured overlay: water, swamp or lava
+export const REGION_TILE_LIQUID = 0x4;
 
 export type RegionDataInput = {
     // World tile coordinates
