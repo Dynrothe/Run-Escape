@@ -46,7 +46,8 @@
         "slim-cache": "npx tsx scripts/cache/slim-cache.ts",
         "desktop:main": "esbuild desktop/main.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=desktop/out/main.cjs --log-level=warning",
         "desktop": "npm run desktop:main && electron .",
-        "desktop:dist": "npm run desktop:main && npx tsx desktop/release-files.ts && electron-builder --config desktop/electron-builder.yml --win --publish never"
+        "desktop:dist": "npm run desktop:main && npx tsx desktop/release-files.ts && electron-builder --config desktop/electron-builder.yml --win --publish never",
+        "desktop:dist:linux": "npm run desktop:main && npx tsx desktop/release-files.ts && electron-builder --config desktop/electron-builder.yml --linux --publish never"
     },
     "browserslist": {
         "production": [

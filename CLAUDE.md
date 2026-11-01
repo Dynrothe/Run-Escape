@@ -61,6 +61,7 @@ npx prettier --write <files>
 npm run build && npm run slim-cache    # build for hosting (only when deploying)
 npm run desktop            # the Windows app, on that build
 npm run desktop:dist       # the app's zip, game zip and manifest, into release/
+npm run desktop:dist:linux # the Linux archive, game zip and manifest, into release/
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.
