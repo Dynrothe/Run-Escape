@@ -44,7 +44,8 @@ export type CoopLink = {
 // it likes and says what happened at each frame; a guest steps only as far as
 // the host has said, sending what its player does to the host to go in.
 export class CoopRun {
-    readonly prediction?: MovementPrediction;
+    // A guest's, while it's turned on (setPrediction)
+    prediction?: MovementPrediction;
     // Frames stepped
     frame = 0;
     // The frames that are out (for a guest, what the host has sent so far)
@@ -85,6 +86,16 @@ export class CoopRun {
         if (!isHost) {
             this.prediction = new MovementPrediction(sim, now);
         }
+    }
+
+    // A guest's: whether its own movement is predicted on screen. Off, it sends
+    // and shows only what the host confirms. Back on, it starts afresh.
+    setPrediction(on: boolean): void {
+        if (this.isHost || on === (this.prediction !== undefined)) {
+            return;
+        }
+        this.prediction = on ? new MovementPrediction(this.sim, this.now) : undefined;
+        this.moveSeqSent = 0;
     }
 
     // The host's: this hero's move or action for the next frame, with the
