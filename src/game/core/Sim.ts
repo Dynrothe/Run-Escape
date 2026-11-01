@@ -521,6 +521,7 @@ export type Hero = {
     // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
     recentDamage: Float64Array;
     killsBySource: Record<string, number>;
+    casketsOpened: number;
     damageTaken: number;
     healed: number;
     highestHit: number;
@@ -1013,6 +1014,7 @@ export class Sim {
             damageBySource: {},
             recentDamage: new Float64Array(DPS_WINDOW_TICKS),
             killsBySource: {},
+            casketsOpened: 0,
             damageTaken: 0,
             healed: 0,
             highestHit: 0,
@@ -8005,6 +8007,7 @@ export class Sim {
         );
         this.coins += coins;
         this.casketsOpened++;
+        this.hero.casketsOpened++;
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });

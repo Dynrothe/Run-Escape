@@ -2,7 +2,7 @@ import { Rarity } from "../content/rarity";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
-import { RunResult } from "../core/Sim";
+import { RunResult, RunStats } from "../core/Sim";
 import { SaveData } from "../core/save";
 import { DisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
@@ -183,6 +183,20 @@ export type BossView = {
 
 export type BossKillView = { name: string; seconds: number };
 
+// A snapshot of one player's contribution, including players who left or fell.
+export type PlayerResultView = {
+    name: string;
+    characterName: string;
+    isLocal: boolean;
+    down: boolean;
+    left: boolean;
+    kills: number;
+    damageDealt: number;
+    caskets: number;
+    stats: RunStats;
+    damage: DamageView[];
+};
+
 // done / of: how far it's got, this run's kills and caskets included;
 // finished: this run finished it (it pays once the run is over)
 export type QuestTrackView = {
@@ -255,10 +269,9 @@ export type UiSnapshot = {
     // than any before it on the map; newGear: the names of the gear it found
     // for the first time, for the Armoury; quests: the quests it finished,
     // and what they paid
-    // damage / bossKills: the stats screen's rows
+    // players: everyone's individual stats; bossKills: the party's boss times
     result?: RunResult & {
-        characterName: string;
-        damage: DamageView[];
+        players: PlayerResultView[];
         bossKills: BossKillView[];
         endlessRecord: boolean;
         unlockedMap?: string;
