@@ -615,6 +615,45 @@ describe("co-op relay", () => {
         expect((await host.next("error")).message).toMatch(/another version/);
     });
 
+    it("sends a flood of a player's updates on as one, with the latest", async () => {
+        await restart({ memberUpdateMs: 100 });
+        const { host, guests } = await party(1);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        host.messages.length = 0;
+        for (let i = 0; i < 50; i++) {
+            guests[0].send({ t: "me", characterId: `c${i}` });
+        }
+        const { room } = await host.roomWhere((r) => r.members[1].characterId === "c49");
+        expect(room.members[1].characterId).toBe("c49");
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(host.messages.filter((m) => m.t === "room").length).toBeLessThan(5);
+    });
+
+    it("sends no player updates mid-run, and has them all when it ends", async () => {
+        await restart({ memberUpdateMs: 1 });
+        const { host, guests } = await party(1);
+        host.send({ t: "start", game: { seed: 5 } });
+        await guests[0].next("start");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        host.messages.length = 0;
+        guests[0].send({ t: "me", characterId: "wizard" });
+        guests[0].send({ t: "up", d: { m: [1, 0] } });
+        await host.next("up");
+        expect(host.messages.filter((m) => m.t === "room")).toEqual([]);
+        host.send({ t: "end" });
+        await host.roomWhere((r) => !r.started && r.members[1].characterId === "wizard");
+    });
+
+    it("lets a seat go as soon as a connection ends without a close frame", async () => {
+        const { host, code } = await party(0);
+        const raw = new RawClient(Number(new URL(url).port));
+        await raw.saw("welcome");
+        raw.socket.write(RawClient.frame(0x1, JSON.stringify({ t: "join", code, me: {} })));
+        await host.roomWhere((r) => r.members.length === 2);
+        raw.socket.end();
+        await host.roomWhere((r) => r.members.length === 1);
+    });
+
     it("keeps a kicked player out, and slows down guessing codes", async () => {
         await restart({ wrongCodesPerMinute: 3 });
         const { host, guests, code } = await party(1);

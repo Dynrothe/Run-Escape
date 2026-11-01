@@ -20,6 +20,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
+import { pipeline } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 import { proxyMode } from "./client-ip.mjs";
@@ -167,9 +168,8 @@ const server = createServer((req, res) => {
         res.end();
         return;
     }
-    createReadStream(found.file, { start, end })
-        .on("error", () => res.destroy())
-        .pipe(res);
+    // pipeline, not pipe: it closes the file when the player goes mid-download
+    pipeline(createReadStream(found.file, { start, end }), res, () => {});
 });
 
 // Nothing else here upgrades, so anything but the relay is turned away

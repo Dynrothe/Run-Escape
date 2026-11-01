@@ -103,6 +103,9 @@ const MAX_DEPTH = 16;
 // whose game has stopped reading would otherwise grow the relay's memory
 const MAX_BUFFERED_BYTES = 1024 * 1024;
 const PING_MS = 20_000;
+// How often a room hears what its players say about themselves, however often
+// they say it: one player can't flood the rest off a slow line
+const MEMBER_UPDATE_MS = 250;
 // Room codes leave out letters and digits that look alike
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 5;
@@ -132,6 +135,8 @@ class Connection {
         socket.on("data", (data) => this.receive(data));
         socket.on("close", () => this.finish());
         socket.on("error", () => this.finish());
+        // The other end's gone without a close frame: nothing to wait for
+        socket.on("end", () => socket.destroy());
     }
 
     receive(data) {
@@ -495,6 +500,7 @@ export function createRelay(limits = {}) {
         roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
         createsPerMinute = MAX_CREATES_PER_MINUTE,
         wrongCodesPerMinute = MAX_WRONG_CODES_PER_MINUTE,
+        memberUpdateMs = MEMBER_UPDATE_MS,
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
         proxy = proxyMode(),
@@ -557,6 +563,28 @@ export function createRelay(limits = {}) {
         for (const member of room.members) {
             member.connection.send({ t: "room", room: view, you: member.id });
         }
+    }
+
+    // For what players say about themselves. It goes out now if it's been a
+    // while, and otherwise once, with the latest. Mid-run nobody's reading it,
+    // and the room hears it all when the run ends.
+    function broadcastMembers(room) {
+        if (room.started) {
+            return;
+        }
+        if (room.updateTimer) {
+            room.updateWaiting = true;
+            return;
+        }
+        broadcastRoom(room);
+        room.updateTimer = setTimeout(() => {
+            room.updateTimer = undefined;
+            if (room.updateWaiting && rooms.get(room.code) === room) {
+                room.updateWaiting = false;
+                broadcastMembers(room);
+            }
+        }, memberUpdateMs);
+        room.updateTimer.unref?.();
     }
 
     function listing(room) {
@@ -867,7 +895,7 @@ export function createRelay(limits = {}) {
             case "me":
                 if (room) {
                     setMember(client, message);
-                    broadcastRoom(room);
+                    broadcastMembers(room);
                 }
                 return;
             case "rename":
@@ -880,7 +908,7 @@ export function createRelay(limits = {}) {
                     playerNames.add(name);
                     client.connection.send({ t: "named", name: client.name });
                     if (room) {
-                        broadcastRoom(room);
+                        broadcastMembers(room);
                     }
                 }
                 return;
@@ -1142,7 +1170,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
             res.end("Run Escape co-op relay\n");
         }
     });
-    relay.attach(server, path);
+    relay.attach(server, path, { closeOthers: true });
     server.listen(port, () => {
         console.log(`Co-op relay on ws://localhost:${port}${path}`);
     });
