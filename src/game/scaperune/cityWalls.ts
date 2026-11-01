@@ -20,8 +20,9 @@ const EAST = 2;
 const SOUTH = 3;
 const WEST = 0;
 
-// One face of a wall: the wall on the ground and the rail on top of it, a level up
-export type WallFace = { wall: number; rail: number };
+// One face of a wall: the wall on the ground and the rail on top of it, a level up. A wall a
+// loc thick has no rail, and nothing behind it.
+export type WallFace = { wall: number; rail?: number };
 
 // A loc of a gate: tiles along the wall from the gate's first column, tiles in from the wall's
 // middle (the outer face's tile is -1), level, id, type and rotation, with the outside to the south
@@ -34,9 +35,22 @@ export type GatePart = [
     rotation: number,
 ];
 
+// A tower, an octagon, solid to the top: inside is how many tiles across inside its faces, chamfer
+// how far its corners are cut, and it stands storeys high with its floor and rail on top of that
+export type WallTower = {
+    wall: number;
+    rail: number;
+    floor: number;
+    inside: number;
+    chamfer: number;
+    storeys: number;
+    rise: number;
+};
+
 export type CityWallKit = {
     label: string;
     outer: WallFace;
+    // With a width of 0 there's only the outer face: a plain wall with nothing on top
     inner: WallFace;
     // The walkway's floor, as the map files store it, how high it stands in height units, and how
     // many tiles wide it is
@@ -52,13 +66,15 @@ export type CityWallKit = {
     gateParts?: GatePart[];
     // A buttress against the outer face, every so many tiles
     pier?: { id: number; every: number };
+    // A tower on each corner in place of the corner
+    tower?: WallTower;
     // For the automatic choice: the town families and the biomes it suits
     families: string[];
     biomes: string[];
 };
 
 // Rotation 0 faces west, and each turn goes clockwise, so [outer, inner] rotate with the side
-export const CITY_WALLS = {
+const KITS = {
     // Falador's: the south-east stretch at 2935,3372, and its north gate at 2963 to 2968,3392
     falador: {
         label: "Falador",
@@ -110,11 +126,101 @@ export const CITY_WALLS = {
         gateSize: 6,
         pier: { id: 23811, every: 6 },
         families: ["varrock"],
-        biomes: ["meadow"],
+        biomes: ["meadow", "swamp", "deadlands", "darkwood"],
+    },
+    // Kourend Castle's curtain wall at 1631,3657, three tiles across the top, with the castle's
+    // octagon towers at 1593,3661. Its rails stand level, so they step on a slope.
+    kourend: {
+        label: "Kourend Castle",
+        outer: { wall: 23780, rail: 23775 },
+        inner: { wall: 23780, rail: 23775 },
+        walk: 11,
+        rise: 37,
+        width: 3,
+        chamfer: 0,
+        gateSize: 6,
+        tower: {
+            wall: 23818,
+            rail: 23775,
+            floor: 11,
+            inside: 7,
+            chamfer: 2,
+            storeys: 2,
+            rise: 37,
+        },
+        families: ["hosidius"],
+        biomes: ["autumn"],
+    },
+    // Shayzien's at 1503,3542
+    shayzien: {
+        label: "Shayzien",
+        outer: { wall: 14543, rail: 14558 },
+        inner: { wall: 14543, rail: 14558 },
+        walk: 11,
+        rise: 30,
+        width: 1,
+        chamfer: 3,
+        gateSize: 6,
+        families: ["shayzien", "lovakengj"],
+        biomes: ["ash"],
+    },
+    // Civitas illa Fortis's at 1747,3162, three tiles tall
+    civitas: {
+        label: "Civitas illa Fortis",
+        outer: { wall: 52287, rail: 52296 },
+        inner: { wall: 52286, rail: 52296 },
+        walk: 159,
+        rise: 48,
+        width: 1,
+        chamfer: 3,
+        gateSize: 6,
+        families: ["al", "pollnivneach", "sophanem", "ape", "taibwo"],
+        biomes: ["desert", "jungle", "tropical"],
+    },
+    // Yanille's at 2542,3110. Nothing in it's contoured, so it wants flat ground.
+    yanille: {
+        label: "Yanille",
+        outer: { wall: 17088, rail: 1913 },
+        inner: { wall: 17088, rail: 1913 },
+        walk: 10,
+        rise: 36,
+        width: 2,
+        chamfer: 0,
+        gateSize: 6,
+        families: [],
+        biomes: [],
+    },
+    // East Ardougne's at 2614,3263: one wall, and nothing on it
+    ardougne: {
+        label: "East Ardougne",
+        outer: { wall: 21239 },
+        inner: { wall: 21239 },
+        walk: 0,
+        rise: 0,
+        width: 0,
+        chamfer: 3,
+        gateSize: 6,
+        families: [],
+        biomes: [],
+    },
+    // Jatizso's, the same way
+    jatizso: {
+        label: "Jatizso",
+        outer: { wall: 21407 },
+        inner: { wall: 21407 },
+        walk: 0,
+        rise: 0,
+        width: 0,
+        chamfer: 3,
+        gateSize: 6,
+        families: ["rellekka"],
+        biomes: ["snow"],
     },
 } satisfies Record<string, CityWallKit>;
 
-export type CityWallId = keyof typeof CITY_WALLS;
+export type CityWallId = keyof typeof KITS;
+
+export const CITY_WALLS: Record<CityWallId, CityWallKit> = KITS;
 
 export const CITY_WALL_IDS = Object.keys(CITY_WALLS) as CityWallId[];
 
@@ -143,6 +249,18 @@ export function getWallSide(rect: WallRect, turn: number) {
     };
 }
 
+// How many tiles from a corner a tower covers along a wall, with its centre on the walkway's
+function getTowerSpan(kit: CityWallKit): { back: number; on: number } {
+    const across = (kit.tower?.inside ?? 0) + 2;
+    const back = ((across - 1) >> 1) - ((kit.width - 1) >> 1);
+    return { back, on: across - back };
+}
+
+// How far along a side its first column stands, past what's at the corner
+export function getWallInset(kit: CityWallKit): number {
+    return kit.tower ? getTowerSpan(kit).on : kit.chamfer;
+}
+
 // Where a gate is on its side: the first of the columns it takes up
 export function getGateColumns(kit: CityWallKit, rect: WallRect, gate: CityGate) {
     const turn = WALL_SIDES.indexOf(gate.side);
@@ -166,6 +284,77 @@ export function forWallTiles(
                 visit(side.x(along, across), side.y(along, across));
             }
         }
+        if (kit.tower) {
+            const { back, on } = getTowerSpan(kit);
+            for (let along = -back; along < on; along++) {
+                for (let across = -back; across < on; across++) {
+                    visit(side.x(along, across), side.y(along, across));
+                }
+            }
+        }
+    }
+}
+
+// A tower with its south-west corner at a tile. It's blocked right through.
+function placeTower(ground: Ground, tower: WallTower, x: number, y: number): void {
+    const { wall, rail, floor, inside, chamfer, storeys, rise } = tower;
+    const rect = { x0: x + 1, y0: y + 1, x1: x + inside, y1: y + inside };
+    const corners = ground.sizeX + 1;
+    const up = (level: number, tileX: number, tileY: number) => {
+        const tiles = ground.grid.levels[level];
+        tiles.flags[ground.tile(tileX, tileY)] |= TILE_SHOWN;
+        for (const corner of [0, 1, corners, corners + 1]) {
+            tiles.heights[tileX + tileY * corners + corner] = rise;
+        }
+    };
+    for (let tileY = y; tileY < y + inside + 2; tileY++) {
+        for (let tileX = x; tileX < x + inside + 2; tileX++) {
+            const i = ground.tile(tileX, tileY);
+            ground.reserved[i] = 1;
+            for (let level = 1; level <= storeys; level++) {
+                up(level, tileX, tileY);
+            }
+            const fromX = Math.min(tileX - rect.x0, rect.x1 - tileX);
+            const fromY = Math.min(tileY - rect.y0, rect.y1 - tileY);
+            if (fromX >= 0 && fromY >= 0 && fromX + fromY >= chamfer) {
+                ground.level0.flags[i] |= TILE_BLOCKED;
+                ground.grid.levels[storeys].overlays[i] = floor;
+            }
+        }
+    }
+    const put = (level: number, type: number, rotation: number, tileX: number, tileY: number) =>
+        ground.grid.locs.push({
+            id: level === storeys ? rail : wall,
+            type,
+            rotation: rotation & 3,
+            level,
+            x: tileX,
+            y: tileY,
+        });
+    for (let turn = 0; turn < 4; turn++) {
+        const side = getWallSide(rect, turn);
+        for (let level = 0; level <= storeys; level++) {
+            for (let along = chamfer; along <= side.length - chamfer; along++) {
+                put(level, LOC_WALL, NORTH + turn, side.x(along, -1), side.y(along, -1));
+            }
+            for (let i = 0; i < chamfer; i++) {
+                const diagonalX = side.x(i, chamfer - 1 - i);
+                const diagonalY = side.y(i, chamfer - 1 - i);
+                put(level, LOC_DIAGONAL, NORTH + turn, diagonalX, diagonalY);
+                if (level === storeys) {
+                    const tiles = ground.grid.levels[level];
+                    const at = ground.tile(diagonalX, diagonalY);
+                    tiles.overlays[at] = floor;
+                    tiles.shapes[at] = 1;
+                    tiles.rotations[at] = (NORTH + turn + 1) & 3;
+                }
+            }
+            for (let i = 0; i <= chamfer; i++) {
+                const postX = side.x(i - 1, chamfer - 1 - i);
+                const postY = side.y(i - 1, chamfer - 1 - i);
+                put(level, LOC_POST, NORTH + turn, postX, postY);
+            }
+        }
     }
 }
 
@@ -180,7 +369,8 @@ export function placeCityWall(
     gates: CityGate[],
     skip: (x: number, y: number) => boolean = () => false,
 ): void {
-    const { outer, inner, walk, rise, width, chamfer, pier } = kit;
+    const { outer, inner, walk, rise, width, chamfer, pier, tower } = kit;
+    const inset = getWallInset(kit);
     const levelUp = ground.grid.levels[1];
     const corners = ground.sizeX + 1;
     const free = (x: number, y: number) => ground.inside(x, y) && !skip(x, y);
@@ -222,10 +412,12 @@ export function placeCityWall(
     };
 
     const sides = WALL_SIDES.map((_, turn) => getWallSide(rect, turn));
+    // Columns by a gate that has its own ends, which don't want a cap too
+    const capless = sides.map((side) => new Uint8Array(side.length + 1));
     // Which columns of each side stand. A column's the tiles across the wall at one along.
     const columns = sides.map((side, turn) => {
         const stands = new Uint8Array(side.length + 1);
-        for (let along = chamfer; along <= side.length - chamfer; along++) {
+        for (let along = inset; along <= side.length - inset; along++) {
             let clear = 1;
             for (let across = -1; across <= width; across++) {
                 clear &= free(side.x(along, across), side.y(along, across)) ? 1 : 0;
@@ -236,6 +428,9 @@ export function placeCityWall(
             if (WALL_SIDES.indexOf(gate.side) === turn) {
                 const { start } = getGateColumns(kit, rect, gate);
                 stands.fill(0, Math.max(start, 0), start + kit.gateSize);
+                if (kit.gateParts) {
+                    capless[turn].fill(1, Math.max(start - 1, 0), start + kit.gateSize + 1);
+                }
             }
         }
         return stands;
@@ -255,10 +450,10 @@ export function placeCityWall(
 
     sides.forEach((side, turn) => {
         const stands = columns[turn];
-        const last = side.length - chamfer;
-        const walkEnd = chamfer > 0 ? last : side.length - width;
-        const innerFrom = chamfer > 0 ? chamfer + 1 : width + 1;
-        const innerTo = chamfer > 0 ? last - 1 : side.length - width - 1;
+        const last = side.length - inset;
+        const walkEnd = chamfer > 0 || tower ? last : side.length - width;
+        const innerFrom = tower ? inset : chamfer > 0 ? chamfer + 1 : width + 1;
+        const innerTo = tower ? last : chamfer > 0 ? last - 1 : side.length - width - 1;
         const x = side.x;
         const y = side.y;
         // Both of a face, the wall and its rail
@@ -271,11 +466,14 @@ export function placeCityWall(
         ) => {
             const at = [x(along, across), y(along, across)] as const;
             put(wall, type, rotation + turn, 0, ...at);
-            put(rail, type, rotation + turn, 1, ...at);
+            if (rail !== undefined) {
+                put(rail, type, rotation + turn, 1, ...at);
+            }
         };
+        const hasInner = width > 0;
 
         // A run of wall, and a cap at each end that isn't a corner
-        let along = chamfer;
+        let along = inset;
         while (along <= last) {
             if (!stands[along]) {
                 along++;
@@ -292,7 +490,7 @@ export function placeCityWall(
             }
             for (let at = start; at <= end; at++) {
                 face(outer, LOC_WALL, NORTH, at, -1);
-                if (at >= innerFrom && at <= innerTo) {
+                if (hasInner && at >= innerFrom && at <= innerTo) {
                     face(inner, LOC_WALL, SOUTH, at, width);
                 }
                 if (at <= walkEnd) {
@@ -305,16 +503,20 @@ export function placeCityWall(
                     put(pier.id, LOC_NORMAL, NORTH + turn, 0, ...tile);
                 }
             }
-            if (start > chamfer) {
+            if (start > inset && !capless[turn][start - 1]) {
                 face(outer, LOC_POST, NORTH, start - 1, -1);
-                face(inner, LOC_POST, EAST, start - 1, width);
+                if (hasInner) {
+                    face(inner, LOC_POST, EAST, start - 1, width);
+                }
                 for (let across = 0; across < width; across++) {
                     face(outer, LOC_WALL, EAST, start - 1, across);
                 }
             }
-            if (end < last) {
+            if (end < last && !capless[turn][end + 1]) {
                 face(outer, LOC_POST, WEST, end + 1, -1);
-                face(inner, LOC_POST, SOUTH, end + 1, width);
+                if (hasInner) {
+                    face(inner, LOC_POST, SOUTH, end + 1, width);
+                }
                 for (let across = 0; across < width; across++) {
                     face(outer, LOC_WALL, WEST, end + 1, across);
                 }
@@ -324,28 +526,44 @@ export function placeCityWall(
         // The corner at this side's start, where the side before it comes in
         const before = (turn + 1) % 4;
         const stood =
-            cornersClear[turn] &&
-            columns[before][sides[before].length - chamfer] &&
-            stands[chamfer];
-        if (stood && chamfer === 0) {
+            cornersClear[turn] && columns[before][sides[before].length - inset] && stands[inset];
+        if (stood && tower) {
+            // The tower's faces take the tile where the wall would meet it, so it stops a tile
+            // short with only its walkway going on
+            const { back, on } = getTowerSpan(kit);
+            placeTower(ground, tower, x(-back, -back), y(-back, -back));
+            const end = sides[before];
+            for (let across = 0; across < width; across++) {
+                solid(x(on - 1, across), y(on - 1, across));
+                solid(end.x(end.length - on + 1, across), end.y(end.length - on + 1, across));
+            }
+        } else if (stood && chamfer === 0) {
             face(outer, LOC_POST, NORTH, -1, -1);
-            face(inner, LOC_INNER_CORNER, SOUTH, width, width);
+            if (hasInner) {
+                face(inner, LOC_INNER_CORNER, SOUTH, width, width);
+            }
         } else if (stood) {
             const c = chamfer;
-            for (let i = 1; i < c; i++) {
-                solid(x(i, c - i), y(i, c - i));
+            if (hasInner) {
+                for (let i = 1; i < c; i++) {
+                    solid(x(i, c - i), y(i, c - i));
+                }
             }
             for (let i = 0; i < c; i++) {
                 face(outer, LOC_DIAGONAL, NORTH, i, c - 1 - i);
-                face(inner, LOC_DIAGONAL, SOUTH, i + 1, c - i);
-                halfDeck(NORTH + turn, x(i, c - 1 - i), y(i, c - 1 - i));
-                halfDeck(SOUTH + turn, x(i + 1, c - i), y(i + 1, c - i));
+                if (hasInner) {
+                    face(inner, LOC_DIAGONAL, SOUTH, i + 1, c - i);
+                    halfDeck(NORTH + turn, x(i, c - 1 - i), y(i, c - 1 - i));
+                    halfDeck(SOUTH + turn, x(i + 1, c - i), y(i + 1, c - i));
+                }
             }
             for (let i = 0; i <= c; i++) {
                 face(outer, LOC_POST, NORTH, i - 1, c - 1 - i);
             }
-            for (let i = 0; i < c - 1; i++) {
-                face(inner, LOC_POST, SOUTH, i + 2, c - i);
+            if (hasInner) {
+                for (let i = 0; i < c - 1; i++) {
+                    face(inner, LOC_POST, SOUTH, i + 2, c - i);
+                }
             }
         }
     });

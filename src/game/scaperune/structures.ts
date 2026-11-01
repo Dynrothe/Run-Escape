@@ -8,6 +8,7 @@ import {
     WallRect,
     forWallTiles,
     getGateColumns,
+    getWallInset,
     getWallSide,
     placeCityWall,
 } from "./cityWalls";
@@ -370,6 +371,9 @@ const GATE_LEAD = 5;
 
 // How far off a town's wall a side can move to get clear of a road running along it
 const WALL_SHIFT = 4;
+
+// Tiles left clear out of a door, past any wall
+const DOOR_CLEAR = 3;
 
 // A seed of its own, so that it moves no other roll, for which wall a town gets
 const WALL_KIT_SEED = 2417;
@@ -949,7 +953,7 @@ function clearOfRoads(build: Build, roads: RoadNetwork, rect: WallRect): void {
             const side = getWallSide(rect, turn);
             let onRoad = 0;
             for (let along = 0; along <= side.length; along++) {
-                onRoad += roads.tiles[ground.tile(side.x(along, 0), side.y(along, 0))];
+                onRoad += roads.isRoad(side.x(along, 0), side.y(along, 0)) ? 1 : 0;
             }
             if (onRoad < fewest) {
                 fewest = onRoad;
@@ -965,18 +969,17 @@ function clearOfRoads(build: Build, roads: RoadNetwork, rect: WallRect): void {
 function planGates(build: Build, roads: RoadNetwork, kit: CityWallKit, rect: WallRect): CityGate[] {
     const { ground } = build;
     const gates: CityGate[] = [];
-    const margin = kit.chamfer + GATE_CORNER;
+    const margin = getWallInset(kit) + GATE_CORNER;
     WALL_SIDES.forEach((name, turn) => {
         const side = getWallSide(rect, turn);
         const lastGate = side.length - margin;
         if (lastGate < margin) {
             return;
         }
-        const tileAt = (along: number) => ground.tile(side.x(along, 0), side.y(along, 0));
         const stops: number[] = [];
         let from = -1;
         for (let along = 0; along <= side.length + 1; along++) {
-            const onRoad = along <= side.length && roads.tiles[tileAt(along)] !== 0;
+            const onRoad = along <= side.length && roads.isRoad(side.x(along, 0), side.y(along, 0));
             if (onRoad && from < 0) {
                 from = along;
             } else if (!onRoad && from >= 0) {
@@ -985,7 +988,19 @@ function planGates(build: Build, roads: RoadNetwork, kit: CityWallKit, rect: Wal
             }
         }
         if (stops.length === 0) {
-            stops.push(side.length >> 1);
+            // As near the middle as there's ground to walk on both sides of it
+            const middle = side.length >> 1;
+            const canWalk = (along: number) =>
+                [-3, kit.width + 2].every((across) => {
+                    const i = ground.tile(side.x(along, across), side.y(along, across));
+                    return !roads.water[i] && !build.cliffs[i] && !ground.footprint[i];
+                });
+            for (let off = 0; off <= middle - margin && stops.length === 0; off++) {
+                const found = [middle + off, middle - off].find(canWalk);
+                if (found !== undefined) {
+                    stops.push(found);
+                }
+            }
         }
         let last = -Infinity;
         for (const along of stops) {
@@ -996,6 +1011,22 @@ function planGates(build: Build, roads: RoadNetwork, kit: CityWallKit, rect: Wal
         }
     });
     return gates;
+}
+
+// The tiles out of each building's door, which a wall has to leave clear
+function getDoorTiles(build: Build, buildings: PlacedBuilding[]): Set<number> {
+    const { ground } = build;
+    const doors = new Set<number>();
+    for (const { exit } of buildings) {
+        for (let out = 0; exit && out <= DOOR_CLEAR; out++) {
+            const x = Math.floor(exit.x + exit.outX * out);
+            const y = Math.floor(exit.y + exit.outY * out);
+            for (const tile of [ground.tile(x, y), ground.tile(x - 1, y), ground.tile(x, y - 1)]) {
+                doors.add(tile);
+            }
+        }
+    }
+    return doors;
 }
 
 // The way through a gate, level, with a road through it. A gate that no road came to gets one on
@@ -1017,7 +1048,7 @@ function openGate(
     });
     let hadRoad = false;
     for (let along = start; along <= end; along++) {
-        hadRoad ||= roads.tiles[ground.tile(side.x(along, 0), side.y(along, 0))] !== 0;
+        hadRoad ||= roads.isRoad(side.x(along, 0), side.y(along, 0));
     }
     const xs = [side.x(start, -2), side.x(end, kit.width + 1)];
     const ys = [side.y(start, -2), side.y(end, kit.width + 1)];
@@ -1028,6 +1059,10 @@ function openGate(
     const height = getPlotHeight(build, x, y, sizeX, sizeY);
     if (height !== undefined) {
         pinPlot(build, x, y, sizeX, sizeY, height);
+    }
+    // Roads at 0 means none, not even to a gate
+    if (build.settings.roads <= 0) {
+        return;
     }
     const halfWidth = Math.min(roads.halfWidth + 0.5, kit.gateSize / 2 - 1);
     roads.addStraight(point(-GATE_LEAD), point(kit.width + GATE_LEAD), halfWidth);
@@ -1107,22 +1142,22 @@ export function chooseWalledTowns(
         clearOfRoads(build, roads, rect);
         const kit = pickWallKit(build, town, members);
         const gates = planGates(build, roads, kit, rect);
+        const doors = getDoorTiles(build, buildings);
+        const tiles = new Set<number>();
         const taken = new Set<number>();
         forWallTiles(kit, rect, (tx, ty) => {
             const i = ground.tile(tx, ty);
-            if (roads.tiles[i]) {
-                return;
-            }
-            if (
-                ground.reserved[i] ||
-                ground.footprint[i] ||
-                roads.bridgeZone[i] ||
-                roads.water[i]
-            ) {
+            tiles.add(i);
+            const held = ground.reserved[i] && !roads.isRoad(tx, ty);
+            if (held || ground.footprint[i] || doors.has(i)) {
+                taken.add(i);
+            } else if (roads.bridgeZone[i] || roads.water[i]) {
                 taken.add(i);
             }
-            ground.reserved[i] = 1;
         });
+        for (const i of tiles) {
+            ground.reserved[i] = 1;
+        }
         for (const gate of gates) {
             openGate(build, roads, kit, rect, gate);
         }

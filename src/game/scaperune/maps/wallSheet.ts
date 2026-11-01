@@ -6,10 +6,10 @@ import { MapRecipe } from "../recipe";
 // Every city wall twice, to look them over: on the flat to the west, and to the east on a slope
 // that climbs eastward, each with a gate north and south and the same in a smaller wall.
 const CELL_X = 58;
-const CELL_Y = 42;
+const CELL_Y = 34;
 const WALL_X = 40;
-const WALL_Y = 26;
-const SQUARES = 6;
+const WALL_Y = 20;
+const SQUARES = 7;
 const SIZE = SQUARES * 64;
 
 // Where the slope starts, how far it runs, and how much it climbs a tile

@@ -1,5 +1,6 @@
 import { Ground } from "./Ground";
 import { BIOMES, CLIFF_FALL, SNOW_ROCK, WATERFALL } from "./biomes";
+import { CITY_WALLS, placeCityWall } from "./cityWalls";
 import { REEDS } from "./dress";
 import { FLOOR_KITS } from "./floorKits";
 import { TileGrid } from "./format";
@@ -20,6 +21,7 @@ const SQUARES = 5;
 const SIZE = SQUARES * 64;
 const PLOT = 20;
 const PIECE_ROW = 10;
+const WALL_PIECE = 24;
 
 function build(context: BuildContext): TileGrid {
     const ground = new Ground(SIZE, SIZE);
@@ -149,6 +151,20 @@ function build(context: BuildContext): TileGrid {
             }
             ground.place({ id, type: 10, rotation: 0, level: 0, x, y }, sizeX, sizeY);
             x += sizeX + 1;
+        }
+    }
+    // City walls, all there is of each
+    y += PIECE_ROW + WALL_PIECE;
+    x = WALL_PIECE;
+    for (const kit of Object.values(CITY_WALLS)) {
+        const at = x + (WALL_PIECE >> 1);
+        placeCityWall(ground, kit, { x0: x, y0: y, x1: x + WALL_PIECE, y1: y + WALL_PIECE }, [
+            { side: "south", at },
+        ]);
+        x += WALL_PIECE * 2;
+        if (x + WALL_PIECE * 2 >= SIZE) {
+            x = WALL_PIECE;
+            y += WALL_PIECE * 2;
         }
     }
     return ground.grid;

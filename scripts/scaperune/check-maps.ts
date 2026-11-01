@@ -15,7 +15,20 @@ import {
     WATER_OVERLAYS,
     findBannedLocs,
 } from "../../src/game/scaperune/catalogue";
-import { countStranded, getCollisionFlags, getStepGrid } from "../../src/game/scaperune/collision";
+import {
+    CITY_WALL_IDS,
+    WALL_SIDES,
+    getGateColumns,
+    getWallInset,
+    getWallSide,
+} from "../../src/game/scaperune/cityWalls";
+import {
+    TileRect,
+    countStranded,
+    findReachable,
+    getCollisionFlags,
+    getStepGrid,
+} from "../../src/game/scaperune/collision";
 import {
     MAP_SQUARE_SIZE,
     TILE_BLOCKED,
@@ -171,6 +184,17 @@ const SWEEP: Partial<GeneratorSettings>[] = [
     { biome: "astral", island: 0.1, waterLevel: 0.5, squaresX: 3, squaresY: 3, rivers: 1 },
     { biome: "autumn", secondBiome: "astral", biomeMix: 0.5, landmarks: 1, squaresX: 3 },
     { rivers: 2, riverWidth: 14, roads: 0 },
+    { towns: 2, townSize: 24, townWalls: 1, buildings: 1, hills: 0.7, squaresX: 3, squaresY: 3 },
+    ...CITY_WALL_IDS.map((wallKit) => ({
+        wallKit,
+        towns: 1,
+        townSize: 26,
+        townWalls: 1,
+        buildings: 1,
+        rivers: 1,
+        squaresX: 3,
+        squaresY: 3,
+    })),
 ];
 
 // Tiles past the end of a deck that must be whole road, and that must have nothing
@@ -364,6 +388,56 @@ function checkCollision(
 }
 
 // Every road's ground, along its length: how it was graded, steady, and walkable
+// A walled town has two ways in or more, you can walk through them, and a road only meets its
+// wall at a gate
+function checkWalls(
+    map: GeneratedMap,
+    context: BuildContext,
+    spawn: { x: number; y: number },
+    arena: TileRect,
+): string[] {
+    const { grid, roadTiles } = map;
+    const problems: string[] = [];
+    const flags = getCollisionFlags(grid, context.locs);
+    const reached = findReachable(flags, grid.sizeX, grid.sizeY, arena, spawn.x, spawn.y);
+    const tile = (x: number, y: number) => x + y * grid.sizeX;
+    for (const town of map.walled ?? []) {
+        const { kit, gates, taken, x0, y0, x1, y1 } = town;
+        const open = gates.filter((gate) => {
+            const { side, start } = getGateColumns(kit, town, gate);
+            const middle = start + (kit.gateSize >> 1);
+            return [-2, kit.width + 2].every(
+                (across) => reached[tile(side.x(middle, across), side.y(middle, across))],
+            );
+        });
+        if (open.length < 2) {
+            problems.push(`the wall at ${x0},${y0} has ${open.length} gates you can walk through`);
+        }
+        const inset = getWallInset(kit);
+        for (let turn = 0; turn < 4; turn++) {
+            const side = getWallSide({ x0, y0, x1, y1 }, turn);
+            const here = gates.filter((gate) => WALL_SIDES.indexOf(gate.side) === turn);
+            const starts = here.map((gate) => getGateColumns(kit, town, gate).start);
+            let from = -1;
+            for (let along = inset; along <= side.length - inset + 1; along++) {
+                const i = tile(side.x(along, 0), side.y(along, 0));
+                const onRoad = along <= side.length - inset && roadTiles[i] && !taken.has(i);
+                if (onRoad && from < 0) {
+                    from = along;
+                } else if (!onRoad && from >= 0) {
+                    const end = along - 1;
+                    if (!starts.some((at) => at <= end && at + kit.gateSize > from)) {
+                        const [x, y] = [side.x(from, 0), side.y(from, 0)];
+                        problems.push(`a road meets the wall at ${x},${y} with no gate`);
+                    }
+                    from = -1;
+                }
+            }
+        }
+    }
+    return problems;
+}
+
 function checkRoadHeights(map: GeneratedMap): { problems: string[]; steepest: number } {
     const { grid, lines, passes, walkSlope } = map;
     const problems: string[] = [];
@@ -753,6 +827,7 @@ function checkMap(
         ...checkBuildingGround(map),
         ...checkLandmarks(map),
         ...checkFalls(map),
+        ...checkWalls(map, context, recipe.spawn, gridRect),
         ...(shipped ? [] : checkCatalogue(map)),
         ...(shipped ? [] : checkLook(id, map, recipe.margin, createLocs(locTypeLoader), settings)),
     ];

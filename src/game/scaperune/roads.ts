@@ -413,6 +413,17 @@ export class RoadNetwork {
         }
     }
 
+    // Whether a tile will be painted as road, streets and squares included
+    isRoad(x: number, y: number): boolean {
+        const { corners, ground } = this.build;
+        if (this.tiles[ground.tile(x, y)]) {
+            return true;
+        }
+        const at = x + y * corners.x;
+        const near = [at, at + 1, at + corners.x, at + corners.x + 1];
+        return near.some((corner) => this.road[corner] > 0);
+    }
+
     // A straight piece of road, for a gate
     addStraight(from: Point, to: Point, halfWidth: number): void {
         const { corners } = this.build;
