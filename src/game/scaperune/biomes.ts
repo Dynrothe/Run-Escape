@@ -84,8 +84,9 @@ export type BiomeDef = {
 
 // Foam at the foot of a waterfall, 3 tiles wide with rotation 0 running east to west
 export const WATERFALL = 26499;
-// A waterfall 3 tiles wide that follows the ground, so it climbs any cliff, foam and all
+// Waterfalls 3 tiles wide, foam and all, 65 and 33 units tall on flat ground. See falls.ts.
 export const CLIFF_FALL = 51484;
+export const LOW_FALL = 44632;
 // Lava, as in Karamja's volcano
 const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss

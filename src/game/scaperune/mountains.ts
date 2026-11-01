@@ -362,12 +362,13 @@ export function finishHeights(build: Build): void {
 // Tiles too steep to walk are blocked, going by the heights as they'll be drawn, and so is
 // what's left of the cliffs. Bridges are walked on a level up.
 export function blockSteepGround(build: Build): void {
-    const { ground, settings, cliffs, sizeX, sizeY, corners } = build;
+    const { ground, settings, cliffs, faces, sizeX, sizeY, corners } = build;
     const { heights, flags } = ground.level0;
     const bridges = ground.grid.levels[1].flags;
     for (let y = 0; y < sizeY; y++) {
         for (let x = 0; x < sizeX; x++) {
             const i = x + y * sizeX;
+            cliffs[i] |= faces[i];
             const steep = getTileSlope(heights, corners.x, x, y) > settings.walkSlope;
             if ((steep || cliffs[i]) && !(bridges[i] & TILE_BRIDGE)) {
                 flags[i] |= TILE_BLOCKED;

@@ -15,6 +15,9 @@ export const BANNED_LOCS: { ids: [from: number, to: number]; why: string; inWate
 // Overlays that are water, as the map files store them. Lava counts: rocks stand in it too.
 export const WATER_OVERLAYS = new Set([6, 7, 19, 442, 547, 568]);
 
+// What grows in a field, by name, as the cache spells it: check-maps.ts finds fields by these
+export const CROP_NAME = /^(cabbage|corn|flax|onion|potato|pumpkin|wheat)s?$/i;
+
 // Only has a model for wall decoration, so as ground decoration it draws nothing
 export const BLOOD_WALL_ONLY = 13312;
 

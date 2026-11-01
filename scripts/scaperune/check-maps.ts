@@ -12,6 +12,7 @@ import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
 import {
     BLOOD_WALL_ONLY,
+    CROP_NAME,
     WATER_OVERLAYS,
     findBannedLocs,
 } from "../../src/game/scaperune/catalogue";
@@ -29,6 +30,7 @@ import {
     getCollisionFlags,
     getStepGrid,
 } from "../../src/game/scaperune/collision";
+import { FALL_MODELS, FALL_ROWS } from "../../src/game/scaperune/falls";
 import {
     MAP_SQUARE_SIZE,
     TILE_BLOCKED,
@@ -202,6 +204,8 @@ const SWEEP: Partial<GeneratorSettings>[] = [
 // road can join it.
 const ROAD_OFF_DECK = 7;
 const ROAD_ALONE_OFF_DECK = 4;
+// How far a deck's end can be from the road running off it
+const DECK_STEP = 10;
 
 // Problems with the roads off a grid's bridges, and how many ran each way
 function checkBridgeRoads(
@@ -209,6 +213,8 @@ function checkBridgeRoads(
     roadTiles: Uint8Array,
 ): { problems: string[]; ways: number[] } {
     const { sizeX } = grid;
+    const corners = sizeX + 1;
+    const ground = grid.levels[0].heights;
     const deck = new Set<number>();
     grid.levels[1].flags.forEach((flag, i) => {
         if (flag & TILE_BRIDGE) {
@@ -244,6 +250,28 @@ function checkBridgeRoads(
         };
         const [first, last] = eastWest ? [x0, x1] : [y0, y1];
         const [low, high] = eastWest ? [y0, y1] : [x0, x1];
+        // The deck stands clear of what's under it, and comes down to its banks at both ends
+        const corner = (along: number, across: number) =>
+            eastWest ? along + across * corners : across + along * corners;
+        const deckAt = (along: number) => {
+            const at = corner(along, high);
+            return { deck: ground[at] + grid.levels[1].heights[at], under: ground[at] };
+        };
+        for (let along = first + 3; along <= last - 2; along++) {
+            const { deck, under } = deckAt(along);
+            if (deck <= under) {
+                problems.push(`the deck's in the ground at ${along},${high}`);
+            }
+        }
+        for (const [end, past] of [
+            [first, first - 2],
+            [last + 1, last + 3],
+        ]) {
+            const step = deckAt(end).deck - ground[corner(past, high)];
+            if (Math.abs(step) > DECK_STEP) {
+                problems.push(`the deck stops ${step} from its bank at ${end},${high}`);
+            }
+        }
         for (const way of [-1, 1]) {
             const end = way < 0 ? first : last;
             for (let step = 1; step <= ROAD_OFF_DECK; step++) {
@@ -509,6 +537,222 @@ function checkBuildingGround(map: GeneratedMap): string[] {
     return problems;
 }
 
+// How far from a fall foam can be: rivers fall across their whole width
+const FOAM_REACH = 14;
+
+// The corners of a rectangle of tiles: the lowest and highest
+function getRectHeights(grid: TileGrid, rect: TileRect): { min: number; max: number } {
+    const corners = grid.sizeX + 1;
+    const { heights } = grid.levels[0];
+    let min = Infinity;
+    let max = -Infinity;
+    for (let cy = rect.y0; cy <= rect.y1 + 1; cy++) {
+        for (let cx = rect.x0; cx <= rect.x1 + 1; cx++) {
+            min = Math.min(min, heights[cx + cy * corners]);
+            max = Math.max(max, heights[cx + cy * corners]);
+        }
+    }
+    return { min, max };
+}
+
+// Tiles in pieces joined at a side or a corner, biggest first, reach being how far apart two can be
+function groupTiles(tiles: number[], sizeX: number, reach = 1): number[][] {
+    const left = new Set(tiles);
+    const pieces: number[][] = [];
+    for (const start of tiles) {
+        if (!left.delete(start)) {
+            continue;
+        }
+        const piece = [start];
+        for (let at = 0; at < piece.length; at++) {
+            for (let dy = -reach; dy <= reach; dy++) {
+                for (let dx = -reach; dx <= reach; dx++) {
+                    const i = piece[at] + dx + dy * sizeX;
+                    if (left.delete(i)) {
+                        piece.push(i);
+                    }
+                }
+            }
+        }
+        pieces.push(piece);
+    }
+    return pieces.sort((a, b) => b.length - a.length);
+}
+
+function getTileBounds(tiles: number[], sizeX: number): TileRect {
+    const xs = tiles.map((i) => i % sizeX);
+    const ys = tiles.map((i) => Math.floor(i / sizeX));
+    return {
+        x0: Math.min(...xs),
+        y0: Math.min(...ys),
+        x1: Math.max(...xs),
+        y1: Math.max(...ys),
+    };
+}
+
+function formatRect({ x0, y0, x1, y1 }: TileRect): string {
+    return x0 === x1 && y0 === y1 ? `${x0},${y0}` : `${x0},${y0} to ${x1},${y1}`;
+}
+
+function isInRect(rect: TileRect, x: number, y: number): boolean {
+    return x >= rect.x0 && y >= rect.y0 && x <= rect.x1 && y <= rect.y1;
+}
+
+// Crops, and their share of the rectangle they're in, that make a field
+const FIELD_LEAST = 9;
+const FIELD_DENSITY = 0.3;
+
+// A field stands on level ground, fence and rows, unless its recipe says it slopes. Fields are
+// found by what's growing, so a map can't forget to say it has one.
+function checkFields(map: GeneratedMap, locs: (id: number) => LocMeta): string[] {
+    const { grid, fields = [] } = map;
+    const { sizeX } = grid;
+    const grown = grid.locs.filter(
+        ({ level, type, id }) => level === 0 && type === 10 && CROP_NAME.test(locs(id).name),
+    );
+    const crops = grown.map((loc) => loc.x + loc.y * sizeX);
+    // In rows, not a few stalks in the grass
+    const planted = groupTiles(crops, sizeX, 2).filter((piece) => {
+        const { x0, y0, x1, y1 } = getTileBounds(piece, sizeX);
+        const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+        return piece.length >= FIELD_LEAST && piece.length / area >= FIELD_DENSITY;
+    });
+    const rects = planted.map((piece) => getTileBounds(piece, sizeX));
+    const problems: string[] = [];
+    for (const rect of [...fields, ...rects]) {
+        const declared = fields.find((field) => isInRect(field, rect.x0, rect.y0));
+        const { min, max } = getRectHeights(grid, rect);
+        if (max !== min && !declared?.slopes) {
+            const name = locs(grown.find(({ x, y }) => isInRect(rect, x, y))?.id ?? 0).name;
+            problems.push(
+                `the field at ${formatRect(rect)} isn't level: ${min} to ${max} (${name})`,
+            );
+        }
+    }
+    return problems;
+}
+
+// Every tile of water lies level, and only a fall can come between two levels of it. Corners
+// are shared, so that also makes a lake or a stretch of river one level all over.
+function checkWater(map: GeneratedMap): string[] {
+    const { grid, waterDrops = [], falls, waterfalls } = map;
+    const { sizeX, sizeY } = grid;
+    const corners = sizeX + 1;
+    const { heights, overlays } = grid.levels[0];
+    const tilted: number[] = [];
+    const spreads = new Map<number, number>();
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            const i = x + y * sizeX;
+            if (!WATER_OVERLAYS.has(overlays[i])) {
+                continue;
+            }
+            const at = x + y * corners;
+            const round = [at, at + 1, at + corners, at + corners + 1].map((c) => heights[c]);
+            const spread = Math.max(...round) - Math.min(...round);
+            if (spread > 0 && !waterDrops.some((drop) => isInRect(drop, x, y))) {
+                tilted.push(i);
+                spreads.set(i, spread);
+            }
+        }
+    }
+    const problems = groupTiles(tilted, sizeX).map((piece) => {
+        const worst = Math.max(...piece.map((i) => spreads.get(i)!));
+        const where = formatRect(getTileBounds(piece, sizeX));
+        return `${piece.length} water tiles aren't level at ${where}, by up to ${worst}`;
+    });
+    // A drop's only a drop with a fall at it
+    const seen = [...falls, ...waterfalls];
+    for (const drop of waterDrops) {
+        const atFall = seen.some(
+            ({ x, y }) =>
+                Math.hypot(x - (drop.x0 + drop.x1) / 2, y - (drop.y0 + drop.y1) / 2) <= FOAM_REACH,
+        );
+        if (!atFall) {
+            problems.push(`the water drops at ${formatRect(drop)} with no fall there`);
+        }
+    }
+    return problems;
+}
+
+// A road in land you can walk on can be walked, its bridge's deck and ends too. A road that's
+// shut has to say so in its recipe and show it in the world. Stretches out of reach altogether
+// aren't counted: nobody gets to them.
+function checkRoadsWalkable(
+    map: GeneratedMap,
+    context: BuildContext,
+    spawn: { x: number; y: number },
+    arena: TileRect,
+): string[] {
+    const { grid, roadTiles, lines, closedRoads = [] } = map;
+    const { sizeX, sizeY } = grid;
+    const flags = getCollisionFlags(grid, context.locs);
+    const steps = getStepGrid(flags, sizeX, arena);
+    const reached = findReachable(flags, sizeX, sizeY, arena, spawn.x, spawn.y);
+    const onRoad = new Uint8Array(roadTiles.length);
+    grid.levels[1].flags.forEach((flag, i) => {
+        onRoad[i] = flag & TILE_BRIDGE ? 1 : 0;
+    });
+    // By its lines: a town's square is paved, but what stands on it is meant to
+    for (const line of lines.filter((road) => road.halfWidth !== FORD_HALF_WIDTH)) {
+        const reach = Math.ceil(line.halfWidth);
+        for (const point of line.points) {
+            const px = Math.floor(point.x);
+            const py = Math.floor(point.y);
+            for (let y = py - reach; y <= py + reach; y++) {
+                for (let x = px - reach; x <= px + reach; x++) {
+                    const near = Math.hypot(x + 0.5 - point.x, y + 0.5 - point.y) <= line.halfWidth;
+                    if (near && isInRect(arena, x, y) && roadTiles[x + y * sizeX]) {
+                        onRoad[x + y * sizeX] = 1;
+                    }
+                }
+            }
+        }
+    }
+    const blocked: number[] = [];
+    for (let y = arena.y0; y <= arena.y1; y++) {
+        for (let x = arena.x0; x <= arena.x1; x++) {
+            const shut = closedRoads.some((road) => isInRect(road, x, y));
+            if (onRoad[x + y * sizeX] && steps.isSolid(x, y) && !shut) {
+                blocked.push(x + y * sizeX);
+            }
+        }
+    }
+    const walkedTo = (i: number) => {
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (reached[i + dx + dy * sizeX]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    const pieces = groupTiles(blocked, sizeX).filter((piece) => piece.some(walkedTo));
+    const count = pieces.reduce((sum, piece) => sum + piece.length, 0);
+    const problems = pieces.map(
+        (piece) =>
+            `road can't be walked: ${piece.length} of ${count} tiles at ` +
+            formatRect(getTileBounds(piece, sizeX)),
+    );
+    for (const road of closedRoads) {
+        const shown = grid.locs.filter(({ x, y, type, id }) => {
+            const solid = type !== 22 && context.locs(id).clipType !== 0;
+            return (
+                solid && isInRect(road, x, y) && (roadTiles[x + y * sizeX] || onRoad[x + y * sizeX])
+            );
+        });
+        const ended = lines.some(({ points }) => {
+            const { x, y } = points[points.length - 1];
+            return isInRect(road, Math.floor(x), Math.floor(y));
+        });
+        if (road.shownBy === "broken end" ? !ended : shown.length === 0) {
+            problems.push(`the road shut at ${formatRect(road)} shows no ${road.shownBy}`);
+        }
+    }
+    return problems;
+}
+
 // Set pieces on land stand on flat ground, with nothing built or painted under them
 function checkLandmarks(map: GeneratedMap): string[] {
     const { grid, landmarks, roadTiles, footprint } = map;
@@ -539,20 +783,61 @@ function checkLandmarks(map: GeneratedMap): string[] {
     return problems;
 }
 
-// A cliff's waterfall comes down into its pool
+// How far the top of a fall can be from the lip behind it, and from level across it. A corner off
+// level across a seat is what shows a fall's dark back.
+const FALL_LIP_SLACK = 8;
+const FALL_SKEW = 2;
+
+// A fall's seated in its face: its foot's in level water, the ground's level across it and out to
+// its edges, it faces the camera, and its top meets the lip. The rest is for looking at.
 function checkFalls(map: GeneratedMap): string[] {
     const { grid, falls } = map;
-    const { flags, overlays } = grid.levels[0];
-    return falls
-        .filter(({ x, y }) => {
-            const i = x + 1 + (y - 2) * grid.sizeX;
-            return !(flags[i] & TILE_BLOCKED) || overlays[i] === 0;
-        })
-        .map(({ x, y }) => `the waterfall at ${x},${y} has no pool`);
+    const { sizeX } = grid;
+    const corners = sizeX + 1;
+    const { heights, overlays } = grid.levels[0];
+    const problems: string[] = [];
+    for (const { x, y } of falls) {
+        const where = `the waterfall at ${x},${y}`;
+        const loc = grid.locs.find(
+            (other) =>
+                other.x === x && other.y === y && FALL_MODELS.some(({ id }) => id === other.id),
+        );
+        if (!loc) {
+            problems.push(`${where} has no model`);
+            continue;
+        }
+        if (loc.rotation !== 0) {
+            problems.push(`${where} doesn't face the camera`);
+        }
+        const inPool = [0, 1, 2].every((across) =>
+            WATER_OVERLAYS.has(overlays[x + across + y * sizeX]),
+        );
+        if (!inPool) {
+            problems.push(`${where} has no pool`);
+        }
+        for (let row = 0; row <= FALL_ROWS; row++) {
+            const line = [-1, 0, 1, 2, 3, 4].map(
+                (across) => heights[x + across + (y + row) * corners],
+            );
+            const skew = Math.max(...line) - Math.min(...line);
+            if (skew > FALL_SKEW) {
+                problems.push(`${where} isn't level across its row ${row}: off by ${skew}`);
+            }
+        }
+        const at = x + 1 + y * corners;
+        const foot = [0, 1, 2].map((row) => heights[at + row * corners]);
+        if (Math.max(...foot) !== Math.min(...foot)) {
+            problems.push(`${where} stands on a slope: ${foot.join(", ")}`);
+        }
+        const { height } = FALL_MODELS.find(({ id }) => id === loc.id)!;
+        const top = heights[at + (FALL_ROWS - 1) * corners] + height;
+        const lip = heights[at + FALL_ROWS * corners];
+        if (Math.abs(top - lip) > FALL_LIP_SLACK) {
+            problems.push(`${where} stops ${top - lip} from its lip`);
+        }
+    }
+    return problems;
 }
-
-// How far from a fall foam can be: rivers fall across their whole width
-const FOAM_REACH = 14;
 
 // Nothing from the wrong place: the ban list, blood that draws nothing, foam away from a fall
 function checkCatalogue(map: GeneratedMap): string[] {
@@ -826,6 +1111,9 @@ function checkMap(
         ...roadHeights.problems,
         ...checkBuildingGround(map),
         ...checkLandmarks(map),
+        ...checkFields(map, createLocs(locTypeLoader)),
+        ...checkWater(map),
+        ...checkRoadsWalkable(map, context, recipe.spawn, gridRect),
         ...checkFalls(map),
         ...checkWalls(map, context, recipe.spawn, gridRect),
         ...(shipped ? [] : checkCatalogue(map)),
@@ -842,7 +1130,7 @@ function checkMap(
             `${map.landmarks.length} landmarks, ${map.falls.length} falls, ` +
             `passes ${map.passes.length}, steepest road ${roadHeights.steepest.toFixed(1)}`,
     );
-    for (const problem of problems.slice(0, 8)) {
+    for (const problem of problems.slice(0, 16)) {
         console.log(`  ${problem}`);
     }
     return stranded === 0 && open >= 200 && problems.length === 0;

@@ -2,7 +2,7 @@ import { Ground } from "./Ground";
 import { BIOMES, BiomeDef } from "./biomes";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
 import { dressGround } from "./dress";
-import { placeFallPools, placeFalls } from "./falls";
+import { getFallDrop, placeFallPools, placeFalls } from "./falls";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
 import {
     LandformBounds,
@@ -50,6 +50,7 @@ import {
     createRivers,
     createWaterFields,
     createWaterLevels,
+    getWaterDrops,
     holdWater,
     placeWaterfalls,
     riverCentre,
@@ -128,6 +129,12 @@ const HILL_STONES = 0.34;
 
 export type { RoadLine };
 
+// A field of crops: level ground, unless a recipe says it's meant to slope
+export type PlacedField = TileRect & { slopes?: boolean };
+
+// A road that's shut on purpose, on these tiles, and what shows it in the world
+export type ClosedRoad = TileRect & { shownBy: "gate" | "rubble" | "broken end" };
+
 // A map, and what check-maps.ts needs to hold it to the rules
 export type GeneratedMap = {
     grid: TileGrid;
@@ -145,6 +152,10 @@ export type GeneratedMap = {
     falls: Point[];
     // Rivers' own
     waterfalls: Point[];
+    // The tiles of water that drop at a fall, which are the only ones that can tilt
+    waterDrops?: TileRect[];
+    fields?: PlacedField[];
+    closedRoads?: ClosedRoad[];
     // Only the generator's towns: a hand-made map's own wall is its own business
     walled?: WalledTown[];
 };
@@ -546,6 +557,7 @@ function createBuild(settings: GeneratorSettings, context: BuildContext): Build 
         terrain: relief.terrain,
         cliffs: new Uint8Array(sizeX * sizeY),
         heldCorners: new Uint8Array(corners.x * corners.y),
+        faces: new Uint8Array(sizeX * sizeY),
         heldForNow: [],
         mainland: new Uint8Array(sizeX * sizeY).fill(1),
         tileHeights: new Float32Array(sizeX * sizeY),
@@ -571,8 +583,15 @@ export function generateMapDetail(
     const toSea = distanceTo(seaTiles, sizeX, sizeY, 8);
     const toFresh = distanceTo(freshTiles, sizeX, sizeY, MAX_BANK);
     sinkSea(build, toSea);
-    const levels = createWaterLevels(build, rivers, fields.pools, fields.fresh, fields.flood);
-    sinkFresh(build, toFresh, levels);
+    const levels = createWaterLevels(
+        build,
+        rivers,
+        fields.pools,
+        fields.fresh,
+        fields.flood,
+        seaTiles,
+    );
+    sinkFresh(build, toFresh, levels, toSea);
 
     const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
     const waterTiles = paintWater(build, waterField);
@@ -593,7 +612,7 @@ export function generateMapDetail(
     const roads = new RoadNetwork(build, waterTiles, bridgeZone);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
-        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone) : [];
+        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone, waterField) : [];
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>
@@ -611,6 +630,7 @@ export function generateMapDetail(
     const walled = chooseWalledTowns(build, buildings, roads);
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
+    roads.pinTiles();
     terrain.smoothPins(ROAD_SMOOTHING);
     // After the roads are graded, so that they don't have levels to fight, and settling then
     // brings the ground to them
@@ -656,6 +676,7 @@ export function generateMapDetail(
         caves,
         falls,
         walled,
+        waterDrops: [...getWaterDrops(build, rivers), ...falls.map((fall) => getFallDrop(fall))],
         waterfalls: rivers.flatMap((river) =>
             river.drops.map(({ along }) => {
                 const across = riverCentre(river, along);

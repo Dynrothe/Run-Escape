@@ -2,7 +2,7 @@ import { Ground } from "../Ground";
 import { BIOMES, BiomeDef } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { dressGround } from "../dress";
-import { placeFallPools, placeFalls } from "../falls";
+import { getFallDrop, placeFallPools, placeFalls } from "../falls";
 import { TILE_BLOCKED } from "../format";
 import { DEFAULT_SETTINGS, GeneratedMap, GeneratorSettings } from "../generator";
 import { Relief, shapeCliffs } from "../landforms";
@@ -40,6 +40,7 @@ import {
     River,
     SEA_BED,
     createWaterLevels,
+    getWaterDrops,
     holdWater,
     riverCentre,
     riverHalfWidth,
@@ -89,7 +90,8 @@ const SETTINGS: GeneratorSettings = {
     boundary: "sea",
     // Says there's relief: the volcano's made here, not by the setting
     volcanoes: 1,
-    waterfalls: 0,
+    // Every fall the lava has comes down at a drop: it lies flat between them, as water does
+    waterfalls: 1,
     roadWidth: 2.4,
     roadCurviness: 0.15,
     rockFaces: 1,
@@ -289,7 +291,7 @@ const SEAWEED = [30537, 30538, 30542];
 const MAX_STRANDED = 500;
 
 // Thick jungle, under the trees
-const UNDERGROWTH = [9010, 9015, 1204, 4825, 4829, 1398, 1390];
+const UNDERGROWTH = [9010, 9015, 1204, 4825, 1398, 1390];
 
 const CORAL = [12498, 12507, 12529, 12509, 12518, 12487];
 
@@ -530,6 +532,7 @@ function createBuild(context: BuildContext, shape: Shape): Build {
         terrain,
         cliffs: new Uint8Array(SIZE_X * SIZE_Y),
         heldCorners: new Uint8Array(corners.x * corners.y),
+        faces: new Uint8Array(SIZE_X * SIZE_Y),
         heldForNow: [],
         mainland: new Uint8Array(SIZE_X * SIZE_Y).fill(1),
         tileHeights: new Float32Array(SIZE_X * SIZE_Y),
@@ -1409,9 +1412,9 @@ function buildMap(context: BuildContext): GeneratedMap {
     shapeLand(build, shape);
 
     const flood = new Uint8Array(corners.x * corners.y);
-    const levels = createWaterLevels(build, [lava], pools, smoothFresh, flood);
+    const levels = createWaterLevels(build, [lava], pools, smoothFresh, flood, seaTiles);
     const freshTiles = getTouchedTiles(smoothFresh, SIZE_X, SIZE_Y);
-    sinkFresh(build, distanceTo(freshTiles, SIZE_X, SIZE_Y, MAX_BANK), levels);
+    sinkFresh(build, distanceTo(freshTiles, SIZE_X, SIZE_Y, MAX_BANK), levels, shape.toSea);
 
     const waterTiles = ground.paintField(sea, SEA_OVERLAY, true, notSea);
     ground.paintField(smoothFresh, LAVA_OVERLAY, true).forEach((tile, i) => {
@@ -1448,6 +1451,7 @@ function buildMap(context: BuildContext): GeneratedMap {
 
     const steepest = SETTINGS.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
+    roads.pinTiles();
     terrain.smoothPins(ROAD_SMOOTHING);
     finishHeights(build);
     blockSteepGround(build);
@@ -1502,7 +1506,8 @@ function buildMap(context: BuildContext): GeneratedMap {
         walkSlope: SETTINGS.walkSlope,
         caves,
         falls,
-        waterfalls: [],
+        waterDrops: [...getWaterDrops(build, [lava]), ...falls.map((fall) => getFallDrop(fall))],
+        waterfalls: lava.drops.map(({ along }) => ({ x: riverCentre(lava, along), y: along })),
     };
 }
 
