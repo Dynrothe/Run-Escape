@@ -506,15 +506,24 @@ function acceptKey(key) {
 
 // ---- Rooms ----
 
-// The maps a player's game says it has unlocked, and has endless for
+// The maps a player's game says it has unlocked, and has endless and hard mode
+// for
 function cleanUnlocks(unlocks) {
     const list = (ids) =>
         Array.isArray(ids) ? ids.slice(0, MAX_UNLOCKED_MAPS).map(cleanId).filter(Boolean) : [];
-    return { maps: list(unlocks?.maps), endless: list(unlocks?.endless) };
+    return {
+        maps: list(unlocks?.maps),
+        endless: list(unlocks?.endless),
+        hard: list(unlocks?.hard),
+    };
 }
 
-function hasUnlocked(unlocks, mapId, endless) {
-    return unlocks.maps.includes(mapId) && (!endless || unlocks.endless.includes(mapId));
+function hasUnlocked(unlocks, mapId, endless, hard) {
+    return (
+        unlocks.maps.includes(mapId) &&
+        (!endless || unlocks.endless.includes(mapId)) &&
+        (!hard || unlocks.hard.includes(mapId))
+    );
 }
 
 // A whole number from a message, kept within min and max
@@ -586,6 +595,7 @@ export function createRelay(limits = {}) {
             hostId: room.hostId,
             mapId: room.mapId,
             endless: room.endless,
+            hard: room.hard,
             started: room.started,
             members: room.members.map((client) => ({
                 id: client.id,
@@ -638,6 +648,7 @@ export function createRelay(limits = {}) {
             max: MAX_PARTY,
             mapId: room.mapId,
             endless: room.endless,
+            hard: room.hard,
         };
     }
 
@@ -779,14 +790,19 @@ export function createRelay(limits = {}) {
     // What stops these players (with these unlocks, or their own) playing on a
     // map: the first one without it, as an error for whoever's asking, or
     // nothing. who: the player's name, said when it isn't the one asking.
-    function missingMap(players, mapId, endless, asking) {
+    function missingMap(players, mapId, endless, hard, asking) {
         if (anyMap) {
             return undefined;
         }
         for (const { client, unlocks = client.unlocks } of players) {
-            if (!hasUnlocked(unlocks, mapId, endless)) {
-                const need = { mapId, endless, ...(client !== asking && { who: client.name }) };
-                const what = `${mapId}${endless ? " (endless)" : ""}`;
+            if (!hasUnlocked(unlocks, mapId, endless, hard)) {
+                const need = {
+                    mapId,
+                    endless,
+                    hard,
+                    ...(client !== asking && { who: client.name }),
+                };
+                const what = `${mapId}${hard ? " (hard)" : ""}${endless ? " (endless)" : ""}`;
                 return {
                     t: "error",
                     message:
@@ -857,6 +873,7 @@ export function createRelay(limits = {}) {
                     [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
                     cleanId(message.mapId) || "lumbridge",
                     message.endless === true,
+                    message.hard === true,
                     client,
                 );
                 if (hostMissing) {
@@ -877,6 +894,7 @@ export function createRelay(limits = {}) {
                     hostId: client.id,
                     mapId: cleanId(message.mapId) || "lumbridge",
                     endless: message.endless === true,
+                    hard: message.hard === true,
                     started: false,
                     members: [client],
                     order: nextRoomOrder++,
@@ -921,6 +939,7 @@ export function createRelay(limits = {}) {
                     [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
                     target.mapId,
                     target.endless,
+                    target.hard,
                     client,
                 );
                 if (missing) {
@@ -982,11 +1001,13 @@ export function createRelay(limits = {}) {
                             : room.mapId;
                     const endless =
                         message.endless !== undefined ? message.endless === true : room.endless;
+                    const hard = message.hard !== undefined ? message.hard === true : room.hard;
                     // Only a map everyone in the room has
                     const missing = missingMap(
                         room.members.map((member) => ({ client: member })),
                         mapId,
                         endless,
+                        hard,
                         client,
                     );
                     if (missing) {
@@ -994,6 +1015,7 @@ export function createRelay(limits = {}) {
                     } else {
                         room.mapId = mapId;
                         room.endless = endless;
+                        room.hard = hard;
                     }
                     broadcastRoom(room);
                 }
@@ -1020,6 +1042,7 @@ export function createRelay(limits = {}) {
                         room.members.map((member) => ({ client: member })),
                         room.mapId,
                         room.endless,
+                        room.hard,
                         client,
                     );
                     if (missing) {

@@ -11,6 +11,7 @@ the version in the corner).
   full screen.
 - Hard mode on every map, once you've beaten it (fun maps from the start): more enemies, tougher and
   harder hitting, twice the elites, bosses that enrage sooner and attack faster, and 25% more coins.
+  In co-op, the host can turn it on once everyone in the room has it.
 
 ## 0.21.0 - 2026-11-01
 

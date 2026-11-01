@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { TeammateView, UiSnapshot } from "../client/GameStore";
 import { describeMissing, parseRoomCode } from "../client/coop/CoopLobby";
-import { RoomView } from "../client/coop/protocol";
+import { RoomListing, RoomView } from "../client/coop/protocol";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
 import { FUN_MAPS, MAPS, MAP_BY_ID, getMap } from "../content/maps";
-import { isEndlessUnlocked, isMapUnlocked } from "../core/save";
+import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
 import "./CoopScreen.css";
 import { AdventurerPanel, Toggle, getStartingWeaponIcon } from "./GameUi";
 import { ItemIcon } from "./ItemIcon";
@@ -37,11 +37,13 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
     const rooms = coop.rooms.filter((listing) => MAP_BY_ID.has(listing.mapId));
     // Unless the relay takes anyone, a room on a map this player hasn't got
     // can't be joined: what's missing, or nothing
-    const missing = (mapId: string, endless: boolean) =>
+    const missing = ({ mapId, endless, hard }: RoomListing) =>
         coop.anyMap ||
-        (isMapUnlocked(ui.save, mapId) && (!endless || isEndlessUnlocked(ui.save, mapId)))
+        (isMapUnlocked(ui.save, mapId) &&
+            (!endless || isEndlessUnlocked(ui.save, mapId)) &&
+            (!hard || isHardUnlocked(ui.save, mapId)))
             ? undefined
-            : describeMissing({ mapId, endless });
+            : describeMissing({ mapId, endless, hard });
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.code === "Escape" && !(e.target instanceof HTMLInputElement)) {
@@ -156,6 +158,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                                 <span className="ui-coop-room-code">{listing.code}</span>
                                 <span className="ui-coop-room-map">
                                     {getMap(listing.mapId).name}
+                                    {listing.hard && ", hard"}
                                     {listing.endless && !getMap(listing.mapId).fun && ", endless"}
                                 </span>
                             </span>
@@ -164,11 +167,11 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             </span>
                             <button
                                 className="ui-button ui-button-small"
-                                disabled={!online || !!missing(listing.mapId, listing.endless)}
-                                title={missing(listing.mapId, listing.endless)}
+                                disabled={!online || !!missing(listing)}
+                                title={missing(listing)}
                                 onClick={() => client.joinRoom(listing.code)}
                             >
-                                {missing(listing.mapId, listing.endless) ? "Locked" : "Join"}
+                                {missing(listing) ? "Locked" : "Join"}
                             </button>
                         </div>
                     ))}
@@ -236,13 +239,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const everyoneReady = room.members.every((m) => m.ready);
     // Unless the relay takes anyone, the host can only pick what everyone in
     // the room has unlocked: who hasn't, or nothing
-    const lacking = (mapId: string, endless: boolean) =>
+    const lacking = (mapId: string, endless: boolean, hard = false) =>
         ui.coop.anyMap
             ? undefined
             : room.members.find(
                   (m) =>
                       !m.unlocks?.maps.includes(mapId) ||
-                      (endless && !m.unlocks.endless.includes(mapId)),
+                      (endless && !m.unlocks.endless.includes(mapId)) ||
+                      (hard && !m.unlocks.hard.includes(mapId)),
               );
     // A map this game hasn't got (a newer host's) shows as the first
     const map = MAP_BY_ID.get(room.mapId) ?? MAPS[0];
@@ -401,13 +405,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                           ? "Endless"
                                           : "Fifteen minutes and the boss"}
                                 </div>
+                                {room.hard && <div className="ui-card-style">On hard mode</div>}
                             </div>
                         </div>
                     </div>
                 )}
                 {ui.coop.error && <div className="ui-coop-error">{ui.coop.error}</div>}
             </div>
-            <div className="ui-panel rs-border rs-background ui-select-bar">
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
                 <button className="ui-button" onClick={() => client.leaveRoom()}>
                     Leave
                 </button>
@@ -444,6 +449,30 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                         )}
                     </div>
                 )}
+                {isHost && (
+                    <div
+                        className={
+                            "ui-endless" +
+                            (isHardUnlocked(ui.save, map.id) ? "" : " ui-endless-locked")
+                        }
+                    >
+                        <span className="ui-endless-name">Hard</span>
+                        {!isHardUnlocked(ui.save, map.id) ? (
+                            <span className="ui-endless-hint">Beat the map</span>
+                        ) : !room.hard && lacking(map.id, false, true) ? (
+                            // It can be turned off, but only on once everyone's beaten it
+                            <span className="ui-endless-hint">
+                                {lacking(map.id, false, true)!.name} hasn't beaten it
+                            </span>
+                        ) : (
+                            <Toggle
+                                on={room.hard}
+                                label="Hard"
+                                onToggle={() => client.toggleHard()}
+                            />
+                        )}
+                    </div>
+                )}
                 <button
                     className={
                         "ui-button ui-coop-ready" +
@@ -462,6 +491,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                         onClick={() => client.startCoopRun()}
                     >
                         Start · {map.name}
+                        {room.hard && " hard"}
                     </button>
                 )}
             </div>

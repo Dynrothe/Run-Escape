@@ -438,27 +438,30 @@ export class GameClient implements GameFrameHandler {
             const hard = snapshot.hard && isHardUnlocked(this.save, mapId);
             this.store.set({ mapId, endless, hard });
             if (this.coop.isHost) {
-                this.coop.setMap(mapId, endless);
+                this.coop.setMap(mapId, endless, hard);
             }
         }
     }
 
     // Endless runs, for a map that's been beaten
     toggleEndless(): void {
-        const { mapId, endless } = this.store.getSnapshot();
+        const { mapId, endless, hard } = this.store.getSnapshot();
         if (endless || isEndlessUnlocked(this.save, mapId)) {
             this.store.set({ endless: !endless });
             if (this.coop.isHost) {
-                this.coop.setMap(mapId, !endless);
+                this.coop.setMap(mapId, !endless, hard);
             }
         }
     }
 
     // Hard mode, for a map that's been beaten
     toggleHard(): void {
-        const { mapId, hard } = this.store.getSnapshot();
+        const { mapId, endless, hard } = this.store.getSnapshot();
         if (hard || isHardUnlocked(this.save, mapId)) {
             this.store.set({ hard: !hard });
+            if (this.coop.isHost) {
+                this.coop.setMap(mapId, endless, !hard);
+            }
         }
     }
 
@@ -491,8 +494,8 @@ export class GameClient implements GameFrameHandler {
 
     // A room of this player's, for the map picked
     createRoom(open: boolean): void {
-        const { mapId, endless } = this.store.getSnapshot();
-        this.coop.create(open, mapId, endless);
+        const { mapId, endless, hard } = this.store.getSnapshot();
+        this.coop.create(open, mapId, endless, hard);
     }
 
     // Another page of the open rooms
@@ -532,12 +535,14 @@ export class GameClient implements GameFrameHandler {
         return url.toString();
     }
 
-    // The maps this player has, and has endless for, which rooms go by
+    // The maps this player has, and has endless and hard mode for, which rooms
+    // go by
     private getUnlocks(): Unlocks {
         const ids = [...MAPS, ...FUN_MAPS].map((m) => m.id);
         return {
             maps: ids.filter((id) => isMapUnlocked(this.save, id)),
             endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
+            hard: ids.filter((id) => isHardUnlocked(this.save, id)),
         };
     }
 
@@ -570,6 +575,7 @@ export class GameClient implements GameFrameHandler {
             mapId: map.id,
             endless:
                 map.fun !== undefined || (room.endless && isEndlessUnlocked(this.save, map.id)),
+            hard: room.hard === true && isHardUnlocked(this.save, map.id),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -889,6 +895,7 @@ export class GameClient implements GameFrameHandler {
             spawnX: map.spawn.x,
             spawnY: map.spawn.y,
             endless: game.endless,
+            hard: game.hard,
             party,
             focus,
         });
