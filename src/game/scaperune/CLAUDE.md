@@ -746,7 +746,7 @@ Don't spend a round on these.
   a low count. Heavier kits aren't an option.
 - **A family of one makes a town of copies.** Look for a 1 in the [Biomes](#biomes) table. Try another seed, or add prefabs to
   the family.
-- **Big maps take a while to build.** 8 s at 16 squares and 26 s at 28: see [How big a map can be](#how-big-a-map-can-be).
+- **Big maps take a while to build.** 8 s at 16 squares and 28 s at 28: see [How big a map can be](#how-big-a-map-can-be).
 
 **Tried and dropped**
 
@@ -1307,7 +1307,7 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
 | -------------- | ----------------- | -------- | --------------- | --------- |
 | 8              | 410 k             | 2.3 s    |                 | 640 MB    |
 | 16             | 1.3 M             | 8 s      | 7.3 s           | 1 GB      |
-| 28             | 3.7 M             | 26 s     | 23 s            | 1.7 GB    |
+| 28             | 3.7 M             | 28 s     | 23 s            | 1.7 GB    |
 
 - **What's left is mostly roads.** At 16 squares buildings cost about 3 s and `sites` next to nothing: with neither it's 4.3 s.
   At 28, finding the roads to a town's buildings is 7 s of the 24, so `sites: 0` doesn't help any more and few buildings does.
