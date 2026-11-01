@@ -8,6 +8,7 @@ import {
     WallRect,
     forWallTiles,
     getGateColumns,
+    getTowerSpan,
     getWallInset,
     getWallSide,
     placeCityWall,
@@ -929,7 +930,7 @@ function pickWallKit(build: Build, town: number, members: PlacedBuilding[]): Cit
     const biome = Object.keys(BIOMES).find((id) => BIOMES[id as BiomeId] === here) ?? "";
     const byFamily = CITY_WALL_IDS.filter((id) => CITY_WALLS[id].families.includes(family));
     const byBiome = CITY_WALL_IDS.filter((id) => CITY_WALLS[id].biomes.includes(biome));
-    const from = [byFamily, byBiome, CITY_WALL_IDS].find((ids) => ids.length > 0)!;
+    const from = byFamily.length > 0 ? byFamily : byBiome;
     return CITY_WALLS[pick(roll, from)];
 }
 
@@ -1011,6 +1012,42 @@ function planGates(build: Build, roads: RoadNetwork, kit: CityWallKit, rect: Wal
         }
     });
     return gates;
+}
+
+// What of a wall won't bend to the ground: a tower stands on a plot, and a wall that's level all
+// through has the whole ring pinned, which brings the ground to it
+function levelWall(build: Build, kit: CityWallKit, rect: WallRect): void {
+    const { terrain } = build;
+    const { tower, width } = kit;
+    if (tower) {
+        const { back } = getTowerSpan(kit);
+        for (let turn = 0; turn < 4; turn++) {
+            const side = getWallSide(rect, turn);
+            const size = tower.inside + 2;
+            const x = Math.min(side.x(-back, -back), side.x(size - 1 - back, size - 1 - back));
+            const y = Math.min(side.y(-back, -back), side.y(size - 1 - back, size - 1 - back));
+            const height = getPlotHeight(build, x, y, size, size);
+            if (height !== undefined) {
+                pinPlot(build, x, y, size, size, height);
+            }
+        }
+    }
+    if (kit.level) {
+        const { min, max } = terrain.getRange(
+            rect.x0,
+            rect.y0,
+            rect.x1 - rect.x0 + 1,
+            rect.y1 - rect.y0 + 1,
+        );
+        const height = Math.round((min + max) / 2);
+        const band = width + 2;
+        const strip = (x: number, y: number, sizeX: number, sizeY: number) =>
+            pinPlot(build, x, y, sizeX, sizeY, height);
+        strip(rect.x0 - 1, rect.y0 - 1, rect.x1 - rect.x0 + band, band);
+        strip(rect.x0 - 1, rect.y1 - width, rect.x1 - rect.x0 + band, band);
+        strip(rect.x0 - 1, rect.y0 - 1, band, rect.y1 - rect.y0 + band);
+        strip(rect.x1 - width, rect.y0 - 1, band, rect.y1 - rect.y0 + band);
+    }
 }
 
 // The tiles out of each building's door, which a wall has to leave clear
@@ -1158,6 +1195,7 @@ export function chooseWalledTowns(
         for (const i of tiles) {
             ground.reserved[i] = 1;
         }
+        levelWall(build, kit, rect);
         for (const gate of gates) {
             openGate(build, roads, kit, rect, gate);
         }

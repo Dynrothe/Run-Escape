@@ -68,6 +68,8 @@ export type CityWallKit = {
     pier?: { id: number; every: number };
     // A tower on each corner in place of the corner
     tower?: WallTower;
+    // Nothing in it's contoured, so it's only for level ground: the generator levels its ring
+    level?: boolean;
     // For the automatic choice: the town families and the biomes it suits
     families: string[];
     biomes: string[];
@@ -85,7 +87,7 @@ const KITS = {
         width: 1,
         chamfer: 3,
         families: ["lumbridge"],
-        biomes: ["meadow"],
+        biomes: ["meadow", "elven", "astral", "fairy"],
         gateSize: 6,
         gateParts: [
             [0, -1, 0, 24029, LOC_POST, 0],
@@ -177,9 +179,10 @@ const KITS = {
         families: ["al", "pollnivneach", "sophanem", "ape", "taibwo"],
         biomes: ["desert", "jungle", "tropical"],
     },
-    // Yanille's at 2542,3110. Nothing in it's contoured, so it wants flat ground.
+    // Yanille's at 2542,3110
     yanille: {
         label: "Yanille",
+        level: true,
         outer: { wall: 17088, rail: 1913 },
         inner: { wall: 17088, rail: 1913 },
         walk: 10,
@@ -250,7 +253,7 @@ export function getWallSide(rect: WallRect, turn: number) {
 }
 
 // How many tiles from a corner a tower covers along a wall, with its centre on the walkway's
-function getTowerSpan(kit: CityWallKit): { back: number; on: number } {
+export function getTowerSpan(kit: CityWallKit): { back: number; on: number } {
     const across = (kit.tower?.inside ?? 0) + 2;
     const back = ((across - 1) >> 1) - ((kit.width - 1) >> 1);
     return { back, on: across - back };
@@ -479,11 +482,27 @@ export function placeCityWall(
                 along++;
                 continue;
             }
-            const start = along;
+            let start = along;
             while (along <= last && stands[along]) {
                 along++;
             }
-            const end = along - 1;
+            let end = along - 1;
+            // A cap needs ground of its own, so a wall that's stopped by something stops a column
+            // shorter
+            const capFits = (column: number) => {
+                for (let across = -1; across <= width; across++) {
+                    if (!free(x(column, across), y(column, across))) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            while (end >= start && end < last && !capFits(end + 1)) {
+                end--;
+            }
+            while (start <= end && start > inset && !capFits(start - 1)) {
+                start++;
+            }
             // Anything shorter than this is only a lump
             if (end - start < 2) {
                 continue;
@@ -531,7 +550,9 @@ export function placeCityWall(
             // The tower's faces take the tile where the wall would meet it, so it stops a tile
             // short with only its walkway going on
             const { back, on } = getTowerSpan(kit);
-            placeTower(ground, tower, x(-back, -back), y(-back, -back));
+            const towerX = Math.min(x(-back, -back), x(on - 1, on - 1));
+            const towerY = Math.min(y(-back, -back), y(on - 1, on - 1));
+            placeTower(ground, tower, towerX, towerY);
             const end = sides[before];
             for (let across = 0; across < width; across++) {
                 solid(x(on - 1, across), y(on - 1, across));
