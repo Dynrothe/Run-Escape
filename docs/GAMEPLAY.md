@@ -178,6 +178,13 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
+- **Hard mode**: the switch beside Endless, open once you've beaten the map (from the start on fun
+  maps), on your own for now rather than in co-op. Enemies have more hitpoints and hit harder, more
+  of them come at once, every elite is two, and bosses enrage at 65% of their hitpoints and attack
+  15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's
+  bought everything walks through them, and the late ones the least. Experience from bones is 10%
+  lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
+  records of its own. A win counts as a win on the map, and turns its tick gold.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
   would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there

@@ -50,6 +50,7 @@ import {
     getQuestProgress,
     isEndlessRecord,
     isEndlessUnlocked,
+    isHardUnlocked,
     isMapUnlocked,
     recordRun,
     refundUpgrades,
@@ -432,8 +433,10 @@ export class GameClient implements GameFrameHandler {
 
     selectMap(mapId: string): void {
         if (isMapUnlocked(this.save, mapId)) {
-            const endless = this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId);
-            this.store.set({ mapId, endless });
+            const snapshot = this.store.getSnapshot();
+            const endless = snapshot.endless && isEndlessUnlocked(this.save, mapId);
+            const hard = snapshot.hard && isHardUnlocked(this.save, mapId);
+            this.store.set({ mapId, endless, hard });
             if (this.coop.isHost) {
                 this.coop.setMap(mapId, endless);
             }
@@ -448,6 +451,14 @@ export class GameClient implements GameFrameHandler {
             if (this.coop.isHost) {
                 this.coop.setMap(mapId, !endless);
             }
+        }
+    }
+
+    // Hard mode, for a map that's been beaten
+    toggleHard(): void {
+        const { mapId, hard } = this.store.getSnapshot();
+        if (hard || isHardUnlocked(this.save, mapId)) {
+            this.store.set({ hard: !hard });
         }
     }
 
@@ -711,6 +722,9 @@ export class GameClient implements GameFrameHandler {
         if (!isEndlessUnlocked(save, this.store.getSnapshot().mapId)) {
             this.store.set({ endless: false });
         }
+        if (!isHardUnlocked(save, this.store.getSnapshot().mapId)) {
+            this.store.set({ hard: false });
+        }
         this.persist();
     }
 
@@ -778,6 +792,7 @@ export class GameClient implements GameFrameHandler {
         const endless =
             map.fun !== undefined ||
             (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
+        const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const characterId = map.fun?.character ?? this.store.getSnapshot().characterId;
         if (!(await this.travelTo(mapId, "characters"))) {
             return;
@@ -793,6 +808,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             endless,
+            hard,
             armoury: { ...this.save.armoury },
         });
         for (let i = 0; i < this.options.stress; i++) {
@@ -1188,6 +1204,11 @@ export class GameClient implements GameFrameHandler {
         );
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
+        const firstHardWin =
+            result.hard &&
+            result.victory &&
+            !isDevMap(sim.map.id) &&
+            !this.save.hardVictories[sim.map.id];
         const newGear = isDevMap(sim.map.id)
             ? []
             : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
@@ -1205,7 +1226,7 @@ export class GameClient implements GameFrameHandler {
         const unlockedItems = lockedItems.filter((i) => this.save.unlockedItems.includes(i.id));
         if (unlockedMap) {
             // Ready for the next run
-            this.store.set({ mapId: unlockedMap.id, endless: false });
+            this.store.set({ mapId: unlockedMap.id, endless: false, hard: false });
         }
         this.store.set({
             result: {
@@ -1214,6 +1235,7 @@ export class GameClient implements GameFrameHandler {
                 damage: getDamageViews(sim, result.stats),
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
+                firstHardWin,
                 unlockedMap: unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),

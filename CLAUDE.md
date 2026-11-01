@@ -31,6 +31,7 @@ go stale. Add anything that cost you time to work out.
 | The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                   |
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`              |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`         |
+| Hard mode's numbers (each map's are on its `MapDef`)  | `src/game/content/hard.ts`               |
 | Caskets and the inventory                             | `src/game/core/Loot.ts`                  |
 | Random events: who turns up, what they do             | `src/game/content/randomEvents.ts`       |
 | Save data and migrations                              | `src/game/core/save.ts`                  |
@@ -94,6 +95,7 @@ npx tsx scripts/game/simulate-run.ts wizard 3                # one adventurer, 3
 MAP=barrows npx tsx scripts/game/simulate-run.ts "" 3        # everyone on one map, 3 seeds
 MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # everything bought
 ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
+HARD=1 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts wizard 3    # hard mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # co-op
 ```
@@ -106,6 +108,9 @@ PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts ""
 - For a change to one combat style, compare all three styles, so you can see the gap between them.
 - For a change to co-op's balance (`content/coop.ts`, or anything a party does differently), run
   `PARTY=2` and `PARTY=4` too. The bot plays each player on their own, with no teamwork.
+- For hard mode's numbers, compare `HARD=1` with normal on the same seeds, and use at least 6 seeds:
+  with 3, a lower multiplier can come out harder. Go by wins as well as how long runs last: the bot
+  can't win on some maps even on normal, and on early maps it lasts until the final boss either way.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit

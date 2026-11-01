@@ -8,7 +8,7 @@ import { BossAttackDef, emptyStats } from "../content/types";
 import { getWeapon } from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, Pickup } from "./entities";
-import { createSave, migrateSave, recordRun } from "./save";
+import { SAVE_VERSION, createSave, migrateSave, recordRun } from "./save";
 import { makeGrid } from "./world/testGrid";
 
 function openField(): string[] {
@@ -392,7 +392,7 @@ describe("Halloween rewards", () => {
         const { trophies: _, ...old } = createSave();
         const migrated = migrateSave({ ...old, version: 7 });
         expect(migrated.trophies).toEqual([]);
-        expect(migrated.version).toBe(8);
+        expect(migrated.version).toBe(SAVE_VERSION);
         const kept = migrateSave({ ...old, trophies: ["jar_of_dreams", "nope", "jar_of_dreams"] });
         expect(kept.trophies).toEqual(["jar_of_dreams"]);
     });
