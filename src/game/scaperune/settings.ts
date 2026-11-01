@@ -120,6 +120,8 @@ export type GeneratorSettings = {
     // Settlements
     buildings: number;
     // How many places buildings gather; 0 spreads them all over
+    // How much a map gathers into places about 50 tiles apart, with quiet land between
+    sites: number;
     towns: number;
     // Tiles from a town's middle to its edge
     townSize: number;
@@ -265,6 +267,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     roadCurviness: share("Road curviness", { when: hasRoads }),
 
     buildings: share("Buildings"),
+    sites: share("Gathered places"),
     towns: number("Towns", 0, 8, 1, { when: hasBuildings }),
     townSize: number("Town size", 10, 60, 2, { when: (s) => s.buildings > 0 && s.towns > 0 }),
     houses: flag("Houses", { when: hasBuildings }),
@@ -360,6 +363,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
         name: "Settlements",
         keys: [
             "buildings",
+            "sites",
             "towns",
             "townSize",
             "houses",
@@ -437,6 +441,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     roadCurviness: 0.4,
 
     buildings: 0.5,
+    sites: 1,
     towns: 0,
     townSize: 30,
     houses: true,
@@ -757,6 +762,7 @@ const KEPT_BY_RANDOM: readonly SettingKey[] = [
     "squaresX",
     "dressing",
     "flatness",
+    "sites",
     "squaresY",
     "heightmap",
     "spawnX",

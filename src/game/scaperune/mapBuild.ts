@@ -72,6 +72,8 @@ export type Build = {
     plots: Plot[];
     // Towns laid out from the middle
     towns?: PlannedTown[];
+    // Places things gather at, with quieter land between them
+    sites?: Point[];
 };
 
 // The water as painted: repainted when a ford cuts through it

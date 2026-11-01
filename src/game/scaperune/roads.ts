@@ -411,12 +411,6 @@ export class RoadNetwork {
                 this.tiles[ground.tile(x, y)] = 1;
             }
         }
-        for (let x = x0; x <= x1; x++) {
-            this.samples.push({ x, y: y0 }, { x, y: y1 });
-        }
-        for (let y = y0; y <= y1; y++) {
-            this.samples.push({ x: x0, y }, { x: x1, y });
-        }
     }
 
     // A round of road, for a town's square

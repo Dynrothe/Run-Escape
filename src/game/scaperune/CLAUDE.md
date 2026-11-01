@@ -188,6 +188,11 @@ round the town as before, and trees come back over 32 tiles past its paved core 
 prefabs, by the start of their names, and its fence goes with them (`KIT_FENCES`). `Walled city` is the preset for a big one, and
 `scaperune_town` is the dev map.
 
+**Sites.** A real region's settlements are about 50 tiles apart, mostly hamlets, with quiet land between them. `getSites` picks
+places that far apart, `sites` being how many. With no `towns` asked for, a map's buildings gather in hamlets at the first of them,
+landmarks take the rest, and scatter goes by `getPace`: more near a site and less between them. Roads get a stone every 40 tiles.
+A town's `towns` setting still works as before, with sites spaced round its towns.
+
 **Vignettes** are one or two small groups a building, against a wall without a door, of what its biome's towns really have.
 
 **Waymarkers** stand beside roads, turn about, every 16 tiles at 1.

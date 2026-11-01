@@ -320,6 +320,13 @@ const PIECES_A_SQUARE = 1.5;
 
 const TRIES_A_PIECE = 40;
 
+// How near a town a site counts as taken, tries at each site, and how far off it a piece can be
+const SITE_TAKEN = 30;
+
+const SITE_TRIES = 8;
+
+const SITE_JITTER = 16;
+
 // Houses in a drowned town
 const DROWNED_HOUSES = 3;
 
@@ -364,6 +371,8 @@ const EDGE_SHARE = 0.7;
 const MARKER_SPACING = 16;
 
 const MARKER_OFFSET = 2;
+
+const ROADSIDE_MARKERS = 0.4;
 
 // Tiles across a maze's corridors, with a tile of hedge between them. Crowds have to fit.
 const MAZE_CELL = 3;
@@ -721,9 +730,24 @@ export function placeSetPieces(build: Build, roads: RoadNetwork, water: Uint8Arr
     );
     const placed: PlacedPiece[] = [];
     const used = new Map<string, number>();
+    // The sites with nothing on them first, a little off their middles. Rolled for anyway, so
+    // that a map with no sites comes out as it did.
+    const sites = (build.sites ?? []).filter(
+        (site) =>
+            !build.towns?.some(
+                ({ x0, y0, x1, y1 }) =>
+                    Math.hypot(site.x - (x0 + x1) / 2, site.y - (y0 + y1) / 2) < SITE_TAKEN,
+            ),
+    );
     for (let attempt = 0; attempt < wanted * TRIES_A_PIECE && placed.length < wanted; attempt++) {
-        const middleX = Math.round(lerp(arena.x0, arena.x1, rng()));
-        const middleY = Math.round(lerp(arena.y0, arena.y1, rng()));
+        const site = sites[attempt % Math.max(sites.length, 1)];
+        const spotX = lerp(arena.x0, arena.x1, rng());
+        const spotY = lerp(arena.y0, arena.y1, rng());
+        const onSite = site && attempt < sites.length * SITE_TRIES;
+        const nearX = site ? site.x + (spotX / arena.x1 - 0.5) * SITE_JITTER : spotX;
+        const nearY = site ? site.y + (spotY / arena.y1 - 0.5) * SITE_JITTER : spotY;
+        const middleX = Math.round(onSite ? nearX : spotX);
+        const middleY = Math.round(onSite ? nearY : spotY);
         const names = biomeAt(middleX, middleY).landmarks.filter(
             (name) => !["wreck", "sunken"].includes(SET_PIECES[name].kind),
         );
@@ -860,7 +884,7 @@ export function chooseWalledTowns(
 ): WalledTown[] {
     const { settings, ground, arena, rng, terrain, spawn } = build;
     const walled: WalledTown[] = [];
-    if (settings.townWalls <= 0) {
+    if (settings.townWalls <= 0 || settings.towns <= 0) {
         return walled;
     }
     const towns = new Map<number, PlacedBuilding[]>();
@@ -969,13 +993,15 @@ export function placeTownWalls(build: Build, walled: WalledTown[], roadTiles: Ui
 export function placeWaymarkers(build: Build, roads: RoadNetwork): Point[] {
     const { settings, ground, biomeAt, rng, toEdge } = build;
     const markers: Point[] = [];
-    if (settings.waymarkers <= 0) {
+    // Something to see on the way, on a map of sites: no road goes far with nothing by it
+    const share = Math.max(settings.waymarkers, settings.sites * ROADSIDE_MARKERS);
+    if (share <= 0) {
         return markers;
     }
     for (const line of roads.lines) {
         const { points, lead, halfWidth } = line;
         let side = rng() < 0.5 ? 1 : -1;
-        const spacing = Math.round(MARKER_SPACING / settings.waymarkers);
+        const spacing = Math.round(MARKER_SPACING / share);
         for (let at = lead + spacing; at + 1 < points.length; at += spacing) {
             const from = points[at];
             const to = points[at + 1];

@@ -80,7 +80,7 @@ import {
     placeWaymarkers,
 } from "./structures";
 import { limitSlope } from "./terrain";
-import { getTownFade, getTownPaving } from "./townPlan";
+import { getPace, getTownFade, getTownPaving } from "./townPlan";
 import { placeVignettes } from "./vignettes";
 
 export * from "./settings";
@@ -302,9 +302,10 @@ function scatter(build: Build, water: Uint8Array): void {
             // Nothing grows on the snow, and trees take over from a town's buildings
             const bare = terrain.height[terrain.corner(x, y)] > snowLine ? 0 : 1 - rocky;
             const fade = getTownFade(build, x, y);
-            const treeChance = (inBelt ? 0.5 : settings.trees * density) * bare * fade;
-            const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006) * fade;
-            const propChance = settings.props * PROP_CHANCE * bare * fade;
+            const pace = inBelt ? 1 : getPace(build, x, y);
+            const treeChance = (inBelt ? 0.5 : settings.trees * density * pace) * bare * fade;
+            const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006) * fade * pace;
+            const propChance = settings.props * PROP_CHANCE * bare * fade * pace;
             if (stones && edge + hillWander(x / 14, y / 14) * 8 < 5 && edge > -6) {
                 // Rock heaped along the edge, where the ground gets too steep, in a line
                 // that wanders so that it doesn't show the arena's edge
@@ -357,7 +358,7 @@ function scatter(build: Build, water: Uint8Array): void {
                     });
                 }
             } else if (
-                rng() < settings.flowers * 0.4 * bare &&
+                rng() < settings.flowers * 0.4 * bare * pace &&
                 flowerPatches(x / 9, y / 9) > 0.55 &&
                 ground.isClear(x, y, 1, 1)
             ) {

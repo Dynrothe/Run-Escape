@@ -8,6 +8,7 @@ import {
     WALL_NORTH,
     WALL_SOUTH,
     WALL_WEST,
+    lerp,
     smoothstep,
 } from "./mapBuild";
 import { createRng } from "./noise";
@@ -89,8 +90,10 @@ const MAX_PLOT_RISE = 18;
 // A town's paved core, as a share of its reach
 const CORE_SHARE = 0.65;
 
-// Tiles past a town's streets over which trees come back, and how many ground a yard takes
+// Tiles past a town's streets over which trees come back, in a town and in a hamlet, and how
+// many ground a yard takes
 const FADE_TILES = 32;
+const HAMLET_FADE_TILES = 8;
 const YARD_DEEP = 5;
 const YARD_GATE = 2;
 const LEAST_YARDS = 0.4;
@@ -99,6 +102,12 @@ const LEAST_YARDS = 0.4;
 const OVER_CORNER = 5;
 
 const PER_CHURCH = 12;
+
+// How much is scattered near a site and between them, and how far that takes
+const BUSY_PACE = 2.6;
+const QUIET_PACE = 0.6;
+const SITE_NEAR = 14;
+const SITE_FADE = 16;
 
 const WELL = 884;
 const STALLS = [634, 11729, 11730, 634];
@@ -365,7 +374,7 @@ export function planTown(
     const { x0, y0, x1, y1, height } = square;
     const cx = (x0 + x1) >> 1;
     const cy = (y0 + y1) >> 1;
-    const longest = Math.round(settings.townSize * 0.9);
+    const longest = Math.round(Math.min(settings.townSize * 0.9, kind === "hamlet" ? 18 : 99));
 
     // Every way a street could go, then the ones with the most ground
     const ways = [
@@ -536,11 +545,6 @@ export function planTown(
                     continue;
                 }
                 const exit: Exit = { ...door, x: door.x + x, y: door.y + y };
-                const road = roads.getNearest(exit.x, exit.y);
-                const facing = exit.outX * (road.x - exit.x) + exit.outY * (road.y - exit.y);
-                if (facing <= 0) {
-                    continue;
-                }
                 kit.stamp(ground, name, turns, x, y, true);
                 pinPlot(build, x, y, prefab.sizeX, prefab.sizeY, height, exit);
                 markOffLimits(build, roads, x, y, prefab.sizeX, prefab.sizeY, 1);
@@ -600,9 +604,25 @@ export function getTownPaving(build: Build, x: number, y: number): boolean {
 // Trees take over from buildings over about 32 tiles, and the ground stays as busy.
 export function getTownFade(build: Build, x: number, y: number): number {
     let fade = 1;
-    for (const { x0, y0, x1, y1, reach } of build.towns ?? []) {
+    for (const { kind, x0, y0, x1, y1, reach } of build.towns ?? []) {
         const distance = Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2);
-        fade = Math.min(fade, smoothstep((distance - reach * CORE_SHARE) / FADE_TILES));
+        const tiles = kind === "hamlet" ? HAMLET_FADE_TILES : FADE_TILES;
+        fade = Math.min(fade, smoothstep((distance - reach * CORE_SHARE) / tiles));
     }
     return fade;
+}
+
+// How much is scattered on a tile, against a map with no sites: more near one, and less on the
+// land between. Real screens run from nothing to 130 or more, and a map where they're all
+// alike has nowhere to arrive at.
+export function getPace(build: Build, x: number, y: number): number {
+    const { sites } = build;
+    if (!sites || sites.length === 0) {
+        return 1;
+    }
+    let nearest = Infinity;
+    for (const site of sites) {
+        nearest = Math.min(nearest, Math.hypot(x - site.x, y - site.y));
+    }
+    return lerp(BUSY_PACE, QUIET_PACE, smoothstep((nearest - SITE_NEAR) / SITE_FADE));
 }

@@ -58,6 +58,20 @@ const KIT_PATIENCE = 30;
 
 const TOWN_KIT_SEED = 400;
 
+const SITE_SEED = 420;
+
+// Places to a map square, with the setting at 1, tiles between them and in from the edge, and
+// buildings to a hamlet
+const SITES_A_SQUARE = 1.2;
+
+const SITE_SPACING = 50;
+
+const SITE_INSET = 16;
+
+const SITE_TRIES = 40;
+
+const SITE_BUILDINGS = 3;
+
 // Where a family has a fence of its own. Anywhere else it's the biome's.
 export const KIT_FENCES: Record<string, number> = {
     lumbridge: 980,
@@ -446,6 +460,36 @@ function placeBuilding(
     return undefined;
 }
 
+// Places about 50 tiles apart, on ground that can take them, away from the spawn: where a map's
+// hamlets and landmarks go, with quieter land between. Real settlements are 49 to 56 apart.
+function getSites(build: Build, water: Uint8Array, taken: Point[]): Point[] {
+    const { settings, arena, spawn, ground, cliffs, mainland, toEdge } = build;
+    const roll = createRng(settings.seed + SITE_SEED);
+    const wanted = Math.round(
+        settings.sites * settings.squaresX * settings.squaresY * SITES_A_SQUARE,
+    );
+    const sites: Point[] = [];
+    for (let attempt = 0; attempt < wanted * SITE_TRIES && sites.length < wanted; attempt++) {
+        const x = Math.floor(lerp(arena.x0, arena.x1, roll()));
+        const y = Math.floor(lerp(arena.y0, arena.y1, roll()));
+        const i = ground.tile(x, y);
+        const spaced = [...taken, ...sites].every(
+            (other) => Math.hypot(other.x - x, other.y - y) >= SITE_SPACING,
+        );
+        if (
+            spaced &&
+            toEdge(x, y) >= SITE_INSET &&
+            Math.hypot(x - spawn.x, y - spawn.y) >= SITE_SPACING / 2 &&
+            !water[i] &&
+            !cliffs[i] &&
+            mainland[i]
+        ) {
+            sites.push({ x, y });
+        }
+    }
+    return sites;
+}
+
 export function placeBuildings(
     build: Build,
     roads: RoadNetwork,
@@ -453,7 +497,12 @@ export function placeBuildings(
 ): PlacedBuilding[] {
     const { settings } = build;
     const wanted = Math.round(settings.buildings * settings.squaresX * settings.squaresY * 3);
-    const towns = getTownCentres(build);
+    const named = getTownCentres(build);
+    build.sites = settings.sites > 0 ? getSites(build, water, named) : [];
+    // With no towns asked for, what there is to build gathers in hamlets at the first sites
+    const hamlets =
+        named.length > 0 || settings.roads <= 0 ? 0 : Math.ceil(wanted / SITE_BUILDINGS);
+    const towns = [...named, ...build.sites.slice(0, hamlets)];
     const kits = towns.map((): TownKit => ({ misses: 0 }));
     const plots: PlacedBuilding[] = [];
     // Towns are laid out from the middle. What doesn't fit on their streets, and towns with no
