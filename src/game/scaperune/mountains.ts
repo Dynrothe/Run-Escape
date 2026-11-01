@@ -16,7 +16,7 @@ import { Point, smoothPath } from "./paths";
 import { RoadLine, gradeRoads } from "./roadGrades";
 import { ROAD_STEEPEST } from "./roads";
 import { GeneratorSettings } from "./settings";
-import { getTileSlope, limitFaces, limitNorthFaces } from "./terrain";
+import { getTileSlope, liftFaces, limitFaces, limitNorthFaces } from "./terrain";
 
 // What the land's shape comes to: passes through it, what can be walked, rock and caves.
 
@@ -282,15 +282,15 @@ export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
 // taken its tiles out of the mask
 export function dressCliffs(
     build: Build,
-    rock: Uint8Array,
+    painted: Uint8Array,
     skip: Uint8Array,
     falls: Point[],
 ): void {
     const { ground, settings, sizeX, biomeAt } = build;
-    if (!hasRelief(settings)) {
-        return;
-    }
-    const { snowy } = findRockTiles(build, skip);
+    // Land with no rock on it still has steep banks
+    const found = findRockTiles(build, skip);
+    const { snowy } = found;
+    const rock = hasRelief(settings) ? painted : found.rock;
     for (const { x, y } of falls) {
         for (let ty = y; ty < y + FALL_TILES; ty++) {
             rock.fill(0, x + ty * sizeX, x + FALL_TILES + ty * sizeX);
@@ -354,6 +354,7 @@ export function finishHeights(build: Build): void {
     terrain.markPinned(fixed);
     limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
     limitFaces(terrain.height, corners.x, corners.y, STEEPEST_FACE, fixed);
+    liftFaces(terrain.height, corners.x, corners.y, STEEPEST_FACE, fixed);
     limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
     terrain.write((x, y, height) => ground.setHeight(x, y, height));
 }

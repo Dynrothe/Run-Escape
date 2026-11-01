@@ -28,6 +28,11 @@ const OFF_THE_ROCK = -0.3;
 // How much of a floor's real decoration a map gets. A map's scatter adds to the same layer,
 // and between them they come to about 60% of what the real thing has.
 const DRESS_SHARE = 0.6;
+// The least a road has: real paths are at 30 to 60 per 100 tiles, whatever they're made of
+const ROAD_PER_100 = 35;
+// The least any floor has: the real thing's sand and snow are sparser, but it's all there is to
+// see on them here
+const LEAST_PER_100 = 25;
 // On a floor the world doesn't use: decorations per 100 tiles, of the biome's own
 const BIOME_DECOR_PER_100 = 30;
 // Land beside water with a stone on it, and water beside land with a reed in it
@@ -119,8 +124,8 @@ export function dressRock(ground: Ground, rock: Uint8Array, dressing: RockDressi
             }
             const kit = kitAt(x, y);
             if (kit.facets && toFace[i] <= FACET_REACH) {
-                taken[i] = 1;
                 if (roll() < share) {
+                    taken[i] = 1;
                     put(pick(kit.facets), LOC_NORMAL, x, y);
                 }
                 continue;
@@ -200,10 +205,9 @@ export function dressGround(ground: Ground, dressing: GroundDressing): void {
                 continue;
             }
             const kit = kitAt(i);
-            const shore = near.some(isWater);
-            const chance = shore
-                ? SHORE_CHANCE
-                : ((kit?.per100 ?? BIOME_DECOR_PER_100) / 100) * DRESS_SHARE;
+            const least = overlays[i] !== 0 ? ROAD_PER_100 : LEAST_PER_100;
+            const per100 = Math.max(kit?.per100 ?? BIOME_DECOR_PER_100, least);
+            const chance = near.some(isWater) ? SHORE_CHANCE : (per100 / 100) * DRESS_SHARE;
             if (roll() < chance * density) {
                 const ids = kit?.ids ?? biomeDecor(x, y);
                 const id = ids[Math.floor(roll() * ids.length)];

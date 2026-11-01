@@ -2,6 +2,7 @@ import { Ground } from "../Ground";
 import { BIOMES, BiomeDef, CLIFF_FALL, WATERFALL } from "../biomes";
 import { Exit } from "../building";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
+import { dressGround, dressRock, paintRockFloor } from "../dress";
 import { TILE_BLOCKED, TILE_BRIDGE } from "../format";
 import { GeneratedMap } from "../generator";
 import { shapeCliffs } from "../landforms";
@@ -628,13 +629,12 @@ function scatter(build: Build, massif: Float32Array): void {
     }
 }
 
-// Rock on everything that's blocked for being steep, up to the snow: paintRock's, with an edge
-// smoothed further, because here it's looked at close to
-function paintRockFaces(build: Build, skip: Uint8Array, massif: Float32Array): void {
+// Rock on everything that's blocked for being steep, up to the snow. Returns its tiles.
+function paintRockFaces(build: Build, skip: Uint8Array, massif: Float32Array): Uint8Array {
     const { ground, sizeX, sizeY, corners, cliffs, terrain } = build;
     const { heights, flags } = ground.level0;
     const snowLine = getSnowLine(SETTINGS);
-    const rock = new Float32Array(corners.x * corners.y).fill(-1);
+    const rock = new Uint8Array(sizeX * sizeY);
     for (let y = 0; y < sizeY; y++) {
         for (let x = 0; x < sizeX; x++) {
             const i = ground.tile(x, y);
@@ -642,15 +642,12 @@ function paintRockFaces(build: Build, skip: Uint8Array, massif: Float32Array): v
             const summit =
                 massif[terrain.corner(x, y)] > 0.8 && heights[x + y * corners.x] > snowLine;
             if (flags[i] & TILE_BLOCKED && steep && !skip[i] && !summit) {
-                const at = x + y * corners.x;
-                for (const corner of [at, at + 1, at + corners.x, at + corners.x + 1]) {
-                    rock[corner] = 1;
-                }
+                rock[i] = 1;
             }
         }
     }
-    const field = smoothField(rock, corners.x, corners.y, 2);
-    ground.paintField(field, (x, y) => build.biomeAt(x, y).rock.overlay, false, skip);
+    paintRockFloor(ground, rock, (x, y) => build.biomeAt(x, y).rock.overlay, skip);
+    return rock;
 }
 
 // A field with a fence round it, crops in rows
@@ -1196,7 +1193,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     for (let i = 0; i < rockSkip.length; i++) {
         rockSkip[i] = waterTiles[i] | roadTiles[i] | ground.footprint[i] | bridgeZone[i];
     }
-    paintRockFaces(build, rockSkip, massif);
+    const rock = paintRockFaces(build, rockSkip, massif);
     for (const { foot, centre } of [
         { foot: 147, centre: 139 },
         { foot: 236, centre: 133 },
@@ -1231,6 +1228,11 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     placeCityWall(build, roadTiles);
     placeWaymarkers(build, roads);
     scatter(build, massif);
+    dressRock(ground, rock, {
+        kitAt: (x, y) => build.biomeAt(x, y).rock,
+        seed: SETTINGS.seed + 202,
+        share: SETTINGS.rockFaces,
+    });
 
     // Anything you can't get to is only to look at
     const flags = getCollisionFlags(ground.grid, context.locs);
@@ -1238,6 +1240,11 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     for (const i of findStranded(flags, sizeX, arena, reached)) {
         blockTile(ground.grid, i);
     }
+    dressGround(ground, {
+        seed: SETTINGS.seed + 300,
+        density: SETTINGS.dressing,
+        biomeDecor: (x, y) => build.biomeAt(x, y).decor,
+    });
     return {
         grid: ground.grid,
         footprint: ground.footprint,

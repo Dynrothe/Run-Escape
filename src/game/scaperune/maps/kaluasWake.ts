@@ -1,6 +1,7 @@
 import { Ground } from "../Ground";
 import { BIOMES, BiomeDef } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
+import { dressGround } from "../dress";
 import { placeFallPools, placeFalls } from "../falls";
 import { TILE_BLOCKED } from "../format";
 import { DEFAULT_SETTINGS, GeneratedMap, GeneratorSettings } from "../generator";
@@ -21,7 +22,14 @@ import {
     refreshTileHeights,
     smoothstep,
 } from "../mapBuild";
-import { blockSteepGround, cutPasses, finishHeights, paintRock, placeCaves } from "../mountains";
+import {
+    blockSteepGround,
+    cutPasses,
+    dressCliffs,
+    finishHeights,
+    paintRock,
+    placeCaves,
+} from "../mountains";
 import { createNoise, createRng, distanceTo, smoothField } from "../noise";
 import { PathFinder, Point, smoothPath } from "../paths";
 import { PrefabDef, PrefabKit, isDoor, loadPrefab } from "../prefabs";
@@ -126,7 +134,7 @@ const JUNGLE: BiomeDef = {
         [57569, 1],
     ],
     // The volcano's rock comes down through the jungle
-    rock: { ...BIOMES.jungle.rock, overlay: 32 },
+    rock: { ...BIOMES.jungle.rock, overlay: 99 },
 };
 
 const TROPICAL: BiomeDef = {
@@ -1320,7 +1328,9 @@ function paintThinRock(build: Build, rock: Uint8Array, skip: Uint8Array): void {
         }
     }
     const smooth = smoothField(field, corners.x, corners.y, 1);
-    ground.paintField(smooth, (x, y) => biomeAt(x, y).rock.overlay, false, skip);
+    // Only on rock's own tiles: the ground beside a cliff stays plain ground
+    const offRock = skip.map((skipped, i) => (skipped || !rock[i] ? 1 : 0));
+    ground.paintField(smooth, (x, y) => biomeAt(x, y).rock.overlay, false, offRock);
 }
 
 // Anything that can't be walked to is shut off, so nobody stands at it from the far side
@@ -1473,7 +1483,13 @@ function buildMap(context: BuildContext): GeneratedMap {
     landmarks.push(...placeSea(build, waterTiles));
     placeSurf(build, waterTiles, shape, bridgeZone);
     scatter(build, waterTiles, shape);
+    dressCliffs(build, rock, rockSkip, falls);
     shutOffStranded(build);
+    dressGround(ground, {
+        seed: SEED + 300,
+        density: SETTINGS.dressing,
+        biomeDecor: (x, y) => build.biomeAt(x, y).decor,
+    });
 
     return {
         grid: ground.grid,

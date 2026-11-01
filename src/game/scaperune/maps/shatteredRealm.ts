@@ -3,6 +3,7 @@ import { RUN_LENGTH, paced } from "../../content/waves";
 import { Ground } from "../Ground";
 import { CLIFF_FALL, WATERFALL } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
+import { RockKit, dressGround, dressRock, paintRockFloor } from "../dress";
 import { TILE_BLOCKED, TileGrid } from "../format";
 import { GeneratedMap } from "../generator";
 import { Rng, createNoise, createRng, smoothField } from "../noise";
@@ -10,7 +11,7 @@ import { addPathToField, smoothPath } from "../paths";
 import { rotatePrefab } from "../prefab";
 import { BRIDGES, PrefabKit, loadPrefab } from "../prefabs";
 import { BuildContext, MapRecipe } from "../recipe";
-import { Terrain, getTileSlope, limitNorthFaces, spreadNearest } from "../terrain";
+import { Terrain, getTileSlope, liftFaces, limitNorthFaces, spreadNearest } from "../terrain";
 
 // The Shards of Ysmar: a hand-made map. When the sky god Ysmar fell, he broke the world he
 // landed on. Six pieces of it still hang over the stars, joined by causeways his priests
@@ -45,14 +46,23 @@ const VOID_STARS = 39;
 const VOID_BLACK = 139;
 // How much of the noise is cloud
 const CLOUD_LINE = 0.56;
-const ROCK_STONE = 20;
-const ROCK_DARK = 32;
+const ROCK_STONE = 2;
+const ROCK_DARK = 99;
 const COBBLES = 12;
 const PLAIN_STONE = 10;
+const STEEPEST_FACE = 72;
 const DAIS_SIZE = 12;
 const DAIS_RISE = 12;
 const DAIS_STATUE = 7002;
 const PILE_OF_BRICKS = 4769;
+// Grey stone, on grey rock
+const ROCK_KIT: RockKit = {
+    pebbles: [336, 14483, 14482],
+    rubble: [
+        [11434, 2],
+        [11435, 2],
+    ],
+};
 const BLOOD = 331;
 const LAVA = 19;
 // A clear blue-green, for the Glasswood. Its one colour's edge is the shore's
@@ -859,6 +869,14 @@ function dropEdges(map: Map3): void {
     }
 }
 
+// No face past what the real world has: the rock off the edge comes up to meet the land, which
+// stays as it is
+function easeEdges(map: Map3): void {
+    const { terrain, land, spanCorners } = map;
+    const held = Uint8Array.from(land, (value, i) => (value > 0 || spanCorners[i] ? 1 : 0));
+    liftFaces(terrain.height, CORNERS, CORNERS, STEEPEST_FACE, held);
+}
+
 // Ground made flat: for one big thing, which check-maps.ts holds to it, or a whole site
 type Plot = { x: number; y: number; size: number; site?: boolean };
 
@@ -1054,7 +1072,7 @@ function paintWays(map: Map3): void {
     const paved = paving.map((value, i) =>
         Math.max(Math.min(value, -fissures[i] - 1.6), raised[i]),
     );
-    ground.paintField(paved, COBBLES, false);
+    ground.paintField(paved, getPaving, false);
     ground.paintField(fissures, LAVA, true);
 
     // The terrace's cliff
@@ -1067,10 +1085,18 @@ function paintWays(map: Map3): void {
             }
         }
     }
-    ground.paintOverlay(cliff, ROCK_STONE, false, map.water);
+    paintRockFloor(ground, cliff, ROCK_STONE, map.water);
+}
+
+// Plain paving, as real towns are, and cobbles only in the square round the heart: a texture's
+// for a small patch, and over a whole yard it's a band across the screen
+function getPaving(x: number, y: number): number {
+    const inSquare = Math.abs(x - HEART_SQUARE.x) < HEART_SQUARE.half;
+    return inSquare && Math.abs(y - HEART_SQUARE.y) < HEART_SQUARE.half ? COBBLES : PLAIN_STONE;
 }
 
 const YARD = { x0: 166, y0: 170, x1: 218, y1: 226 };
+const HEART_SQUARE = { x: 192, y: 198, half: 14 };
 const KEEP_HEIGHT = 196;
 const WALL_RISE = 46;
 const TOWER_RISE = 74;
@@ -1763,6 +1789,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
     dropEdges(map);
     raiseKeep(map);
     raiseTerrace(map);
+    easeEdges(map);
     map.terrain.write((x, y, height) => ground.setHeight(x, y, height));
     paintFloors(map);
     paintWays(map);
@@ -1817,6 +1844,18 @@ function buildDetail(context: BuildContext): GeneratedMap {
     for (const i of findStranded(collision, SIZE, rect, reached)) {
         blockTile(ground.grid, i);
     }
+
+    // What's on the rock, and on the ground
+    const { overlays } = ground.level0;
+    const rock = Uint8Array.from(overlays, (overlay, i) =>
+        (overlay === ROCK_STONE || overlay === ROCK_DARK) && flags[i] & TILE_BLOCKED ? 1 : 0,
+    );
+    dressRock(ground, rock, { kitAt: () => ROCK_KIT, seed: 202, share: 1 });
+    dressGround(ground, {
+        seed: 300,
+        density: 1,
+        biomeDecor: (x, y) => STREWN[Math.max(map.owner[x + y * CORNERS], 0)].decor,
+    });
     return {
         grid: ground.grid,
         footprint: ground.footprint,

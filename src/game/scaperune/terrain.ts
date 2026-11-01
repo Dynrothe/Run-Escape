@@ -119,6 +119,25 @@ export function limitFaces(
     }
 }
 
+// The same from below: brings up what's too far under its neighbours, for where a corner held
+// high can only be met by the ground coming up to it
+export function liftFaces(
+    field: Float32Array,
+    cornersX: number,
+    cornersY: number,
+    slope: number,
+    held: Uint8Array,
+): void {
+    const pass = (at: number, from: number, distance: number) => {
+        if (!held[at]) {
+            field[at] = Math.max(field[at], field[from] - slope * distance);
+        }
+    };
+    for (let round = 0; round < 3; round++) {
+        sweep(cornersX, cornersY, pass);
+    }
+}
+
 // Fills the unset corners of a field (Infinity) with the value of the nearest set one
 export function spreadNearest(field: Float32Array, cornersX: number, cornersY: number): void {
     const distances = new Float32Array(field.length).fill(Infinity);
