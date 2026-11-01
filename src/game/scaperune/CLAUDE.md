@@ -395,8 +395,9 @@ own building's plot.
 - **A gate keeps 12 tiles clear behind it and 8 in front** (`GATE_CLEAR_IN`, `GATE_CLEAR_OUT`), across its width and 2 tiles past
   each side. Only its road goes there. 12 is a bit under half a screen, so a gate opens on to a street you can see down.
 - **A wall is as big as its buildings need**: 360 tiles of town a building, which is about a sixth of it indoors, capped at
-  `townSize` and never under 14 from its middle. It's stretched up to 20% either way by the seed, and each side then comes in
-  till it's on ground that takes it.
+  `townSize` and never under 22 from its middle. It's stretched up to 20% either way by the seed, and each side then comes in
+  till it's on ground that takes it. Each corner's then cut by 4% to 30% of the shorter side (`cutWallCorners`), by a roll and on
+  past bad ground, which is what stops a city being a box. `WallRect.cuts` holds them, and `placeCityWall` takes them too.
 - **Gates go where outside roads arrive** (`getArrivals`): where the main road's line crosses, or else facing the spawn, a bridge
   or another town. A wall has at least 2, and a side 56 or longer gets one anyway. Each lies on a column of the square, so that
   its street's dead straight.
@@ -636,8 +637,10 @@ Don't spend a round on these.
 - **No mottled ground.** Pieces of one underlay are 14 to 22 tiles at the median, against 2 to 4 in the real world, and edges
   between biomes have no dither.
 - **No invisible walls.** The real world seals drops with 85 and 2639, which draw nothing. Nothing here uses them on purpose.
-- **Streets are straight and square to the map.** Town walls are rectangles with their corners cut, and only for `towns`.
-  Main streets don't turn: each runs from a gate straight to its square.
+- **Streets are straight and square to the map.** Main streets don't turn: each runs from a gate straight to its square.
+- **Town walls have eight sides at most, and only `towns` get one.** A wall's a rectangle with each corner cut by its own amount, so
+  it's a lopsided octagon. There are no inward corners, and `kourend` and `yanille` stay rectangles, as their corners are towers
+  and square.
 - **Only rotation.** The map format has no mirror.
 - **One plane is drawn**, so nothing upstairs is seen unless its tiles are flagged `TILE_SHOWN`, as a city wall's top is.
   That draws what's up there. It doesn't let anyone walk on it: all the collision is the ground's.

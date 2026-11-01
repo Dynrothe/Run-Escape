@@ -372,7 +372,12 @@ function scatter(build: Build, water: Uint8Array): void {
                 flowerPatches(x / 9, y / 9) > 0.55 &&
                 ground.isClear(x, y, 1, 1)
             ) {
-                place(pick(rng, biome.flowers), 1, LOC_NORMAL, x, y);
+                // Some flowers are more than a tile
+                const id = pick(rng, biome.flowers);
+                const { sizeX: across, sizeY: deep } = build.context.locs(id);
+                if (ground.isClear(x, y, across, deep)) {
+                    place(id, Math.max(across, deep), LOC_NORMAL, x, y);
+                }
             }
         }
     }

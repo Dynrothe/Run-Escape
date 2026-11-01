@@ -12,13 +12,14 @@ import {
     hasRelief,
     lerp,
     pick,
+    refreshTileHeights,
 } from "./mapBuild";
-import { createRng } from "./noise";
+import { createRng, distanceTo } from "./noise";
 import { Point } from "./paths";
 import { BuildingKind, PREFABS, getBuildingKind, isBuildingKind } from "./prefabs";
 import { RESERVE_PIECE, RESERVE_PLOT } from "./reservations";
 import { ROAD_STEEPEST, RoadNetwork } from "./roads";
-import { PlannedTown, fillTown, getPlot, layOutTown } from "./townPlan";
+import { LEVEL_FADE, PlannedTown, fillTown, getPlot, layOutTown } from "./townPlan";
 import { WalledTown, getWallInside, isInsideWall } from "./townWalls";
 
 // Where buildings go, and the ground they stand on.
@@ -513,6 +514,9 @@ function placeBuilding(
         for (let step = 0; step <= roads.doorLead; step++) {
             lead.push({ x: exit.x + exit.outX * step, y: exit.y + exit.outY * step });
         }
+        if (wantsRoad && !roads.isLeadClear(lead)) {
+            continue;
+        }
         const end = lead[lead.length - 1];
         const from = { x: Math.floor(end.x), y: Math.floor(end.y) };
         markOffLimits(build, roads, lot.x0, lot.y0, lotX, lotY, 1);
@@ -592,6 +596,11 @@ export function planTowns(build: Build, roads: RoadNetwork, water: Uint8Array): 
     if (wanted === 0) {
         return { middles, kits, byTown, plans, wanted };
     }
+    const rough = new Uint8Array(water.length);
+    rough.forEach((_, i) => {
+        rough[i] = water[i] | build.cliffs[i];
+    });
+    const toRough = distanceTo(rough, build.sizeX, build.sizeY, LEVEL_FADE);
     const share = Math.ceil(wanted / middles.length);
     middles.forEach((middle, town) => {
         const city = plans.find(
@@ -622,13 +631,14 @@ export function planTowns(build: Build, roads: RoadNetwork, water: Uint8Array): 
                 town,
                 family: kits[town].family ?? kitOf(names[0]),
             };
-            const plan = layOutTown(build, roads, water, middle, parts, wantsWall);
+            const plan = layOutTown(build, roads, water, middle, parts, wantsWall, toRough);
             if (plan) {
                 plans.push(plan);
                 byTown[town] = plan;
             }
         }
     });
+    refreshTileHeights(build);
     return { middles, kits, byTown, plans, wanted };
 }
 

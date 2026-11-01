@@ -75,6 +75,8 @@ export type PlannedTown = {
     // How far out from its middle streets run
     reach: number;
     streets: Street[];
+    // Lesser ones, off those
+    sideStreets: Street[];
     // Square and street tiles, which other roads can join once it's joined up itself
     held: number[];
     parts: TownParts;
@@ -131,6 +133,22 @@ const STREET_PAST_WALL = 2;
 // Tiles past the outer edge of a gate's clear space that a road runs straight
 const GATE_STRAIGHT = 2;
 
+// Tiles over which a town's level ground gets back to the land's, past its edge and from water and
+// cliffs, which stay as they are
+export const LEVEL_FADE = 6;
+
+// A side street's half width, and tiles along a main street to the first and between them: room
+// for a row of buildings and yards each side. Streets run to the wall, or whatever stops them.
+const SIDE_STREET_HALF = 2;
+
+const SIDE_STREET_FIRST = 12;
+
+const SIDE_STREET_SPACING = 22;
+
+const SIDE_STREET_JITTER = 6;
+
+const SIDE_STREET_SHORT = SIDE_STREET_HALF + 2;
+
 // Tiles between a plot and water, so that the ground can get down to it
 const WATER_CLEAR = 6;
 
@@ -181,7 +199,14 @@ type Frontage = {
     done: boolean;
 };
 
-export type Street = { points: Point[]; end: Point; length: number; wayX: number; wayY: number };
+export type Street = {
+    points: Point[];
+    end: Point;
+    length: number;
+    wayX: number;
+    wayY: number;
+    halfWidth: number;
+};
 
 // Whether a band of tiles across a street's way can be built on
 function canPave(
@@ -296,7 +321,78 @@ function walkStreet(
     for (let step = 0; step <= length; step++) {
         points.push({ x: from.x + wayX * step, y: from.y + wayY * step });
     }
-    return { points, end: points[points.length - 1], length, wayX, wayY };
+    const end = points[points.length - 1];
+    return { points, end, length, wayX, wayY, halfWidth: def.streetHalf };
+}
+
+// Streets off a main street, turning off both sides of it, for the buildings that the main streets
+// leave no room for. A formal middle has looser ground round it, so where each falls is by a roll,
+// and they stop at whatever's there, the wall included.
+function planSideStreets(
+    build: Build,
+    roads: RoadNetwork,
+    water: Uint8Array,
+    main: Street,
+    def: KindDef,
+    height: number,
+    held: number[],
+    roll: () => number,
+): Street[] {
+    const side: KindDef = { ...def, streetHalf: SIDE_STREET_HALF };
+    const streets: Street[] = [];
+    const last = main.length - GATE_CLEAR_IN;
+    const offset = Math.ceil(def.streetHalf);
+    for (const turn of [-1, 1]) {
+        let along = SIDE_STREET_FIRST + Math.floor(roll() * SIDE_STREET_JITTER);
+        for (
+            ;
+            along < last;
+            along += SIDE_STREET_SPACING + Math.floor(roll() * SIDE_STREET_JITTER)
+        ) {
+            const wayX = main.wayY * turn;
+            const wayY = main.wayX * turn;
+            const at = main.points[along];
+            // From clear of the main street's own tiles, and joined back on to it after
+            const from = { x: at.x + wayX * (offset + 2), y: at.y + wayY * (offset + 2) };
+            const walked = walkStreet(build, roads, water, from, wayX, wayY, 99, side, height);
+            if (walked.length < SHORTEST_STREET) {
+                continue;
+            }
+            const back = [0, 1].map((step) => ({
+                x: at.x + wayX * (offset + step),
+                y: at.y + wayY * (offset + step),
+            }));
+            // Its end's round, and it stops short of what stopped it
+            const kept = walked.points.slice(0, -SIDE_STREET_SHORT);
+            const points = [...back, ...kept];
+            const length = points.length - 1;
+            const street = { ...walked, points, length, end: points[length] };
+            roads.addStreet(points, SIDE_STREET_HALF, height, held);
+            streets.push(street);
+        }
+    }
+    return streets;
+}
+
+// Levels the ground under a town, so that its buildings all stand at about one height and its wall
+// doesn't fight the land. Real towns are 76% to 89% dead flat. toRough is each tile's distance from
+// water and cliffs, up to LEVEL_FADE.
+function levelSite(build: Build, toRough: Float32Array, rect: TileRect, height: number): void {
+    const { terrain, heldCorners, ground, corners } = build;
+    for (let y = rect.y0 - LEVEL_FADE; y <= rect.y1 + LEVEL_FADE; y++) {
+        for (let x = rect.x0 - LEVEL_FADE; x <= rect.x1 + LEVEL_FADE; x++) {
+            if (x < 0 || y < 0 || x >= corners.x || y >= corners.y) {
+                continue;
+            }
+            const at = terrain.corner(x, y);
+            const past = Math.max(rect.x0 - x, x - rect.x1, rect.y0 - y, y - rect.y1, 0);
+            const rough = ground.inside(x, y) ? toRough[ground.tile(x, y)] : 0;
+            const share = smoothstep(1 - past / LEVEL_FADE) * smoothstep(rough / LEVEL_FADE);
+            if (!heldCorners[at]) {
+                terrain.height[at] = lerp(terrain.height[at], height, share);
+            }
+        }
+    }
 }
 
 // A wall's gates, each with its street to the square: as near as can be to where a road's arriving,
@@ -318,7 +414,7 @@ function planGates(
     const turns = [0, 1, 2, 3].sort(
         (a, b) => Number(arrivals[b].real) - Number(arrivals[a].real) || a - b,
     );
-    const edge = Math.ceil(def.streetHalf) + 1;
+    const edge = Math.ceil(def.streetHalf);
     for (const turn of turns) {
         if (gates.length >= wanted) {
             break;
@@ -348,7 +444,7 @@ function planGates(
                 x: turn & 1 ? (wayX < 0 ? square.x0 : square.x1) : inner.x,
                 y: turn & 1 ? inner.y : wayY < 0 ? square.y0 : square.y1,
             };
-            const length = Math.abs(inner.x - from.x) + Math.abs(inner.y - from.y);
+            const length = Math.floor(Math.abs(inner.x - from.x) + Math.abs(inner.y - from.y));
             const street = walkStreet(
                 build,
                 roads,
@@ -397,6 +493,7 @@ export function layOutTown(
     middle: Point,
     parts: TownParts,
     wantsWall: boolean,
+    toRough: Float32Array,
 ): PlannedTown | undefined {
     const { settings, ground } = build;
     const { names, wanted, town, family } = parts;
@@ -512,6 +609,15 @@ export function layOutTown(
         }
     }
 
+    const sideStreets: Street[] = [];
+    if (hasRoads && kind !== "hamlet") {
+        for (const street of kept) {
+            sideStreets.push(
+                ...planSideStreets(build, roads, water, street, def, height, held, roll),
+            );
+        }
+    }
+
     // What's in the middle
     const placeAt = (id: number, x: number, y: number, rotation = 0) =>
         ground.place({ id, type: LOC_NORMAL, rotation, level: 0, x, y }, 2, 2);
@@ -522,6 +628,8 @@ export function layOutTown(
         placeAt(STALLS[2], cx - 1, cy - 6, 1);
         placeAt(STALLS[3], cx - 1, cy + 4, 3);
     }
+    const site = wall ?? getStreetBounds(square, kept);
+    levelSite(build, toRough, site, height);
     const reach = Math.max(...kept.map((street) => street.length), 0) + (x1 - x0) / 2;
     const plan: PlannedTown = {
         kind,
@@ -533,12 +641,25 @@ export function layOutTown(
         height,
         reach,
         streets: kept,
+        sideStreets,
         held,
         parts,
         wall,
     };
     (build.towns ??= []).push(plan);
     return plan;
+}
+
+// What a town without a wall covers: its square and its streets, and a row of buildings each side
+function getStreetBounds(square: TileRect, streets: Street[]): TileRect {
+    const ends = streets.map(({ end }) => end);
+    const rows = SHORTEST_STREET;
+    return {
+        x0: Math.min(square.x0, ...ends.map(({ x }) => x)) - rows,
+        y0: Math.min(square.y0, ...ends.map(({ y }) => y)) - rows,
+        x1: Math.max(square.x1, ...ends.map(({ x }) => x)) + rows,
+        y1: Math.max(square.y1, ...ends.map(({ y }) => y)) + rows,
+    };
 }
 
 // How wide the road through a gate is
@@ -720,7 +841,7 @@ export function fillTown(
     plan: PlannedTown,
 ): PlacedBuilding[] {
     const { settings, ground, kit } = build;
-    const { streets: kept, x0, y0, x1, y1, height, kind, wall, parts } = plan;
+    const { streets: kept, sideStreets, x0, y0, x1, y1, height, kind, wall, parts } = plan;
     const { names, wanted, town, family } = parts;
     const def = KINDS[kind];
     const roll = createRng(settings.seed + TOWN_FILL_SEED + town);
@@ -801,15 +922,16 @@ export function fillTown(
     squareSide(x1, y0, 0, 1, y1 - y0, 1, 0);
     squareSide(x0, y0, 0, 1, y1 - y0, -1, 0);
     const front: Frontage[] = [];
-    for (const street of kept) {
-        const { points, length, wayX, wayY } = street;
+    for (const street of [...kept, ...sideStreets]) {
+        const { points, length, wayX, wayY, halfWidth } = street;
         const start = points[0];
+        const back = Math.ceil(halfWidth + WALL_OFF_STREET);
         for (const side of [-1, 1]) {
             const outX = wayY * side;
             const outY = wayX * side;
             // Lines run east or north, so one that goes out west or south starts at its far end
-            const x = start.x + outX * setBack + (wayX < 0 ? -length : 0);
-            const y = start.y + outY * setBack + (wayY < 0 ? -length : 0);
+            const x = start.x + outX * back + (wayX < 0 ? -length : 0);
+            const y = start.y + outY * back + (wayY < 0 ? -length : 0);
             front.push(line(x, y, Math.abs(wayX), Math.abs(wayY), length, outX, outY, false));
         }
     }

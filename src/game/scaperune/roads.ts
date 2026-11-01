@@ -173,6 +173,17 @@ export class RoadNetwork {
         );
     }
 
+    // Whether a lead can go straight out of something, with nothing in its way that's spoken for.
+    // It's the one bit of road that isn't routed round things.
+    isLeadClear(lead: Point[]): boolean {
+        const { ranks } = this.build.ground.claims;
+        let clear = true;
+        forTilesNear(this.build, lead, this.halfWidth + ROAD_PAINT_MARGIN, (i) => {
+            clear &&= !(ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT && ranks[i] !== RESERVE_STREET);
+        });
+        return clear;
+    }
+
     // Whether a point of road is on a building or a wall or anything that's theirs, or by a
     // bridge's road where nothing's to go. A road coming off a bridge starts out next to that, so
     // it's let off (nearBridge).

@@ -43,7 +43,7 @@ const GATE_CORNER = 5;
 
 // A wall's rectangle, and how much of its band can be lost to water and cliffs before the ground's
 // no place for one. Under the smallest size there's no room for a gate's street and buildings.
-const LEAST_WALL_HALF = 22;
+const LEAST_WALL_HALF = 30;
 
 const MOST_LOST_BAND = 0.2;
 
@@ -58,7 +58,7 @@ const MOST_PULL_IN = 0.4;
 const WALL_STRETCH = 0.2;
 
 // Tiles from a town's chosen middle a wall can move to find ground, and in steps of what
-const WALL_SEARCH = 24;
+const WALL_SEARCH = 48;
 
 const WALL_SEARCH_STEP = 8;
 
@@ -161,7 +161,9 @@ export function fitWall(
 ): WallRect | undefined {
     const { settings, arena, terrain, towns } = build;
     const past = kit.tower ? getTowerSpan(kit).back : 1;
-    const inset = (settings.boundary === "sea" ? 3 : settings.boundaryDepth + 3) + past;
+    const edge = settings.boundary === "sea" ? 3 : settings.boundaryDepth + 3;
+    // Any side's to be able to take a gate, with what's kept clear in front of it
+    const inset = edge + past + GATE_CLEAR_OUT;
     const half = Math.min(Math.sqrt(wanted * TILES_A_BUILDING) / 2, settings.townSize);
     const stretch = 1 + (roll() * 2 - 1) * WALL_STRETCH;
     const halfX = Math.max(Math.round(half * stretch), LEAST_WALL_HALF);
