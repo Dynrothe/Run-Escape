@@ -1495,6 +1495,9 @@ function buildMap(context: BuildContext): GeneratedMap {
         grid: ground.grid,
         footprint: ground.footprint,
         roadTiles,
+        clippedRoads: roads.clipped,
+        // The road up from the landing clips the corner of this hut: a tile, and it reads as meant
+        designed: [{ x0: 192, y0: 137, x1: 192, y1: 137 }],
         lines: roads.lines,
         buildings,
         landmarks,

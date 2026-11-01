@@ -43,6 +43,9 @@ const ROAD_PLOT_MARGIN = 1.25;
 // Tiles a road that leads nowhere takes to narrow away
 const ROAD_TAPER = 7;
 
+// Tiles past a street's edge that a corner where two streets meet can paint
+const JUNCTION_MARGIN = 2.5;
+
 // Tiles a street takes to narrow to the road through its gate
 const STREET_NARROWS = 5;
 
@@ -477,6 +480,14 @@ export class RoadNetwork {
         forTilesNear(this.build, points, halfWidth + ROAD_CLEAR_MARGIN, (i) => {
             claims.takeTile(i, RESERVE_STREET);
             held.push(i);
+        });
+    }
+
+    // Where one street meets another its edges round off, a little past either's width
+    markJunction(point: Point, halfWidth: number): void {
+        const { claims } = this.build.ground;
+        forTilesNear(this.build, [point], halfWidth + JUNCTION_MARGIN, (i) => {
+            claims.markTile(i, RESERVE_LANE);
         });
     }
 

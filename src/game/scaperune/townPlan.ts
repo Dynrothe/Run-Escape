@@ -391,6 +391,7 @@ function planSideStreets(
             const points = [...back, ...walked.points];
             const street = { ...walked, points, length: points.length - 1 };
             roads.addStreet(points, SIDE_STREET_HALF, height, held);
+            roads.markJunction(at, Math.max(def.streetHalf, SIDE_STREET_HALF));
             streets.push(street);
         }
     }

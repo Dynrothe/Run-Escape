@@ -1249,6 +1249,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
         grid: ground.grid,
         footprint: ground.footprint,
         roadTiles,
+        clippedRoads: roads.clipped,
         lines: roads.lines,
         buildings,
         landmarks: [],
