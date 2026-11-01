@@ -102,6 +102,8 @@ export type GeneratorSettings = {
     rocks: number;
     rockMix: number;
     grass: number;
+    // How much of the small things real ground has on it, by floor, on all the land
+    dressing: number;
     flowers: number;
     // Big things that stand about: a biome's own boulders, plants and bones
     props: number;
@@ -250,6 +252,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     rocks: share("Rocks"),
     rockMix: share("Rock size", { when: (s) => s.rocks > 0 }),
     grass: share("Grass"),
+    dressing: share("Ground dressing"),
     flowers: share("Flowers"),
     props: share("Big scenery"),
 
@@ -334,7 +337,17 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
     },
     {
         name: "Scenery",
-        keys: ["trees", "treeClumping", "treeMix", "rocks", "rockMix", "grass", "flowers", "props"],
+        keys: [
+            "trees",
+            "treeClumping",
+            "treeMix",
+            "rocks",
+            "rockMix",
+            "grass",
+            "dressing",
+            "flowers",
+            "props",
+        ],
     },
     { name: "Roads", keys: ["roads", "roadStyle", "roadWidth", "roadCurviness"] },
     {
@@ -407,6 +420,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     rocks: 0.4,
     rockMix: 0.5,
     grass: 0.5,
+    dressing: 1,
     flowers: 0.2,
     props: 0.4,
 
@@ -734,6 +748,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
 // uploaded image, and how a run plays rather than how the map looks
 const KEPT_BY_RANDOM: readonly SettingKey[] = [
     "squaresX",
+    "dressing",
     "squaresY",
     "heightmap",
     "spawnX",

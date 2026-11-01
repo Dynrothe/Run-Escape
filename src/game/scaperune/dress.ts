@@ -1,6 +1,7 @@
 import { Ground, OverlayChoice } from "./Ground";
 import { RockDef } from "./biomes";
 import { WATER_OVERLAYS } from "./catalogue";
+import { FLOOR_KITS } from "./floorKits";
 import { TILE_BLOCKED } from "./format";
 import { createRng, distanceTo, smoothField } from "./noise";
 import { getTileSlope } from "./terrain";
@@ -23,6 +24,18 @@ const FACET_REACH = 3;
 // Where a field stops, in the same units as paintOverlay's: far enough under 0 that a tile's
 // edge runs through its middle rather than along its side
 const OFF_THE_ROCK = -0.3;
+
+// How much of a floor's real decoration a map gets. A map's scatter adds to the same layer,
+// and between them they come to about 60% of what the real thing has.
+const DRESS_SHARE = 0.6;
+// On a floor the world doesn't use: decorations per 100 tiles, of the biome's own
+const BIOME_DECOR_PER_100 = 30;
+// Land beside water with a stone on it, and water beside land with a reed in it
+const SHORE_CHANCE = 0.7;
+const REED_CHANCE = 0.14;
+export const REEDS = [1162, 5539, 5540, 5542];
+// Water reeds grow in: not the sea, and not lava
+const REED_WATER = new Set([6, 7]);
 
 // What a tile of rock can have on it
 export type RockKit = Pick<RockDef, "pebbles" | "rubble" | "facets">;
@@ -131,6 +144,71 @@ export function dressRock(ground: Ground, rock: Uint8Array, dressing: RockDressi
             const i = x + y * sizeX;
             if (isRock(i) && !taken[i] && roll() < PEBBLE_SHARE) {
                 put(pick(kitAt(x, y).pebbles), LOC_FLOOR_DECORATION, x, y);
+            }
+        }
+    }
+}
+
+// How a map's ground is dressed. density is the `dressing` setting.
+export type GroundDressing = {
+    seed: number;
+    density: number;
+    biomeDecor: (x: number, y: number) => number[];
+};
+
+// Ground decoration by what's underfoot, on everything but water, indoors and rock, once a
+// tile as in the engine. A road gets its own floor's pebbles, and a shore its stones and
+// reeds. It's the last thing a map does, so that nothing painted later sits on it, and it
+// only uses what can't block, so where you can walk doesn't change.
+export function dressGround(ground: Ground, dressing: GroundDressing): void {
+    const { seed, density, biomeDecor } = dressing;
+    const { sizeX, sizeY, footprint } = ground;
+    const { flags, overlays, underlays, shapes } = ground.level0;
+    const bridges = ground.grid.levels[1].flags;
+    const { locs } = ground.grid;
+    const roll = createRng(seed);
+    const taken = new Uint8Array(sizeX * sizeY);
+    for (const { level, type, x, y } of locs) {
+        if (level === 0 && (type === LOC_FLOOR_DECORATION || type === LOC_NORMAL)) {
+            taken[x + y * sizeX] = 1;
+        }
+    }
+    const kitAt = (i: number) => {
+        const own = overlays[i] !== 0 && shapes[i] === 0;
+        return (
+            (own || (overlays[i] !== 0 && roll() < 0.5)
+                ? FLOOR_KITS[`o${overlays[i]}`]
+                : undefined) ?? FLOOR_KITS[`u${underlays[i]}`]
+        );
+    };
+    const isWater = (i: number) => WATER_OVERLAYS.has(overlays[i]);
+    for (let y = 1; y < sizeY - 1; y++) {
+        for (let x = 1; x < sizeX - 1; x++) {
+            const i = x + y * sizeX;
+            const near = [i - 1, i + 1, i - sizeX, i + sizeX];
+            if (flags[i] & TILE_BLOCKED) {
+                if (REED_WATER.has(overlays[i]) && !taken[i] && near.some((j) => !isWater(j))) {
+                    if (!bridges[i] && roll() < REED_CHANCE * density) {
+                        const id = REEDS[Math.floor(roll() * REEDS.length)];
+                        const rotation = Math.floor(roll() * 4);
+                        locs.push({ id, type: LOC_NORMAL, rotation, level: 0, x, y });
+                    }
+                }
+                continue;
+            }
+            if (footprint[i] || taken[i] || bridges[i]) {
+                continue;
+            }
+            const kit = kitAt(i);
+            const shore = near.some(isWater);
+            const chance = shore
+                ? SHORE_CHANCE
+                : ((kit?.per100 ?? BIOME_DECOR_PER_100) / 100) * DRESS_SHARE;
+            if (roll() < chance * density) {
+                const ids = kit?.ids ?? biomeDecor(x, y);
+                const id = ids[Math.floor(roll() * ids.length)];
+                const rotation = Math.floor(roll() * 4);
+                locs.push({ id, type: LOC_FLOOR_DECORATION, rotation, level: 0, x, y });
             }
         }
     }

@@ -1,5 +1,7 @@
 import { Ground } from "./Ground";
 import { BIOMES, CLIFF_FALL, SNOW_ROCK, WATERFALL } from "./biomes";
+import { REEDS } from "./dress";
+import { FLOOR_KITS } from "./floorKits";
 import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
@@ -20,6 +22,8 @@ function build(context: BuildContext): TileGrid {
     const ground = new Ground(SIZE, SIZE);
     ground.level0.underlays.fill(BIOMES.meadow.ground[0]);
     ground.level0.heights.fill(40);
+    const put1 = (id: number, x: number, y: number) =>
+        ground.place({ id, type: 10, rotation: 0, level: 0, x, y }, 1, 1);
 
     // A plot each for the prefabs and bridge, then a strip per biome
     const defs = [...Object.values(PREFABS), ...Object.values(BRIDGES)];
@@ -110,6 +114,15 @@ function build(context: BuildContext): TileGrid {
     }
     ground.paintOverlay(paved, PAVING, false);
     ground.place({ id: FOUNTAIN, type: 10, rotation: 0, level: 0, x: 20, y: PLOT * rows }, 2, 2);
+    // What dressing puts on each floor, in rows
+    const dressing = [...new Set(Object.values(FLOOR_KITS).flatMap(({ ids }) => ids))];
+    dressing.forEach((id, i) => {
+        const at = { x: 2 + (i % 100) * 2, y: y + Math.floor(i / 100) * 2 };
+        ground.grid.locs.push({ id, type: 22, rotation: 0, level: 0, ...at });
+    });
+    y += (Math.ceil(dressing.length / 100) + 1) * 2;
+    REEDS.forEach((id, i) => put1(id, 2 + i * 2, y));
+    y += 2;
     // Set pieces, each on a row of its own: they're big
     let x = 2;
     for (const piece of Object.values(SET_PIECES)) {

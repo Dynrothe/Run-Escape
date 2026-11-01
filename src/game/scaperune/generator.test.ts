@@ -187,6 +187,7 @@ describe("generateMap", () => {
         rocks: [1],
         rockMix: [1],
         grass: [1],
+        dressing: [0],
         flowers: [1],
         props: [1],
         roads: [0],

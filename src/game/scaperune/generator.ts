@@ -1,6 +1,7 @@
 import { Ground } from "./Ground";
 import { BIOMES, BiomeDef } from "./biomes";
 import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } from "./collision";
+import { dressGround } from "./dress";
 import { placeFallPools, placeFalls } from "./falls";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "./format";
 import { LandformBounds, createRelief, getHillBoundaryRise, shapeCliffs } from "./landforms";
@@ -106,6 +107,9 @@ const STONE_CHANCE = 0.12;
 const PROP_CHANCE = 0.006;
 
 const BIOME_FRAY = 0.16;
+
+// Dressing runs last, on a seed of its own, so that it moves nothing else
+const DRESS_SEED = 300;
 
 // Where hills meet the arena's edge: chances a tile gets a heap of rock, or a heap or a stone
 const HILL_RUBBLE = 0.14;
@@ -612,6 +616,11 @@ export function generateMapDetail(
     landmarks.push(...placeWaterPieces(build, waterTiles));
     scatter(build, waterTiles);
     const fords = connectGround(build, water, roads.offLimits);
+    dressGround(ground, {
+        seed: settings.seed + DRESS_SEED,
+        density: settings.dressing,
+        biomeDecor: (x, y) => biomeAt(x, y).decor,
+    });
     return {
         grid: ground.grid,
         footprint: ground.footprint,
