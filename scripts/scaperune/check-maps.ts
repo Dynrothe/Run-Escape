@@ -9,10 +9,19 @@
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
-import { WATERFALL } from "../../src/game/scaperune/biomes";
-import { BLOOD_WALL_ONLY, findBannedLocs } from "../../src/game/scaperune/catalogue";
+import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
+import {
+    BLOOD_WALL_ONLY,
+    WATER_OVERLAYS,
+    findBannedLocs,
+} from "../../src/game/scaperune/catalogue";
 import { countStranded, getCollisionFlags, getStepGrid } from "../../src/game/scaperune/collision";
-import { TILE_BLOCKED, TILE_BRIDGE, TileGrid } from "../../src/game/scaperune/format";
+import {
+    MAP_SQUARE_SIZE,
+    TILE_BLOCKED,
+    TILE_BRIDGE,
+    TileGrid,
+} from "../../src/game/scaperune/format";
 import {
     DEFAULT_SETTINGS,
     FORD_HALF_WIDTH,
@@ -40,6 +49,16 @@ import { getTileSlope } from "../../src/game/scaperune/terrain";
 import { buildRegionData } from "../../src/mapviewer/worker/RegionDataLoader";
 import { addCustomMapSquares } from "../../src/rs/map/CustomMapFileLoader";
 import { createSceneBuilder, createVarManager, loadGameCache } from "../cache/scene-util";
+import { LocMeta, createLocs, cropGrid } from "./research/lib";
+import {
+    findRims,
+    measureHeight,
+    measureObjects,
+    measurePacing,
+    measureSightLines,
+    measureTowns,
+    prepare,
+} from "./research/metrics";
 
 const GENERATED = /^scaperune_(?!palette|prefabs|cliffs)/;
 
@@ -480,6 +499,177 @@ function checkCatalogue(map: GeneratedMap): string[] {
     return problems;
 }
 
+// Bars for how a map looks. A map can be fully reachable and still look awful, and now these
+// failures can be measured. Real regions have 26 to 39 decorations per 100 tiles and 23 to 96
+// on roads, 99.96% of tiles are 80 a tile or under, places with relief have something on 12%
+// to 83% of steep tiles, and the tile at a cliff's foot is on rock 2% to 20% of the time, with
+// 29 to 93 decorations per 100. See the engine plan.
+const LOOK = {
+    decorPer100: 20,
+    roadDecorPer100: 15,
+    steepest: 80,
+    steepWithLocPct: 25,
+    footOnRockPct: 30,
+    footDecorPer100: 20,
+    viewP50: 4,
+};
+// Below these a rule says nothing: a sliver of road or one short cliff isn't a look
+const LOOK_LEAST = { land: 2000, road: 200, steep: 100, foot: 60 };
+// Land textures, which stretched down a cliff are the bands that started all this
+const TEXTURED_ROCK = new Set([20, 32]);
+const ROCK_OVERLAYS = new Set(Object.values(BIOMES).map(({ rock }) => rock.overlay));
+const STARS = 39;
+const BIG_LOC = 6;
+// 45 degrees
+const STEEP = 16;
+const BRIDGE_REACH = 4;
+const WATER_REACH = 2;
+
+// How a map looks, from the same measures as the real world's, on its arena. Says what's wrong,
+// and prints what a map can be right to differ on.
+function checkLook(
+    id: string,
+    map: GeneratedMap,
+    margin: number,
+    locs: (id: number) => LocMeta,
+    settings?: GeneratorSettings,
+): string[] {
+    const { grid, roadTiles } = map;
+    const m = margin * MAP_SQUARE_SIZE;
+    const arena = cropGrid(grid, m, m, grid.sizeX - m * 2, grid.sizeY - m * 2);
+    const p = prepare(arena, locs);
+    const { n, sizeX } = p;
+    const { overlays, underlays, flags } = arena.levels[0];
+    const problems: string[] = [];
+
+    const isLand = (i: number) =>
+        !WATER_OVERLAYS.has(overlays[i]) && overlays[i] !== STARS && underlays[i] !== 0;
+    const decorAt = new Uint8Array(n);
+    for (const loc of arena.locs) {
+        if (loc.level === 0 && loc.type === 22) {
+            decorAt[loc.x + loc.y * sizeX] = 1;
+        }
+    }
+    let land = 0;
+    let decor = 0;
+    let road = 0;
+    let roadDecor = 0;
+    let textured = 0;
+    for (let i = 0; i < n; i++) {
+        land += isLand(i) ? 1 : 0;
+        decor += isLand(i) ? decorAt[i] : 0;
+        const whole = i % sizeX;
+        const y = Math.floor(i / sizeX);
+        if (roadTiles[whole + m + (y + m) * grid.sizeX]) {
+            road++;
+            roadDecor += decorAt[i];
+        }
+        textured += flags[i] & TILE_BLOCKED && TEXTURED_ROCK.has(overlays[i]) ? 1 : 0;
+    }
+    const dressed = !settings || (settings.dressing === 1 && settings.grass > 0);
+    const decorPer100 = (100 * decor) / Math.max(land, 1);
+    if (dressed && land >= LOOK_LEAST.land && decorPer100 < LOOK.decorPer100) {
+        problems.push(`decoration is ${decorPer100.toFixed(1)} per 100 land tiles`);
+    }
+    const roadPer100 = (100 * roadDecor) / Math.max(road, 1);
+    if (dressed && road >= LOOK_LEAST.road && roadPer100 < LOOK.roadDecorPer100) {
+        problems.push(`decoration is ${roadPer100.toFixed(1)} per 100 road tiles`);
+    }
+    if (textured > 0) {
+        problems.push(`${textured} blocked tiles are on a textured floor`);
+    }
+    // What stands on what's steep, on land: a shore can be as steep as it likes under water.
+    // Past that, only what can't move is left over the bar: a bridge's own heights, a fall in a
+    // river, and a road that's pinned where it meets water, which all hold both ends of a tile.
+    const covered = new Uint8Array(n);
+    for (const loc of arena.locs) {
+        const { sizeX: wide, sizeY: deep } = locs(loc.id);
+        for (let ty = loc.y; ty < Math.min(loc.y + deep, arena.sizeY); ty++) {
+            for (let tx = loc.x; tx < Math.min(loc.x + wide, sizeX); tx++) {
+                covered[tx + ty * sizeX] = loc.level === 0 ? 1 : covered[tx + ty * sizeX];
+            }
+        }
+    }
+    const held = new Uint8Array(n);
+    const hold = (i: number, reach: number) => {
+        for (let dy = -reach; dy <= reach; dy++) {
+            for (let dx = -reach; dx <= reach; dx++) {
+                held[Math.min(Math.max(i + dx + dy * sizeX, 0), n - 1)] = 1;
+            }
+        }
+    };
+    for (let i = 0; i < n; i++) {
+        if (arena.levels[1].flags[i] & TILE_BRIDGE) {
+            hold(i, BRIDGE_REACH);
+        } else if (WATER_OVERLAYS.has(overlays[i])) {
+            hold(i, WATER_REACH);
+        }
+    }
+    let steepest = 0;
+    let steepTiles = 0;
+    let steepCovered = 0;
+    for (let i = 0; i < n; i++) {
+        if (!held[i] && isLand(i)) {
+            steepest = Math.max(steepest, p.slope[i]);
+        }
+        if (isLand(i) && p.slope[i] >= STEEP) {
+            steepTiles++;
+            steepCovered += covered[i];
+        }
+    }
+    // A heightmap can ask for anything, and the sweep's asks for the worst
+    if (steepest > LOOK.steepest && !settings?.heightmap) {
+        problems.push(`the steepest tile is ${steepest} a tile`);
+    }
+    const steepWithLocPct = Math.round((100 * steepCovered) / Math.max(steepTiles, 1));
+    if (dressed && steepTiles >= LOOK_LEAST.steep && steepWithLocPct < LOOK.steepWithLocPct) {
+        problems.push(
+            `only ${steepWithLocPct}% of ${steepTiles} steep tiles have anything on them`,
+        );
+    }
+    const { walkSlopeSharePct } = measureHeight(p);
+    const rim = findRims(p);
+    let foot = 0;
+    let footRock = 0;
+    let footDecor = 0;
+    for (let i = 0; i < n; i++) {
+        if (rim[i] === 1) {
+            foot++;
+            footRock += ROCK_OVERLAYS.has(overlays[i]) ? 1 : 0;
+            footDecor += decorAt[i];
+        }
+    }
+    const footRockPct = (100 * footRock) / Math.max(foot, 1);
+    const footPer100 = (100 * footDecor) / Math.max(foot, 1);
+    if (foot >= LOOK_LEAST.foot && footRockPct > LOOK.footOnRockPct) {
+        problems.push(`${footRockPct.toFixed(0)}% of tiles at a cliff's foot are on rock`);
+    }
+    if (dressed && foot >= LOOK_LEAST.foot && footPer100 < LOOK.footDecorPer100) {
+        problems.push(`decoration at a cliff's foot is ${footPer100.toFixed(1)} per 100 tiles`);
+    }
+    const view = measureSightLines(p).viewQ[1];
+    if (view < LOOK.viewP50) {
+        problems.push(`you can only see ${view} tiles at the median`);
+    }
+
+    const { objectsOnScreen, kindsOnScreen } = measurePacing(p);
+    const { indoorSharePct, gapQ } = measureTowns(p);
+    const { scenerySize } = measureObjects(p);
+    const big = Object.entries(scenerySize).reduce(
+        (sum, [size, count]) => sum + (Number(size) >= BIG_LOC ? count : 0),
+        0,
+    );
+    console.log(
+        `  look ${id.slice(0, 24)}: decor ${decorPer100.toFixed(0)}, road ${roadPer100.toFixed(0)}, ` +
+            `steepest ${steepest}, on steep ${steepWithLocPct}%, foot rock ${footRockPct.toFixed(0)}% ` +
+            `decor ${footPer100.toFixed(0)}, view ${view}; objects ${objectsOnScreen.p10}/` +
+            `${objectsOnScreen.p50}/${objectsOnScreen.p90}, kinds ${kindsOnScreen.p50}, ` +
+            `flat ${walkSlopeSharePct["0-0"]}%, indoor ${indoorSharePct}%, gap ${gapQ[1]}, ` +
+            `size 6+ ${big}`,
+    );
+    return problems;
+}
+
 // Open tiles the play camera can't see, for the ground between
 function countHiddenTiles(
     grid: TileGrid,
@@ -516,6 +706,7 @@ function checkMap(
     id: string,
     mapDetail: (context: BuildContext) => GeneratedMap,
     recipe: MapRecipe,
+    settings?: GeneratorSettings,
 ) {
     if (only && !only.test(id)) {
         return true;
@@ -563,6 +754,7 @@ function checkMap(
         ...checkLandmarks(map),
         ...checkFalls(map),
         ...(shipped ? [] : checkCatalogue(map)),
+        ...(shipped ? [] : checkLook(id, map, recipe.margin, createLocs(locTypeLoader), settings)),
     ];
     if (hidden > 0) {
         problems.push(`${hidden} open tiles are hidden from the camera`);
@@ -575,7 +767,7 @@ function checkMap(
             `${map.landmarks.length} landmarks, ${map.falls.length} falls, ` +
             `passes ${map.passes.length}, steepest road ${roadHeights.steepest.toFixed(1)}`,
     );
-    for (const problem of problems.slice(0, 6)) {
+    for (const problem of problems.slice(0, 8)) {
         console.log(`  ${problem}`);
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
@@ -591,7 +783,7 @@ for (const recipe of [
     // A hand-made map says how to build what it's held to, if it's held to the rules at all
     const detail = settings ? (c: BuildContext) => generateMapDetail(settings, c) : recipe.detail;
     if (detail) {
-        failed = !checkMap(recipe.id, detail, recipe) || failed;
+        failed = !checkMap(recipe.id, detail, recipe, settings) || failed;
     }
 }
 SWEEP.forEach((overrides, i) => {
@@ -601,13 +793,19 @@ SWEEP.forEach((overrides, i) => {
         `sweep ${i} ${JSON.stringify({ ...overrides, heightmap: undefined })}`,
         (context) => generateMapDetail(settings, context),
         recipe,
+        settings,
     );
     failed = !passed || failed;
 });
 for (const [name, preset] of Object.entries(SETTING_PRESETS)) {
     const settings: GeneratorSettings = { seed: 3, ...DEFAULT_SETTINGS, ...preset };
     const recipe = generatedRecipe("preset", 70, 134, settings);
-    const passed = checkMap(name, (context) => generateMapDetail(settings, context), recipe);
+    const passed = checkMap(
+        name,
+        (context) => generateMapDetail(settings, context),
+        recipe,
+        settings,
+    );
     failed = !passed || failed;
 }
 // What the screen's Randomize can come up with: refusing for too little ground is fine
@@ -619,6 +817,7 @@ for (let i = 0; i < RANDOM_MAPS; i++) {
         `random ${i} ${formatSettings(settings)}`,
         (context) => generateMapDetail(settings, context),
         recipe,
+        settings,
     );
     failed = !passed || failed;
 }

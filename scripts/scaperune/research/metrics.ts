@@ -1400,8 +1400,9 @@ export function measureAprons(p: Prepared) {
 }
 
 // The walkable tiles along a face: those above it and those at its foot, and what's on them
-export function measureRims(p: Prepared) {
-    const { grid, sizeX, sizeY, n, slope, walkable, level0, locs } = p;
+// The walkable tiles that touch a steep blocked tile: 1 at its foot, 2 on top of it
+export function findRims(p: Prepared): Uint8Array {
+    const { sizeX, sizeY, n, slope, walkable, level0 } = p;
     const cornersX = sizeX + 1;
     const mean = (x: number, y: number) =>
         (level0.heights[x + y * cornersX] +
@@ -1409,7 +1410,7 @@ export function measureRims(p: Prepared) {
             level0.heights[x + (y + 1) * cornersX] +
             level0.heights[x + 1 + (y + 1) * cornersX]) /
         4;
-    const rim = new Uint8Array(n); // 1 at the foot, 2 on top
+    const rim = new Uint8Array(n);
     for (let y = 1; y < sizeY - 1; y++) {
         for (let x = 1; x < sizeX - 1; x++) {
             const i = x + y * sizeX;
@@ -1427,6 +1428,12 @@ export function measureRims(p: Prepared) {
             }
         }
     }
+    return rim;
+}
+
+export function measureRims(p: Prepared) {
+    const { grid, sizeX, n, slope, level0, locs } = p;
+    const rim = findRims(p);
     const tiles = [0, 0, 0];
     const flat = [0, 0, 0];
     const overlaid = [0, 0, 0];

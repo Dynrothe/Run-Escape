@@ -10,6 +10,7 @@ import {
 } from "../../../src/game/scaperune/format";
 import { CacheSystem } from "../../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../../src/rs/cache/loader/CacheLoaderFactory";
+import type { LocTypeLoader } from "../../../src/rs/config/loctype/LocTypeLoader";
 import { loadGameCache } from "../../cache/scene-util";
 
 export type LocMeta = {
@@ -30,18 +31,10 @@ export type LocMeta = {
 
 export type World = ReturnType<typeof openWorld>;
 
-export function openWorld() {
-    const cache = loadGameCache();
-    const factory = getCacheLoaderFactory(
-        cache.info,
-        CacheSystem.fromFiles(cache.type, cache.files),
-    );
-    const maps = factory.getMapFileLoader();
-    const locTypes = factory.getLocTypeLoader();
-    const underlays = factory.getUnderlayTypeLoader();
-    const overlays = factory.getOverlayTypeLoader();
+// What the measures need to know about a loc, kept as it's asked for
+export function createLocs(locTypes: LocTypeLoader): (id: number) => LocMeta {
     const metas = new Map<number, LocMeta>();
-    const loc = (id: number): LocMeta => {
+    return (id) => {
         let meta = metas.get(id);
         if (!meta) {
             const type = locTypes.load(id);
@@ -64,6 +57,19 @@ export function openWorld() {
         }
         return meta;
     };
+}
+
+export function openWorld() {
+    const cache = loadGameCache();
+    const factory = getCacheLoaderFactory(
+        cache.info,
+        CacheSystem.fromFiles(cache.type, cache.files),
+    );
+    const maps = factory.getMapFileLoader();
+    const locTypes = factory.getLocTypeLoader();
+    const underlays = factory.getUnderlayTypeLoader();
+    const overlays = factory.getOverlayTypeLoader();
+    const loc = createLocs(locTypes);
     // A rectangle of the world, in world tiles, with its corners and locs
     const rect = (x0: number, y0: number, sizeX: number, sizeY: number): TileGrid => {
         const grid = createTileGrid(sizeX, sizeY);
