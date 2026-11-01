@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
+  full screen.
+
 ## 0.21.0 - 2026-11-01
 
 ### Added
