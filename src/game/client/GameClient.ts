@@ -79,7 +79,7 @@ import {
 } from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
-import { getBossKillViews, getDamageViews } from "./RunStatsViews";
+import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, Unlocks, isGameStart } from "./coop/protocol";
@@ -1210,8 +1210,7 @@ export class GameClient implements GameFrameHandler {
         this.store.set({
             result: {
                 ...result,
-                characterName: getCharacter(sim.characterId).name,
-                damage: getDamageViews(sim, result.stats),
+                players: getPlayerResultViews(sim),
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
                 unlockedMap: unlockedMap?.name,
