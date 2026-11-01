@@ -748,7 +748,7 @@ function checkRoadsWalkable(
         onRoad[i] = flag & TILE_BRIDGE ? 1 : 0;
     });
     // By its lines, painted or not: a town's square is paved, but what stands on it is meant to
-    for (const line of lines.filter((road) => road.halfWidth !== FORD_HALF_WIDTH)) {
+    for (const line of lines.filter((road) => road.grade !== undefined)) {
         const reach = Math.ceil(line.halfWidth);
         line.points.forEach((point, at) => {
             const px = Math.floor(point.x);
