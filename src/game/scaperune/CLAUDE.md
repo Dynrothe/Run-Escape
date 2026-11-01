@@ -670,8 +670,8 @@ scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 ### The generator's order
 
 `generateMapDetail`, in order: the land's shape (`landforms.ts`), rivers down its valleys, sea and lakes, cliffs, passes,
-floors, bridges, main roads, sites and buildings with their roads, vignettes, set pieces, ruins, pools for waterfalls, walled
-towns' squares, roads graded, flat land, then the heights are finished (`finishHeights`), what's too steep is blocked, roads are
+floors, bridges, main roads, sites and buildings with their roads, vignettes, set pieces, ruins, pools for waterfalls, lava's
+level, walled towns' squares, roads graded, flat land, then the heights are finished (`finishHeights`), what's too steep is blocked, roads are
 painted, then rock, caves, lava, the falls, what's on the rock, the boundary, town walls, waymarkers, what stands in water,
 scatter, reachability, and last the ground's dressing. Anything it can't connect gets blocked.
 
@@ -933,7 +933,8 @@ height depends on what it meets and passes, and those can come later. Then the g
 and `pinTiles` pins out to the corners of every tile that'll be painted, or a road's edge stands on a slope. Water can't move
 for a road, so where one runs along a shore the shore gives way, by the tiles that touch the road's. Painting skips anything
 blocked or solid, so that a tile painted as road can be walked, and `clearLocs`, last of all, takes off anything solid that's
-still on one. A hand-made map with a `RoadNetwork` calls both.
+still on one. `easeTiles` smooths what's left too steep under a road's middle, once the heights are done. A hand-made map with a
+`RoadNetwork` calls `pinTiles` and `clearLocs`.
 
 **Rivers** (`findValley`) follow the low ground, a column at a time, so a river's a function of how far along it is. They run in
 flat reaches, each at the lowest level it comes to, with all the height they lose at drops (`stepRiver`), `WATERFALL_SPACING` apart

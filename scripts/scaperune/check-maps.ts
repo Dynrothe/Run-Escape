@@ -4,7 +4,9 @@
 // a building, that a building's road ends at its door, and that a building without one
 // faces the nearest road. And for height: that collision comes from slopes and agrees with
 // the game's, that roads climb smoothly, that buildings stand on flat ground, and that
-// nothing you can walk on is hidden from the camera. Fails if not.
+// nothing you can walk on is hidden from the camera. And the four rules for the ground: fields
+// are level, roads can be walked, water's flat but at a fall, and falls are seated in their
+// faces. Fails if not.
 //
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match

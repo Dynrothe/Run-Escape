@@ -79,6 +79,9 @@ export const ROAD_SMOOTHING = 2;
 // Corners past a road's half width that its painted tiles can reach
 const ROAD_PIN_REACH = 3;
 
+// Times the ground under a road's eased
+const ROAD_EASE_ROUNDS = 4;
+
 // What a tile beside water costs a road: it eats into the shore
 const ROAD_SHORE_COST = 10;
 
@@ -186,8 +189,8 @@ export class RoadNetwork {
         let touches = false;
         forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
             const wet = this.water[i] !== 0 || this.avoid[i] !== 0;
-            const offBridge = !nearBridge && (this.bridgeZone[i] !== 0 || wet);
-            touches ||= ground.footprint[i] !== 0 || offBridge;
+            const offBridge = !nearBridge && this.bridgeZone[i] !== 0;
+            touches ||= ground.footprint[i] !== 0 || offBridge || wet;
         });
         return touches;
     }
@@ -401,6 +404,44 @@ export class RoadNetwork {
                 }
             }
         }
+    }
+
+    // Eases what's left too steep under the middle of a road, once the heights are done: a door's
+    // step beside a road can stand a little over it. What's pinned hard and water stay put.
+    easeTiles(passes: RoadLine[] = []): void {
+        const { terrain, settings, ground } = this.build;
+        const { height } = terrain;
+        const limit = settings.walkSlope - 1;
+        for (let round = 0; round < ROAD_EASE_ROUNDS; round++) {
+            for (const { points, lead } of [...this.lines, ...passes]) {
+                for (const point of points.slice(lead)) {
+                    const x = Math.floor(point.x);
+                    const y = Math.floor(point.y);
+                    if (terrain.getSlope(x, y) <= limit) {
+                        continue;
+                    }
+                    const free = [
+                        [x, y],
+                        [x + 1, y],
+                        [x, y + 1],
+                        [x + 1, y + 1],
+                    ].filter(
+                        ([cx, cy]) =>
+                            !terrain.isHardPinned(cx, cy) &&
+                            !terrain.isLocked(terrain.corner(cx, cy)),
+                    );
+                    if (free.length > 0) {
+                        const heights = free.map(([cx, cy]) => height[terrain.corner(cx, cy)]);
+                        const middle = (Math.max(...heights) + Math.min(...heights)) / 2;
+                        for (const [cx, cy] of free) {
+                            const at = terrain.corner(cx, cy);
+                            height[at] += (middle - height[at]) / 2;
+                        }
+                    }
+                }
+            }
+        }
+        terrain.write((x, y, value) => ground.setHeight(x, y, value));
     }
 
     // Takes water off a corner of a road's tile. Water can't move to meet a road, so where one
@@ -693,6 +734,7 @@ export function placeBridges(
     water: Uint8Array,
     zone: Uint8Array,
     dry?: Uint8Array,
+    avoid?: Uint8Array,
 ): RoadStart[] {
     const { context, ground, arena, terrain, biomeAt } = build;
     const starts: RoadStart[] = [];
@@ -716,8 +758,10 @@ export function placeBridges(
             const onLand = (distance: number) => {
                 const p = across(distance);
                 const q = river.vertical ? { x: p.x, y: p.y - 1 } : { x: p.x - 1, y: p.y };
-                const free = (t: Point) =>
-                    !water[ground.tile(t.x, t.y)] && !zone[ground.tile(t.x, t.y)];
+                const free = (t: Point) => {
+                    const i = ground.tile(t.x, t.y);
+                    return !water[i] && !zone[i] && !avoid?.[i];
+                };
                 return inArena(p) && inArena(q) && free(p) && free(q);
             };
             let fits = true;

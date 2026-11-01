@@ -619,7 +619,9 @@ export function generateMapDetail(
     keepOffLava(build, roads.avoid);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
-        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone, dry) : [];
+        settings.roads > 0
+            ? placeBridges(build, rivers, waterTiles, bridgeZone, dry, roads.avoid)
+            : [];
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>
@@ -644,6 +646,7 @@ export function generateMapDetail(
     // brings the ground to them
     flattenLand(terrain, build.cliffs, build.heldCorners, settings.flatness, settings.walkSlope);
     finishHeights(build);
+    roads.easeTiles(passes);
     blockSteepGround(build);
 
     const paving = (x: number, y: number) =>
