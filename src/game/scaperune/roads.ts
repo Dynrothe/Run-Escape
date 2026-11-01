@@ -99,6 +99,8 @@ export class RoadNetwork {
     // Keeps roads and fords off buildings: on each tile, how many buildings it's too
     // close to, because zones overlap and a spot that's given up on takes its own off
     readonly offLimits: Uint8Array;
+    // Tiles a road keeps off for good, even when it's smoothed: where lava's going to be
+    readonly avoid: Uint8Array;
     readonly lines: RoadLine[] = [];
     // Towns' squares, as tiles
     readonly squares: TileRect[] = [];
@@ -122,6 +124,7 @@ export class RoadNetwork {
         const { ground, corners, settings, spawn } = build;
         this.tiles = new Uint8Array(ground.sizeX * ground.sizeY);
         this.offLimits = new Uint8Array(this.tiles.length);
+        this.avoid = new Uint8Array(this.tiles.length);
         this.halfWidth = settings.roadWidth / 2;
         this.road = new Float32Array(corners.x * corners.y).fill(-4);
         this.trail = new Float32Array(corners.x * corners.y).fill(-4);
@@ -163,7 +166,7 @@ export class RoadNetwork {
         if (this.tiles[i]) {
             return 0.2;
         }
-        if (this.water[i] || ground.reserved[i] || this.offLimits[i]) {
+        if (this.water[i] || this.avoid[i] || ground.reserved[i] || this.offLimits[i]) {
             return Infinity;
         }
         return (
@@ -182,7 +185,8 @@ export class RoadNetwork {
         const { ground } = this.build;
         let touches = false;
         forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
-            const offBridge = !nearBridge && (this.bridgeZone[i] !== 0 || this.water[i] !== 0);
+            const wet = this.water[i] !== 0 || this.avoid[i] !== 0;
+            const offBridge = !nearBridge && (this.bridgeZone[i] !== 0 || wet);
             touches ||= ground.footprint[i] !== 0 || offBridge;
         });
         return touches;
@@ -340,13 +344,14 @@ export class RoadNetwork {
 
     // Pins the ground under every tile that'll be painted as road, out to the corners a road's
     // own width doesn't reach, or a road's edge can stand on a slope too steep to walk. Goes once
-    // the roads have heights, and what's pinned already stays.
-    pinTiles(): void {
+    // the roads have heights, and what's pinned already stays. passes get the same.
+    pinTiles(passes: RoadLine[] = []): void {
         const { corners, sizeX, sizeY, terrain, cliffs } = this.build;
         const count = corners.x * corners.y;
         const nearest = new Float32Array(count).fill(Infinity);
         const heights = new Float32Array(count);
-        for (const line of this.lines) {
+        const lines = [...this.lines, ...passes];
+        for (const line of lines) {
             const reach = Math.ceil(line.halfWidth) + ROAD_PIN_REACH;
             line.points.forEach((point, i) => {
                 const px = Math.round(point.x);
@@ -367,6 +372,12 @@ export class RoadNetwork {
             sizeX,
             sizeY,
         );
+        // And whatever a road's own line is on, painted or not
+        for (const { points } of lines) {
+            for (const { x, y } of points) {
+                painted[Math.floor(x) + Math.floor(y) * sizeX] = 1;
+            }
+        }
         for (let y = 0; y < sizeY; y++) {
             for (let x = 0; x < sizeX; x++) {
                 if (!painted[x + y * sizeX]) {

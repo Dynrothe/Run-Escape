@@ -12,7 +12,7 @@ import {
     refreshTileHeights,
     settleTerrain,
 } from "./mapBuild";
-import { createRng } from "./noise";
+import { createRng, distanceTo } from "./noise";
 import { Point, smoothPath } from "./paths";
 import { findWaterPieces, holdWater } from "./rivers";
 import { RoadLine, gradeRoads } from "./roadGrades";
@@ -64,6 +64,9 @@ const CAVE_DEPTH = 2;
 
 // How much higher the ground has to rise behind a cave for there to be a cliff to go in
 const CAVE_CLIFF = 24;
+
+// Tiles roads and what's standing keep from lava
+const LAVA_CLEAR = 2;
 
 // The ground round the spawn is level and walkable, whatever the land's doing there
 function pinSpawn(build: Build): void {
@@ -247,19 +250,22 @@ function createLavaField(build: Build): Float32Array {
 
 // Lava comes last, so that it's painted over what's made of the land: until then, roads, and
 // anything standing, are kept off where it'll be
-export function keepOffLava(build: Build, offLimits: Uint8Array): void {
+export function keepOffLava(build: Build, avoid: Uint8Array): void {
     const { ground, relief, sizeX, sizeY } = build;
     if (relief.craters.length === 0) {
         return;
     }
-    getTouchedTiles(createLavaField(build), sizeX, sizeY).forEach((tile, i) => {
-        offLimits[i] |= tile;
-        ground.reserved[i] |= tile;
+    const lava = getTouchedTiles(createLavaField(build), sizeX, sizeY);
+    distanceTo(lava, sizeX, sizeY, LAVA_CLEAR + 1).forEach((distance, i) => {
+        if (distance <= LAVA_CLEAR) {
+            avoid[i] = 1;
+            ground.reserved[i] = 1;
+        }
     });
 }
 
-// Lava lies level, as water does: a pool at the lowest of the ground it covers, with its corners
-// held like water's
+// Lava lies level, as water does, at the lowest point of its edge, so that it fills its crater
+// as a lake fills a basin rather than sinking a pit, with its corners held like water's
 export function levelLava(build: Build): void {
     const { relief, sizeX, sizeY, corners, terrain } = build;
     if (relief.craters.length === 0) {
@@ -279,8 +285,16 @@ export function levelLava(build: Build): void {
     pieces.forEach((piece, i) => {
         if (piece >= 0) {
             forCorners(i, (x, y) => {
-                const height = terrain.height[x + y * corners.x];
-                lowest.set(piece, Math.min(lowest.get(piece) ?? Infinity, height));
+                const round = [
+                    x - 1 + (y - 1) * sizeX,
+                    x + (y - 1) * sizeX,
+                    x - 1 + y * sizeX,
+                    x + y * sizeX,
+                ];
+                if (round.some((tile) => !tiles[tile])) {
+                    const height = terrain.height[x + y * corners.x];
+                    lowest.set(piece, Math.min(lowest.get(piece) ?? Infinity, height));
+                }
             });
         }
     });

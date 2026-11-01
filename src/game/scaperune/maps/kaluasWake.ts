@@ -1451,7 +1451,7 @@ function buildMap(context: BuildContext): GeneratedMap {
 
     const steepest = SETTINGS.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
-    roads.pinTiles();
+    roads.pinTiles(passes);
     terrain.smoothPins(ROAD_SMOOTHING);
     finishHeights(build);
     blockSteepGround(build);

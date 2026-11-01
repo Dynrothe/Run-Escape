@@ -616,7 +616,7 @@ export function generateMapDetail(
 
     const bridgeZone = new Uint8Array(waterTiles.length);
     const roads = new RoadNetwork(build, waterTiles, bridgeZone, dry);
-    keepOffLava(build, roads.offLimits);
+    keepOffLava(build, roads.avoid);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
         settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone, dry) : [];
@@ -638,7 +638,7 @@ export function generateMapDetail(
     const walled = chooseWalledTowns(build, buildings, roads);
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
-    roads.pinTiles();
+    roads.pinTiles(passes);
     terrain.smoothPins(ROAD_SMOOTHING);
     // After the roads are graded, so that they don't have levels to fight, and settling then
     // brings the ground to them
