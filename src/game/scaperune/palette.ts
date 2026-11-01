@@ -6,6 +6,7 @@ import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
 import { BuildContext, MapRecipe } from "./recipe";
+import { KIT_FENCES } from "./settlements";
 import { FOUNTAIN, PAVING, SET_PIECES, getPieceLocs } from "./structures";
 
 // Everything the generator can ask the cache for, on one map: each biome's
@@ -122,6 +123,9 @@ function build(context: BuildContext): TileGrid {
     });
     y += (Math.ceil(dressing.length / 100) + 1) * 2;
     REEDS.forEach((id, i) => put1(id, 2 + i * 2, y));
+    Object.values(KIT_FENCES).forEach((id, i) => {
+        ground.grid.locs.push({ id, type: 0, rotation: 0, level: 0, x: 20 + i * 2, y });
+    });
     y += 2;
     // Set pieces, each on a row of its own: they're big
     let x = 2;
