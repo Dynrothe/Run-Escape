@@ -6,6 +6,7 @@ import {
     LOC_NORMAL,
     SPAWN_CLEAR,
     createClimb,
+    getTouchedTiles,
     hasRelief,
     lerp,
     refreshTileHeights,
@@ -13,6 +14,7 @@ import {
 } from "./mapBuild";
 import { createRng } from "./noise";
 import { Point, smoothPath } from "./paths";
+import { findWaterPieces, holdWater } from "./rivers";
 import { RoadLine, gradeRoads } from "./roadGrades";
 import { ROAD_STEEPEST } from "./roads";
 import { GeneratorSettings } from "./settings";
@@ -223,12 +225,9 @@ export function getSnowLine(settings: GeneratorSettings): number {
     return settings.snow > 0 ? lerp(SNOW_LINE_HIGH, SNOW_LINE_LOW, settings.snow) : Infinity;
 }
 
-// Lava in the craters
-export function paintLava(build: Build): void {
-    const { ground, relief, corners, biomeAt } = build;
-    if (relief.craters.length === 0) {
-        return;
-    }
+// Where the lava goes: above 0 is lava
+function createLavaField(build: Build): Float32Array {
+    const { relief, corners } = build;
     const field = new Float32Array(corners.x * corners.y).fill(-4);
     for (const { x, y, radius } of relief.craters) {
         const reach = Math.ceil(radius) + 4;
@@ -239,7 +238,61 @@ export function paintLava(build: Build): void {
             }
         }
     }
-    ground.paintField(field, (x, y) => biomeAt(x, y).rock.lava, true);
+    return field;
+}
+
+// Lava comes last, so that it's painted over what's made of the land: until then, roads, and
+// anything standing, are kept off where it'll be
+export function keepOffLava(build: Build, offLimits: Uint8Array): void {
+    const { ground, relief, sizeX, sizeY } = build;
+    if (relief.craters.length === 0) {
+        return;
+    }
+    getTouchedTiles(createLavaField(build), sizeX, sizeY).forEach((tile, i) => {
+        offLimits[i] |= tile;
+        ground.reserved[i] |= tile;
+    });
+}
+
+// Lava lies level, as water does: a pool at the lowest of the ground it covers, with its corners
+// held like water's
+export function levelLava(build: Build): void {
+    const { relief, sizeX, sizeY, corners, terrain } = build;
+    if (relief.craters.length === 0) {
+        return;
+    }
+    const tiles = getTouchedTiles(createLavaField(build), sizeX, sizeY);
+    const pieces = findWaterPieces(build, tiles, new Uint8Array(tiles.length));
+    const lowest = new Map<number, number>();
+    const forCorners = (i: number, visit: (x: number, y: number) => void) => {
+        const x = i % sizeX;
+        const y = (i - x) / sizeX;
+        visit(x, y);
+        visit(x + 1, y);
+        visit(x, y + 1);
+        visit(x + 1, y + 1);
+    };
+    pieces.forEach((piece, i) => {
+        if (piece >= 0) {
+            forCorners(i, (x, y) => {
+                const height = terrain.height[x + y * corners.x];
+                lowest.set(piece, Math.min(lowest.get(piece) ?? Infinity, height));
+            });
+        }
+    });
+    pieces.forEach((piece, i) => {
+        if (piece >= 0) {
+            forCorners(i, (x, y) => terrain.pin(x, y, Math.round(lowest.get(piece)!)));
+        }
+    });
+    holdWater(build, tiles);
+}
+
+export function paintLava(build: Build): void {
+    const { ground, relief, biomeAt } = build;
+    if (relief.craters.length > 0) {
+        ground.paintField(createLavaField(build), (x, y) => biomeAt(x, y).rock.lava, true);
+    }
 }
 
 // Which tiles are rock, and which are the same under snow: everything too steep to walk,

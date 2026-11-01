@@ -37,6 +37,8 @@ import {
     dressCliffs,
     finishHeights,
     getSnowLine,
+    keepOffLava,
+    levelLava,
     paintLava,
     paintRock,
     placeCaves,
@@ -81,7 +83,7 @@ import {
     placeWaterPieces,
     placeWaymarkers,
 } from "./structures";
-import { limitSlope } from "./terrain";
+import { limitFaces } from "./terrain";
 import { createPace, createTownFade, getTownPaving } from "./townPlan";
 import { placeVignettes } from "./vignettes";
 
@@ -156,6 +158,8 @@ export type GeneratedMap = {
     waterDrops?: TileRect[];
     fields?: PlacedField[];
     closedRoads?: ClosedRoad[];
+    // Towns' squares: paved, with things standing on them on purpose
+    squares?: TileRect[];
     // Only the generator's towns: a hand-made map's own wall is its own business
     walled?: WalledTown[];
 };
@@ -460,7 +464,8 @@ function layFord(build: Build, path: number[], water: WaterPaint): void {
         }
     }
     ground.clearOverlay(water.tiles);
-    water.tiles = ground.paintField(water.field, getWaterOverlay(build, water.tiles), true);
+    const overlay = getWaterOverlay(build, water.tiles);
+    water.tiles = ground.paintField(water.field, overlay, true, water.dry);
     blockSteepGround(build);
     ground.grid.locs = ground.grid.locs.filter(
         (loc) =>
@@ -595,14 +600,16 @@ export function generateMapDetail(
 
     const waterField = fields.sea.map((value, i) => Math.max(value, fields.fresh[i]));
     const waterTiles = paintWater(build, waterField);
-    const water: WaterPaint = { field: waterField, tiles: waterTiles };
+    const dry = new Uint8Array(waterTiles.length);
+    const water: WaterPaint = { field: waterField, tiles: waterTiles, dry };
     holdWater(build, seaTiles);
     holdWater(build, freshTiles);
 
     if (hasRelief(settings)) {
         build.cliffs.set(shapeCliffs(terrain, settings.walkSlope));
     } else {
-        limitSlope(terrain.height, corners.x, corners.y, settings.walkSlope * 0.92);
+        const slope = settings.walkSlope * 0.92;
+        limitFaces(terrain.height, corners.x, corners.y, slope, build.heldCorners);
     }
     const passes = cutPasses(build);
     refreshTileHeights(build);
@@ -610,9 +617,10 @@ export function generateMapDetail(
 
     const bridgeZone = new Uint8Array(waterTiles.length);
     const roads = new RoadNetwork(build, waterTiles, bridgeZone);
+    keepOffLava(build, roads.offLimits);
     // With no roads to meet them, rivers are crossed by fords
     const bridgeStarts =
-        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone, waterField) : [];
+        settings.roads > 0 ? placeBridges(build, rivers, waterTiles, bridgeZone, dry) : [];
     if (settings.roads > 0) {
         layMainRoads(build, roads, bridgeZone);
         const byDistance = (a: RoadStart, b: RoadStart) =>
@@ -627,6 +635,7 @@ export function generateMapDetail(
     const landmarks = placeSetPieces(build, roads, waterTiles);
     placeRuins(build, roads, waterTiles);
     const falls = placeFallPools(build, water);
+    levelLava(build);
     const walled = chooseWalledTowns(build, buildings, roads);
     const steepest = settings.walkSlope * ROAD_STEEPEST;
     gradeRoads(terrain, [...roads.lines, ...passes], build.plots, ROAD_SHOULDER, steepest);
@@ -658,6 +667,7 @@ export function generateMapDetail(
     placeWaymarkers(build, roads);
     landmarks.push(...placeWaterPieces(build, waterTiles));
     scatter(build, waterTiles);
+    roads.clearLocs();
     const fords = connectGround(build, water, roads.offLimits);
     dressGround(ground, {
         seed: settings.seed + DRESS_SEED,
@@ -669,6 +679,7 @@ export function generateMapDetail(
         footprint: ground.footprint,
         roadTiles,
         lines: [...roads.lines, ...fords],
+        squares: roads.squares,
         buildings,
         landmarks,
         passes,

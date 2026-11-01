@@ -258,6 +258,11 @@ export class Terrain {
         this.locked[at] = 0;
     }
 
+    // Pinned by something that doesn't give way, as a plot does
+    isHardPinned(x: number, y: number): boolean {
+        return this.pinDistance[this.corner(x, y)] <= 0;
+    }
+
     isLocked(at: number): boolean {
         return this.locked[at] !== 0;
     }
@@ -290,7 +295,7 @@ export class Terrain {
             for (let y = 1; y + 1 < cornersY; y++) {
                 for (let x = 1; x + 1 < cornersX; x++) {
                     const at = x + y * cornersX;
-                    if (Number.isNaN(from[at]) || pinDistance[at] === 0) {
+                    if (Number.isNaN(from[at]) || pinDistance[at] <= 0) {
                         continue;
                     }
                     let sum = 0;

@@ -1367,7 +1367,7 @@ function createLavaField(lava: River): { field: Float32Array; pools: Pool[] } {
         }
     }
     const pools: Pool[] = [
-        { x: KALUA.x, y: KALUA.y, radius: RIM_RADIUS - 6, level: 0 },
+        { x: KALUA.x, y: KALUA.y, radius: RIM_RADIUS - 6, level: 0, source: true },
         ...LAVA_PONDS.map(([x, y, radius]) => ({
             x: x + CHART,
             y: y + CHART,
@@ -1488,6 +1488,7 @@ function buildMap(context: BuildContext): GeneratedMap {
     placeSurf(build, waterTiles, shape, bridgeZone);
     scatter(build, waterTiles, shape);
     dressCliffs(build, rock, rockSkip, falls);
+    roads.clearLocs();
     shutOffStranded(build);
     dressGround(ground, {
         seed: SEED + 300,

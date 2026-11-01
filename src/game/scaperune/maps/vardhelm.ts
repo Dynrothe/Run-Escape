@@ -5,7 +5,6 @@ import { TileRect, blockTile, findReachable, findStranded, getCollisionFlags } f
 import { dressGround, dressRock, paintRockFloor } from "../dress";
 import {
     FALL_ROWS,
-    FALL_WIDTH,
     getFallDrop,
     getFallSeat,
     getSeatHeight,
@@ -139,16 +138,16 @@ const COURSE: [number, number, number][] = [
     [112, 150, 4.5],
     [124, 145, 6],
     [138, 140, 6],
-    [147, 139, 4],
-    [151, 139, 4],
+    [147, 139.5, 4.5],
+    [151, 139.5, 4.5],
     [160, 137, 4],
     [172, 128, 4.5],
     [184, 126, 4.5],
     [208, 126, 4.5],
     [218, 129, 4],
     [228, 132, 5],
-    [236, 133, 4],
-    [245, 133, 4],
+    [236, 133.5, 4.5],
+    [245, 133.5, 4.5],
     [255, 146, 4.5],
     [274, 146, 4.5],
     [286, 142, 5],
@@ -158,10 +157,12 @@ const CROSSINGS = [100, 196, 262];
 // Where it falls: side by side across the river from x, on seats, so that the river's rows from
 // foot to lip are level across and go by getSeatHeight. A fall's as tall as its model, so the
 // great fall's two, one on the other's lip.
+// They overlap by a tile, or the join shows the dark inside of a model's edge.
+const FALL_STEP = 2;
 const FALLS = [
-    { foot: 147, x: 136, models: 2, seat: getFallSeat(RIVER_VALE, RIVER_SHELF)! },
-    { foot: 236, x: 130, models: 2, seat: getFallSeat(RIVER_SHELF, RIVER_LEDGE)! },
-    { foot: 240, x: 130, models: 2, seat: getFallSeat(RIVER_LEDGE, RIVER_HIGH)! },
+    { foot: 147, x: 136, models: 3, seat: getFallSeat(RIVER_VALE, RIVER_SHELF)! },
+    { foot: 236, x: 130, models: 3, seat: getFallSeat(RIVER_SHELF, RIVER_LEDGE)! },
+    { foot: 240, x: 130, models: 3, seat: getFallSeat(RIVER_LEDGE, RIVER_HIGH)! },
 ];
 
 // A pool of its own under a cliff, for a fall with no river behind it
@@ -1265,11 +1266,11 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     const waterDrops: TileRect[] = [];
     for (const { foot, x, models, seat } of FALLS) {
         for (let model = 0; model < models; model++) {
-            const fall = { x: x + model * FALL_WIDTH, y: foot, id: seat.id };
+            const fall = { x: x + model * FALL_STEP, y: foot, id: seat.id };
             placeFalls(build, [fall]);
             falls.push(fall);
         }
-        waterDrops.push(getFallDrop({ x, y: foot }, models * FALL_WIDTH));
+        waterDrops.push(getFallDrop({ x, y: foot }, models * FALL_STEP + 1));
     }
     placeFalls(build, [{ ...POOL_FALL, id: POOL_FALL.seat.id }]);
     falls.push(POOL_FALL);
@@ -1282,6 +1283,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
         seed: SETTINGS.seed + 202,
         share: SETTINGS.rockFaces,
     });
+    roads.clearLocs([ROCKFALL]);
 
     // Anything you can't get to is only to look at
     const flags = getCollisionFlags(ground.grid, context.locs);

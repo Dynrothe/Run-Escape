@@ -78,8 +78,9 @@ export type Build = {
     sites?: Point[];
 };
 
-// The water as painted: repainted when a ford cuts through it
-export type WaterPaint = { field: Float32Array; tiles: Uint8Array };
+// The water as painted: repainted when a ford cuts through it. dry is tiles it stays off, for
+// the ends of bridges.
+export type WaterPaint = { field: Float32Array; tiles: Uint8Array; dry?: Uint8Array };
 
 export function pick<T>(rng: Rng, list: T[]): T {
     return list[Math.floor(rng() * list.length)];

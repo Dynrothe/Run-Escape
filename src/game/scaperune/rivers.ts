@@ -89,8 +89,9 @@ export type River = {
 
 export type RiverDrop = { along: number; level: number; row: number };
 
-// A lake or pond: where it is, and how high its water stands
-export type Pool = { x: number; y: number; radius: number; level: number };
+// A lake or pond: where it is, and how high its water stands. A river runs out of a source and
+// never falls into it.
+export type Pool = { x: number; y: number; radius: number; level: number; source?: boolean };
 
 function riverStraightness(river: River, along: number): number {
     let away = Infinity;
@@ -464,7 +465,7 @@ function stepRiver(build: Build, river: River, peak: number, count: number): voi
 
 // Tiles of water in pieces that touch, at a side or just a corner: they share corners, so each
 // has to be one level. Tiles in cut aren't in any: that's how a drop parts two reaches.
-function findWaterPieces(build: Build, tiles: Uint8Array, cut: Uint8Array): Int32Array {
+export function findWaterPieces(build: Build, tiles: Uint8Array, cut: Uint8Array): Int32Array {
     const { sizeX, sizeY } = build;
     const pieces = new Int32Array(tiles.length).fill(-1);
     let next = 0;
@@ -574,6 +575,7 @@ export function createWaterLevels(
     const solve = () => {
         const pieces = findWaterPieces(build, tiles, cut);
         const wanted = new Map<number, number>();
+        const sources = new Set<number>();
         const ask = (piece: number, level: number) => {
             wanted.set(piece, Math.min(wanted.get(piece) ?? Infinity, level));
         };
@@ -592,6 +594,9 @@ export function createWaterLevels(
             for (const pool of pools) {
                 if (Math.hypot(x + 0.5 - pool.x, y + 0.5 - pool.y) <= pool.radius) {
                     ask(piece, pool.level);
+                    if (pool.source) {
+                        sources.add(piece);
+                    }
                 }
             }
             for (let ny = Math.max(y - 1, 0); ny <= Math.min(y + 1, sizeY - 1); ny++) {
@@ -607,16 +612,13 @@ export function createWaterLevels(
                 wanted.set(piece, Math.max(lowest.get(piece)! - WATER_DROP, RIVER_BED));
             }
         }
-        return { pieces, wanted };
+        return { pieces, wanted, sources };
     };
-    // Which piece stands on one side of a drop: the row of tiles next to it, in the river
-    const levelBy = (river: River, row: number, solved: ReturnType<typeof solve>) => {
+    // What stands on one side of a drop: the row of tiles next to it, in the river
+    const pieceBy = (river: River, row: number, { pieces }: ReturnType<typeof solve>) => {
         const across = Math.floor(riverCentre(river, row));
-        if (row < 0 || across < 0 || row >= (river.vertical ? sizeY : sizeX)) {
-            return undefined;
-        }
-        const piece = solved.pieces[river.vertical ? across + row * sizeX : row + across * sizeX];
-        return piece < 0 ? undefined : solved.wanted.get(piece);
+        const inside = across >= 0 && row >= 0 && row < (river.vertical ? sizeY : sizeX);
+        return inside ? pieces[river.vertical ? across + row * sizeX : row + across * sizeX] : -1;
     };
     // Levels can come down to meet a pool until a drop isn't one any more: it goes, and its
     // two reaches are one, until nothing changes
@@ -626,10 +628,12 @@ export function createWaterLevels(
         for (const river of rivers) {
             for (const drop of river.drops) {
                 const [before, after] = [drop.row - 1, drop.row + 1].map((row) =>
-                    levelBy(river, row, solved),
+                    pieceBy(river, row, solved),
                 );
-                const [low, high] = drop.along === drop.row ? [before, after] : [after, before];
-                if (low === undefined || high === undefined || high - low < LEAST_DROP) {
+                const [lower, upper] = drop.along === drop.row ? [before, after] : [after, before];
+                const gone = lower < 0 || upper < 0 || solved.sources.has(lower);
+                const fall = solved.wanted.get(upper)! - solved.wanted.get(lower)!;
+                if (gone || fall < LEAST_DROP) {
                     river.drops = river.drops.filter((other) => other !== drop);
                     cutDrop(river, drop, 0);
                     changed = true;

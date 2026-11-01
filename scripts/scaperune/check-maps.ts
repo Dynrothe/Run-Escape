@@ -684,7 +684,7 @@ function checkRoadsWalkable(
     spawn: { x: number; y: number },
     arena: TileRect,
 ): string[] {
-    const { grid, roadTiles, lines, closedRoads = [] } = map;
+    const { grid, roadTiles, lines, closedRoads = [], squares = [] } = map;
     const { sizeX, sizeY } = grid;
     const flags = getCollisionFlags(grid, context.locs);
     const steps = getStepGrid(flags, sizeX, arena);
@@ -693,26 +693,30 @@ function checkRoadsWalkable(
     grid.levels[1].flags.forEach((flag, i) => {
         onRoad[i] = flag & TILE_BRIDGE ? 1 : 0;
     });
-    // By its lines: a town's square is paved, but what stands on it is meant to
+    // By its lines, painted or not: a town's square is paved, but what stands on it is meant to
     for (const line of lines.filter((road) => road.halfWidth !== FORD_HALF_WIDTH)) {
         const reach = Math.ceil(line.halfWidth);
-        for (const point of line.points) {
+        line.points.forEach((point, at) => {
             const px = Math.floor(point.x);
             const py = Math.floor(point.y);
             for (let y = py - reach; y <= py + reach; y++) {
                 for (let x = px - reach; x <= px + reach; x++) {
-                    const near = Math.hypot(x + 0.5 - point.x, y + 0.5 - point.y) <= line.halfWidth;
-                    if (near && isInRect(arena, x, y) && roadTiles[x + y * sizeX]) {
-                        onRoad[x + y * sizeX] = 1;
+                    const i = x + y * sizeX;
+                    const away = Math.hypot(x + 0.5 - point.x, y + 0.5 - point.y);
+                    const dry = !WATER_OVERLAYS.has(grid.levels[0].overlays[i]);
+                    const middle = x === px && y === py && at >= line.lead && dry;
+                    const painted = roadTiles[i] !== 0 && away <= line.halfWidth;
+                    if ((middle || painted) && isInRect(arena, x, y)) {
+                        onRoad[i] = 1;
                     }
                 }
             }
-        }
+        });
     }
     const blocked: number[] = [];
     for (let y = arena.y0; y <= arena.y1; y++) {
         for (let x = arena.x0; x <= arena.x1; x++) {
-            const shut = closedRoads.some((road) => isInRect(road, x, y));
+            const shut = [...closedRoads, ...squares].some((road) => isInRect(road, x, y));
             if (onRoad[x + y * sizeX] && steps.isSolid(x, y) && !shut) {
                 blocked.push(x + y * sizeX);
             }
@@ -730,17 +734,35 @@ function checkRoadsWalkable(
     };
     const pieces = groupTiles(blocked, sizeX).filter((piece) => piece.some(walkedTo));
     const count = pieces.reduce((sum, piece) => sum + piece.length, 0);
+    // What's in the way: a loc, or the ground itself
+    const blamed = (i: number) => {
+        const [x, y] = [i % sizeX, Math.floor(i / sizeX)];
+        const loc = grid.locs.find((other) => {
+            const { sizeX: wide, sizeY: deep, clipType } = context.locs(other.id);
+            const [dx, dy] = [x - other.x, y - other.y];
+            const fills = other.type >= 9 && other.type !== 22;
+            return fills && clipType !== 0 && dx >= 0 && dy >= 0 && dx < wide && dy < deep;
+        });
+        const corners = sizeX + 1;
+        const slope = getTileSlope(grid.levels[0].heights, corners, x, y);
+        return loc ? `${context.locs(loc.id).name ?? "a loc"} ${loc.id}` : `slope ${slope}`;
+    };
     const problems = pieces.map(
         (piece) =>
             `road can't be walked: ${piece.length} of ${count} tiles at ` +
-            formatRect(getTileBounds(piece, sizeX)),
+            `${formatRect(getTileBounds(piece, sizeX))} (${blamed(piece[0])})`,
     );
     for (const road of closedRoads) {
+        // Something solid on the road, or in the way of it, in its rectangle
         const shown = grid.locs.filter(({ x, y, type, id }) => {
-            const solid = type !== 22 && context.locs(id).clipType !== 0;
-            return (
-                solid && isInRect(road, x, y) && (roadTiles[x + y * sizeX] || onRoad[x + y * sizeX])
-            );
+            const { clipType, sizeX: wide, sizeY: deep } = context.locs(id);
+            let onIt = false;
+            for (let ty = y; ty < y + deep; ty++) {
+                for (let tx = x; tx < x + wide; tx++) {
+                    onIt ||= onRoad[tx + ty * sizeX] !== 0;
+                }
+            }
+            return type !== 22 && clipType !== 0 && isInRect(road, x, y) && onIt;
         });
         const ended = lines.some(({ points }) => {
             const { x, y } = points[points.length - 1];
