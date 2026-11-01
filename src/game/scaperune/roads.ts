@@ -506,7 +506,12 @@ export class RoadNetwork {
             if (this.tiles[i]) {
                 return step;
             }
-            if (ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT) {
+            let free = ranks[i] === 0;
+            forTilesNear(this.build, [{ x, y }], DOOR_PATH_HALF + ROAD_PLOT_MARGIN, (near) => {
+                free &&= ranks[near] === 0 || ranks[near] > RESERVE_PLOT;
+                free ||= ranks[near] === RESERVE_STREET;
+            });
+            if (!free) {
                 return 0;
             }
         }

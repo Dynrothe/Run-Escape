@@ -85,6 +85,33 @@ A screen is what the play camera sees, about 27 by 16 tiles.
 - **What players see is the ground plan.** The game draws one plane, so roofs vanish, but for tiles flagged to show from
   the ground, as the tops of city walls are. Floors, interiors and furniture matter more here than in OSRS itself.
 
+**West Varrock, measured** with `research/street-survey.ts`, over 56 by 90 tiles from 3176,3383, against a `Walled city` of 101 by
+93 with `sideStreets` at 1. It's a long paved street with blocks off one side and lanes of 2 or 3 tiles round them, and a block is
+one to three big buildings, not a row of little ones.
+
+| Measure                              | West Varrock | Generated, side streets 1 |
+| ------------------------------------ | ------------ | ------------------------- |
+| Buildings per 1000 tiles             | 3.6          | 3.2                       |
+| Indoors                              | 26%          | 11%                       |
+| Path                                 | 25%          | 24%                       |
+| Walkable                             | 70%          | 81%                       |
+| Tiles indoors a building, p25/50/75  | 25/45/79     | 25/25/48                  |
+| To the nearest building, p25/50/75   | 0/4/5        | 3/4/6                     |
+| Buildings with one within 2 tiles    | 44%          | 0%                        |
+| Sharing a wall                       | 11%          | 0%                        |
+| Buildings a block, median and p90    | 1 and 3      | 1 and 2                   |
+| A block's long side, p50 and p90     | 9 and 26     | 7 and 16                  |
+| A block's short side, p50 and p90    | 6 and 17     | 5 and 9                   |
+| Between buildings, p25/50/75/90      | 5/7/10/24    | 5/10/15/17                |
+| Runs under 5 tiles, as a share       | 8%           | 8%                        |
+| A wall's outside with a path by it   | 50%, median  | 25%                       |
+| Street edge with a building by it    | 31%          | 27%                       |
+| What's within 4 of a wall, on path   | 37%          | 21%                       |
+| Free-standing walls per 100 tiles    | 13.5         | 9.4                       |
+
+So density and paths are about right. What's short is size: our buildings are smaller, none are the real thing's 165 to 340 tiles,
+and they stand further apart. Crowds need the room, so the gaps stay wider than the real ones on purpose.
+
 ### Terrain: flat, then a step
 
 - **Three quarters of real walkable ground is dead flat.** Land is levels joined by short faces and ramps. Noise leaves
@@ -233,6 +260,7 @@ are how the generator joins anything big that's cut off.
   times past 30.
 - **Hamlets**: `buildings` with `towns: 0` and `roads` over 0. Buildings gather at the first sites, about 3 to a hamlet.
 - **A town**: `towns`, `townSize`, `buildings`, and `roads` over 0.
+- **Side streets**: `sideStreets`, how close together a town's lesser streets run, and how a block's filled: see [the flow](#the-flow).
 - **Something to see along a road**: `sites` at 1 gives a stone every 40 tiles, and `waymarkers` at 1 makes that 16.
 - **Yards**: `gardens`. A planned town's streets get at least 40% whatever it's set to.
 - **A wall round a town**: `townWalls`, only for `towns`, and `wallKit` for whose. Hamlets never get one. See
@@ -405,9 +433,17 @@ own building's plot.
 - **Site.** The ground under a town goes to its square's height, walls and all, and back to the land's over 6 tiles past its
   edge and from water and cliffs (`levelSite`), so a city's on one level and its buildings all fit. A wall won't go where the
   ground rises over 80 inside it.
-- **Side streets** turn off main streets 22 to 28 tiles apart, 4 wide, and run to the wall or whatever stops them. Hamlets have none.
-- **What that comes to**: a `Walled city` of 100 by 92 fits about 24 buildings, 11% indoors, where it asks for 38. It's meant to
-  stop there: the real range is 10% to 25%, and crowds need the room.
+- **Side streets** run as ribs off the long way through a town, as West Varrock's do, 4 wide. `sideStreets` at 0 has none, and from
+  there they run 34 tiles apart, down to 20 at 1, with up to 6 more by a roll. Two sets of them, one off each way, cut the ground
+  into blocks with room for a building each, so it's only the one set. They run to the wall, and join a street if they meet one.
+  Hamlets have none.
+- **Past 0.6**, a side street gets lanes across it, 3 wide and about 30 apart, and buildings close up: a tile less between them, and
+  plots of their own width. That, more than the streets, is what gets the buildings in. Lanes any closer than 30 take more room than
+  they give: at 20 a block has room for one building.
+- **Last of all a block's filled**: every 2 tiles of what's left, nearest the middle first and the smallest building first, anywhere
+  a door's within 5 tiles of a street.
+- **What that comes to**, by `sideStreets` at 0, 0.5, 0.8 and 1 on `Walled city` at seed 3: 17, 18, 23 and 20 of 38. At seed 2, 30 of
+  38 at 1, and `Town` 26 of 27 at 0.8. It's meant to stop where a city's full: seeds differ by how much ground the wall gets.
 - **A wall has 2 tiles of open ground along its inside** that no plot takes, for a crowd to get round, and roads keep 3 tiles off
   either side of it (`WALL_ROAD_GAP`), because its ground's pinned and won't bend for them.
 
@@ -773,7 +809,7 @@ layouts stay put.
 
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random, Reset,
 Randomize, copying and pasting the settings as JSON, Generate with a preview from above, and Play. Randomize rolls what shapes
-the map, and leaves the size, heightmap, start, waves, `dressing`, `flatness` and `sites` as they are. It's temporary, so it's
+the map, and leaves the size, heightmap, start, waves, `dressing`, `flatness`, `sites` and `sideStreets` as they are. It's temporary, so it's
 built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton` line in
 `ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`.
 
@@ -790,7 +826,7 @@ fort's wall, waymarker and rock. There's a preset that shows off most of them, a
 
 | Biome       | From                                        | Prefab families (how many)       | Rock overlay |
 | ----------- | ------------------------------------------- | -------------------------------- | ------------ |
-| `meadow`    | Lumbridge                                   | lumbridge 2, varrock 1           | 83           |
+| `meadow`    | Lumbridge, and West Varrock's houses        | lumbridge 2, varrock 7           | 83           |
 | `desert`    | Kharidian Desert                            | al 2, pollnivneach 3, sophanem 1 | 26           |
 | `swamp`     | Lumbridge Swamp, Morytania                  | canifis 1, burgh 2               | 102          |
 | `snow`      | Trollweiss, with ice from the north seas    | rellekka 2                       | 3            |
@@ -829,6 +865,8 @@ npx tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2  # a re
 npx tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map    # a place's walls: ranked by level, as a text map
 npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795 # one id's longest run, and what's across it
 npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # every loc and floor, tile by tile, on each level
+npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90          # a place's streets, blocks and gaps, as numbers
+npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1    # the same inside a made wall
 ```
 
 The index is JSON: a few lines of anything will list a region's commonest locs, which is the quick way to choose. A loc's

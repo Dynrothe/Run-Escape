@@ -780,6 +780,7 @@ const KEPT_BY_RANDOM: readonly SettingKey[] = [
     "dressing",
     "flatness",
     "sites",
+    "sideStreets",
     "squaresY",
     "heightmap",
     "spawnX",
