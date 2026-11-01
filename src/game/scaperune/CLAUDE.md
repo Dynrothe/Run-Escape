@@ -472,8 +472,8 @@ rock in flat colour: `83`, `3`, `2`, `99`, `115`, `102`, `14`. `RockDef` in `bio
 
 - `paintRockFloor` paints rock's overlay on rock tiles only. `paintOverlay` smooths outward onto the walkable ground,
   which is what made the hard band at a cliff's foot, so don't use that for rock.
-- `dressRock` runs last, on blocked ground only, so nothing it does changes where you walk: pebbles on 40% of tiles, low
-  2 by 2 heaps on a third of tiles over 16 a tile (`rubble`), and with `facets`, a full tile of contoured rock on everything
+- `dressRock` runs last, on blocked ground only, so nothing it does changes where you walk: pebbles on 40% of tiles up to 44 a tile, since past that they
+  bend into shards, low 2 by 2 heaps on 45% of tiles over 16 a tile (`rubble`), and with `facets`, a full tile of contoured rock on everything
   within 3 tiles of a face. The heaps and facets are the `rockFaces` setting's share. Facets only work as a carpet on their
   own dark overlay, as at Karuulm: anywhere else they read as shards.
 - Every kit is contoured, so it follows the ground. Sea rocks (`60436` to `60444`) aren't, and sink 3.5 tiles: they're

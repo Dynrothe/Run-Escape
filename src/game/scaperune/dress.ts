@@ -15,9 +15,11 @@ const LOC_FLOOR_DECORATION = 22;
 
 // How steep a tile is before a heap of rock can stand on it, and how many of those get one
 const SLIDE_SLOPE = 16;
-const SLIDE_SHARE = 1 / 3;
+const SLIDE_SHARE = 0.45;
 // Rock with pebbles on it
 const PEBBLE_SHARE = 0.4;
+// Past this a pebble's bent to the ground so far that it reads as a black shard
+const PEBBLE_SLOPE = 44;
 // Facets cover rock this many tiles out from a face
 const FACET_REACH = 3;
 
@@ -149,7 +151,8 @@ export function dressRock(ground: Ground, rock: Uint8Array, dressing: RockDressi
     for (let y = 1; y < sizeY - 1; y++) {
         for (let x = 1; x < sizeX - 1; x++) {
             const i = x + y * sizeX;
-            if (isRock(i) && !taken[i] && roll() < PEBBLE_SHARE) {
+            const lies = getTileSlope(heights, corners, x, y) <= PEBBLE_SLOPE;
+            if (isRock(i) && !taken[i] && lies && roll() < PEBBLE_SHARE) {
                 put(pick(kitAt(x, y).pebbles), LOC_FLOOR_DECORATION, x, y);
             }
         }
