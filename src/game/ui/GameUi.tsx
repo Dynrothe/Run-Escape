@@ -25,7 +25,6 @@ import {
     UiSnapshot,
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
-import { isMultiplayerShown } from "../client/coop/CoopLobby";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { CAMPAIGN_MAPS, DEV_MAPS, FUN_MAPS, MAPS, SEASONAL_MAPS, getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
@@ -534,7 +533,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         >
                             Singleplayer
                         </button>
-                        {ui.coop.available && isMultiplayerShown(window.location.search) && (
+                        {ui.coop.available && (
                             <button
                                 className="ui-button ui-button-big"
                                 onClick={() => client.openCoop()}

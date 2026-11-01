@@ -3,17 +3,7 @@ import { getUpgradeLine } from "../../content/armoury";
 import { CASKET_GEAR } from "../../content/items";
 import { SHOP_UPGRADES } from "../../content/shop";
 import { LOCKABLE_ITEMS } from "../../content/unlocks";
-import { isMultiplayerShown, makeLoadout, parseRoomCode } from "./CoopLobby";
-
-describe("the Multiplayer button", () => {
-    it("only shows with ?multiplayer or on an invite link, for now", () => {
-        expect(isMultiplayerShown("")).toBe(false);
-        expect(isMultiplayerShown("?bgtick")).toBe(false);
-        expect(isMultiplayerShown("?multiplayer")).toBe(true);
-        expect(isMultiplayerShown("?multiplayer=1")).toBe(true);
-        expect(isMultiplayerShown("?room=ABCDEFGH")).toBe(true);
-    });
-});
+import { makeLoadout, parseRoomCode } from "./CoopLobby";
 
 describe("room codes", () => {
     it("takes the code out of a pasted invite link", () => {

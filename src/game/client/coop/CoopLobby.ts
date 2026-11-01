@@ -85,15 +85,6 @@ function getStatusUrl(): string {
     return url.toString();
 }
 
-// While co-op's being tried out, its button only shows with ?multiplayer in the
-// address, or on an invite link. Make this true to release it.
-const MULTIPLAYER_RELEASED = false;
-
-export function isMultiplayerShown(search: string): boolean {
-    const params = new URLSearchParams(search);
-    return MULTIPLAYER_RELEASED || params.has("multiplayer") || params.has("room");
-}
-
 // Room codes are this long (the relay makes them)
 export const ROOM_CODE_LENGTH = 8;
 
