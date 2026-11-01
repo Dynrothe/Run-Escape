@@ -109,6 +109,9 @@ const QUIET_PACE = 0.6;
 const SITE_NEAR = 14;
 const SITE_FADE = 16;
 
+// Cells of 32 tiles, as a shift
+const REACH_CELL = 5;
+
 const WELL = 884;
 const STALLS = [634, 11729, 11730, 634];
 
@@ -600,29 +603,73 @@ export function getTownPaving(build: Build, x: number, y: number): boolean {
     return false;
 }
 
+// Which of a list of things reach each 32 tile cell of the map, so that what's worked out for
+// every tile only looks at those. A big map has hundreds of sites and towns.
+function createReachIndex<T>(
+    build: Build,
+    items: T[],
+    getReach: (item: T) => { x: number; y: number; reach: number },
+): (x: number, y: number) => T[] {
+    const across = (build.sizeX >> REACH_CELL) + 1;
+    const down = (build.sizeY >> REACH_CELL) + 1;
+    const cells: T[][] = Array.from({ length: across * down }, () => []);
+    for (const item of items) {
+        const { x, y, reach } = getReach(item);
+        const x0 = Math.max(Math.floor(x - reach - 1) >> REACH_CELL, 0);
+        const y0 = Math.max(Math.floor(y - reach - 1) >> REACH_CELL, 0);
+        const x1 = Math.min(Math.ceil(x + reach + 1) >> REACH_CELL, across - 1);
+        const y1 = Math.min(Math.ceil(y + reach + 1) >> REACH_CELL, down - 1);
+        for (let cy = y0; cy <= y1; cy++) {
+            for (let cx = x0; cx <= x1; cx++) {
+                cells[cx + cy * across].push(item);
+            }
+        }
+    }
+    return (x, y) => cells[(x >> REACH_CELL) + (y >> REACH_CELL) * across];
+}
+
 // How much of a tile's trees and scenery a town leaves: none in its middle, all past its fade.
 // Trees take over from buildings over about 32 tiles, and the ground stays as busy.
-export function getTownFade(build: Build, x: number, y: number): number {
-    let fade = 1;
-    for (const { kind, x0, y0, x1, y1, reach } of build.towns ?? []) {
-        const distance = Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2);
-        const tiles = kind === "hamlet" ? HAMLET_FADE_TILES : FADE_TILES;
-        fade = Math.min(fade, smoothstep((distance - reach * CORE_SHARE) / tiles));
-    }
-    return fade;
+export function createTownFade(build: Build): (x: number, y: number) => number {
+    const towns = (build.towns ?? []).map(({ kind, x0, y0, x1, y1, reach }) => ({
+        x: (x0 + x1) / 2,
+        y: (y0 + y1) / 2,
+        core: reach * CORE_SHARE,
+        tiles: kind === "hamlet" ? HAMLET_FADE_TILES : FADE_TILES,
+    }));
+    const near = createReachIndex(build, towns, ({ x, y, core, tiles }) => ({
+        x,
+        y,
+        reach: core + tiles,
+    }));
+    return (x, y) => {
+        let fade = 1;
+        for (const town of near(x, y)) {
+            const distance = Math.hypot(x - town.x, y - town.y);
+            fade = Math.min(fade, smoothstep((distance - town.core) / town.tiles));
+        }
+        return fade;
+    };
 }
 
 // How much is scattered on a tile, against a map with no sites: more near one, and less on the
 // land between. Real screens run from nothing to 130 or more, and a map where they're all
 // alike has nowhere to arrive at.
-export function getPace(build: Build, x: number, y: number): number {
+export function createPace(build: Build): (x: number, y: number) => number {
     const { sites } = build;
     if (!sites || sites.length === 0) {
-        return 1;
+        return () => 1;
     }
-    let nearest = Infinity;
-    for (const site of sites) {
-        nearest = Math.min(nearest, Math.hypot(x - site.x, y - site.y));
-    }
-    return lerp(BUSY_PACE, QUIET_PACE, smoothstep((nearest - SITE_NEAR) / SITE_FADE));
+    const near = createReachIndex(build, sites, ({ x, y }) => ({
+        x,
+        y,
+        reach: SITE_NEAR + SITE_FADE,
+    }));
+    return (x, y) => {
+        let nearest = Infinity;
+        for (const site of near(x, y)) {
+            nearest = Math.min(nearest, Math.hypot(x - site.x, y - site.y));
+        }
+        return lerp(BUSY_PACE, QUIET_PACE, smoothstep((nearest - SITE_NEAR) / SITE_FADE));
+    };
 }

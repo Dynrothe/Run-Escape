@@ -228,7 +228,7 @@ are how the generator joins anything big that's cut off.
 ### 4. Places
 
 - **Places about 50 tiles apart**: `sites` (default 1). About 1.2 to a map square, 50 from each other and 25 from the spawn.
-- **Quiet land between them**: the same setting. `getPace` scatters 2.6 times as much within 14 tiles of a site, and 0.6
+- **Quiet land between them**: the same setting. `createPace` scatters 2.6 times as much within 14 tiles of a site, and 0.6
   times past 30.
 - **Hamlets**: `buildings` with `towns: 0` and `roads` over 0. Buildings gather at the first sites, about 3 to a hamlet.
 - **A town**: `towns`, `townSize`, `buildings`, and `roads` over 0.
@@ -253,7 +253,7 @@ ground round the middle.
 The planner puts the biggest building on the square, the rest along the streets 3 to 5 tiles apart with doors onto them,
 one church to every 12 buildings, and a fenced yard behind many. Each gets a step of road to the street, so the rule about
 doors and roads holds. Paving runs over 65% of a market or axis's reach, in the biome's `paving` or Varrock's `171`. Trees
-come back over 32 tiles past that, or 8 from a hamlet (`getTownFade`).
+come back over 32 tiles past that, or 8 from a hamlet (`createTownFade`).
 
 **One kit per town** is automatic: a town picks a family of prefabs by the start of their names (`lumbridge_house` is
 `lumbridge`), and its fence goes with it (`KIT_FENCES`). A family with one prefab makes a town of copies: see
@@ -263,7 +263,7 @@ come back over 32 tiles past that, or 8 from a hamlet (`getTownFade`).
 `VIGNETTES`. They're biome by biome, from what its towns really have. They block, so they keep off roads and leave a tile
 clear. `fairy` has none.
 
-Hand-made: `planTown`, `placeVignettes`, `placeSetPieces` and `getPace` all want a `Build`, and the first and third a
+Hand-made: `planTown`, `placeVignettes`, `placeSetPieces` and `createPace` all want a `Build`, and the first and third a
 `RoadNetwork`, so they're for a map that has those, as `maps/kaluasWake.ts` does. None of the three hand-made maps calls them
 yet. Without them, stamp prefabs with `PrefabKit` and lay the town out by hand, to the numbers above. Keep to one family,
 and put a square in the middle.
@@ -330,7 +330,7 @@ Of these only `flowers` and `grass` don't block, so when a map needs more on scr
 means `trees`, `treeMix` or `props` are too high.
 
 Hand-made: `scatter` is private to the generator. Copy what you need, as `maps/kaluasWake.ts` and `maps/vardhelm.ts` do.
-`getPace` needs a `Build` with `sites`.
+`createPace` needs a `Build` with `sites`.
 
 ### 8. Dressing
 
@@ -1009,7 +1009,7 @@ Three maps are whole worked examples, each going further than this one:
 - `maps/shatteredRealm.ts`: land over a void, its own waves, events and bosses, and terrain as architecture.
 
 `createBuild`, `paintFloors`, `scatter` and `connectGround` are private to the generator, and `paintRock`,
-`blockSteepGround`, `gradeRoads` and `getPace` need a `Build`, so a hand-made map copies what it needs. Keep to the order in
+`blockSteepGround`, `gradeRoads` and `createPace` need a `Build`, so a hand-made map copies what it needs. Keep to the order in
 [The generator's order](#the-generators-order): it's the one that works.
 
 Grid tiles start at the grid's south-west corner, x east and y north. `getRecipeWorldTile` turns them

@@ -80,7 +80,7 @@ import {
     placeWaymarkers,
 } from "./structures";
 import { limitSlope } from "./terrain";
-import { getPace, getTownFade, getTownPaving } from "./townPlan";
+import { createPace, createTownFade, getTownPaving } from "./townPlan";
 import { placeVignettes } from "./vignettes";
 
 export * from "./settings";
@@ -248,6 +248,8 @@ function scatter(build: Build, water: Uint8Array): void {
     const clumpLine = lerp(0.5, 0.56, settings.treeClumping);
     const inClump = lerp(0.1, 0.4, settings.treeClumping);
     const outOfClump = lerp(0.1, 0, settings.treeClumping);
+    const townFade = createTownFade(build);
+    const paceAt = createPace(build);
     const place = (id: number, size: number, type: number, x: number, y: number) => {
         ground.place({ id, type, rotation: Math.floor(rng() * 4), level: 0, x, y }, size, size);
     };
@@ -301,8 +303,8 @@ function scatter(build: Build, water: Uint8Array): void {
             }
             // Nothing grows on the snow, and trees take over from a town's buildings
             const bare = terrain.height[terrain.corner(x, y)] > snowLine ? 0 : 1 - rocky;
-            const fade = getTownFade(build, x, y);
-            const pace = inBelt ? 1 : getPace(build, x, y);
+            const fade = townFade(x, y);
+            const pace = inBelt ? 1 : paceAt(x, y);
             const treeChance = (inBelt ? 0.5 : settings.trees * density * pace) * bare * fade;
             const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006) * fade * pace;
             const propChance = settings.props * PROP_CHANCE * bare * fade * pace;
