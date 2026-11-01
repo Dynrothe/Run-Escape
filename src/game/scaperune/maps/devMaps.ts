@@ -90,6 +90,7 @@ const GENERATED: GeneratedLine[] = [
     ["scaperune_canyon", 76, { seed: 5, ...SETTING_PRESETS.Canyon, squaresX: 3, squaresY: 3 }, 110],
     ["scaperune_volcano", 81, { seed: 6, ...SETTING_PRESETS.Volcano }, 110],
     ["scaperune_town", 93, { seed: 3, ...SETTING_PRESETS.Town, wallKit: "varrock" }, 180],
+    ["scaperune_city", 72, { seed: 1, ...SETTING_PRESETS["Walled city"] }, 190],
     // A map of each newer biome, 2 squares a side
     ...(
         [

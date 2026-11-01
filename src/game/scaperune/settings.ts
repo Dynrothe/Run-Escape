@@ -281,9 +281,6 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     ruins: share("Ruins"),
     landmarks: share("Landmarks"),
     townWalls: share("Town walls", { when: (s) => s.towns > 0 && s.buildings > 0 }),
-    wallKit: choice("Wall from", ["auto", ...CITY_WALL_IDS], {
-        when: (s) => s.towns > 0 && s.buildings > 0 && s.townWalls > 0,
-    }),
     waymarkers: share("Waymarkers", { when: hasRoads }),
 
     spawnX: share("Start, west to east"),
@@ -301,6 +298,10 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     ]),
     enemyDensity: number("Enemy density", 0.25, 3, 0.25),
     brightness: number("Brightness", 0.5, 1.2, 0.05),
+    // Last, so that Randomize's rolls for the rest stay as they were. The screen goes by SECTIONS.
+    wallKit: choice("Wall from", ["auto", ...CITY_WALL_IDS], {
+        when: (s) => s.towns > 0 && s.buildings > 0 && s.townWalls > 0,
+    }),
 };
 
 // In the order the screen shows them

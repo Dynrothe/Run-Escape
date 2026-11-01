@@ -784,7 +784,8 @@ it. The band's reserved at once, and `placeTownWalls` puts the wall up after the
 water, cliffs, buildings, door steps, bridges and anything that was there first. Inside, roads are paved, and there's a square
 with a fountain unless the town was laid out with one.
 
-`Walled city` is the preset for a big one, `scaperune_town` is the dev map, and `scaperune_walls` (`maps/wallSheet.ts`) has every
+`Walled city` is the preset for a big one, in Falador's wall, and `scaperune_city` is that as a dev map. `scaperune_town` has
+two towns inside Varrock's, and `scaperune_walls` (`maps/wallSheet.ts`) has every
 kit, on the flat and on a slope of 3 a tile.
 
 **By hand.** It only needs a `Ground`, so any map can call it, with the heights done:
@@ -811,6 +812,10 @@ call it before `dressGround`, and keep everything else off the band, which is `f
 below. They've looked right at 3 a tile. So on a hand-made map let a wall run over what's there, up to about that, and pin a
 gate's plot flat: a gate's own locs are contoured in `falador`, but the road through it still wants to be level. A tower isn't
 contoured, so pin it a plot too, and use `level` kits (`yanille`) on flat ground or with the ring pinned, as `levelWall` does.
+
+**What they cost.** Triangles a tile of wall, both faces and both rails: `falador` 634, `civitas` 512, `varrock` 550, `kourend`
+558, `shayzien` 468, `yanille` 76, and `jatizso` 366 for its one face. A screen is 27 tiles across, so a stretch of Falador's
+wall along the middle of one is about 17,000 triangles, the most any one thing there adds.
 
 **Adding a kit.** `wall-survey.ts`'s `runs` reads a section, and `dump` the rest. It wants a wall type in the face's and the rail's
 `types`, with 1 and 9 for cut corners and 2 for square ones (`model-bounds.ts` prints them). Add it to `sweep` by being in

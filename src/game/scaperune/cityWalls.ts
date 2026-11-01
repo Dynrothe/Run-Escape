@@ -14,7 +14,7 @@ const LOC_INNER_CORNER = 2;
 const LOC_DIAGONAL = 9;
 const LOC_NORMAL = 10;
 
-// A wall on a tile's north edge, as walls are in this file's frame: see getSide
+// A wall's rotation: which of a tile's edges it's on, in the frame of getWallSide
 const NORTH = 1;
 const EAST = 2;
 const SOUTH = 3;
@@ -75,9 +75,9 @@ export type CityWallKit = {
     biomes: string[];
 };
 
-// Rotation 0 faces west, and each turn goes clockwise, so [outer, inner] rotate with the side
+// Measured from the cache. Rotations in gateParts are with the outside to the south.
 const KITS = {
-    // Falador's: the south-east stretch at 2935,3372, and its north gate at 2963 to 2968,3392
+    // Falador's: the west wall at 2935,3372, and its north gate at 2963 to 2968,3392
     falador: {
         label: "Falador",
         outer: { wall: 24029, rail: 24026 },
@@ -350,8 +350,8 @@ function placeTower(ground: Ground, tower: WallTower, x: number, y: number): voi
 
 // Builds a wall round a rectangle. skip says where it can't stand: it stops short of those tiles
 // with a cap, as it does at a gate. A hand-made map calls this once its heights are done: the wall
-// goes up on the ground as it is, and only needs a Ground. Keep gates on flat ground: a gate's
-// locs that aren't contoured show their undersides on a slope.
+// goes up on the ground as it is, and only needs a Ground. Pin a gate's ground flat, and a tower's:
+// see the guide, on slopes.
 export function placeCityWall(
     ground: Ground,
     kit: CityWallKit,
