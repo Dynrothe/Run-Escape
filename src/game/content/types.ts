@@ -955,6 +955,10 @@ export type MapDef = {
     ditch?: { y: number };
     // Enemies' hitpoints and damage (bosses' attacks too) on top of their own
     difficulty: { hp: number; damage: number };
+    // What hard mode multiplies those by here (see hard.ts for when it's unset).
+    // More on the early maps, which a player with everything bought walks
+    // through, and less on the late ones, which are hard enough already.
+    hard?: { hp: number; damage: number };
     waves: WaveDef[];
     events: RunEventDef[];
     // The countdown before the final boss, and the victory title

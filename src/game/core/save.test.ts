@@ -1,12 +1,13 @@
 import { ARMOURY_COSTS } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { getEnemy } from "../content/enemies";
-import { CAMPAIGN_MAPS, MAPS, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
 import { LOCKABLE_ITEMS } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
 import {
     RunSummary,
+    SAVE_VERSION,
     buyArmouryUpgrade,
     buyUpgrade,
     createSave,
@@ -20,6 +21,7 @@ import {
     importSave,
     isEndlessRecord,
     isEndlessUnlocked,
+    isHardUnlocked,
     isMapUnlocked,
     migrateSave,
     recordRun,
@@ -307,6 +309,65 @@ describe("save", () => {
                 expect(getMap(task.mapId)).toBeDefined();
             }
         }
+    });
+});
+
+describe("hard mode", () => {
+    const hardWin = (mapId: string) => run(mapId, { hard: true, victory: true, seconds: 900 });
+
+    test("opens on a map once it's been beaten, and on fun maps from the start", () => {
+        const save = createSave();
+        expect(isHardUnlocked(save, "lumbridge")).toBe(false);
+        expect(isHardUnlocked(save, FUN_MAPS[0].id)).toBe(true);
+        recordRun(save, run("lumbridge", { victory: true, seconds: 900 }));
+        expect(isHardUnlocked(save, "lumbridge")).toBe(true);
+        expect(isHardUnlocked(save, "barrows")).toBe(false);
+    });
+
+    test("a win counts as a win, and on its own as a hard one", () => {
+        const save = createSave();
+        recordRun(save, run("lumbridge", { victory: true, seconds: 900 }));
+        expect(save.hardVictories.lumbridge).toBeUndefined();
+        recordRun(save, hardWin("lumbridge"));
+        expect(save.mapVictories.lumbridge).toBe(2);
+        expect(save.hardVictories.lumbridge).toBe(1);
+        // Losing on hard is no win of either kind
+        recordRun(save, run("lumbridge", { hard: true }));
+        expect(save.mapVictories.lumbridge).toBe(2);
+        expect(save.hardVictories.lumbridge).toBe(1);
+    });
+
+    test("endless records are kept apart from normal ones", () => {
+        const save = createSave();
+        const endless = (hard: boolean, round: number) =>
+            run("lumbridge", { endless: true, hard, round, seconds: round * 600 });
+        recordRun(save, endless(false, 4));
+        expect(isEndlessRecord(save, endless(true, 2))).toBe(true);
+        recordRun(save, endless(true, 2));
+        expect(save.endlessBest.lumbridge.round).toBe(4);
+        expect(save.hardEndlessBest.lumbridge.round).toBe(2);
+        expect(isEndlessRecord(save, endless(true, 1))).toBe(false);
+    });
+
+    test("survives a round trip, and older saves load without it", () => {
+        const save = createSave();
+        recordRun(save, hardWin("lumbridge"));
+        recordRun(save, run("lumbridge", { endless: true, hard: true, round: 2, seconds: 1500 }));
+        const back = importSave(exportSave(save));
+        expect(back.hardVictories).toEqual({ lumbridge: 1 });
+        expect(back.hardEndlessBest).toEqual({ lumbridge: { round: 2, seconds: 1500 } });
+
+        const older = migrateSave({ version: 8, mapVictories: { lumbridge: 3 } });
+        expect(older.version).toBe(SAVE_VERSION);
+        expect(older.hardVictories).toEqual({});
+        expect(older.hardEndlessBest).toEqual({});
+
+        const broken = migrateSave({
+            hardVictories: { lumbridge: 2, nowhere: 5, barrows: "lots" },
+            hardEndlessBest: { lumbridge: { round: 3, seconds: 900 }, nowhere: { round: 9 } },
+        });
+        expect(broken.hardVictories).toEqual({ lumbridge: 2 });
+        expect(broken.hardEndlessBest).toEqual({ lumbridge: { round: 3, seconds: 900 } });
     });
 });
 

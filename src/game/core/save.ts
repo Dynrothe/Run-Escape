@@ -25,7 +25,8 @@ import { WEAPONS } from "../content/weapons";
 // 6: quests, and the kills and caskets they count
 // 7: evolutions made, for the Collection log
 // 8: trophies found, for the Collection log
-export const SAVE_VERSION = 8;
+// 9: hard mode's wins and endless records
+export const SAVE_VERSION = 9;
 
 // Characters taken out of the game for now; saves keep them unlocked for when
 // they're back
@@ -46,11 +47,15 @@ export type SaveData = {
     victories: number;
     // Map id -> times beaten; beating a map unlocks the next
     mapVictories: Record<string, number>;
+    // Map id -> the times of those that were on hard mode
+    hardVictories: Record<string, number>;
     totalKills: number;
     bestSeconds: number;
     bestLevel: number;
     // Map id -> the furthest an endless run there has got
     endlessBest: Record<string, EndlessRecord>;
+    // The same, on hard mode
+    hardEndlessBest: Record<string, EndlessRecord>;
     // Ids of the gear that's come out of caskets, which can be upgraded in
     // the Armoury
     foundGear: string[];
@@ -83,10 +88,12 @@ export function createSave(): SaveData {
         runs: 0,
         victories: 0,
         mapVictories: {},
+        hardVictories: {},
         totalKills: 0,
         bestSeconds: 0,
         bestLevel: 0,
         endlessBest: {},
+        hardEndlessBest: {},
         foundGear: [],
         armoury: {},
         enemyKills: {},
@@ -144,17 +151,31 @@ export function migrateSave(raw: unknown): SaveData {
         // From before there were maps: every win was in Lumbridge
         save.mapVictories[MAPS[0].id] = save.victories;
     }
-    save.totalKills = num(data.totalKills, 0);
-    save.bestSeconds = num(data.bestSeconds, 0);
-    save.bestLevel = num(data.bestLevel, 0);
-    if (data.endlessBest && typeof data.endlessBest === "object") {
-        for (const [id, record] of Object.entries(data.endlessBest)) {
-            const round = num(record?.round, 0);
-            if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
-                save.endlessBest[id] = { round, seconds: num(record?.seconds, 0) };
+    if (data.hardVictories && typeof data.hardVictories === "object") {
+        for (const [id, wins] of Object.entries(data.hardVictories)) {
+            if (MAPS.some((m) => m.id === id) && num(wins, 0) > 0) {
+                save.hardVictories[id] = num(wins, 0);
             }
         }
     }
+    save.totalKills = num(data.totalKills, 0);
+    save.bestSeconds = num(data.bestSeconds, 0);
+    save.bestLevel = num(data.bestLevel, 0);
+    const copyEndlessBest = (
+        from: Record<string, EndlessRecord> | undefined,
+        to: Record<string, EndlessRecord>,
+    ) => {
+        if (from && typeof from === "object") {
+            for (const [id, record] of Object.entries(from)) {
+                const round = num(record?.round, 0);
+                if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
+                    to[id] = { round, seconds: num(record?.seconds, 0) };
+                }
+            }
+        }
+    };
+    copyEndlessBest(data.endlessBest, save.endlessBest);
+    copyEndlessBest(data.hardEndlessBest, save.hardEndlessBest);
     if (Array.isArray(data.foundGear)) {
         for (const id of data.foundGear) {
             if (isCasketGear(id) && !save.foundGear.includes(id)) {
@@ -274,6 +295,7 @@ export type RunSummary = {
     // An endless run, and the round it got to
     endless?: boolean;
     round?: number;
+    hard?: boolean;
     victory: boolean;
     seconds: number;
     level: number;
@@ -303,12 +325,16 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     if (run.victory) {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
+        if (run.hard) {
+            save.hardVictories[run.mapId] = (save.hardVictories[run.mapId] ?? 0) + 1;
+        }
     }
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
     save.bestLevel = Math.max(save.bestLevel, run.level);
     if (run.endless && isEndlessRecord(save, run)) {
-        save.endlessBest[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
+        const records = run.hard ? save.hardEndlessBest : save.endlessBest;
+        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
     }
     for (const id of run.gearFound ?? []) {
         if (isCasketGear(id) && !save.foundGear.includes(id)) {
@@ -395,13 +421,13 @@ export function getFinishedQuests(save: SaveData, run?: RunSummary): QuestDef[] 
     });
 }
 
-// Whether an endless run got further than any before it on its map: a later
-// round, or as far but longer
+// Whether an endless run got further than any before it on its map (hard mode
+// keeps its own records): a later round, or as far but longer
 export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     if (isDevMap(run.mapId)) {
         return false;
     }
-    const best = save.endlessBest[run.mapId];
+    const best = (run.hard ? save.hardEndlessBest : save.endlessBest)[run.mapId];
     const round = run.round ?? 1;
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
 }
@@ -464,6 +490,12 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
 // ever endless
 export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
+}
+
+// Hard mode opens the same way: once the map's been beaten, and from the start
+// on the fun maps, which can't be
+export function isHardUnlocked(save: SaveData, mapId: string): boolean {
+    return isEndlessUnlocked(save, mapId);
 }
 
 // A piece's next upgrade in the Armoury: what it becomes, what that costs,

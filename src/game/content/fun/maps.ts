@@ -291,6 +291,7 @@ export const FUN_MAPS: MapDef[] = [
         // In the middle of town, between the banks
         spawn: { x: 2965.5, y: 3378.5 },
         difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.4, damage: 1.25 },
         waves: paced([
             [{ id: "noob", weight: 1 }],
             [
@@ -633,6 +634,8 @@ export const FUN_MAPS: MapDef[] = [
         // The pests come in close (few of them shoot), which is easier going
         // than the other fun maps' crowds, so they're a little tougher
         difficulty: { hp: 1.15, damage: 1.1 },
+        // Gently: ravagers from the first second can swamp a start with no levels yet
+        hard: { hp: 1.3, damage: 1.15 },
         waves: paced([
             [{ id: "ravager", weight: 1 }],
             [
