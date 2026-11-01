@@ -89,7 +89,6 @@ const BLOCK_FAMILIES: Record<string, string[]> = {
         "varrock_house",
         "varrock_terrace",
         "varrock_store",
-        "varrock_hall",
         "varrock_corner",
     ],
 };

@@ -86,28 +86,28 @@ A screen is what the play camera sees, about 27 by 16 tiles.
   the ground, as the tops of city walls are. Floors, interiors and furniture matter more here than in OSRS itself.
 
 **West Varrock, measured** with `research/street-survey.ts`, over 56 by 90 tiles from 3176,3383, against a `Walled city` of 101 by
-93 with `sideStreets` at 1. It's a long paved street with blocks off one side and lanes of 2 or 3 tiles round them, and a block is
-one to three big buildings, not a row of little ones.
+93 at seed 2 with `sideStreets` at 0.8. It's a long paved street with blocks off one side and lanes of 2 or 3 tiles round them, and
+a block is one to three big buildings, not a row of little ones.
 
-| Measure                              | West Varrock | Generated, side streets 1 |
-| ------------------------------------ | ------------ | ------------------------- |
-| Buildings per 1000 tiles             | 3.6          | 3.2                       |
-| Indoors                              | 26%          | 11%                       |
-| Path                                 | 25%          | 24%                       |
-| Walkable                             | 70%          | 81%                       |
-| Tiles indoors a building, p25/50/75  | 25/45/79     | 25/25/48                  |
-| To the nearest building, p25/50/75   | 0/4/5        | 3/4/6                     |
-| Buildings with one within 2 tiles    | 44%          | 0%                        |
-| Sharing a wall                       | 11%          | 0%                        |
-| Buildings a block, median and p90    | 1 and 3      | 1 and 2                   |
-| A block's long side, p50 and p90     | 9 and 26     | 7 and 16                  |
-| A block's short side, p50 and p90    | 6 and 17     | 5 and 9                   |
-| Between buildings, p25/50/75/90      | 5/7/10/24    | 5/10/15/17                |
-| Runs under 5 tiles, as a share       | 8%           | 8%                        |
-| A wall's outside with a path by it   | 50%, median  | 25%                       |
-| Street edge with a building by it    | 31%          | 27%                       |
-| What's within 4 of a wall, on path   | 37%          | 21%                       |
-| Free-standing walls per 100 tiles    | 13.5         | 9.4                       |
+| Measure                             | West Varrock | Generated  |
+| ----------------------------------- | ------------ | ---------- |
+| Buildings per 1000 tiles            | 3.6          | 3.0        |
+| Indoors                             | 26%          | 11%        |
+| Path                                | 25%          | 24%        |
+| Walkable                            | 70%          | 82%        |
+| Tiles indoors a building, p25/50/75 | 25/45/79     | 28/35/48   |
+| To the nearest building, p25/50/75  | 0/4/5        | 3/4/6      |
+| Buildings with one within 2 tiles   | 44%          | 0%         |
+| Sharing a wall                      | 11%          | 0%         |
+| Buildings a block, median and p90   | 1 and 3      | 1 and 2    |
+| A block's long side, p50 and p90    | 9 and 26     | 7 and 14   |
+| A block's short side, p50 and p90   | 6 and 17     | 5 and 10   |
+| Between buildings, p25/50/75/90     | 5/7/10/24    | 5/10/15/20 |
+| Runs under 5 tiles, as a share      | 8%           | 7%         |
+| A wall's outside with a path by it  | 50%, median  | 29%        |
+| Street edge with a building by it   | 31%          | 25%        |
+| What's within 4 of a wall, on path  | 37%          | 22%        |
+| Free-standing walls per 100 tiles   | 13.5         | 9.4        |
 
 So density and paths are about right. What's short is size: our buildings are smaller, none are the real thing's 165 to 340 tiles,
 and they stand further apart. Crowds need the room, so the gaps stay wider than the real ones on purpose.
@@ -442,8 +442,12 @@ own building's plot.
   they give: at 20 a block has room for one building.
 - **Last of all a block's filled**: every 2 tiles of what's left, nearest the middle first and the smallest building first, anywhere
   a door's within 5 tiles of a street.
-- **What that comes to**, by `sideStreets` at 0, 0.5, 0.8 and 1 on `Walled city` at seed 3: 17, 18, 23 and 20 of 38. At seed 2, 30 of
-  38 at 1, and `Town` 26 of 27 at 0.8. It's meant to stop where a city's full: seeds differ by how much ground the wall gets.
+- **What that comes to**, of 38 asked for: `Walled city` at seed 3 gets 21, 22, 22, 25 and 22 with `sideStreets` at 0, 0.3, 0.5, 0.8 and
+  1, and at seed 2, 24, 28 and 28 at 0, 0.8 and 1. `Town` gets 17 at 0 and 25 of 27 at 0.8. It's meant to stop where a city's full, and
+  how much ground its wall gets matters more than the setting. The setting does the most to a small town.
+- **Past 0.6 a town keeps to a family with buildings for blocks** (`BLOCK_FAMILIES`), if its biome has one. That's meadow's Varrock,
+  whose five West Varrock houses only towns get. Tents, the open-fronted shops and anything else with no plain rectangle to cut
+  were left out: `check-prefabs.ts` won't have an open one, and the tents read as circus tents repeated.
 - **A wall has 2 tiles of open ground along its inside** that no plot takes, for a crowd to get round, and roads keep 3 tiles off
   either side of it (`WALL_ROAD_GAP`), because its ground's pinned and won't bend for them.
 
@@ -826,7 +830,7 @@ fort's wall, waymarker and rock. There's a preset that shows off most of them, a
 
 | Biome       | From                                        | Prefab families (how many)       | Rock overlay |
 | ----------- | ------------------------------------------- | -------------------------------- | ------------ |
-| `meadow`    | Lumbridge, and West Varrock's houses        | lumbridge 2, varrock 7           | 83           |
+| `meadow`    | Lumbridge, and West Varrock's houses        | lumbridge 2, varrock 6           | 83           |
 | `desert`    | Kharidian Desert                            | al 2, pollnivneach 3, sophanem 1 | 26           |
 | `swamp`     | Lumbridge Swamp, Morytania                  | canifis 1, burgh 2               | 102          |
 | `snow`      | Trollweiss, with ice from the north seas    | rellekka 2                       | 3            |
