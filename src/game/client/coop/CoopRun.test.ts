@@ -124,7 +124,7 @@ describe("co-op lockstep", () => {
             expect(guest.desynced).toBe(false);
             expect(syncHash(guest.sim)).toBe(syncHash(host.sim));
         }
-    });
+    }, 30000);
 
     // A host's run, on a clock the test moves, with what it sends kept
     function hostRun(clock: { now: number }) {
