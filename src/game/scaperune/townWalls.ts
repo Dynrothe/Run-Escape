@@ -29,7 +29,7 @@ import { PAVING } from "./structures";
 
 // What's kept clear of a gate, in tiles: how far in behind it and how far out in front, and how
 // many past its sides. Nothing but its road goes there, so that a gate always opens on to a street
-// you can see down. 12 is a bit under half a screen.
+// you can see down. 12 is about three quarters of a screen's height.
 export const GATE_CLEAR_IN = 12;
 
 export const GATE_CLEAR_OUT = 8;
