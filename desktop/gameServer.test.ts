@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { GAME_ORIGIN, parseRange, resolveGamePath, serveGame } from "./gameServer";
+import { GAME_ORIGIN, getRelayOrigin, parseRange, resolveGamePath, serveGame } from "./gameServer";
 
 // CacheFiles.ts sends Number.MAX_SAFE_INTEGER as the end of a resume
 const RESUME_END = "9007199254740991";
@@ -79,6 +79,20 @@ describe("resolveGamePath", () => {
         expect(resolveGamePath(root, "/C:%5cWindows", path.win32)).toBeUndefined();
         expect(resolveGamePath(root, "/index.html:stream", path.win32)).toBeUndefined();
     });
+});
+
+describe("getRelayOrigin", () => {
+    test("gives the origin of a secure relay", () => {
+        expect(getRelayOrigin("wss://example.com/game/coop")).toBe("https://example.com");
+        expect(getRelayOrigin("wss://example.com:8443/coop")).toBe("https://example.com:8443");
+    });
+
+    test.each([[""], ["not a url"], ["ws://example.com/coop"], ["https://example.com/coop"]])(
+        "lets nothing out for %j",
+        (url) => {
+            expect(getRelayOrigin(url)).toBeUndefined();
+        },
+    );
 });
 
 describe("serveGame", () => {

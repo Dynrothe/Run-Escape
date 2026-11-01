@@ -156,6 +156,16 @@ else. `npm start` and `npm run preview` run a relay of their own at `/coop`
 
 ## Desktop
 
+**Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
+into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
+`wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
+has to be `wss://`, and the app lets only that address out. Without it there's no Multiplayer.
+
+The launcher only gets it in a new download, so players on an older one keep playing without
+Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.
+Desktop and web players share rooms only on the same build, so publish a release and deploy the
+website from the same commit.
+
 The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
 `desktop/`, apart from the game, which doesn't know it's in an app.

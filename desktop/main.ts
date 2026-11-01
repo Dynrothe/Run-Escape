@@ -4,7 +4,7 @@ import { appendFile } from "node:fs/promises";
 import path from "node:path";
 
 import { GameFolder, pickGameFolder } from "./gameFiles";
-import { GAME_ORIGIN, serveGame } from "./gameServer";
+import { GAME_ORIGIN, getRelayOrigin, serveGame } from "./gameServer";
 import { checkForUpdate, installUpdate, readInstalledGames, removeOldGames } from "./gameUpdate";
 import { GITHUB_SOURCE } from "./releaseSource";
 import { LAUNCHER_VERSION } from "./version";
@@ -33,6 +33,9 @@ const log = (message: string) =>
         path.join(app.getPath("userData"), "launcher.log"),
         `${new Date().toISOString()} ${message}\n`,
     ).catch(() => {});
+
+// The relay, from the build (see build-main.ts). Empty for a build with none.
+declare const __COOP_URL__: string;
 
 function openExternally(url: string): void {
     if (/^https?:\/\//.test(url)) {
@@ -164,7 +167,13 @@ function openGame(): BrowserWindow {
 async function start(): Promise<void> {
     Menu.setApplicationMenu(null);
     const gameSession = session.fromPartition(GAME_PARTITION);
-    gameSession.protocol.handle("https", (request) => serveGame(gameRoot, request));
+    // Everything's the game's own but the relay, the one thing that's let out
+    const relayOrigin = getRelayOrigin(__COOP_URL__);
+    gameSession.protocol.handle("https", (request) =>
+        new URL(request.url).origin === relayOrigin
+            ? gameSession.fetch(request, { bypassCustomProtocolHandlers: true })
+            : serveGame(gameRoot, request),
+    );
     // The game only ever asks for these two
     gameSession.setPermissionRequestHandler((_contents, permission, callback) => {
         callback(permission === "fullscreen" || permission === "pointerLock");

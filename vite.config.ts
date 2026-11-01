@@ -18,7 +18,7 @@ const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json
 // when the server started without one.
 function buildId(): string {
     try {
-        const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+        const commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
             encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
         }).trim();
