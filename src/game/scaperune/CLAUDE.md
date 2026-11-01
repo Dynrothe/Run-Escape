@@ -594,9 +594,6 @@ Don't spend a round on these.
 
 **Known faults**
 
-- **Meadow's sea road.** `scaperune_meadow` has a 109 a tile where a road runs into the sea: both ends of that tile are held.
-  The look line can't see within 2 of water, so it reads 49, and `height.steepest` tells the truth. Roads pinned where they
-  meet water can do this on any map.
 - **Plain rock is weak on pale ground.** On `snow`, `desert` and `tropical` a plain face doesn't read as one surface: its heaps and
   pebbles show as loose shards against it, even white ones on snow. Snow's kits were cut back for that, and there's no fix yet.
   Keep faces short there, and look at it.
