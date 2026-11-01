@@ -503,6 +503,67 @@ export function importSave(text: string): SaveData {
     return migrateSave(raw);
 }
 
+// Merges two saves (for cloud sync across browsers): keeps every adventurer,
+// item, quest, evolution and piece of gear found in either, the higher records
+// and wins on each map, and the coins, skills and Armoury upgrades from whichever
+// save has gone further.
+export function mergeSaves(local: SaveData, remote: SaveData): SaveData {
+    const primary =
+        remote.totalCoins > local.totalCoins ||
+        (remote.totalCoins === local.totalCoins && remote.runs > local.runs)
+            ? remote
+            : local;
+    const mapVictories: Record<string, number> = { ...local.mapVictories };
+    for (const [id, wins] of Object.entries(remote.mapVictories)) {
+        mapVictories[id] = Math.max(mapVictories[id] ?? 0, wins);
+    }
+    const endlessBest: Record<string, EndlessRecord> = { ...local.endlessBest };
+    for (const [id, rec] of Object.entries(remote.endlessBest)) {
+        const cur = endlessBest[id];
+        if (
+            !cur ||
+            rec.round > cur.round ||
+            (rec.round === cur.round && rec.seconds > cur.seconds)
+        ) {
+            endlessBest[id] = { ...rec };
+        }
+    }
+    const armoury: Record<string, number> = { ...local.armoury };
+    for (const [id, rank] of Object.entries(remote.armoury)) {
+        armoury[id] = Math.max(armoury[id] ?? 0, rank);
+    }
+    const enemyKills: Record<string, number> = { ...(local.enemyKills ?? {}) };
+    for (const [id, count] of Object.entries(remote.enemyKills ?? {})) {
+        enemyKills[id] = Math.max(enemyKills[id] ?? 0, count);
+    }
+    return migrateSave({
+        version: SAVE_VERSION,
+        coins: primary.coins,
+        totalCoins: Math.max(local.totalCoins, remote.totalCoins),
+        upgrades: { ...primary.upgrades },
+        upgradesSpent: primary.upgradesSpent,
+        unlockedCharacters: [
+            ...new Set([...local.unlockedCharacters, ...remote.unlockedCharacters]),
+        ],
+        unlockedItems: [...new Set([...local.unlockedItems, ...remote.unlockedItems])],
+        runs: Math.max(local.runs, remote.runs),
+        victories: Math.max(local.victories, remote.victories),
+        mapVictories,
+        totalKills: Math.max(local.totalKills, remote.totalKills),
+        bestSeconds: Math.max(local.bestSeconds, remote.bestSeconds),
+        bestLevel: Math.max(local.bestLevel, remote.bestLevel),
+        endlessBest,
+        foundGear: [...new Set([...local.foundGear, ...remote.foundGear])],
+        armoury,
+        enemyKills,
+        casketsOpened: Math.max(local.casketsOpened ?? 0, remote.casketsOpened ?? 0),
+        questsDone: [...new Set([...(local.questsDone ?? []), ...(remote.questsDone ?? [])])],
+        evolutionsMade: [
+            ...new Set([...(local.evolutionsMade ?? []), ...(remote.evolutionsMade ?? [])]),
+        ],
+    });
+}
+
 export interface SaveStore {
     load(): SaveData;
     save(data: SaveData): void;

@@ -44,6 +44,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig } from "../render/CameraRig";
 import { GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
+import { SpacetimeSync } from "../spacetimedb/SpacetimeSync";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import {
     GameAssets,
@@ -230,6 +231,7 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
+    readonly cloud: SpacetimeSync;
 
     sim?: Sim;
     paused = false;
@@ -293,6 +295,30 @@ export class GameClient implements GameFrameHandler {
         };
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
+        this.cloud = new SpacetimeSync({
+            getLocalSave: () => this.save,
+            onMergedSave: (merged) => {
+                this.save = merged;
+                this.saveStore.save(this.save);
+                this.store.set({ save: structuredClone(this.save) });
+                if (!this.sim) {
+                    const { characterId, mapId } = this.store.getSnapshot();
+                    if (!merged.unlockedCharacters.includes(characterId)) {
+                        this.selectCharacter(merged.unlockedCharacters[0]);
+                    }
+                    if (!isMapUnlocked(merged, mapId)) {
+                        this.store.set({ mapId: MAPS[0].id });
+                    }
+                    if (!isEndlessUnlocked(merged, this.store.getSnapshot().mapId)) {
+                        this.store.set({ endless: false });
+                    }
+                }
+            },
+            onStateChange: (cloud) => {
+                this.store.set({ cloud });
+            },
+        });
+        void this.cloud.init();
 
         if (options.autostart) {
             this.store.set({ characterId: options.autostart });
@@ -307,6 +333,7 @@ export class GameClient implements GameFrameHandler {
     }
 
     dispose(): void {
+        this.cloud.dispose();
         this.input.dispose();
         this.audio.dispose();
         if (this.renderer.game === this) {
@@ -443,6 +470,39 @@ export class GameClient implements GameFrameHandler {
         this.saveStore.save(this.save);
         // A fresh object so React sees the change
         this.store.set({ save: structuredClone(this.save) });
+        this.cloud.scheduleSaveSync(this.save);
+    }
+
+    signInCloud(): void {
+        void this.cloud.signInWithSpacetimeAuth();
+    }
+
+    loginWithToken(token?: string): void {
+        this.cloud.loginWithToken(token);
+    }
+
+    logoutCloud(): void {
+        this.cloud.logout();
+    }
+
+    setCloudDisplayName(name: string): Promise<string | undefined> {
+        return this.cloud.setDisplayName(name);
+    }
+
+    grantRole(identityHex: string, roleId: string | bigint | number, scopeId = 0n): Promise<string | undefined> {
+        return this.cloud.grantRole(identityHex, roleId, scopeId);
+    }
+
+    revokeGrant(grantId: string | bigint | number): Promise<string | undefined> {
+        return this.cloud.revokeGrant(grantId);
+    }
+
+    createScope(name: string, kind = "room", parent = 0n): Promise<string | undefined> {
+        return this.cloud.createScope(name, kind, parent);
+    }
+
+    getCloudToken(): string | undefined {
+        return this.cloud.getStoredToken();
     }
 
     // Builds a map's collision the first time it's played (a scene build of
@@ -728,6 +788,7 @@ export class GameClient implements GameFrameHandler {
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
         const quests = recordRun(this.save, result);
         this.persist();
+        const verification = this.cloud.submitRun(result);
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -750,6 +811,9 @@ export class GameClient implements GameFrameHandler {
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                runVerified: verification.verified,
+                runVerifyReason: verification.verified ? undefined : verification.reason,
+                runSynced: verification.verified ? verification.synced : false,
             },
         });
     }

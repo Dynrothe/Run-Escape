@@ -4,6 +4,7 @@ import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
 import { SaveData } from "../core/save";
+import { CloudState } from "../spacetimedb/SpacetimeSync";
 import { DisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 
@@ -15,6 +16,7 @@ export type Screen =
     | "armoury"
     | "quests"
     | "collectionLog"
+    | "hiscores"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -246,11 +248,15 @@ export type UiSnapshot = {
         // The names of the trophies it found for the first time
         newTrophies: string[];
         quests: { name: string; coins: number }[];
+        runVerified?: boolean;
+        runVerifyReason?: string;
+        runSynced?: boolean;
     };
     toasts: Toast[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
+    cloud: CloudState;
 };
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
@@ -275,6 +281,20 @@ export class GameStore {
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
             display: { menuSpin: true, pauseOnBlur: true, questTracker: true, autoAlch: false },
+            cloud: {
+                isLoggedIn: false,
+                status: "disabled",
+                hasOidcClient: false,
+                pendingRuns: 0,
+                isAdmin: false,
+                roles: [],
+                permissions: [],
+                authzRoles: [],
+                authzScopes: [],
+                authzGrants: [],
+                endlessLeaderboard: [],
+                standardLeaderboard: [],
+            },
         };
     }
 

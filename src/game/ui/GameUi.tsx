@@ -48,6 +48,7 @@ import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
+import { HiscoresScreen } from "./HiscoresScreen";
 import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { QuestScreen } from "./QuestScreen";
@@ -122,6 +123,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "collectionLog":
             screen = <CollectionLogScreen ui={ui} client={client} />;
+            break;
+        case "hiscores":
+            screen = <HiscoresScreen ui={ui} client={client} />;
             break;
         case "run":
             screen = <RunScreen ui={ui} client={client} />;
@@ -358,6 +362,123 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function CloudSyncSetting({ ui, client }: ScreenProps): JSX.Element {
+    const cloud = ui.cloud;
+    const [tokenInput, setTokenInput] = useState("");
+    const [showTokenPrompt, setShowTokenPrompt] = useState(false);
+
+    return (
+        <>
+            <Setting
+                name="Cloud hiscores & stats"
+                text={
+                    cloud.isLoggedIn
+                        ? cloud.status === "connected"
+                            ? `Connected as ${cloud.displayName ?? "Adventurer"}${cloud.roles.length > 0 ? ` [${cloud.roles.join(", ")}]` : ""}${cloud.pendingRuns > 0 ? ` (${cloud.pendingRuns} queued)` : ""}`
+                            : cloud.status === "connecting"
+                              ? "Connecting to SpacetimeDB..."
+                              : cloud.status === "error"
+                                ? `Error: ${cloud.error ?? "Connection failed"}`
+                                : "Disconnected"
+                        : "Requires login via SpacetimeAuth before connecting to SpacetimeDB."
+                }
+            >
+                {cloud.isLoggedIn ? (
+                    <button
+                        className="ui-button ui-button-small"
+                        onClick={(e) => {
+                            client.logoutCloud();
+                            e.currentTarget.blur();
+                        }}
+                    >
+                        Log out
+                    </button>
+                ) : (
+                    <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                            className="ui-button ui-button-small ui-button-go"
+                            onClick={(e) => {
+                                client.signInCloud();
+                                e.currentTarget.blur();
+                            }}
+                        >
+                            {cloud.hasOidcClient ? "Sign In" : "Log In"}
+                        </button>
+                        <button
+                            className="ui-button ui-button-small"
+                            onClick={(e) => {
+                                setShowTokenPrompt(!showTokenPrompt);
+                                e.currentTarget.blur();
+                            }}
+                        >
+                            Token
+                        </button>
+                    </div>
+                )}
+            </Setting>
+            {cloud.isLoggedIn && (
+                <Setting
+                    name="Identity Token"
+                    text="Your private token for syncing your stats across devices."
+                >
+                    <button
+                        className="ui-button ui-button-small"
+                        onClick={(e) => {
+                            const token = client.getCloudToken();
+                            if (token) {
+                                void navigator.clipboard.writeText(token);
+                                window.alert("Token copied to clipboard!");
+                            } else {
+                                window.alert("No token stored yet.");
+                            }
+                            e.currentTarget.blur();
+                        }}
+                    >
+                        Copy
+                    </button>
+                    <button
+                        className="ui-button ui-button-small"
+                        onClick={(e) => {
+                            setShowTokenPrompt(!showTokenPrompt);
+                            e.currentTarget.blur();
+                        }}
+                    >
+                        {showTokenPrompt ? "Hide" : "Switch"}
+                    </button>
+                </Setting>
+            )}
+            {showTokenPrompt && (
+                <div
+                    className="ui-setting"
+                    style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}
+                >
+                    <input
+                        className="ui-rsn-input"
+                        style={{ width: "100%", boxSizing: "border-box" }}
+                        type="text"
+                        placeholder="Paste your SpacetimeAuth JWT / token"
+                        value={tokenInput}
+                        onChange={(e) => setTokenInput(e.target.value)}
+                    />
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <button
+                            className="ui-button ui-button-small ui-button-go"
+                            disabled={!tokenInput.trim()}
+                            onClick={() => {
+                                client.loginWithToken(tokenInput.trim());
+                                setTokenInput("");
+                                setShowTokenPrompt(false);
+                            }}
+                        >
+                            Log In With Token
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
 // Behind the title screen's Settings button
 function SettingsPanel({
     ui,
@@ -386,6 +507,10 @@ function SettingsPanel({
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
+                </section>
+                <section className="ui-settings-section">
+                    <h3>Cloud Sync (SpacetimeDB)</h3>
+                    <CloudSyncSetting ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>Save</h3>
@@ -499,6 +624,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         onClick={() => client.showScreen("collectionLog")}
                     >
                         Collection log
+                    </button>
+                    <button
+                        className="ui-button ui-button-big"
+                        onClick={() => client.showScreen("hiscores")}
+                    >
+                        Hiscores
                     </button>
                     <button
                         className="ui-button ui-button-big"
@@ -1759,6 +1890,20 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                 </table>
                             </div>
                         )}
+                    </div>
+                )}
+                {result?.runVerified === false && (
+                    <div className="ui-run-verify ui-run-unverified">
+                        ⚠ Run unranked: {result.runVerifyReason ?? "Anti-cheat check failed"}
+                    </div>
+                )}
+                {result?.runVerified === true && (
+                    <div className="ui-run-verify ui-run-verified">
+                        {result.runSynced
+                            ? "✓ Verified run synced to SpacetimeDB Hiscores"
+                            : ui.cloud.isLoggedIn
+                              ? "✓ Verified run queued for SpacetimeDB Hiscores"
+                              : "✓ Verified run (local mode — log in to sync)"}
                     </div>
                 )}
                 <div className="ui-row">
