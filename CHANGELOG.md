@@ -9,6 +9,7 @@ the version in the corner).
 
 - Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
   full screen.
+- Co-op servers provide lightweight Prometheus player and room counts locally by default, with an off switch.
 
 ## 0.21.0 - 2026-11-01
 
