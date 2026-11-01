@@ -10,6 +10,7 @@ the version in the corner).
 ### Added
 
 - A Windows desktop version: unzip it, run it, and it plays offline and keeps itself up to date.
+- A GitHub link beside the Discord one on the title screen.
 
 ### Changed
 
