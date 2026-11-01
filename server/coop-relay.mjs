@@ -84,6 +84,8 @@ const IDLE_MS = 30 * 60_000;
 // Armoury); a bigger one is dropped rather than sent round the room
 export const MAX_LOADOUT_BYTES = 16 * 1024;
 const FULL_TEXT = "All rooms are taken right now. Try again when one opens.";
+const OTHER_BUILD_TEXT =
+    "That room's on another version of the game. Reload the page to get the latest.";
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most
 const LIST_PAGE_SIZE = 8;
@@ -681,6 +683,21 @@ export function createRelay(limits = {}) {
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
         }
+        if (typeof message.build === "string") {
+            client.build = message.build.slice(0, 64);
+        }
+    }
+
+    // A player whose game isn't the host's build, which would fall out of
+    // step with it, as an error for whoever's asking
+    function otherBuild(players, host, asking) {
+        const odd = players.find((client) => client.build !== host.build);
+        if (!odd) {
+            return undefined;
+        }
+        return odd === asking
+            ? OTHER_BUILD_TEXT
+            : `${odd.name}'s game is another version. Everyone needs to reload the page.`;
     }
 
     // What stops these players (with these unlocks, or their own) playing on a
@@ -829,6 +846,15 @@ export function createRelay(limits = {}) {
                     client.connection.send(missing);
                     return;
                 }
+                const host = target.members.find((member) => member.id === target.hostId);
+                const build =
+                    typeof message.me?.build === "string"
+                        ? message.me.build.slice(0, 64)
+                        : client.build;
+                if (host && build !== host.build) {
+                    error(OTHER_BUILD_TEXT);
+                    return;
+                }
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
@@ -905,6 +931,11 @@ export function createRelay(limits = {}) {
                     );
                     if (missing) {
                         client.connection.send(missing);
+                        return;
+                    }
+                    const versionError = otherBuild(room.members, client, client);
+                    if (versionError) {
+                        error(versionError);
                         return;
                     }
                     room.started = true;
@@ -984,6 +1015,7 @@ export function createRelay(limits = {}) {
             ready: false,
             loadout: undefined,
             unlocks: cleanUnlocks(undefined),
+            build: undefined,
             room: undefined,
             connection: undefined,
             address,

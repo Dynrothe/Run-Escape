@@ -1447,6 +1447,11 @@ function PauseModal({
 }): JSX.Element {
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
+    // The host can remove anyone still in the run (one who's stopped playing)
+    const kickable =
+        coop && ui.coop.room?.hostId === ui.coop.you
+            ? ui.party.filter((member) => member.id && !member.left)
+            : [];
     return (
         <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
             <div className="ui-panel rs-border rs-background ui-pause">
@@ -1539,6 +1544,26 @@ function PauseModal({
                                             <span className="ui-quest-progress">
                                                 {formatQuestProgress(quest)}
                                             </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        {kickable.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">Party</h3>
+                                <div className="ui-pause-list">
+                                    {kickable.map((member) => (
+                                        <div key={member.id} className="ui-pause-item">
+                                            <span className="ui-pause-name">{member.name}</span>
+                                            <button
+                                                className="ui-button ui-button-small ui-coop-kick"
+                                                title={`Remove ${member.name} from the run`}
+                                                aria-label={`Kick ${member.name}`}
+                                                onClick={() => client.kickPlayer(member.id!)}
+                                            >
+                                                Kick
+                                            </button>
                                         </div>
                                     ))}
                                 </div>

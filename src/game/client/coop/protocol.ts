@@ -20,6 +20,8 @@ export type MemberView = {
     ready: boolean;
     loadout?: Loadout;
     unlocks?: Unlocks;
+    // The build their game is (__BUILD_ID__): a room only takes the host's
+    build?: string;
 };
 
 // What a player's missing to play on a room's map: the map (its endless too,

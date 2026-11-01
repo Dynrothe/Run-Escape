@@ -658,7 +658,7 @@ export class Sim {
     private lastPowerUpId?: string;
     // Random events roll on their own, so a run only goes differently for
     // what they do and not for them being there
-    private readonly eventRng: Rng;
+    readonly eventRng: Rng;
     // Run second the next random event is due, and the last one (not twice running)
     private nextRandomEventSeconds: number;
     private lastRandomEventId?: string;
@@ -1821,6 +1821,9 @@ export class Sim {
             this.settle();
             if ((this.state as SimState) === "playing") {
                 this.as(this.focus, () => this.checkLevelUp());
+            } else {
+                // A level up that was waiting behind what's gone with them
+                this.as(this.focus, () => this.rollMissingChoices());
             }
         }
     }
@@ -7946,11 +7949,16 @@ export class Sim {
         }
         if (this.state === "playing" && this.anyoneToChoose()) {
             this.state = "levelUp";
-            for (const hero of this.heroes) {
-                if (this.isChoosing(hero) && hero.choices.length === 0) {
-                    this.use(hero);
-                    this.choices = this.roll();
-                }
+            this.rollMissingChoices();
+        }
+    }
+
+    // Rewards for everyone choosing a level up who hasn't any yet
+    private rollMissingChoices(): void {
+        for (const hero of this.heroes) {
+            if (this.isChoosing(hero) && hero.choices.length === 0) {
+                this.use(hero);
+                this.choices = this.roll();
             }
         }
     }

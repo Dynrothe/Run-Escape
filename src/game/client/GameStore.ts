@@ -223,6 +223,8 @@ export type TeammateView = {
     // the game
     down: boolean;
     left: boolean;
+    // Their player id in the room, for the host to kick them
+    id?: string;
 };
 
 export type Toast = { id: number; text: string; until: number };

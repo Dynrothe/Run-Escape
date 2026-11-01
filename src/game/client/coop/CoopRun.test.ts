@@ -3,7 +3,7 @@ import { Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import { fm, usePortableMath } from "../../core/fmath";
 import { syncHash } from "../../core/lockstep";
 import { makeGrid } from "../../core/world/testGrid";
-import { CoopLink, CoopRun } from "./CoopRun";
+import { CoopLink, CoopRun, DECIDE_AFTER_MS } from "./CoopRun";
 import { DownMessage, UpMessage } from "./protocol";
 
 function openField(): string[] {
@@ -121,5 +121,74 @@ describe("co-op lockstep", () => {
             expect(guest.desynced).toBe(false);
             expect(syncHash(guest.sim)).toBe(syncHash(host.sim));
         }
+    });
+
+    // A host's run, on a clock the test moves, with what it sends kept
+    function hostRun(clock: { now: number }) {
+        const sent: DownMessage[] = [];
+        const link: CoopLink = { sendUp: () => {}, sendDown: (m) => sent.push(m) };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const run = new CoopRun(createSim(0), true, link, heroes, "host", () => clock.now);
+        run.receiveUp("guest1", { loaded: true });
+        run.receiveUp("guest2", { loaded: true });
+        return { run, sent };
+    }
+
+    it("turns away a guest's input that isn't what the game sends", () => {
+        const { run } = hostRun({ now: 0 });
+        const bad: unknown[] = [
+            null,
+            { move: [NaN, 1] },
+            { move: ["a", 1] },
+            { move: [1, 2, 3] },
+            { action: { kind: "choose", index: -1 } },
+            { action: { kind: "choose", index: 1.5 } },
+            { action: { kind: "nope" } },
+            { action: { kind: "chest", action: "burn" } },
+        ];
+        for (const message of bad) {
+            run.receiveUp("guest1", message as UpMessage);
+        }
+        expect(run.stepFrame()).toEqual([]);
+        run.receiveUp("guest1", { move: [127, 0], action: { kind: "skip", extra: 1 } } as never);
+        expect(run.stepFrame()).toEqual([{ frame: 2, hero: 1, move: [127, 0] }]);
+    });
+
+    it("decides for whoever keeps the run waiting", () => {
+        const clock = { now: 0 };
+        const { run } = hostRun(clock);
+        const sim = run.sim;
+        sim.xp = 100;
+        run.stepFrame();
+        expect(sim.state).toBe("levelUp");
+        run.act({ kind: "choose", index: 0 });
+        run.receiveUp("guest1", { action: { kind: "choose", index: 0 } });
+        run.stepFrame();
+        expect(sim.waitingOn.map((hero) => hero.index)).toEqual([2]);
+        clock.now += DECIDE_AFTER_MS - 1;
+        expect(run.stepFrame()).toEqual([]);
+        clock.now += 2;
+        const pending = sim.heroes[2].pendingLevelUps;
+        expect(run.stepFrame()).toEqual([
+            expect.objectContaining({ hero: 2, action: { kind: "choose", index: 0 }, auto: true }),
+        ]);
+        expect(sim.heroes[2].pendingLevelUps).toBe(pending - 1);
+    });
+
+    it("sends a move a touch stick keeps changing no more than about 15 times a second", () => {
+        const clock = { now: 0 };
+        const ups: UpMessage[] = [];
+        const link: CoopLink = { sendUp: (m) => ups.push(m), sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const run = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        for (let i = 0; i < 10; i++) {
+            run.setMove(i / 10, 0.5);
+            clock.now += 16;
+        }
+        expect(ups.length).toBeLessThanOrEqual(3);
+        // Where it ended up gets there
+        clock.now += 100;
+        run.setMove(0.9, 0.5);
+        expect(ups.at(-1)).toEqual({ move: [114, 64] });
     });
 });

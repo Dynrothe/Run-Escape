@@ -228,6 +228,22 @@ describe("co-op", () => {
         expect(sim.state).toBe("playing");
     });
 
+    it("rolls a level up that was waiting behind an offer whose player left", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        expect(sim.startRandomEvent(getRandomEvent("mysterious_old_man"))).toBe(true);
+        const visitor = sim.visitor!;
+        sim.heroes[0].player.x = visitor.x + 10;
+        sim.heroes[1].player.x = visitor.x + 0.5;
+        sim.heroes[1].player.y = visitor.y;
+        sim.step();
+        expect(sim.offer?.hero).toBe(1);
+        // A level up that came in while the offer was open
+        sim.heroes[0].pendingLevelUps = 1;
+        sim.leave(1);
+        expect(sim.state).toBe("levelUp");
+        expect(sim.heroes[0].choices.length).toBeGreaterThan(0);
+    });
+
     it("tags a hero's own events with who they're about", () => {
         const sim = createParty(["warrior", "wizard"]);
         sim.dropPickup("coins", sim.heroes[1].player.x, sim.heroes[1].player.y, 5);

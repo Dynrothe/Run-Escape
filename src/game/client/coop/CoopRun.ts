@@ -3,6 +3,8 @@ import {
     CoopAction,
     FrameEvent,
     applyFrameEvent,
+    cleanAction,
+    cleanMove,
     quantizeMove,
     syncHash,
 } from "../../core/lockstep";
@@ -19,6 +21,12 @@ const QUIET_FRAMES = 2;
 export const GUEST_BUFFER_FRAMES = 4;
 // The host waits this long at most for everyone's map to load
 const LOAD_WAIT_MS = 20_000;
+// A move goes out this often at most: a touch stick changes nearly every
+// frame, and each one sent is a message from the host to everyone
+const MOVE_INTERVAL_MS = 66;
+// Someone the run's waited on this long (a hidden tab, gone to make tea) has
+// it decided for them: the first reward, taking the casket, or walking away
+export const DECIDE_AFTER_MS = 20_000;
 
 export type CoopLink = {
     sendUp(message: UpMessage): void;
@@ -44,11 +52,14 @@ export class CoopRun {
     // A guest's checks from the host still to compare
     private hashes = new Map<number, number>();
     private lastMove: [number, number] = [0, 0];
+    private moveSentAt = -Infinity;
+    // The host's: since when the run's been waiting on each hero
+    private readonly waitingSince = new Map<number, number>();
     // The copies have gone apart (it's said once)
     desynced = false;
     // The host's: the guests whose map is still loading, and since when
     private readonly loading: Set<string>;
-    private readonly loadStart = Date.now();
+    private readonly loadStart: number;
 
     constructor(
         readonly sim: Sim,
@@ -58,13 +69,15 @@ export class CoopRun {
         private readonly heroes: Map<string, number>,
         // The host's own id
         hostId: string,
+        private readonly now: () => number = Date.now,
     ) {
         this.loading = new Set(isHost ? [...heroes.keys()].filter((id) => id !== hostId) : []);
+        this.loadStart = now();
     }
 
     // The host's: whether it's still waiting for someone's map to load
     get waitingForLoad(): boolean {
-        if (this.loading.size > 0 && Date.now() - this.loadStart > LOAD_WAIT_MS) {
+        if (this.loading.size > 0 && this.now() - this.loadStart > LOAD_WAIT_MS) {
             this.loading.clear();
         }
         return this.loading.size > 0;
@@ -73,10 +86,15 @@ export class CoopRun {
     // What the local player's pressing, sent on when it changes
     setMove(x: number, y: number): void {
         const move = quantizeMove(x, y);
-        if (move[0] === this.lastMove[0] && move[1] === this.lastMove[1]) {
+        const now = this.now();
+        if (
+            (move[0] === this.lastMove[0] && move[1] === this.lastMove[1]) ||
+            now - this.moveSentAt < MOVE_INTERVAL_MS
+        ) {
             return;
         }
         this.lastMove = move;
+        this.moveSentAt = now;
         if (this.isHost) {
             this.next.push({ frame: 0, hero: this.sim.focus, move });
         } else {
@@ -93,19 +111,49 @@ export class CoopRun {
         }
     }
 
-    // The host's: a guest's input
+    // The host's: a guest's input, checked before it goes in, as every
+    // copy applies it
     receiveUp(from: string, message: UpMessage): void {
         const hero = this.heroes.get(from);
-        if (!this.isHost || hero === undefined) {
+        if (!this.isHost || hero === undefined || !message || typeof message !== "object") {
             return;
         }
+        const move = "move" in message ? cleanMove(message.move) : undefined;
+        const action = "action" in message ? cleanAction(message.action) : undefined;
         if ("loaded" in message) {
             this.loading.delete(from);
-        } else if ("move" in message && Array.isArray(message.move)) {
-            const [x, y] = message.move;
-            this.next.push({ frame: 0, hero, move: quantizeMove(x / 127, y / 127) });
-        } else if ("action" in message && message.action) {
-            this.next.push({ frame: 0, hero, action: message.action });
+        } else if (move) {
+            this.next.push({ frame: 0, hero, move });
+        } else if (action) {
+            this.next.push({ frame: 0, hero, action });
+        }
+    }
+
+    // The host's: anyone the run's waited on for DECIDE_AFTER_MS has it
+    // decided for them, and again each time after that
+    private decideForTheSlow(): void {
+        const sim = this.sim;
+        const now = this.now();
+        const waiting = new Set(sim.waitingOn.map((hero) => hero.index));
+        for (const index of this.waitingSince.keys()) {
+            if (!waiting.has(index)) {
+                this.waitingSince.delete(index);
+            }
+        }
+        for (const index of waiting) {
+            const since = this.waitingSince.get(index) ?? now;
+            this.waitingSince.set(index, since);
+            if (now - since < DECIDE_AFTER_MS) {
+                continue;
+            }
+            this.waitingSince.set(index, now);
+            const action: CoopAction =
+                sim.state === "levelUp"
+                    ? { kind: "choose", index: 0 }
+                    : sim.state === "chest"
+                      ? { kind: "chest", action: "take" }
+                      : { kind: "leaveEvent" };
+            this.next.push({ frame: 0, hero: index, action, auto: true });
         }
     }
 
@@ -149,6 +197,7 @@ export class CoopRun {
         const frame = this.frame + 1;
         let events: FrameEvent[];
         if (this.isHost) {
+            this.decideForTheSlow();
             events = this.next.map((event) => ({ ...event, frame }));
             this.next = [];
             this.outgoing.push(...events);

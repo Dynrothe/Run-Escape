@@ -362,7 +362,7 @@ export class CoopLobby {
     }
 
     private joinAs(): Partial<MemberView> {
-        return { ...this.me, name: playerName(this.view.name), ready: false };
+        return { ...this.me, name: playerName(this.view.name), ready: false, build: __BUILD_ID__ };
     }
 
     leave(): void {

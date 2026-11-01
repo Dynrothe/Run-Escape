@@ -7,6 +7,11 @@ export class Rng {
         this.state = seed >>> 0;
     }
 
+    // Where it's got to, for co-op's check that copies agree
+    get position(): number {
+        return this.state;
+    }
+
     // [0, 1)
     next(): number {
         this.state = (this.state + 0x6d2b79f5) >>> 0;

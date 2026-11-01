@@ -88,7 +88,13 @@ import { GameStart, GoneReason, Loadout, Unlocks } from "./coop/protocol";
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
 const MAX_TICKS_PER_FRAME = 10;
 // A co-op guest that's fallen well behind the host catches up this fast
-const MAX_CATCH_UP_TICKS = 30;
+const MAX_CATCH_UP_TICKS = 120;
+// A frame spends this long at most on catching up, so a slow phone stays
+// responsive while it does (the ticks that are due in real time still run)
+const CATCH_UP_BUDGET_MS = 8;
+// What can wait for a co-op run whose copy is still being made: far more
+// than a slow load brings in
+const MAX_COOP_INBOX = 50_000;
 const HUD_INTERVAL_MS = 100;
 // The damage meter's number holds this long, so it can be read
 const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
@@ -191,8 +197,26 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
     });
 }
 
+// What a co-op player brings, as far as any game could have it (another
+// player's game could send anything)
+function cleanLoadout(loadout: Loadout | undefined): {
+    unlockedItems: Set<string>;
+    armoury: Record<string, number>;
+} {
+    const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const armoury: Record<string, number> = {};
+    for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
+        if (Number.isInteger(times) && times > 0) {
+            armoury[id] = Math.min(times, 20);
+        }
+    }
+    return {
+        unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
+        armoury,
+    };
+}
+
 // What a co-op player's loadout gives their hero, no more than the shop can
-// (another player's game could send anything)
 function loadoutStats(loadout: Loadout | undefined): Stats {
     const stats = emptyStats();
     for (const [key, value] of Object.entries(loadout?.metaStats ?? {})) {
@@ -353,9 +377,9 @@ export class GameClient implements GameFrameHandler {
         };
         this.coop = new CoopLobby(store);
         this.coop.onStart = (game) => this.beginCoopRun(game);
-        this.coop.onUp = (from, message) => this.coopRun?.receiveUp(from, message);
-        this.coop.onDown = (message) => this.coopRun?.receiveDown(message);
-        this.coop.onLeft = (id) => this.coopRun?.playerLeft(id);
+        this.coop.onUp = (from, message) => this.toCoopRun((run) => run.receiveUp(from, message));
+        this.coop.onDown = (message) => this.toCoopRun((run) => run.receiveDown(message));
+        this.coop.onLeft = (id) => this.toCoopRun((run) => run.playerLeft(id));
         this.coop.onGone = (reason) => this.onCoopGone(reason);
         this.coop.onClosed = () => this.onCoopClosed();
         // Co-op's offered only where there's a relay to play it through
@@ -771,6 +795,17 @@ export class GameClient implements GameFrameHandler {
         this.enterRun(sim);
     }
 
+    // A message for the co-op run, kept while its copy is still being made
+    // (the map loading, which can take one player longer than the rest) and
+    // handed over once it's there
+    private toCoopRun(deliver: (run: CoopRun) => void): void {
+        if (this.coopRun) {
+            deliver(this.coopRun);
+        } else if (this.coopInbox && this.coopInbox.length < MAX_COOP_INBOX) {
+            this.coopInbox.push(deliver);
+        }
+    }
+
     // A co-op run, as the host started it: everyone builds the same Sim, each
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
@@ -780,6 +815,7 @@ export class GameClient implements GameFrameHandler {
         if (focus === -1 || !room) {
             return;
         }
+        this.coopInbox = [];
         // A map or adventurer this game hasn't got (another player's game
         // could be newer, or made up): it can't play along
         if (
@@ -787,6 +823,7 @@ export class GameClient implements GameFrameHandler {
             !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
         ) {
             this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.coopInbox = undefined;
             this.coop.leave();
             return;
         }
@@ -795,6 +832,7 @@ export class GameClient implements GameFrameHandler {
             this.leaveRun(false);
         }
         if (!(await this.travelTo(game.mapId, "coop"))) {
+            this.coopInbox = undefined;
             this.coop.leave();
             return;
         }
@@ -805,8 +843,7 @@ export class GameClient implements GameFrameHandler {
             name: hero.name,
             characterId: hero.characterId,
             metaStats: loadoutStats(hero.loadout),
-            unlockedItems: new Set(hero.loadout?.unlockedItems ?? []),
-            armoury: { ...(hero.loadout?.armoury ?? {}) },
+            ...cleanLoadout(hero.loadout),
         }));
         const sim = new Sim({
             grid: this.grid,
@@ -821,10 +858,21 @@ export class GameClient implements GameFrameHandler {
             focus,
         });
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
-        this.coopRun = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        this.coopRun = run;
+        this.coopPlayerIds = game.heroes.map((hero) => hero.id);
+        const inbox = this.coopInbox ?? [];
+        this.coopInbox = undefined;
+        for (const deliver of inbox) {
+            deliver(run);
+        }
         this.enterRun(sim);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
+        }
+        // Hidden while it loaded: it keeps up from the start
+        if (document.hidden) {
+            this.onVisibilityChange();
         }
     }
 
@@ -851,6 +899,7 @@ export class GameClient implements GameFrameHandler {
         this.shownDpsTick = 0;
         this.appearanceVersions = [];
         this.decisionKey = "";
+        this.autoAlchedUid = -1;
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
@@ -1336,11 +1385,12 @@ export class GameClient implements GameFrameHandler {
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
+        const started = performance.now();
         let steps = 0;
         while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
             if (this.accumulator >= TICK_MS) {
                 this.accumulator -= TICK_MS;
-            } else if (steps >= catchUp) {
+            } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
                 break;
             }
             steps++;
@@ -1349,6 +1399,12 @@ export class GameClient implements GameFrameHandler {
             for (const event of events) {
                 if (event.action && event.hero === sim.focus) {
                     this.afterCoopAction(sim, event.action);
+                    if (event.auto) {
+                        this.store.toast(
+                            "Everyone was waiting, so that was decided for you.",
+                            4000,
+                        );
+                    }
                 }
             }
         }
@@ -1357,9 +1413,12 @@ export class GameClient implements GameFrameHandler {
             this.accumulator = Math.min(this.accumulator, TICK_MS);
         }
         run.flush();
-        if (run.desynced && !this.desyncToasted) {
-            this.desyncToasted = true;
-            this.store.toast("Your game has fallen out of step with the host's.", 6000);
+        if (run.desynced && !this.runRecorded) {
+            // Nothing brings the copies back together, so this one stops
+            // rather than everyone waiting on it
+            this.coop.leave();
+            this.endCoopRunEarly("Your game fell out of step with the host's, so your run ended.");
+            return;
         }
         // Choices and caskets come and go with the frames
         const key = this.getDecisionKey(sim);
@@ -1369,16 +1428,22 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private desyncToasted = false;
-    // Ticks for a co-op host whose tab is hidden (see onVisibilityChange)
+    // What's come for a co-op run before its copy's made (toCoopRun), and
+    // each hero's player id
+    private coopInbox?: ((run: CoopRun) => void)[];
+    private coopPlayerIds: string[] = [];
+    // Ticks for a co-op player whose tab is hidden (see onVisibilityChange)
     private backgroundTicker?: Worker;
     private backgroundTime = 0;
 
-    // A hidden tab isn't drawn, and its frames stop with it, so a co-op host
-    // keeps the run going for everyone off a worker's timer (a page's own
-    // timers are slowed right down in a hidden tab, a worker's aren't)
+    // A hidden tab isn't drawn, and its frames stop with it, so a co-op
+    // player keeps stepping off a worker's timer (a page's own timers are
+    // slowed right down in a hidden tab, a worker's aren't): the host keeps
+    // the run going for everyone, and a guest keeps up rather than having
+    // minutes to catch up on when they're back
     private onVisibilityChange = (): void => {
-        if (document.hidden && this.coopRun?.isHost) {
+        this.stopBackgroundTicker();
+        if (document.hidden && this.coopRun) {
             this.backgroundTime = performance.now();
             const source = `setInterval(() => postMessage(0), ${TICK_MS});`;
             const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
@@ -1718,6 +1783,7 @@ export class GameClient implements GameFrameHandler {
                     maxHp: hero.player.maxHp,
                     down: hero.down,
                     left: hero.left,
+                    id: this.coopPlayerIds[hero.index],
                 }));
             if (JSON.stringify(party) !== JSON.stringify(this.store.getSnapshot().party)) {
                 this.store.set({ party });
