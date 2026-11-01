@@ -1,5 +1,5 @@
 import { Ground } from "../Ground";
-import { BIOMES, BiomeDef, WATERFALL } from "../biomes";
+import { BIOMES, BiomeDef } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { placeFallPools, placeFalls } from "../falls";
 import { TILE_BLOCKED } from "../format";
@@ -147,8 +147,8 @@ const SCORCHED: BiomeDef = {
         [20234, 2],
         [49388, 2],
         [20232, 1],
-        [60436, 1],
-        [60440, 2],
+        [14461, 2],
+        [11933, 2],
     ],
     rock: { ...BIOMES.ash.rock, ground: 155 },
 };
@@ -274,7 +274,9 @@ const DECK_THINGS: [number, number, number, number, number][] = [
 
 const BEACH_DECOR = [57982, 57983, 30797, 729, 3171, 51810, 51811];
 
-const SURF_SPACING = 4;
+const SURF_SPACING = 16;
+
+const SEAWEED = [30537, 30538, 30542];
 
 const MAX_STRANDED = 500;
 
@@ -1203,15 +1205,9 @@ function placeSea(build: Build, water: Uint8Array): PlacedPiece[] {
     return placed;
 }
 
-// Foam along the beaches, in lengths of 3 tiles where the shore runs straight enough
+// Seaweed washed up along the beaches, a tile at a time. Foam is for the foot of a fall.
 function placeSurf(build: Build, water: Uint8Array, shape: Shape, zone: Uint8Array): void {
     const { ground, biomeAt } = build;
-    // A length of foam blocks all its tiles, and one by a bridge could shut its deck
-    const isWater = (x: number, y: number) =>
-        water[ground.tile(x, y)] !== 0 && !zone[ground.tile(x, y)];
-    const addSurf = (rotation: number, x: number, y: number) => {
-        ground.grid.locs.push({ id: WATERFALL, type: LOC_NORMAL, rotation, level: 0, x, y });
-    };
     for (let y = CHART - 8; y < SIZE_Y - CHART + 8; y++) {
         for (let x = CHART - 8; x < SIZE_X - CHART + 8; x++) {
             const i = ground.tile(x, y);
@@ -1220,25 +1216,13 @@ function placeSurf(build: Build, water: Uint8Array, shape: Shape, zone: Uint8Arr
             }
             // Not in among the stilts
             const inBay = x - CHART < 60 && y - CHART > 22 && y - CHART < 74 && x - CHART > 20;
-            if (shape.toSea[i] !== 0 || inBay) {
+            if (shape.toSea[i] !== 0 || inBay || !water[i] || zone[i]) {
                 continue;
             }
-            const along = (dx: number, dy: number, from: number) =>
-                [0, 1, 2].every((at) =>
-                    from === 0
-                        ? isWater(x + dx * at, y + dy * at)
-                        : !isWater(x + dx * at + dy * from, y + dy * at + dx * from),
-                );
-            const wet = (dx: number, dy: number) => along(dx, dy, 0);
-            const spot = x * 5 + y * 3;
-            if (spot % SURF_SPACING === 0 && wet(1, 0) && (along(1, 0, 2) || along(1, 0, -2))) {
-                addSurf(0, x, y);
-            } else if (
-                spot % SURF_SPACING === 1 &&
-                wet(0, 1) &&
-                (along(0, 1, 2) || along(0, 1, -2))
-            ) {
-                addSurf(1, x, y);
+            if ((x * 5 + y * 3) % SURF_SPACING === 0) {
+                const id = SEAWEED[(x + y) % SEAWEED.length];
+                const rotation = (x * 3 + y) & 3;
+                ground.grid.locs.push({ id, type: LOC_NORMAL, rotation, level: 0, x, y });
             }
         }
     }

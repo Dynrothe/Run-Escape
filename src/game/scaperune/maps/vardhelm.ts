@@ -58,7 +58,7 @@ const DRY_ROCK = [171, 172];
 const GREY_ROCK = 111;
 const NEUTRAL_SNOW = 58;
 const FIELD_FENCE = BIOMES.meadow.fence;
-const GREAT_BOULDER = 60444;
+const GREAT_BOULDER = 11433;
 const PARAPET = 1902;
 const GUARD = 818;
 const SHRINE_CRYSTAL = 27878;
@@ -1099,7 +1099,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
             Math.round(180 + Math.sin(angle) * 6),
         );
     }
-    place(GREAT_BOULDER, 89, 178, 4);
+    place(GREAT_BOULDER, 91, 179, 2);
     for (let row = 0; row < 3; row++) {
         for (let grave = 0; grave < 6; grave++) {
             place(GRAVES[(row * 3 + grave) % GRAVES.length], 104 + grave * 2, 166 + row * 2);
@@ -1161,7 +1161,7 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     }
     place(SHRINE_CRYSTAL, 97, 304, 5);
     // Rocks and dead trees on the way up Hillfoot
-    place(GREAT_BOULDER, 228, 144, 4);
+    place(GREAT_BOULDER, 228, 144, 2);
     place(1282, 206, 146, 2);
     place(1283, 226, 158, 2);
     place(1284, 204, 128, 2);

@@ -104,7 +104,16 @@ export const SET_PIECES: Record<string, SetPiece> = {
         radius: 4,
         middle: [29495, 1, 1],
     },
-    great_boulder: single([60444, 6, 4]),
+    great_boulder: {
+        kind: "grove",
+        locs: [
+            [11433, 2, 2],
+            [11434, 2, 2],
+            [11435, 2, 2],
+        ],
+        count: 5,
+        radius: 4,
+    },
     giant_mushroom: single([43131, 9, 9]),
     mushroom_grove: { kind: "grove", locs: MUSHROOM_TREES, count: 4, radius: 7 },
     toadstools: {

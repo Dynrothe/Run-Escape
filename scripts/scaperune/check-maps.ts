@@ -9,6 +9,8 @@
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { WATERFALL } from "../../src/game/scaperune/biomes";
+import { BLOOD_WALL_ONLY, findBannedLocs } from "../../src/game/scaperune/catalogue";
 import { countStranded, getCollisionFlags, getStepGrid } from "../../src/game/scaperune/collision";
 import { TILE_BLOCKED, TILE_BRIDGE, TileGrid } from "../../src/game/scaperune/format";
 import {
@@ -456,6 +458,28 @@ function checkFalls(map: GeneratedMap): string[] {
         .map(({ x, y }) => `the waterfall at ${x},${y} has no pool`);
 }
 
+// How far from a fall foam can be: rivers fall across their whole width
+const FOAM_REACH = 14;
+
+// Nothing from the wrong place: the ban list, blood that draws nothing, foam away from a fall
+function checkCatalogue(map: GeneratedMap): string[] {
+    const { grid, falls, waterfalls } = map;
+    const problems = findBannedLocs(grid).map(
+        ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
+    );
+    const drops = [...falls, ...waterfalls];
+    for (const { id, type, x, y } of grid.locs) {
+        if (id === BLOOD_WALL_ONLY && type === 22) {
+            problems.push(`loc ${id} at ${x},${y} draws nothing as ground decoration`);
+        }
+        const atFall = drops.some((fall) => Math.hypot(fall.x - x, fall.y - y) <= FOAM_REACH);
+        if (id === WATERFALL && !atFall) {
+            problems.push(`foam at ${x},${y} isn't at a fall`);
+        }
+    }
+    return problems;
+}
+
 // Open tiles the play camera can't see, for the ground between
 function countHiddenTiles(
     grid: TileGrid,
@@ -496,6 +520,7 @@ function checkMap(
     if (only && !only.test(id)) {
         return true;
     }
+    const shipped = SCAPERUNE_MAPS.some((recipe) => recipe.id === id);
     const sceneBuilder = createSceneBuilder(cache);
     const { mapFileLoader, locTypeLoader } = sceneBuilder;
     const context = createBuildContext(mapFileLoader, locTypeLoader);
@@ -537,6 +562,7 @@ function checkMap(
         ...checkBuildingGround(map),
         ...checkLandmarks(map),
         ...checkFalls(map),
+        ...(shipped ? [] : checkCatalogue(map)),
     ];
     if (hidden > 0) {
         problems.push(`${hidden} open tiles are hidden from the camera`);

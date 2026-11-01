@@ -1,7 +1,7 @@
 import type { RunEventDef } from "../../content/types";
 import { RUN_LENGTH, paced } from "../../content/waves";
 import { Ground } from "../Ground";
-import { CLIFF_FALL } from "../biomes";
+import { CLIFF_FALL, WATERFALL } from "../biomes";
 import { blockTile, findReachable, findStranded, getCollisionFlags } from "../collision";
 import { TILE_BLOCKED, TileGrid } from "../format";
 import { GeneratedMap } from "../generator";
@@ -48,6 +48,11 @@ const CLOUD_LINE = 0.56;
 const ROCK_STONE = 20;
 const ROCK_DARK = 32;
 const COBBLES = 12;
+const PLAIN_STONE = 10;
+const DAIS_SIZE = 12;
+const DAIS_RISE = 12;
+const DAIS_STATUE = 7002;
+const PILE_OF_BRICKS = 4769;
 const BLOOD = 331;
 const LAVA = 19;
 // A clear blue-green, for the Glasswood. Its one colour's edge is the shore's
@@ -1179,23 +1184,61 @@ const PLOTS: Plot[] = [
     // The keep's yard's already flat
 ];
 
-// A round mosaic, four locs making a square 12 tiles a side. It blocks though it looks like a
-// floor, so a rail goes round it: nothing that stops you should look like ground.
+// A floor of plain stone raised on the ground, 12 tiles a side, with a rail round it and a
+// statue at each corner. It blocks, and nothing that stops you should look like ground, so
+// it stands proud and the rail says so.
 function placeDais(map: Map3, x: number, y: number): void {
-    placeProp(map, 45881, 6, x, y + 6);
-    placeProp(map, 45882, 6, x + 6, y + 6);
-    placeProp(map, 45886, 6, x, y);
-    placeProp(map, 45887, 6, x + 6, y);
-    const { locs } = map.ground.grid;
+    const { ground } = map;
+    const { locs } = ground.grid;
+    for (let cy = y; cy <= y + DAIS_SIZE; cy++) {
+        for (let cx = x; cx <= x + DAIS_SIZE; cx++) {
+            ground.setHeight(cx, cy, ground.getHeight(cx, cy) + DAIS_RISE);
+        }
+    }
+    const { overlays, shapes, rotations, flags } = ground.level0;
+    for (let ty = y; ty < y + DAIS_SIZE; ty++) {
+        for (let tx = x; tx < x + DAIS_SIZE; tx++) {
+            const i = ground.tile(tx, ty);
+            overlays[i] = PLAIN_STONE;
+            shapes[i] = 0;
+            rotations[i] = 0;
+            flags[i] |= TILE_BLOCKED;
+            ground.reserved[i] = 1;
+        }
+    }
     const rail = (tx: number, ty: number, rotation: number) =>
         locs.push({ id: 1902, type: LOC_WALL, rotation, level: 0, x: tx, y: ty });
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < DAIS_SIZE; i++) {
         rail(x + i, y, WALL_SOUTH);
-        rail(x + i, y + 11, WALL_NORTH);
+        rail(x + i, y + DAIS_SIZE - 1, WALL_NORTH);
         rail(x, y + i, WALL_WEST);
-        rail(x + 11, y + i, WALL_EAST);
+        rail(x + DAIS_SIZE - 1, y + i, WALL_EAST);
+    }
+    for (const [tx, ty] of [
+        [x + 1, y + 1],
+        [x + DAIS_SIZE - 3, y + 1],
+        [x + 1, y + DAIS_SIZE - 3],
+        [x + DAIS_SIZE - 3, y + DAIS_SIZE - 3],
+    ]) {
+        placeProp(map, DAIS_STATUE, 2, tx, ty);
     }
 }
+
+// What came down of the keep: heaps of stone, with bricks among them
+function placeFallenStone(map: Map3, x: number, y: number): void {
+    placeProp(map, 11433, 2, x + 1, y + 3, x & 3);
+    placeProp(map, 11434, 2, x + 3, y + 1, y & 3);
+    placeProp(map, 11435, 2, x + 4, y + 4, (x + y) & 3);
+    placeProp(map, PILE_OF_BRICKS, 1, x, y + 1, 1);
+    placeProp(map, PILE_OF_BRICKS, 1, x + 3, y + 3, 2);
+    placeProp(map, PILE_OF_BRICKS, 1, x + 6, y + 3, 0);
+}
+
+// Where the river goes over the edge, 3 tiles of foam each
+const RIVER_DROPS: { x: number; y: number }[] = [
+    { x: 263, y: 80 },
+    { x: 266, y: 80 },
+];
 
 const GIANT_MUSHROOMS: Point[] = [
     [266, 289],
@@ -1249,8 +1292,8 @@ function placeSetPieces(map: Map3): void {
 
     // The Glasswood's: spires round the lake, one standing in it, and elven walls beyond
     placeProp(map, 27878, 5, 284, 136);
-    placeProp(map, 48972, 6, 262, 120);
-    placeProp(map, 48973, 6, 296, 118);
+    placeProp(map, 27878, 5, 262, 120);
+    placeProp(map, 27882, 3, 296, 118);
     placeProp(map, 27878, 5, 266, 156);
     placeProp(map, 27878, 5, 278, 88);
     placeProp(map, 27882, 3, 296, 96);
@@ -1292,8 +1335,7 @@ function placeSetPieces(map: Map3): void {
         const y = 250 + i * 6;
         placeProp(map, 49341, 4, 84, y, 0);
         placeProp(map, 49341, 4, 96, y, 2);
-        placeProp(map, 60438, 1, 94, y + 1, 0);
-        placeProp(map, 60438, 1, 95, y + 3, 1);
+        placeProp(map, 11434, 2, 94, y + 1, i & 3);
     }
     placeProp(map, 59324, 3, 102, 240, 0);
 
@@ -1362,9 +1404,9 @@ function placeSetPieces(map: Map3): void {
     }
 
     // Bits of the keep's roof, where they came down
-    placeProp(map, 48333, 7, 172, 196);
-    placeProp(map, 48332, 7, 206, 200);
-    placeProp(map, 48328, 7, 176, 216);
+    placeFallenStone(map, 172, 196);
+    placeFallenStone(map, 206, 200);
+    placeFallenStone(map, 176, 216);
 
     // The crown, where the north causeways meet
     placeDais(map, 186, 260);
@@ -1405,8 +1447,8 @@ function placeSetPieces(map: Map3): void {
     }
 
     // The river goes over the edge
-    for (const x of [263, 266]) {
-        ground.grid.locs.push({ id: 26499, type: LOC_NORMAL, rotation: 0, level: 0, x, y: 80 });
+    for (const { x, y } of RIVER_DROPS) {
+        ground.grid.locs.push({ id: WATERFALL, type: LOC_NORMAL, rotation: 0, level: 0, x, y });
     }
 }
 
@@ -1490,8 +1532,8 @@ const STREWN: Strewn[] = [
             [10820, 3],
         ],
         big: [
-            [60438, 1],
-            [60440, 2],
+            [10790, 2],
+            [11434, 2],
         ],
         rocks: [
             [5605, 1],
@@ -1521,7 +1563,7 @@ const STREWN: Strewn[] = [
             [60918, 2],
             [60927, 2],
         ],
-        decor: [652, 13312, 40837, 40836, 40838, 61097, 61098],
+        decor: [652, 652, 40837, 40836, 40838, 61097, 61098],
         flowers: [30830, 60876, 60877],
         treeChance: 0.26,
         bigChance: 0.01,
@@ -1545,7 +1587,7 @@ const STREWN: Strewn[] = [
         ],
         rocks: [
             [11933, 2],
-            [60438, 1],
+            [4605, 2],
         ],
         decor: [3549, 3548, 3547, 12931, 5358, 5359, 14523],
         flowers: [404, 405, 401, 400],
@@ -1566,7 +1608,7 @@ const STREWN: Strewn[] = [
             [12749, 2],
             [23564, 2],
         ],
-        rocks: [[60438, 1]],
+        rocks: [[11933, 2]],
         decor: [3549, 3548, 3547, 3614, 11439, 185, 3703],
         flowers: [],
         treeChance: 0.02,
@@ -1608,8 +1650,6 @@ const STREWN: Strewn[] = [
             [27882, 3],
             [27878, 5],
             [36530, 3],
-            [48972, 6],
-            [48973, 6],
         ],
         rocks: [
             [3896, 1],
@@ -1795,7 +1835,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
         walkSlope: WALK_SLOPE,
         caves: [],
         falls: [FALL],
-        waterfalls: [],
+        waterfalls: RIVER_DROPS,
     };
 }
 

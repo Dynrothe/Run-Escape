@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BIOMES } from "./biomes";
+import { findBannedLocs } from "./catalogue";
 import { findReachable, findStranded, getCollisionFlags } from "./collision";
 import { TILE_BLOCKED, createTileGrid, writeLocs, writeTerrain } from "./format";
 import {
@@ -50,6 +51,37 @@ function expectAllReachable(full: GeneratorSettings): void {
     const reached = findReachable(flags, grid.sizeX, grid.sizeY, arena, spawn.x, spawn.y);
     expect(findStranded(flags, grid.sizeX, arena, reached)).toEqual([]);
 }
+
+describe("the catalogue", () => {
+    const grid = (id: number, overlay: number) => {
+        const out = createTileGrid(4, 4);
+        out.levels[0].overlays[0] = overlay;
+        out.locs.push({ id, type: 10, rotation: 0, level: 0, x: 0, y: 0 });
+        return out;
+    };
+
+    it("finds a banned loc on any ground", () => {
+        expect(findBannedLocs(grid(45881, 0))).toHaveLength(1);
+        expect(findBannedLocs(grid(45881, 6))).toHaveLength(1);
+    });
+
+    it("lets sea rocks stand in water, and nowhere else", () => {
+        expect(findBannedLocs(grid(60440, 0))).toHaveLength(1);
+        expect(findBannedLocs(grid(60440, 442))).toEqual([]);
+        expect(findBannedLocs(grid(1276, 0))).toEqual([]);
+    });
+
+    it.each(Object.keys(BIOMES))("%s names nothing banned", (id) => {
+        const biome = BIOMES[id as keyof typeof BIOMES];
+        const { rocks, props, rock } = biome;
+        const ids = [...rocks, ...props, ...rock.rubble].map(([loc]) => loc);
+        const out = createTileGrid(4, 4);
+        for (const loc of [...ids, ...biome.decor, ...biome.flowers]) {
+            out.locs.push({ id: loc, type: 10, rotation: 0, level: 0, x: 0, y: 0 });
+        }
+        expect(findBannedLocs(out)).toEqual([]);
+    });
+});
 
 describe("biomes", () => {
     it.each(Object.keys(BIOMES))("%s only names what's there", (id) => {

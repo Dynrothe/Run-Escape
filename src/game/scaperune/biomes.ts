@@ -87,7 +87,8 @@ const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
 const SNOW = 58;
 
-const BOULDERS = [60436, 60437, 60438, 60439];
+// One tile of plain rock, until cliffs get kits of their own
+const BOULDERS = [5605];
 
 function rock(def: Omit<RockDef, "snowGround" | "lava">): RockDef {
     return { ...def, snowGround: SNOW, lava: LAVA };
@@ -114,10 +115,10 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         decor: [4735, 4736, 4737, 4738],
         flowers: [1187, 1188, 1189],
         props: [
-            [60438, 1],
-            [60436, 1],
+            [10790, 2],
+            [11434, 2],
             [42407, 2],
-            [60440, 2],
+            [3718, 2],
         ],
         buildings: ["lumbridge_house", "lumbridge_church", "varrock_shop"],
         // Trollheim's ground, with stone that takes the light
@@ -310,8 +311,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [57513, 3],
         ],
         rocks: [
-            [60438, 1],
-            [60440, 2],
+            [3718, 2],
+            [11434, 2],
         ],
         decor: [1241, 1242, 1228, 1243, 1226, 1225, 1224, 1229],
         flowers: [1184, 1186, 57805, 57812, 57813, 57541],
@@ -332,7 +333,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             overlay: 20,
             boulders: BOULDERS,
             rubble: [
-                [60440, 2],
+                [11434, 2],
                 [3718, 2],
             ],
             stones: [315, 320],
@@ -357,14 +358,13 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rocks: [
             [51790, 2],
             [51791, 2],
-            [60438, 1],
         ],
         decor: [51810, 51811, 51812, 51813, 51815, 51814, 729],
         flowers: [57805, 57808, 42400],
         props: [
             [60454, 3],
             [60452, 2],
-            [60440, 2],
+            [51792, 2],
             [57798, 2],
         ],
         buildings: ["ape_hut", "taibwo_hut", "taibwo_house"],
@@ -383,10 +383,10 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 223,
             overlay: 26,
-            boulders: [11386, 11387, 60438],
+            boulders: [11386, 11387],
             rubble: [
                 [51790, 2],
-                [60440, 2],
+                [51792, 2],
             ],
             stones: [729, 3171],
             cave: 30180,
@@ -408,7 +408,6 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [40950, 2],
         ],
         rocks: [
-            [60438, 1],
             [14461, 2],
             [14462, 2],
         ],
@@ -416,8 +415,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         flowers: [14438, 11967, 11851],
         props: [
             [14463, 2],
-            [60436, 1],
-            [60440, 2],
+            [14461, 2],
+            [11933, 2],
             [5952, 2],
         ],
         buildings: ["lovakengj_house", "lovakengj_hall", "shayzien_house"],
@@ -454,14 +453,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         ],
         rocks: [
             [5605, 1],
-            [60440, 2],
+            [55130, 2],
         ],
         decor: [51811, 51813, 51815, 51814, 325],
         flowers: [42400, 42401, 51086, 51822],
         props: [
             [42399, 2],
             [42407, 2],
-            [60438, 1],
+            [55129, 2],
         ],
         buildings: ["hosidius_barn", "shayzien_house", "shayzien_shop"],
         landmarks: ["redwoods", "stone_circle", "great_boulder", "hedge_maze", "fort"],
@@ -497,7 +496,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [14513, 2],
         ],
         rocks: [
-            [60438, 1],
+            [4605, 2],
             [11933, 2],
         ],
         decor: [3549, 3548, 3547, 12931, 5335],
@@ -505,7 +504,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         props: [
             [4054, 3],
             [14533, 2],
-            [60440, 2],
+            [4605, 2],
             [34796, 1],
         ],
         buildings: ["darkmeyer_house", "darkmeyer_hall", "darkmeyer_shop", "burgh_house"],
@@ -680,7 +679,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [36674, 3],
         ],
         rocks: [
-            [60438, 1],
+            [3897, 1],
             [3894, 2],
         ],
         decor: [3549, 3548, 3547, 60420, 60419, 60418],
@@ -688,7 +687,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         props: [
             [27886, 2],
             [27882, 3],
-            [60440, 2],
+            [3895, 2],
         ],
         buildings: ["prif_house", "prif_hut", "prif_shop"],
         landmarks: ["crystal", "crystal_field", "stone_circle", "hedge_maze"],
