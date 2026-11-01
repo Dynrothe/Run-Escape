@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../cache";
 import { BIOMES, BiomeId } from "./biomes";
@@ -63,6 +63,10 @@ function settings(overrides: Partial<GeneratorSettings>): GeneratorSettings {
 }
 
 describe("generateMap", () => {
+    // These run back to back with nothing to wait for, and vitest's worker gives up on the main
+    // process after a minute without a turn to hear from it
+    afterEach(() => new Promise((resolve) => setTimeout(resolve)));
+
     it("makes the same map from the same seed and settings", () => {
         const a = generateMap(settings({ seed: 5, rivers: 1 }), context);
         const b = generateMap(settings({ seed: 5, rivers: 1 }), context);
