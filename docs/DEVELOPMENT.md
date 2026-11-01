@@ -281,7 +281,7 @@ src/game/
             of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
             (what each map's tasks bring in); quests (what each asks for and pays); hard (hard
-            mode's numbers, solo only for now: rooms and GameStart don't carry it yet)
+            mode's numbers)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
   core/     the game in plain TypeScript (no DOM), tested with vitest
     Sim.ts            fixed 20ms tick: movement, enemies, spawning, weapons, pickups, power-ups,
@@ -489,11 +489,12 @@ When adding to the sim:
 How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
 one goes down or leaves, with each of those still counting as half a player (`PLAYER_GONE`).
 
-Rooms only take players who've unlocked their map (and its endless, for an endless room), and the
-host can only pick maps everyone in the room has, so nobody skips ahead: someone without it is told
-"You need Barrows unlocked to join this room", and the open list shows that room as locked to them.
-Each player's game sends the maps it has (`unlocks`), checked by the relay on joining, on the host
-changing the map or endless, and at the start. `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone
+Rooms only take players who've unlocked their map (and its endless or hard mode, for a room on
+them), and the host can only pick what everyone in the room has, so nobody skips ahead: someone
+without it is told "You need Barrows unlocked to join this room", and the open list shows that room
+as locked to them. Each player's game sends the maps it has (`unlocks`), checked by the relay on
+joining, on the host changing the map, endless or hard mode, and at the start. Whether the run's on
+hard mode goes out in `GameStart`, like endless, so every player's copy plays the same. `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone
 into any room instead, and a win then opens that map for a player who hadn't got there. With no
 accounts, a player's maps are their game's word: this keeps fair players fair rather than stopping
 a cheat.
@@ -545,6 +546,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   an installed game its own storage, without the saves or cache from Safari. There's no service
   worker, so it still needs a connection. The icons in `public/icons/` are whole multiples of
   `favicon.png`, to keep its pixels square.
+- `client/saveFile.ts` exports a save. Installed on iOS it uses the share sheet, since a download
+  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.

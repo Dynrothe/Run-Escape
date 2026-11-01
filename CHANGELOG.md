@@ -7,10 +7,22 @@ the version in the corner).
 
 ### Added
 
+- Hard mode in co-op: the host can turn it on once everyone in the room has it.
+
+## 0.22.0 - 2026-11-01
+
+### Added
+
+- Hard mode for solo runs on every map, once you've beaten it (fun maps from the start): more
+  enemies, tougher and harder hitting, twice the elites, bosses that enrage sooner and attack faster,
+  and 25% more coins.
 - Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
   full screen.
-- Hard mode on every map, once you've beaten it (fun maps from the start): more enemies, tougher and
-  harder hitting, twice the elites, bosses that enrage sooner and attack faster, and 25% more coins.
+
+### Fixed
+
+- Exporting your save from the home screen on an iPhone or iPad opens the share menu, instead of a
+  tiny sheet you had to scroll inside.
 
 ## 0.21.0 - 2026-11-01
 
