@@ -572,6 +572,23 @@ describe("co-op relay", () => {
         });
     });
 
+    it("only takes players on the host's build of the game", async () => {
+        const host = await connect();
+        host.send({ t: "create", me: { name: nextName("host"), build: "1.0-abc" } });
+        const { room } = await host.room();
+        const old = await connect();
+        old.send({ t: "join", code: room.code, me: { name: nextName("old"), build: "0.9-def" } });
+        expect((await old.next("error")).message).toMatch(/another version/);
+        const same = await connect();
+        same.send({ t: "join", code: room.code, me: { name: nextName("same"), build: "1.0-abc" } });
+        await same.roomWhere((r) => r.members.length === 2);
+        // One that changes build in the lobby (a reload) holds up the start
+        same.send({ t: "me", build: "1.1-xyz" });
+        await host.roomWhere(() => true);
+        host.send({ t: "start", game: {} });
+        expect((await host.next("error")).message).toMatch(/another version/);
+    });
+
     it("keeps a kicked player out, and slows down guessing codes", async () => {
         await restart({ wrongCodesPerMinute: 3 });
         const { host, guests, code } = await party(1);

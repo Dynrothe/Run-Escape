@@ -231,11 +231,13 @@ export class CoopRun {
         return events;
     }
 
-    // The host's: sends the frames stepped since last time
-    flush(): void {
+    // The host's: sends the frames stepped since last time (quiet ones once
+    // there are a couple, unless everything's to go now)
+    flush(everything = false): void {
         if (
             !this.isHost ||
-            (this.outgoing.length === 0 && this.upTo - this.sentUpTo < QUIET_FRAMES)
+            this.upTo === this.sentUpTo ||
+            (!everything && this.outgoing.length === 0 && this.upTo - this.sentUpTo < QUIET_FRAMES)
         ) {
             return;
         }

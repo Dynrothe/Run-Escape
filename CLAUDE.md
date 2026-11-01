@@ -94,6 +94,7 @@ MAP=barrows npx tsx scripts/game/simulate-run.ts "" 3        # everyone on one m
 MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # everything bought
 ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
+PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # co-op
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real
@@ -102,6 +103,8 @@ WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
   the old and new code. `META=max` buys every shop upgrade, so a new one changes those results.
 - **Run every map that's affected**, not only Lumbridge. A change can help one map and hurt another.
 - For a change to one combat style, compare all three styles, so you can see the gap between them.
+- For a change to co-op's balance (`content/coop.ts`, or anything a party does differently), run
+  `PARTY=2` and `PARTY=4` too. The bot plays each player on their own, with no teamwork.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit

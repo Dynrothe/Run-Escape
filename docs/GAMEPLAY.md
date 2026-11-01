@@ -412,10 +412,19 @@ version and how to run it.
       once her Sleepwalkers reach her hits everyone. A curse,
       her parasite and being held are on the player they hit. Her fight starts with the whole
       party in the middle of her square, and each player rolls for their own Collection log drop.
+    - Anyone who keeps the run waiting for 20 seconds (a level up, a casket, a random event's
+      offer) has it decided for them: the first reward, taking the casket, or walking away. The
+      host can kick a player from the menu mid-run, and everyone has to be on the same version of
+      the game.
+    - Caskets drop 40% more often for each player past the first, so there's gear for everyone,
+      and power-ups hit as hard against the tougher crowd. The Highwayman takes his share of the
+      shared coins once, however many of you he hits.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party
-      levels about as fast as a player on their own.
+      levels about as fast as a player on their own (worth more when the crowd is at its cap and
+      can grow no bigger). It drops as players go down or leave, so the last one standing faces a
+      crowd made for one.
     - Enemies go for whoever's **nearest**, and pickups fly to whoever's nearest.
     - A player who falls with no ring of life left (it saves you as it does on your own) is
       **down** and out for the rest of the run, watching a teammate who's still up. The run goes

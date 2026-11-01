@@ -118,9 +118,18 @@ Its limits, at the top of `server/coop-relay.mjs`:
 | Connections from one address  | 16 (a household or LAN party behind one address)                                                      |
 | Rooms hosted from one address | 4                                                                                                     |
 | Rooms made from one address   | 10 a minute                                                                                           |
-| A room with nothing happening | closed after 30 minutes                                                                               |
+| Wrong room codes              | 20 a minute from one address, then it has to wait                                                     |
+| A room with nothing happening | closed after 30 minutes (pings and looking at the list don't count)                                   |
 | A player's loadout            | 16 KB, or it's dropped                                                                                |
-| A message                     | 256 KB, and 400 a second from one connection                                                          |
+| A message                     | 256 KB, in 16 pieces at most, nested 16 deep at most, and UTF-8                                       |
+| Frames from one connection    | 400 a second, empty ones and pings included                                                           |
+| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                      |
+
+An IPv6 address counts by its /64, which is what one home or server gets. A kicked player can't
+rejoin that room from the same address. Anything wrong with one message (it isn't JSON, it's too
+deep, it throws) drops that connection and never the relay, and a request whose path isn't a URL
+is a 400. `serve.mjs` turns away WebSocket upgrades to any other path rather than leaving them
+open, and answers `Range` with 206, as the cache's download resumes with one.
 
 A room of four is about 12 KB/s through the relay, both ways, and about 0.15% of a core: 500 rooms
 is around 50 Mbit/s and three quarters of one core. Set `MULTIPLAYER_MAX_ROOMS` (or
@@ -380,7 +389,8 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         BOSS_ARENA=48 tries a phased boss on any
                                                         map, FRESH=1 straight at it, SAFE_WAVES=1
                                                         with what a run earned, FLAT=1 with no
-                                                        walls, DODGE=1 keeping off its marks)
+                                                        walls, DODGE=1 keeping off its marks,
+                                                        PARTY=4 a co-op party of that adventurer)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and
@@ -400,10 +410,25 @@ Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from t
 everyone's loadout (`GameStart`), and only what the players do goes over the network. The host
 numbers the ticks (frames) and sends, every frame or two, what happened at each: who changed what
 they're pressing (as whole numbers, so every copy moves the same) and who chose what. Guests step
-only as far as the host has sent, sending their own input to the host to go in a frame. Nothing
-waits on a slow guest; they see the run a little behind. Every 50 frames the host sends a hash of
-its run, and a guest whose run differs says so. The host waits for everyone's map to load before
-the first frame, and a host whose tab is hidden keeps stepping off a worker's timer.
+only as far as the host has sent, sending their own input to the host to go in a frame, a move
+about 15 times a second at most. The host checks what a guest sends (`cleanMove`,
+`cleanAction` in `core/lockstep.ts`) before it goes in, since every copy applies it. Nothing
+waits on a slow guest; they see the run a little behind, and catch up at 8 ms a frame at most.
+
+- **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
+  while a player's map is still loading is kept and handed over once their copy's made
+  (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
+  lost.
+- **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
+  room only takes players on the host's, as different builds fall out of step.
+- **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
+  RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
+  run, rather than everyone waiting on a copy that can't recover.
+- **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
+  it decided for them by the host: the first reward, taking the casket, or walking away from the
+  offer. The host can kick a player from the menu mid-run.
+- **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
+  host keeps the run going and a guest keeps up.
 
 For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
 trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
@@ -423,7 +448,20 @@ plays exactly as before.
 Anything that lands where players stand (a boss's swing, bullets, ground marks, pools, a stomp)
 checks each hero still up with `forEachHeroInReach`, not just the current one, and what a boss
 does to a player (a curse, a parasite, being held) is kept on that `Hero`. Who a boss aims at is
-the hero nearest it, as the current one when it acts.
+the hero nearest it, as the current one when it acts. Outside a loop over the heroes,
+`this.player` is whichever hero the sim last worked on, so don't lean on it there.
+
+When adding to the sim:
+
+- State that's a player's own goes on `Hero`, with a getter on `Sim` like the rest.
+- Something that lingers (a projectile, a pool, a turret) carries `hero`, and acts with
+  `useHeroAt(thing.hero)`.
+- A new event that's about one player goes in `PERSONAL_EVENTS`, so it's tagged with who.
+- Trigonometry goes through `fm`. `core/fmath.test.ts` fails on `Math.sin` and the like in
+  `core/`.
+
+How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again from the
+players still up whenever one goes down or leaves.
 
 Rooms only take players who've unlocked their map (and its endless, for an endless room), and the
 host can only pick maps everyone in the room has, so nobody skips ahead: someone without it is told
@@ -448,8 +486,8 @@ banned one, and the relay cleans every name it's sent, giving a banned one the d
 `server/coop-relay.mjs` holds the rooms (code, open or invite only, host, map, members and their
 ready state and loadout) and forwards `up` messages from guests to the host and `down` messages
 from the host to everyone else. The host leaving a run ends it for everyone; in the lobby the
-room goes to the next player. How much bigger the crowd gets for each player is in
-`content/coop.ts`. The balance bot plays solo runs only.
+room goes to the next player. The balance bot plays a party with `PARTY=4`, each player on their
+own, so it can't show teamwork.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request; the menu asks for its

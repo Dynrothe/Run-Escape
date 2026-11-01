@@ -73,7 +73,9 @@ describe("co-op lockstep", () => {
                     );
                 },
             };
-            runs.push(new CoopRun(createSim(i), i === 0, link, heroes, "host"));
+            // A clock that goes with the ticks, so it plays the same every time
+            const clock = () => now * (1000 / TICKS_PER_SECOND);
+            runs.push(new CoopRun(createSim(i), i === 0, link, heroes, "host", clock));
             if (i > 0) {
                 link.sendUp({ loaded: true });
             }
@@ -106,6 +108,7 @@ describe("co-op lockstep", () => {
             });
         }
         // Everything still on its way arrives, and the guests catch up
+        runs[0].flush(true);
         for (const delivery of queue.sort((a, b) => a.at - b.at || a.order - b.order)) {
             delivery.deliver();
         }

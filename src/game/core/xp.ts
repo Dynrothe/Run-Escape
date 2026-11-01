@@ -1,11 +1,22 @@
+import { fm } from "./fmath";
+
 // The OSRS experience table: the XP needed for each level, from level 1.
 const MAX_LEVEL = 126;
+
+// 2 to the power of 0/7 to 6/7, so 2^(level/7) is a whole power of two times
+// one of these, and the table comes out the same in every browser (co-op
+// copies have to agree)
+const SEVENTHS = [
+    1, 1.1040895136738123, 1.2190136542044754, 1.3459001926323562, 1.4859942891369484,
+    1.6406707120152759, 1.8114473285278132,
+];
 
 const XP_FOR_LEVEL: number[] = (() => {
     const table = [0, 0];
     let points = 0;
     for (let level = 1; level < MAX_LEVEL; level++) {
-        points += Math.floor(level + 300 * Math.pow(2, level / 7));
+        const power = 2 ** Math.floor(level / 7) * SEVENTHS[level % 7];
+        points += Math.floor(level + 300 * power);
         table.push(Math.floor(points / 4));
     }
     return table;
@@ -56,7 +67,7 @@ export function endlessXpForLevel(level: number): number {
     const step = top - runXpForLevel(ENDLESS_STEEP_LEVELS - 1);
     const g = ENDLESS_LATE_GROWTH;
     const levels = Math.min(level, MAX_ENDLESS_LEVEL) - ENDLESS_STEEP_LEVELS;
-    return Math.floor(top + (step * g * (Math.pow(g, levels) - 1)) / (g - 1));
+    return Math.floor(top + (step * g * (fm.pow(g, levels) - 1)) / (g - 1));
 }
 
 // Counts up from the level the player is at (endless levels have no top to
