@@ -61,6 +61,7 @@ import { CameraRig } from "../render/CameraRig";
 import { GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { DamageMeter } from "./DamageMeter";
+import { SpacetimeSync } from "../spacetimedb/SpacetimeSync";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import {
     GameAssets,
@@ -317,6 +318,7 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
+    readonly cloud: SpacetimeSync;
 
     sim?: Sim;
     paused = false;
@@ -416,6 +418,30 @@ export class GameClient implements GameFrameHandler {
         this.cameraRig.distance = ATTRACT_DISTANCE;
         // Before a run starts, so it's with the save as it is now
         this.stopSaveLock = this.saveLock.listen((held) => this.onSaveLock(held));
+        this.cloud = new SpacetimeSync({
+            getLocalSave: () => this.save,
+            onMergedSave: (merged) => {
+                this.save = merged;
+                this.saveStore.save(this.save);
+                this.store.set({ save: structuredClone(this.save) });
+                if (!this.sim) {
+                    const { characterId, mapId } = this.store.getSnapshot();
+                    if (!merged.unlockedCharacters.includes(characterId)) {
+                        this.selectCharacter(merged.unlockedCharacters[0]);
+                    }
+                    if (!isMapUnlocked(merged, mapId)) {
+                        this.store.set({ mapId: MAPS[0].id });
+                    }
+                    if (!isEndlessUnlocked(merged, this.store.getSnapshot().mapId)) {
+                        this.store.set({ endless: false });
+                    }
+                }
+            },
+            onStateChange: (cloud) => {
+                this.store.set({ cloud });
+            },
+        });
+        void this.cloud.init();
 
         // An invite link (?room=CODE) goes straight to the room
         const invite = new URLSearchParams(window.location.search).get("room");
@@ -438,6 +464,7 @@ export class GameClient implements GameFrameHandler {
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopBackgroundTicker();
         this.coop.close();
+        this.cloud.dispose();
         this.input.dispose();
         this.audio.dispose();
         if (this.renderer.game === this) {
@@ -933,6 +960,39 @@ export class GameClient implements GameFrameHandler {
         }
         // A fresh object so React sees the change
         this.store.set({ save: structuredClone(this.save) });
+        this.cloud.scheduleSaveSync(this.save);
+    }
+
+    signInCloud(): void {
+        void this.cloud.signInWithSpacetimeAuth();
+    }
+
+    loginWithToken(token?: string): void {
+        this.cloud.loginWithToken(token);
+    }
+
+    logoutCloud(): void {
+        this.cloud.logout();
+    }
+
+    setCloudDisplayName(name: string): Promise<string | undefined> {
+        return this.cloud.setDisplayName(name);
+    }
+
+    grantRole(identityHex: string, roleId: string | bigint | number, scopeId = 0n): Promise<string | undefined> {
+        return this.cloud.grantRole(identityHex, roleId, scopeId);
+    }
+
+    revokeGrant(grantId: string | bigint | number): Promise<string | undefined> {
+        return this.cloud.revokeGrant(grantId);
+    }
+
+    createScope(name: string, kind = "room", parent = 0n): Promise<string | undefined> {
+        return this.cloud.createScope(name, kind, parent);
+    }
+
+    getCloudToken(): string | undefined {
+        return this.cloud.getStoredToken();
     }
 
     // Builds a map's collision the first time it's played (a scene build of
@@ -1427,6 +1487,7 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
+        const verification = this.cloud.submitRun(result);
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -1455,6 +1516,9 @@ export class GameClient implements GameFrameHandler {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
                 endedEarly,
+                runVerified: verification.verified,
+                runVerifyReason: verification.verified ? undefined : verification.reason,
+                runSynced: verification.verified ? verification.synced : false,
             },
         });
         // The room sees this player's new unlocks and upgrades next run

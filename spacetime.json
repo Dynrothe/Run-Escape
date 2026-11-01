@@ -1,0 +1,4 @@
+{
+  "server": "localhost:3000",
+  "module-path": "./server"
+}

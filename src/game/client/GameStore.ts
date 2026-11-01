@@ -4,6 +4,7 @@ import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave } from "../core/save";
+import { CloudState } from "../spacetimedb/SpacetimeSync";
 import { DisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
@@ -18,6 +19,7 @@ export type Screen =
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
+    | "hiscores"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -334,11 +336,15 @@ export type UiSnapshot = {
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
+        runVerified?: boolean;
+        runVerifyReason?: string;
+        runSynced?: boolean;
     };
     toasts: Toast[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
+    cloud: CloudState;
 };
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
@@ -375,6 +381,20 @@ export class GameStore {
                 damagePanel: false,
                 autoAlch: false,
                 movePrediction: false,
+            },
+            cloud: {
+                isLoggedIn: false,
+                status: "disabled",
+                hasOidcClient: false,
+                pendingRuns: 0,
+                isAdmin: false,
+                roles: [],
+                permissions: [],
+                authzRoles: [],
+                authzScopes: [],
+                authzGrants: [],
+                endlessLeaderboard: [],
+                standardLeaderboard: [],
             },
         };
     }

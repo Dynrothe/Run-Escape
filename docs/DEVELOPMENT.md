@@ -419,6 +419,8 @@ src/game/
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
+            SpacetimeDB Rust module: anti-cheat, cloud persistence, leaderboards, and Authz RBAC
+            (see docs/AUTHENTICATION.md for setup and OAuth configuration)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per pass
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one
