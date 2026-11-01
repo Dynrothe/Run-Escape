@@ -2001,6 +2001,139 @@ describe("enemy mechanics", () => {
         expect(sim.grid.isSolid(Math.floor(enemy.x), Math.floor(enemy.y))).toBe(false);
     });
 
+    test("what surfaces comes up slowly: it stands there, can't hit, and can be hit", () => {
+        const sim = createSim();
+        sim.weapons = [];
+        const def = variant("goblin", {
+            blinks: {
+                interval: 1,
+                minRange: 5,
+                distance: 1,
+                sound: 2500,
+                surface: { seq: 7601, seconds: 2 },
+            },
+        });
+        const enemy = sim.spawnEnemy(def, "normal", { x: 1052.5, y: 1036.5 })!;
+        enemy.hp = enemy.maxHp = 1e9;
+        const events: SimEvent[] = [];
+        for (let i = 0; i < 2 * TICKS_PER_SECOND && enemy.risingEnd === 0; i++) {
+            events.push(...play(sim, 1 / TICKS_PER_SECOND));
+        }
+        expect(enemy.risingEnd).toBeGreaterThan(sim.tick);
+        expect(enemy.anim).toBe("attack");
+        expect(enemy.attackSeq).toBe(7601);
+        // Once as it digs in, and again where it's coming up
+        const sounds = events.filter((e) => e.type === "bossAttack" && e.sound === 2500);
+        expect(sounds.length).toBe(2);
+        expect(sounds[1]).toMatchObject({ x: enemy.x, y: enemy.y });
+
+        const { x, y } = enemy;
+        const rest = (enemy.risingEnd - sim.tick - 1) / TICKS_PER_SECOND;
+        const during = play(sim, rest);
+        expect([enemy.x, enemy.y]).toEqual([x, y]);
+        expect(during.some((e) => e.type === "playerHit")).toBe(false);
+        sim["damageEnemy"](enemy, 5, 0, enemy.x, enemy.y);
+        expect(enemy.hp).toBeLessThan(enemy.maxHp);
+
+        // Up now, it comes on and hits as anything else does
+        const after = play(sim, 2);
+        expect(enemy.risingEnd).toBe(0);
+        expect(after.some((e) => e.type === "playerHit")).toBe(true);
+    });
+
+    test("a crowd left behind go one after another", () => {
+        const sim = createSim();
+        sim.weapons = [];
+        const def = variant("goblin", {
+            blinks: { interval: 1, minRange: 5, distance: 1, windup: 0.5, gap: 2 },
+        });
+        const crowd = [0, 1, 2, 3, 4, 5].map((i) => {
+            const enemy = sim.spawnEnemy(def, "normal", { x: 1052.5, y: 1030.5 + i * 2 })!;
+            enemy.hp = enemy.maxHp = 1e9;
+            enemy.frozen = 0;
+            return enemy;
+        });
+        let mostAtOnce = 0;
+        for (let i = 0; i < 6 * TICKS_PER_SECOND; i++) {
+            play(sim, 1 / TICKS_PER_SECOND);
+            const going = crowd.filter((e) => e.abilities!.blinkLand !== -1).length;
+            mostAtOnce = Math.max(mostAtOnce, going);
+        }
+        expect(mostAtOnce).toBe(1);
+    });
+
+    test("the Jal-ImKot comes up well clear of the player, with time to get away", () => {
+        const blinks = getEnemy("jal_imkot").blinks!;
+        expect(blinks.distance).toBeGreaterThanOrEqual(4);
+        expect(blinks.surface!.seconds).toBeGreaterThanOrEqual(2);
+        expect(blinks.gap).toBeGreaterThan(0);
+    });
+
+    describe("what flies", () => {
+        // A fence of thin objects at x = 30, and a band of rock at x = 40-45 from
+        // the south edge up to y = 50, with the player between them
+        function fieldWithRock(): string[] {
+            return openField().map((row, i) => {
+                const y = 71 - i;
+                return y > 0 && y <= 50 ? row.slice(0, 40) + "^^^^^^" + row.slice(46) : row;
+            });
+        }
+        function setUp(changes: Partial<EnemyDef>, x: number): { sim: Sim; enemy: Enemy } {
+            const sim = new Sim({
+                grid: makeGrid(fieldWithRock(), 1000, 1000),
+                mapId: "lumbridge",
+                characterId: "warrior",
+                metaStats: emptyStats(),
+                seed: 1,
+                spawnX: 1036.5,
+                spawnY: 1036.5,
+                endless: false,
+            });
+            sim.weapons = [];
+            const def = variant("goblin", { speed: 4, ...changes });
+            const enemy = sim.spawnEnemy(def, "normal", { x, y: 1036.5 })!;
+            enemy.hp = enemy.maxHp = 1e9;
+            return { sim, enemy };
+        }
+
+        test("goes straight over a fence, as a walker can't", () => {
+            const flying = setUp({ flies: true }, 1026.5);
+            play(flying.sim, 1.5);
+            expect(flying.enemy.x).toBeGreaterThan(1031);
+            expect(Math.abs(flying.enemy.y - 1036.5)).toBeLessThan(0.5);
+
+            const walking = setUp({}, 1026.5);
+            play(walking.sim, 1.5);
+            expect(walking.enemy.x).toBeLessThan(1030);
+        });
+
+        test("goes round terrain, never over it, and gets there", () => {
+            const { sim, enemy } = setUp({ flies: true }, 1050.5);
+            let wentOver = false;
+            for (let i = 0; i < 20 * TICKS_PER_SECOND; i++) {
+                play(sim, 1 / TICKS_PER_SECOND);
+                wentOver ||= enemy.x > 1040 && enemy.x < 1046 && enemy.y < 1051;
+            }
+            expect(wentOver).toBe(false);
+            expect(Math.hypot(enemy.x - sim.player.x, enemy.y - sim.player.y)).toBeLessThan(2);
+        });
+
+        test("a ghost goes straight through the lot", () => {
+            const { sim, enemy } = setUp({ ghost: true }, 1050.5);
+            play(sim, 2);
+            expect(enemy.x).toBeLessThan(1044);
+            expect(Math.abs(enemy.y - 1036.5)).toBeLessThan(0.5);
+        });
+
+        test("only ghosts and the Ankou go through walls; bats and aviansies fly", () => {
+            const ghosts = ENEMIES.filter((def) => def.ghost).map((def) => def.id);
+            expect(ghosts.sort()).toEqual(["ankou", "ghost"]);
+            for (const id of ["giant_bat", "crystalline_bat", "jal_mejrah", "aviansie"]) {
+                expect(getEnemy(id).flies).toBe(true);
+            }
+        });
+    });
+
     test("enemies of different factions hurt each other; it's nobody's kill and drops nothing", () => {
         const sim = createSim();
         // Too far from the player for its weapon, and standing still

@@ -1,6 +1,7 @@
 import { getEnemy } from "./enemies";
+import { getMapEnemyIds } from "./mapEnemies";
 import { getMap } from "./maps";
-import { QuestDef, QuestObjective } from "./types";
+import { MapDef, QuestDef, QuestObjective } from "./types";
 
 // Quests: goals that take as many runs as they take, each paying coins once
 // when the run that finishes it ends. Named for the OSRS quest they're
@@ -341,6 +342,23 @@ export const QUESTS: QuestDef[] = [
 ];
 
 export const QUEST_BY_ID: Map<string, QuestDef> = new Map(QUESTS.map((q) => [q.id, q]));
+
+// Whether a run on this map gets a quest anywhere: the map's own, and the ones
+// done all over if what they're after turns up here (there are no rats in the
+// Inferno). Caskets come on every map.
+export function canDoQuestOn(quest: QuestDef, map: MapDef): boolean {
+    if (quest.mapId !== undefined) {
+        return quest.mapId === map.id;
+    }
+    const objective = quest.objective;
+    if (objective.kind !== "kill" && objective.kind !== "killEach") {
+        return true;
+    }
+    const here = getMapEnemyIds(map);
+    return objective.kind === "kill"
+        ? objective.enemyIds.some((id) => here.has(id))
+        : objective.enemyIds.every((id) => here.has(id));
+}
 
 // "Kill 75 chickens", "Kill Count Draynor", "Kill Fareed, Dessous and Damis",
 // "Open 30 reward caskets", "Beat The Inferno"

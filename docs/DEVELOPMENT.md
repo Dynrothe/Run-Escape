@@ -277,7 +277,9 @@ src/game/
                       levels
     BulletPool.ts     a boss's bullets, in flat arrays: hundreds at once, no allocation in the tick
     world/            ArenaGrid (collision + heights), Collision (circle vs tiles and walls),
-                      FlowField (Dijkstra from the player, how hundreds of enemies find a way)
+                      FlowField (Dijkstra from the player, how hundreds of enemies find a way),
+                      FlightGrid (the terrain walls that stop what flies: blocked floor that
+                      isn't liquid, and solid clumps too big to be a tree)
     lockstep.ts       co-op's frame events, applying them, and the check that copies agree
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices

@@ -23,7 +23,7 @@ import {
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { getPowerUp } from "../content/powerups";
-import { QUESTS, describeQuest } from "../content/quests";
+import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
@@ -143,9 +143,7 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
     }
     const run = sim.getResult();
     const quests = QUESTS.filter(
-        (quest) =>
-            (quest.mapId === sim.map.id || quest.mapId === undefined) &&
-            !save.questsDone.includes(quest.id),
+        (quest) => canDoQuestOn(quest, sim.map) && !save.questsDone.includes(quest.id),
     );
     // The map's own first (QUESTS has the ones done all over last)
     return quests.map((quest) => {

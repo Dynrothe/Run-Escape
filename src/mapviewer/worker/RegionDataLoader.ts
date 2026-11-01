@@ -8,6 +8,7 @@ import {
     COLLISION_LOC_STRIDE,
     REGION_TILE_BRIDGE,
     REGION_TILE_INSIDE,
+    REGION_TILE_LIQUID,
     RegionData,
     RegionDataInput,
 } from "./RegionData";
@@ -209,8 +210,15 @@ export function buildRegionData(
             if ((scene.tileRenderFlags[level][sceneX][sceneY] & 0x4) !== 0) {
                 flags |= REGION_TILE_INSIDE;
             }
+            const overlay = scene.tileOverlays[level][sceneX][sceneY];
+            if (
+                overlay !== 0 &&
+                sceneBuilder.overlayTypeLoader.load(overlay - 1).textureId !== -1
+            ) {
+                flags |= REGION_TILE_LIQUID;
+            }
             tileFlags[i] = flags;
-            overlays[i] = scene.tileOverlays[level][sceneX][sceneY];
+            overlays[i] = overlay;
         }
     }
 

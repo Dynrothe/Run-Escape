@@ -429,7 +429,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.4,
         xp: 30,
         sounds: { attack: 292, hit: 294, death: 293 },
-        ghost: true,
+        flies: true,
     },
 
     // Barrows: the crypts' tunnels (crypt rats, spiders and bloodworms; the
@@ -5441,7 +5441,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 8,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.7,
-        ghost: true,
+        flies: true,
     },
     {
         id: "crystalline_spider",
@@ -6281,7 +6281,7 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 292, hit: 294, death: 293 },
         // Two tiles across in OSRS
         scale: 0.8,
-        ghost: true,
+        flies: true,
     },
     {
         id: "knight_of_saradomin",
@@ -6362,7 +6362,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 20,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.2,
     },
     {
@@ -6488,7 +6488,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 32,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.3,
     },
     {
@@ -6572,7 +6572,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 40,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.5,
     },
 
@@ -6648,7 +6648,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 50,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.7,
     },
     {
@@ -6667,7 +6667,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 50,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.7,
     },
     {
@@ -6686,7 +6686,7 @@ export const ENEMIES: EnemyDef[] = [
         xp: 50,
         sounds: { attack: 292, hit: 294, death: 293 },
         scale: 0.8,
-        ghost: true,
+        flies: true,
         knockbackResist: 0.7,
     },
     {
@@ -7565,7 +7565,7 @@ export const ENEMIES: EnemyDef[] = [
     // The Inferno, under Mor Ul Rek: the city's TzHaar (Hur, Xil, Mej and Ket
     // castes) and the Inferno's creatures. Jal-Nib nibblers in swarms,
     // Jal-MejRah bats, Jal-Ak blobs that split into three small ones when they
-    // die, Jal-ImKot that dig in and come up next to you, Jal-Xil rangers and
+    // die, Jal-ImKot that dig in and come up near you, Jal-Xil rangers and
     // Jal-Zek mages that bring the dead back up. The TzHaar sound like
     // people, the Inferno's creatures like the Fight Caves'.
     {
@@ -7614,7 +7614,7 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 292, hit: 294, death: 293 },
         // Two tiles across in OSRS
         scale: 0.7,
-        ghost: true,
+        flies: true,
     },
     {
         id: "tzhaar_xil",
@@ -7705,8 +7705,8 @@ export const ENEMIES: EnemyDef[] = [
         walkSeq: 7596,
         attackSeq: 7597,
         deathSeq: 7599,
-        hp: 40,
-        damage: 4,
+        hp: 32,
+        damage: 3,
         speed: 1.6,
         radius: 0.45,
         xp: 26,
@@ -7714,14 +7714,17 @@ export const ENEMIES: EnemyDef[] = [
         // Four tiles across in OSRS
         scale: 0.5,
         knockbackResist: 0.6,
-        // Digs in when it's left behind, and comes up right by you
+        // Digs in when it's left behind, and comes up near you, slowly enough
+        // to get away from it, and a crowd of them one after another
         blinks: {
             interval: 10,
             minRange: 8,
-            distance: 2.5,
-            windup: 1.5,
+            distance: 5,
+            windup: 2.2,
             seq: 7600,
             sound: 2500,
+            surface: { seq: 7601, seconds: 2.1 },
+            gap: 1.5,
         },
     },
     {
