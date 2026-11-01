@@ -66,7 +66,52 @@ export function cleanMove(value: unknown): [number, number] | undefined {
     if (!Array.isArray(value) || value.length !== 2 || !value.every(Number.isFinite)) {
         return undefined;
     }
-    return quantizeMove(value[0] / MOVE_STEPS, value[1] / MOVE_STEPS);
+    // No faster than a full stick. A real diagonal rounds a little over.
+    const length = Math.sqrt(value[0] * value[0] + value[1] * value[1]);
+    const scale = length > MOVE_STEPS + 2 ? MOVE_STEPS / length : 1;
+    return quantizeMove((value[0] * scale) / MOVE_STEPS, (value[1] * scale) / MOVE_STEPS);
+}
+
+// An event as the host sent it, made into a clean one, or undefined for
+// anything that isn't one. The host checks its guests, and each guest checks
+// the host: a modified game could send anything.
+export function cleanFrameEvent(value: unknown, heroCount: number): FrameEvent | undefined {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const { frame, hero, move, action, auto, leave } = value as Record<string, unknown>;
+    if (
+        !Number.isSafeInteger(frame) ||
+        !Number.isInteger(hero) ||
+        (hero as number) < 0 ||
+        (hero as number) >= heroCount
+    ) {
+        return undefined;
+    }
+    const cleanedMove = move !== undefined ? cleanMove(move) : undefined;
+    const cleanedAction = action !== undefined ? cleanAction(action) : undefined;
+    if ((move !== undefined && !cleanedMove) || (action !== undefined && !cleanedAction)) {
+        return undefined;
+    }
+    return {
+        frame: frame as number,
+        hero: hero as number,
+        ...(cleanedMove && { move: cleanedMove }),
+        ...(cleanedAction && { action: cleanedAction }),
+        ...(auto === true && { auto }),
+        ...(leave === true && { leave }),
+    };
+}
+
+// Whether a run's result has a number that isn't one, which a save can't hold
+export function hasBadNumber(value: unknown): boolean {
+    if (typeof value === "number") {
+        return !Number.isFinite(value);
+    }
+    if (value instanceof Set || value instanceof Map) {
+        return [...value.values()].some(hasBadNumber);
+    }
+    return !!value && typeof value === "object" && Object.values(value).some(hasBadNumber);
 }
 
 const MOVE_STEPS = 127;

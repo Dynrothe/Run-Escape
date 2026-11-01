@@ -4,6 +4,7 @@ import {
     FrameEvent,
     applyFrameEvent,
     cleanAction,
+    cleanFrameEvent,
     cleanMove,
     quantizeMove,
     syncHash,
@@ -27,6 +28,10 @@ const MOVE_INTERVAL_MS = 66;
 // Someone the run's waited on this long (a hidden tab, gone to make tea) has
 // it decided for them: the first reward, taking the casket, or walking away
 export const DECIDE_AFTER_MS = 20_000;
+// The most a hero's actions can queue for one frame. It's more than a player
+// can do, and with moves kept to the latest it keeps what the host sends small
+// however much a guest sends while it waits.
+const MAX_QUEUED_ACTIONS = 8;
 
 export type CoopLink = {
     sendUp(message: UpMessage): void;
@@ -75,6 +80,23 @@ export class CoopRun {
         this.loadStart = now();
     }
 
+    // The host's: this hero's move or action for the next frame, with the
+    // latest move replacing one that's waiting
+    private queue(event: FrameEvent): void {
+        if (event.move) {
+            const waiting = this.next.find((e) => e.hero === event.hero && e.move);
+            if (waiting) {
+                waiting.move = event.move;
+                return;
+            }
+        } else if (
+            this.next.filter((e) => e.hero === event.hero && e.action).length >= MAX_QUEUED_ACTIONS
+        ) {
+            return;
+        }
+        this.next.push(event);
+    }
+
     // The host's: whether it's still waiting for someone's map to load
     get waitingForLoad(): boolean {
         if (this.loading.size > 0 && this.now() - this.loadStart > LOAD_WAIT_MS) {
@@ -96,7 +118,7 @@ export class CoopRun {
         this.lastMove = move;
         this.moveSentAt = now;
         if (this.isHost) {
-            this.next.push({ frame: 0, hero: this.sim.focus, move });
+            this.queue({ frame: 0, hero: this.sim.focus, move });
         } else {
             this.link.sendUp({ move });
         }
@@ -105,7 +127,7 @@ export class CoopRun {
     // Something the local player did, applied when the frame it's in comes
     act(action: CoopAction): void {
         if (this.isHost) {
-            this.next.push({ frame: 0, hero: this.sim.focus, action });
+            this.queue({ frame: 0, hero: this.sim.focus, action });
         } else {
             this.link.sendUp({ action });
         }
@@ -123,9 +145,9 @@ export class CoopRun {
         if ("loaded" in message) {
             this.loading.delete(from);
         } else if (move) {
-            this.next.push({ frame: 0, hero, move });
+            this.queue({ frame: 0, hero, move });
         } else if (action) {
-            this.next.push({ frame: 0, hero, action });
+            this.queue({ frame: 0, hero, action });
         }
     }
 
@@ -168,14 +190,23 @@ export class CoopRun {
 
     // A guest's: the host's frames
     receiveDown(message: DownMessage): void {
-        if (this.isHost) {
+        if (
+            this.isHost ||
+            !message ||
+            !Array.isArray(message.events) ||
+            !Number.isSafeInteger(message.upTo)
+        ) {
             return;
         }
-        for (const event of message.events) {
-            this.incoming.push(event);
+        for (const raw of message.events) {
+            const event = cleanFrameEvent(raw, this.sim.heroes.length);
+            if (event) {
+                this.incoming.push(event);
+            }
         }
-        if (message.hash) {
-            this.hashes.set(message.hash[0], message.hash[1]);
+        const hash: unknown = message.hash;
+        if (Array.isArray(hash) && Number.isSafeInteger(hash[0]) && Number.isFinite(hash[1])) {
+            this.hashes.set(hash[0], hash[1]);
         }
         this.upTo = Math.max(this.upTo, message.upTo);
     }

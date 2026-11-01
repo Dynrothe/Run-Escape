@@ -67,6 +67,31 @@ export type GameStart = {
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
+// Whether a start from the host is one every game could play: a modified one
+// could send anything
+export function isGameStart(value: unknown, maxParty: number): value is GameStart {
+    const game = value as GameStart | undefined;
+    return (
+        !!game &&
+        typeof game === "object" &&
+        Number.isSafeInteger(game.seed) &&
+        typeof game.mapId === "string" &&
+        typeof game.endless === "boolean" &&
+        Array.isArray(game.heroes) &&
+        game.heroes.length > 0 &&
+        game.heroes.length <= maxParty &&
+        game.heroes.every(
+            (hero) =>
+                !!hero &&
+                typeof hero === "object" &&
+                typeof hero.id === "string" &&
+                typeof hero.name === "string" &&
+                hero.name.length <= 64 &&
+                typeof hero.characterId === "string",
+        )
+    );
+}
+
 // Why a player is out of a room
 // (idle: nothing happened in the room for half an hour)
 export type GoneReason = "left" | "kicked" | "disbanded" | "hostLeft" | "idle";

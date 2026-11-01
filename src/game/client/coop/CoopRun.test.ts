@@ -1,10 +1,10 @@
 import { emptyStats } from "../../content/types";
 import { Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import { fm, usePortableMath } from "../../core/fmath";
-import { syncHash } from "../../core/lockstep";
+import { cleanFrameEvent, cleanMove, hasBadNumber, syncHash } from "../../core/lockstep";
 import { makeGrid } from "../../core/world/testGrid";
 import { CoopLink, CoopRun, DECIDE_AFTER_MS } from "./CoopRun";
-import { DownMessage, UpMessage } from "./protocol";
+import { DownMessage, UpMessage, isGameStart } from "./protocol";
 
 function openField(): string[] {
     const rows: string[] = [];
@@ -193,5 +193,85 @@ describe("co-op lockstep", () => {
         clock.now += 100;
         run.setMove(0.9, 0.5);
         expect(ups.at(-1)).toEqual({ move: [114, 64] });
+    });
+
+    it("takes nothing odd from the host", () => {
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp() {}, sendDown() {} },
+            new Map(),
+            "host",
+        );
+        const down = (events: unknown[], upTo = 1) =>
+            guest.receiveDown({ upTo, events } as DownMessage);
+        down([
+            { frame: 1, hero: "__proto__", move: [1, 0] },
+            { frame: 1, hero: 99, move: [1, 0] },
+            { frame: 1, hero: 0, move: [Infinity, 0] },
+            { frame: 1, hero: 0, move: ["a", 0] },
+            { frame: 1, hero: 0, action: { kind: "nothing" } },
+        ]);
+        expect(guest.stepFrame()).toEqual([]);
+        expect(Object.keys(Array.prototype)).toEqual([]);
+        guest.receiveDown({ upTo: Infinity, events: [] } as DownMessage);
+        guest.receiveDown(undefined as unknown as DownMessage);
+        expect(guest.canStep()).toBe(false);
+        expect(cleanFrameEvent({ frame: 2, hero: 1, move: [3, 4], leave: true }, 2)).toEqual({
+            frame: 2,
+            hero: 1,
+            move: [3, 4],
+            leave: true,
+        });
+    });
+
+    it("keeps a guest's moves no faster than a full stick", () => {
+        const [x, y] = cleanMove([127, 127])!;
+        expect(Math.hypot(x, y)).toBeLessThan(129);
+        expect(cleanMove([90, 90])).toEqual([90, 90]);
+        expect(cleanMove(cleanMove([127, 127]))).toEqual(cleanMove([127, 127]));
+    });
+
+    it("sends the same whatever a guest floods it with", () => {
+        const sent: DownMessage[] = [];
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const host = new CoopRun(
+            createSim(0),
+            true,
+            { sendUp() {}, sendDown: (m) => sent.push(m) },
+            heroes,
+            "host",
+        );
+        for (let i = 0; i < 5000; i++) {
+            host.receiveUp("guest1", { move: [i % 100, 0] });
+            host.receiveUp("guest1", { action: { kind: "reroll" } });
+        }
+        heroes.forEach((_, id) => host.receiveUp(id, { loaded: true }));
+        host.stepFrame();
+        host.flush(true);
+        expect(sent[0].events.length).toBeLessThanOrEqual(9);
+    });
+
+    it("only takes a start every game could play", () => {
+        const good = {
+            seed: 1,
+            mapId: "lumbridge",
+            endless: false,
+            heroes: [{ id: "p1", name: "A", characterId: "warrior", loadout: {} }],
+        };
+        expect(isGameStart(good, 4)).toBe(true);
+        expect(isGameStart(undefined, 4)).toBe(false);
+        expect(isGameStart({ ...good, heroes: Array(5).fill(good.heroes[0]) }, 4)).toBe(false);
+        expect(isGameStart({ ...good, heroes: [{ ...good.heroes[0], name: 5 }] }, 4)).toBe(false);
+    });
+
+    it("sees a number a save can't hold, and none in a real result", () => {
+        expect(hasBadNumber({ a: [{ coins: NaN }] })).toBe(true);
+        expect(hasBadNumber({ a: new Map([["x", Infinity]]) })).toBe(true);
+        const sim = createSim(0);
+        for (let i = 0; i < TICKS_PER_SECOND * 5; i++) {
+            sim.step();
+        }
+        expect(hasBadNumber(sim.getResult())).toBe(false);
     });
 });

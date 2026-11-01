@@ -37,7 +37,7 @@ import { HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
-import { CoopAction, applyAction } from "../core/lockstep";
+import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
 import {
     SaveData,
     SaveStore,
@@ -82,7 +82,7 @@ import { Overlay, ScreenPoint } from "./Overlay";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
-import { GameStart, GoneReason, Loadout, Unlocks } from "./coop/protocol";
+import { GameStart, GoneReason, Loadout, Unlocks, isGameStart } from "./coop/protocol";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -817,6 +817,12 @@ export class GameClient implements GameFrameHandler {
     // A co-op run, as the host started it: everyone builds the same Sim, each
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
+        if (!isGameStart(game, MAX_PARTY)) {
+            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.coopInbox = undefined;
+            this.coop.leave();
+            return;
+        }
         const you = this.coop.id;
         const focus = game.heroes.findIndex((hero) => hero.id === you);
         const room = this.coop.room;
@@ -1190,7 +1196,9 @@ export class GameClient implements GameFrameHandler {
         const newTrophies = isDevMap(sim.map.id)
             ? []
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
-        const quests = recordRun(this.save, result);
+        // A co-op run's numbers can come from another player's modified game
+        const quests =
+            sim.heroes.length > 1 && hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
