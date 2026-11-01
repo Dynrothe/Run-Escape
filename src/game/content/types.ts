@@ -108,6 +108,9 @@ export type EnemyDef = {
     scale?: number;
     // Walks through walls and water (though it turns up where the rest do)
     ghost?: boolean;
+    // Flies over fences, buildings' walls, trees and water, as the walkers can't,
+    // and has to go round terrain walls as they do (FlightGrid)
+    flies?: boolean;
     // Cache sound effect ids
     sounds: { attack: number; hit: number; death: number };
     // Bosses: the toast when they turn up, and a spot animation and sound
@@ -253,6 +256,12 @@ export type EnemyBlinksDef = {
     castSpotAnim?: number;
     impactSpotAnim?: number;
     sound?: number;
+    // Comes up slowly, playing seq for seconds (and sound again, for the warning):
+    // it can be hit, but doesn't move or hit anything until it's up
+    surface?: { seq: number; seconds: number };
+    // Seconds before another of its kind can go after one does, so a crowd left
+    // behind don't all land on the player at once
+    gap?: number;
 };
 
 // A player look for an enemy: worn items by equipment slot, and optionally

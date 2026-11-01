@@ -1,4 +1,8 @@
-import { COLLISION_LOC_STRIDE, RegionData } from "../../../mapviewer/worker/RegionData";
+import {
+    COLLISION_LOC_STRIDE,
+    REGION_TILE_LIQUID,
+    RegionData,
+} from "../../../mapviewer/worker/RegionData";
 import { CollisionFlag } from "../../../rs/pathfinder/flag/CollisionFlag";
 import { ArenaGrid } from "./ArenaGrid";
 
@@ -16,10 +20,10 @@ export type TestLoc = {
 export const NOWHERE: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
 
 // Builds a grid from rows of text for tests. rows[0] is the northmost row.
-// '#' solid, '~' water (blocked floor), '.' open, '|' wall on the east side
-// of the tile, '_' wall on the north side of the tile, 'o' a loc standing on
-// just the middle of its tile (a signpost), '?' a loc that draws nothing (an
-// invisible wall). locs are more, in world tiles.
+// '#' solid, '~' water (blocked floor), '^' blocked floor that isn't water (rock),
+// '.' open, '|' wall on the east side of the tile, '_' wall on the north side of
+// the tile, 'o' a loc standing on just the middle of its tile (a signpost), '?' a
+// loc that draws nothing (an invisible wall). locs are more, in world tiles.
 export function makeGrid(
     rows: string[],
     baseX = 100,
@@ -29,6 +33,7 @@ export function makeGrid(
     const sizeY = rows.length;
     const sizeX = rows[0].length;
     const collisionFlags = new Int32Array(sizeX * sizeY);
+    const tileFlags = new Uint8Array(sizeX * sizeY);
     locs = [...locs];
     for (let row = 0; row < sizeY; row++) {
         const y = sizeY - 1 - row;
@@ -38,6 +43,9 @@ export function makeGrid(
             if (c === "#") {
                 flags = CollisionFlag.OBJECT;
             } else if (c === "~") {
+                flags = CollisionFlag.FLOOR;
+                tileFlags[x + y * sizeX] = REGION_TILE_LIQUID;
+            } else if (c === "^") {
                 flags = CollisionFlag.FLOOR;
             } else if (c === "|") {
                 flags = CollisionFlag.WALL_EAST;
@@ -95,7 +103,7 @@ export function makeGrid(
         collisionFlags,
         heights: new Int32Array((sizeX + 1) * (sizeY + 1)),
         bridgeHeights: new Int32Array((sizeX + 1) * (sizeY + 1)),
-        tileFlags: new Uint8Array(sizeX * sizeY),
+        tileFlags,
         overlays: new Uint16Array(sizeX * sizeY),
         collisionLocs,
     };

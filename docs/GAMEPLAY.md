@@ -243,7 +243,9 @@ version and how to run it.
 - **Maps**: every run is on one map, and beating a map (killing its final boss) opens the next.
   Enemies have more hitpoints and hit harder on each one. Pick where to go under the
   adventurers. Enemies only turn up where you could stand and walk to, never behind a wall or in
-  rock, ghosts included (East Varrock's come from both sides of the ditch, which they jump). Each
+  rock, ghosts included (East Varrock's come from both sides of the ditch, which they jump). Ghosts
+  and the Ankou then go through anything. Bats and aviansies fly over fences, buildings' walls,
+  trees and water, but go round terrain walls: the rock and void round a cave or a mountain. Each
   map's monsters are from its part of the world:
     - **Lumbridge**: chickens, rats, goblins, cows and imps, the swamp's giant rats and frogs,
       Draynor's dark wizards, and the zombies, skeletons, ghosts, spiders and bats of Draynor
@@ -278,7 +280,8 @@ version and how to run it.
       and dark beasts, the city's guards, the Iorwerth's warriors and archers and Zulrah's
       snakelings, and the corrupted ones late on.
     - **The Inferno**: Mor Ul Rek's TzHaar, nibblers, Jal-MejRah bats, Jal-Ak blobs that split
-      into three, Jal-ImKot that dig up next to you, Jal-Xil, and Jal-Zek that raise the dead.
+      into three, Jal-ImKot that dig in when left behind and come up near you (slowly, and one
+      after another, so you can get away), Jal-Xil, and Jal-Zek that raise the dead.
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -395,7 +398,8 @@ version and how to run it.
   as many runs as they take, on any map but the fun ones, and each pays its coins once (100 to 2,500), when the
   run that finishes it ends; one finished mid-run rings the bell. The list is coloured like the
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
-  tracker under the minimap (and the pause menu) shows how far the map's quests have got.
+  tracker under the minimap (and the pause menu) shows how far the map's quests have got, and the
+  ones done all over if the map has what they're after (no Ratcatchers in the Inferno).
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).

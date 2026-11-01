@@ -109,6 +109,10 @@ animations, sounds and stats. Tests check that every enemy a map or boss refers 
 that every boss attacks. It's baked for the maps that use it (`getMapEnemies` finds its id wherever
 a map, or an enemy on that map, mentions it), so that needs nothing added.
 
+- `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
+  `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
+- A `blinks.surface` seq is baked like `blinks.seq`, and needs to be one the NPC's model can play.
+
 ## Map
 
 Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in `waves.ts`.
