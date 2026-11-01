@@ -40,7 +40,6 @@ import {
 } from "../../src/game/scaperune/format";
 import {
     DEFAULT_SETTINGS,
-    FORD_HALF_WIDTH,
     GeneratedMap,
     GeneratorSettings,
     HEIGHTMAP_SIZE,
@@ -323,8 +322,8 @@ function checkRoadsAndBuildings(map: GeneratedMap): string[] {
             }
         }
     }
-    // Fords aren't roads
-    const roadPoints = lines.filter((line) => line.halfWidth !== FORD_HALF_WIDTH);
+    // Fords aren't roads, and have no grade
+    const roadPoints = lines.filter((line) => line.grade !== undefined);
     for (const building of buildings) {
         const { exit, name } = building;
         if (!exit) {

@@ -491,12 +491,10 @@ function placeBuilding(
     const { name } = spot;
     for (const { turns, x, y, exit } of getPlacings(build, roads, water, spot)) {
         const { prefab } = kit.get(name, turns);
-        // A yard's part of its plot, and it's the plot roads keep off
-        const yard =
-            rng() < settings.gardens ? getYard(x, y, prefab.sizeX, prefab.sizeY) : undefined;
-        const lot = yard ?? getPlot(x, y, prefab.sizeX, prefab.sizeY);
-        const lotX = lot.x1 - lot.x0 + 1;
-        const lotY = lot.y1 - lot.y0 + 1;
+        // A yard's part of its plot, and roads keep off where it'll be, whether or not it gets one
+        const room = getYard(x, y, prefab.sizeX, prefab.sizeY);
+        const roomX = room.x1 - room.x0 + 1;
+        const roomY = room.y1 - room.y0 + 1;
         const plot: PlacedBuilding = {
             name,
             x,
@@ -506,8 +504,6 @@ function placeBuilding(
             exit,
             hasRoad: wantsRoad,
             town: spot.town,
-            plot: lot,
-            yard,
         };
         // Straight out of the door, so that's how the road arrives
         const lead: Point[] = [];
@@ -519,10 +515,10 @@ function placeBuilding(
         }
         const end = lead[lead.length - 1];
         const from = { x: Math.floor(end.x), y: Math.floor(end.y) };
-        markOffLimits(build, roads, lot.x0, lot.y0, lotX, lotY, 1);
+        markOffLimits(build, roads, room.x0, room.y0, roomX, roomY, 1);
         const route = wantsRoad && ground.inside(from.x, from.y) ? roads.findRoute(from, lead) : [];
         if (wantsRoad && route.length === 0) {
-            markOffLimits(build, roads, lot.x0, lot.y0, lotX, lotY, -1);
+            markOffLimits(build, roads, room.x0, room.y0, roomX, roomY, -1);
             continue;
         }
         // Its road has to be able to get from its door to where it joins
@@ -531,14 +527,18 @@ function placeBuilding(
         const steepest = settings.walkSlope * ROAD_STEEPEST * route.length;
         const tooFar = joining !== undefined && Math.abs(joining - (height ?? 0)) > steepest;
         if (height === undefined || tooFar) {
-            markOffLimits(build, roads, lot.x0, lot.y0, lotX, lotY, -1);
+            markOffLimits(build, roads, room.x0, room.y0, roomX, roomY, -1);
             continue;
         }
-        ground.claims.take(lot.x0, lot.y0, lotX, lotY, RESERVE_PLOT);
         kit.stamp(ground, name, turns, x, y, true);
         pinPlot(build, x, y, prefab.sizeX, prefab.sizeY, height, exit);
-        if (yard) {
-            placeYard(build, roads, plot, yard, spot.town === undefined ? undefined : kitOf(name));
+        plot.yard = rng() < settings.gardens ? room : undefined;
+        plot.plot = plot.yard ?? getPlot(x, y, prefab.sizeX, prefab.sizeY);
+        const { x0, y0, x1, y1 } = plot.plot;
+        ground.claims.take(x0, y0, x1 - x0 + 1, y1 - y0 + 1, RESERVE_PLOT);
+        if (plot.yard) {
+            const family = spot.town === undefined ? undefined : kitOf(name);
+            placeYard(build, roads, plot, plot.yard, family);
         }
         if (wantsRoad) {
             roads.lay(from, lead, route, roads.halfWidth, height);

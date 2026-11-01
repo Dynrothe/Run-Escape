@@ -15,6 +15,7 @@ import {
     placeCityWall,
 } from "./cityWalls";
 import { TileRect } from "./collision";
+import { PlacedLoc } from "./format";
 import { Build, SPAWN_CLEAR, pick } from "./mapBuild";
 import { createRng } from "./noise";
 import { Point } from "./paths";
@@ -37,6 +38,9 @@ const GATE_CLEAR_SIDE = 2;
 
 // Tiles of open ground kept along the inside of a wall, for a crowd to get round
 const WALL_FOOT = 2;
+
+// Tiles roads keep off a wall
+const WALL_ROAD_GAP = 3;
 
 // How far from the corner of a wall a gate's middle can be, past the wall's chamfer
 const GATE_CORNER = 5;
@@ -81,13 +85,12 @@ const MOST_CORNER_CUT = 0.3;
 const WALL_KIT_SEED = 2417;
 
 // A town with a wall round it: the rectangle its walkway runs round, what it's built of and where
-// its gates are, and which of its tiles it can't stand on. locs is its place in the grid's list of
-// locs, once it's up.
+// its gates are, and which of its tiles it can't stand on. locs are its own, once it's up.
 export type WalledTown = WallRect & {
     kit: CityWallKit;
     gates: CityGate[];
     taken: Set<number>;
-    locs?: [from: number, to: number];
+    locs?: PlacedLoc[];
 };
 
 // Where a road means to get to a side of a wall, along it, if it does
@@ -416,10 +419,11 @@ export function reserveWall(
     wall: WalledTown,
     height: number,
 ): void {
-    const { ground, terrain, cliffs, mainland, heldCorners } = build;
+    const { ground, terrain, cliffs, mainland, heldCorners, plots } = build;
     const { claims } = ground;
     const { kit, gates, taken } = wall;
     const seen = new Set<number>();
+    const near = new Set<number>();
     forWallTiles(kit, wall, (x, y) => {
         const i = ground.tile(x, y);
         if (seen.has(i)) {
@@ -432,11 +436,35 @@ export function reserveWall(
             terrain.pinRect(x, y, 1, 1, height);
         }
         claims.takeTile(i, RESERVE_WALL);
-        roads.offLimits[i]++;
+        // Roads and fords keep their distance: what's pinned here doesn't bend for them
+        for (let ty = y - WALL_ROAD_GAP; ty <= y + WALL_ROAD_GAP; ty++) {
+            for (let tx = x - WALL_ROAD_GAP; tx <= x + WALL_ROAD_GAP; tx++) {
+                near.add(ground.tile(tx, ty));
+            }
+        }
     });
+    for (const i of near) {
+        roads.offLimits[i]++;
+    }
+    // Plots for its sides, so that a road going by comes up to it, and anything else keeps its
+    // distance. What's pinned that isn't a plot, a road knows nothing about.
+    const { x0, y0, x1, y1 } = wall;
+    const band = kit.width + 2;
+    plots.push(
+        { x: x0 - 1, y: y0 - 1, sizeX: x1 - x0 + band, sizeY: band, height },
+        { x: x0 - 1, y: y1 - kit.width, sizeX: x1 - x0 + band, sizeY: band, height },
+        { x: x0 - 1, y: y0 - 1, sizeX: band, sizeY: y1 - y0 + band, height },
+        { x: x1 - kit.width, y: y0 - 1, sizeX: band, sizeY: y1 - y0 + band, height },
+    );
     for (const gate of gates) {
-        for (const { x0, y0, x1, y1 } of getGateClear(kit, wall, gate)) {
-            claims.take(x0, y0, x1 - x0 + 1, y1 - y0 + 1, RESERVE_GATE);
+        for (const rect of getGateClear(kit, wall, gate)) {
+            claims.take(
+                rect.x0,
+                rect.y0,
+                rect.x1 - rect.x0 + 1,
+                rect.y1 - rect.y0 + 1,
+                RESERVE_GATE,
+            );
         }
         const plot = getGatePlot(kit, wall, gate);
         pinPlot(build, plot.x0, plot.y0, plot.x1 - plot.x0 + 1, plot.y1 - plot.y0 + 1, height);
@@ -479,6 +507,6 @@ export function placeTownWalls(build: Build, walled: WalledTown[]): void {
             gates,
             (x, y) => taken.has(ground.tile(x, y)) || ground.isWaterTile(x, y),
         );
-        town.locs = [from, ground.grid.locs.length];
+        town.locs = ground.grid.locs.slice(from);
     }
 }

@@ -37,6 +37,9 @@ const ROAD_CLEAR_MARGIN = 0.3;
 // corner's in, and that's this far from its middle.
 const ROAD_PAINT_MARGIN = 0.75;
 
+// The same for a road that bends, which paints a bit past that on its way round
+const ROAD_PLOT_MARGIN = 1.25;
+
 // Tiles a road that leads nowhere takes to narrow away
 const ROAD_TAPER = 7;
 
@@ -192,10 +195,10 @@ export class RoadNetwork {
         const { ranks } = ground.claims;
         let touches = false;
         forTilesNear(this.build, [point], this.halfWidth + 0.5, (i) => {
-            touches ||=
-                ground.footprint[i] !== 0 ||
-                (ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT && ranks[i] !== RESERVE_STREET) ||
-                (!nearBridge && this.bridgeZone[i] !== 0);
+            touches ||= ground.footprint[i] !== 0 || (!nearBridge && this.bridgeZone[i] !== 0);
+        });
+        forTilesNear(this.build, [point], this.halfWidth + ROAD_PLOT_MARGIN, (i) => {
+            touches ||= ranks[i] !== 0 && ranks[i] <= RESERVE_PLOT && ranks[i] !== RESERVE_STREET;
         });
         return touches;
     }
@@ -221,9 +224,11 @@ export class RoadNetwork {
         forTilesNear(this.build, points, clear, (i) => {
             ground.reserved[i] = 1;
         });
-        // What it can paint, which building has to keep off
+        // What it can paint, which building has to keep off. A street's straight, and paints no
+        // further than its width.
         const widest = Math.max(width(0), width(points.length - 1));
-        forTilesNear(this.build, points, widest + ROAD_PAINT_MARGIN, (i) => {
+        const margin = join ? ROAD_PLOT_MARGIN : ROAD_PAINT_MARGIN;
+        forTilesNear(this.build, points, widest + margin, (i) => {
             claims.markTile(i, RESERVE_LANE);
         });
         // A lead's its door's or bridge's alone: others join past it, not against the wall
@@ -439,10 +444,15 @@ export class RoadNetwork {
         const length = Math.hypot(end.x - before.x, end.y - before.y);
         const wayX = (end.x - before.x) / length;
         const wayY = (end.y - before.y) / length;
+        const { ground } = this.build;
         for (let step = 0; step < ROAD_TAPER; step++) {
             const narrow = halfWidth * (1 - (step + 1) / ROAD_TAPER);
             const from = { x: end.x + wayX * step, y: end.y + wayY * step };
             const to = { x: from.x + wayX, y: from.y + wayY };
+            const ahead = ground.claims.ranks[ground.tile(Math.floor(to.x), Math.floor(to.y))];
+            if (ahead !== 0 && ahead <= RESERVE_PLOT && ahead !== RESERVE_STREET) {
+                return;
+            }
             addPathToField(this.road, corners.x, corners.y, [from, to], narrow);
             addPathToField(this.trail, corners.x, corners.y, [from, to], narrow + TRAIL_MARGIN);
         }

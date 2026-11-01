@@ -130,6 +130,9 @@ const STREET_RISE = 40;
 // Tiles past the inside of a wall that its street runs up to
 const STREET_PAST_WALL = 2;
 
+// Tiles past a street's half width that it stops short of what stopped it
+const STREET_SHORT = 2;
+
 // Tiles past the outer edge of a gate's clear space that a road runs straight
 const GATE_STRAIGHT = 2;
 
@@ -146,8 +149,6 @@ const SIDE_STREET_FIRST = 12;
 const SIDE_STREET_SPACING = 22;
 
 const SIDE_STREET_JITTER = 6;
-
-const SIDE_STREET_SHORT = SIDE_STREET_HALF + 2;
 
 // Tiles between a plot and water, so that the ground can get down to it
 const WATER_CLEAR = 6;
@@ -302,10 +303,13 @@ function walkStreet(
     def: KindDef,
     height: number,
     rise = TOWN_RISE,
+    toWall = false,
 ): Street {
     const across = Math.ceil(def.streetHalf + WALL_OFF_STREET);
-    let length = 0;
-    for (let step = 1; step <= longest; step++) {
+    // Its end's round, so it stops short of what's in its way. One to a gate's meant to get there.
+    const ahead = toWall ? 0 : Math.ceil(def.streetHalf) + STREET_SHORT;
+    let length = longest;
+    for (let step = 1; step <= longest + ahead; step++) {
         const x = from.x + wayX * step;
         const y = from.y + wayY * step;
         let free = true;
@@ -313,9 +317,9 @@ function walkStreet(
             free &&= canPave(build, roads, water, x + wayY * side, y + wayX * side, height, rise);
         }
         if (!free) {
+            length = Math.min(Math.max(step - 1 - ahead, 0), longest);
             break;
         }
-        length = step;
     }
     const points: Point[] = [];
     for (let step = 0; step <= length; step++) {
@@ -362,11 +366,8 @@ function planSideStreets(
                 x: at.x + wayX * (offset + step),
                 y: at.y + wayY * (offset + step),
             }));
-            // Its end's round, and it stops short of what stopped it
-            const kept = walked.points.slice(0, -SIDE_STREET_SHORT);
-            const points = [...back, ...kept];
-            const length = points.length - 1;
-            const street = { ...walked, points, length, end: points[length] };
+            const points = [...back, ...walked.points];
+            const street = { ...walked, points, length: points.length - 1 };
             roads.addStreet(points, SIDE_STREET_HALF, height, held);
             streets.push(street);
         }
@@ -456,6 +457,7 @@ function planGates(
                 def,
                 square.height,
                 STREET_RISE,
+                true,
             );
             // The way out has to have ground too
             let open = street.length === length;
@@ -690,19 +692,27 @@ export function connectTown(build: Build, roads: RoadNetwork, plan: PlannedTown)
             const route = ground.inside(from.x, from.y) ? roads.findRoute(from, lead) : [];
             roads.lay(from, lead, route, getGateHalfWidth(roads, kit), height);
         }
-    } else if (streets.length > 0) {
-        // The way in, from the end of the street nearest the rest of the roads
+    } else {
+        // The way in, from the end of the street nearest the rest of the roads. It starts past the
+        // street's end, since its own tiles aren't open to it.
         const near = [...streets].sort(
             (a, b) =>
                 Math.hypot(a.end.x - spawn.x, a.end.y - spawn.y) -
                 Math.hypot(b.end.x - spawn.x, b.end.y - spawn.y),
-        )[0];
-        const lead = near.points.slice(-3);
-        const from = { x: Math.floor(near.end.x), y: Math.floor(near.end.y) };
-        if (ground.inside(from.x, from.y) && lead.length >= 2) {
-            const route = roads.findRoute(from, lead);
+        );
+        for (const { points, end, wayX, wayY, halfWidth } of near) {
+            const past = Math.ceil(halfWidth) + STREET_SHORT;
+            const onward = Array.from({ length: past }, (_, step) => ({
+                x: end.x + wayX * (step + 1),
+                y: end.y + wayY * (step + 1),
+            }));
+            const lead = [...points.slice(-3), ...onward];
+            const last = lead[lead.length - 1];
+            const from = { x: Math.floor(last.x), y: Math.floor(last.y) };
+            const route = ground.inside(from.x, from.y) ? roads.findRoute(from, lead) : [];
             if (route.length > 0) {
                 roads.lay(from, lead, route, roads.halfWidth, height);
+                break;
             }
         }
     }

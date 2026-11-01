@@ -259,7 +259,13 @@ function scatter(build: Build, water: Uint8Array): void {
     const townFade = createTownFade(build);
     const paceAt = createPace(build);
     const place = (id: number, size: number, type: number, x: number, y: number) => {
-        ground.place({ id, type, rotation: Math.floor(rng() * 4), level: 0, x, y }, size, size);
+        // A list's size for a loc isn't always all of it
+        const { sizeX: across, sizeY: deep } = build.context.locs(id);
+        const whole = Math.max(size, across, deep);
+        const rotation = Math.floor(rng() * 4);
+        if (whole === size || ground.isClear(x, y, whole, whole)) {
+            ground.place({ id, type, rotation, level: 0, x, y }, whole, whole);
+        }
     };
     // Past the arena there's only anything to see on land, and then it goes on
     const reach = settings.boundary === "sea" ? 24 : MARGIN * MAP_SQUARE_SIZE;
@@ -372,12 +378,7 @@ function scatter(build: Build, water: Uint8Array): void {
                 flowerPatches(x / 9, y / 9) > 0.55 &&
                 ground.isClear(x, y, 1, 1)
             ) {
-                // Some flowers are more than a tile
-                const id = pick(rng, biome.flowers);
-                const { sizeX: across, sizeY: deep } = build.context.locs(id);
-                if (ground.isClear(x, y, across, deep)) {
-                    place(id, Math.max(across, deep), LOC_NORMAL, x, y);
-                }
+                place(pick(rng, biome.flowers), 1, LOC_NORMAL, x, y);
             }
         }
     }

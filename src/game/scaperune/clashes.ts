@@ -1,5 +1,6 @@
 import { forWallTiles } from "./cityWalls";
 import { TileRect } from "./collision";
+import { PlacedLoc, TILE_BLOCKED } from "./format";
 import type { GeneratedMap } from "./generator";
 import { OVERLAY_SHAPES } from "./shapes";
 import { getGateClear } from "./townWalls";
@@ -33,7 +34,7 @@ const DOOR_STRIP_SIDE = 4;
 const DOOR_STRIP_BEHIND = 1;
 
 // Tiles from a door a road can run up against its building
-const DOOR_REACH = 3;
+const DOOR_REACH = 4.5;
 
 function inRect({ x0, y0, x1, y1 }: TileRect, x: number, y: number): boolean {
     return x >= x0 && y >= y0 && x <= x1 && y <= y1;
@@ -55,7 +56,7 @@ function findBandClashes(map: GeneratedMap, locs: LocSizes): Clash[] {
     }
     const band = new Uint8Array(sizeX * sizeY);
     const clear = new Uint8Array(sizeX * sizeY);
-    const own = new Uint8Array(grid.locs.length);
+    const own = new Set<PlacedLoc>();
     for (const town of walled) {
         const { kit, gates } = town;
         // What it found it couldn't stand on is no part of it: water, cliffs, bridges
@@ -66,14 +67,14 @@ function findBandClashes(map: GeneratedMap, locs: LocSizes): Clash[] {
             for (const rect of getGateClear(kit, town, gate)) {
                 for (let y = rect.y0; y <= rect.y1; y++) {
                     for (let x = rect.x0; x <= rect.x1; x++) {
-                        clear[x + y * sizeX] = 1;
+                        // Reeds in the water are in nobody's way
+                        const i = x + y * sizeX;
+                        clear[i] = grid.levels[0].flags[i] & TILE_BLOCKED ? 0 : 1;
                     }
                 }
             }
         }
-        if (town.locs) {
-            own.fill(1, town.locs[0], town.locs[1]);
-        }
+        town.locs?.forEach((loc) => own.add(loc));
     }
     const check = (x: number, y: number, what: string) => {
         const i = x + y * sizeX;
@@ -83,8 +84,9 @@ function findBandClashes(map: GeneratedMap, locs: LocSizes): Clash[] {
             clashes.push({ rule: "gate", x, y, what: `${what} in a gate's clear space` });
         }
     };
-    grid.locs.forEach(({ id, type, x, y, rotation }, at) => {
-        if (own[at] || type === LOC_DECORATION) {
+    grid.locs.forEach((loc) => {
+        const { id, type, x, y, rotation } = loc;
+        if (own.has(loc) || type === LOC_DECORATION) {
             return;
         }
         const { sizeX: across, sizeY: deep } = locs(id);

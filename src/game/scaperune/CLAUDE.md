@@ -366,7 +366,7 @@ afterwards and set pieces got there first, so one stamped over the other, and no
 | ---- | ----------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
 | 1    | Site                    | `fitWall`, `findSquare`                          | Pick the ground first, and level it, so that the wall doesn't fight the land  |
 | 2    | Walls and gates         | `reserveWall`, `planGates`                       | The town's shape comes first. Buildings are fitted to it, never the reverse   |
-| 3    | Main streets and square | `layOutTown`, then `layMainRoads`, `connectTown` | Gate to square to gate, before any building                                   |
+| 3    | Main streets and square | `layOutTown`, then `layMainRoads`, `connectTown` | Gate to square to gate before any building, then side streets                 |
 | 4    | Plots                   | `fillTown`, `placeBuilding`                      | A building's plot holds its yard and fence, and they're reserved as one block |
 | 5    | Lanes                   | `placeBuilding`, `addDoorPath`                   | To the doors, after the buildings, round every plot                           |
 | 6    | Set pieces              | `placeSetPieces`, `placeRuins`                   | On whatever's left                                                            |
@@ -395,13 +395,19 @@ own building's plot.
 - **A gate keeps 12 tiles clear behind it and 8 in front** (`GATE_CLEAR_IN`, `GATE_CLEAR_OUT`), across its width and 2 tiles past
   each side. Only its road goes there. 12 is a bit under half a screen, so a gate opens on to a street you can see down.
 - **A wall is as big as its buildings need**: 360 tiles of town a building, which is about a sixth of it indoors, capped at
-  `townSize` and never under 22 from its middle. It's stretched up to 20% either way by the seed, and each side then comes in
+  `townSize` and never under 30 from its middle, which is what it takes for a gate's clear space and a row of plots. It's stretched up to 20% either way by the seed, and each side then comes in
   till it's on ground that takes it. Each corner's then cut by 4% to 30% of the shorter side (`cutWallCorners`), by a roll and on
   past bad ground, which is what stops a city being a box. `WallRect.cuts` holds them, and `placeCityWall` takes them too.
 - **Gates go where outside roads arrive** (`getArrivals`): where the main road's line crosses, or else facing the spawn, a bridge
   or another town. A wall has at least 2, and a side 56 or longer gets one anyway. Each lies on a column of the square, so that
   its street's dead straight.
 - **A plot's** a tile round the walls, plus the yard. Walls stand 1.5 tiles off a street's edge, plots 1 apart, buildings 3 to 5.
+- **Site.** The ground under a town goes to its square's height, walls and all, and back to the land's over 6 tiles past its
+  edge and from water and cliffs (`levelSite`), so a city's on one level and its buildings all fit. A wall won't go where the
+  ground rises over 80 inside it.
+- **Side streets** turn off main streets 22 to 28 tiles apart, 4 wide, and run to the wall or whatever stops them. Hamlets have none.
+- **What that comes to**: a `Walled city` of 100 by 92 fits about 24 buildings, 11% indoors, where it asks for 38. It's meant to
+  stop there: the real range is 10% to 25%, and crowds need the room.
 - **A wall has 2 tiles of open ground along its inside** that no plot takes, for a crowd to get round.
 
 **Drop rather than break.** If something doesn't fit, it's left out: a yard before its building, a building before its town, a
