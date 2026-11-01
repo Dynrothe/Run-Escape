@@ -16,7 +16,7 @@ import { Point, smoothPath } from "./paths";
 import { RoadLine, gradeRoads } from "./roadGrades";
 import { ROAD_STEEPEST } from "./roads";
 import { GeneratorSettings } from "./settings";
-import { getTileSlope, limitNorthFaces } from "./terrain";
+import { getTileSlope, limitFaces, limitNorthFaces } from "./terrain";
 
 // What the land's shape comes to: passes through it, what can be walked, rock and caves.
 
@@ -37,6 +37,10 @@ const PASSES_A_SQUARE = 4;
 // north from high up, at 70 degrees, which is 45 units a tile: anything steeper hides
 // the ground at its foot. This leaves a margin for the top of the screen.
 const NORTH_FACE_SLOPE = 30;
+
+// How steep any face can be, in height units a tile. 99.96% of the real world's tiles are 80
+// or under, and past that a tile stretches one row of triangles across the screen.
+const STEEPEST_FACE = 72;
 
 // Snow starts this high, with the setting at its least and its most
 const SNOW_LINE_HIGH = 235;
@@ -348,6 +352,8 @@ export function finishHeights(build: Build): void {
     }
     const fixed = Uint8Array.from(heldCorners);
     terrain.markPinned(fixed);
+    limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
+    limitFaces(terrain.height, corners.x, corners.y, STEEPEST_FACE, fixed);
     limitNorthFaces(terrain.height, corners.x, corners.y, NORTH_FACE_SLOPE, fixed);
     terrain.write((x, y, height) => ground.setHeight(x, y, height));
 }

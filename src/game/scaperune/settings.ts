@@ -391,7 +391,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     ridgeScale: 44,
     ruggedness: 0.5,
     warp: 0.5,
-    terraces: 0.5,
+    terraces: 0.75,
     terraceHeight: 30,
     walkSlope: 12,
     rockFaces: 1,

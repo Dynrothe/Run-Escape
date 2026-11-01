@@ -100,6 +100,25 @@ export function limitSlope(
     }
 }
 
+// Takes the tops off a field until nothing's steeper than slope a tile, in any direction. Corners
+// held stay put, though what's next to them is held to them.
+export function limitFaces(
+    field: Float32Array,
+    cornersX: number,
+    cornersY: number,
+    slope: number,
+    held: Uint8Array,
+): void {
+    const pass = (at: number, from: number, distance: number) => {
+        if (!held[at]) {
+            field[at] = Math.min(field[at], field[from] + slope * distance);
+        }
+    };
+    for (let round = 0; round < 3; round++) {
+        sweep(cornersX, cornersY, pass);
+    }
+}
+
 // Fills the unset corners of a field (Infinity) with the value of the nearest set one
 export function spreadNearest(field: Float32Array, cornersX: number, cornersY: number): void {
     const distances = new Float32Array(field.length).fill(Infinity);
