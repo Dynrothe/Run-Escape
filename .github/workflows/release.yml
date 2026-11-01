@@ -1,0 +1,156 @@
+# Builds the Windows desktop release when package.json's version has no release yet, and leaves it
+# as a draft: Dynny publishes it by hand, and only then do players get it. See Desktop in
+# docs/DEVELOPMENT.md.
+name: Release
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        permissions:
+            # A token that can only read doesn't see draft releases. Nothing from npm runs here.
+            contents: write
+        outputs:
+            version: ${{ steps.release.outputs.version }}
+            build: ${{ steps.release.outputs.build }}
+            draft: ${{ steps.release.outputs.draft }}
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+
+            - name: Stop unless this version is new
+              id: release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  EVENT: ${{ github.event_name }}
+              run: |
+                  version=$(node -p "require('./package.json').version")
+                  state=$(gh release list --limit 1000 --json tagName,isDraft --jq "
+                      map(select(.tagName == \"v$version\")) | first |
+                      if . == null then \"none\" elif .isDraft then \"draft\" else \"published\" end")
+                  echo "v$version: $state"
+
+                  # An unpublished draft is left alone by merges. Running this by hand rebuilds it.
+                  build=true
+                  if [ "$state" = published ] || { [ "$state" = draft ] && [ "$EVENT" != workflow_dispatch ]; }; then
+                      build=false
+                  fi
+
+                  {
+                      echo "version=$version"
+                      echo "build=$build"
+                      echo "draft=$([ "$state" = draft ] && echo true || echo false)"
+                  } >> "$GITHUB_OUTPUT"
+
+    build:
+        needs: check
+        if: needs.check.outputs.build == 'true'
+        runs-on: windows-latest
+        timeout-minutes: 60
+        permissions:
+            contents: read
+        defaults:
+            run:
+                shell: bash
+        steps:
+            # Windows checkouts default to CRLF, which the game's shaders and tests aren't written for
+            - run: git config --global core.autocrlf false
+
+            - uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+
+            # Electron needs 22.12 or later, which is more than package.json's engines asks for
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - run: npm ci
+
+            - name: Find the game's cache
+              id: game-cache
+              run: |
+                  name=$(sed -n 's/.*GAME_CACHE_NAME = "\([^"]*\)".*/\1/p' src/game/cache.ts)
+                  test -n "$name"
+                  echo "name=$name" >> "$GITHUB_OUTPUT"
+
+            - uses: actions/cache/restore@v6
+              id: restore-cache
+              with:
+                  path: caches
+                  key: osrs-cache-${{ steps.game-cache.outputs.name }}
+
+            - name: Download the game's cache
+              if: steps.restore-cache.outputs.cache-hit != 'true'
+              env:
+                  CACHE_NAME: ${{ steps.game-cache.outputs.name }}
+              run: |
+                  npm run download-caches
+                  test -f "caches/$CACHE_NAME/main_file_cache.dat2"
+                  test -f caches/caches.json
+
+            # Saved straight away, so a failure further on doesn't mean fetching it from OpenRS2 again
+            - uses: actions/cache/save@v6
+              if: steps.restore-cache.outputs.cache-hit != 'true'
+              with:
+                  path: caches
+                  key: osrs-cache-${{ steps.game-cache.outputs.name }}
+
+            - run: npm test
+            - run: npm run build
+            - run: npm run slim-cache
+            - run: npm run desktop:dist
+
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: desktop-release
+                  path: |
+                      release/Run-Escape-*-win-x64.zip
+                      release/game-*.zip
+                      release/game-manifest.json
+                      release/notes.md
+                  if-no-files-found: error
+                  retention-days: 1
+                  compression-level: 0
+
+    # Apart from the build, so the token that can write to releases never runs npm packages
+    publish:
+        needs: [check, build]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/download-artifact@v8
+              with:
+                  name: desktop-release
+                  path: release
+
+            - name: Create the draft release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  VERSION: ${{ needs.check.outputs.version }}
+                  DRAFT_EXISTS: ${{ needs.check.outputs.draft }}
+              run: |
+                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/game-manifest.json)
+                  if [ "$DRAFT_EXISTS" = true ]; then
+                      gh release upload "v$VERSION" "${files[@]}" --clobber
+                      gh release edit "v$VERSION" --notes-file release/notes.md --target "$GITHUB_SHA"
+                  else
+                      gh release create "v$VERSION" "${files[@]}" --draft \
+                          --title "Run Escape $VERSION" --notes-file release/notes.md \
+                          --target "$GITHUB_SHA"
+                  fi

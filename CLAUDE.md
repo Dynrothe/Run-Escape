@@ -20,6 +20,9 @@ go stale. Add anything that cost you time to work out.
 | Looking for                                           | Go to                                    |
 | ----------------------------------------------------- | ---------------------------------------- |
 | How the code is laid out, scripts, URL flags, hosting | `docs/DEVELOPMENT.md`                    |
+| The Windows app, its game updates, releases           | `docs/DEVELOPMENT.md`, Desktop           |
+| The app's main process and update code                | `desktop/`                               |
+| The release workflow                                  | `.github/workflows/release.yml`          |
 | What's in the game, map by map                        | `docs/GAMEPLAY.md`                       |
 | Getting it running, controls, cache version           | `README.md`                              |
 | What changed in each version                          | `CHANGELOG.md`                           |
@@ -61,6 +64,8 @@ npx tsc --noEmit -p .      # type check
 npx prettier --write <files>
 npm run build && npm run slim-cache    # build for hosting (only when deploying)
 npm run serve              # serve the build, co-op's relay too (serve:singleplayer without)
+npm run desktop            # the Windows app, on that build
+npm run desktop:dist       # the app's zip, game zip and manifest, into release/
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.
@@ -164,3 +169,8 @@ npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or chan
   each co-op player). Anything a hero leaves behind (a projectile, a thrall) keeps a `hero` index.
   A solo run must play exactly as before; co-op's tests are in `core/coop.test.ts`.
 - **Licence**: the cache belongs to Jagex and stays out of the repository.
+- **The desktop app's address**: `GAME_ORIGIN`, the user data folder's name and `GAME_PARTITION` are
+  where its players' saves are, so never change them. It can't use a custom scheme: the Cache API
+  refuses one (see Desktop in `docs/DEVELOPMENT.md`).
+- **`minLauncher`**: raise `LAUNCHER_VERSION` in `desktop/version.ts` only if the game can't run on
+  launchers already out there. It makes every player download a new zip by hand.

@@ -121,7 +121,8 @@ async function downloadCaches(count, onlyName) {
         }
     }
 
-    if (totalBytes > 0) {
+    // Without a terminal (a CI run) nobody can answer, and the script would just stop here
+    if (totalBytes > 0 && process.stdin.isTTY) {
         await askQuestion("Downloading ~" + formatBytes(totalBytes) + ". Press enter to continue.");
     }
 

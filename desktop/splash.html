@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+        />
+        <title>Run Escape</title>
+        <style>
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+                overflow: hidden;
+            }
+            body {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 10px;
+                box-sizing: border-box;
+                padding: 16px 20px;
+                background: #2b2319;
+                color: #ffcf3f;
+                font:
+                    15px "Segoe UI",
+                    system-ui,
+                    sans-serif;
+                user-select: none;
+            }
+            #bar {
+                height: 10px;
+                background: #14100a;
+                border: 1px solid #6b5a3e;
+                visibility: hidden;
+            }
+            #fill {
+                height: 100%;
+                width: 0;
+                background: #b5892e;
+            }
+            button {
+                align-self: flex-end;
+                padding: 3px 12px;
+                background: #4a3c28;
+                color: #ffcf3f;
+                border: 1px solid #6b5a3e;
+                font: inherit;
+                cursor: pointer;
+                visibility: hidden;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="status">Starting...</div>
+        <div id="bar"><div id="fill"></div></div>
+        <button id="skip" onclick="window.close()">Skip for now</button>
+        <script>
+            // Called from the main process. Closing this window cancels the update.
+            function showStatus(text, fraction, canSkip) {
+                document.getElementById("status").textContent = text;
+                const bar = document.getElementById("bar");
+                bar.style.visibility = fraction === undefined ? "hidden" : "visible";
+                document.getElementById("fill").style.width = `${(fraction ?? 0) * 100}%`;
+                document.getElementById("skip").style.visibility = canSkip ? "visible" : "hidden";
+            }
+        </script>
+    </body>
+</html>

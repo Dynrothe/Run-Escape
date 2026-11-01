@@ -2,7 +2,10 @@
     "name": "run-escape",
     "version": "0.20.0",
     "private": true,
+    "description": "A Vampire Survivors style fan game in the Old School RuneScape world",
+    "author": "Dynrothe",
     "type": "module",
+    "main": "desktop/out/main.cjs",
     "engines": {
         "node": ">=20"
     },
@@ -43,7 +46,10 @@
         "download-caches": "node scripts/download-caches.cjs",
         "export-textures": "npx tsx scripts/cache/export-textures.ts",
         "export-height-map": "npx tsx scripts/cache/export-height-map.ts",
-        "slim-cache": "npx tsx scripts/cache/slim-cache.ts"
+        "slim-cache": "npx tsx scripts/cache/slim-cache.ts",
+        "desktop:main": "esbuild desktop/main.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=desktop/out/main.cjs --log-level=warning",
+        "desktop": "npm run desktop:main && electron .",
+        "desktop:dist": "npm run desktop:main && npx tsx desktop/release-files.ts && electron-builder --config desktop/electron-builder.yml --win --publish never"
     },
     "browserslist": {
         "production": [
@@ -74,6 +80,9 @@
         "@vitejs/plugin-react": "^4.7.0",
         "@webgpu/types": "^0.1.70",
         "adm-zip": "^0.5.17",
+        "electron": "^45.2.1",
+        "electron-builder": "^26.18.0",
+        "esbuild": "^0.28.2",
         "jsdom": "^25.0.1",
         "prettier": "^3.8.4",
         "sharp": "^0.35.1",
