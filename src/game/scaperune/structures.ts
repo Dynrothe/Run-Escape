@@ -18,8 +18,8 @@ import { fitsBuilding, getPlotHeight, markOffLimits, pinPlot, putFence } from ".
 
 // What a place is known for: one big thing, or a few that belong together, standing on a plot
 // as a building does, because a big loc on a slope shows its underside. Then what only makes
-// sense on a map that's otherwise done: wrecks and drowned towns in the water, town walls and
-// stones along the roads. Biomes say which pieces they have (biomes.ts).
+// sense on a map that's otherwise done: wrecks and drowned towns in the water, and stones along
+// the roads. Biomes say which pieces they have (biomes.ts).
 
 // [loc id, tiles across, tiles deep]
 export type PieceLoc = [number, number, number];

@@ -239,10 +239,17 @@ describe("generateMap", () => {
         const a = generateMap(before, context);
         const b = generateMap(after, context);
         const sameSize = a.sizeX === b.sizeX && a.sizeY === b.sizeY;
+        // Terrain in a square of it, and locs all over: a few things can be anywhere on a map
+        const sameLocs =
+            a.locs.length === b.locs.length &&
+            a.locs.every((loc, i) => {
+                const { id, x, y, rotation } = b.locs[i];
+                return loc.id === id && loc.x === x && loc.y === y && loc.rotation === rotation;
+            });
         const sameMap =
             sameSize &&
             writeTerrain(a, 64, 64).join() === writeTerrain(b, 64, 64).join() &&
-            writeLocs(a, 64, 64).join() === writeLocs(b, 64, 64).join();
+            sameLocs;
         expect(sameMap).toBe(false);
     });
 
