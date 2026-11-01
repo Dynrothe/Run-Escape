@@ -60,11 +60,19 @@ if (isCoarsePointer) {
     clickSharedTaps();
 }
 
+// Opened from the home screen, public/manifest.webmanifest has already done this
+const INSTALLED_QUERY = "(display-mode: fullscreen), (display-mode: standalone)";
+
 // Full screen and held sideways where the browser allows it (Android's does,
 // an iPhone's doesn't). Has to be called from a tap.
 export function enterFullscreen(): void {
     const page = document.documentElement;
-    if (!isCoarsePointer || document.fullscreenElement || !page.requestFullscreen) {
+    if (
+        !isCoarsePointer ||
+        document.fullscreenElement ||
+        !page.requestFullscreen ||
+        window.matchMedia(INSTALLED_QUERY).matches
+    ) {
         return;
     }
     page.requestFullscreen({ navigationUI: "hide" })

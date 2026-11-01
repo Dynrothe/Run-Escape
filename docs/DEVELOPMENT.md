@@ -538,6 +538,12 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
 - A touch screen also gets a pixel ratio capped at 1.5, 2 workers instead of 4, and a closer camera
   on a phone.
+- `public/manifest.webmanifest` lets a browser install the game to the home screen (HTTPS only,
+  apart from localhost), opening full screen and sideways. `enterFullscreen` leaves an installed
+  game alone. iOS ignores `orientation`, so an iPhone still gets the rotate notice, and it can give
+  an installed game its own storage, without the saves or cache from Safari. There's no service
+  worker, so it still needs a connection. The icons in `public/icons/` are whole multiples of
+  `favicon.png`, to keep its pixels square.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.

@@ -79,7 +79,8 @@ pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** paus
 mouse wheel zooms.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
-use your items, and everything else is a tap.
+use your items, and everything else is a tap. To open it full screen from its own icon, pick Add to
+Home Screen or Install app in your browser's menu.
 
 ### Tests and tools
 

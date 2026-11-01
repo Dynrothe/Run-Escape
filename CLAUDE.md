@@ -37,6 +37,7 @@ go stale. Add anything that cost you time to work out.
 | Run flow, camera, input, the HUD's data               | `src/game/client/GameClient.ts`          |
 | 3D actors, swooshes, hitsplats                        | `src/game/client/GameView.ts`            |
 | Touch screens: the stick, its buttons, phone layouts  | `docs/DEVELOPMENT.md`, Touch screens     |
+| The game on a phone's home screen (PWA)               | `docs/DEVELOPMENT.md`, Touch screens     |
 | React screens and the HUD                             | `src/game/ui/GameUi.tsx`                 |
 | Weapon stat lines on cards, pause and tooltips        | `src/game/content/weaponStats.ts`        |
 | How the player stands and runs with each weapon       | `src/game/content/stances.ts`            |
