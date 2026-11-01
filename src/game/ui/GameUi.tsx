@@ -29,6 +29,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { CAMPAIGN_MAPS, DEV_MAPS, FUN_MAPS, MAPS, SEASONAL_MAPS, getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
+import { COLLECTION_LOG_OBJ, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine } from "../content/weaponStats";
@@ -424,6 +425,34 @@ function SettingsPanel({
     );
 }
 
+// A smaller way in, under the play buttons: an item, or a sprite on its own
+function TitleTile({
+    name,
+    objId = -1,
+    spriteId,
+    onClick,
+}: {
+    name: string;
+    objId?: number;
+    spriteId?: number;
+    onClick: () => void;
+}): JSX.Element {
+    return (
+        <button className="ui-card ui-title-tile" onClick={onClick}>
+            <ItemIcon objId={objId} spriteId={spriteId} />
+            {name}
+        </button>
+    );
+}
+
+function TitleStat({ name, value }: { name: string; value: string | number }): JSX.Element {
+    return (
+        <span className="ui-title-stat">
+            {name} <span className="ui-title-stat-value">{value}</span>
+        </span>
+    );
+}
+
 function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     const save = ui.save;
     const [changelogOpen, setChangelogOpen] = useState(false);
@@ -458,7 +487,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                     setChangelogOpen(false);
                     setSettingsOpen(false);
                 }
-            } else if (e.code === "Enter" || e.code === "Space") {
+            } else if (
+                e.code === "Space" ||
+                // Enter on something focused from the keyboard is for that instead
+                (e.code === "Enter" && !(e.target as HTMLElement).closest("button, a"))
+            ) {
                 client.showScreen("characters");
             }
         };
@@ -490,60 +523,53 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
             </div>
             <div className="ui-title-bottom">
                 <div className="ui-panel rs-border rs-background ui-title-menu">
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => {
-                            enterFullscreen();
-                            client.showScreen("characters");
-                        }}
-                    >
-                        Singleplayer
-                    </button>
-                    {ui.coop.available && (
+                    <div className="ui-title-play">
                         <button
                             className="ui-button ui-button-big"
-                            onClick={() => client.openCoop()}
+                            onClick={() => {
+                                enterFullscreen();
+                                client.showScreen("characters");
+                            }}
                         >
-                            Multiplayer
+                            Singleplayer
                         </button>
-                    )}
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => client.showScreen("shop")}
-                    >
-                        Skills
-                    </button>
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => client.showScreen("armoury")}
-                    >
-                        Armoury
-                    </button>
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => client.showScreen("quests")}
-                    >
-                        Quests
-                    </button>
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => client.showScreen("collectionLog")}
-                    >
-                        Collection log
-                    </button>
-                    <button
-                        className="ui-button ui-button-big"
-                        onClick={() => setSettingsOpen(true)}
-                    >
-                        Settings
-                    </button>
-                    {import.meta.env.DEV && <MapGeneratorButton client={client} />}
+                        {ui.coop.available && (
+                            <button
+                                className="ui-button ui-button-big"
+                                onClick={() => client.openCoop()}
+                            >
+                                Multiplayer
+                            </button>
+                        )}
+                    </div>
+                    <div className="ui-title-tiles">
+                        <TitleTile
+                            name="Skills"
+                            spriteId={TITLE_TAB_SPRITES.skills}
+                            onClick={() => client.showScreen("shop")}
+                        />
+                        <TitleTile
+                            name="Armoury"
+                            spriteId={TITLE_TAB_SPRITES.armoury}
+                            onClick={() => client.showScreen("armoury")}
+                        />
+                        <TitleTile
+                            name="Quests"
+                            spriteId={TITLE_TAB_SPRITES.quests}
+                            onClick={() => client.showScreen("quests")}
+                        />
+                        <TitleTile
+                            name="Collection log"
+                            objId={COLLECTION_LOG_OBJ}
+                            onClick={() => client.showScreen("collectionLog")}
+                        />
+                    </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
-                        <div>
-                            Runs {save.runs} · Wins {save.victories} · Best{" "}
-                            {formatTime(save.bestSeconds)} · Best level {save.bestLevel}
-                        </div>
+                        <TitleStat name="Runs" value={save.runs} />
+                        <TitleStat name="Wins" value={save.victories} />
+                        <TitleStat name="Best" value={formatTime(save.bestSeconds)} />
+                        <TitleStat name="Best level" value={save.bestLevel} />
                     </div>
                 </div>
                 <div className="ui-hint">
@@ -552,13 +578,22 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         : "WASD to move · weapons fire on their own · Esc to pause · M to mute"}
                 </div>
             </div>
-            <div className="ui-title-links">
+            <div className="ui-title-utils">
+                {import.meta.env.DEV && <MapGeneratorButton client={client} />}
+                <button className="ui-version" onClick={() => setChangelogOpen(true)}>
+                    v{GAME_VERSION} · What's new
+                </button>
+                <button
+                    className="ui-title-link ui-title-settings"
+                    title="Settings"
+                    aria-label="Settings"
+                    onClick={() => setSettingsOpen(true)}
+                >
+                    <ItemIcon objId={-1} spriteId={TITLE_TAB_SPRITES.settings} />
+                </button>
                 <DiscordLink />
                 <GitHubLink />
             </div>
-            <button className="ui-version" onClick={() => setChangelogOpen(true)}>
-                v{GAME_VERSION} · What's new
-            </button>
             {notice && <NoticePanel notice={notice} onClose={closeNotice} />}
         </div>
     );

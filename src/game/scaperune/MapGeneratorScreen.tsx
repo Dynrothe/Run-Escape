@@ -367,7 +367,11 @@ export function MapGeneratorButton({ client }: { client: GameClient }): JSX.Elem
     const title = button.current?.closest(".ui-title");
     return (
         <>
-            <button ref={button} className="ui-button ui-button-big" onClick={() => setOpen(true)}>
+            <button
+                ref={button}
+                className="ui-button ui-button-small"
+                onClick={() => setOpen(true)}
+            >
                 Map generator
             </button>
             {open &&

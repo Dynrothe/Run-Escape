@@ -38,6 +38,7 @@ import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
+import { COLLECTION_LOG_OBJ, TITLE_TAB_SPRITES } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
 import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
@@ -159,6 +160,7 @@ function getWornObjs(): [EquipSlot, number][] {
 // their icons
 function getContentObjIds(): number[] {
     const ids = new Set<number>([
+        COLLECTION_LOG_OBJ,
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
     ]);
@@ -262,9 +264,11 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
     }
 
     await load(new SoundLoader(), { ids: getGameSoundIds() });
-    // The hitsplats, and the passives with an interface sprite for an icon
+    // The hitsplats, the title screen's tabs, and the passives with an interface
+    // sprite for an icon
     const spriteIds = [
         ...Object.values(HITSPLAT_SPRITES),
+        ...Object.values(TITLE_TAB_SPRITES),
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
