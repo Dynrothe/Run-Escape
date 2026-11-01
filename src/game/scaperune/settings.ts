@@ -61,7 +61,7 @@ export type GeneratorSettings = {
     terraceHeight: number;
     // The steepest ground you can walk on, in height units a tile. 16 is 45 degrees.
     walkSlope: number;
-    // How many boulders stand along the edges of cliffs
+    // How much of the rock on cliffs gets heaps and facets
     rockFaces: number;
     // Rock lying about on the mountains
     rubble: number;
@@ -224,7 +224,7 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
         when: (s) => hasMountains(s) && s.terraces > 0,
     }),
     walkSlope: number("Steepest walkable slope", 8, 16, 1),
-    rockFaces: share("Boulders on cliffs", { when: hasRock }),
+    rockFaces: share("Rock on cliffs", { when: hasRock }),
     rubble: share("Rubble", { when: hasRock }),
     snow: share("Snow", { when: hasRock }),
     passWidth: number("Pass width", 3, 12, 1, { when: hasRock }),

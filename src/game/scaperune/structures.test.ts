@@ -93,7 +93,7 @@ describe("biomes", () => {
             expect(SET_PIECES[name], name).toBeDefined();
         }
         expect(BRIDGES[biome.bridge]).toBeDefined();
-        expect(biome.rock.boulders.length).toBeGreaterThan(0);
+        expect(biome.rock.pebbles.length).toBeGreaterThan(0);
         expect(biome.ruins ?? biome.buildings).not.toEqual([]);
     });
 

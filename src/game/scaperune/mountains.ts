@@ -1,3 +1,5 @@
+import { SNOW_ROCK } from "./biomes";
+import { dressRock, paintRockFloor } from "./dress";
 import { TILE_BLOCKED, TILE_BRIDGE } from "./format";
 import {
     Build,
@@ -41,11 +43,12 @@ const SNOW_LINE_HIGH = 235;
 
 const SNOW_LINE_LOW = 110;
 
-// How much steeper than walkable a tile is before it gets a rock face
-const FACE_SLOPE = 2;
+// A cliff's waterfall stands on this many tiles a side
+const FALL_TILES = 3;
 
-// Of the tiles at a cliff's edge, the share that get a boulder: they're wider than a tile
-const BOULDER_SHARE = 0.34;
+const ROCK_SEED = 202;
+
+const SNOW_SEED = 203;
 
 const CAVES_A_SQUARE = 1.5;
 
@@ -235,13 +238,10 @@ export function paintLava(build: Build): void {
     ground.paintField(field, (x, y) => biomeAt(x, y).rock.lava, true);
 }
 
-// The rock on everything too steep to walk, and rock faces over the steepest. It's painted
-// after the roads, and goes round them.
-export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
-    const { ground, settings, sizeX, sizeY, corners, cliffs, biomeAt, terrain } = build;
-    if (!hasRelief(settings)) {
-        return new Uint8Array(sizeX * sizeY);
-    }
+// Which tiles are rock, and which are the same under snow: everything too steep to walk,
+// less what's skipped
+function findRockTiles(build: Build, skip: Uint8Array): { rock: Uint8Array; snowy: Uint8Array } {
+    const { ground, settings, sizeX, sizeY, corners, cliffs, terrain } = build;
     const { heights, flags } = ground.level0;
     const snowLine = getSnowLine(settings);
     const rock = new Uint8Array(sizeX * sizeY);
@@ -259,39 +259,44 @@ export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
             }
         }
     }
-    ground.paintOverlay(rock, (x, y) => biomeAt(x, y).rock.overlay, false, skip);
+    return { rock, snowy };
+}
 
-    const roll = createRng(settings.seed + 200);
-    const faced = new Uint8Array(sizeX * sizeY);
-    for (let y = 1; y < sizeY - 1; y++) {
-        for (let x = 1; x < sizeX - 1; x++) {
-            const i = x + y * sizeX;
-            const slope = getTileSlope(heights, corners.x, x, y);
-            faced[i] = (rock[i] || snowy[i]) && slope >= settings.walkSlope + FACE_SLOPE ? 1 : 0;
-        }
+// Rock's colour on everything too steep to walk. It's painted after the roads, and goes
+// round them.
+export function paintRock(build: Build, skip: Uint8Array): Uint8Array {
+    const { ground, settings, sizeX, sizeY, biomeAt } = build;
+    if (!hasRelief(settings)) {
+        return new Uint8Array(sizeX * sizeY);
     }
-    for (let y = 1; y < sizeY - 1; y++) {
-        for (let x = 1; x < sizeX - 1; x++) {
-            const i = x + y * sizeX;
-            if (!faced[i] || roll() >= settings.rockFaces) {
-                continue;
-            }
-            const inner = faced[i - 1] && faced[i + 1] && faced[i - sizeX] && faced[i + sizeX];
-            if (inner || roll() >= BOULDER_SHARE) {
-                continue;
-            }
-            const { boulders } = biomeAt(x, y).rock;
-            ground.grid.locs.push({
-                id: boulders[Math.floor(roll() * boulders.length)],
-                type: LOC_NORMAL,
-                rotation: Math.floor(roll() * 4),
-                level: 0,
-                x,
-                y,
-            });
-        }
-    }
+    const { rock } = findRockTiles(build, skip);
+    paintRockFloor(ground, rock, (x, y) => biomeAt(x, y).rock.overlay, skip);
     return rock;
+}
+
+// What's on the rock, and on the snow over it, once everything that stands on a cliff has
+// taken its tiles out of the mask
+export function dressCliffs(
+    build: Build,
+    rock: Uint8Array,
+    skip: Uint8Array,
+    falls: Point[],
+): void {
+    const { ground, settings, sizeX, biomeAt } = build;
+    if (!hasRelief(settings)) {
+        return;
+    }
+    const { snowy } = findRockTiles(build, skip);
+    for (const { x, y } of falls) {
+        for (let ty = y; ty < y + FALL_TILES; ty++) {
+            rock.fill(0, x + ty * sizeX, x + FALL_TILES + ty * sizeX);
+            snowy.fill(0, x + ty * sizeX, x + FALL_TILES + ty * sizeX);
+        }
+    }
+    const share = settings.rockFaces;
+    const kitAt = (x: number, y: number) => biomeAt(x, y).rock;
+    dressRock(ground, rock, { kitAt, seed: settings.seed + ROCK_SEED, share });
+    dressRock(ground, snowy, { kitAt: () => SNOW_ROCK, seed: settings.seed + SNOW_SEED, share });
 }
 
 // Cave mouths, for looks: in the foot of a cliff that faces the camera

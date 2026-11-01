@@ -22,10 +22,12 @@ export type RockDef = {
     // Underlay on the mountains, and overlay on what's too steep to walk
     ground: number;
     overlay: number;
-    // Big round boulders along the edge of a cliff: one tile each, but they stand over two
-    // or three, so that a line of them's a rock wall
-    boulders: number[];
-    // Heaps of rock, [loc id, tiles a side], that block
+    // Small stones on rock's own tiles (loc type 22)
+    pebbles: number[];
+    // A full tile of contoured rock, turned at random, as a carpet over what's near a face.
+    // Only on a dark overlay of their own: on anything else they read as shards.
+    facets?: number[];
+    // Low heaps of rock, [loc id, tiles a side], that block
     rubble: [number, number][];
     // Stones on the ground (loc type 22)
     stones: number[];
@@ -87,8 +89,14 @@ const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
 const SNOW = 58;
 
-// One tile of plain rock, until cliffs get kits of their own
-const BOULDERS = [5605];
+// What's on cliffs above the snow line, whatever the biome
+export const SNOW_ROCK: Pick<RockDef, "pebbles" | "rubble"> = {
+    pebbles: [559, 560, 561],
+    rubble: [
+        [11922, 2],
+        [11434, 2],
+    ],
+};
 
 function rock(def: Omit<RockDef, "snowGround" | "lava">): RockDef {
     return { ...def, snowGround: SNOW, lava: LAVA };
@@ -137,10 +145,11 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34781,
         rock: rock({
             ground: 92,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 83,
+            pebbles: [3709, 3703, 3706, 3702],
             rubble: [
                 [11434, 2],
+                [11435, 2],
                 [3718, 2],
             ],
             stones: [3614, 11439],
@@ -190,10 +199,11 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 68,
             overlay: 26,
-            boulders: [11386, 11387, 11105, 11106],
+            pebbles: [330, 729, 10845, 331],
             rubble: [
                 [18894, 2],
                 [18893, 2],
+                [51792, 2],
             ],
             stones: [321, 3171],
             cave: 30180,
@@ -233,11 +243,12 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34796,
         rock: rock({
             ground: 94,
-            overlay: 32,
-            boulders: BOULDERS,
+            overlay: 102,
+            pebbles: [5328, 5204, 5327, 5205],
             rubble: [
-                [11933, 2],
+                [3718, 2],
                 [4605, 2],
+                [11933, 2],
             ],
             stones: [185, 3703],
             cave: 17209,
@@ -282,8 +293,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             // Near the snow's own, as a dark rock bleeds a long way into white
             ground: 16,
-            overlay: 20,
-            boulders: [33220, 60404, 60405, 33215, 33216],
+            overlay: 3,
+            pebbles: [11439, 336, 11438, 559],
             rubble: [
                 [11922, 2],
                 [11434, 2],
@@ -330,11 +341,11 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 2975,
         rock: rock({
             ground: 97,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 83,
+            pebbles: [4340, 3709, 16823, 4341],
             rubble: [
-                [11434, 2],
                 [3718, 2],
+                [11434, 2],
             ],
             stones: [315, 320],
             cave: 2123,
@@ -383,7 +394,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         rock: rock({
             ground: 223,
             overlay: 26,
-            boulders: [11386, 11387],
+            pebbles: [51814, 729, 51815],
             rubble: [
                 [51790, 2],
                 [51792, 2],
@@ -427,8 +438,9 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34797,
         rock: rock({
             ground: 148,
-            overlay: 32,
-            boulders: BOULDERS,
+            overlay: 115,
+            pebbles: [34413, 34414, 34416, 20743],
+            facets: [34384, 34385, 34387, 34391, 34392],
             rubble: [
                 [14461, 2],
                 [11933, 2],
@@ -470,11 +482,11 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34781,
         rock: rock({
             ground: 92,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 14,
+            pebbles: [339, 338, 31777, 31778],
             rubble: [
-                [18894, 2],
-                [51792, 2],
+                [55129, 2],
+                [55130, 2],
             ],
             stones: [3614, 11439],
             cave: 2123,
@@ -516,8 +528,9 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 404,
         rock: rock({
             ground: 94,
-            overlay: 32,
-            boulders: BOULDERS,
+            overlay: 99,
+            pebbles: [336, 14483, 14482, 14486],
+            facets: [42352, 42353],
             rubble: [
                 [11933, 2],
                 [4605, 2],
@@ -561,8 +574,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 36492,
         rock: rock({
             ground: 92,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 3,
+            pebbles: [11439, 336, 11438],
             rubble: [
                 [3894, 2],
                 [3895, 2],
@@ -605,8 +618,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 12006,
         rock: rock({
             ground: 144,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 83,
+            pebbles: [3709, 3703],
             rubble: [
                 [3894, 2],
                 [3895, 2],
@@ -652,8 +665,9 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 34796,
         rock: rock({
             ground: 241,
-            overlay: 32,
-            boulders: BOULDERS,
+            overlay: 99,
+            pebbles: [61098, 61100],
+            facets: [42352, 42353],
             rubble: [
                 [60918, 2],
                 [60927, 2],
@@ -697,8 +711,8 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         marker: 36492,
         rock: rock({
             ground: 55,
-            overlay: 20,
-            boulders: BOULDERS,
+            overlay: 2,
+            pebbles: [336, 14483, 14482],
             rubble: [
                 [3894, 2],
                 [3895, 2],

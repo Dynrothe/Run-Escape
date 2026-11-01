@@ -1,5 +1,5 @@
 import { Ground } from "./Ground";
-import { BIOMES, CLIFF_FALL, WATERFALL } from "./biomes";
+import { BIOMES, CLIFF_FALL, SNOW_ROCK, WATERFALL } from "./biomes";
 import { TileGrid } from "./format";
 import { rotatePrefab } from "./prefab";
 import { BRIDGES, PREFABS, loadPrefab } from "./prefabs";
@@ -37,6 +37,13 @@ function build(context: BuildContext): TileGrid {
     const rows = Math.ceil(defs.length / 8);
     ground.place({ id: WATERFALL, type: 10, rotation: 0, level: 0, x: 2, y: PLOT * rows }, 3, 2);
     ground.place({ id: CLIFF_FALL, type: 10, rotation: 0, level: 0, x: 8, y: PLOT * rows }, 3, 3);
+    SNOW_ROCK.pebbles.forEach((id, i) => {
+        ground.place({ id, type: 22, rotation: 0, level: 0, x: 24 + i, y: PLOT * rows }, 1, 1);
+    });
+    SNOW_ROCK.rubble.forEach(([id, size], i) => {
+        const x = 30 + i * (size + 1);
+        ground.place({ id, type: 10, rotation: 0, level: 0, x, y: PLOT * rows }, size, size);
+    });
     let y = PLOT * rows + 4;
     for (const biome of Object.values(BIOMES)) {
         let x = 2;
@@ -53,13 +60,13 @@ function build(context: BuildContext): TileGrid {
         ]) {
             put(id, size, 10);
         }
-        for (const id of [...biome.rock.boulders, biome.marker]) {
+        for (const id of [...(biome.rock.facets ?? []), biome.marker]) {
             put(id, 1, 10);
         }
         for (const id of [biome.fence, biome.wall]) {
             put(id, 1, 0);
         }
-        for (const id of [...biome.decor, ...biome.rock.stones]) {
+        for (const id of [...biome.decor, ...biome.rock.stones, ...biome.rock.pebbles]) {
             put(id, 1, 22);
         }
         for (const id of biome.flowers) {

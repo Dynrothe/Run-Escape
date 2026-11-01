@@ -653,29 +653,6 @@ function paintRockFaces(build: Build, skip: Uint8Array, massif: Float32Array): v
     ground.paintField(field, (x, y) => build.biomeAt(x, y).rock.overlay, false, skip);
 }
 
-// Boulders along the foot of the cliffs, on flat ground, where they stand as they should
-function placeEdgeStones(build: Build, massif: Float32Array): void {
-    const { ground, sizeX, sizeY, cliffs, rng } = build;
-    const { flags } = ground.level0;
-    for (let y = 2; y < sizeY - 2; y++) {
-        for (let x = 2; x < sizeX - 2; x++) {
-            const i = ground.tile(x, y);
-            if (flags[i] & TILE_BLOCKED || ground.reserved[i] || !cliffs[i + sizeX]) {
-                continue;
-            }
-            if (rng() < 0.22 && massif[build.terrain.corner(x, y)] < 0.9) {
-                const { boulders } = build.biomeAt(x, y).rock;
-                const id = boulders[Math.floor(rng() * boulders.length)];
-                ground.place(
-                    { id, type: 10, rotation: Math.floor(rng() * 4), level: 0, x, y },
-                    1,
-                    1,
-                );
-            }
-        }
-    }
-}
-
 // A field with a fence round it, crops in rows
 function fencedField(
     build: Build,
@@ -1253,7 +1230,6 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     }
     placeCityWall(build, roadTiles);
     placeWaymarkers(build, roads);
-    placeEdgeStones(build, massif);
     scatter(build, massif);
 
     // Anything you can't get to is only to look at

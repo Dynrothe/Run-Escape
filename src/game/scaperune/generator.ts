@@ -27,6 +27,7 @@ import {
 import {
     blockSteepGround,
     cutPasses,
+    dressCliffs,
     finishHeights,
     getSnowLine,
     paintLava,
@@ -105,6 +106,11 @@ const STONE_CHANCE = 0.12;
 const PROP_CHANCE = 0.006;
 
 const BIOME_FRAY = 0.16;
+
+// Where hills meet the arena's edge: chances a tile gets a heap of rock, or a heap or a stone
+const HILL_RUBBLE = 0.14;
+
+const HILL_STONES = 0.34;
 
 export type { RoadLine };
 
@@ -286,10 +292,22 @@ function scatter(build: Build, water: Uint8Array): void {
             const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006);
             const propChance = settings.props * PROP_CHANCE * bare;
             if (stones && edge + hillWander(x / 14, y / 14) * 8 < 5 && edge > -6) {
-                // Boulders piled along the edge, where the ground gets too steep, in a line
+                // Rock heaped along the edge, where the ground gets too steep, in a line
                 // that wanders so that it doesn't show the arena's edge
-                if (roll < 0.34 && ground.isClear(x, y, 1, 1)) {
-                    place(pick(rng, biome.rock.boulders), 1, LOC_NORMAL, x, y);
+                if (roll < HILL_RUBBLE) {
+                    const [id, size] = pick(rng, biome.rock.rubble);
+                    if (ground.isClear(x, y, size, size)) {
+                        place(id, size, LOC_NORMAL, x, y);
+                    }
+                } else if (roll < HILL_STONES && ground.isClear(x, y, 1, 1)) {
+                    ground.grid.locs.push({
+                        id: pick(rng, biome.rock.stones),
+                        type: LOC_FLOOR_DECORATION,
+                        rotation: Math.floor(rng() * 4),
+                        level: 0,
+                        x,
+                        y,
+                    });
                 }
                 continue;
             }
@@ -582,10 +600,12 @@ export function generateMapDetail(
     for (let i = 0; i < rockSkip.length; i++) {
         rockSkip[i] = waterTiles[i] | roadTiles[i] | ground.footprint[i] | bridgeZone[i];
     }
-    const caves = placeCaves(build, paintRock(build, rockSkip));
+    const rock = paintRock(build, rockSkip);
+    const caves = placeCaves(build, rock);
     paintLava(build);
     placeWaterfalls(build, rivers);
     placeFalls(build, falls);
+    dressCliffs(build, rock, rockSkip, falls);
     placeBoundary(build, roadTiles);
     placeTownWalls(build, walled, roadTiles);
     placeWaymarkers(build, roads);
