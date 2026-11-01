@@ -394,8 +394,9 @@ version and how to run it.
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
   Armoury and unlocked items; the host picks the map and endless, and starts once everyone (the
   host too) is ready, which can be a party of one. The host can open or close the room, kick a
-  player and disband it. A pasted invite link in the code box leaves just its code. Names are
-  lowercase letters only (no spaces), and offensive ones aren't allowed.
+  player and disband it. A pasted invite link in the code box leaves just its code. Everyone
+  gets a readable name to play under, like "Plucky Chinchompa", and rooms get one too, like "Moonlit
+  Crossing". **New name** picks another, any time but during a run.
     - You can only join a room on a map you've unlocked yourself (and its endless, for an endless
       room), and the host can only pick maps everyone in the room has, so nobody skips ahead. A
       server can let anyone in instead (`MULTIPLAYER_ANY_MAP`); then a win opens the map it was

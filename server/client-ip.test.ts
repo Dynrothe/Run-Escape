@@ -1,4 +1,13 @@
-import { addressList, clientAddress, plainAddress, proxyMode, viaProxy } from "./client-ip.mjs";
+import {
+    CLOUDFLARE_IPS_URL,
+    addressList,
+    clientAddress,
+    fetchCloudflareRanges,
+    plainAddress,
+    proxyMode,
+    viaProxy,
+    watchCloudflareRanges,
+} from "./client-ip.mjs";
 
 const PROXIES = addressList(["127.0.0.0/8", "10.0.0.0/8", "::1/128"]);
 const CLOUDFLARE = addressList(["173.245.48.0/20", "2606:4700::/32"]);
@@ -106,5 +115,78 @@ describe("client addresses, with Cloudflare set", () => {
         expect(plainAddress("[2001:db8::7]:443")).toBe("2001:db8::7");
         expect(plainAddress("not an address")).toBeUndefined();
         expect(from("127.0.0.1", { "x-forwarded-for": "garbage" })).toBe("127.0.0.1");
+    });
+});
+
+describe("Cloudflare's addresses", () => {
+    // Cloudflare's API, as it answers
+    const answer = (body: unknown, ok = true) =>
+        (async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as any;
+    const ranges = {
+        success: true,
+        result: { ipv4_cidrs: ["173.245.48.0/20"], ipv6_cidrs: ["2606:4700::/32"] },
+    };
+    // Through Cloudflare, with the list the relay has (not one of the test's)
+    const viaCloudflare = (remoteAddress: string) =>
+        clientAddress(
+            { headers: { "cf-connecting-ip": "198.51.100.7" } },
+            { remoteAddress },
+            "cloudflare",
+        );
+
+    it("come from Cloudflare's API", async () => {
+        let asked = "";
+        const fetchImpl = (async (url: string) => {
+            asked = url;
+            return answer(ranges)();
+        }) as any;
+        expect(await fetchCloudflareRanges(fetchImpl)).toEqual([
+            "173.245.48.0/20",
+            "2606:4700::/32",
+        ]);
+        expect(asked).toBe("https://api.cloudflare.com/client/v4/ips");
+        expect(CLOUDFLARE_IPS_URL).toBe(asked);
+    });
+
+    it("aren't taken from an answer that isn't right", async () => {
+        await expect(fetchCloudflareRanges(answer(ranges, false))).rejects.toThrow(/503/);
+        await expect(fetchCloudflareRanges(answer({ success: false }))).rejects.toThrow();
+        await expect(
+            fetchCloudflareRanges(answer({ success: true, result: { ipv4_cidrs: [] } })),
+        ).rejects.toThrow(/no addresses/);
+    });
+
+    it("are believed once they've come, and kept after a failed fetch", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const failing = watchCloudflareRanges({ fetchImpl: answer({}, false), env: {} });
+        await (failing as any).loaded;
+        failing();
+        expect(viaCloudflare("173.245.48.10")).toBe("173.245.48.10");
+        expect(warn).toHaveBeenCalled();
+
+        const stop = watchCloudflareRanges({ fetchImpl: answer(ranges), env: {} });
+        await (stop as any).loaded;
+        stop();
+        expect(viaCloudflare("173.245.48.10")).toBe("198.51.100.7");
+        // Not from anywhere else
+        expect(viaCloudflare("203.0.113.9")).toBe("203.0.113.9");
+
+        const again = watchCloudflareRanges({ fetchImpl: answer({}, false), env: {} });
+        await (again as any).loaded;
+        again();
+        expect(viaCloudflare("173.245.48.10")).toBe("198.51.100.7");
+        warn.mockRestore();
+    });
+
+    it("aren't fetched when CLOUDFLARE_IPS gives them", () => {
+        let fetched = false;
+        const stop = watchCloudflareRanges({
+            fetchImpl: (async () => {
+                fetched = true;
+            }) as any,
+            env: { CLOUDFLARE_IPS: "173.245.48.0/20" },
+        });
+        stop();
+        expect(fetched).toBe(false);
     });
 });

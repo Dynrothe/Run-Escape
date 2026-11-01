@@ -74,7 +74,7 @@ more browsing the room list) took at most 13% of one core and 64 MB. A small VPS
 serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
-packages, so copy it with `server/names.mjs` (the name rules, which the game uses too) and
+packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from) and
 `server/client-ip.mjs` to the server and run it.
 
 ```
@@ -107,8 +107,11 @@ proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve 
 
 Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
 proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)
-adds proxies elsewhere, and `CLOUDFLARE_IPS` replaces the list of Cloudflare's addresses in
-`server/client-ip.mjs` if it changes.
+adds proxies elsewhere. With `cloudflare`, the relay fetches Cloudflare's addresses from
+`https://api.cloudflare.com/client/v4/ips` when it starts and again each day, so there's no list
+in the code to go out of date. Until the first fetch comes back (or if it fails, which it says and
+then tries again a minute later), players look like Cloudflare to the limits; a failed refresh
+keeps the last list. `CLOUDFLARE_IPS` gives the list instead, and then nothing's fetched.
 
 Its limits, at the top of `server/coop-relay.mjs`:
 
@@ -434,18 +437,20 @@ into any room instead, and a win then opens that map for a player who hadn't got
 accounts, a player's maps are their game's word: this keeps fair players fair rather than stopping
 a cheat.
 
-A name's only one player's at a time: making or joining a room with a name someone in a room already
-has is turned down, and it's free again once they've gone. There are no accounts, so nothing keeps a
-name for anyone. A game that's given a map or adventurer it hasn't got (from a newer or made-up game)
+A game that's given a map or adventurer it hasn't got (from a newer or made-up game)
 leaves the room rather than playing a run it can't, and other players' shop bonuses are kept within
 what the shop sells.
 
-Player names, which the open rooms list shows anyone, are lowercase a-z only and checked against a
-banned list (with digits and symbols standing in for letters read as letters) in
-`server/names.mjs`. The game cleans them as they're typed and won't make or join a room with a
-banned one, and the relay cleans every name it's sent, giving a banned one the default.
+Nobody types a name. The relay gives each player one as they connect (in `welcome`), and each room
+one as it's made, from `server/name-gen.mjs`: two words, like "Plucky Chinchompa" or "Moonlit
+Crossing", from short lists picked so any pair reads fine. That's why there's no list of banned
+words to keep. A name's only one player's (or room's) at a time, and a number goes on the end once
+the pairs it tries are all taken. **New name** (`rename`) asks for another, except during a run,
+when everyone's copy of it has the old one. A name a game sends is ignored, and there are no
+accounts, so a reconnect gets a new name. When adding words, keep them ones that can't make
+something unfortunate next to any word in the other list.
 
-`server/coop-relay.mjs` holds the rooms (code, open or invite only, host, map, members and their
+`server/coop-relay.mjs` holds the rooms (code, name, open or invite only, host, map, members and their
 ready state and loadout) and forwards `up` messages from guests to the host and `down` messages
 from the host to everyone else. The host leaving a run ends it for everyone; in the lobby the
 room goes to the next player. How much bigger the crowd gets for each player is in

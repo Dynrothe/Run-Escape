@@ -15,6 +15,7 @@ export type Unlocks = { maps: string[]; endless: string[] };
 
 export type MemberView = {
     id: string;
+    // Given by the relay (server/name-gen.mjs), not picked
     name: string;
     characterId: string;
     ready: boolean;
@@ -22,12 +23,18 @@ export type MemberView = {
     unlocks?: Unlocks;
 };
 
+// What a player says about themselves: everything but their id and name,
+// which the relay gives
+export type Member = Omit<MemberView, "id" | "name">;
+
 // What a player's missing to play on a room's map: the map (its endless too,
 // for an endless room), and who, when it's someone else
 export type MissingMap = { mapId: string; endless: boolean; who?: string };
 
 export type RoomView = {
     code: string;
+    // Given by the relay when the room's made, like a player's
+    name: string;
     // Listed for anyone to join, or invite only (by its code)
     open: boolean;
     hostId: string;
@@ -41,6 +48,7 @@ export type RoomView = {
 // An open room, as the list of them shows it
 export type RoomListing = {
     code: string;
+    name: string;
     host: string;
     players: number;
     max: number;
@@ -82,11 +90,13 @@ export type ClientMessage =
           open: boolean;
           mapId: string;
           endless: boolean;
-          me: Partial<MemberView>;
+          me: Partial<Member>;
       }
-    | { t: "join"; code: string; me: Partial<MemberView> }
+    | { t: "join"; code: string; me: Partial<Member> }
     | { t: "leave" }
-    | ({ t: "me" } & Partial<Omit<MemberView, "id">>)
+    | ({ t: "me" } & Partial<Member>)
+    // A new name, from the relay (not during a run)
+    | { t: "rename" }
     | { t: "settings"; open?: boolean; mapId?: string; endless?: boolean }
     | { t: "kick"; id: string }
     | { t: "disband" }
@@ -96,8 +106,11 @@ export type ClientMessage =
     | { t: "down"; d: DownMessage };
 
 export type ServerMessage =
-    // anyMap: rooms take players whatever maps they have
-    | { t: "welcome"; id: string; anyMap?: boolean }
+    // name: the one the relay's given this player. anyMap: rooms take players
+    // whatever maps they have.
+    | { t: "welcome"; id: string; name: string; anyMap?: boolean }
+    // This player's new name, after asking for one
+    | { t: "named"; name: string }
     | { t: "pong" }
     // A page of the open rooms, which page it is (the last, if the one asked
     // for has gone), of how many, and how many rooms in all

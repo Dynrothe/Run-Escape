@@ -15,8 +15,8 @@ import { createHash, randomInt } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
-import { clientAddress, proxyMode, viaProxy } from "./client-ip.mjs";
-import { DEFAULT_NAME, playerName } from "./names.mjs";
+import { clientAddress, proxyMode, viaProxy, watchCloudflareRanges } from "./client-ip.mjs";
+import { playerName, roomName } from "./name-gen.mjs";
 
 export const RELAY_PATH = "/coop";
 
@@ -362,9 +362,13 @@ export function createRelay(limits = {}) {
         // Rooms take players without their map (see isAnyMapOn)
         anyMap = isAnyMapOn(),
     } = limits;
+    // Behind Cloudflare, its addresses, fetched from its API
+    const stopCloudflare = proxy === "cloudflare" ? watchCloudflareRanges() : () => {};
     let warnedProxy = false;
     const rooms = new Map();
     const clients = new Set();
+    // Every connected player's name, so no two have the same
+    const playerNames = new Set();
     let nextId = 1;
     // Connections from each address, and when each made its latest rooms
     const connectionsFrom = new Map();
@@ -390,6 +394,7 @@ export function createRelay(limits = {}) {
     function roomView(room) {
         return {
             code: room.code,
+            name: room.name,
             open: room.open,
             hostId: room.hostId,
             mapId: room.mapId,
@@ -418,6 +423,7 @@ export function createRelay(limits = {}) {
         const host = room.members.find((member) => member.id === room.hostId);
         return {
             code: room.code,
+            name: room.name,
             host: host?.name ?? "",
             players: room.members.length,
             max: MAX_PARTY,
@@ -483,23 +489,15 @@ export function createRelay(limits = {}) {
         room.members = [];
     }
 
-    // Someone else in a room already has this name. Names are a player's
-    // own only while they're in a room: no accounts, so nothing's kept.
-    function nameTaken(name, client) {
-        for (const room of rooms.values()) {
-            if (room.members.some((member) => member !== client && member.name === name)) {
-                return true;
-            }
-        }
-        return false;
+    // A name nobody connected has (name-gen.mjs). Names are a player's own
+    // only while they're connected: no accounts, so nothing's kept.
+    function newPlayerName() {
+        return playerName((name) => playerNames.has(name));
     }
 
-    // The name a player's after, or an error if it's taken
-    function checkName(client, message) {
-        const name = message.name !== undefined ? playerName(message.name) : client.name;
-        return nameTaken(name, client)
-            ? `Someone's already using ${name} right now. Pick another name.`
-            : undefined;
+    function newRoomName() {
+        const taken = new Set([...rooms.values()].map((room) => room.name));
+        return roomName((name) => taken.has(name));
     }
 
     // Rooms whose host is at this address
@@ -527,10 +525,9 @@ export function createRelay(limits = {}) {
         return true;
     }
 
+    // What a player's told the room about themselves. Their name isn't theirs
+    // to say: the relay gives it.
     function setMember(client, message) {
-        if (message.name !== undefined) {
-            client.name = playerName(message.name);
-        }
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
         }
@@ -608,11 +605,6 @@ export function createRelay(limits = {}) {
                     error("There are too many rooms from your connection already.");
                     return;
                 }
-                const taken = checkName(client, message.me ?? {});
-                if (taken) {
-                    error(taken);
-                    return;
-                }
                 const hostMissing = missingMap(
                     [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
                     cleanId(message.mapId) || "lumbridge",
@@ -632,6 +624,7 @@ export function createRelay(limits = {}) {
                 client.ready = false;
                 const created = {
                     code: newCode(),
+                    name: newRoomName(),
                     open: message.open === true,
                     hostId: client.id,
                     mapId: cleanId(message.mapId) || "lumbridge",
@@ -664,11 +657,6 @@ export function createRelay(limits = {}) {
                 if (target.members.includes(client)) {
                     return;
                 }
-                const nameError = checkName(client, message.me ?? {});
-                if (nameError) {
-                    error(nameError);
-                    return;
-                }
                 const missing = missingMap(
                     [{ client, unlocks: cleanUnlocks(message.me?.unlocks ?? client.unlocks) }],
                     target.mapId,
@@ -692,14 +680,22 @@ export function createRelay(limits = {}) {
                 return;
             case "me":
                 if (room) {
-                    const nameError = checkName(client, message);
-                    if (nameError) {
-                        error(nameError);
-                        setMember(client, { ...message, name: undefined });
-                    } else {
-                        setMember(client, message);
-                    }
+                    setMember(client, message);
                     broadcastRoom(room);
+                }
+                return;
+            case "rename":
+                // Not mid-run: everyone's copy of it has the old name
+                if (!room?.started) {
+                    // Picked while the old one's still taken, so it's a new one
+                    const name = newPlayerName();
+                    playerNames.delete(client.name);
+                    client.name = name;
+                    playerNames.add(name);
+                    client.connection.send({ t: "named", name: client.name });
+                    if (room) {
+                        broadcastRoom(room);
+                    }
                 }
                 return;
             case "settings":
@@ -827,7 +823,7 @@ export function createRelay(limits = {}) {
         );
         const client = {
             id: `p${nextId++}`,
-            name: DEFAULT_NAME,
+            name: newPlayerName(),
             characterId: "",
             ready: false,
             loadout: undefined,
@@ -841,6 +837,7 @@ export function createRelay(limits = {}) {
             (message, payload) => handle(client, message, payload),
             () => {
                 clients.delete(client);
+                playerNames.delete(client.name);
                 const left = (connectionsFrom.get(address) ?? 1) - 1;
                 if (left > 0) {
                     connectionsFrom.set(address, left);
@@ -851,9 +848,10 @@ export function createRelay(limits = {}) {
             },
         );
         clients.add(client);
+        playerNames.add(client.name);
         // anyMap: the game shows rooms on maps the player hasn't got as locked
         // unless it's on
-        client.connection.send({ t: "welcome", id: client.id, anyMap });
+        client.connection.send({ t: "welcome", id: client.id, name: client.name, anyMap });
         if (head && head.length > 0) {
             client.connection.receive(head);
         }
@@ -925,6 +923,7 @@ export function createRelay(limits = {}) {
         close() {
             clearInterval(pinger);
             clearInterval(sweeper);
+            stopCloudflare();
             for (const client of clients) {
                 client.connection.close(1001);
             }

@@ -1,4 +1,3 @@
-import { cleanName, isNameAllowed, playerName } from "../../../../server/names.mjs";
 import { MAP_BY_ID } from "../../content/maps";
 import { GameStore } from "../GameStore";
 import {
@@ -7,7 +6,7 @@ import {
     GameStart,
     GoneReason,
     Loadout,
-    MemberView,
+    Member,
     MissingMap,
     RoomListing,
     RoomView,
@@ -31,10 +30,8 @@ export type CoopView = {
     room?: RoomView;
     // This player's id in the room
     you?: string;
+    // This player's name, given by the relay on connecting ("" till then)
     name: string;
-    // The name as it was typed isn't on the banned list (a digit for a letter
-    // counts: it's checked before the digit's stripped)
-    nameAllowed: boolean;
     // There's a relay to play co-op through (the game only offers it then);
     // undefined until it's been asked
     available?: boolean;
@@ -50,14 +47,12 @@ export const OFFLINE: CoopView = {
     roomsTotal: 0,
     roomsFull: false,
     name: "",
-    nameAllowed: true,
     anyMap: false,
 };
 
 // How long to wait for the relay to say it's there
 const AVAILABLE_TIMEOUT_MS = 4000;
 
-const NAME_KEY = "rune-survivors-coop-name";
 const LIST_INTERVAL_MS = 5000;
 const PING_INTERVAL_MS = 15_000;
 
@@ -112,14 +107,6 @@ export function describeMissing(need: MissingMap): string {
         : `You need ${what} unlocked to join this room.`;
 }
 
-export function loadCoopName(): string {
-    try {
-        return cleanName(window.localStorage.getItem(NAME_KEY) ?? "");
-    } catch (e) {
-        return "";
-    }
-}
-
 // The connection to the co-op relay, and the room this player is in. What
 // the room's run does goes to whoever's set the on* handlers (GameClient).
 export class CoopLobby {
@@ -128,7 +115,7 @@ export class CoopLobby {
     private pingTimer?: number;
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
-    private me: Partial<MemberView> = {};
+    private me: Partial<Member> = {};
 
     onStart?: (game: GameStart) => void;
     onUp?: (from: string, message: UpMessage) => void;
@@ -138,8 +125,7 @@ export class CoopLobby {
     onClosed?: () => void;
 
     constructor(readonly store: GameStore) {
-        const name = loadCoopName();
-        this.view = { ...OFFLINE, name, nameAllowed: isNameAllowed(name) };
+        this.view = OFFLINE;
     }
 
     get room(): RoomView | undefined {
@@ -203,6 +189,8 @@ export class CoopLobby {
                     status: "offline",
                     room: undefined,
                     you: undefined,
+                    // A new one comes with the next connection
+                    name: "",
                     rooms: [],
                     roomsPage: 0,
                     error: wasOnline
@@ -224,6 +212,7 @@ export class CoopLobby {
             status: "offline",
             room: undefined,
             you: undefined,
+            name: "",
             rooms: [],
             roomsPage: 0,
         });
@@ -247,6 +236,7 @@ export class CoopLobby {
                 this.update({
                     status: "online",
                     you: message.id,
+                    name: message.name,
                     error: undefined,
                     available: true,
                     anyMap: message.anyMap === true,
@@ -261,6 +251,9 @@ export class CoopLobby {
                     () => this.send({ t: "ping" }),
                     PING_INTERVAL_MS,
                 );
+                break;
+            case "named":
+                this.update({ name: message.name });
                 break;
             case "rooms":
                 this.update({
@@ -326,21 +319,13 @@ export class CoopLobby {
         this.send({ t: "list", page: Math.max(0, page) });
     }
 
-    // Kept as it can be (lowercase a-z), as it's typed
-    setName(name: string): void {
-        const clean = cleanName(name);
-        try {
-            window.localStorage.setItem(NAME_KEY, clean);
-        } catch (e) {}
-        const allowed = isNameAllowed(name) && isNameAllowed(clean);
-        this.update({ name: clean, nameAllowed: allowed });
-        if (allowed) {
-            this.setMe({ name: playerName(clean) });
-        }
+    // Asks the relay for another name
+    rename(): void {
+        this.send({ t: "rename" });
     }
 
     // This player's adventurer and what they bring, kept up to date
-    setMe(changes: Partial<Omit<MemberView, "id">>): void {
+    setMe(changes: Partial<Member>): void {
         this.me = { ...this.me, ...changes };
         if (this.view.room) {
             this.send({ t: "me", ...changes });
@@ -361,8 +346,8 @@ export class CoopLobby {
         this.send({ t: "join", code: clean, me: this.joinAs() });
     }
 
-    private joinAs(): Partial<MemberView> {
-        return { ...this.me, name: playerName(this.view.name), ready: false };
+    private joinAs(): Partial<Member> {
+        return { ...this.me, ready: false };
     }
 
     leave(): void {
