@@ -10,6 +10,13 @@ the version in the corner).
 - Your character and camera respond to movement straight away when joining a co-op host,
   with corrections as the host confirms your movement. Hits and pickups still follow the host.
 
+### Fixed
+
+- Co-op movement corrections no longer get stuck across walls. The camera eases back when
+  movement prediction stops, and slashes and auras stay attached to your displayed character.
+- Co-op prediction keeps recent stops and turns on slow connections and handles slow frames
+  without losing their animation time.
+
 ## 0.22.0 - 2026-11-01
 
 ### Added

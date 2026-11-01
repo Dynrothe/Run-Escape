@@ -19,7 +19,7 @@ export function getPlayerPose(
     if (predicted?.hero === hero) {
         return predicted;
     }
-    const player = sim.heroes[hero].player;
+    const player = sim.heroes[hero]?.player ?? sim.player;
     return {
         hero,
         x: player.prevX + (player.x - player.prevX) * alpha,

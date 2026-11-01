@@ -1,12 +1,16 @@
-import { PLAYER_SPEED, Sim, TICKS_PER_SECOND, yawFromVector } from "../../core/Sim";
+import { MovementRules, movePlayer } from "../../core/PlayerMovement";
+import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import type { FrameEvent } from "../../core/lockstep";
 import { moveCircle } from "../../core/world/Collision";
-import { PlayerPose } from "../PlayerPose";
+import { PlayerPose, getPlayerPose } from "../PlayerPose";
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 // Bound both replay work and how far the picture can run ahead of confirmed play.
 export const PREDICTION_MS = 300;
 export const MAX_INPUT_HISTORY = 128;
+// Refresh a held direction so host time lost between ticks can't accumulate
+// indefinitely in our local-to-confirmed timeline. Still uses the send throttle.
+export const MOVE_REFRESH_MS = 200;
 const STALE_MS = 500;
 const CORRECTION_MS = 80;
 const SNAP_DISTANCE = 1.5;
@@ -27,7 +31,7 @@ export class MovementPrediction {
     private lastX: number;
     private lastY: number;
     private pose?: PlayerPose;
-    private arena?: { minX: number; minY: number; maxX: number; maxY: number };
+    private rules?: MovementRules;
 
     constructor(
         private readonly sim: Sim,
@@ -44,7 +48,11 @@ export class MovementPrediction {
     // Called even when the network's move throttle hasn't elapsed yet.
     sample(move: [number, number]): number {
         const last = this.inputs[this.inputs.length - 1];
-        if (last.move[0] !== move[0] || last.move[1] !== move[1]) {
+        if (
+            last.move[0] !== move[0] ||
+            last.move[1] !== move[1] ||
+            ((move[0] !== 0 || move[1] !== 0) && this.now() - last.at >= MOVE_REFRESH_MS)
+        ) {
             this.inputs.push({ seq: ++this.sequence, at: this.now(), move });
             if (this.inputs.length > MAX_INPUT_HISTORY) {
                 this.inputs.shift();
@@ -96,52 +104,33 @@ export class MovementPrediction {
     }
 
     private reset(time: number): void {
-        const last = this.inputs[this.inputs.length - 1];
-        this.inputs = [{ ...last, at: time }];
-        this.acknowledged = last.seq;
-        this.confirmedAt = this.renderedAt = time;
+        this.resetTimeline(time);
+        this.renderedAt = time;
         this.pose = undefined;
     }
 
-    // This mirrors stepPlayer's movement rules, but moves only the picture.
-    // Known freezes stay authoritative; we never guess when a hold will end.
-    private move(pose: PlayerPose, input: Input, ms: number): void {
-        const sim = this.sim;
-        const hero = sim.heroes[sim.focus];
-        let x = input.move[0] / 127;
-        let y = input.move[1] / 127;
-        if (hero.curse) {
-            const [a, b, c, d] = hero.curse.matrix;
-            [x, y] = [x * a + y * b, x * c + y * d];
-        }
-        pose.moving = x !== 0 || y !== 0;
-        if (pose.moving) {
-            pose.yaw = yawFromVector(x, y);
-            const sled = sim.tick < hero.sledEndTick ? hero.sledSpeed : 1;
-            const speed = PLAYER_SPEED * (1 + hero.stats.moveSpeed) * sled;
-            // Small steps follow the same wall sliding as confirmed movement.
-            for (let left = ms; left > 0; left -= TICK_MS) {
-                const ticks = Math.min(left, TICK_MS) / TICK_MS;
-                moveCircle(
-                    sim.grid,
-                    pose,
-                    x * speed * ticks,
-                    y * speed * ticks,
-                    hero.player.radius,
-                );
-            }
-        }
-        this.clampArena(pose);
+    private resetTimeline(time: number): void {
+        const last = this.inputs[this.inputs.length - 1];
+        this.inputs = [{ ...last, at: time }];
+        this.acknowledged = last.seq;
+        this.confirmedAt = time;
     }
 
-    private clampArena(pose: PlayerPose): void {
-        const sim = this.sim;
-        if (this.arena) {
-            const arena = this.arena;
-            const edge = sim.player.radius;
-            pose.x = Math.max(arena.minX + edge, Math.min(arena.maxX - edge, pose.x));
-            pose.y = Math.max(arena.minY + edge, Math.min(arena.maxY - edge, pose.y));
-        }
+    // Uses the sim's movement rules on a separate body, in bounded small steps.
+    private move(pose: PlayerPose, input: Input, ms: number): void {
+        let left = ms;
+        do {
+            const ticks = Math.min(left, TICK_MS) / TICK_MS;
+            pose.moving = movePlayer(
+                this.sim.grid,
+                pose,
+                input.move[0] / 127,
+                input.move[1] / 127,
+                this.rules!,
+                ticks,
+            );
+            left -= TICK_MS;
+        } while (left > 0);
     }
 
     private replay(pose: PlayerPose, from: number, to: number): void {
@@ -160,10 +149,12 @@ export class MovementPrediction {
         this.move(pose, input, Math.max(0, to - from));
     }
 
-    render(): PlayerPose | undefined {
+    render(alpha = 1): PlayerPose | undefined {
         const time = this.now();
         const sim = this.sim;
         const player = sim.player;
+        const dt = Math.max(0, time - this.renderedAt);
+        const blend = 1 - Math.exp(-dt / CORRECTION_MS);
         if (
             !this.confirmed ||
             sim.state !== "playing" ||
@@ -173,8 +164,23 @@ export class MovementPrediction {
             time - this.receivedAt > STALE_MS ||
             time < this.renderedAt
         ) {
-            this.reset(time);
-            return undefined;
+            // Keep the picture while its lead decays. Dropping it immediately
+            // would jump both the body and camera back to the confirmed player.
+            this.resetTimeline(time);
+            this.renderedAt = time;
+            const target = getPlayerPose(sim, sim.focus, alpha);
+            const pose = this.pose;
+            if (!pose) return undefined;
+            pose.x += (target.x - pose.x) * blend;
+            pose.y += (target.y - pose.y) * blend;
+            pose.yaw = target.yaw;
+            pose.moving = target.moving;
+            pose.moveTicks = target.moveTicks;
+            if (Math.hypot(target.x - pose.x, target.y - pose.y) < 0.001) {
+                this.pose = undefined;
+                return undefined;
+            }
+            return pose;
         }
         const target: PlayerPose = {
             hero: sim.focus,
@@ -186,28 +192,43 @@ export class MovementPrediction {
         };
         // Resolve this once per render, rather than scanning for the boss
         // during every replayed movement segment.
-        this.arena =
-            sim.map.bossArena && sim.shownBoss?.def.boss?.phases ? sim.bossArena : undefined;
-        const end = Math.min(time, this.confirmedAt + PREDICTION_MS);
-        this.replay(target, this.confirmedAt, end);
-        const dt = Math.min(50, Math.max(0, time - this.renderedAt));
+        const hero = sim.heroes[sim.focus];
+        this.rules = {
+            radius: player.radius,
+            baseSpeed: PLAYER_SPEED,
+            moveSpeed: hero.stats.moveSpeed,
+            tick: sim.tick,
+            sledEndTick: hero.sledEndTick,
+            sledSpeed: hero.sledSpeed,
+            frozen: player.frozen > 0,
+            held: !!hero.hold,
+            curse: hero.curse,
+            arena: sim.map.bossArena && sim.shownBoss?.def.boss?.phases ? sim.bossArena : undefined,
+        };
+        // Keep the newest input when a lead exceeds the replay budget: starts,
+        // stops and turns mustn't get stranded beyond the end of an old window.
+        this.replay(target, Math.max(this.confirmedAt, time - PREDICTION_MS), time);
         const pose = this.pose ?? { ...target };
         const wasMoving = pose.moving;
         if (this.pose) {
-            this.replay(
-                pose,
-                this.renderedAt,
-                Math.max(this.renderedAt, Math.min(end, this.renderedAt + dt)),
-            );
+            this.replay(pose, Math.max(this.renderedAt, time - PREDICTION_MS), time);
             const dx = target.x - pose.x;
             const dy = target.y - pose.y;
             if (Math.hypot(dx, dy) > SNAP_DISTANCE) {
                 pose.x = target.x;
                 pose.y = target.y;
             } else {
-                const blend = 1 - Math.exp(-dt / CORRECTION_MS);
+                const beforeX = pose.x;
+                const beforeY = pose.y;
                 moveCircle(sim.grid, pose, dx * blend, dy * blend, player.radius);
-                this.clampArena(pose);
+                const progress = (pose.x - beforeX) * dx + (pose.y - beforeY) * dy;
+                // Correction is not a player walking. If a wall blocks it,
+                // cross to the valid confirmed/replayed target instead of
+                // leaving the camera stranded on the other side forever.
+                if (progress + 1e-12 < (dx * dx + dy * dy) * blend * 0.5) {
+                    pose.x = target.x;
+                    pose.y = target.y;
+                }
             }
         }
         // Facing and animation react even before the next movement tick.

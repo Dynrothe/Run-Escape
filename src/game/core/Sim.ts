@@ -102,6 +102,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
+import { movePlayer, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -1974,42 +1975,23 @@ export class Sim {
         const player = this.player;
         player.prevX = player.x;
         player.prevY = player.y;
-        // It's the input that's cursed, so keys and the stick go the same way
-        const curse = this.curse;
-        if (curse) {
-            const [a, b, c, d] = curse.matrix;
-            const x = moveX * a + moveY * b;
-            moveY = moveX * c + moveY * d;
-            moveX = x;
-        }
         const frozen = player.frozen > 0;
         if (frozen) {
             player.frozen--;
         }
-        // Held by what's beside them, they can still turn to hit it
-        if (frozen && this.hold && (moveX !== 0 || moveY !== 0)) {
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        const moving = !frozen && (moveX !== 0 || moveY !== 0);
-        if (moving) {
-            const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
-            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
-            moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        // A fight in a set square (MapDef.bossArena) can't be walked away from
-        if (this.map.bossArena && this.shownBoss?.def.boss?.phases) {
-            const arena = this.bossArena;
-            const edge = player.radius;
-            player.x = Math.max(arena.minX + edge, Math.min(arena.maxX - edge, player.x));
-            player.y = Math.max(arena.minY + edge, Math.min(arena.maxY - edge, player.y));
-        }
+        const moving = movePlayer(this.grid, player, moveX, moveY, {
+            radius: player.radius,
+            baseSpeed: PLAYER_SPEED,
+            moveSpeed: this.stats.moveSpeed,
+            tick: this.tick,
+            sledEndTick: this.sledEndTick,
+            sledSpeed: this.sledSpeed,
+            frozen,
+            held: !!this.hold,
+            curse: this.curse,
+            arena:
+                this.map.bossArena && this.shownBoss?.def.boss?.phases ? this.bossArena : undefined,
+        });
         if (moving !== player.moving) {
             player.moving = moving;
             player.moveStart = this.tick;
@@ -8231,10 +8213,7 @@ function pingPong(distance: number, half: number): number {
     return p < half * 2 ? p - half : half * 3 - p;
 }
 
-// RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
-export function yawFromVector(dx: number, dy: number): number {
-    return Math.round((fm.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
-}
+export { yawFromVector } from "./PlayerMovement";
 
 export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };
 

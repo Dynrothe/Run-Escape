@@ -1,11 +1,17 @@
 import { emptyStats } from "../../content/types";
 import { PLAYER_SPEED, Sim } from "../../core/Sim";
+import type { Enemy } from "../../core/entities";
 import { usePortableMath } from "../../core/fmath";
 import { cleanFrameEvent, syncHash } from "../../core/lockstep";
 import { makeGrid } from "../../core/world/testGrid";
 import { getPlayerPose } from "../PlayerPose";
 import { CoopRun } from "./CoopRun";
-import { MAX_INPUT_HISTORY, MovementPrediction, PREDICTION_MS } from "./MovementPrediction";
+import {
+    MAX_INPUT_HISTORY,
+    MOVE_REFRESH_MS,
+    MovementPrediction,
+    PREDICTION_MS,
+} from "./MovementPrediction";
 
 function makeSim(focus = 1, wall = false): Sim {
     const rows = Array.from({ length: 72 }, () =>
@@ -53,6 +59,7 @@ test("moves and turns immediately without writing any confirmed player state", (
     // A spectator or teammate always uses their own confirmed position.
     expect(getPlayerPose(sim, 0, 1, pose).x).toBe(sim.heroes[0].player.x);
     expect(getPlayerPose(sim, 1, 1, pose)).toBe(pose);
+    expect(getPlayerPose(sim, 99, 1).x).toBe(sim.player.x);
 });
 
 test("replays terrain collision, movement speed and cursed controls", () => {
@@ -70,6 +77,31 @@ test("replays terrain collision, movement speed and cursed controls", () => {
     expect(other.prediction.render()!.x).toBeCloseTo(other.sim.player.x - 2 * PLAYER_SPEED);
 });
 
+test("prediction applies the sled multiplier and the active boss arena", () => {
+    const { sim, prediction, time } = setup();
+    sim.heroes[1].sledEndTick = 100;
+    sim.heroes[1].sledSpeed = 2;
+    prediction.sample([127, 0]);
+    time(20);
+    expect(prediction.render()!.x).toBeCloseTo(sim.player.x + 2 * PLAYER_SPEED);
+
+    const arena = setup();
+    Object.defineProperty(arena.sim, "map", {
+        value: {
+            ...arena.sim.map,
+            bossArena: { baseX: 1033, baseY: 1037, size: 1 },
+        },
+    });
+    vi.spyOn(arena.sim, "shownBoss", "get").mockReturnValue({
+        def: { boss: { phases: {} } },
+    } as Enemy);
+    arena.prediction.sample([127, 0]);
+    arena.time(300);
+    const pose = arena.prediction.render()!;
+    expect(pose.x).toBeCloseTo(1034 - arena.sim.player.radius);
+    expect(pose.y).toBeCloseTo(1038 - arena.sim.player.radius);
+});
+
 test("bounds prediction time and history during a stalled connection", () => {
     const { sim, prediction, time } = setup();
     prediction.sample([127, 0]);
@@ -77,8 +109,13 @@ test("bounds prediction time and history during a stalled connection", () => {
     const maximum = sim.player.x + (PREDICTION_MS / 20) * PLAYER_SPEED;
     expect(prediction.render()!.x).toBeCloseTo(maximum);
     time(480);
-    expect(prediction.render()!.x).toBeCloseTo(maximum);
+    // Correction easing can leave a small visual error beyond the replay
+    // window, but a stalled connection cannot move the picture indefinitely.
+    const last = prediction.render()!.x;
+    expect(last).toBeLessThan(maximum + 0.1);
     time(501);
+    expect(prediction.render()!.x).toBeLessThan(last);
+    time(1500);
     expect(prediction.render()).toBeUndefined();
 
     for (let i = 0; i < 1000; i++) {
@@ -90,21 +127,123 @@ test("bounds prediction time and history during a stalled connection", () => {
     );
 });
 
-test.each(["frozen", "down", "left", "menu", "over"])(
-    "falls back to confirmed presentation when %s",
+test.each(["frozen", "hold", "down", "left", "menu", "casket", "over"])(
+    "eases back to confirmed presentation when %s",
     (reason) => {
         const { sim, prediction, time } = setup();
         prediction.sample([127, 0]);
-        time(100);
-        expect(prediction.render()).toBeDefined();
+        time(300);
+        const before = prediction.render()!.x;
         if (reason === "frozen") sim.player.frozen = 30;
+        if (reason === "hold") {
+            sim.player.frozen = 30;
+            sim.heroes[1].hold = {} as NonNullable<(typeof sim.heroes)[1]["hold"]>;
+        }
         if (reason === "down") sim.heroes[1].down = true;
         if (reason === "left") sim.heroes[1].left = true;
         if (reason === "menu") sim.state = "levelUp";
+        if (reason === "casket") sim.state = "chest";
         if (reason === "over") sim.state = "dead";
+        time(316);
+        const easing = prediction.render()!;
+        expect(easing.x).toBeGreaterThan(sim.player.x);
+        expect(easing.x).toBeLessThan(before);
+        expect(before - easing.x).toBeLessThan(0.25);
+        for (let now = 332; now <= 1200; now += 16) {
+            time(now);
+            prediction.render();
+        }
         expect(prediction.render()).toBeUndefined();
     },
 );
+
+test("correction crosses a wall when the confirmed position is on its other side", () => {
+    const { sim, prediction, time } = setup(true);
+    sim.player.x = sim.player.prevX = 1035.6;
+    prediction.confirm([]);
+    prediction.render();
+    // Less than SNAP_DISTANCE, with a thin wall between the two valid positions.
+    sim.player.x = sim.player.prevX = 1036.4;
+    for (let now = 20; now <= 600; now += 20) {
+        time(now);
+        prediction.confirm([]);
+        prediction.render();
+    }
+    expect(prediction.render()!.x).toBeCloseTo(sim.player.x, 4);
+});
+
+test("100ms frames keep their movement and animation time", () => {
+    const { sim, prediction, time } = setup();
+    prediction.sample([127, 0]);
+    prediction.render();
+    time(100);
+    const pose = prediction.render()!;
+    expect(pose.x).toBeCloseTo(sim.player.x + 5 * PLAYER_SPEED);
+    expect(pose.moveTicks).toBeCloseTo(5);
+});
+
+test("the newest stop is replayed even when the confirmation lead exceeds the budget", () => {
+    const { sim, prediction, time } = setup();
+    prediction.sample([127, 0]);
+    time(300);
+    const before = prediction.render()!.x;
+    time(350);
+    prediction.sample([0, 0]);
+    for (let now = 360; now <= 480; now += 20) {
+        time(now);
+        prediction.render();
+    }
+    expect(prediction.render()!.x).toBeLessThan(before - 0.2);
+    expect(prediction.render()!.moving).toBe(false);
+    expect(sim.player.moving).toBe(false);
+});
+
+test("periodic input acknowledgments bound clock drift when the host runs slowly", () => {
+    let now = 0;
+    const heroes = new Map([
+        ["p0", 0],
+        ["p1", 1],
+    ]);
+    const host = new CoopRun(
+        makeSim(0),
+        true,
+        {
+            sendUp() {},
+            sendDown: (message) => guest.receiveDown(message),
+        },
+        heroes,
+        "p0",
+        () => now,
+    );
+    const guest = new CoopRun(
+        makeSim(1),
+        false,
+        {
+            sendUp: (message) => host.receiveUp("p1", message),
+            sendDown() {},
+        },
+        heroes,
+        "p0",
+        () => now,
+    );
+    host.receiveUp("p1", { loaded: true });
+    for (now = 0; now <= 4200; now += 20) {
+        guest.setMove(now < 3800 ? 1 : 0, 0);
+        // Host simulates at half the real-time rate.
+        if (now % 40 === 0) {
+            host.stepFrame();
+            host.flush(true);
+        }
+        while (guest.canStep()) guest.stepFrame();
+        guest.prediction!.render();
+        if (now === 3600) {
+            const clock = guest.prediction as unknown as { confirmedAt: number };
+            expect(now - clock.confirmedAt).toBeLessThan(MOVE_REFRESH_MS + 40);
+        }
+    }
+    expect(guest.prediction!.render()!.x).toBeCloseTo(guest.sim.player.x, 2);
+    expect(syncHash(guest.sim)).toBe(syncHash(host.sim));
+});
 
 test("teleports reset prediction instead of smoothing through scenery", () => {
     const { sim, prediction, time } = setup();

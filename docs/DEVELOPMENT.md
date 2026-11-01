@@ -449,14 +449,21 @@ returns to the last sent direction inside the throttle still sends its new seque
 predicted tap can't remain unacknowledged forever.
 
 Prediction covers the character's position, facing and movement animation, camera, minimap,
-health bar and attached text. `PlayerPose` is presentation state: never write it into `Sim`.
-Combat, pickups, attack effects and all hashes still use confirmed positions. Terrain collision,
-speed, sleds, curses and boss arena limits are mirrored for display; keep these rules aligned with
-`Sim.stepPlayer` when changing movement. Small errors ease toward the confirmed path, while large
-displacements reset prediction. Death, known freezes, decisions and stale connections fall back
-to confirmed presentation. Replay is limited to 300 ms and 128 input changes for one player;
-it never steps a second full simulation or rolls back combat. This improves control response,
-but a hit can still arrive after the local picture appears to have moved clear.
+health bar, attached text, slashes and auras. `PlayerPose` is presentation state: never write it
+into `Sim`. Combat, pickups, world-space attack effects and all hashes still use confirmed
+positions. `core/PlayerMovement.ts` shares terrain collision, speed, sleds, curses, facing and
+boss arena limits with `Sim.stepPlayer`. Small errors ease toward the confirmed path; a wall
+blocking correction snaps the picture to its valid target instead of trapping it. Large
+confirmed displacements reset prediction. Death, known freezes, decisions and stale connections
+ease back to confirmed presentation, including the camera.
+
+`PREDICTION_MS` and `MAX_INPUT_HISTORY` bound replay work for one player. When the lead exceeds
+that window, replay uses the newest inputs so a stop or turn still takes effect. Long render
+frames retain their elapsed animation time and replay movement up to the same safety limit.
+Held movement refreshes its sequence at `MOVE_REFRESH_MS` (still subject to the network send
+throttle), bounding accumulated timing drift when the host loses simulation time. Prediction
+never steps a second full simulation or rolls back combat. Extreme latency remains visible,
+and a hit can still arrive after the local picture appears to have moved clear.
 
 - **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
   while a player's map is still loading is kept and handed over once their copy's made

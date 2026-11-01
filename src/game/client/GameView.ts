@@ -832,12 +832,12 @@ export class GameView {
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
         this.fight.drawGround(overlay, sim, alpha, now, scale);
-        this.drawAuras(overlay, sim, now);
+        this.drawAuras(overlay, sim, alpha, now);
         this.drawBlasts(overlay, sim, now, scale);
         this.drawRockTargets(overlay, sim, now, scale);
         this.drawRingReach(overlay, sim, now, scale);
         this.drawSwings(overlay, sim, now, scale);
-        this.drawSlashes(overlay, sim, now, scale);
+        this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
 
         // Health bars over hurt elites; with hundreds of enemies bars on all of
@@ -1169,15 +1169,19 @@ export class GameView {
         }
     }
 
-    private drawSlashes(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+    private drawSlashes(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+    ): void {
         const ctx = overlay.ctx;
         this.slashes = this.slashes.filter((s) => now - s.start < SLASH_MS);
         for (const slash of this.slashes) {
             const t = (now - slash.start) / SLASH_MS;
             // Follows the player, like the weapon does
-            const player = sim.heroes[slash.hero]?.player ?? sim.player;
-            const cx = player.x;
-            const cy = player.y;
+            const { x: cx, y: cy } = getPlayerPose(sim, slash.hero, alpha, this.localPlayerPose);
             const base = Math.atan2(slash.dirY, slash.dirX);
             const sweep = slash.arc;
             // Enough points for a wide sweep to stay round
@@ -1229,14 +1233,14 @@ export class GameView {
         ctx.closePath();
     }
 
-    private drawAuras(overlay: Overlay, sim: Sim, now: number): void {
+    private drawAuras(overlay: Overlay, sim: Sim, alpha: number, now: number): void {
         const ctx = overlay.ctx;
         this.auras = this.auras.filter((a) => now - a.start < AURA_MS);
         for (const aura of this.auras) {
             const t = (now - aura.start) / AURA_MS;
             const radius = aura.radius * (0.5 + t * 0.5);
-            const player = sim.heroes[aura.hero]?.player ?? sim.player;
-            this.traceGroundCircle(overlay, sim, player.x, player.y, radius);
+            const pose = getPlayerPose(sim, aura.hero, alpha, this.localPlayerPose);
+            this.traceGroundCircle(overlay, sim, pose.x, pose.y, radius);
             ctx.fillStyle = `rgba(150, 210, 255, ${0.18 * (1 - t)})`;
             ctx.fill();
             ctx.lineWidth = 3;

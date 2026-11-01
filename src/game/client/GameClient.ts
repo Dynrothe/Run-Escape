@@ -1401,7 +1401,7 @@ export class GameClient implements GameFrameHandler {
         const alpha = this.getAlpha();
         this.view.localPlayerPose = this.coopStopped
             ? undefined
-            : this.coopRun?.prediction?.render();
+            : this.coopRun?.prediction?.render(alpha);
         const { x: px, y: py } = getPlayerPose(
             sim,
             this.viewHero,
