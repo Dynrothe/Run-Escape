@@ -28,10 +28,11 @@ for (const [sides, [shape, rotation]] of OVERLAY_SHAPES) {
     SHAPE_SIDES.set(shape * 4 + rotation, sides);
 }
 
-// How far past a door a road counts as its own, and how wide
+// How far either side of a door a road counts as its own, and how far back: a wide road's round end
+// reaches past the door, round the corner of a building that has its corners cut
 const DOOR_STRIP_SIDE = 4;
 
-const DOOR_STRIP_BEHIND = 1;
+const DOOR_STRIP_BEHIND = 3;
 
 // Tiles from a door a road can run up against its building
 const DOOR_REACH = 4.5;
