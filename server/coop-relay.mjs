@@ -76,6 +76,9 @@ const MAX_ROOMS = 500;
 const MAX_CONNECTIONS_PER_ADDRESS = 16;
 const MAX_ROOMS_PER_ADDRESS = 4;
 const MAX_CREATES_PER_MINUTE = 10;
+// Joining's a room update for everyone in it, and so's leaving: enough to look
+// round a few rooms, not enough to flood one by going in and out
+const MAX_JOINS_PER_MINUTE = 12;
 // Room codes that don't exist, tried from one address, before it has to wait
 const MAX_WRONG_CODES_PER_MINUTE = 20;
 // A room nobody's done anything in for this long is closed
@@ -500,6 +503,7 @@ export function createRelay(limits = {}) {
         roomsPerAddress = MAX_ROOMS_PER_ADDRESS,
         createsPerMinute = MAX_CREATES_PER_MINUTE,
         wrongCodesPerMinute = MAX_WRONG_CODES_PER_MINUTE,
+        joinsPerMinute = MAX_JOINS_PER_MINUTE,
         memberUpdateMs = MEMBER_UPDATE_MS,
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
@@ -519,6 +523,7 @@ export function createRelay(limits = {}) {
     const connectionsFrom = new Map();
     const createdFrom = new Map();
     const wrongCodesFrom = new Map();
+    const joinedFrom = new Map();
     let nextRoomOrder = 1;
     // The open rooms as the list shows them, worked out again only after a
     // room changes (everyone browsing asks every few seconds)
@@ -881,6 +886,10 @@ export function createRelay(limits = {}) {
                     error(OTHER_BUILD_TEXT);
                     return;
                 }
+                if (!underLimit(joinedFrom, client.address, joinsPerMinute)) {
+                    error("That's a lot of joining. Wait a minute and try again.");
+                    return;
+                }
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
@@ -1097,7 +1106,7 @@ export function createRelay(limits = {}) {
                 disband(room, "idle");
             }
         }
-        for (const times of [createdFrom, wrongCodesFrom]) {
+        for (const times of [createdFrom, wrongCodesFrom, joinedFrom]) {
             for (const [address, at] of times) {
                 if (at.every((t) => now - t >= 60_000)) {
                     times.delete(address);

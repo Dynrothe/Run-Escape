@@ -654,6 +654,20 @@ describe("co-op relay", () => {
         await host.roomWhere((r) => r.members.length === 1);
     });
 
+    it("slows down going in and out of rooms", async () => {
+        await restart({ joinsPerMinute: 2 });
+        const { host, code } = await party(0);
+        const guest = await connect();
+        for (let i = 0; i < 2; i++) {
+            guest.send({ t: "join", code, me: {} });
+            await host.roomWhere((r) => r.members.length === 2);
+            guest.send({ t: "leave" });
+            await host.roomWhere((r) => r.members.length === 1);
+        }
+        guest.send({ t: "join", code, me: {} });
+        expect((await guest.next("error")).message).toMatch(/Wait a minute/);
+    });
+
     it("keeps a kicked player out, and slows down guessing codes", async () => {
         await restart({ wrongCodesPerMinute: 3 });
         const { host, guests, code } = await party(1);
