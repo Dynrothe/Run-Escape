@@ -95,6 +95,12 @@ location /game/coop {
 }
 ```
 
+With Apache 2.4.47 or newer (`a2enmod proxy proxy_http`), which adds `X-Forwarded-For` itself:
+
+```
+ProxyPass "/game/coop" "http://127.0.0.1:8787/coop" upgrade=websocket
+```
+
 The relay limits each address (see below), so behind a proxy, where every player looks like the
 proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve --`). It's off
 (`none`) unless it's set:
