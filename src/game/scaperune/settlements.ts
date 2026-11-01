@@ -19,7 +19,7 @@ import { Point } from "./paths";
 import { BuildingKind, PREFABS, getBuildingKind, isBuildingKind } from "./prefabs";
 import { RESERVE_PIECE, RESERVE_PLOT } from "./reservations";
 import { ROAD_STEEPEST, RoadNetwork } from "./roads";
-import { LEVEL_FADE, PlannedTown, fillTown, getPlot, layOutTown } from "./townPlan";
+import { CLOSE_STREETS, LEVEL_FADE, PlannedTown, fillTown, getPlot, layOutTown } from "./townPlan";
 import { WalledTown, getWallInside, isInsideWall } from "./townWalls";
 
 // Where buildings go, and the ground they stand on.
@@ -80,6 +80,19 @@ const SITE_INSET = 16;
 const SITE_TRIES = 40;
 
 const SITE_BUILDINGS = 3;
+
+// Buildings a family has for a town in blocks, past what its biome lists: towns get them, and
+// nothing else does. West Varrock's, cut for this: see the guide.
+const BLOCK_FAMILIES: Record<string, string[]> = {
+    varrock: [
+        "varrock_cottage",
+        "varrock_house",
+        "varrock_terrace",
+        "varrock_store",
+        "varrock_hall",
+        "varrock_corner",
+    ],
+};
 
 // Where a family has a fence of its own. Anywhere else it's the biome's.
 export const KIT_FENCES: Record<string, number> = {
@@ -192,10 +205,16 @@ function keepToKit(build: Build, kit: TownKit, town: number, names: string[]): s
     }
     if (kit.family === undefined) {
         const roll = createRng(build.settings.seed + TOWN_KIT_SEED + town);
-        kit.family = kitOf(names[Math.floor(roll() * names.length)]);
+        const rolled = kitOf(names[Math.floor(roll() * names.length)]);
+        // A town built in blocks wants a family that's got the buildings for it
+        const blocks = names.map(kitOf).find((family) => BLOCK_FAMILIES[family]);
+        kit.family = build.settings.sideStreets > CLOSE_STREETS && blocks ? blocks : rolled;
     }
     const own = names.filter((name) => kitOf(name) === kit.family);
-    return own.length > 0 ? own : names;
+    const more = (BLOCK_FAMILIES[kit.family] ?? []).filter((name) =>
+        isBuildingKind(name, build.settings),
+    );
+    return own.length > 0 ? [...own, ...more] : names;
 }
 
 function pickSpot(build: Build, plans: TownPlans): Candidate | undefined {

@@ -133,17 +133,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
             [42407, 2],
             [3718, 2],
         ],
-        buildings: [
-            "lumbridge_house",
-            "lumbridge_church",
-            "varrock_shop",
-            "varrock_cottage",
-            "varrock_house",
-            "varrock_terrace",
-            "varrock_store",
-            "varrock_hall",
-            "varrock_corner",
-        ],
+        buildings: ["lumbridge_house", "lumbridge_church", "varrock_shop"],
         // Trollheim's ground, with stone that takes the light
         landmarks: [
             "stone_circle",

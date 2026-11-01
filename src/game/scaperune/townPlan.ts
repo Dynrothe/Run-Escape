@@ -166,7 +166,7 @@ const SIDE_STREET_JITTER = 6;
 
 // Past this much of the setting, lanes off side streets, about as wide as a real alley, and
 // buildings stand a tile closer on plots of their own width
-const LANES_FROM = 0.6;
+export const CLOSE_STREETS = 0.6;
 
 const LANE_HALF = 1.5;
 
@@ -469,7 +469,7 @@ function planSideStreets(
                 roads.markJunction(points[length], half + 1);
             }
             streets.push(street);
-            if (level === 0 && sideStreets > LANES_FROM) {
+            if (level === 0 && sideStreets > CLOSE_STREETS) {
                 streets.push(
                     ...planSideStreets(build, roads, water, street, def, height, held, roll, 1),
                 );
@@ -1069,7 +1069,7 @@ export function fillTown(
     const yards = Math.max(settings.gardens, LEAST_YARDS);
     const houses = names.some((name) => getBuildingKind(name) !== "church");
     let churches = 0;
-    const closer = settings.sideStreets > LANES_FROM ? CLOSER_GAP : 0;
+    const closer = settings.sideStreets > CLOSE_STREETS ? CLOSER_GAP : 0;
     // Takes a plot, and puts a building on it
     const stand = (
         name: string,
