@@ -193,20 +193,7 @@ const KITS = {
         families: [],
         biomes: [],
     },
-    // East Ardougne's at 2614,3263: one wall, and nothing on it
-    ardougne: {
-        label: "East Ardougne",
-        outer: { wall: 21239 },
-        inner: { wall: 21239 },
-        walk: 0,
-        rise: 0,
-        width: 0,
-        chamfer: 3,
-        gateSize: 6,
-        families: [],
-        biomes: [],
-    },
-    // Jatizso's, the same way
+    // Jatizso's: one wall, and nothing on it
     jatizso: {
         label: "Jatizso",
         outer: { wall: 21407 },

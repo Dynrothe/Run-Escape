@@ -81,8 +81,8 @@ A screen is what the play camera sees, about 27 by 16 tiles.
 - **Towns are flat.** 76% to 89% of walkable tiles in Hosidius, Shayzien and Civitas.
 - **The edge is a fade, not a line.** Over about 32 tiles walls fall away and trees take over. Decoration stays level:
   only the kind of thing changes, not how busy the ground is.
-- **What players see is the ground plan.** The game draws one plane, so roofs vanish. Floors, interiors and furniture
-  matter more here than in OSRS itself.
+- **What players see is the ground plan.** The game draws one plane, so roofs vanish, but for tiles flagged to show from
+  the ground, as the tops of city walls are. Floors, interiors and furniture matter more here than in OSRS itself.
 
 ### Terrain: flat, then a step
 
@@ -234,7 +234,8 @@ are how the generator joins anything big that's cut off.
 - **A town**: `towns`, `townSize`, `buildings`, and `roads` over 0.
 - **Something to see along a road**: `sites` at 1 gives a stone every 40 tiles, and `waymarkers` at 1 makes that 16.
 - **Yards**: `gardens`. A planned town's streets get at least 40% whatever it's set to.
-- **A wall round a town**: `townWalls`, only for `towns`. Hamlets never get one.
+- **A wall round a town**: `townWalls`, only for `towns`, and `wallKit` for whose. Hamlets never get one. See
+  [City walls](#city-walls).
 
 `buildings` at 1 means 3 buildings a map square. `planTown` picks the kind by how many a town wants, which is what's wanted
 over the whole map shared between its towns:
@@ -438,6 +439,10 @@ in a big arena still reads low. `steepest` can't see tiles within 2 of water or 
 - `X isn't on flat ground`, `opens onto ground you can't walk on`, `has something under it`: use `pinPlot`, and `markOffLimits`.
 - `gap at x,y off the deck isn't whole road`, `road outside the fences`: run the road down the deck's line for 7 tiles.
 - `the waterfall at x,y has no pool`: `placeFallPools` goes before the heights settle.
+- `the wall at x,y has N gates you can walk through`: under 2. Its sides are in water or cliffs: try another seed, or less
+  water near the town.
+- `a road meets the wall at x,y with no gate`: two roads crossed a side closer than a gate and its spacing, or one crossed
+  by a corner. Say what's odd about the map first: `planGates` puts a gate on every crossing it can.
 
 **Reachability:**
 
@@ -541,9 +546,10 @@ Don't spend a round on these.
 - **No mottled ground.** Pieces of one underlay are 14 to 22 tiles at the median, against 2 to 4 in the real world, and edges
   between biomes have no dither.
 - **No invisible walls.** The real world seals drops with 85 and 2639, which draw nothing. Nothing here uses them on purpose.
-- **Streets are straight and square to the map.** Town walls are rectangles, and only for `towns`.
+- **Streets are straight and square to the map.** Town walls are rectangles with their corners cut, and only for `towns`.
 - **Only rotation.** The map format has no mirror.
-- **One plane is drawn**, so nothing can be built to be seen upstairs.
+- **One plane is drawn**, so nothing upstairs is seen unless its tiles are flagged `TILE_SHOWN`, as a city wall's top is.
+  That draws what's up there. It doesn't let anyone walk on it: all the collision is the ground's.
 
 **Targets only partly met**
 
@@ -617,7 +623,8 @@ scripts call `installRecipeInSceneBuilder`. Reload the page to see a change.
 | `settlements.ts`  | where buildings go, their plots, and sites                             |
 | `townPlan.ts`     | towns laid out from the middle, and pace                               |
 | `vignettes.ts`    | small groups of things against a building's walls                      |
-| `structures.ts`   | set pieces, wrecks and drowned towns, town walls, waymarkers           |
+| `structures.ts`   | set pieces, wrecks and drowned towns, where town walls go, waymarkers  |
+| `cityWalls.ts`    | real city walls as data, and building one round a rectangle            |
 | `falls.ts`        | waterfalls off cliffs, with their pools                                |
 | `terrain.ts`      | the height layer: floats per corner, pins, slope limits                |
 | `landforms.ts`    | the shape of the land, and flat land                                   |
@@ -673,8 +680,8 @@ anything else that's kept per map, clear it there.
 
 ### Biomes
 
-Each is an entry in `BIOMES` (`biomes.ts`): its ground, water, trees, scatter, big props, buildings, set pieces, fence, town
-wall, waymarker and rock. There's a preset that shows off most of them, and a dev map, `scaperune_<id>`.
+Each is an entry in `BIOMES` (`biomes.ts`): its ground, water, trees, scatter, big props, buildings, set pieces, fence, a
+fort's wall, waymarker and rock. There's a preset that shows off most of them, and a dev map, `scaperune_<id>`.
 
 | Biome       | From                                        | Prefab families (how many)       | Rock overlay |
 | ----------- | ------------------------------------------- | -------------------------------- | ------------ |
@@ -714,6 +721,9 @@ npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle
 npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
 npx tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12  # a real cliff as text: heights, floors, what's on it
 npx tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2  # a real place from above
+npx tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map    # a place's walls: ranked by level, as a text map
+npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795 # one id's longest run, and what's across it
+npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # every loc and floor, tile by tile, on each level
 ```
 
 The index is JSON: a few lines of anything will list a region's commonest locs, which is the quick way to choose. A loc's
@@ -743,10 +753,74 @@ planks, `174` flagstones, `196` ice, `84` sandstone. Overlay `42` isn't drawn at
 
 On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a big loc on a slope shows its underside.
 
-**Town walls.** `townWalls` is the share of `towns` with one. It's a rectangle a little way out from a town's buildings, open
-where roads go through and with a gate on each side, in the biome's `wall`, and inside it roads are paved and there's a square
-with a fountain unless it's been laid out with one. A wall loc is a thin thing on a tile's side, so it costs nothing, and
-reachability needs no help. `Walled city` is the preset for a big one, and `scaperune_town` is the dev map.
+### City walls
+
+`CITY_WALLS` in `cityWalls.ts` is real walls as data, and `townWalls` is the share of `towns` with one. A real city wall is
+never one loc. It's a band of tiles a level high: a face on each side, a blocked middle, and a walkway on level 1 with a rail
+along each edge. Level 1 tiles are flagged `TILE_SHOWN` (0x8), which is what makes the cache's wall tops draw from the ground,
+so a wall is built the same way here, with no bridge flag and nothing on the walkway to walk on. Everything's blocked at ground
+level, so collision stays the ground's.
+
+| Kit        | From                    | Across | Faces   | Top             | Corners               | Gate                           | Slopes                  | `auto` for                                                                  |
+| ---------- | ----------------------- | ------ | ------- | --------------- | --------------------- | ------------------------------ | ----------------------- | --------------------------------------------------------------------------- |
+| `falador`  | Falador, the west wall  | 3      | 24029   | 24026, 24035    | Cut 3 tiles           | The north gate, 23982 to 23993 | All contoured           | `lumbridge`, meadow, elven, astral, fairy                                   |
+| `varrock`  | Varrock, the north-west | 3      | 23795   | 23777, buttress | Cut 3 tiles           | A gap with capped ends         | All contoured           | `varrock`, meadow, swamp, deadlands, darkwood                               |
+| `kourend`  | Kourend Castle          | 5      | 23780   | 23775, 3 wide   | Octagon towers, 23818 | A gap with capped ends         | Rails stand level       | `hosidius`, autumn                                                          |
+| `shayzien` | Shayzien                | 3      | 14543   | 14558           | Cut 3 tiles           | A gap with capped ends         | All contoured           | `shayzien`, `lovakengj`, ash                                                |
+| `civitas`  | Civitas illa Fortis     | 3      | 52286-7 | 52296           | Cut 3 tiles           | A gap with capped ends         | All contoured           | `al`, `pollnivneach`, `sophanem`, `ape`, `taibwo`, desert, jungle, tropical |
+| `yanille`  | Yanille                 | 4      | 17088   | 1913            | Square                | A gap with capped ends         | None: the ring's pinned | Nothing: set it yourself                                                    |
+| `jatizso`  | Jatizso                 | 1 line | 21407   | Nothing         | Cut 3 tiles           | A gap                          | All contoured           | `rellekka`, snow                                                            |
+
+`wallKit` picks one, and `auto` goes by the family of a town's buildings, then its biome (`families` and `biomes` in the kit),
+on a seed of its own. Every biome is covered. Across counts the two tiles the faces stand on. Rough sizes: 2 to 3 tiles tall,
+walkways 1 to 3 wide, and buildings stand `TOWN_WALL_GAP` back from the walkway so that yards fit.
+
+**What the generator does**, in `chooseWalledTowns`, before roads are graded: the wall's rectangle is a little way out from
+the buildings, and each side moves out to where the fewest road tiles lie along it. Towns close enough for their walls to touch
+are merged into one. A road through a side gets a gate where it crosses (`planGates`), a side with none gets one in its middle
+if there's ground to walk on, and that gate gets a road of its own to the nearest road. So a town has a gate on every side that
+can take one, which is what stops a wall being a choke. A gate's ground is a plot, and a straight stretch of road goes through
+it. The band's reserved at once, and `placeTownWalls` puts the wall up after the land's finished, stopping with a cap short of
+water, cliffs, buildings, door steps, bridges and anything that was there first. Inside, roads are paved, and there's a square
+with a fountain unless the town was laid out with one.
+
+`Walled city` is the preset for a big one, `scaperune_town` is the dev map, and `scaperune_walls` (`maps/wallSheet.ts`) has every
+kit, on the flat and on a slope of 3 a tile.
+
+**By hand.** It only needs a `Ground`, so any map can call it, with the heights done:
+
+```ts
+import { CITY_WALLS, placeCityWall } from "../cityWalls";
+
+placeCityWall(
+    ground,
+    CITY_WALLS.falador,
+    { x0: 90, y0: 80, x1: 150, y1: 130 }, // the middle of the walkway, corner to corner
+    [
+        { side: "south", at: 120 }, // by the tile at the gate's middle: an x on the north and south, a y on the others
+        { side: "west", at: 104 },
+    ],
+    (x, y) => ground.isWaterTile(x, y) || ground.footprint[ground.tile(x, y)] !== 0, // where it can't stand
+);
+```
+
+Then keep to what the generator does for you: two gates or more, and a road through each one, straight on for `GATE_LEAD` tiles;
+call it before `dressGround`, and keep everything else off the band, which is `forWallTiles`. `getGateColumns` says which tiles a gate takes up, so you can pin them flat.
+
+**On slopes.** Contoured kits bend to the ground, walkway and rails too, because a level 1 height is measured from the level
+below. They've looked right at 3 a tile. So on a hand-made map let a wall run over what's there, up to about that, and pin a
+gate's plot flat: a gate's own locs are contoured in `falador`, but the road through it still wants to be level. A tower isn't
+contoured, so pin it a plot too, and use `level` kits (`yanille`) on flat ground or with the ring pinned, as `levelWall` does.
+
+**Adding a kit.** `wall-survey.ts`'s `runs` reads a section, and `dump` the rest. It wants a wall type in the face's and the rail's
+`types`, with 1 and 9 for cut corners and 2 for square ones (`model-bounds.ts` prints them). Add it to `sweep` by being in
+`CITY_WALLS`, and look at it on `scaperune_walls`.
+
+**Left out, and why**: Sophanem and Menaphos (6562 stands with a skirt 1.2 tiles under the ground and is finished by diagonals on
+level 1 and walls on level 2, which came out with a black foot and a muddle at its corners), Darkmeyer (its walls have only a
+straight model, and its corners and towers are its own locs), Camelot and Lumbridge (castles, whose walls are building walls),
+Rellekka and East Ardougne (what looks like a city wall is a house's or a paddock's). Kourend's real gates run under the walkway,
+which would hide the player, so its gate is a gap.
 
 ### Floors and heights
 
@@ -1067,7 +1141,12 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
   `createRng` and `createNoise`. If you add a call to `rng()` early on, every later roll changes, and
   so does the map. Anything new goes on a seed of its own.
-- **Bridges draw above the plane**: their deck is on level 1 with a flag on level 1's tiles.
+- **Bridges draw above the plane**: their deck is on level 1 with a flag on level 1's tiles. That flag makes level 1 the ground
+  there, and level 0's locs and floor aren't drawn at all. For something that stands on the ground with more on top, use
+  `TILE_SHOWN`, which draws level 1 as well.
+- **A tile holds one wall a level.** The scene keeps the last of a type 0 to 3 on a tile, so two faces on a tile need a type 2, or
+  a tile of their own. It's why a wall's faces stand on the tiles beside its walkway.
+- **Anything on level 1 needs `TILE_SHOWN` on its tile**, or it won't draw. Yanille's are unflagged in the cache.
 - **Round buildings have empty corners.** Only what's inside the walls is reserved, so `fitsBuilding` looks at plots as well.
 - **Ruins have no floor.** A floor with half its walls gone is a slab with nothing round it.
 - **Doors are closed, or open and turned.** A stamped building with a door has a sealed inside unless you drop
