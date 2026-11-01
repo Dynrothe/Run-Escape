@@ -4,6 +4,7 @@ import { getRandomEvent } from "../content/randomEvents";
 import { emptyStats } from "../content/types";
 import { HeroOptions, Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm, usePortableMath } from "./fmath";
+import { syncHash } from "./lockstep";
 import { makeGrid } from "./world/testGrid";
 
 function openField(): string[] {
@@ -341,6 +342,18 @@ describe("co-op", () => {
         const solo = createParty(["warrior"]).spawnEnemy(goblin, "normal")!;
         expect(after.maxHp).toBeLessThan(before.maxHp);
         expect(after.maxHp).toBeGreaterThan(solo.maxHp);
+    });
+
+    it("tells apart copies that picked different rewards", () => {
+        const picks = [0, 1].map((index) => {
+            const sim = createParty(["warrior", "wizard"], 4);
+            sim.xp = 100;
+            sim.step();
+            sim.as(0, () => sim.choose(index));
+            return sim;
+        });
+        expect(picks[0].heroes[0].choices).toEqual(picks[1].heroes[0].choices);
+        expect(syncHash(picks[0])).not.toBe(syncHash(picks[1]));
     });
 
     it("plays out the same on every player's copy", () => {

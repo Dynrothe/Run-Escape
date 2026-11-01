@@ -381,6 +381,16 @@ function depthOver(payload, max) {
     return false;
 }
 
+// Turns an upgrade away and lets go of its socket, whether or not the other
+// end closes its side (one that doesn't would hold it open for good)
+function refuse(socket, status) {
+    socket.on("error", () => socket.destroy());
+    socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () =>
+        socket.destroy(),
+    );
+    setTimeout(() => socket.destroy(), 1000).unref?.();
+}
+
 // The path of a request's URL, or undefined for one that isn't a URL
 export function requestPath(req) {
     try {
@@ -981,7 +991,7 @@ export function createRelay(limits = {}) {
             (req.headers.upgrade ?? "").toLowerCase() !== "websocket" ||
             req.headers["sec-websocket-version"] !== "13"
         ) {
-            socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+            refuse(socket, "400 Bad Request");
             return;
         }
         const address = addressKey(clientAddress(req, socket, proxy));
@@ -994,7 +1004,7 @@ export function createRelay(limits = {}) {
         }
         const connections = connectionsFrom.get(address) ?? 0;
         if (connections >= connectionsPerAddress) {
-            socket.end("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+            refuse(socket, "429 Too Many Requests");
             return;
         }
         connectionsFrom.set(address, connections + 1);
@@ -1077,8 +1087,7 @@ export function createRelay(limits = {}) {
                 if (requestPath(req) === path) {
                     handleUpgrade(req, socket, head);
                 } else if (closeOthers) {
-                    socket.on("error", () => socket.destroy());
-                    socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
+                    refuse(socket, "404 Not Found");
                 }
             });
         },

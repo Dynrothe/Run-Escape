@@ -507,6 +507,21 @@ describe("co-op relay", () => {
             await stillWorks();
         });
 
+        it("lets go of a connection it turns away, even one that never closes", async () => {
+            const socket = connectTcp(port(), "127.0.0.1");
+            socket.on("error", () => {});
+            let answer = "";
+            socket.on("data", (data) => (answer += data.toString()));
+            const closed = new Promise<void>((resolve) => socket.on("close", () => resolve()));
+            // An old WebSocket version: turned away
+            socket.write(
+                `GET ${RELAY_PATH} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 8\r\n\r\n",
+            );
+            await closed;
+            expect(answer).toMatch(/^HTTP\/1.1 400/);
+        });
+
         it("drops a message nested too deep to encode again", async () => {
             const raw = new RawClient(port());
             await raw.saw("welcome");

@@ -580,12 +580,16 @@ export class GameClient implements GameFrameHandler {
         if (reason !== "left") {
             this.store.toast(ENDED_EARLY[reason] ?? "You left the party.", 5000);
         }
+        // A run that's still loading never starts
+        this.coopInbox = undefined;
         if (this.coopRun && this.sim && !this.sim.runOver) {
             this.endCoopRunEarly(ENDED_EARLY[reason] ?? "You left the party.");
         }
     }
 
     private onCoopClosed(): void {
+        // A run that's still loading never starts
+        this.coopInbox = undefined;
         const sim = this.sim;
         const run = this.coopRun;
         if (!sim || !run || sim.runOver) {
@@ -610,6 +614,9 @@ export class GameClient implements GameFrameHandler {
 
     // A guest's run that can't go on: what was done counts, as if they'd quit
     private endCoopRunEarly(why: string): void {
+        // Nothing more of it is stepped, frames still to come included
+        this.coopStopped = true;
+        this.stopBackgroundTicker();
         this.finishRun(why);
         this.store.set({ overlay: "dead", choices: [], chest: undefined, waitingOn: [] });
         this.updateHud(true);
@@ -837,6 +844,13 @@ export class GameClient implements GameFrameHandler {
             this.coop.leave();
             return;
         }
+        // The room went while the map loaded (the host left, the connection
+        // dropped): there's no run to join
+        if (!this.coopInbox || this.coop.room?.code !== room.code) {
+            this.coopInbox = undefined;
+            this.store.set({ screen: this.coop.room ? "coop" : "title" });
+            return;
+        }
         // Every copy has to work out the same numbers, to the bit
         usePortableMath(true);
         const map = getMap(game.mapId);
@@ -901,6 +915,7 @@ export class GameClient implements GameFrameHandler {
         this.appearanceVersions = [];
         this.decisionKey = "";
         this.autoAlchedUid = -1;
+        this.coopStopped = false;
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
@@ -1379,6 +1394,9 @@ export class GameClient implements GameFrameHandler {
     // behind). The menu doesn't stop it, and neither does a level up: the
     // frames carry everyone's choices.
     private updateCoop(deltaTimeMs: number, sim: Sim, run: CoopRun): void {
+        if (this.coopStopped) {
+            return;
+        }
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
@@ -1433,6 +1451,8 @@ export class GameClient implements GameFrameHandler {
     // each hero's player id
     private coopInbox?: ((run: CoopRun) => void)[];
     private coopPlayerIds: string[] = [];
+    // A co-op run that's ended early for this player (endCoopRunEarly)
+    private coopStopped = false;
     // Ticks for a co-op player whose tab is hidden (see onVisibilityChange)
     private backgroundTicker?: Worker;
     private backgroundTime = 0;

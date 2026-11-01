@@ -148,6 +148,16 @@ export function syncHash(sim: Sim): number {
             hero.inventory.filter((slot) => slot).length,
             hero.chests.length,
             hero.pendingLevelUps,
+            // What's in them, not only how many: two copies that picked
+            // different rewards differ here
+            fold([
+                hero.choices,
+                hero.weapons.map((weapon) => [weapon.def.id, weapon.level]),
+                hero.passives,
+                hero.gear,
+                hero.inventory,
+                hero.buffs,
+            ]),
         );
     }
     let x = 0;
@@ -164,6 +174,16 @@ export function syncHash(sim: Sim): number {
     let hash = 0x811c9dc5;
     for (const word of words) {
         hash = Math.imul(hash ^ word, 0x01000193) >>> 0;
+    }
+    return hash;
+}
+
+// FNV-1a of something as JSON, built the same way on every copy
+function fold(value: unknown): number {
+    const text = JSON.stringify(value) ?? "";
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
     }
     return hash;
 }
