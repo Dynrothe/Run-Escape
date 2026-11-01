@@ -256,7 +256,8 @@ const TOWN_SQUARE_RISE = 14;
 // In a town's square, and the cobbles on its streets
 export const FOUNTAIN = 879;
 
-export const PAVING = 12;
+// Varrock's street stone, a plain warm grey. Texture's for small patches.
+export const PAVING = 171;
 
 // Tiles along a road between stones, and off its edge
 const MARKER_SPACING = 16;
@@ -662,7 +663,7 @@ export function chooseWalledTowns(
             towns.set(building.town, [...(towns.get(building.town) ?? []), building]);
         }
     }
-    for (const members of towns.values()) {
+    for (const [town, members] of towns) {
         if (rng() >= settings.townWalls || members.length < MIN_WALLED_BUILDINGS) {
             continue;
         }
@@ -677,6 +678,10 @@ export function chooseWalledTowns(
             arena.y1 - 2,
         );
         walled.push({ x0, y0, x1, y1 });
+        // One that's been laid out has its square already
+        if (build.towns?.some((planned) => planned.town === town)) {
+            continue;
+        }
         // Round the middle till there's a spot for the square
         const middleX = (x0 + x1) >> 1;
         const middleY = (y0 + y1) >> 1;

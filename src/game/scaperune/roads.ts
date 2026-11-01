@@ -1,3 +1,4 @@
+import { Exit } from "./building";
 import { Build, createClimb, forTilesNear, getTouchedTiles, hasRelief, lerp } from "./mapBuild";
 import { Noise, createNoise, smoothField } from "./noise";
 import { Point, addPathToField, smoothPath } from "./paths";
@@ -39,6 +40,8 @@ const ROAD_TURN_RADIUS = 8;
 // How far a road runs dead straight off the end of a bridge's stamp, down the middle
 // of the gap between its fences and on, before it can curve
 const BRIDGE_ROAD_STRAIGHT = 6;
+
+const DOOR_PATH_HALF = 1;
 
 // Rows kept clear either side of a bridge's road
 const BRIDGE_ROAD_CLEAR = 4;
@@ -361,6 +364,58 @@ export class RoadNetwork {
             const to = { x: from.x + wayX, y: from.y + wayY };
             addPathToField(this.road, corners.x, corners.y, [from, to], narrow);
             addPathToField(this.trail, corners.x, corners.y, [from, to], narrow + TRAIL_MARGIN);
+        }
+    }
+
+    // A town's street, straight and as wide as it wants, for others to join
+    addStreet(points: Point[], halfWidth: number, height: number): void {
+        const { ground } = this.build;
+        const line = { points, lead: 0, halfWidth, start: height, grade: ROAD_GRADE };
+        this.add(line, () => halfWidth, true);
+        forTilesNear(this.build, points, halfWidth + ROAD_CLEAR_MARGIN, (i) => {
+            ground.reserved[i] = 1;
+            this.tiles[i] = 1;
+        });
+    }
+
+    // A door on a street: a step or two of road, to the street's edge
+    addDoorPath(exit: Exit, height: number): void {
+        const points = [0, 1, 2].map((step) => ({
+            x: exit.x + exit.outX * step,
+            y: exit.y + exit.outY * step,
+        }));
+        const line = {
+            points,
+            lead: points.length,
+            halfWidth: DOOR_PATH_HALF,
+            start: height,
+            grade: ROAD_GRADE,
+        };
+        this.add(line, () => DOOR_PATH_HALF, false);
+    }
+
+    // A rectangle of road, between tile corners, for a town's square
+    addRect(x0: number, y0: number, x1: number, y1: number): void {
+        const { ground, corners } = this.build;
+        for (let y = y0 - 2; y <= y1 + 2; y++) {
+            for (let x = x0 - 2; x <= x1 + 2; x++) {
+                const inside = Math.min(x - x0, x1 - x, y - y0, y1 - y) + 0.5;
+                const at = x + y * corners.x;
+                this.road[at] = Math.max(this.road[at], inside);
+                this.trail[at] = Math.max(this.trail[at], inside + TRAIL_MARGIN);
+            }
+        }
+        for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+                ground.reserved[ground.tile(x, y)] = 1;
+                this.tiles[ground.tile(x, y)] = 1;
+            }
+        }
+        for (let x = x0; x <= x1; x++) {
+            this.samples.push({ x, y: y0 }, { x, y: y1 });
+        }
+        for (let y = y0; y <= y1; y++) {
+            this.samples.push({ x: x0, y }, { x: x1, y });
         }
     }
 

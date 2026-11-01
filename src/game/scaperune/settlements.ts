@@ -16,6 +16,7 @@ import { createRng } from "./noise";
 import { Point } from "./paths";
 import { BuildingKind, PREFABS, getBuildingKind, isBuildingKind } from "./prefabs";
 import { ROAD_STEEPEST, RoadNetwork } from "./roads";
+import { planTown } from "./townPlan";
 
 // Where buildings go, and the ground they stand on.
 
@@ -455,6 +456,23 @@ export function placeBuildings(
     const towns = getTownCentres(build);
     const kits = towns.map((): TownKit => ({ misses: 0 }));
     const plots: PlacedBuilding[] = [];
+    // Towns are laid out from the middle. What doesn't fit on their streets, and towns with no
+    // roads to have streets, go on the loose ground round them.
+    if (settings.roads > 0 && wanted > 0) {
+        towns.forEach((middle, town) => {
+            const all = getBuildingNames(build, Math.floor(middle.x), Math.floor(middle.y));
+            const names = keepToKit(build, kits[town], town, all);
+            if (names.length > 0) {
+                const parts = {
+                    names,
+                    wanted: Math.ceil(wanted / towns.length),
+                    town,
+                    family: kits[town].family ?? kitOf(names[0]),
+                };
+                plots.push(...planTown(build, roads, water, middle, parts));
+            }
+        });
+    }
     // Those with roads first, so that the rest can face all the roads there'll be
     const roadCount = Math.round(wanted * settings.roads);
     for (const [count, wantsRoad] of [

@@ -39,6 +39,8 @@ The recipe runs once, on the main thread, the first time the map's played. `Game
 | `mountains.ts`   | passes, what can be walked, rock, snow, caves, lava                                                       |
 | `roads.ts`       | roads and bridges                                                                                         |
 | `settlements.ts` | where buildings go, and their plots                                                                       |
+| `townPlan.ts`    | towns laid out from the middle: a square, streets, buildings facing them                                  |
+| `vignettes.ts`   | small groups of things against a building's walls                                                         |
 | `structures.ts`  | set pieces, wrecks and drowned towns, town walls, waymarkers                                              |
 | `falls.ts`       | waterfalls off cliffs, with their pools                                                                   |
 | `terrain.ts`     | the height layer: floats per corner, pins, slope limits                                                   |
@@ -176,10 +178,17 @@ On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a
 
 **Town walls.** `townWalls` is the share of towns with one. It's a rectangle a little way out from a town's buildings, open
 where roads go through and with a gate on each side, in the biome's `wall`, and inside it roads are cobbled and there's a
-square with a fountain. A wall loc is a thin thing on a tile's side, so it costs nothing, and reachability needs no help.
+square with a fountain unless it's been laid out with one. A wall loc is a thin thing on a tile's side, so it costs nothing, and reachability needs no help.
 
-**Cities.** A town with walls is laid out in districts, a wedge each for houses, shops and churches, as far as the biome
-has them. `Walled city` is the preset.
+**Towns** are laid out from the middle (`planTown`), when there are roads to have streets: a market with a well and stalls and a
+street off each side of its square, a long axis, or a hamlet on a lane, by how many buildings it wants. Buildings stand along
+the square and the streets, facing them, 3 to 5 tiles apart with the biggest on the square, and many have a fenced yard behind.
+Each has a step of road to the street, so the rule about doors and roads holds. What doesn't fit goes on the loose ground
+round the town as before, and trees come back over 32 tiles past its paved core (`getTownFade`). A town keeps to one family of
+prefabs, by the start of their names, and its fence goes with them (`KIT_FENCES`). `Walled city` is the preset for a big one, and
+`scaperune_town` is the dev map.
+
+**Vignettes** are one or two small groups a building, against a wall without a door, of what its biome's towns really have.
 
 **Waymarkers** stand beside roads, turn about, every 16 tiles at 1.
 

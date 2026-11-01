@@ -51,6 +51,8 @@ export type BiomeDef = {
     trail: number;
     // Overlays
     road: number;
+    // Overlay for a town's paving, if it's not the usual
+    paving?: number;
     water: number;
     // [loc id, tiles a side], smallest first
     trees: [number, number][];
@@ -88,6 +90,9 @@ export const CLIFF_FALL = 51484;
 const LAVA = 19;
 // Snow on any mountain, from Ice Mountain and Trollweiss
 const SNOW = 58;
+
+// Hosidius's grey, for towns where warm stone would look wrong
+const DARK_PAVING = 10;
 
 // What's on cliffs above the snow line, whatever the biome
 export const SNOW_ROCK: Pick<RockDef, "pebbles" | "rubble"> = {
@@ -410,6 +415,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         hillGround: 146,
         trail: 148,
         road: 99,
+        paving: DARK_PAVING,
         water: LAVA,
         molten: true,
         trees: [
@@ -499,6 +505,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         hillGround: 98,
         trail: 97,
         road: 110,
+        paving: DARK_PAVING,
         water: 7,
         trees: [
             [1289, 1],
@@ -635,6 +642,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
         hillGround: 240,
         trail: 240,
         road: 72,
+        paving: DARK_PAVING,
         water: 7,
         trees: [
             [40788, 2],

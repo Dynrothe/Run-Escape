@@ -9,6 +9,7 @@ import { BuildContext } from "./recipe";
 import { Plot } from "./roadGrades";
 import { GeneratorSettings } from "./settings";
 import { Terrain } from "./terrain";
+import type { PlannedTown } from "./townPlan";
 
 // What's kept while a generated map's built, and what the parts of the generator share.
 
@@ -69,6 +70,8 @@ export type Build = {
     tileHeights: Float32Array;
     // Buildings' plots, for roads to keep to
     plots: Plot[];
+    // Towns laid out from the middle
+    towns?: PlannedTown[];
 };
 
 // The water as painted: repainted when a ford cuts through it

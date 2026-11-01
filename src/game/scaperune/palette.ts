@@ -115,6 +115,9 @@ function build(context: BuildContext): TileGrid {
         }
     }
     ground.paintOverlay(paved, PAVING, false);
+    for (const biome of Object.values(BIOMES)) {
+        ground.level0.overlays[ground.tile(19, PLOT * rows + 5)] = biome.paving ?? PAVING;
+    }
     ground.place({ id: FOUNTAIN, type: 10, rotation: 0, level: 0, x: 20, y: PLOT * rows }, 2, 2);
     // What dressing puts on each floor, in rows
     const dressing = [...new Set(Object.values(FLOOR_KITS).flatMap(({ ids }) => ids))];

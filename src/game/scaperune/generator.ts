@@ -70,6 +70,7 @@ import {
 import { DEFAULT_SETTINGS, GeneratorSettings, getSettingsError } from "./settings";
 import { PlacedBuilding, placeBuildings, placeRuins } from "./settlements";
 import {
+    PAVING,
     PlacedPiece,
     chooseWalledTowns,
     getPaving,
@@ -79,6 +80,7 @@ import {
     placeWaymarkers,
 } from "./structures";
 import { limitSlope } from "./terrain";
+import { getTownFade, getTownPaving } from "./townPlan";
 import { placeVignettes } from "./vignettes";
 
 export * from "./settings";
@@ -297,11 +299,12 @@ function scatter(build: Build, water: Uint8Array): void {
                     continue;
                 }
             }
-            // Nothing grows on the snow
+            // Nothing grows on the snow, and trees take over from a town's buildings
             const bare = terrain.height[terrain.corner(x, y)] > snowLine ? 0 : 1 - rocky;
-            const treeChance = (inBelt ? 0.5 : settings.trees * density) * bare;
-            const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006);
-            const propChance = settings.props * PROP_CHANCE * bare;
+            const fade = getTownFade(build, x, y);
+            const treeChance = (inBelt ? 0.5 : settings.trees * density) * bare * fade;
+            const rockChance = settings.rocks * (clump < 0.44 ? 0.025 : 0.006) * fade;
+            const propChance = settings.props * PROP_CHANCE * bare * fade;
             if (stones && edge + hillWander(x / 14, y / 14) * 8 < 5 && edge > -6) {
                 // Rock heaped along the edge, where the ground gets too steep, in a line
                 // that wanders so that it doesn't show the arena's edge
@@ -609,7 +612,10 @@ export function generateMapDetail(
     finishHeights(build);
     blockSteepGround(build);
 
-    const paving = (x: number, y: number) => getPaving(walled, x, y);
+    const paving = (x: number, y: number) =>
+        getTownPaving(build, x, y) || getPaving(walled, x, y)
+            ? (biomeAt(x, y).paving ?? PAVING)
+            : undefined;
     const roadTiles = settings.roads > 0 ? roads.paint(paving) : new Uint8Array(waterTiles.length);
     const rockSkip = new Uint8Array(waterTiles.length);
     for (let i = 0; i < rockSkip.length; i++) {
