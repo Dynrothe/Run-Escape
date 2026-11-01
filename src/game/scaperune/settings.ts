@@ -1,4 +1,5 @@
 import { BIOMES, BiomeId } from "./biomes";
+import { CITY_WALL_IDS, CityWallId } from "./cityWalls";
 import type { Rng } from "./noise";
 
 // Everything the generator can be told, in one place: the map generator's screen,
@@ -137,6 +138,8 @@ export type GeneratorSettings = {
     landmarks: number;
     // Share of towns with a wall round them
     townWalls: number;
+    // Which real city's wall they have. On auto, one that suits a town's buildings or biome.
+    wallKit: "auto" | CityWallId;
     // Old stones along the roads: 1 is one every 16 tiles
     waymarkers: number;
 
@@ -278,6 +281,9 @@ export const SETTINGS: Record<SettingKey, SettingDef> = {
     ruins: share("Ruins"),
     landmarks: share("Landmarks"),
     townWalls: share("Town walls", { when: (s) => s.towns > 0 && s.buildings > 0 }),
+    wallKit: choice("Wall from", ["auto", ...CITY_WALL_IDS], {
+        when: (s) => s.towns > 0 && s.buildings > 0 && s.townWalls > 0,
+    }),
     waymarkers: share("Waymarkers", { when: hasRoads }),
 
     spawnX: share("Start, west to east"),
@@ -374,6 +380,7 @@ export const SETTING_SECTIONS: { name: string; keys: SettingKey[] }[] = [
             "ruins",
             "landmarks",
             "townWalls",
+            "wallKit",
             "waymarkers",
         ],
     },
@@ -452,6 +459,7 @@ export const DEFAULT_SETTINGS: Omit<GeneratorSettings, "seed"> = {
     ruins: 0,
     landmarks: 0.3,
     townWalls: 0,
+    wallKit: "auto",
     waymarkers: 0,
 
     spawnX: 0.5,
@@ -607,6 +615,7 @@ export const SETTING_PRESETS: Record<string, Partial<GeneratorSettings>> = {
         towns: 1,
         townSize: 52,
         townWalls: 1,
+        wallKit: "falador",
         buildings: 0.8,
         roads: 1,
         waymarkers: 0.5,

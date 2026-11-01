@@ -99,7 +99,7 @@ type Candidate = { name: string; centreX: number; centreY: number; town?: number
 // A town's family of prefabs, and how many spots it's missed
 type TownKit = { family?: string; misses: number };
 
-function kitOf(name: string): string {
+export function kitOf(name: string): string {
     return name.split("_")[0];
 }
 

@@ -1,3 +1,16 @@
+import { BIOMES, BiomeId } from "./biomes";
+import {
+    CITY_WALLS,
+    CITY_WALL_IDS,
+    CityGate,
+    CityWallKit,
+    WALL_SIDES,
+    WallRect,
+    forWallTiles,
+    getGateColumns,
+    getWallSide,
+    placeCityWall,
+} from "./cityWalls";
 import {
     Build,
     LOC_NORMAL,
@@ -10,10 +23,17 @@ import {
     lerp,
     pick,
 } from "./mapBuild";
-import { distanceTo } from "./noise";
+import { createRng, distanceTo } from "./noise";
 import { Point } from "./paths";
 import { RoadNetwork } from "./roads";
-import { PlacedBuilding, fitsBuilding, getPlotHeight, markOffLimits, pinPlot } from "./settlements";
+import {
+    PlacedBuilding,
+    fitsBuilding,
+    getPlotHeight,
+    kitOf,
+    markOffLimits,
+    pinPlot,
+} from "./settlements";
 
 // What a place is known for: one big thing, or a few that belong together, standing on a plot
 // as a building does, because a big loc on a slope shows its underside. Then what only makes
@@ -333,14 +353,26 @@ const DROWNED_HOUSES = 3;
 // A wreck's this near the shore, in tiles from its edge
 const WRECK_REACH = 4;
 
-// Of a town's walls, tiles either side of a gate where there's no road through
-const GATE_HALF = 2;
-
 // The same for a fort's
 const FORT_GATE = 2;
 
-// Tiles from a town's outermost building to its wall
-const TOWN_WALL_GAP = 4;
+// Tiles from a town's outermost building to the middle of its wall, which keeps it off yards
+const TOWN_WALL_GAP = 6;
+
+// How far from the corner of a wall a gate's middle can be, past the wall's chamfer
+const GATE_CORNER = 5;
+
+// Tiles of wall between one gate and the next, or a road crossing there shares the last's gate
+const GATE_SPACING = 5;
+
+// Tiles of road each side of a wall, for a road to come through a gate straight on
+const GATE_LEAD = 5;
+
+// How far off a town's wall a side can move to get clear of a road running along it
+const WALL_SHIFT = 4;
+
+// A seed of its own, so that it moves no other roll, for which wall a town gets
+const WALL_KIT_SEED = 2417;
 
 // A town needs this many buildings to have a wall
 const MIN_WALLED_BUILDINGS = 2;
@@ -872,8 +904,175 @@ export function placeWaterPieces(build: Build, water: Uint8Array): PlacedPiece[]
     return placed;
 }
 
-// A town with a wall round it, by the rectangle the wall stands on
-export type WalledTown = { x0: number; y0: number; x1: number; y1: number };
+// A town with a wall round it: the rectangle its walkway runs round, what it's built of and where
+// its gates are, and which of the rectangle's tiles something else was on first
+export type WalledTown = WallRect & { kit: CityWallKit; gates: CityGate[]; taken: Set<number> };
+
+// Which wall a town gets: the setting's, or one that suits its buildings, or else its biome
+function pickWallKit(build: Build, town: number, members: PlacedBuilding[]): CityWallKit {
+    const { settings, biomeAt } = build;
+    if (settings.wallKit !== "auto") {
+        return CITY_WALLS[settings.wallKit];
+    }
+    const roll = createRng(settings.seed + WALL_KIT_SEED + town);
+    const counts = new Map<string, number>();
+    for (const { name } of members) {
+        counts.set(kitOf(name), (counts.get(kitOf(name)) ?? 0) + 1);
+    }
+    const family = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+    const { x, y } = members[0];
+    const here = biomeAt(x, y);
+    const biome = Object.keys(BIOMES).find((id) => BIOMES[id as BiomeId] === here) ?? "";
+    const byFamily = CITY_WALL_IDS.filter((id) => CITY_WALLS[id].families.includes(family));
+    const byBiome = CITY_WALL_IDS.filter((id) => CITY_WALLS[id].biomes.includes(biome));
+    const from = [byFamily, byBiome, CITY_WALL_IDS].find((ids) => ids.length > 0)!;
+    return CITY_WALLS[pick(roll, from)];
+}
+
+// Each side of a wall moves out to wherever the fewest road tiles lie along it, so that no road
+// runs under it for its length
+function clearOfRoads(build: Build, roads: RoadNetwork, rect: WallRect): void {
+    const { ground, arena } = build;
+    const limits = [arena.y0 + 3, arena.x0 + 3, arena.y1 - 3, arena.x1 - 3];
+    const keys = ["y0", "x0", "y1", "x1"] as const;
+    keys.forEach((key, turn) => {
+        const out = turn < 2 ? -1 : 1;
+        let best = rect[key];
+        let fewest = Infinity;
+        const start = rect[key];
+        for (let shift = 0; shift <= WALL_SHIFT; shift++) {
+            const at = start + shift * out;
+            if ((at - limits[turn]) * out > 0) {
+                break;
+            }
+            rect[key] = at;
+            const side = getWallSide(rect, turn);
+            let onRoad = 0;
+            for (let along = 0; along <= side.length; along++) {
+                onRoad += roads.tiles[ground.tile(side.x(along, 0), side.y(along, 0))];
+            }
+            if (onRoad < fewest) {
+                fewest = onRoad;
+                best = at;
+            }
+        }
+        rect[key] = best;
+    });
+}
+
+// A gate wherever a road comes through a side, and in the middle of a side that has none, so that
+// a wall's never a trap with one way in
+function planGates(build: Build, roads: RoadNetwork, kit: CityWallKit, rect: WallRect): CityGate[] {
+    const { ground } = build;
+    const gates: CityGate[] = [];
+    const margin = kit.chamfer + GATE_CORNER;
+    WALL_SIDES.forEach((name, turn) => {
+        const side = getWallSide(rect, turn);
+        const lastGate = side.length - margin;
+        if (lastGate < margin) {
+            return;
+        }
+        const tileAt = (along: number) => ground.tile(side.x(along, 0), side.y(along, 0));
+        const stops: number[] = [];
+        let from = -1;
+        for (let along = 0; along <= side.length + 1; along++) {
+            const onRoad = along <= side.length && roads.tiles[tileAt(along)] !== 0;
+            if (onRoad && from < 0) {
+                from = along;
+            } else if (!onRoad && from >= 0) {
+                stops.push(Math.min(Math.max((from + along - 1) >> 1, margin), lastGate));
+                from = -1;
+            }
+        }
+        if (stops.length === 0) {
+            stops.push(side.length >> 1);
+        }
+        let last = -Infinity;
+        for (const along of stops) {
+            if (along - last >= kit.gateSize + GATE_SPACING) {
+                gates.push({ side: name, at: turn & 1 ? side.y(along, 0) : side.x(along, 0) });
+                last = along;
+            }
+        }
+    });
+    return gates;
+}
+
+// The way through a gate, level, with a road through it. A gate that no road came to gets one on
+// the inside, to the nearest road.
+function openGate(
+    build: Build,
+    roads: RoadNetwork,
+    kit: CityWallKit,
+    rect: WallRect,
+    gate: CityGate,
+): void {
+    const { ground } = build;
+    const { side, start } = getGateColumns(kit, rect, gate);
+    const end = start + kit.gateSize - 1;
+    const middle = (start + end) / 2;
+    const point = (across: number): Point => ({
+        x: side.x(middle, across) + 0.5,
+        y: side.y(middle, across) + 0.5,
+    });
+    let hadRoad = false;
+    for (let along = start; along <= end; along++) {
+        hadRoad ||= roads.tiles[ground.tile(side.x(along, 0), side.y(along, 0))] !== 0;
+    }
+    const xs = [side.x(start, -2), side.x(end, kit.width + 1)];
+    const ys = [side.y(start, -2), side.y(end, kit.width + 1)];
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    const sizeX = Math.max(...xs) - x + 1;
+    const sizeY = Math.max(...ys) - y + 1;
+    const height = getPlotHeight(build, x, y, sizeX, sizeY);
+    if (height !== undefined) {
+        pinPlot(build, x, y, sizeX, sizeY, height);
+    }
+    const halfWidth = Math.min(roads.halfWidth + 0.5, kit.gateSize / 2 - 1);
+    roads.addStraight(point(-GATE_LEAD), point(kit.width + GATE_LEAD), halfWidth);
+    if (!hadRoad) {
+        const lead = [0, 1, 2, 3].map((step) => point(kit.width + GATE_LEAD + step));
+        const from = { x: Math.floor(lead[3].x), y: Math.floor(lead[3].y) };
+        roads.lay(from, lead, roads.findRoute(from, lead), roads.halfWidth, height ?? 0);
+    }
+}
+
+// The towns that get a wall, with any whose walls would touch run together into one: two cities
+// that close are one city, and a wall can't cross another
+function mergeWalledTowns(
+    build: Build,
+    towns: Map<number, PlacedBuilding[]>,
+): [number, PlacedBuilding[]][] {
+    const { rng, settings } = build;
+    const groups: [number, PlacedBuilding[]][] = [];
+    for (const [town, members] of towns) {
+        if (rng() < settings.townWalls && members.length >= MIN_WALLED_BUILDINGS) {
+            groups.push([town, members]);
+        }
+    }
+    const reach = (TOWN_WALL_GAP + WALL_SHIFT) * 2 + 2;
+    const bounds = (members: PlacedBuilding[]) => ({
+        x0: Math.min(...members.map((b) => b.x)),
+        y0: Math.min(...members.map((b) => b.y)),
+        x1: Math.max(...members.map((b) => b.x + b.sizeX)),
+        y1: Math.max(...members.map((b) => b.y + b.sizeY)),
+    });
+    for (let i = 0; i < groups.length; i++) {
+        for (let j = groups.length - 1; j > i; j--) {
+            const a = bounds(groups[i][1]);
+            const b = bounds(groups[j][1]);
+            const apart = Math.max(a.x0 - b.x1, b.x0 - a.x1, a.y0 - b.y1, b.y0 - a.y1);
+            if (apart < reach) {
+                groups[i][1] = [...groups[i][1], ...groups[j][1]];
+                groups.splice(j, 1);
+                // What's merged may reach another that it didn't before
+                j = groups.length;
+            }
+        }
+    }
+    return groups;
+}
 
 // Which towns have walls, a little way out from their buildings, each with a square and a
 // fountain at its middle if there's room
@@ -893,28 +1092,48 @@ export function chooseWalledTowns(
             towns.set(building.town, [...(towns.get(building.town) ?? []), building]);
         }
     }
-    for (const [town, members] of towns) {
-        if (rng() >= settings.townWalls || members.length < MIN_WALLED_BUILDINGS) {
-            continue;
-        }
-        const x0 = Math.max(Math.min(...members.map((b) => b.x)) - TOWN_WALL_GAP, arena.x0 + 2);
-        const y0 = Math.max(Math.min(...members.map((b) => b.y)) - TOWN_WALL_GAP, arena.y0 + 2);
+    for (const [town, members] of mergeWalledTowns(build, towns)) {
+        const x0 = Math.max(Math.min(...members.map((b) => b.x)) - TOWN_WALL_GAP, arena.x0 + 3);
+        const y0 = Math.max(Math.min(...members.map((b) => b.y)) - TOWN_WALL_GAP, arena.y0 + 3);
         const x1 = Math.min(
             Math.max(...members.map((b) => b.x + b.sizeX)) + TOWN_WALL_GAP,
-            arena.x1 - 2,
+            arena.x1 - 3,
         );
         const y1 = Math.min(
             Math.max(...members.map((b) => b.y + b.sizeY)) + TOWN_WALL_GAP,
-            arena.y1 - 2,
+            arena.y1 - 3,
         );
-        walled.push({ x0, y0, x1, y1 });
+        const rect = { x0, y0, x1, y1 };
+        clearOfRoads(build, roads, rect);
+        const kit = pickWallKit(build, town, members);
+        const gates = planGates(build, roads, kit, rect);
+        const taken = new Set<number>();
+        forWallTiles(kit, rect, (tx, ty) => {
+            const i = ground.tile(tx, ty);
+            if (roads.tiles[i]) {
+                return;
+            }
+            if (
+                ground.reserved[i] ||
+                ground.footprint[i] ||
+                roads.bridgeZone[i] ||
+                roads.water[i]
+            ) {
+                taken.add(i);
+            }
+            ground.reserved[i] = 1;
+        });
+        for (const gate of gates) {
+            openGate(build, roads, kit, rect, gate);
+        }
+        walled.push({ ...rect, kit, gates, taken });
         // One that's been laid out has its square already
         if (build.towns?.some((planned) => planned.town === town)) {
             continue;
         }
         // Round the middle till there's a spot for the square
-        const middleX = (x0 + x1) >> 1;
-        const middleY = (y0 + y1) >> 1;
+        const middleX = (rect.x0 + rect.x1) >> 1;
+        const middleY = (rect.y0 + rect.y1) >> 1;
         let done = false;
         for (let reach = 0; reach < TOWN_SQUARE_SEARCH && !done; reach++) {
             for (let tries = 0; tries < 8 && !done; tries++) {
@@ -958,34 +1177,17 @@ export function getPaving(walled: WalledTown[], x: number, y: number): number | 
         : undefined;
 }
 
-// The walls round towns, open where roads go through them, and with a gate each way
-export function placeTownWalls(build: Build, walled: WalledTown[], roadTiles: Uint8Array): void {
-    const { ground, biomeAt, spawn } = build;
-    for (const { x0, y0, x1, y1 } of walled) {
-        const id = biomeAt((x0 + x1) >> 1, (y0 + y1) >> 1).wall;
-        // A gate on each side, on the line to the spawn if it's that side
-        const gateX = Math.min(Math.max(spawn.x, x0 + GATE_HALF + 1), x1 - GATE_HALF - 1);
-        const gateY = Math.min(Math.max(spawn.y, y0 + GATE_HALF + 1), y1 - GATE_HALF - 1);
-        const put = (x: number, y: number, rotation: number) => {
-            const i = ground.tile(x, y);
-            const wall = !ground.isWaterTile(x, y) && !ground.footprint[i] && !roadTiles[i];
-            const gate =
-                rotation === WALL_NORTH || rotation === WALL_SOUTH
-                    ? Math.abs(x - gateX) <= GATE_HALF
-                    : Math.abs(y - gateY) <= GATE_HALF;
-            if (wall && !gate) {
-                ground.grid.locs.push({ id, type: LOC_WALL, rotation, level: 0, x, y });
-                ground.reserved[i] = 1;
-            }
-        };
-        for (let x = x0; x <= x1; x++) {
-            put(x, y0, WALL_SOUTH);
-            put(x, y1, WALL_NORTH);
-        }
-        for (let y = y0; y <= y1; y++) {
-            put(x0, y, WALL_WEST);
-            put(x1, y, WALL_EAST);
-        }
+// The walls round towns, on what's left of the ground once the land's finished
+export function placeTownWalls(build: Build, walled: WalledTown[]): void {
+    const { ground } = build;
+    for (const { kit, gates, taken, x0, y0, x1, y1 } of walled) {
+        placeCityWall(
+            ground,
+            kit,
+            { x0, y0, x1, y1 },
+            gates,
+            (x, y) => taken.has(ground.tile(x, y)) || ground.isWaterTile(x, y),
+        );
     }
 }
 

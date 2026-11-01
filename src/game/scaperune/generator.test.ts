@@ -207,6 +207,7 @@ describe("generateMap", () => {
         ruins: [1],
         landmarks: [1],
         townWalls: [1, { towns: 1, buildings: 1 }],
+        wallKit: ["varrock", { towns: 1, buildings: 1, townWalls: 1, wallKit: "falador" }],
         waymarkers: [1, { roads: 1, sites: 0 }],
         spawnX: [0.1],
         spawnY: [0.1],

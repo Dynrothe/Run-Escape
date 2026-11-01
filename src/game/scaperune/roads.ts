@@ -413,6 +413,13 @@ export class RoadNetwork {
         }
     }
 
+    // A straight piece of road, for a gate
+    addStraight(from: Point, to: Point, halfWidth: number): void {
+        const { corners } = this.build;
+        addPathToField(this.road, corners.x, corners.y, [from, to], halfWidth);
+        addPathToField(this.trail, corners.x, corners.y, [from, to], halfWidth + TRAIL_MARGIN);
+    }
+
     // A round of road, for a town's square
     addSquare(x: number, y: number, radius: number): void {
         const { corners } = this.build;

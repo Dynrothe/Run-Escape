@@ -72,6 +72,7 @@ import { PlacedBuilding, placeBuildings, placeRuins } from "./settlements";
 import {
     PAVING,
     PlacedPiece,
+    WalledTown,
     chooseWalledTowns,
     getPaving,
     placeSetPieces,
@@ -144,6 +145,8 @@ export type GeneratedMap = {
     falls: Point[];
     // Rivers' own
     waterfalls: Point[];
+    // Only the generator's towns: a hand-made map's own wall is its own business
+    walled?: WalledTown[];
 };
 
 export function getGeneratedSize(settings: Pick<GeneratorSettings, "squaresX" | "squaresY">): {
@@ -631,7 +634,7 @@ export function generateMapDetail(
     placeFalls(build, falls);
     dressCliffs(build, rock, rockSkip, falls);
     placeBoundary(build, roadTiles);
-    placeTownWalls(build, walled, roadTiles);
+    placeTownWalls(build, walled);
     placeWaymarkers(build, roads);
     landmarks.push(...placeWaterPieces(build, waterTiles));
     scatter(build, waterTiles);
@@ -652,6 +655,7 @@ export function generateMapDetail(
         walkSlope: settings.walkSlope,
         caves,
         falls,
+        walled,
         waterfalls: rivers.flatMap((river) =>
             river.drops.map(({ along }) => {
                 const across = riverCentre(river, along);
