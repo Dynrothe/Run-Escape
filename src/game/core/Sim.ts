@@ -103,6 +103,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
+import { movePlayer, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -173,7 +174,7 @@ export const DPS_WINDOW_SECONDS = 8;
 const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
-const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
+export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
@@ -373,8 +374,9 @@ export const LEVEL_MIGHT_LEVELS = 40;
 // across it
 const FIRE_INTERVAL = 25;
 const FIRE_FLAMES = 7;
-// At most this many patches of burning ground at once; a pulse this close to
-// one (a share of its radius) keeps it burning rather than lighting another
+// At most this many patches of burning ground at once for each hero; a pulse
+// this close to one of theirs (a share of its radius) keeps it burning rather
+// than lighting another
 const MAX_FIRES = 3;
 const FIRE_MERGE = 0.5;
 // Split arrows look for enemies this close to where the arrow split
@@ -619,7 +621,10 @@ export class Sim {
     // A boss's bullets, what fired each (BulletPool.source), and the volleys to
     // come
     readonly bullets = new BulletPool();
-    readonly bulletSources: { attack: BossAttackDef; enemy: Enemy }[] = [];
+    // What a bullet's source index means. A slot is freed once its boss is
+    // dead with nothing of its left in the air (see freeBulletSources), so
+    // a long endless run doesn't keep every boss it's had
+    readonly bulletSources: ({ attack: BossAttackDef; enemy: Enemy } | undefined)[] = [];
     private emitters: BulletEmitter[] = [];
     // Where each hero is for the bullets, kept from tick to tick
     private readonly bulletTargets: BulletTarget[] = [];
@@ -1442,10 +1447,11 @@ export class Sim {
     }
 
     // A level up's rewards can be skipped for coins, but not a godsword's
-    // hilt, or the coins and shark offered when there's nothing else
+    // hilt, or the coins and shark offered when there's nothing else. Only by
+    // someone choosing: a downed player can't spend the party's coins.
     get canSkip(): boolean {
         return (
-            this.state === "levelUp" &&
+            this.isChoosing() &&
             !this.choosingHilt &&
             this.choices.some((c) => c.kind !== "coins" && c.kind !== "food")
         );
@@ -1484,13 +1490,14 @@ export class Sim {
 
     // Rolls what's on offer again, for one of the run's rerolls: the level
     // up's rewards, or the open casket's item (another one, its rarity rolled
-    // again too). False when there's no reroll left or nothing on offer.
+    // again too). False when there's no reroll left or nothing on offer (a
+    // downed player has no level up to choose).
     reroll(): boolean {
         const chest = this.chest;
         if (this.rerollsLeft <= 0 || this.choosingHilt) {
             return false;
         }
-        if (this.state === "levelUp" && this.pendingLevelUps > 0) {
+        if (this.isChoosing()) {
             this.choices = this.roll();
         } else if (this.state === "chest" && chest) {
             this.declineSetPiece(chest.itemId);
@@ -1982,42 +1989,23 @@ export class Sim {
         const player = this.player;
         player.prevX = player.x;
         player.prevY = player.y;
-        // It's the input that's cursed, so keys and the stick go the same way
-        const curse = this.curse;
-        if (curse) {
-            const [a, b, c, d] = curse.matrix;
-            const x = moveX * a + moveY * b;
-            moveY = moveX * c + moveY * d;
-            moveX = x;
-        }
         const frozen = player.frozen > 0;
         if (frozen) {
             player.frozen--;
         }
-        // Held by what's beside them, they can still turn to hit it
-        if (frozen && this.hold && (moveX !== 0 || moveY !== 0)) {
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        const moving = !frozen && (moveX !== 0 || moveY !== 0);
-        if (moving) {
-            const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
-            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
-            moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        // A fight in a set square (MapDef.bossArena) can't be walked away from
-        if (this.map.bossArena && this.shownBoss?.def.boss?.phases) {
-            const arena = this.bossArena;
-            const edge = player.radius;
-            player.x = Math.max(arena.minX + edge, Math.min(arena.maxX - edge, player.x));
-            player.y = Math.max(arena.minY + edge, Math.min(arena.maxY - edge, player.y));
-        }
+        const moving = movePlayer(this.grid, player, moveX, moveY, {
+            radius: player.radius,
+            baseSpeed: PLAYER_SPEED,
+            moveSpeed: this.stats.moveSpeed,
+            tick: this.tick,
+            sledEndTick: this.sledEndTick,
+            sledSpeed: this.sledSpeed,
+            frozen,
+            held: !!this.hold,
+            curse: this.curse,
+            arena:
+                this.map.bossArena && this.shownBoss?.def.boss?.phases ? this.bossArena : undefined,
+        });
         if (moving !== player.moving) {
             player.moving = moving;
             player.moveStart = this.tick;
@@ -2952,7 +2940,9 @@ export class Sim {
         ignoreArmor = false,
     ): number {
         const player = this.player;
-        if (this.hero.down && !this.runOver) {
+        // Once the run's over nothing more lands, so a win can't turn into a
+        // death (or spend a revive) later in the tick it's won
+        if (this.runOver || this.hero.down) {
             return 0;
         }
         const armor = ignoreArmor ? 0 : this.stats.armor;
@@ -4056,9 +4046,16 @@ export class Sim {
         if (!pattern) {
             return;
         }
-        let source = this.bulletSources.findIndex((s) => s.attack === attack && s.enemy === enemy);
+        let source = this.bulletSources.findIndex(
+            (s) => s !== undefined && s.attack === attack && s.enemy === enemy,
+        );
         if (source === -1) {
-            source = this.bulletSources.push({ attack, enemy }) - 1;
+            this.freeBulletSources();
+            source = this.bulletSources.indexOf(undefined);
+            if (source === -1) {
+                source = this.bulletSources.length;
+            }
+            this.bulletSources[source] = { attack, enemy };
         }
         const aimed = pattern.shape === "spread";
         this.emitters.push({
@@ -4072,6 +4069,29 @@ export class Sim {
         });
         enemy.bossState!.channelEnd =
             this.tick + secondsToTicks(pattern.volleys * pattern.interval);
+    }
+
+    // Frees the slots of dead bosses, once no bullet or volley of theirs is
+    // left to point at them, for the next pattern to take
+    private freeBulletSources(): void {
+        const sources = this.bulletSources;
+        const bullets = this.bullets;
+        const inUse = new Set<number>();
+        for (let i = 0; i < bullets.count; i++) {
+            inUse.add(bullets.source[bullets.order[i]]);
+        }
+        for (const emitter of this.emitters) {
+            inUse.add(emitter.source);
+        }
+        for (let i = 0; i < sources.length; i++) {
+            const source = sources[i];
+            if (source && source.enemy.dead && !inUse.has(i)) {
+                sources[i] = undefined;
+            }
+        }
+        while (sources.length > 0 && sources[sources.length - 1] === undefined) {
+            sources.pop();
+        }
     }
 
     private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
@@ -4187,7 +4207,8 @@ export class Sim {
                 return;
             }
             this.use(this.heroes[i]);
-            const { attack, enemy } = this.bulletSources[bullets.source[hit]];
+            // A bullet in the air keeps its source's slot (freeBulletSources)
+            const { attack, enemy } = this.bulletSources[bullets.source[hit]]!;
             this.bulletGraceEnd = this.tick + BULLET_GRACE_TICKS;
             this.bossHit(enemy.def.id, enemy, attack, bullets.damage[hit]);
         });
@@ -4923,7 +4944,7 @@ export class Sim {
         showImpact = true,
     ): void {
         const player = this.player;
-        if (this.reviving || (this.hero.down && !this.runOver)) {
+        if (this.reviving || this.runOver || this.hero.down) {
             return;
         }
         if (showImpact && attack.impactSpotAnim !== undefined) {
@@ -5377,6 +5398,12 @@ export class Sim {
     }
 
     private endRun(state: "dead" | "victory"): void {
+        // A result stands, except that the final boss falling in the same tick
+        // as the last player wins, whichever came first (weapons still fire in
+        // that tick, see stepRun)
+        if (this.runOver && !(state === "victory" && this.tick === this.endTick)) {
+            return;
+        }
         this.endTick = this.tick;
         this.state = state;
         // Everything stands still from here on; idle rather than walk on the spot
@@ -6075,10 +6102,14 @@ export class Sim {
     }
 
     // Puts the weapon's items circling the player, evenly spaced, in place of
-    // any still going round from last time
+    // any of theirs still going round from last time (not the rest of the
+    // party's)
     private fireOrbit(def: WeaponDef, level: WeaponDef["levels"][number]): void {
         const player = this.player;
-        this.projectiles = this.projectiles.filter((p) => !(p.orbit && p.weapon === def));
+        const hero = this.hero.index;
+        this.projectiles = this.projectiles.filter(
+            (p) => !(p.orbit && p.weapon === def && p.hero === hero),
+        );
         const amount = level.amount + this.stats.amount;
         const radius = level.area * (1 + this.stats.area);
         // Speed is how fast they go round, in tiles a second
@@ -6427,7 +6458,8 @@ export class Sim {
     // Leaves the ground around the player burning for the level's duration
     // (Toktz-mej-tal), with flames across it. A pulse where the ground's
     // already burning keeps that fire going instead, and only a few burn at
-    // once (the oldest goes out).
+    // once (the oldest goes out). In co-op each player has their own: one's
+    // pulse doesn't feed or put out another's fire.
     private burnGround(
         burns: NonNullable<WeaponDef["burns"]>,
         level: WeaponDef["levels"][number],
@@ -6438,7 +6470,9 @@ export class Sim {
         // A share of the aura's own reach, so it grows with its area bonuses
         const radius = level.area * (1 + this.stats.area) * burns.radius;
         const damage = level.damage * burns.damage;
-        const same = this.fires.find(
+        const hero = this.hero.index;
+        const own = this.fires.filter((fire) => fire.hero === hero);
+        const same = own.find(
             (fire) => fm.hypot(fire.x - x, fire.y - y) < fire.radius * FIRE_MERGE,
         );
         if (same) {
@@ -6456,8 +6490,8 @@ export class Sim {
             }
             return;
         }
-        if (this.fires.length >= MAX_FIRES) {
-            this.fires.shift();
+        if (own.length >= MAX_FIRES) {
+            this.fires.splice(this.fires.indexOf(own[0]), 1);
         }
         const flames: Vec2[] = [];
         for (let i = 0; i < FIRE_FLAMES; i++) {
@@ -7694,10 +7728,13 @@ export class Sim {
         }
     }
 
-    // Its timer on screen goes with it, which may be early
+    // Its timer on screen goes with it, which may be early (its own hero's,
+    // not another's from the same power-up)
     private endRampage(rampage: Rampage): void {
         rampage.doneTick = this.tick;
-        const active = this.powerUps.find((p) => p.id === rampage.powerUpId);
+        const active = this.powerUps.find(
+            (p) => p.id === rampage.powerUpId && p.hero === rampage.hero,
+        );
         if (active) {
             active.endTick = this.tick + 1;
         }
@@ -8267,10 +8304,7 @@ function pingPong(distance: number, half: number): number {
     return p < half * 2 ? p - half : half * 3 - p;
 }
 
-// RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
-export function yawFromVector(dx: number, dy: number): number {
-    return Math.round((fm.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
-}
+export { yawFromVector } from "./PlayerMovement";
 
 export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };
 
