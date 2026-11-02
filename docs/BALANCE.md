@@ -4,6 +4,27 @@ Edit [`src/game/content/balance.ts`](../src/game/content/balance.ts) for weapon,
 difficulty and party-size adjustments. The shipped config is `{}`: no blanket nerf. Authored
 weapon levels remain in [`weapons.ts`](../src/game/content/weapons.ts).
 
+## Current evolution curves
+
+The controlled nerf edits 21 evolutions' authored damage at each level. Its target is half of the
+positive sustained-DPS gain above the strongest maxed parent:
+`target = base DPS + 0.5 × (original evolution DPS − base DPS)`.
+
+`scripts/game/measure-weapon-dps.ts` measures actual attacks for 60 seconds on seeds 1–3, against
+stationary normal and boss targets at an ideal distance. It includes projectiles, specials,
+follow-ups, venom and burns, with no gear or Might. The selected integer damage meets the target
+in both cases, keeps the primary hit and damage/cooldown above the maxed base, and rises at each
+evolution level. Rounding and those guards can retain more than half of the original bonus.
+Attack patterns, cooldowns, venom values and utility are unchanged.
+
+Flames of Zamorak and Ancient godsword keep their original damage. They already trade sustained
+single-target damage for area, extra boss hits or healing, so this comparison doesn't establish
+safe nerf headroom for them. These are controlled damage curves, not a promise to halve observed
+DPS or every secondary effect. Full-run sweeps are still needed alongside this stationary check.
+
+See [the before/after validation](EVOLUTION_BALANCE_RESULTS.md) for the authored curves and full
+progression runs across every shipped map, difficulty and tested party size.
+
 These are developer settings, not player options. Restart the run after changing them; every
 co-op player must use the same build. Tests and offline comparisons can pass `SimOptions.balance`
 without mutating the shared config. Live runs use the shipped settings.
@@ -117,3 +138,5 @@ Follow `CLAUDE.md` for tests and standard `scripts/game/simulate-run.ts` sweeps:
 upgrades, every affected map, all three styles, solo/two/four players and both difficulties when
 applicable. Report wins and run lengths. Short forced-loadout checks don't replace full progression
 and win-rate testing. The bot is limited at strike weapons and co-op teamwork.
+
+For a repeatable attack-level comparison, run `npx tsx scripts/game/measure-weapon-dps.ts`.
