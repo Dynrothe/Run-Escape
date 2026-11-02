@@ -9,6 +9,10 @@ the version in the corner).
 
 - Hard mode in co-op: the host can turn it on once everyone in the room has it.
 
+### Changed
+
+- Multiplayer bosses spawn in pairs, or one per player in hard mode; Hallowed Night's final Nightmare fight stays a single boss.
+
 ## 0.22.0 - 2026-11-01
 
 ### Added
