@@ -3,12 +3,18 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Weapon cards and tooltips include fixed damage adjustments, including venom.
+- Weaker poison and burning ground no longer take ownership of a stronger lingering effect.
+
 ## 0.23.0 - 2026-11-02
 
 ### Added
 
 - Hard mode in co-op: the host can turn it on once everyone in the room has it.
-- Separate weapon and evolution damage tuning for solo, co-op, normal and hard mode, starting with 50% less damage from all evolutions.
 
 ### Changed
 

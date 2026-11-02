@@ -28,7 +28,8 @@ go stale. Add anything that cost you time to work out.
 | What changed in each version                          | `CHANGELOG.md`                           |
 | How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`        |
 | Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                      |
-| Weapon damage controls and co-op scaling              | `docs/BALANCE.md`                        |
+| Weapon damage controls                                | `docs/BALANCE.md`                        |
+| Co-op enemy and reward scaling                        | `src/game/content/coop.ts`               |
 | The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                   |
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`              |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`         |

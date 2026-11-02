@@ -1,4 +1,5 @@
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
+import { WeaponDamageBalance } from "../content/balance";
 import { getCharacter } from "../content/characters";
 import { PLAYER_GONE, PartyScale, getPartyScale } from "../content/coop";
 import {
@@ -414,6 +415,8 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
 export type SimState = "playing" | "levelUp" | "chest" | "event" | "dead" | "victory";
 
 export type SimOptions = {
+    // Tests and offline balance comparisons; live runs use the shipped config.
+    balance?: WeaponDamageBalance;
     grid: ArenaGrid;
     // Lumbridge when unset
     mapId?: string;
@@ -948,7 +951,7 @@ export class Sim {
         this.weaponDamageMultipliers = Object.fromEntries(
             WEAPONS.map((weapon) => [
                 `weapon:${weapon.id}`,
-                getWeaponDamageMultiplier(weapon, party.length, this.hard),
+                getWeaponDamageMultiplier(weapon, party.length, this.hard, options.balance),
             ]),
         );
         this.partyScale = getPartyScale(party.length);
@@ -5903,6 +5906,18 @@ export class Sim {
         enemy.drainEnd = this.tick + Math.round(ticks);
     }
 
+    // Keep the existing source on ties, for both venom and merged ground fire.
+    private strongerDot(
+        source: DamageSource,
+        damage: number,
+        currentSource: DamageSource,
+        currentDamage: number,
+    ): boolean {
+        const tunedDamage = (from: DamageSource, raw: number) =>
+            raw * (this.weaponDamageMultipliers[from] ?? 1);
+        return tunedDamage(source, damage) > tunedDamage(currentSource, currentDamage);
+    }
+
     // Venom damage every second for this many ticks. Topped up rather than
     // started again, so its next hit still comes on time.
     private envenom(enemy: Enemy, venom: number, ticks: number): void {
@@ -5911,20 +5926,11 @@ export class Sim {
             enemy.venom = 0;
         }
         enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
-        const oldScale = this.weaponDamageMultipliers[enemy.venomSource ?? "other"] ?? 1;
-        const newScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
-        // Different tuning can make the smaller raw dose the stronger one.
-        // Keep its source too, since that's what scales each later tick.
-        if (oldScale !== newScale) {
-            if (enemy.venom * oldScale > venom * newScale) {
-                return;
-            }
+        if (this.strongerDot(this.damageSource, venom, enemy.venomSource ?? "other", enemy.venom)) {
             enemy.venom = venom;
-        } else {
-            enemy.venom = Math.max(enemy.venom, venom);
+            enemy.venomSource = this.damageSource;
+            enemy.venomHero = this.hero.index;
         }
-        enemy.venomSource = this.damageSource;
-        enemy.venomHero = this.hero.index;
     }
 
     // A hit's chance of healing the player: the weapon's (the Sanguinesti
@@ -6477,16 +6483,10 @@ export class Sim {
         );
         if (same) {
             same.endTick = Math.max(same.endTick, endTick);
-            const oldScale = this.weaponDamageMultipliers[same.source] ?? 1;
-            const newScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
-            if (oldScale !== newScale) {
-                if (damage * newScale > same.damage * oldScale) {
-                    same.damage = damage;
-                    same.source = this.damageSource;
-                    same.hero = this.hero.index;
-                }
-            } else {
-                same.damage = Math.max(same.damage, damage);
+            if (this.strongerDot(this.damageSource, damage, same.source, same.damage)) {
+                same.damage = damage;
+                same.source = this.damageSource;
+                same.hero = this.hero.index;
             }
             return;
         }
