@@ -1,8 +1,10 @@
 # Damage and co-op balance
 
 Edit [`src/game/content/balance.ts`](../src/game/content/balance.ts) to tune weapon damage and
-co-op enemy/reward scaling. All weapon multipliers start at **1**, and the co-op values keep the
-existing balance. These are developer settings shipped with the game, not player options. Restart
+co-op enemy/reward scaling. Currently, `global.evolved: 0.5` gives **all evolutions 50% less damage**
+across every class and run mode. Base weapons and co-op enemy/reward scaling keep their existing
+balance. Set `global.evolved` back to `1` to restore evolutions' original damage.
+These are developer settings shipped with the game, not player options. Restart
 the run after changing them; every co-op player must use the same build.
 
 ## Weapon damage
@@ -55,6 +57,10 @@ Choose the scope for the change:
 `all × base-or-evolved × style.all × style.base-or-evolved × individual-weapon` applies.
 
 ### Examples
+
+These examples start from neutral profiles: set `global.evolved` back to `1` and clear any other
+adjustments first. Leaving the current `0.5` in place multiplies each example's evolution damage
+by another `0.5` (for example, `0.5 × 0.6 = 0.3`, or 70% less than the original damage).
 
 For **40% less damage from all magic evolutions**, change `evolved` under
 `global.styles.magic` from `1` to `0.6`. Base magic weapons and the other styles keep their damage.

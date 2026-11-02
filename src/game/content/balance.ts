@@ -1,6 +1,6 @@
 import { CombatStyle } from "./types";
 
-// Damage multipliers: 1 keeps today's damage, 0.6 does 40% less, 1.2 does 20%
+// Damage multipliers: 1 keeps the authored damage, 0.6 does 40% less, 1.2 does 20%
 // more. Missing entries mean 1. All matching entries multiply together.
 // See docs/BALANCE.md for examples and how these affect DPS.
 export type DamageStages = {
@@ -31,7 +31,7 @@ export const WEAPON_DAMAGE_BALANCE: WeaponDamageBalance = {
     global: {
         all: 1,
         base: 1,
-        evolved: 1,
+        evolved: 0.5,
         styles: {
             melee: { all: 1, base: 1, evolved: 1 },
             ranged: { all: 1, base: 1, evolved: 1 },
