@@ -3,6 +3,16 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Co-op: a double click or a quick second key on a level up, casket or random event no longer
+  answers the next one too, unseen.
+- Pressing Enter or Space on a focused casket button no longer resolves the next casket as well.
+- Co-op: a tab left in the background no longer builds up effects to draw all at once when you come
+  back.
+
 ## 0.22.1 - 2026-11-02
 
 ### Added
