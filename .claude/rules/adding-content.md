@@ -28,6 +28,10 @@ content, so add new entries to its tables and lists.
 
 Add it to `WEAPONS` in `weapons.ts`.
 
+Damage tuning by style, evolution, weapon and run mode is in `content/balance.ts`; see
+`docs/BALANCE.md`. It applies at damage time, so don't fold those multipliers into a weapon's
+levels or secondary attacks as well. Keep the originating weapon's damage source on delayed effects.
+
 - `kind` decides how it attacks and what each level's numbers mean: `slash`, `sweep`, `missile`,
   `knives`, `axes`, `aura`, `strike` or `orbit`. The `fire*` methods in `Sim.ts` do the work, and
   `statFields` in `weaponStats.ts` lists the stats each kind shows.

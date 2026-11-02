@@ -8,6 +8,7 @@ the version in the corner).
 ### Added
 
 - Hard mode in co-op: the host can turn it on once everyone in the room has it.
+- Separate weapon and evolution damage tuning for solo, co-op, normal and hard mode, starting with 50% less damage from all evolutions.
 
 ## 0.22.0 - 2026-11-01
 

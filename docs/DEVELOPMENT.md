@@ -486,8 +486,11 @@ When adding to the sim:
 - Trigonometry goes through `fm`. `core/fmath.test.ts` fails on `Math.sin` and the like in
   `core/`.
 
-How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
-one goes down or leaves, with each of those still counting as half a player (`PLAYER_GONE`).
+Weapon damage tuning and co-op enemy/reward scaling live in `content/balance.ts`; see
+[Damage and co-op balance](BALANCE.md) for class, evolution and normal/hard mode examples.
+`content/coop.ts` works out the enemy scaling again whenever one goes down or leaves, with each
+of those still counting as `COOP_BALANCE.playerGone` of a player (currently half). Weapon damage
+rules use the starting party size throughout the run.
 
 Rooms only take players who've unlocked their map (and its endless or hard mode, for a room on
 them), and the host can only pick what everyone in the room has, so nobody skips ahead: someone

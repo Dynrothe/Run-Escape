@@ -1,3 +1,5 @@
+import { COOP_BALANCE } from "./balance";
+
 // Co-op: two to four players in one run. Everyone's weapons are on the same
 // crowd, so it comes bigger and tougher with each player past the first, and
 // bosses keep up with the party's damage. The crowd's attention is split
@@ -12,7 +14,7 @@ export const MAX_PARTY = 4;
 
 // How much of a player one who's down or gone still counts for in the
 // party's scale
-export const PLAYER_GONE = 0.5;
+export const PLAYER_GONE = COOP_BALANCE.playerGone;
 
 export type PartyScale = {
     // Multiplies the waves' spawn rate and how many are about at once
@@ -29,23 +31,15 @@ export type PartyScale = {
     caskets: number;
 };
 
-// Each player past the first adds this much of each (the experience, takes
-// it away)
-const CROWD_PER_PLAYER = 0.35;
-const HP_PER_PLAYER = 0.5;
-const BOSS_HP_PER_PLAYER = 1.1;
-const DAMAGE_PER_PLAYER = 0.1;
-const XP_PER_PLAYER = -0.12;
-const CASKETS_PER_PLAYER = 0.2;
-
 export function getPartyScale(players: number): PartyScale {
     const extra = Math.max(0, Math.min(players, MAX_PARTY) - 1);
+    const perPlayer = COOP_BALANCE.perExtraPlayer;
     return {
-        crowd: 1 + CROWD_PER_PLAYER * extra,
-        hp: 1 + HP_PER_PLAYER * extra,
-        bossHp: 1 + BOSS_HP_PER_PLAYER * extra,
-        damage: 1 + DAMAGE_PER_PLAYER * extra,
-        xp: 1 + XP_PER_PLAYER * extra,
-        caskets: 1 + CASKETS_PER_PLAYER * extra,
+        crowd: 1 + perPlayer.crowd * extra,
+        hp: 1 + perPlayer.hp * extra,
+        bossHp: 1 + perPlayer.bossHp * extra,
+        damage: 1 + perPlayer.damage * extra,
+        xp: 1 + perPlayer.xp * extra,
+        caskets: 1 + perPlayer.caskets * extra,
     };
 }

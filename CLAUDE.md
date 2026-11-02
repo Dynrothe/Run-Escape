@@ -28,6 +28,7 @@ go stale. Add anything that cost you time to work out.
 | What changed in each version                          | `CHANGELOG.md`                           |
 | How to add a weapon, enemy, map and so on             | `.claude/rules/adding-content.md`        |
 | Weapons, enemies, items, maps, shop (plain data)      | `src/game/content/`                      |
+| Weapon damage controls and co-op scaling              | `docs/BALANCE.md`                        |
 | The game itself: tick, combat, spawning, levels       | `src/game/core/Sim.ts`                   |
 | Level up choices, and when a weapon can evolve        | `src/game/core/Upgrades.ts`              |
 | Evolution recipes, for the UI                         | `src/game/content/evolutions.ts`         |
@@ -106,7 +107,7 @@ PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts ""
   the old and new code. `META=max` buys every shop upgrade, so a new one changes those results.
 - **Run every map that's affected**, not only Lumbridge. A change can help one map and hurt another.
 - For a change to one combat style, compare all three styles, so you can see the gap between them.
-- For a change to co-op's balance (`content/coop.ts`, or anything a party does differently), run
+- For a change to co-op's balance (`content/balance.ts`, `content/coop.ts`, or anything a party does differently), run
   `PARTY=2` and `PARTY=4` too. The bot plays each player on their own, with no teamwork.
 - For hard mode's numbers, compare `HARD=1` with normal on the same seeds, and use at least 6 seeds:
   with 3, a lower multiplier can come out harder. Go by wins as well as how long runs last: the bot

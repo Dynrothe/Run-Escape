@@ -87,7 +87,8 @@ import {
     emptyStats,
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
-import { getWeapon, getWeaponStyle } from "../content/weapons";
+import { getWeaponDamageMultiplier } from "../content/weaponBalance";
+import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
@@ -652,6 +653,7 @@ export class Sim {
     // What's dealing damage now, for damageBySource: set before each source
     // gets its turn
     private damageSource: DamageSource = "other";
+    private readonly weaponDamageMultipliers: Partial<Record<DamageSource, number>>;
     // The final boss is up
     bossSpawned = false;
     // Endless runs' round, and the tick it started; killing the final boss
@@ -938,6 +940,12 @@ export class Sim {
                 armoury: options.armoury,
             },
         ];
+        this.weaponDamageMultipliers = Object.fromEntries(
+            WEAPONS.map((weapon) => [
+                `weapon:${weapon.id}`,
+                getWeaponDamageMultiplier(weapon, party.length, this.hard),
+            ]),
+        );
         this.partyScale = getPartyScale(party.length);
         this.partyXp = this.partyScale.xp;
         this.focus = Math.min(options.focus ?? 0, party.length - 1);
@@ -5098,6 +5106,12 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
+        // Balance each weapon's damage once, including venom, burns and extra
+        // hits. Items, power-ups and recoil keep their own damage rules.
+        const weaponScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
+        if (weaponScale === 0) {
+            return 0;
+        }
         const drain = enemy.drainEnd > this.tick ? enemy.drain : 0;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
@@ -5106,6 +5120,7 @@ export class Sim {
             1,
             Math.round(
                 baseDamage *
+                    weaponScale *
                     (1 + this.stats.might * mightScale) *
                     (1 + bossMight) *
                     (1 + drain) *
@@ -5868,8 +5883,19 @@ export class Sim {
             enemy.venomNext = this.tick + TICKS_PER_SECOND;
             enemy.venom = 0;
         }
-        enemy.venom = Math.max(enemy.venom, venom);
         enemy.venomEnd = Math.max(enemy.venomEnd, this.tick + ticks);
+        const oldScale = this.weaponDamageMultipliers[enemy.venomSource ?? "other"] ?? 1;
+        const newScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
+        // Different tuning can make the smaller raw dose the stronger one.
+        // Keep its source too, since that's what scales each later tick.
+        if (oldScale !== newScale) {
+            if (enemy.venom * oldScale > venom * newScale) {
+                return;
+            }
+            enemy.venom = venom;
+        } else {
+            enemy.venom = Math.max(enemy.venom, venom);
+        }
         enemy.venomSource = this.damageSource;
         enemy.venomHero = this.hero.index;
     }
@@ -6417,7 +6443,17 @@ export class Sim {
         );
         if (same) {
             same.endTick = Math.max(same.endTick, endTick);
-            same.damage = Math.max(same.damage, damage);
+            const oldScale = this.weaponDamageMultipliers[same.source] ?? 1;
+            const newScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
+            if (oldScale !== newScale) {
+                if (damage * newScale > same.damage * oldScale) {
+                    same.damage = damage;
+                    same.source = this.damageSource;
+                    same.hero = this.hero.index;
+                }
+            } else {
+                same.damage = Math.max(same.damage, damage);
+            }
             return;
         }
         if (this.fires.length >= MAX_FIRES) {
