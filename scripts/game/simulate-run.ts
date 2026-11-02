@@ -9,6 +9,7 @@
 //   META=max npx tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
 //   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
 //   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
+//   HARD=1 npx tsx scripts/game/simulate-run.ts          # on hard mode
 //   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
@@ -40,6 +41,7 @@ const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 
 const map = getMap(process.env.MAP ?? "lumbridge");
 const endless = process.env.ENDLESS === "1";
+const hard = process.env.HARD === "1";
 // The weapons, passives and items brought in by map tasks: all of them, or none
 const unlockedItems = process.env.UNLOCKS === "none" ? new Set<string>() : undefined;
 // The shop's permanent upgrades: none, or all of them, as a player has by the
@@ -340,6 +342,7 @@ function runOnce(characterId: string, seed: number) {
         spawnY: map.spawn.y,
         unlockedItems,
         endless,
+        hard,
         armoury,
     });
     // Another weapon to start with, to compare weapons on one character
@@ -504,6 +507,7 @@ function runParty(characterId: string, seed: number) {
         spawnX: map.spawn.x,
         spawnY: map.spawn.y,
         endless,
+        hard,
         party: Array.from({ length: partySize }, (_, i) => ({
             name: "bot" + (i + 1),
             characterId,

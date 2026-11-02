@@ -609,12 +609,16 @@
     padding: 8px 28px;
 }
 
-/* The endless switch, by the start button */
+/* The endless and hard switches, by the start button */
 .ui-endless {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-left: auto;
+}
+
+.ui-endless + .ui-endless {
+    margin-left: 0;
 }
 
 .ui-endless-name {
@@ -730,6 +734,11 @@
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
     filter: drop-shadow(1px 1px 0 #000);
+}
+
+/* Gold once it's been beaten on hard */
+.ui-beaten-hard {
+    border-color: var(--ui-orange);
 }
 
 /* What a map's tasks bring in, faded until it's earned */

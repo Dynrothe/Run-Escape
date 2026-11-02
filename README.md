@@ -35,8 +35,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, and the run going on while anyone's standing.
-- **Endless mode** for every map you've beaten, **skills** to train with the coins you bank, and
-  **quests** that pay out over many runs.
+- **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
+  you bank, and **quests** that pay out over many runs.
 
 [docs/GAMEPLAY.md](docs/GAMEPLAY.md) goes through all of it, map by map. [CHANGELOG.md](CHANGELOG.md)
 has what changed in each version.

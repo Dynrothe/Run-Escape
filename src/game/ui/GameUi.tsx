@@ -39,6 +39,7 @@ import {
     getNextUpgradeCost,
     importSave,
     isEndlessUnlocked,
+    isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
@@ -281,6 +282,21 @@ function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function MovePredictionSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Movement prediction (trial)"
+            text="Joining a co-op game, you move as soon as you press, then correct to the host"
+        >
+            <Toggle
+                on={ui.display.movePrediction}
+                label="Movement prediction"
+                onToggle={() => client.toggleMovePrediction()}
+            />
+        </Setting>
+    );
+}
+
 // The community server's invite
 const DISCORD_INVITE = "https://discord.gg/82gBtKz2Xx";
 const GITHUB_REPOSITORY = "https://github.com/Dynrothe/Run-Escape";
@@ -410,6 +426,7 @@ function SettingsPanel({
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
+                    <MovePredictionSetting ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>Save</h3>
@@ -630,11 +647,13 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 </button>
                 <Coins amount={ui.save.coins} />
                 <EndlessSwitch ui={ui} client={client} />
+                <HardSwitch ui={ui} client={client} />
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
                     Enter {getMap(ui.mapId).name}
+                    {ui.hard && " hard"}
                     {ui.endless && !getMap(ui.mapId).fun && " endless"}
                 </button>
             </div>
@@ -670,6 +689,30 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             <span className="ui-endless-name">Endless</span>
             {open ? (
                 <Toggle on={ui.endless} label="Endless" onToggle={() => client.toggleEndless()} />
+            ) : (
+                <span className="ui-endless-hint">Beat the map</span>
+            )}
+        </div>
+    );
+}
+
+// Hard mode for the map picked, once it's been beaten (open from the start on
+// fun maps)
+function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
+    const open = isHardUnlocked(ui.save, ui.mapId);
+    return (
+        <div
+            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
+            title={
+                open
+                    ? "More enemies, tougher and harder hitting, twice the elites, and bosses " +
+                      "that enrage sooner and attack faster. Coins are worth 25% more."
+                    : `Beat ${getMap(ui.mapId).name} to play it on hard`
+            }
+        >
+            <span className="ui-endless-name">Hard</span>
+            {open ? (
+                <Toggle on={ui.hard} label="Hard" onToggle={() => client.toggleHard()} />
             ) : (
                 <span className="ui-endless-hint">Beat the map</span>
             )}
@@ -820,8 +863,12 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
                 <span className="ui-map-name">{map.name}</span>
-                {(save.mapVictories[map.id] ?? 0) > 0 && (
-                    <span className="ui-beaten" aria-label="Beaten" />
+                {(save.hardVictories[map.id] ?? 0) > 0 ? (
+                    <span className="ui-beaten ui-beaten-hard" aria-label="Beaten on hard" />
+                ) : (
+                    (save.mapVictories[map.id] ?? 0) > 0 && (
+                        <span className="ui-beaten" aria-label="Beaten" />
+                    )
                 )}
             </button>
         );
@@ -875,6 +922,8 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
     const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
     const endless = save.endlessBest[map.id];
+    const hardWins = save.hardVictories[map.id] ?? 0;
+    const hardEndless = save.hardEndlessBest[map.id];
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -895,6 +944,17 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                     {endless && (
                         <div className="ui-card-style">
                             Endless best: round {endless.round}, {formatTime(endless.seconds)}
+                        </div>
+                    )}
+                    {hardWins > 0 && (
+                        <div className="ui-card-style">
+                            Beaten on hard {hardWins === 1 ? "once" : `${hardWins} times`}
+                        </div>
+                    )}
+                    {hardEndless && (
+                        <div className="ui-card-style">
+                            Hard endless best: round {hardEndless.round},{" "}
+                            {formatTime(hardEndless.seconds)}
                         </div>
                     )}
                 </div>
@@ -1634,6 +1694,7 @@ function PauseModal({
                         />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
+                        <MovePredictionSetting ui={ui} client={client} />
                     </div>
                 </div>
                 <div className="ui-row">
@@ -1715,7 +1776,13 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 )}
                 {result?.endlessRecord && (
                     <p className="ui-unlocked">
-                        Your furthest endless run in {getMap(result.mapId).name}!
+                        Your furthest {result.hard && "hard "}endless run in{" "}
+                        {getMap(result.mapId).name}!
+                    </p>
+                )}
+                {result?.firstHardWin && (
+                    <p className="ui-unlocked">
+                        You've beaten {getMap(result.mapId).name} on hard!
                     </p>
                 )}
                 {result?.unlockedMap && (
@@ -1753,6 +1820,12 @@ function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                         <td>Adventurer</td>
                                         <td>{result.characterName}</td>
                                     </tr>
+                                    {result.hard && (
+                                        <tr>
+                                            <td>Difficulty</td>
+                                            <td>Hard</td>
+                                        </tr>
+                                    )}
                                     {result.endless && (
                                         <tr>
                                             <td>Endless round</td>

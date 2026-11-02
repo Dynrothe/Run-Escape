@@ -51,6 +51,7 @@ export const MAPS: MapDef[] = [
         // The castle courtyard
         spawn: { x: 3222.5, y: 3218.5 },
         difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 2.2, damage: 1.7 },
         waves: LUMBRIDGE_WAVES,
         events: LUMBRIDGE_EVENTS,
         finalBossWarning: "The Wise Old Man is on his way...",
@@ -70,6 +71,7 @@ export const MAPS: MapDef[] = [
         // Among the six mounds
         spawn: { x: 3565.5, y: 3287.5 },
         difficulty: { hp: 1.25, damage: 1.15 },
+        hard: { hp: 1.75, damage: 1.45 },
         waves: BARROWS_WAVES,
         events: BARROWS_EVENTS,
         finalBossWarning: "The last brother stirs in his crypt...",
@@ -88,6 +90,7 @@ export const MAPS: MapDef[] = [
         arena: { baseX: 49 * 64, baseY: 57 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
         spawn: { x: 3237.5, y: 3742.5 },
         difficulty: { hp: 1.5, damage: 1.3 },
+        hard: { hp: 1.6, damage: 1.35 },
         waves: WILDERNESS_WAVES,
         events: WILDERNESS_EVENTS,
         finalBossWarning: "Something huge stirs beneath the Lava Maze...",
@@ -108,6 +111,7 @@ export const MAPS: MapDef[] = [
         // Open sand by the Bandit Camp
         spawn: { x: 3200.5, y: 2985.5 },
         difficulty: { hp: 1.75, damage: 1.45 },
+        hard: { hp: 1.75, damage: 1.4 },
         waves: DESERT_WAVES,
         events: DESERT_EVENTS,
         finalBossWarning: "The sand trembles beneath your feet...",
@@ -128,6 +132,7 @@ export const MAPS: MapDef[] = [
         // Outside Rellekka's gate
         spawn: { x: 2670.5, y: 3640.5 },
         difficulty: { hp: 2, damage: 1.6 },
+        hard: { hp: 1.6, damage: 1.35 },
         waves: FREMENNIK_WAVES,
         events: FREMENNIK_EVENTS,
         finalBossWarning: "Something stirs in the ice of Ungael...",
@@ -148,6 +153,7 @@ export const MAPS: MapDef[] = [
         // In Tai Bwo Wannai
         spawn: { x: 2790.5, y: 3070.5 },
         difficulty: { hp: 2.25, damage: 1.75 },
+        hard: { hp: 1.45, damage: 1.25 },
         waves: KARAMJA_WAVES,
         events: KARAMJA_EVENTS,
         finalBossWarning: "The volcano rumbles... TzTok-Jad is coming!",
@@ -167,6 +173,7 @@ export const MAPS: MapDef[] = [
         // Outside Shayzien
         spawn: { x: 1500.5, y: 3600.5 },
         difficulty: { hp: 2.5, damage: 1.9 },
+        hard: { hp: 1.45, damage: 1.25 },
         waves: KOUREND_WAVES,
         events: KOUREND_EVENTS,
         finalBossWarning: "Something stirs beneath Mount Karuulm...",
@@ -187,6 +194,7 @@ export const MAPS: MapDef[] = [
         // In the city's streets
         spawn: { x: 1700.5, y: 3100.5 },
         difficulty: { hp: 2.75, damage: 2.05 },
+        hard: { hp: 1.5, damage: 1.3 },
         waves: VARLAMORE_WAVES,
         events: VARLAMORE_EVENTS,
         finalBossWarning: "The crowd roars... Sol Heredit enters the arena!",
@@ -209,6 +217,7 @@ export const MAPS: MapDef[] = [
         // In Slepe
         spawn: { x: 3720.5, y: 3310.5 },
         difficulty: { hp: 3, damage: 2.2 },
+        hard: { hp: 1.5, damage: 1.3 },
         waves: MORYTANIA_WAVES,
         events: MORYTANIA_EVENTS,
         finalBossWarning: "The Theatre's curtain rises... Verzik Vitur awaits!",
@@ -242,6 +251,7 @@ export const MAPS: MapDef[] = [
         // (from 2.1) when its bosses grew to full size and anything the
         // player hits stopped fighting the other armies
         difficulty: { hp: 3.25, damage: 1.95 },
+        hard: { hp: 1.4, damage: 1.25 },
         waves: GOD_WARS_WAVES,
         events: GOD_WARS_EVENTS,
         finalBossWarning: "The frozen door cracks... Nex is breaking free!",
@@ -263,6 +273,7 @@ export const MAPS: MapDef[] = [
         // By the Tower of Voices
         spawn: { x: 3264.5, y: 6060.5 },
         difficulty: { hp: 3.5, damage: 2.5 },
+        hard: { hp: 1.35, damage: 1.2 },
         waves: PRIFDDINAS_WAVES,
         events: PRIFDDINAS_EVENTS,
         finalBossWarning: "The crystal singing turns sour... the Corrupted Hunllef is coming!",
@@ -285,6 +296,7 @@ export const MAPS: MapDef[] = [
         // In the square south of the city's middle
         spawn: { x: 2497.5, y: 5097.5 },
         difficulty: { hp: 3.75, damage: 2.7 },
+        hard: { hp: 1.4, damage: 1.2 },
         waves: INFERNO_WAVES,
         events: INFERNO_EVENTS,
         finalBossWarning: "The lava churns... three JalTok-Jads are rising!",
@@ -302,6 +314,7 @@ export const MAPS: MapDef[] = [
         // South of the ritual circle
         spawn: getRecipeWorldTile(HALLOWED_NIGHT, HALLOWED_NIGHT.spawn.x, HALLOWED_NIGHT.spawn.y),
         difficulty: { hp: 1.25, damage: 1.15 },
+        hard: { hp: 1.5, damage: 1.3 },
         waves: HALLOWEEN_WAVES,
         events: HALLOWEEN_EVENTS,
         finalBossWarning: "The pumpkins go dark... The Nightmare is waking!",

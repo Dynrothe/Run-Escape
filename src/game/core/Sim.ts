@@ -15,6 +15,15 @@ import {
     roundScale,
 } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import {
+    HARD_BOSS_INTERVAL,
+    HARD_COINS,
+    HARD_CROWD,
+    HARD_ELITES,
+    HARD_ENRAGE_AT,
+    HARD_XP,
+    getHardScale,
+} from "../content/hard";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
@@ -93,6 +102,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
+import { movePlayer, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -163,7 +173,7 @@ export const DPS_WINDOW_SECONDS = 8;
 const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
-const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
+export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
@@ -418,6 +428,8 @@ export type SimOptions = {
     // Round after round until the player falls, rather than a win at the
     // final boss (see endless.ts)
     endless?: boolean;
+    // Everything on the map tougher, for more coins (see hard.ts)
+    hard?: boolean;
     // The pieces upgraded in the Armoury, which caskets give as what they've
     // become (none when unset)
     armoury?: ArmouryUpgrades;
@@ -431,6 +443,7 @@ export type SimOptions = {
 export type RunResult = {
     mapId: string;
     endless: boolean;
+    hard: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -569,6 +582,7 @@ export class Sim {
     readonly map: MapDef;
     readonly rng: Rng;
     readonly endless: boolean;
+    readonly hard: boolean;
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -650,6 +664,8 @@ export class Sim {
 
     // Co-op's bigger, tougher crowds (content/coop.ts), all 1 on your own
     private partyScale: PartyScale;
+    // What hard mode multiplies enemies' hitpoints and damage by (1 outside it)
+    private readonly hardScale: { hp: number; damage: number };
     // What each bone's worth for the party: its scale's experience, made up
     // for when the crowd's cap leaves no room for all of the party's extra
     private partyXp = 1;
@@ -912,6 +928,8 @@ export class Sim {
         this.rng = new Rng(options.seed);
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
+        this.hard = options.hard ?? false;
+        this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -1204,6 +1222,7 @@ export class Sim {
         return {
             mapId: this.map.id,
             endless: this.endless,
+            hard: this.hard,
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -1764,9 +1783,9 @@ export class Sim {
     }
 
     // What coins found in the run are worth: less in endless runs, and less
-    // again in their later rounds (see endless.ts)
+    // again in their later rounds (see endless.ts), and more on hard mode
     get coinScale(): number {
-        return this.endless ? endlessCoinScale(this.round) : 1;
+        return (this.endless ? endlessCoinScale(this.round) : 1) * (this.hard ? HARD_COINS : 1);
     }
 
     // Coins for high alching an item, as the run pays them
@@ -1956,42 +1975,23 @@ export class Sim {
         const player = this.player;
         player.prevX = player.x;
         player.prevY = player.y;
-        // It's the input that's cursed, so keys and the stick go the same way
-        const curse = this.curse;
-        if (curse) {
-            const [a, b, c, d] = curse.matrix;
-            const x = moveX * a + moveY * b;
-            moveY = moveX * c + moveY * d;
-            moveX = x;
-        }
         const frozen = player.frozen > 0;
         if (frozen) {
             player.frozen--;
         }
-        // Held by what's beside them, they can still turn to hit it
-        if (frozen && this.hold && (moveX !== 0 || moveY !== 0)) {
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        const moving = !frozen && (moveX !== 0 || moveY !== 0);
-        if (moving) {
-            const sled = this.tick < this.sledEndTick ? this.sledSpeed : 1;
-            const speed = PLAYER_SPEED * (1 + this.stats.moveSpeed) * sled;
-            moveCircle(this.grid, player, moveX * speed, moveY * speed, player.radius);
-            const len = fm.hypot(moveX, moveY);
-            player.facingX = moveX / len;
-            player.facingY = moveY / len;
-            player.yaw = yawFromVector(moveX, moveY);
-        }
-        // A fight in a set square (MapDef.bossArena) can't be walked away from
-        if (this.map.bossArena && this.shownBoss?.def.boss?.phases) {
-            const arena = this.bossArena;
-            const edge = player.radius;
-            player.x = Math.max(arena.minX + edge, Math.min(arena.maxX - edge, player.x));
-            player.y = Math.max(arena.minY + edge, Math.min(arena.maxY - edge, player.y));
-        }
+        const moving = movePlayer(this.grid, player, moveX, moveY, {
+            radius: player.radius,
+            baseSpeed: PLAYER_SPEED,
+            moveSpeed: this.stats.moveSpeed,
+            tick: this.tick,
+            sledEndTick: this.sledEndTick,
+            sledSpeed: this.sledSpeed,
+            frozen,
+            held: !!this.hold,
+            curse: this.curse,
+            arena:
+                this.map.bossArena && this.shownBoss?.def.boss?.phases ? this.bossArena : undefined,
+        });
         if (moving !== player.moving) {
             player.moving = moving;
             player.moveStart = this.tick;
@@ -2073,7 +2073,9 @@ export class Sim {
             const event = events[this.eventIndex];
             this.useSpawnHero();
             if (event.kind === "elite") {
-                this.spawnEnemy(getEnemy(event.enemyId), "elite");
+                for (let i = 0; i < (this.hard ? HARD_ELITES : 1); i++) {
+                    this.spawnEnemy(getEnemy(event.enemyId), "elite");
+                }
             } else if (event.kind === "ring") {
                 this.spawnRing(getEnemy(event.enemyId), event.count);
             } else if (getEnemy(event.enemyId).boss?.intro) {
@@ -2111,13 +2113,14 @@ export class Sim {
         }
 
         const wave = this.currentWave();
-        // Endless runs' later rounds bring bigger crowds, and so do co-op's
-        // players
-        const crowd = roundCrowd(this.round) * this.partyScale.crowd;
+        // Endless runs' later rounds bring bigger crowds, and so do hard mode
+        // and co-op's players
+        const soloCrowd = roundCrowd(this.round) * (this.hard ? HARD_CROWD : 1);
+        const crowd = soloCrowd * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
         if (this.heroes.length > 1) {
-            const alone = Math.min(wave.maxAlive * roundCrowd(this.round), MAX_ENEMIES);
+            const alone = Math.min(wave.maxAlive * soloCrowd, MAX_ENEMIES);
             const bigger = Math.min(wave.maxAlive * crowd, MAX_ENEMIES) / alone;
             this.partyXp = (this.partyScale.crowd * this.partyScale.xp) / bigger;
         }
@@ -2294,19 +2297,22 @@ export class Sim {
         const hpScale = this.enemyHpScale();
         const damageScale = 1 + Math.max(0, minutes - 5) * 0.03;
         // Bosses are tuned as they are (or for the map they're on); later maps
-        // are tougher all round, and so are endless runs' later rounds
+        // are tougher all round, and so are endless runs' later rounds and hard
+        // mode
         const difficulty = this.map.difficulty;
-        const bossDamage = difficulty.damage * this.roundDamage;
+        const bossDamage = difficulty.damage * this.roundDamage * this.hardScale.damage;
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp *
+            this.hardScale.hp *
             (boss ? this.partyScale.bossHp : this.partyScale.hp);
         // What its hits are multiplied by: its touch, a boss's attacks, its
         // explosion (and in co-op, harder for each player)
         let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
-        let xp = def.xp * roundScale(ROUND_XP, this.round) * this.partyXp;
+        let xp =
+            def.xp * roundScale(ROUND_XP, this.round) * this.partyXp * (this.hard ? HARD_XP : 1);
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -3044,6 +3050,7 @@ export class Sim {
                 enemy.damage *
                     FACTION_DAMAGE *
                     (this.partyScale.hp / this.partyScale.damage) *
+                    (this.hardScale.hp / this.hardScale.damage) *
                     this.rng.range(0.85, 1.15),
             ),
         );
@@ -4375,7 +4382,8 @@ export class Sim {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // A fight in phases gets harder by the phase instead
-        if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * ENRAGE_AT) {
+        const enrageAt = this.hard ? HARD_ENRAGE_AT : ENRAGE_AT;
+        if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * enrageAt) {
             this.enrage(enemy);
         }
         this.callSummons(enemy, false);
@@ -4462,7 +4470,11 @@ export class Sim {
             windup.lane = this.pickLane(enemy, attack);
         }
         const drowsy = this.tick < this.drowsyEndTick ? this.drowsyInterval : 1;
-        const interval = def.attackInterval * (state.enraged ? ENRAGED_INTERVAL : 1) * drowsy;
+        const interval =
+            def.attackInterval *
+            (state.enraged ? ENRAGED_INTERVAL : 1) *
+            (this.hard ? HARD_BOSS_INTERVAL : 1) *
+            drowsy;
         enemy.attackCooldown = Math.round(interval * TICKS_PER_SECOND);
         enemy.anim = "attack";
         enemy.animStart = this.tick;
@@ -7335,7 +7347,13 @@ export class Sim {
 
     // Power-ups' damage keeps up with the enemies' hitpoints
     private powerUpDamageScale(): number {
-        return this.enemyHpScale() * this.map.difficulty.hp * this.roundHp * this.partyScale.hp;
+        return (
+            this.enemyHpScale() *
+            this.map.difficulty.hp *
+            this.roundHp *
+            this.hardScale.hp *
+            this.partyScale.hp
+        );
     }
 
     private powerUpTicks(seconds: number): number {
@@ -8195,10 +8213,7 @@ function pingPong(distance: number, half: number): number {
     return p < half * 2 ? p - half : half * 3 - p;
 }
 
-// RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction
-export function yawFromVector(dx: number, dy: number): number {
-    return Math.round((fm.atan2(-dx, -dy) / (2 * Math.PI)) * 2048) & 2047;
-}
+export { yawFromVector } from "./PlayerMovement";
 
 export { DEATH_SINK_TICKS, MAX_DEATH_ANIM_TICKS };
 

@@ -235,10 +235,11 @@ export type UiSnapshot = {
     loadingProgress: number;
     save: SaveData;
     characterId: string;
-    // The map the next run is on, and whether it's endless (once the map's
-    // been beaten)
+    // The map the next run is on, and whether it's endless and on hard mode
+    // (once the map's been beaten)
     mapId: string;
     endless: boolean;
+    hard: boolean;
     hud?: HudView;
     overlay: RunOverlay;
     // Co-op: the room and its menus, everyone else in the run, and who the
@@ -252,15 +253,17 @@ export type UiSnapshot = {
     // unlockedMap: the name of the map this run's win opened up;
     // unlockedCharacters / unlockedItems: the names of the adventurers and
     // items it brought in; endlessRecord: an endless run that went further
-    // than any before it on the map; newGear: the names of the gear it found
-    // for the first time, for the Armoury; quests: the quests it finished,
-    // and what they paid
+    // than any before it on the map; firstHardWin: the first time the map's
+    // been beaten on hard mode; newGear: the names of the gear it found for
+    // the first time, for the Armoury; quests: the quests it finished, and
+    // what they paid
     // damage / bossKills: the stats screen's rows
     result?: RunResult & {
         characterName: string;
         damage: DamageView[];
         bossKills: BossKillView[];
         endlessRecord: boolean;
+        firstHardWin: boolean;
         unlockedMap?: string;
         unlockedCharacters: string[];
         unlockedItems: string[];
@@ -294,6 +297,7 @@ export class GameStore {
             characterId: save.unlockedCharacters[0] ?? "warrior",
             mapId: "lumbridge",
             endless: false,
+            hard: false,
             overlay: "none",
             coop: OFFLINE,
             party: [],
@@ -302,7 +306,13 @@ export class GameStore {
             toasts: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
-            display: { menuSpin: true, pauseOnBlur: true, questTracker: true, autoAlch: false },
+            display: {
+                menuSpin: true,
+                pauseOnBlur: true,
+                questTracker: true,
+                autoAlch: false,
+                movePrediction: false,
+            },
         };
     }
 

@@ -3,10 +3,21 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.22.1 - 2026-11-02
 
 ### Added
 
+- Movement prediction, a trial you can turn on in Settings or the pause menu: joining a co-op game,
+  you move as soon as you press, then correct to the host. Hits and pickups still follow the host.
+  Thanks to trippy22, who built it.
+
+## 0.22.0 - 2026-11-01
+
+### Added
+
+- Hard mode for solo runs on every map, once you've beaten it (fun maps from the start): more
+  enemies, tougher and harder hitting, twice the elites, bosses that enrage sooner and attack faster,
+  and 25% more coins.
 - Put the game on your phone's home screen from your browser's menu: it gets its own icon and opens
   full screen.
 

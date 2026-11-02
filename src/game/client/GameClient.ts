@@ -50,6 +50,7 @@ import {
     getQuestProgress,
     isEndlessRecord,
     isEndlessUnlocked,
+    isHardUnlocked,
     isMapUnlocked,
     recordRun,
     refundUpgrades,
@@ -79,6 +80,7 @@ import {
 } from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { getPlayerPose } from "./PlayerPose";
 import { getBossKillViews, getDamageViews } from "./RunStatsViews";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
@@ -433,8 +435,10 @@ export class GameClient implements GameFrameHandler {
 
     selectMap(mapId: string): void {
         if (isMapUnlocked(this.save, mapId)) {
-            const endless = this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId);
-            this.store.set({ mapId, endless });
+            const snapshot = this.store.getSnapshot();
+            const endless = snapshot.endless && isEndlessUnlocked(this.save, mapId);
+            const hard = snapshot.hard && isHardUnlocked(this.save, mapId);
+            this.store.set({ mapId, endless, hard });
             if (this.coop.isHost) {
                 this.coop.setMap(mapId, endless);
             }
@@ -449,6 +453,14 @@ export class GameClient implements GameFrameHandler {
             if (this.coop.isHost) {
                 this.coop.setMap(mapId, !endless);
             }
+        }
+    }
+
+    // Hard mode, for a map that's been beaten
+    toggleHard(): void {
+        const { mapId, hard } = this.store.getSnapshot();
+        if (hard || isHardUnlocked(this.save, mapId)) {
+            this.store.set({ hard: !hard });
         }
     }
 
@@ -675,6 +687,11 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
 
+    toggleMovePrediction(): void {
+        this.setDisplay({ movePrediction: !this.display.movePrediction });
+        this.coopRun?.setPrediction(this.display.movePrediction);
+    }
+
     private setDisplay(changes: Partial<DisplaySettings>): void {
         this.display = { ...this.display, ...changes };
         saveDisplaySettings(this.display);
@@ -704,6 +721,9 @@ export class GameClient implements GameFrameHandler {
         }
         if (!isEndlessUnlocked(save, this.store.getSnapshot().mapId)) {
             this.store.set({ endless: false });
+        }
+        if (!isHardUnlocked(save, this.store.getSnapshot().mapId)) {
+            this.store.set({ hard: false });
         }
         this.persist();
     }
@@ -772,6 +792,7 @@ export class GameClient implements GameFrameHandler {
         const endless =
             map.fun !== undefined ||
             (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
+        const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const characterId = map.fun?.character ?? this.store.getSnapshot().characterId;
         if (!(await this.travelTo(mapId, "characters"))) {
             return;
@@ -787,6 +808,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             endless,
+            hard,
             armoury: { ...this.save.armoury },
         });
         for (let i = 0; i < this.options.stress; i++) {
@@ -872,6 +894,7 @@ export class GameClient implements GameFrameHandler {
         });
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        run.setPrediction(this.display.movePrediction);
         this.coopRun = run;
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];
@@ -1182,6 +1205,11 @@ export class GameClient implements GameFrameHandler {
         );
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
+        const firstHardWin =
+            result.hard &&
+            result.victory &&
+            !isDevMap(sim.map.id) &&
+            !this.save.hardVictories[sim.map.id];
         const newGear = isDevMap(sim.map.id)
             ? []
             : result.gearFound.filter((id) => !this.save.foundGear.includes(id));
@@ -1199,7 +1227,7 @@ export class GameClient implements GameFrameHandler {
         const unlockedItems = lockedItems.filter((i) => this.save.unlockedItems.includes(i.id));
         if (unlockedMap) {
             // Ready for the next run
-            this.store.set({ mapId: unlockedMap.id, endless: false });
+            this.store.set({ mapId: unlockedMap.id, endless: false, hard: false });
         }
         this.store.set({
             result: {
@@ -1208,6 +1236,7 @@ export class GameClient implements GameFrameHandler {
                 damage: getDamageViews(sim, result.stats),
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
+                firstHardWin,
                 unlockedMap: unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
@@ -1376,9 +1405,15 @@ export class GameClient implements GameFrameHandler {
         this.viewHero = this.getViewHero(sim);
         this.view.viewHero = this.viewHero;
         const alpha = this.getAlpha();
-        const player = sim.heroes[this.viewHero].player;
-        const px = player.prevX + (player.x - player.prevX) * alpha;
-        const py = player.prevY + (player.y - player.prevY) * alpha;
+        this.view.localPlayerPose = this.coopStopped
+            ? undefined
+            : this.coopRun?.prediction?.render(alpha);
+        const { x: px, y: py } = getPlayerPose(
+            sim,
+            this.viewHero,
+            alpha,
+            this.view.localPlayerPose,
+        );
         // Aim at the player's chest, not their feet
         let ground = this.grid.getHeight(px, py) / 128;
         if (sim.map.scaperune) {
@@ -1842,7 +1877,13 @@ export class GameClient implements GameFrameHandler {
         if (sim) {
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
-                this.minimap.draw(this.minimapCanvas, sim, this.getAlpha(), this.viewHero);
+                this.minimap.draw(
+                    this.minimapCanvas,
+                    sim,
+                    this.getAlpha(),
+                    this.viewHero,
+                    this.view.localPlayerPose,
+                );
             }
         }
         if (this.store.getSnapshot().debug) {
