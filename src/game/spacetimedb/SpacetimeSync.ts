@@ -431,6 +431,63 @@ export class SpacetimeSync {
     }
 
     /**
+     * Start-of-Run Handshake (Step 1): Records run start timestamp and seed on the server.
+     */
+    startRun(mapId: string, characterId: string, seed: number, endless: boolean): void {
+        if (!this.state.isLoggedIn || !this.conn || !this.conn.isActive) {
+            return;
+        }
+        this.conn.reducers
+            .startRun({
+                mapId,
+                characterId,
+                seed,
+                endless,
+            })
+            .catch((e) => console.error("SpacetimeDB startRun failed:", e));
+    }
+
+    /**
+     * Signals in-game pause or resume to track active wall-clock time accurately.
+     */
+    pauseRun(paused: boolean): void {
+        if (!this.state.isLoggedIn || !this.conn || !this.conn.isActive) {
+            return;
+        }
+        this.conn.reducers
+            .pauseRun({ paused })
+            .catch((e) => console.error("SpacetimeDB pauseRun failed:", e));
+    }
+
+    /**
+     * Rolling Stateful Checkpoint (Step 2): Audits progress in 5-minute sliding windows.
+     */
+    checkpointRun(checkpoint: {
+        seconds: number;
+        round: number;
+        kills: number;
+        xp: number;
+        level: number;
+        coins: number;
+        casketsOpened: number;
+    }): void {
+        if (!this.state.isLoggedIn || !this.conn || !this.conn.isActive) {
+            return;
+        }
+        this.conn.reducers
+            .checkpointRun({
+                seconds: checkpoint.seconds,
+                round: checkpoint.round,
+                kills: checkpoint.kills,
+                xp: BigInt(Math.max(0, Math.floor(checkpoint.xp))),
+                level: checkpoint.level,
+                coins: checkpoint.coins,
+                casketsOpened: checkpoint.casketsOpened,
+            })
+            .catch((e) => console.error("SpacetimeDB checkpointRun failed:", e));
+    }
+
+    /**
      * Queues and submits a finished run's stats after client-side anti-cheat verification.
      */
     submitRun(result: RunResult): VerificationResultSummary {

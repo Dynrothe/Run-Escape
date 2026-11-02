@@ -101,6 +101,39 @@ const PLAYER_SAVE_OWNER: spacetimedb::Filter = spacetimedb::Filter::Sql(
     "SELECT * FROM player_save WHERE identity = :sender",
 );
 
+#[derive(SpacetimeType, Clone, Debug)]
+pub struct ActiveCheckpoint {
+    pub seconds: f64,
+    pub round: u32,
+    pub kills: u32,
+    pub xp: u64,
+    pub level: u32,
+    pub coins: u32,
+    pub caskets_opened: u32,
+    pub updated_at: Timestamp,
+}
+
+#[spacetimedb::table(accessor = active_run, public)]
+#[derive(Clone, Debug)]
+pub struct ActiveRun {
+    #[primary_key]
+    pub identity: Identity,
+    pub map_id: String,
+    pub character_id: String,
+    pub seed: i32,
+    pub endless: bool,
+    pub started_at: Timestamp,
+    pub last_active_at: Timestamp,
+    pub paused_duration_secs: f64,
+    pub is_paused: bool,
+    pub checkpoint: Option<ActiveCheckpoint>,
+}
+
+#[spacetimedb::client_visibility_filter]
+const ACTIVE_RUN_OWNER: spacetimedb::Filter = spacetimedb::Filter::Sql(
+    "SELECT * FROM active_run WHERE identity = :sender",
+);
+
 #[spacetimedb::table(
     accessor = leaderboard_endless,
     public,
@@ -761,6 +794,160 @@ pub fn set_display_name(ctx: &ReducerContext, display_name: String) -> Result<()
 }
 
 #[spacetimedb::reducer]
+pub fn start_run(
+    ctx: &ReducerContext,
+    map_id: String,
+    character_id: String,
+    seed: i32,
+    endless: bool,
+) -> Result<(), String> {
+    ensure_authenticated(ctx)?;
+    authz::require(ctx, "game.play", authz::GLOBAL)?;
+
+    if !is_valid_map(&map_id) {
+        return Err(format!("Unknown map '{}'.", map_id));
+    }
+    if !VALID_CHARACTERS.contains(&character_id.as_str()) {
+        return Err(format!("Unknown adventurer '{}'.", character_id));
+    }
+
+    let sender = ctx.sender();
+    let entry = ActiveRun {
+        identity: sender,
+        map_id,
+        character_id,
+        seed,
+        endless,
+        started_at: ctx.timestamp,
+        last_active_at: ctx.timestamp,
+        paused_duration_secs: 0.0,
+        is_paused: false,
+        checkpoint: None,
+    };
+
+    if ctx.db.active_run().identity().find(sender).is_some() {
+        ctx.db.active_run().identity().update(entry);
+    } else {
+        ctx.db.active_run().insert(entry);
+    }
+
+    Ok(())
+}
+
+#[spacetimedb::reducer]
+pub fn pause_run(ctx: &ReducerContext, paused: bool) -> Result<(), String> {
+    ensure_authenticated(ctx)?;
+    authz::require(ctx, "game.play", authz::GLOBAL)?;
+    let sender = ctx.sender();
+    let Some(mut active) = ctx.db.active_run().identity().find(sender) else {
+        return Ok(());
+    };
+
+    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+    let last_micros = active.last_active_at.to_micros_since_unix_epoch();
+    if active.is_paused && !paused {
+        // Resuming: accumulate the elapsed pause duration
+        if now_micros > last_micros {
+            let pause_delta = ((now_micros - last_micros) as f64) / 1_000_000.0;
+            active.paused_duration_secs += pause_delta;
+        }
+        active.is_paused = false;
+        active.last_active_at = ctx.timestamp;
+        ctx.db.active_run().identity().update(active);
+    } else if !active.is_paused && paused {
+        // Pausing
+        active.is_paused = true;
+        active.last_active_at = ctx.timestamp;
+        ctx.db.active_run().identity().update(active);
+    }
+
+    Ok(())
+}
+
+#[spacetimedb::reducer]
+pub fn checkpoint_run(
+    ctx: &ReducerContext,
+    seconds: f64,
+    round: u32,
+    kills: u32,
+    xp: u64,
+    level: u32,
+    coins: u32,
+    caskets_opened: u32,
+) -> Result<(), String> {
+    ensure_authenticated(ctx)?;
+    authz::require(ctx, "game.play", authz::GLOBAL)?;
+    let sender = ctx.sender();
+    let Some(mut active) = ctx.db.active_run().identity().find(sender) else {
+        return Err("No active run found to checkpoint.".to_string());
+    };
+
+    if !seconds.is_finite() || seconds < 0.0 || seconds > MAX_RUN_SECONDS {
+        return Err("Invalid checkpoint duration.".to_string());
+    }
+
+    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+    let start_micros = active.started_at.to_micros_since_unix_epoch();
+    let total_wall_clock = ((now_micros.saturating_sub(start_micros)) as f64) / 1_000_000.0;
+
+    let mut current_pause = active.paused_duration_secs;
+    if active.is_paused {
+        let last_micros = active.last_active_at.to_micros_since_unix_epoch();
+        if now_micros > last_micros {
+            current_pause += ((now_micros - last_micros) as f64) / 1_000_000.0;
+        }
+    }
+
+    let active_wall_clock = (total_wall_clock - current_pause).max(0.0);
+    // Allow 20s grace for network latency/drift
+    if seconds > active_wall_clock + 20.0 {
+        return Err(format!(
+            "Checkpoint rejected: claimed in-game time ({:.1}s) exceeds active wall-clock time ({:.1}s).",
+            seconds, active_wall_clock
+        ));
+    }
+
+    // Incremental delta check if previous checkpoint exists
+    if let Some(prev) = &active.checkpoint {
+        if seconds < prev.seconds {
+            return Err("Checkpoint time cannot move backward.".to_string());
+        }
+        let delta_secs = seconds - prev.seconds;
+        if kills < prev.kills || xp < prev.xp || level < prev.level || coins < prev.coins || caskets_opened < prev.caskets_opened {
+            return Err("Checkpoint progress metrics must be monotonic.".to_string());
+        }
+
+        let delta_kills = kills - prev.kills;
+        let round_crowd = 1.0 + 0.5 * ((round.saturating_sub(1)) as f64);
+        let max_delta_kills = (delta_secs * 25.0 * round_crowd + 50.0).ceil() as u32;
+        if delta_kills > max_delta_kills {
+            return Err(format!(
+                "Checkpoint kill spike ({}) exceeds plausible spawn limit ({}) for {:.1}s.",
+                delta_kills, max_delta_kills, delta_secs
+            ));
+        }
+    }
+
+    active.checkpoint = Some(ActiveCheckpoint {
+        seconds,
+        round,
+        kills,
+        xp,
+        level,
+        coins,
+        caskets_opened,
+        updated_at: ctx.timestamp,
+    });
+
+    if !active.is_paused {
+        active.last_active_at = ctx.timestamp;
+    }
+    ctx.db.active_run().identity().update(active);
+
+    Ok(())
+}
+
+#[spacetimedb::reducer]
 pub fn submit_run(ctx: &ReducerContext, run: RunSubmission) -> Result<(), String> {
     ensure_authenticated(ctx)?;
     authz::require(ctx, "game.play", authz::GLOBAL)?;
@@ -774,18 +961,48 @@ pub fn submit_run(ctx: &ReducerContext, run: RunSubmission) -> Result<(), String
         .find(sender)
         .unwrap_or_else(|| default_player_save(sender, ctx.timestamp));
 
-    // Wall-clock elapsed time anti-cheat check (zero extra reducer invocations)
-    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
-    let last_run_micros = save.last_run_at.to_micros_since_unix_epoch();
-    if last_run_micros > 0 {
-        let elapsed_seconds = ((now_micros.saturating_sub(last_run_micros)) as f64) / 1_000_000.0;
-        // 15 seconds grace leeway for network latency / clock jitter
-        if elapsed_seconds + 15.0 < run.seconds {
-            return Err(format!(
-                "Submission rejected: claimed duration ({:.1}s) exceeds elapsed server time ({:.1}s).",
-                run.seconds, elapsed_seconds
-            ));
+    let active_run_opt = ctx.db.active_run().identity().find(sender);
+
+    // Wall-clock & active run anti-cheat verification:
+    // 1. If an active run handshake exists for this map & seed, verify strictly against started_at minus pause duration.
+    // 2. Otherwise fallback to last_run_at wall clock check.
+    if let Some(active) = &active_run_opt {
+        if active.map_id == run.map_id && active.seed == run.seed {
+            let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+            let start_micros = active.started_at.to_micros_since_unix_epoch();
+            let total_wall_clock = ((now_micros.saturating_sub(start_micros)) as f64) / 1_000_000.0;
+            let mut pause_secs = active.paused_duration_secs;
+            if active.is_paused {
+                let last_micros = active.last_active_at.to_micros_since_unix_epoch();
+                if now_micros > last_micros {
+                    pause_secs += ((now_micros - last_micros) as f64) / 1_000_000.0;
+                }
+            }
+            let active_wall_clock = (total_wall_clock - pause_secs).max(0.0);
+            if run.seconds > active_wall_clock + 20.0 {
+                return Err(format!(
+                    "Submission rejected: claimed duration ({:.1}s) exceeds elapsed active run time ({:.1}s).",
+                    run.seconds, active_wall_clock
+                ));
+            }
         }
+    } else {
+        let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+        let last_run_micros = save.last_run_at.to_micros_since_unix_epoch();
+        if last_run_micros > 0 {
+            let elapsed_seconds = ((now_micros.saturating_sub(last_run_micros)) as f64) / 1_000_000.0;
+            if elapsed_seconds + 20.0 < run.seconds {
+                return Err(format!(
+                    "Submission rejected: claimed duration ({:.1}s) exceeds elapsed server time ({:.1}s).",
+                    run.seconds, elapsed_seconds
+                ));
+            }
+        }
+    }
+
+    // Clean up active run row now that run is finished
+    if active_run_opt.is_some() {
+        ctx.db.active_run().identity().delete(sender);
     }
     save.last_run_at = ctx.timestamp;
 

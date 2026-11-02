@@ -16,7 +16,10 @@ import AuthzRedeemInviteReducer from "../authz_redeem_invite_reducer";
 import AuthzRevokeGrantReducer from "../authz_revoke_grant_reducer";
 import AuthzRevokeInviteReducer from "../authz_revoke_invite_reducer";
 import AuthzUpdateRoleReducer from "../authz_update_role_reducer";
+import CheckpointRunReducer from "../checkpoint_run_reducer";
+import PauseRunReducer from "../pause_run_reducer";
 import SetDisplayNameReducer from "../set_display_name_reducer";
+import StartRunReducer from "../start_run_reducer";
 import SubmitRunReducer from "../submit_run_reducer";
 import SyncSaveReducer from "../sync_save_reducer";
 
@@ -30,7 +33,10 @@ export type AuthzRedeemInviteParams = __Infer<typeof AuthzRedeemInviteReducer>;
 export type AuthzRevokeGrantParams = __Infer<typeof AuthzRevokeGrantReducer>;
 export type AuthzRevokeInviteParams = __Infer<typeof AuthzRevokeInviteReducer>;
 export type AuthzUpdateRoleParams = __Infer<typeof AuthzUpdateRoleReducer>;
+export type CheckpointRunParams = __Infer<typeof CheckpointRunReducer>;
+export type PauseRunParams = __Infer<typeof PauseRunReducer>;
 export type SetDisplayNameParams = __Infer<typeof SetDisplayNameReducer>;
+export type StartRunParams = __Infer<typeof StartRunReducer>;
 export type SubmitRunParams = __Infer<typeof SubmitRunReducer>;
 export type SyncSaveParams = __Infer<typeof SyncSaveReducer>;
 

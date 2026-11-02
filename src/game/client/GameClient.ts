@@ -352,6 +352,7 @@ export class GameClient implements GameFrameHandler {
     // back, and shouldn't go twice)
     private autoAlchedUid = -1;
     private runRecorded = false;
+    private lastCheckpointSeconds = 0;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -1191,7 +1192,9 @@ export class GameClient implements GameFrameHandler {
         }
         this.paused = false;
         this.runRecorded = false;
+        this.lastCheckpointSeconds = 0;
         this.tasksAnnounced.clear();
+        this.cloud.startRun(mapId, characterId, sim.seed, endless);
         this.accumulator = 0;
         this.shownDps = 0;
         this.shownDpsTick = 0;
@@ -1395,6 +1398,7 @@ export class GameClient implements GameFrameHandler {
         if (this.sim && !this.sim.runOver) {
             this.paused = true;
             this.syncOverlay();
+            this.cloud.pauseRun(true);
         }
     }
 
@@ -1402,6 +1406,7 @@ export class GameClient implements GameFrameHandler {
         this.paused = false;
         this.accumulator = 0;
         this.syncOverlay();
+        this.cloud.pauseRun(false);
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept.
@@ -1676,6 +1681,19 @@ export class GameClient implements GameFrameHandler {
         if (now - this.lastHudUpdate > HUD_INTERVAL_MS) {
             this.updateHud(false);
             this.announceTasks(sim);
+            // Rolling Stateful Checkpoint: emit checkpoint every 5 minutes (300 seconds)
+            if (sim.seconds - this.lastCheckpointSeconds >= 300) {
+                this.lastCheckpointSeconds = sim.seconds;
+                this.cloud.checkpointRun({
+                    seconds: sim.seconds,
+                    round: sim.round,
+                    kills: sim.kills,
+                    xp: sim.xp,
+                    level: sim.level,
+                    coins: sim.coins,
+                    casketsOpened: sim.casketsOpened,
+                });
+            }
         }
 
         this.viewHero = this.getViewHero(sim);

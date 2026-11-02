@@ -10,6 +10,34 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const ActiveCheckpoint = __t.object("ActiveCheckpoint", {
+  seconds: __t.f64(),
+  round: __t.u32(),
+  kills: __t.u32(),
+  xp: __t.u64(),
+  level: __t.u32(),
+  coins: __t.u32(),
+  casketsOpened: __t.u32(),
+  updatedAt: __t.timestamp(),
+});
+export type ActiveCheckpoint = __Infer<typeof ActiveCheckpoint>;
+
+export const ActiveRun = __t.object("ActiveRun", {
+  identity: __t.identity(),
+  mapId: __t.string(),
+  characterId: __t.string(),
+  seed: __t.i32(),
+  endless: __t.bool(),
+  startedAt: __t.timestamp(),
+  lastActiveAt: __t.timestamp(),
+  pausedDurationSecs: __t.f64(),
+  isPaused: __t.bool(),
+  get checkpoint() {
+    return __t.option(ActiveCheckpoint);
+  },
+});
+export type ActiveRun = __Infer<typeof ActiveRun>;
+
 export const AuthzAudit = __t.object("AuthzAudit", {
   id: __t.u64(),
   at: __t.timestamp(),

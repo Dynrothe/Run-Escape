@@ -44,13 +44,17 @@ import AuthzRedeemInviteReducer from "./authz_redeem_invite_reducer";
 import AuthzRevokeGrantReducer from "./authz_revoke_grant_reducer";
 import AuthzRevokeInviteReducer from "./authz_revoke_invite_reducer";
 import AuthzUpdateRoleReducer from "./authz_update_role_reducer";
+import CheckpointRunReducer from "./checkpoint_run_reducer";
+import PauseRunReducer from "./pause_run_reducer";
 import SetDisplayNameReducer from "./set_display_name_reducer";
+import StartRunReducer from "./start_run_reducer";
 import SubmitRunReducer from "./submit_run_reducer";
 import SyncSaveReducer from "./sync_save_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import ActiveRunRow from "./active_run_table";
 import AuthzAuditRow from "./authz_audit_table";
 import AuthzGrantRow from "./authz_grant_table";
 import AuthzInviteRow from "./authz_invite_table";
@@ -65,6 +69,17 @@ import PlayerSaveRow from "./player_save_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  activeRun: __table({
+    name: 'active_run',
+    indexes: [
+      { accessor: 'identity', name: 'active_run_identity_idx_btree', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'active_run_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, ActiveRunRow),
   authzAudit: __table({
     name: 'authz_audit',
     indexes: [
@@ -236,7 +251,10 @@ const reducersSchema = __reducers(
   __reducerSchema("authz_revoke_grant", AuthzRevokeGrantReducer),
   __reducerSchema("authz_revoke_invite", AuthzRevokeInviteReducer),
   __reducerSchema("authz_update_role", AuthzUpdateRoleReducer),
+  __reducerSchema("checkpoint_run", CheckpointRunReducer),
+  __reducerSchema("pause_run", PauseRunReducer),
   __reducerSchema("set_display_name", SetDisplayNameReducer),
+  __reducerSchema("start_run", StartRunReducer),
   __reducerSchema("submit_run", SubmitRunReducer),
   __reducerSchema("sync_save", SyncSaveReducer),
 );
@@ -247,6 +265,8 @@ const proceduresSchema = __procedures(
 
 type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "tables"> & {
   tables: typeof tablesSchema.schemaType.tables & {
+    /** @deprecated Use `activeRun` instead. This alias will be removed in the next major version. */
+    readonly "active_run": Omit<typeof tablesSchema.schemaType.tables["activeRun"], "accessorName"> & { readonly accessorName: "active_run" };
     /** @deprecated Use `authzAudit` instead. This alias will be removed in the next major version. */
     readonly "authz_audit": Omit<typeof tablesSchema.schemaType.tables["authzAudit"], "accessorName"> & { readonly accessorName: "authz_audit" };
     /** @deprecated Use `authzGrant` instead. This alias will be removed in the next major version. */
@@ -283,6 +303,7 @@ const REMOTE_MODULE = {
 >;
 
 const tableAccessorAliases = {
+  "active_run": "activeRun",
   "authz_audit": "authzAudit",
   "authz_grant": "authzGrant",
   "authz_invite": "authzInvite",
@@ -312,6 +333,8 @@ function __withTableAccessorAliases<T extends object>(target: T, freeze = false)
 
 type __DbViewBase = __DbConnectionImpl<typeof REMOTE_MODULE>["db"];
 export type DbView = __DbViewBase & {
+  /** @deprecated Use `activeRun` instead. This alias will be removed in the next major version. */
+  readonly "active_run": __DbViewBase["activeRun"];
   /** @deprecated Use `authzAudit` instead. This alias will be removed in the next major version. */
   readonly "authz_audit": __DbViewBase["authzAudit"];
   /** @deprecated Use `authzGrant` instead. This alias will be removed in the next major version. */
@@ -334,6 +357,8 @@ export type DbView = __DbViewBase & {
 
 type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
 export type Tables = __TablesBase & {
+  /** @deprecated Use `activeRun` instead. This alias will be removed in the next major version. */
+  readonly "active_run": __TablesBase["activeRun"];
   /** @deprecated Use `authzAudit` instead. This alias will be removed in the next major version. */
   readonly "authz_audit": __TablesBase["authzAudit"];
   /** @deprecated Use `authzGrant` instead. This alias will be removed in the next major version. */
