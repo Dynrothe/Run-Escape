@@ -1,0 +1,278 @@
+import { describe, expect, it } from "vitest";
+
+import { Ground } from "./Ground";
+import { getCollisionFlags, getLocBlocking, getLocSize } from "./collision";
+import {
+    PlacedLoc,
+    TILE_BRIDGE,
+    TILE_SHOWN,
+    TileGrid,
+    createTileGrid,
+    writeLocs,
+    writeTerrain,
+} from "./format";
+import { Placer, findSolidOverlaps } from "./placer";
+import type { BuildContext, LocInfo } from "./recipe";
+
+// Made-up locs, by id: what the cache would say about each
+const LOCS: Record<number, Partial<LocInfo>> = {
+    1: { name: "Crate" },
+    2: { name: "Statue", sizeX: 2, sizeY: 2 },
+    3: { name: "Table", sizeX: 2, sizeY: 1 },
+    4: { name: "Door" },
+    5: { name: "Wall" },
+    6: { name: "Patterned floor", clipType: 2 },
+    7: { name: "Spikes", clipType: 1 },
+    8: { name: "Candle", clipType: 0 },
+    9: { name: "Nothing", drawn: false },
+    10: { name: "Big tree", sizeX: 3, sizeY: 3 },
+};
+const getLoc = (id: number): LocInfo => ({
+    name: String(id),
+    sizeX: 1,
+    sizeY: 1,
+    clipType: 2,
+    blocksProjectile: true,
+    drawn: true,
+    ...LOCS[id],
+});
+const context: Pick<BuildContext, "locs"> = { locs: getLoc };
+const loc = (id: number, type: number, x: number, y: number, rest: Partial<PlacedLoc> = {}) => ({
+    id,
+    type,
+    rotation: 0,
+    level: 0,
+    x,
+    y,
+    ...rest,
+});
+
+describe("getLocBlocking", () => {
+    it("says what blocks by getCollisionFlags' own rules", () => {
+        // Every type, at every clip, drawn or not, on a grid of its own
+        for (let type = 0; type <= 22; type++) {
+            for (const clipType of [0, 1, 2]) {
+                for (const drawn of [true, false]) {
+                    const grid = createTileGrid(4, 4);
+                    grid.locs.push(loc(1, type, 1, 1));
+                    const info = { ...getLoc(1), clipType, drawn };
+                    const flags = getCollisionFlags(grid, () => info);
+                    const blocking = getLocBlocking(type, info);
+                    const label = `type ${type}, clip ${clipType}, drawn ${drawn}`;
+                    // OBJECT or FLOOR_DECORATION on the tile itself
+                    expect((flags[1 + 4] & 0x40100) !== 0, label).toBe(blocking === "tiles");
+                    // Anything at all, walls' edges included
+                    expect(
+                        flags.some((f) => f !== 0),
+                        label,
+                    ).toBe(blocking !== undefined);
+                }
+            }
+        }
+    });
+
+    it("turns a loc's size with it, but not floor decoration's", () => {
+        expect(getLocSize({ type: 10, rotation: 1 }, { sizeX: 2, sizeY: 1 })).toEqual([1, 2]);
+        expect(getLocSize({ type: 10, rotation: 2 }, { sizeX: 2, sizeY: 1 })).toEqual([2, 1]);
+        expect(getLocSize({ type: 22, rotation: 1 }, { sizeX: 2, sizeY: 3 })).toEqual([1, 1]);
+    });
+});
+
+describe("Placer", () => {
+    const create = (size = 12) => {
+        const ground = new Ground(size, size);
+        return { ground, placer: new Placer(ground, { rng: () => 0.5, locs: getLoc }) };
+    };
+
+    it("keeps solid things off each other, but stands them on painted floor", () => {
+        const { ground, placer } = create();
+        const painted = new Uint8Array(12 * 12).fill(1);
+        ground.paintOverlay(painted, 6, false);
+        expect(ground.reserved[ground.tile(4, 4)]).toBe(1);
+        expect(ground.occupied[ground.tile(4, 4)]).toBe(0);
+        expect(placer.solid(2, 4, 4)).toBe(true);
+        expect(ground.occupied[ground.tile(5, 5)]).toBe(1);
+        // A tile of the statue, from each side
+        expect(placer.solid(1, 5, 5)).toBe(false);
+        expect(placer.solid(10, 2, 2)).toBe(false);
+        expect(placer.solid(1, 6, 6)).toBe(true);
+        expect(findSolidOverlaps(ground.grid, getLoc)).toEqual([]);
+    });
+
+    it("turns a loc's size with it", () => {
+        const { ground, placer } = create();
+        // A table two tiles across, turned to run north to south over 3,3 and 3,4
+        expect(placer.getSize(3, 1)).toEqual([1, 2]);
+        expect(placer.solid(3, 3, 3, { rotation: 1 })).toBe(true);
+        expect(ground.occupied[ground.tile(3, 4)]).toBe(1);
+        expect(ground.occupied[ground.tile(4, 3)]).toBe(0);
+        expect(placer.solid(1, 4, 3)).toBe(true);
+        expect(placer.solid(1, 3, 4)).toBe(false);
+        expect(ground.grid.locs[0]).toMatchObject({ id: 3, type: 10, rotation: 1, x: 3, y: 3 });
+    });
+
+    it("takes sizes from a table over the cache's, and wants one or the other", () => {
+        const ground = new Ground(12, 12);
+        const placer = new Placer(ground, { rng: () => 0, sizes: [[3, 3, 1]] });
+        expect(placer.getSize(3)).toEqual([3, 1]);
+        expect(placer.getSize(3, 3)).toEqual([1, 3]);
+        expect(() => placer.getSize(1)).toThrow(/no size for loc 1/);
+        const both = new Placer(ground, { rng: () => 0, locs: getLoc, sizes: [[3, 3, 1]] });
+        expect(both.getSize(3)).toEqual([3, 1]);
+        expect(both.getSize(2)).toEqual([2, 2]);
+    });
+
+    it("refuses zones, unless a placement's allowed on one", () => {
+        const { placer } = create();
+        placer.refuse("arena", (x) => x >= 6).refuse("gateway", (x, y) => y === 0);
+        // Its east tile's on the arena
+        expect(placer.solid(2, 5, 3)).toBe(false);
+        expect(placer.solid(2, 4, 3)).toBe(true);
+        expect(placer.solid(1, 2, 0)).toBe(false);
+        expect(placer.solid(1, 2, 0, { allow: ["gateway"] })).toBe(true);
+        expect(placer.solid(1, 8, 0, { allow: ["gateway"] })).toBe(false);
+        expect(placer.dress(8, 3, 0, { type: 10 })).toBe(false);
+        expect(placer.dress(8, 3, 0, { type: 10, allow: ["gateway"] })).toBe(true);
+        expect(placer.report().get("1")!.refused).toEqual({ gateway: 1, arena: 1 });
+    });
+
+    it("keeps a gap round something that asks for one", () => {
+        const { placer } = create();
+        expect(placer.solid(1, 5, 5)).toBe(true);
+        expect(placer.solid(1, 6, 6, { gap: 1 })).toBe(false);
+        expect(placer.solid(1, 7, 7, { gap: 1 })).toBe(true);
+        // The gap's own tiles mustn't leave the grid either
+        expect(placer.solid(1, 0, 3, { gap: 1 })).toBe(false);
+    });
+
+    it("dresses one to a tile, never under or over something solid", () => {
+        const { ground, placer } = create();
+        expect(placer.solid(2, 2, 2)).toBe(true);
+        expect(placer.dress(8, 3, 3, { type: 10 })).toBe(false);
+        expect(placer.dress(8, 5, 5, { type: 22 })).toBe(true);
+        expect(placer.dress(6, 5, 5, { type: 22 })).toBe(false);
+        expect(placer.solid(1, 5, 5)).toBe(false);
+        // Dressing leaves the tile free of anything solid, and turns at random when not told
+        expect(ground.occupied[ground.tile(5, 5)]).toBe(0);
+        expect(ground.grid.locs[1]).toMatchObject({ id: 8, type: 22, rotation: 2 });
+    });
+
+    it("keeps off buildings and what a stamp brought that blocks", () => {
+        const ground = new Ground(16, 16);
+        const placer = new Placer(ground, { rng: () => 0, locs: getLoc });
+        const prefab = createTileGrid(6, 6);
+        prefab.locs.push(
+            loc(2, 10, 1, 1),
+            loc(6, 22, 4, 4),
+            loc(8, 10, 4, 1),
+            loc(1, 10, 1, 4, { level: 1 }),
+        );
+        ground.stamp(prefab, 0, 0, { floor: "all", feather: 0, flatten: true, locs: getLoc });
+        // The statue blocks; the patterned floor, the candle and what's upstairs don't
+        expect(placer.solid(1, 2, 2)).toBe(false);
+        expect(placer.solid(1, 4, 4)).toBe(true);
+        expect(placer.solid(1, 4, 1)).toBe(true);
+        expect(placer.solid(1, 1, 4)).toBe(true);
+        ground.footprint[ground.tile(10, 10)] = 1;
+        expect(placer.solid(1, 10, 10)).toBe(false);
+        expect(placer.report().get("1")!.refused).toEqual({ occupied: 1, building: 1 });
+        // And a stamp without locs leaves occupied as it was
+        const plain = new Ground(16, 16);
+        plain.stamp(prefab, 0, 0, { floor: "all", feather: 0, flatten: true });
+        expect(plain.occupied.every((v) => v === 0)).toBe(true);
+    });
+
+    it("counts what was asked for against what was placed", () => {
+        const { placer } = create();
+        placer.refuse("arena", (x) => x >= 6);
+        placer.solid(2, 1, 1, { kind: "statue" });
+        placer.solid(2, 2, 2, { kind: "statue" });
+        placer.solid(2, 8, 8, { kind: "statue" });
+        let next = 0;
+        const spots: [number, number][] = [
+            [0, 6],
+            [0, 6],
+            [1, 6],
+            [9, 9],
+            [2, 6],
+        ];
+        const placed = placer.scatter(
+            "crates",
+            3,
+            () => spots[next++ % spots.length],
+            (x, y) => placer.solid(1, x, y),
+            5,
+        );
+        expect(placed).toBe(3);
+        placer.scatter(
+            "more crates",
+            2,
+            () => [9, 9],
+            (x, y) => placer.solid(1, x, y),
+            4,
+        );
+        const report = placer.report();
+        expect(report.get("statue")).toEqual({
+            requested: 3,
+            placed: 1,
+            refused: { occupied: 1, arena: 1 },
+        });
+        expect(report.get("crates")).toMatchObject({ requested: 3, placed: 3 });
+        expect(report.get("more crates")).toEqual({
+            requested: 2,
+            placed: 0,
+            refused: { "gave up": 2 },
+        });
+        // The crates' own tries, each counted under the loc
+        expect(report.get("1")).toEqual({
+            requested: 9,
+            placed: 3,
+            refused: { occupied: 1, arena: 5 },
+        });
+        expect(placer.describeShortfalls()).toEqual([
+            "statue: 1 of 3 (1 occupied, 1 arena)",
+            "1: 3 of 9 (1 occupied, 5 arena)",
+            "more crates: 0 of 2 (2 gave up)",
+        ]);
+    });
+});
+
+describe("findSolidOverlaps", () => {
+    it("finds tiles two solid locs stand on, each once", () => {
+        const grid = createTileGrid(8, 8);
+        grid.locs.push(
+            // A table across 1,1 and 2,1, and a statue over 2,1 2,2 3,1 3,2
+            loc(3, 10, 1, 1),
+            loc(2, 10, 2, 1),
+            // A crate on the statue too, so 3,2 has three
+            loc(1, 10, 3, 2),
+            loc(1, 11, 3, 2),
+        );
+        expect(findSolidOverlaps(grid, getLoc).sort((a, b) => a - b)).toEqual([2 + 8, 3 + 2 * 8]);
+    });
+
+    it("turns sizes, and leaves out what doesn't block or isn't on the ground", () => {
+        const grid = createTileGrid(8, 8);
+        grid.locs.push(
+            // The table turned runs north to south, so the crate east of it is clear
+            loc(3, 10, 1, 1, { rotation: 1 }),
+            loc(1, 10, 2, 1),
+            // Under a crate: a patterned floor, a candle, an empty loc, a wall, one upstairs
+            loc(1, 10, 5, 5),
+            loc(6, 22, 5, 5),
+            loc(8, 10, 5, 5),
+            loc(9, 10, 5, 5),
+            loc(5, 0, 5, 5),
+            loc(1, 10, 5, 5, { level: 1 }),
+        );
+        expect(findSolidOverlaps(grid, getLoc)).toEqual([]);
+        // Spikes block, as does a level-1 crate where level 1's the ground (a bridge)
+        grid.locs.push(loc(7, 22, 5, 5));
+        expect(findSolidOverlaps(grid, getLoc)).toEqual([5 + 5 * 8]);
+        grid.levels[1].flags[6 + 1 * 8] |= TILE_BRIDGE;
+        grid.locs.push(loc(1, 10, 6, 1), loc(1, 10, 6, 1, { level: 1 }));
+        expect(findSolidOverlaps(grid, getLoc)).toEqual([5 + 5 * 8]);
+        grid.locs.push(loc(1, 10, 6, 1, { level: 1 }));
+        expect(findSolidOverlaps(grid, getLoc)).toEqual([5 + 5 * 8, 6 + 1 * 8]);
+    });
+});

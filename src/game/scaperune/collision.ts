@@ -3,7 +3,7 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { CollisionMap } from "../../rs/scene/CollisionMap";
 import { type ArenaGrid, SOLID_FLAGS } from "../core/world/ArenaGrid";
 import { FlowField, type StepGrid, canStep } from "../core/world/FlowField";
-import { TILE_BLOCKED, TILE_BRIDGE, type TileGrid } from "./format";
+import { type PlacedLoc, TILE_BLOCKED, TILE_BRIDGE, type TileGrid } from "./format";
 import type { LocInfo } from "./recipe";
 
 // Collision worked out from a grid alone, without building a scene, by the same
@@ -59,6 +59,53 @@ export function getCollisionFlags(grid: TileGrid, locs: (id: number) => LocInfo)
         }
     }
     return map.flags;
+}
+
+// What a loc of a type blocks on the ground level, by getCollisionFlags' rules: "tiles" for one
+// that fills the tiles under it (a normal or diagonal loc, a diagonal wall, or floor decoration at
+// clip 1), "edge" for a wall on a tile's edge, and undefined for one that blocks nothing. A loc that
+// isn't drawn never blocks, and floor decoration only blocks at clip 1.
+export function getLocBlocking(
+    type: number,
+    info: Pick<LocInfo, "clipType" | "drawn">,
+): "tiles" | "edge" | undefined {
+    if (info.clipType === 0 || !info.drawn) {
+        return undefined;
+    }
+    switch (type) {
+        case LocModelType.WALL:
+        case LocModelType.WALL_TRI_CORNER:
+        case LocModelType.WALL_CORNER:
+        case LocModelType.WALL_RECT_CORNER:
+            return "edge";
+        case LocModelType.WALL_DIAGONAL:
+        case LocModelType.NORMAL:
+        case LocModelType.NORMAL_DIAGIONAL:
+            return "tiles";
+        case LocModelType.FLOOR_DECORATION:
+            return info.clipType === 1 ? "tiles" : undefined;
+        default:
+            return undefined;
+    }
+}
+
+// The tiles a loc fills, across and deep, turned as it's placed: floor decoration is always one
+export function getLocSize(
+    loc: Pick<PlacedLoc, "type" | "rotation">,
+    info: Pick<LocInfo, "sizeX" | "sizeY">,
+): [sizeX: number, sizeY: number] {
+    if (loc.type === LocModelType.FLOOR_DECORATION) {
+        return [1, 1];
+    }
+    return loc.rotation & 1 ? [info.sizeY, info.sizeX] : [info.sizeX, info.sizeY];
+}
+
+// Whether a loc is on the level that's the ground floor where it stands, as getCollisionFlags
+// counts it: level 0, or level 1 on a bridge
+export function isOnGroundLevel(grid: TileGrid, loc: PlacedLoc): boolean {
+    const i = loc.x + loc.y * grid.sizeX;
+    const bridge = (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;
+    return loc.level === (bridge ? 1 : 0);
 }
 
 // The tiles of a rectangle that can be walked between, as canStep walks
