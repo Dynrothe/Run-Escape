@@ -3,9 +3,25 @@ import { describe, expect, it } from "vitest";
 import { SceneTileModel } from "../../rs/scene/SceneTileModel";
 import { Ground } from "./Ground";
 import { findExits, getInsideTiles, getNearestExit } from "./building";
-import { TileGrid, createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./format";
+import {
+    SealRegion,
+    assertReachable,
+    findReachable,
+    getCollisionFlags,
+    sealFrom,
+} from "./collision";
+import {
+    TILE_BLOCKED,
+    TileGrid,
+    createTileGrid,
+    readLocs,
+    readTerrain,
+    writeLocs,
+    writeTerrain,
+} from "./format";
 import { Point, smoothPath } from "./paths";
 import { rotatePrefab } from "./prefab";
+import type { LocInfo } from "./recipe";
 import { OVERLAY_SHAPES, getCoveredSides, getOverlayShape } from "./shapes";
 
 // Which half sides a shape really covers, from what the renderer builds, in the
@@ -365,5 +381,118 @@ describe("Ground", () => {
         expect(ground.getHeight(2, 8)).toBe(40);
         expect(ground.getHeight(5, 8)).toBeGreaterThan(20);
         expect(ground.getHeight(5, 8)).toBeLessThan(40);
+    });
+});
+
+describe("sealFrom", () => {
+    // Two rooms, x 1-4 and x 6-10 by y 1-5, either side of a wall at x 5 with a doorway at
+    // 5,3, and an open border round them that's in neither
+    const WEST = { x0: 1, y0: 1, x1: 4, y1: 5 };
+    const EAST = { x0: 6, y0: 1, x1: 10, y1: 5 };
+    const locs = (): LocInfo => ({
+        name: "",
+        sizeX: 1,
+        sizeY: 1,
+        clipType: 1,
+        blocksProjectile: true,
+        drawn: true,
+    });
+    const tile = (x: number, y: number) => x + y * 12;
+    function rooms(...blocked: [number, number][]): TileGrid {
+        const grid = createTileGrid(12, 7);
+        for (let y = 1; y <= 5; y++) {
+            if (y !== 3) {
+                grid.levels[0].flags[tile(5, y)] |= TILE_BLOCKED;
+            }
+        }
+        for (const [x, y] of blocked) {
+            grid.levels[0].flags[tile(x, y)] |= TILE_BLOCKED;
+        }
+        return grid;
+    }
+    const isBlocked = (grid: TileGrid, x: number, y: number) =>
+        (grid.levels[0].flags[tile(x, y)] & TILE_BLOCKED) !== 0;
+    const regions = (): SealRegion[] => [
+        { name: "west", rect: WEST, from: { x: 2, y: 3 } },
+        { name: "east", rect: EAST, from: { x: 8, y: 3 } },
+    ];
+
+    it("floods each room without leaving its rectangle", () => {
+        const grid = rooms();
+        const sealed = sealFrom(grid, locs, regions());
+        expect(sealed.regions).toEqual([
+            { name: "west", open: 20, sealed: 0 },
+            { name: "east", open: 25, sealed: 0 },
+        ]);
+        // What's in neither is left alone, the doorway too
+        expect(sealed.outside).toBe(0);
+        expect(isBlocked(grid, 5, 3)).toBe(false);
+        expect(isBlocked(grid, 0, 0)).toBe(false);
+    });
+
+    it("blocks everything outside every room, doorways and all", () => {
+        const grid = rooms();
+        const sealed = sealFrom(grid, locs, regions(), { outside: "block" });
+        // The border's 34 tiles and the doorway
+        expect(sealed.outside).toBe(35);
+        expect(isBlocked(grid, 5, 3)).toBe(true);
+        expect(isBlocked(grid, 0, 0)).toBe(true);
+        expect(isBlocked(grid, 2, 3)).toBe(false);
+        // So the west room no longer reaches the east one
+        const all = { x0: 0, y0: 0, x1: 11, y1: 6 };
+        const reached = findReachable(getCollisionFlags(grid, locs), 12, 7, all, 2, 3);
+        expect(reached[tile(8, 3)]).toBe(0);
+    });
+
+    it("walks through a doorway inside one region", () => {
+        const both = { x0: 1, y0: 1, x1: 10, y1: 5 };
+        const sealed = sealFrom(rooms(), locs, [
+            { name: "both", rect: both, from: { x: 2, y: 3 } },
+        ]);
+        expect(sealed.regions[0].open).toBe(46);
+    });
+
+    it("blocks what its start can't reach, and counts it", () => {
+        // 4,5 in the west room's corner, shut in by three blocked tiles
+        const grid = rooms([3, 5], [3, 4], [4, 4]);
+        const sealed = sealFrom(grid, locs, regions());
+        expect(sealed.regions[0]).toEqual({ name: "west", open: 16, sealed: 1 });
+        expect(isBlocked(grid, 4, 5)).toBe(true);
+        expect(isBlocked(grid, 4, 3)).toBe(false);
+    });
+
+    it("throws over maxSealed or under min, having blocked nothing", () => {
+        const grid = rooms([3, 5], [3, 4], [4, 4]);
+        const before = grid.levels[0].flags.slice();
+        const strict = regions();
+        strict[0].maxSealed = 0;
+        expect(() => sealFrom(grid, locs, strict, { label: "Test" })).toThrow(
+            "Test: west would seal 1 open tiles, over 0",
+        );
+        const small = regions();
+        small[1].min = 26;
+        expect(() => sealFrom(grid, locs, small, { outside: "block" })).toThrow(
+            "east has 25 open tiles from 8,3, under 26",
+        );
+        expect(grid.levels[0].flags).toEqual(before);
+    });
+
+    it("says whether a point can be reached, and from which room", () => {
+        const sealed = sealFrom(rooms(), locs, regions(), { outside: "block" });
+        expect(() =>
+            assertReachable(sealed, [
+                { name: "spawn", x: 2, y: 3 },
+                { name: "boss", x: 9.5, y: 4.5, region: "east" },
+            ]),
+        ).not.toThrow();
+        expect(() =>
+            assertReachable(sealed, [{ name: "boss", x: 9, y: 4, region: "west" }], "Test"),
+        ).toThrow("Test: boss at 9,4 can't be reached from west's start");
+        expect(() => assertReachable(sealed, [{ name: "door", x: 5, y: 3 }])).toThrow(
+            "door at 5,3 can't be reached",
+        );
+        expect(() =>
+            assertReachable(sealed, [{ name: "boss", x: 9, y: 4, region: "north" }]),
+        ).toThrow("north, which isn't a region");
     });
 });

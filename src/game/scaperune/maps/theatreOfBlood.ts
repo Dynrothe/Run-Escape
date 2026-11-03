@@ -1,10 +1,10 @@
 import { Ground } from "../Ground";
-import { blockTile, findReachable, getCollisionFlags } from "../collision";
+import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid, createTileGrid } from "../format";
 import { createRng } from "../noise";
 import { cutPrefab, rotatePrefab } from "../prefab";
 import { isDoor } from "../prefabs";
-import { BuildContext, MapRecipe } from "../recipe";
+import { BuildContext, MapPoint, MapRecipe } from "../recipe";
 
 // The Theatre of Blood, as a raid (MapDef.raid): six rooms, one for each of its bosses, walled off
 // from each other in the dark, so the only way between them is the sim's teleport. Each room is a
@@ -204,6 +204,20 @@ export const TOB_ROOM_PLACES = PLACES.map((place) => ({
     },
 }));
 
+// Each room's hall, walked from where the party starts it, and its boss room, from where they're
+// brought in. Anything a region's start can't walk to is sealed.
+const REGIONS: SealRegion[] = PLACES.flatMap((place) => [
+    { name: `${place.id} hall`, rect: place.hall, from: place.start, min: 100 },
+    { name: `${place.id} room`, rect: place.chamber, from: place.arrive, min: 100 },
+]);
+
+// Where the raid puts the party and the bosses (TOB_ROOM_PLACES), each reached from its own region
+const POINTS: MapPoint[] = PLACES.flatMap((place) => [
+    { name: `${place.id} start`, ...place.start, region: `${place.id} hall` },
+    { name: `${place.id} arrival`, ...place.arrive, region: `${place.id} room` },
+    { name: `${place.id}'s boss`, ...place.boss, region: `${place.id} room` },
+]);
+
 // A cut of the real world with the plane it's on brought down to the ground floor, as the game
 // only draws one
 function bringDown(grid: TileGrid, plane: number): TileGrid {
@@ -310,43 +324,18 @@ function build(context: BuildContext): TileGrid {
 
     // Only a hall, or what can be walked to in a boss room from where the party's brought in, is
     // open: the rest is blocked, the boss rooms' doorways and corridors included
-    const collision = getCollisionFlags(ground.grid, context.locs);
-    const open = new Uint8Array(SIZE_X * SIZE_Y);
-    for (const place of PLACES) {
-        for (const [rect, from] of [
-            [place.hall, place.start],
-            [place.chamber, place.arrive],
-        ] as const) {
-            const reached = findReachable(collision, SIZE_X, SIZE_Y, rect, from.x, from.y);
-            let count = 0;
-            for (let i = 0; i < reached.length; i++) {
-                if (reached[i]) {
-                    open[i] = 1;
-                    count++;
-                }
-            }
-            if (count < 100) {
-                throw new Error(
-                    `Theatre of Blood: ${place.id} has ${count} open tiles at ${from.x},${from.y}`,
-                );
-            }
-            if (rect === place.chamber && !reached[ground.tile(place.boss.x, place.boss.y)]) {
-                throw new Error(`Theatre of Blood: ${place.id}'s boss can't be reached`);
-            }
-        }
-    }
+    const sealed = sealFrom(ground.grid, context.locs, REGIONS, {
+        outside: "block",
+        label: "Theatre of Blood",
+    });
+    assertReachable(sealed, POINTS, "Theatre of Blood");
+    // Nothing to see outside the halls and the boss rooms
     for (let y = 0; y < SIZE_Y; y++) {
         for (let x = 0; x < SIZE_X; x++) {
-            const i = ground.tile(x, y);
-            if (!open[i]) {
-                blockTile(ground.grid, i);
-                // Nothing to see outside the halls and the boss rooms
-                if (
-                    !PLACES.some((place) => inRect(place.hall, x, y) || inRect(place.chamber, x, y))
-                ) {
-                    ground.level0.underlays[i] = 0;
-                    ground.level0.overlays[i] = 0;
-                }
+            if (!PLACES.some((place) => inRect(place.hall, x, y) || inRect(place.chamber, x, y))) {
+                const i = ground.tile(x, y);
+                ground.level0.underlays[i] = 0;
+                ground.level0.overlays[i] = 0;
             }
         }
     }

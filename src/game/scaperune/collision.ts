@@ -4,7 +4,7 @@ import { CollisionMap } from "../../rs/scene/CollisionMap";
 import { type ArenaGrid, SOLID_FLAGS } from "../core/world/ArenaGrid";
 import { FlowField, type StepGrid, canStep } from "../core/world/FlowField";
 import { TILE_BLOCKED, TILE_BRIDGE, type TileGrid } from "./format";
-import type { LocInfo } from "./recipe";
+import type { LocInfo, MapPoint, MapRegion } from "./recipe";
 
 // Collision worked out from a grid alone, without building a scene, by the same
 // rules as SceneBuilder (decodeTerrain and addLoc) and ArenaGrid. The check in
@@ -130,23 +130,149 @@ export function blockTile(grid: TileGrid, i: number): void {
     grid.levels[bridge ? 1 : 0].flags[i] |= TILE_BLOCKED;
 }
 
-// The open tiles of a real arena, and how many of them can't reach a tile
+// A region for sealFrom, and what it must come to
+export type SealRegion = MapRegion & {
+    // Throws if the flood reaches fewer tiles than this
+    min?: number;
+    // Throws if more open tiles of the rectangle than this can't be walked to, and so are sealed
+    maxSealed?: number;
+};
+
+export type SealResult = {
+    // For each region in order: the tiles its flood reached, and the open ones it sealed
+    regions: { name: string; open: number; sealed: number }[];
+    // Open tiles outside every region that were blocked, with outside: "block"
+    outside: number;
+    // What each region's flood reached, by tile index
+    reached: Uint8Array[];
+    sizeX: number;
+};
+
+// Floods each region from its start, without leaving its rectangle, then blocks every tile of the
+// rectangle that no region's flood reached, walls and all, so nothing's left open that can't be
+// walked to. With outside: "block", every tile outside every region is blocked too, for a map
+// that's only its rooms. Throws first, having blocked nothing, if a region comes to fewer than its
+// `min` tiles or seals more than its `maxSealed`. The rooms of a raid, or an arena with nothing
+// walkable round it, are this.
+export function sealFrom(
+    grid: TileGrid,
+    locs: (id: number) => LocInfo,
+    regions: SealRegion[],
+    options: { outside?: "block" | "keep"; label?: string } = {},
+): SealResult {
+    const { sizeX, sizeY } = grid;
+    const label = options.label ?? "sealFrom";
+    const flags = getCollisionFlags(grid, locs);
+    const reached = regions.map(({ rect, from }) =>
+        findReachable(flags, sizeX, sizeY, rect, from.x, from.y),
+    );
+    const open = new Uint8Array(sizeX * sizeY);
+    const inRegion = new Uint8Array(sizeX * sizeY);
+    for (let r = 0; r < regions.length; r++) {
+        const { x0, y0, x1, y1 } = regions[r].rect;
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                const i = x + y * sizeX;
+                inRegion[i] = 1;
+                open[i] |= reached[r][i];
+            }
+        }
+    }
+    const isSolid = (i: number) => (flags[i] & SOLID_FLAGS) !== 0;
+    const counts = regions.map(({ name, rect, from, min, maxSealed }, r) => {
+        let count = 0;
+        let sealed = 0;
+        let missed: string | undefined;
+        for (let y = rect.y0; y <= rect.y1; y++) {
+            for (let x = rect.x0; x <= rect.x1; x++) {
+                const i = x + y * sizeX;
+                count += reached[r][i];
+                if (!open[i] && !isSolid(i)) {
+                    sealed++;
+                }
+                if (!reached[r][i] && missed === undefined) {
+                    missed = `${x},${y}`;
+                }
+            }
+        }
+        if (min !== undefined && count < min) {
+            throw new Error(
+                `${label}: ${name} has ${count} open tiles from ${from.x},${from.y}, under ${min}` +
+                    ` (the first tile it doesn't reach is ${missed})`,
+            );
+        }
+        if (maxSealed !== undefined && sealed > maxSealed) {
+            throw new Error(`${label}: ${name} would seal ${sealed} open tiles, over ${maxSealed}`);
+        }
+        return { name, open: count, sealed };
+    });
+    let outside = 0;
+    for (let i = 0; i < sizeX * sizeY; i++) {
+        if (open[i] || (!inRegion[i] && options.outside !== "block")) {
+            continue;
+        }
+        if (!inRegion[i] && !isSolid(i)) {
+            outside++;
+        }
+        blockTile(grid, i);
+    }
+    return { regions: counts, outside, reached, sizeX };
+}
+
+// Throws unless each point is on a tile sealFrom left open: one its own region's flood reached, if
+// it names a region, or any region's if not
+export function assertReachable(
+    sealed: SealResult,
+    points: MapPoint[],
+    label = "assertReachable",
+): void {
+    for (const point of points) {
+        const i = Math.floor(point.x) + Math.floor(point.y) * sealed.sizeX;
+        let masks = sealed.reached;
+        if (point.region !== undefined) {
+            const r = sealed.regions.findIndex((region) => region.name === point.region);
+            if (r < 0) {
+                throw new Error(
+                    `${label}: ${point.name} is in ${point.region}, which isn't a region`,
+                );
+            }
+            masks = [sealed.reached[r]];
+        }
+        if (!masks.some((reached) => reached[i])) {
+            const where = point.region ? ` from ${point.region}'s start` : "";
+            throw new Error(
+                `${label}: ${point.name} at ${point.x},${point.y} can't be reached${where}`,
+            );
+        }
+    }
+}
+
+// The open tiles of a real arena, or of a rectangle of it in world tiles, and how many of them
+// can't reach a tile. Leaked is how many open tiles outside the rectangle can: a room's way out.
+// Pass a field to use one again.
 export function countStranded(
     grid: ArenaGrid,
     fromX: number,
     fromY: number,
-): { open: number; stranded: number } {
-    const field = new FlowField(Math.max(grid.sizeX, grid.sizeY) * 2 + 2);
+    rect?: TileRect,
+    field = new FlowField(Math.max(grid.sizeX, grid.sizeY) * 2 + 2),
+): { open: number; stranded: number; leaked: number } {
     field.update(grid, Math.floor(fromX), Math.floor(fromY));
     let open = 0;
     let stranded = 0;
+    let leaked = 0;
     for (let y = grid.baseY; y < grid.baseY + grid.sizeY; y++) {
         for (let x = grid.baseX; x < grid.baseX + grid.sizeX; x++) {
-            if (!grid.isSolid(x, y)) {
+            if (grid.isSolid(x, y)) {
+                continue;
+            }
+            if (!rect || (x >= rect.x0 && y >= rect.y0 && x <= rect.x1 && y <= rect.y1)) {
                 open++;
                 stranded += field.isReachable(x, y) ? 0 : 1;
+            } else {
+                leaked += field.isReachable(x, y) ? 1 : 0;
             }
         }
     }
-    return { open, stranded };
+    return { open, stranded, leaked };
 }

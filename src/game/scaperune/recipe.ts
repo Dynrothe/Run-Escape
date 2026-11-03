@@ -1,5 +1,6 @@
 import type { MapFileLoader } from "../../rs/map/MapFileLoader";
 import type { MapDef } from "../content/types";
+import type { TileRect } from "./collision";
 import { MAP_SQUARE_SIZE, type TileGrid } from "./format";
 import type { GeneratedMap } from "./generator";
 
@@ -20,6 +21,19 @@ export type BuildContext = {
     maps: Pick<MapFileLoader, "getTerrainData" | "getLocData">;
     locs(id: number): LocInfo;
 };
+
+// A part of a map that's walked on its own, such as a raid's hall, a boss room or a sealed arena:
+// its open tiles are those that can be walked to from `from` without leaving `rect`. Grid tiles.
+export type MapRegion = {
+    name: string;
+    rect: TileRect;
+    from: { x: number; y: number };
+};
+
+// A tile the game puts someone on, such as where a party's brought in or where a boss turns up,
+// which has to be open and reachable: from its region's start if it names one, from the spawn if
+// not. Grid tiles.
+export type MapPoint = { name: string; x: number; y: number; region?: string };
 
 // A map: where its squares go in the world and how to build them. Its grid
 // starts at (mapX, mapY) and covers squaresX by squaresY map squares; the arena
