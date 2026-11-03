@@ -56,6 +56,7 @@ import {
 import { DEV_MAP_SETTINGS, SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";
 import { createRng } from "../../src/game/scaperune/noise";
+import { describeSolidOverlaps, findSolidOverlaps } from "../../src/game/scaperune/placer";
 import {
     BuildContext,
     MapRecipe,
@@ -1218,6 +1219,12 @@ function checkMap(
     );
     for (const problem of problems.slice(0, 16)) {
         console.log(`  ${problem}`);
+    }
+    // Solid locs on each other: a warning on a shipped map, as moving one re-rolls its dressing
+    const overlaps =
+        shipped && describeSolidOverlaps(map.grid, findSolidOverlaps(map.grid, context.locs));
+    if (overlaps) {
+        console.log(`  warning: ${overlaps}`);
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
 }
