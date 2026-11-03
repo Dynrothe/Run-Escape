@@ -54,12 +54,27 @@ const DECISION_RESEND_MS = 10_000;
 export type CoopLink = {
     sendUp(message: UpMessage): void;
     sendDown(message: DownMessage): void;
+    recoveryState?(frame: number, hash: number): void;
+    recoveryFrames?(to: string, from: number, d: DownMessage): void;
+    recoveryAck?(frame: number, hash: number): void;
+    recoveryAbort?(): void;
 };
 
 // Plays a co-op run in lockstep (see core/lockstep.ts). The host steps when
 // it likes and says what happened at each frame; a guest steps only as far as
 // the host has said, sending what its player does to the host to go in.
 export class CoopRun {
+    recovering = false;
+    private recoveryEnabled = false;
+    private pausedAt = 0;
+    private restorePrediction = false;
+    private replayUntil?: number;
+    private history: { from: number; message: DownMessage; bytes: number }[] = [];
+    private historyHead = 0;
+    private historyBytes = 0;
+    private actionSeq = 0;
+    private pendingActions = new Map<number, CoopAction>();
+    private acceptedActions = new Map<number, number>();
     // A guest's, while it's turned on (setPrediction)
     prediction?: MovementPrediction;
     // Frames stepped
@@ -87,7 +102,7 @@ export class CoopRun {
     desynced = false;
     // The host's: the guests whose map is still loading, and since when
     private readonly loading: Set<string>;
-    private readonly loadStart: number;
+    private loadStart: number;
 
     constructor(
         readonly sim: Sim,
@@ -109,6 +124,10 @@ export class CoopRun {
     // A guest's: whether its own movement is predicted on screen. Off, it sends
     // and shows only what the host confirms. Back on, it starts afresh.
     setPrediction(on: boolean): void {
+        if (this.recovering) {
+            this.restorePrediction = on && !this.isHost;
+            return;
+        }
         if (this.isHost || on === (this.prediction !== undefined)) {
             return;
         }
@@ -118,25 +137,30 @@ export class CoopRun {
 
     // The host's: this hero's move or action for the next frame, with the
     // latest move replacing one that's waiting
-    private queue(event: FrameEvent): void {
+    private queue(event: FrameEvent): boolean {
         if (event.move) {
             const waiting = this.next.find((e) => e.hero === event.hero && e.move);
             if (waiting) {
                 waiting.move = event.move;
                 waiting.moveSeq = event.moveSeq;
-                return;
+                return true;
             }
         } else if (
             this.next.filter((e) => e.hero === event.hero && e.action).length >= MAX_QUEUED_ACTIONS
         ) {
-            return;
+            return false;
         }
         this.next.push(event);
+        return true;
     }
 
     // The host's: whether it's still waiting for someone's map to load
     get waitingForLoad(): boolean {
-        if (this.loading.size > 0 && this.now() - this.loadStart > LOAD_WAIT_MS) {
+        if (
+            !this.recovering &&
+            this.loading.size > 0 &&
+            this.now() - this.loadStart > LOAD_WAIT_MS
+        ) {
             this.loading.clear();
         }
         return this.loading.size > 0;
@@ -144,6 +168,7 @@ export class CoopRun {
 
     // What the local player's pressing, sent on when it changes
     setMove(x: number, y: number): void {
+        if (this.recovering) return;
         const move = quantizeMove(x, y);
         const moveSeq = this.prediction?.sample(move);
         const now = this.now();
@@ -169,6 +194,8 @@ export class CoopRun {
     // False when it's a second answer to a decision already answered: the
     // first resolves it, and the second would land on the next one unseen.
     act(action: CoopAction): boolean {
+        if (this.recovering || (!this.isHost && this.pendingActions.size >= MAX_QUEUED_ACTIONS))
+            return false;
         if (DECISIONS.has(action.kind)) {
             const decision = this.decision();
             const now = this.now();
@@ -187,7 +214,11 @@ export class CoopRun {
         if (this.isHost) {
             this.queue({ frame: 0, hero: this.sim.focus, action });
         } else {
-            this.link.sendUp({ action });
+            if (this.recoveryEnabled) {
+                const actionSeq = ++this.actionSeq;
+                this.pendingActions.set(actionSeq, action);
+                this.link.sendUp({ action, actionSeq });
+            } else this.link.sendUp({ action });
         }
         return true;
     }
@@ -213,7 +244,13 @@ export class CoopRun {
     // copy applies it
     receiveUp(from: string, message: UpMessage): void {
         const hero = this.heroes.get(from);
-        if (!this.isHost || hero === undefined || !message || typeof message !== "object") {
+        if (
+            this.recovering ||
+            !this.isHost ||
+            hero === undefined ||
+            !message ||
+            typeof message !== "object"
+        ) {
             return;
         }
         const move = "move" in message ? cleanMove(message.move) : undefined;
@@ -224,7 +261,12 @@ export class CoopRun {
             const moveSeq = "moveSeq" in message ? cleanMoveSeq(message.moveSeq) : undefined;
             this.queue({ frame: 0, hero, move, ...(moveSeq !== undefined && { moveSeq }) });
         } else if (action) {
-            this.queue({ frame: 0, hero, action });
+            if (this.recoveryEnabled) {
+                const seq = "actionSeq" in message ? cleanMoveSeq(message.actionSeq) : undefined;
+                if (seq === undefined || seq !== (this.acceptedActions.get(hero) ?? 0) + 1) return;
+                if (this.queue({ frame: 0, hero, action, actionSeq: seq }))
+                    this.acceptedActions.set(hero, seq);
+            } else this.queue({ frame: 0, hero, action });
         }
     }
 
@@ -267,6 +309,7 @@ export class CoopRun {
 
     // A guest's: the host's frames
     receiveDown(message: DownMessage): void {
+        if (this.recovering) return;
         if (
             this.isHost ||
             !message ||
@@ -274,6 +317,13 @@ export class CoopRun {
             !Number.isSafeInteger(message.upTo)
         ) {
             return;
+        }
+        if (this.recoveryEnabled && message.from !== undefined) {
+            if (message.upTo <= this.upTo) return;
+            if (message.from !== this.upTo) {
+                this.desynced = true;
+                return;
+            }
         }
         for (const raw of message.events) {
             const event = cleanFrameEvent(raw, this.sim.heroes.length);
@@ -291,6 +341,8 @@ export class CoopRun {
     // Whether the next frame can be stepped: always for the host, and for a
     // guest once the host has sent it
     canStep(): boolean {
+        if (this.recovering)
+            return !this.isHost && this.replayUntil !== undefined && this.frame < this.replayUntil;
         return this.isHost ? !this.waitingForLoad : this.frame < this.upTo;
     }
 
@@ -318,6 +370,8 @@ export class CoopRun {
         }
         for (const event of events) {
             applyFrameEvent(this.sim, event);
+            if (event.hero === this.sim.focus && event.actionSeq)
+                this.pendingActions.delete(event.actionSeq);
         }
         this.sim.step();
         this.prediction?.confirm(events);
@@ -337,6 +391,10 @@ export class CoopRun {
                 }
             }
         }
+        if (this.recovering && this.frame === this.replayUntil) {
+            this.replayUntil = undefined;
+            this.link.recoveryAck?.(this.frame, syncHash(this.sim));
+        }
         return events;
     }
 
@@ -350,13 +408,139 @@ export class CoopRun {
         ) {
             return;
         }
-        this.link.sendDown({
+        const message: DownMessage = {
+            ...(this.recoveryEnabled && { from: this.sentUpTo }),
             upTo: this.upTo,
             events: this.outgoing,
             ...(this.outgoingHash && { hash: this.outgoingHash }),
-        });
+        };
+        if (this.recoveryEnabled) {
+            const bytes = JSON.stringify(message).length * 2;
+            this.history.push({ from: this.sentUpTo, message, bytes });
+            this.historyBytes += bytes;
+            while (
+                this.historyHead < this.history.length &&
+                (this.historyBytes > 2 * 1024 * 1024 ||
+                    this.history[this.historyHead].message.upTo < this.frame - 6000)
+            ) {
+                this.historyBytes -= this.history[this.historyHead].bytes;
+                // Release events immediately, before the occasional array compaction.
+                delete this.history[this.historyHead++];
+            }
+            if (this.historyHead > 1024) {
+                this.history = this.history.slice(this.historyHead);
+                this.historyHead = 0;
+            }
+        }
+        this.link.sendDown(message);
         this.outgoing = [];
         this.outgoingHash = undefined;
         this.sentUpTo = this.upTo;
+    }
+
+    enableRecovery(): void {
+        this.recoveryEnabled = true;
+    }
+
+    pauseForRecovery(): void {
+        if (!this.recoveryEnabled) {
+            this.link.recoveryAbort?.();
+            return;
+        }
+        if (!this.recovering) {
+            this.pausedAt = this.now();
+            this.restorePrediction = !!this.prediction;
+            this.prediction = undefined;
+            // Retain even the final packet whose socket write may have been lost.
+            this.flush(true);
+        }
+        this.recovering = true;
+        this.replayUntil = undefined;
+        if (!this.isHost) {
+            this.upTo = this.frame;
+            this.incoming = [];
+            this.hashes.clear();
+        }
+    }
+
+    reportRecoveryState(): void {
+        if (this.recovering) this.link.recoveryState?.(this.frame, syncHash(this.sim));
+    }
+
+    replayTo(to: string, from: number, target: number): void {
+        if (
+            !this.isHost ||
+            !this.recovering ||
+            target !== this.frame ||
+            from >= target ||
+            from < 0 ||
+            from < (this.history[this.historyHead]?.from ?? this.frame)
+        ) {
+            this.link.recoveryAbort?.();
+            return;
+        }
+        let message: DownMessage = { upTo: from, events: [] };
+        for (let i = this.historyHead; i < this.history.length; i++) {
+            const packet = this.history[i];
+            if (packet.message.upTo <= from) continue;
+            const candidate: DownMessage = {
+                upTo: packet.message.upTo,
+                events: [
+                    ...message.events,
+                    ...packet.message.events.filter((event) => event.frame > from),
+                ],
+                hash: packet.message.hash ?? message.hash,
+            };
+            if (JSON.stringify(candidate).length > 8 * 1024) break;
+            message = candidate;
+        }
+        if (message.upTo === from) this.link.recoveryAbort?.();
+        else this.link.recoveryFrames?.(to, from, message);
+    }
+
+    receiveRecoveryFrames(from: number, message: DownMessage): void {
+        if (from < this.frame) return; // Already applied before a repeated delivery.
+        if (
+            this.isHost ||
+            !this.recovering ||
+            this.replayUntil !== undefined ||
+            from !== this.frame ||
+            !Number.isSafeInteger(message?.upTo) ||
+            message.upTo <= from ||
+            message.upTo - from > 6000 ||
+            !Array.isArray(message.events)
+        ) {
+            this.link.recoveryAbort?.();
+            return;
+        }
+        const events = message.events.map((e) => cleanFrameEvent(e, this.sim.heroes.length));
+        let previous = from + 1;
+        for (const event of events) {
+            if (!event || event.frame < previous || event.frame > message.upTo) {
+                this.link.recoveryAbort?.();
+                return;
+            }
+            previous = event.frame;
+        }
+        this.incoming = events as FrameEvent[];
+        this.upTo = this.replayUntil = message.upTo;
+    }
+
+    resumeAfterRecovery(): void {
+        if (!this.recovering) return;
+        const elapsed = this.now() - this.pausedAt;
+        this.loadStart += elapsed;
+        for (const [hero, since] of this.waitingSince) this.waitingSince.set(hero, since + elapsed);
+        if (this.sentDecision) this.sentDecision.at += elapsed;
+        this.recovering = false;
+        if (this.restorePrediction) this.prediction = new MovementPrediction(this.sim, this.now);
+        this.moveSentAt = -Infinity;
+        this.lastMove = [NaN, NaN];
+        this.moveSeqSent = 0;
+        if (!this.isHost) {
+            this.link.sendUp({ loaded: true });
+            for (const [actionSeq, action] of this.pendingActions)
+                this.link.sendUp({ action, actionSeq });
+        }
     }
 }

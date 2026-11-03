@@ -116,6 +116,9 @@ Multiplayer where a relay answers, so a plain static host serves it as a single-
 `npm run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).
+For active games to survive relay restarts, set `MULTIPLAYER_RECOVERY_DIR` to a persistent private
+directory. Compatible parties can reconnect for up to 120 seconds while their tabs stay open;
+see [relay restart recovery](docs/DEVELOPMENT.md#relay-restart-recovery).
 
 ## Desktop
 

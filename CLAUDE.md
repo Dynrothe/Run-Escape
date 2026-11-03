@@ -66,6 +66,14 @@ applied; preserve them when coalescing queued moves. Movement rules shared by si
 prediction live in `core/PlayerMovement.ts`. Keep the delayed-network tests in
 `MovementPrediction.test.ts` covering corrections, fallbacks and changes to movement.
 
+Relay restart recovery is opt-in through `MULTIPLAYER_RECOVERY_DIR`; see Relay restart recovery
+in `docs/DEVELOPMENT.md`. `server/recovery-store.mjs` persists membership and token hashes;
+`server/run-recovery.mjs` authenticates seats and coordinates the frame/hash barrier. The host
+keeps bounded frame history in `CoopRun`; never persist full simulations or advance the host
+during recovery. Keep protocol negotiation backward compatible, preserve `actionSeq` through
+frame cleaning, and check recovery against the original run's build. `server/recovery.test.ts`
+kills real relay processes to test restoration, and the co-op client tests cover replay/retries.
+
 ## Commands
 
 ```sh

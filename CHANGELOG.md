@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Co-op can pause and reconnect after a brief server restart when the server enables recovery.
+
 ## 0.23.0 - 2026-11-02
 
 ### Added

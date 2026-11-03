@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 
 import { clientAddress, proxyMode, viaProxy, watchCloudflareRanges } from "./client-ip.mjs";
 import { playerName, roomName } from "./name-gen.mjs";
+import { RECOVERY_WINDOW_MS, createRecoveryStore } from "./recovery-store.mjs";
+import { createRunRecovery } from "./run-recovery.mjs";
 
 export const RELAY_PATH = "/coop";
 
@@ -412,6 +414,7 @@ class Connection {
     }
 
     close(code) {
+        this.closeCode = code;
         if (this.closed) {
             return;
         }
@@ -621,6 +624,8 @@ export function createRelay(limits = {}) {
         anyMap = isAnyMapOn(),
         metrics = isMetricsOn(),
         metricsPort = metricsPortSetting(),
+        // A stable private directory enables restart recovery. No per-frame disk writes.
+        recoveryDir = process.env.MULTIPLAYER_RECOVERY_DIR,
     } = limits;
     // Behind Cloudflare, its addresses, fetched from its API
     const stopCloudflare = proxy === "cloudflare" ? watchCloudflareRanges() : () => {};
@@ -651,10 +656,34 @@ export function createRelay(limits = {}) {
     const wrongCodesFrom = new Map();
     const wrongCodesFromNetwork = new Map();
     const joinedFrom = new Map();
+    const recoveryStarts = new Map();
     let nextRoomOrder = 1;
     // The open rooms as the list shows them, worked out again only after a
     // room changes (everyone browsing asks every few seconds)
     let openRooms;
+    let recovery;
+    if (recoveryDir) {
+        let store;
+        try {
+            store = createRecoveryStore(recoveryDir, maxRooms);
+            recovery = createRunRecovery({
+                store,
+                rooms,
+                playerNames,
+                roomView,
+                disband,
+                hostCanSend,
+                hostBurstBytes,
+            });
+            nextId = recovery.nextId;
+            counters.peakRooms = rooms.size;
+        } catch (error) {
+            store?.close();
+            rooms.clear();
+            playerNames.clear();
+            console.error(`Co-op restart recovery unavailable: ${error.message}`);
+        }
+    }
 
     function metricsText() {
         let lobbyPlayers = 0;
@@ -662,11 +691,12 @@ export function createRelay(limits = {}) {
         let runningRooms = 0;
         let publicRooms = 0;
         for (const room of rooms.values()) {
+            const connected = room.members.filter((m) => m.connected).length;
             if (room.started) {
                 runningRooms++;
-                playingPlayers += room.members.length;
+                playingPlayers += connected;
             } else {
-                lobbyPlayers += room.members.length;
+                lobbyPlayers += connected;
             }
             if (room.open) {
                 publicRooms++;
@@ -890,11 +920,13 @@ export function createRelay(limits = {}) {
         }
         client.room = undefined;
         client.ready = false;
+        if (!client.connected) playerNames.delete(client.name);
         room.members = room.members.filter((member) => member !== client);
         if (reason) {
             client.connection.send({ t: "gone", reason });
         }
         if (room.members.length === 0) {
+            recovery?.end(room);
             rooms.delete(room.code);
             openRooms = undefined;
             return;
@@ -913,10 +945,12 @@ export function createRelay(limits = {}) {
                 member.connection.send({ t: "left", id: client.id });
             }
         }
+        recovery?.changed(room);
         roomChanged(room);
     }
 
     function disband(room, reason) {
+        recovery?.end(room);
         rooms.delete(room.code);
         openRooms = undefined;
         for (const member of room.members) {
@@ -999,6 +1033,8 @@ export function createRelay(limits = {}) {
         if (typeof message.build === "string") {
             client.build = message.build.slice(0, 64);
         }
+        if (message.recoveryVersion !== undefined)
+            client.recoveryVersion = message.recoveryVersion === 1 ? 1 : undefined;
     }
 
     // A player whose game isn't the host's build, which would fall out of
@@ -1070,6 +1106,11 @@ export function createRelay(limits = {}) {
 
     // payload: the message's bytes as they came, for passing on
     function handle(client, message, payload) {
+        if (recovery?.handle(client, message, payload)) return;
+        if (message.t === "resume") {
+            client.connection.send({ t: "resumeRejected" });
+            return;
+        }
         const room = client.room;
         if (message.t !== "ping") {
             client.lastActive = Date.now();
@@ -1082,6 +1123,11 @@ export function createRelay(limits = {}) {
         }
         const isHost = room !== undefined && room.hostId === client.id;
         const error = (text) => client.connection.send({ t: "error", message: text });
+        if (
+            room?.recovery?.deadline &&
+            ["up", "down", "start", "end", "settings", "me"].includes(message.t)
+        )
+            return;
         switch (message.t) {
             case "ping":
                 client.connection.send({ t: "pong" });
@@ -1311,6 +1357,11 @@ export function createRelay(limits = {}) {
                         return;
                     }
                     room.started = true;
+                    // Bound disk churn from modified clients repeatedly starting and ending runs.
+                    const tokens =
+                        recovery && underLimit(recoveryStarts, client.address, 10)
+                            ? recovery.start(room)
+                            : undefined;
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),
@@ -1318,7 +1369,18 @@ export function createRelay(limits = {}) {
                     counters.runsStarted++;
                     for (const member of room.members) {
                         member.ready = false;
-                        member.connection.write(start);
+                        if (tokens) {
+                            member.connection.send({
+                                t: "start",
+                                game: message.game,
+                                recovery: {
+                                    protocol: 1,
+                                    runId: room.recovery.runId,
+                                    token: tokens.get(member.id),
+                                    windowMs: RECOVERY_WINDOW_MS,
+                                },
+                            });
+                        } else member.connection.write(start);
                     }
                     roomChanged(room);
                 }
@@ -1326,6 +1388,8 @@ export function createRelay(limits = {}) {
             case "end":
                 // The host's back in the lobby: the room is again
                 if (isHost && room.started) {
+                    recovery?.end(room);
+                    for (const member of room.members) member.connection.send({ t: "recoveryOff" });
                     room.started = false;
                     roomChanged(room);
                 }
@@ -1407,6 +1471,7 @@ export function createRelay(limits = {}) {
             build: undefined,
             room: undefined,
             connection: undefined,
+            connected: true,
             address,
             network,
             lastActive: Date.now(),
@@ -1418,10 +1483,11 @@ export function createRelay(limits = {}) {
             (message, payload) => handle(client, message, payload),
             () => {
                 clients.delete(client);
-                playerNames.delete(client.name);
                 addCount(connectionsFrom, address, -1);
                 addCount(connectionsFromNetwork, network, -1);
-                leaveRoom(client);
+                const invalid = [1002, 1007, 1008, 1009].includes(client.connection.closeCode);
+                if (invalid || !recovery?.disconnect(client)) leaveRoom(client);
+                if (!client.room) playerNames.delete(client.name);
             },
             bytesPerSecond,
         );
@@ -1431,7 +1497,13 @@ export function createRelay(limits = {}) {
         playerNames.add(client.name);
         // anyMap: the game shows rooms on maps the player hasn't got as locked
         // unless it's on
-        client.connection.send({ t: "welcome", id: client.id, name: client.name, anyMap });
+        client.connection.send({
+            t: "welcome",
+            id: client.id,
+            name: client.name,
+            anyMap,
+            ...(recovery && { recoveryVersion: 1 }),
+        });
         if (head && head.length > 0) {
             client.connection.receive(head);
         }
@@ -1460,7 +1532,13 @@ export function createRelay(limits = {}) {
                 client.connection.close(1001);
             }
         }
-        for (const times of [createdFrom, wrongCodesFrom, wrongCodesFromNetwork, joinedFrom]) {
+        for (const times of [
+            createdFrom,
+            wrongCodesFrom,
+            wrongCodesFromNetwork,
+            joinedFrom,
+            recoveryStarts,
+        ]) {
             for (const [address, at] of times) {
                 if (at.every((t) => now - t >= 60_000)) {
                     times.delete(address);
@@ -1513,6 +1591,7 @@ export function createRelay(limits = {}) {
         // Closes idle rooms as if it were this time (for the tests)
         sweep,
         close() {
+            recovery?.close();
             clearInterval(pinger);
             clearInterval(sweeper);
             stopCloudflare();

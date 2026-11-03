@@ -41,6 +41,164 @@ function createSim(focus: number): Sim {
 // they were sent (a WebSocket keeps them in order)
 type Delivery = { at: number; order: number; deliver: () => void };
 
+describe("co-op recovery", () => {
+    afterEach(() => usePortableMath(false));
+    function party() {
+        usePortableMath(true);
+        let dropping = false;
+        let now = 0;
+        const aborted = vi.fn();
+        const acks: [number, number][] = [];
+        const replay: DownMessage[] = [];
+        const actions: number[] = [];
+        const runs: CoopRun[] = [];
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        IDS.forEach((id, i) => {
+            runs.push(
+                new CoopRun(
+                    createSim(i),
+                    i === 0,
+                    {
+                        sendUp: (m) => {
+                            if (!dropping) runs[0].receiveUp(id, m);
+                        },
+                        sendDown: (m) => {
+                            actions.push(
+                                ...m.events
+                                    .filter((e) => e.actionSeq !== undefined)
+                                    .map((e) => e.actionSeq!),
+                            );
+                            if (!dropping)
+                                runs.slice(1).forEach((run) => run.receiveDown(structuredClone(m)));
+                        },
+                        recoveryFrames: (to, from, d) => {
+                            replay.push(d);
+                            runs[IDS.indexOf(to)].receiveRecoveryFrames(from, structuredClone(d));
+                        },
+                        recoveryAck: (frame, hash) => acks.push([frame, hash]),
+                        recoveryAbort: aborted,
+                    },
+                    heroes,
+                    "host",
+                    () => now,
+                ),
+            );
+            runs[i].enableRecovery();
+            if (i) runs[0].receiveUp(id, { loaded: true });
+        });
+        const step = () => {
+            now += 20;
+            runs[0].stepFrame();
+            runs[0].flush();
+            for (const run of runs.slice(1)) while (run.canStep()) run.stepFrame();
+        };
+        const recover = () => {
+            runs.forEach((run) => run.pauseForRecovery());
+            expect(runs[0].canStep()).toBe(false);
+            for (let i = 1; i < runs.length; i++) {
+                while (runs[i].frame < runs[0].frame && !aborted.mock.calls.length) {
+                    runs[0].replayTo(IDS[i], runs[i].frame, runs[0].frame);
+                    while (runs[i].canStep()) runs[i].stepFrame();
+                }
+                expect(syncHash(runs[i].sim)).toBe(syncHash(runs[0].sim));
+            }
+            dropping = false;
+            runs.forEach((run) => run.resumeAfterRecovery());
+        };
+        return {
+            runs,
+            step,
+            recover,
+            actions,
+            acks,
+            replay,
+            aborted,
+            drop: () => {
+                dropping = true;
+            },
+            advance: (ms: number) => {
+                now += ms;
+            },
+        };
+    }
+
+    it("replays lost and unsent final frames, with exactly-once actions on either side of the cut", () => {
+        const p = party();
+        for (let i = 0; i < 10; i++) p.step();
+        p.runs[1].act({ kind: "item", index: 0 }); // Accepted, but its frame will be lost.
+        p.drop();
+        p.step();
+        p.runs[1].act({ kind: "item", index: 1 }); // Never reached the host.
+        for (let i = 0; i < 20; i++) {
+            p.runs[0].setMove(1, 0);
+            p.step();
+        }
+        p.runs[0].stepFrame(); // Not flushed before the socket disappears.
+        p.advance(90_000);
+        p.recover();
+        expect(p.aborted).not.toHaveBeenCalled();
+        expect(p.acks).toHaveLength(2);
+        for (let i = 0; i < 4; i++) p.step();
+        p.runs[0].flush(true);
+        for (const run of p.runs.slice(1)) while (run.canStep()) run.stepFrame();
+        expect(p.actions).toEqual([1, 2]);
+        for (const run of p.runs.slice(1)) expect(syncHash(run.sim)).toBe(syncHash(p.runs[0].sim));
+        expect(p.runs.every((run) => !run.desynced && !run.recovering)).toBe(true);
+    });
+
+    it("deduplicates a guest action already queued for the host's next frame", () => {
+        const p = party();
+        p.runs[1].act({ kind: "item", index: 0 });
+        p.drop();
+        p.recover();
+        p.step();
+        p.step();
+        expect(p.actions).toEqual([1]);
+    });
+
+    it("chunks a large replay within the wire budget", () => {
+        const p = party();
+        p.drop();
+        for (let i = 0; i < 300; i++) {
+            p.runs[0].act({ kind: "item", index: i % 4 });
+            p.step();
+        }
+        p.recover();
+        expect(p.replay.length).toBeGreaterThan(2);
+        expect(p.replay.every((d) => JSON.stringify(d).length <= 8192)).toBe(true);
+        expect(p.aborted).not.toHaveBeenCalled();
+    });
+
+    it("refuses missing or malformed history and never advances the host while paused", () => {
+        const p = party();
+        p.step();
+        p.runs.forEach((run) => run.pauseForRecovery());
+        p.runs[0].replayTo("guest1", -1, 1);
+        p.runs[1].receiveRecoveryFrames(0, {
+            upTo: 4,
+            events: [{ frame: 5, hero: 1, move: [1, 0] }],
+        });
+        expect(p.aborted).toHaveBeenCalledTimes(2);
+        expect(p.runs.every((run) => !run.canStep())).toBe(true);
+        expect(p.runs[1].act({ kind: "item", index: 0 })).toBe(false);
+    });
+
+    it("fails recovery when a guest has fallen beyond the bounded history", () => {
+        const p = party();
+        p.drop();
+        // Only the transport history matters here; avoid running minutes of combat.
+        vi.spyOn(p.runs[0].sim, "step").mockImplementation(() => {});
+        for (let i = 0; i < 6010; i++) {
+            p.runs[0].stepFrame();
+            p.runs[0].flush();
+        }
+        p.runs[0].pauseForRecovery();
+        p.runs[0].replayTo("guest1", 0, p.runs[0].frame);
+        expect(p.aborted).toHaveBeenCalledOnce();
+        expect(p.replay).toHaveLength(0);
+    });
+});
+
 describe("co-op lockstep", () => {
     afterEach(() => usePortableMath(false));
 

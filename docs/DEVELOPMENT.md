@@ -75,7 +75,7 @@ serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
 packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from) and
-`server/client-ip.mjs` to the server and run it.
+`server/client-ip.mjs`, `server/recovery-store.mjs` and `server/run-recovery.mjs` to the server and run it.
 
 ```
 PORT=8787 node server/coop-relay.mjs
@@ -172,6 +172,69 @@ mostly Node writing to sockets.
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
 else. `npm start` and `npm run preview` run a relay of their own at `/coop`
 (`npm run start:singleplayer`, or `MULTIPLAYER=off`, without).
+
+#### Relay restart recovery
+
+Set `MULTIPLAYER_RECOVERY_DIR` to a persistent directory outside the deployed checkout, owned by
+the relay's account and private to it (mode `0700` on Linux). For example, after creating that
+directory as the service account:
+
+```sh
+MULTIPLAYER_RECOVERY_DIR=/var/lib/run-escape/coop PORT=8787 node server/coop-relay.mjs
+# Or use the same variable with npm run serve.
+```
+
+Unset, recovery is off. Keep the same directory and public relay URL across deployments; mount
+it as a persistent volume in a container. Run only one relay against it. A PID lock prevents
+two processes from claiming the same seats; a dead process's lock is reclaimed on startup.
+Recovery does not start, stop or restart the server: use the VM's existing service manager.
+An unreadable, unsafe or incompatible store logs an error and leaves ordinary co-op available
+without recovery. Do not delete its files during active games. If a process died during lock
+creation and left `starting.lock`, remove that empty directory only after verifying no relay
+is running against the store.
+
+Recovery is negotiated only when **every member** supports protocol 1 at run start. Older
+clients still create, join and play normally; a party containing one uses the existing
+disconnect behavior. Existing runs at the first deployment cannot gain recovery retroactively.
+Deploy the client and relay, enable the directory, then start new runs to use it.
+
+When the relay connection disappears, browsers retain their simulations, pause and retry with
+bounded backoff. They have **120 seconds** from detecting the interruption to reconnect and
+finish synchronization. The host's tab and every remaining player's tab must stay open with
+their original run in memory. A visible reconnect notice replaces play during the pause;
+reconnect normally begins within 250–500 ms of a closed socket, while a silent connection takes
+up to about 8 seconds to detect. Restart time, network delay and catch-up determine the total
+pause; there is no promise of an invisible restart. No page reload, browser crash recovery or
+host migration is supported. Endless and fun runs recover the same way as regular runs.
+
+Each seat has a random 256-bit bearer token, kept only in browser memory and sent over the
+existing WebSocket (use WSS in production). The disk record contains only its SHA-256 hash,
+room membership and the original game build, never the simulation or raw token. A token can
+reclaim only its own seat; the room code alone grants no recovery access. The token must match
+the run, recovery protocol and original build. Removing a player or ending a run revokes the
+corresponding credentials. Keep tokens out of logs and URLs.
+
+Deploying new frontend assets does not replace JavaScript already running in an open tab.
+Recovery checks the **original run's build**, not the new deployment's build. The relay must
+continue understanding recovery protocol 1 and its persisted record format; a future
+incompatible relay must drain those games first or accept that recovery will fail. All players
+must retain their loaded game; reloading to a new build cannot rejoin an active run.
+
+The host retains up to 6,000 frames (120 seconds of simulation) with a 2 MiB serialized-data
+budget, plus bounded object overhead. Guests request missing frames in small chunks under the
+relay's existing host byte budget. A fresh synchronization epoch discards stale replies, and
+every remaining player must reach the host's paused frame with the same state hash before
+resuming. Action sequence acknowledgements prevent a resent click from applying twice;
+movement is refreshed after resuming. Load and choice timers exclude the recovery pause.
+Missing history, divergent hashes or an expired deadline end recovery safely.
+
+There are no additional packages, per-frame disk writes or server simulations. Room records
+are written atomically on lifecycle changes; a single small lease file is refreshed every 15
+seconds. A startup fixes each interrupted run's deadline on disk so repeated restarts cannot
+extend it. A stale lease discards abandoned records; browsers enforce their own 120-second
+limit too. Rapid repeated starts from one address stop receiving recovery after ten starts
+per minute, while ordinary play remains available. This covers relay process restarts and
+crashes with intact storage, not loss of the VM's disk or a transactional power-loss guarantee.
 
 #### Optional multiplayer metrics
 
