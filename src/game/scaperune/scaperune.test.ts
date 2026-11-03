@@ -3,9 +3,19 @@ import { describe, expect, it } from "vitest";
 import { SceneTileModel } from "../../rs/scene/SceneTileModel";
 import { Ground } from "./Ground";
 import { findExits, getInsideTiles, getNearestExit } from "./building";
-import { TileGrid, createTileGrid, readLocs, readTerrain, writeLocs, writeTerrain } from "./format";
+import {
+    TILE_BLOCKED,
+    TILE_BRIDGE,
+    TILE_SHOWN,
+    TileGrid,
+    createTileGrid,
+    readLocs,
+    readTerrain,
+    writeLocs,
+    writeTerrain,
+} from "./format";
 import { Point, smoothPath } from "./paths";
-import { rotatePrefab } from "./prefab";
+import { bringDown, cutPrefab, rotatePrefab } from "./prefab";
 import { OVERLAY_SHAPES, getCoveredSides, getOverlayShape } from "./shapes";
 
 // Which half sides a shape really covers, from what the renderer builds, in the
@@ -173,6 +183,69 @@ describe("rotatePrefab", () => {
         expect(turned.levels[0].overlays).toEqual(prefab.levels[0].overlays);
         expect(turned.levels[0].rotations).toEqual(prefab.levels[0].rotations);
         expect(turned.locs[0]).toMatchObject({ x: 0, y: 0, rotation: 0 });
+    });
+});
+
+describe("planes", () => {
+    // A square of the world with something on each of its levels: level 1's a room upstairs
+    // with a bridge (level 2 holds its ground floor) and a tile drawn from the ground
+    function upstairs(): TileGrid {
+        const grid = createTileGrid(64, 64);
+        for (let level = 0; level < 4; level++) {
+            grid.levels[level].overlays[5 + 6 * 64] = 10 + level;
+            grid.locs.push({ id: 100 + level, type: 10, rotation: 0, level, x: 5, y: 6 });
+        }
+        grid.levels[0].flags[1] = TILE_BLOCKED;
+        grid.levels[1].flags[1] = TILE_SHOWN;
+        grid.levels[2].flags[1] = TILE_BRIDGE;
+        grid.levels[1].heights[0] = 40;
+        return grid;
+    }
+
+    it("brings a level and those over it down", () => {
+        const down = bringDown(upstairs(), 1);
+        expect([0, 1, 2, 3].map((level) => down.levels[level].overlays[5 + 6 * 64])).toEqual([
+            11, 12, 13, 0,
+        ]);
+        expect(down.locs.map((loc) => [loc.id, loc.level])).toEqual([
+            [101, 0],
+            [102, 1],
+            [103, 2],
+        ]);
+        // Heights stay as they were, over the level below
+        expect(down.levels[0].heights[0]).toBe(40);
+        // The new top level is empty, at an upper level's height
+        expect(down.levels[3].heights[0]).toBe(30);
+    });
+
+    it("brings each level's flags down with it", () => {
+        const down = bringDown(upstairs(), 1);
+        // Level 1's TILE_SHOWN is on the ground floor now, where it means nothing, and level 2's
+        // bridge is on level 1, so the old level 3 counts as walked on
+        expect(down.levels[0].flags[1]).toBe(TILE_SHOWN);
+        expect(down.levels[1].flags[1]).toBe(TILE_BRIDGE);
+        expect(down.levels[2].flags[1]).toBe(0);
+    });
+
+    it("leaves plane 0 alone", () => {
+        const grid = upstairs();
+        expect(bringDown(grid, 0)).toBe(grid);
+    });
+
+    it("cuts from a plane", () => {
+        const square = upstairs();
+        const maps = {
+            getTerrainData: (mapX: number, mapY: number) =>
+                mapX === 50 && mapY === 50 ? writeTerrain(square, 0, 0) : undefined,
+            getLocData: (mapX: number, mapY: number) =>
+                mapX === 50 && mapY === 50 ? writeLocs(square, 0, 0) : undefined,
+        };
+        const cut = cutPrefab(maps, 50 * 64 + 4, 50 * 64 + 4, 4, 4, { plane: 1 });
+        expect(cut.levels[0].overlays[1 + 2 * 4]).toBe(11);
+        expect(cut.locs).toContainEqual({ id: 101, type: 10, rotation: 0, level: 0, x: 1, y: 2 });
+        expect(cut.locs.some((loc) => loc.id === 100)).toBe(false);
+        const ground = cutPrefab(maps, 50 * 64 + 4, 50 * 64 + 4, 4, 4);
+        expect(ground.levels[0].overlays[1 + 2 * 4]).toBe(10);
     });
 });
 

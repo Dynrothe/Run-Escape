@@ -5,12 +5,14 @@ import { cutPrefab, rotatePrefab } from "./prefab";
 import type { BuildContext } from "./recipe";
 
 // A rectangle of the real world, in world tiles: its south-west corner and size, and any locs
-// that are there but aren't wanted
+// that are there but aren't wanted. One that's upstairs says which level it's on (cutPrefab's
+// plane), and comes down to the ground floor.
 export type PrefabDef = {
     worldX: number;
     worldY: number;
     sizeX: number;
     sizeY: number;
+    plane?: number;
     leaveOut?: number[];
 };
 
@@ -105,7 +107,9 @@ const DOOR_NAME = /\b(door|gate|curtain)\b/i;
 const BUILDING_FEATHER = 4;
 
 export function loadPrefab(context: BuildContext, def: PrefabDef): TileGrid {
-    const prefab = cutPrefab(context.maps, def.worldX, def.worldY, def.sizeX, def.sizeY);
+    const prefab = cutPrefab(context.maps, def.worldX, def.worldY, def.sizeX, def.sizeY, {
+        plane: def.plane,
+    });
     const { leaveOut } = def;
     if (leaveOut) {
         prefab.locs = prefab.locs.filter((loc) => !leaveOut.includes(loc.id));
