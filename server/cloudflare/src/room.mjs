@@ -36,8 +36,9 @@ import {
     randomToken,
 } from "./shared.mjs";
 
-// How often a room tells the lobby it's still there
-const ROOM_HEARTBEAT_MS = 30_000;
+// How often a room tells the lobby it's still there. Each one is a billed
+// request to the lobby, whatever it says.
+const ROOM_HEARTBEAT_MS = 60_000;
 // How long a player whose connection dropped keeps their place: longer than
 // their game keeps trying (RESUME_WINDOW_MS in CoopLobby.ts)
 const RESUME_GRACE_MS = 15_000;
@@ -252,6 +253,7 @@ export class Room extends DurableObject {
             updateWaiting,
             saveTimer,
             saveWaiting,
+            told,
             ...fields
         } = room;
         this.ctx.storage
@@ -404,28 +406,41 @@ export class Room extends DurableObject {
         }, MEMBER_UPDATE_MS);
     }
 
-    tellLobby() {
+    // What the lobby lists changes far less often than the room (players'
+    // loadouts and ready don't show), so it's only told of a change, unless
+    // it's the heartbeat saying the room's still there
+    tellLobby(heartbeat = false) {
         const room = this.room;
         if (!room) {
             return;
         }
         const host = room.members.find((member) => member.id === room.hostId);
-        this.lobby
-            .roomUpdate({
-                code: room.code,
-                name: room.name,
-                open: room.open,
-                started: room.started,
-                players: room.members.length,
-                mapId: room.mapId,
-                endless: room.endless,
-                hard: room.hard === true,
-                host: host?.name ?? "",
-                country: host ? shownCountry(host, room) : undefined,
-                hostAddress: host?.address ?? "",
-                order: room.order,
-            })
-            .catch((e) => console.warn("Co-op room: couldn't reach the lobby:", e));
+        const entry = {
+            code: room.code,
+            name: room.name,
+            open: room.open,
+            started: room.started,
+            players: room.members.length,
+            mapId: room.mapId,
+            endless: room.endless,
+            hard: room.hard === true,
+            host: host?.name ?? "",
+            country: host ? shownCountry(host, room) : undefined,
+            hostAddress: host?.address ?? "",
+            order: room.order,
+        };
+        const told = JSON.stringify(entry);
+        if (!heartbeat && told === room.told) {
+            return;
+        }
+        room.told = told;
+        this.lobby.roomUpdate(entry).catch((e) => {
+            // Said again with the next change, not only the next heartbeat
+            if (room.told === told) {
+                room.told = undefined;
+            }
+            console.warn("Co-op room: couldn't reach the lobby:", e);
+        });
     }
 
     // The room's over: the lobby forgets it and its timers stop
@@ -716,7 +731,7 @@ export class Room extends DurableObject {
             } else if (Date.now() - room.lastActive > IDLE_MS) {
                 this.disband("idle");
             } else {
-                this.tellLobby();
+                this.tellLobby(true);
             }
         }, ROOM_HEARTBEAT_MS);
     }

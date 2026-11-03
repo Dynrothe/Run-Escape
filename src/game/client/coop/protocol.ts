@@ -158,7 +158,15 @@ export type ServerMessage =
     // name: the one the relay's given this player. anyMap: rooms take players
     // whatever maps they have. country: theirs, as others see it on their
     // flag, if the relay knows it.
-    | { t: "welcome"; id: string; name: string; anyMap?: boolean; country?: string }
+    | {
+          t: "welcome";
+          id: string;
+          name: string;
+          anyMap?: boolean;
+          country?: string;
+          // The open rooms come again whenever they change, without asking
+          listUpdates?: boolean;
+      }
     // This player's new name, after asking for one
     | { t: "named"; name: string }
     | { t: "pong" }

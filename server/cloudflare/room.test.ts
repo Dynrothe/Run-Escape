@@ -130,6 +130,22 @@ describe("Cloudflare co-op room", () => {
         expect(saved.members[1].ready).toBe(true);
     });
 
+    it("tells the lobby only what it lists, and that it's there now and then", async () => {
+        const { room, guest } = await party();
+        vi.advanceTimersByTime(2000);
+        const told = listings.length;
+        // A loadout or ready isn't on the list: no request to the lobby
+        say(room, guest, { t: "me", ready: true });
+        vi.advanceTimersByTime(2000);
+        expect(listings.length).toBe(told);
+        // The heartbeat says it anyway
+        vi.advanceTimersByTime(60_000);
+        expect(listings.length).toBe(told + 1);
+        // As does someone leaving
+        say(room, guest, { t: "leave" });
+        expect(listings.at(-1).players).toBe(1);
+    });
+
     it("hides a hidden flag, but not an open room's host's", async () => {
         const room = await loadRoom();
         room.code = "ABCDEFGH";

@@ -56,8 +56,15 @@ export const OFFLINE: CoopView = {
 // How long to wait for the relay to say it's there
 const AVAILABLE_TIMEOUT_MS = 4000;
 
+// How often to ask for the open rooms, from a relay that doesn't send them as
+// they change (listUpdates in its welcome)
 const LIST_INTERVAL_MS = 5000;
-const PING_INTERVAL_MS = 15_000;
+const PING_INTERVAL_MS = 30_000;
+// Out of a room with nothing done for this long, the connection's closed, so
+// a tab left on the list doesn't keep the relay busy (the relay has its own,
+// IDLE_CONNECTION_MS)
+export const LOBBY_IDLE_MS = 10 * 60_000;
+const IDLE_TEXT = "Disconnected after 10 minutes with nothing happening.";
 
 // A room's connection that drops (a network blip, or the relay restarting)
 // is tried again for this long before the room's given up on. The relay
@@ -176,6 +183,8 @@ export class CoopLobby {
     private lobbyLost = false;
     private listTimer?: number;
     private pingTimer?: number;
+    // When this player last did anything here, for LOBBY_IDLE_MS
+    private activeAt = 0;
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
@@ -529,16 +538,16 @@ export class CoopLobby {
                     available: true,
                     anyMap: message.anyMap === true,
                 });
+                this.activeAt = Date.now();
                 this.refresh();
-                this.listTimer = window.setInterval(() => {
-                    if (!this.view.room) {
-                        this.refresh();
-                    }
-                }, LIST_INTERVAL_MS);
-                this.pingTimer = window.setInterval(
-                    () => this.send({ t: "ping" }),
-                    PING_INTERVAL_MS,
-                );
+                if (message.listUpdates !== true) {
+                    this.listTimer = window.setInterval(() => {
+                        if (!this.view.room) {
+                            this.refresh();
+                        }
+                    }, LIST_INTERVAL_MS);
+                }
+                this.pingTimer = window.setInterval(() => this.tick(), PING_INTERVAL_MS);
                 break;
             case "named":
                 this.update({ name: message.name });
@@ -609,13 +618,33 @@ export class CoopLobby {
         return available;
     }
 
-    // The open rooms again: this page of them (the one shown, by default)
-    refresh(page = this.view.roomsPage): void {
-        this.send({ t: "list", page: Math.max(0, page) });
+    // Pings, or closes the connection if this player's left it be
+    private tick(): void {
+        const now = Date.now();
+        // Not this.entering, which a refused join (or the Node relay, which
+        // sends no goto) leaves set
+        if (this.view.room || this.enteringSocket) {
+            // In a room's not idle: the time starts again on leaving
+            this.activeAt = now;
+        } else if (now - this.activeAt > LOBBY_IDLE_MS) {
+            this.close();
+            this.update({ error: IDLE_TEXT });
+            return;
+        }
+        this.send({ t: "ping" });
+    }
+
+    // The open rooms again: the page given (by the player), or the one shown
+    refresh(page?: number): void {
+        if (page !== undefined) {
+            this.activeAt = Date.now();
+        }
+        this.send({ t: "list", page: Math.max(0, page ?? this.view.roomsPage) });
     }
 
     // Asks the relay for another name
     rename(): void {
+        this.activeAt = Date.now();
         this.send({ t: "rename" });
     }
 
@@ -628,6 +657,7 @@ export class CoopLobby {
     }
 
     create(open: boolean, mapId: string, endless: boolean, hard: boolean): void {
+        this.activeAt = Date.now();
         this.update({ error: undefined });
         const message: ClientMessage = {
             t: "create",
@@ -646,6 +676,7 @@ export class CoopLobby {
         if (!clean) {
             return;
         }
+        this.activeAt = Date.now();
         this.update({ error: undefined });
         const message: ClientMessage = { t: "join", code: clean, me: this.joinAs() };
         this.entering = message;

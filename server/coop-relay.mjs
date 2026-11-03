@@ -118,8 +118,9 @@ const MAX_CREATES_PER_MINUTE = 10;
 const MAX_JOINS_PER_MINUTE = 12;
 // Connections in all, below a server's usual limit of 1,024 open files
 const MAX_CONNECTIONS = 800;
-// A connection that's in no room and has done nothing but ping for this long
-// is closed (a room left alone goes by IDLE_MS)
+// A connection that's in no room and has done nothing but ping, or ask for the
+// same page of rooms again, for this long is closed (a room left alone goes by
+// IDLE_MS): a tab left open on the list
 const IDLE_CONNECTION_MS = 10 * 60_000;
 // Room codes that don't exist, tried from one address, before it has to wait
 const MAX_WRONG_CODES_PER_MINUTE = 20;
@@ -130,8 +131,7 @@ const MAX_WRONG_CODES_PER_NETWORK_PER_MINUTE = 80;
 const IDLE_MS = 30 * 60_000;
 // Messages that don't count as doing anything in a room, for IDLE_MS: pings,
 // browsing, and a player's own updates and name, which could otherwise be
-// sent now and then to hold a room for ever. A connection in no room only
-// idles on pings (IDLE_CONNECTION_MS): browsing the list is waiting for a room.
+// sent now and then to hold a room for ever.
 const IDLE_MESSAGES = new Set(["ping", "list", "me", "rename"]);
 // Bigger than any real loadout (the shop's bonuses, unlocked items and
 // Armoury); a bigger one is dropped rather than sent round the room
@@ -175,6 +175,9 @@ const PING_MS = 20_000;
 // so one player can't flood the rest off a slow line, or make the relay send
 // that for every tiny message.
 const ROOM_UPDATE_MS = 250;
+// How soon a change to the open rooms goes to everyone browsing them, so a
+// busy relay sends the list once for many changes
+const LIST_PUSH_MS = 1000;
 // Room codes leave out letters and digits that look alike
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 // Long enough that no number of addresses can guess one
@@ -620,6 +623,7 @@ export function createRelay(limits = {}) {
         hostBurstBytes = MAX_MESSAGE_BYTES,
         idleConnectionMs = IDLE_CONNECTION_MS,
         roomUpdateMs = ROOM_UPDATE_MS,
+        listPushMs = LIST_PUSH_MS,
         idleMs = IDLE_MS,
         // The proxy in front (see client-ip.mjs), as the server's set it
         proxy = proxyMode(),
@@ -659,8 +663,9 @@ export function createRelay(limits = {}) {
     const joinedFrom = new Map();
     let nextRoomOrder = 1;
     // The open rooms as the list shows them, worked out again only after a
-    // room changes (everyone browsing asks every few seconds)
+    // room changes, and the timer that sends them to everyone browsing
     let openRooms;
+    let listTimer;
 
     function metricsText() {
         let lobbyPlayers = 0;
@@ -835,7 +840,7 @@ export function createRelay(limits = {}) {
     // The view's encoded once, for everyone. The open rooms list catches up
     // then too, so changing a room fast can't make it be worked out each time.
     function broadcastRoom(room) {
-        openRooms = undefined;
+        listChanged();
         const view = JSON.stringify(roomView(room));
         for (const member of room.members) {
             const message = `{"t":"room","room":${view},"you":${JSON.stringify(member.id)}}`;
@@ -847,7 +852,7 @@ export function createRelay(limits = {}) {
     // otherwise once when it has, with the latest (see ROOM_UPDATE_MS)
     function roomChanged(room) {
         // The list's stale as soon as the room is, sent round now or later
-        openRooms = undefined;
+        listChanged();
         if (room.updateTimer) {
             room.updateWaiting = true;
             return;
@@ -897,6 +902,49 @@ export function createRelay(limits = {}) {
         return openRooms;
     }
 
+    // A page of the open rooms, as a client last asked for it, which becomes
+    // the page they're on
+    function roomsPage(client) {
+        const list = getOpenRooms();
+        const pages = Math.max(1, Math.ceil(list.length / client.listSize));
+        // Past the last page (rooms filled up or went): the last one
+        const page = Math.min(client.listPage, pages - 1);
+        client.listPage = page;
+        return JSON.stringify({
+            t: "rooms",
+            rooms: list.slice(page * client.listSize, (page + 1) * client.listSize),
+            page,
+            pages,
+            total: list.length,
+            // No room for another until one goes
+            full: rooms.size >= maxRooms,
+        });
+    }
+
+    // Sends a client their page of the list, unless it's what they have
+    function sendRooms(client) {
+        const text = roomsPage(client);
+        if (text !== client.listSent) {
+            client.listSent = text;
+            client.connection.sendFrame(0x1, Buffer.from(text, "utf8"));
+        }
+    }
+
+    // The open rooms have changed: everyone browsing them hears soon, so the
+    // game needn't keep asking
+    function listChanged() {
+        openRooms = undefined;
+        listTimer ??= setTimeout(() => {
+            listTimer = undefined;
+            for (const client of clients) {
+                if (client.listPage !== undefined && !client.room) {
+                    sendRooms(client);
+                }
+            }
+        }, listPushMs);
+        listTimer.unref?.();
+    }
+
     // Takes a client out of their room. reason goes to them; the rest are
     // told who's gone.
     function leaveRoom(client, reason) {
@@ -906,13 +954,14 @@ export function createRelay(limits = {}) {
         }
         client.room = undefined;
         client.ready = false;
+        client.lastActive = Date.now();
         room.members = room.members.filter((member) => member !== client);
         if (reason) {
             client.connection.send({ t: "gone", reason });
         }
         if (room.members.length === 0) {
             rooms.delete(room.code);
-            openRooms = undefined;
+            listChanged();
             return;
         }
         if (room.hostId === client.id) {
@@ -934,9 +983,11 @@ export function createRelay(limits = {}) {
 
     function disband(room, reason) {
         rooms.delete(room.code);
-        openRooms = undefined;
+        listChanged();
         for (const member of room.members) {
             member.room = undefined;
+            // Back to the list, which they've only just started waiting on
+            member.lastActive = Date.now();
             member.ready = false;
             member.connection.send({ t: "gone", reason });
         }
@@ -1090,7 +1141,7 @@ export function createRelay(limits = {}) {
     // payload: the message's bytes as they came, for passing on
     function handle(client, message, payload) {
         const room = client.room;
-        if (message.t !== "ping") {
+        if (message.t !== "ping" && message.t !== "list") {
             client.lastActive = Date.now();
         }
         if (!IDLE_MESSAGES.has(message.t)) {
@@ -1106,20 +1157,17 @@ export function createRelay(limits = {}) {
                 client.connection.send({ t: "pong" });
                 return;
             case "list": {
-                const size = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
-                const list = getOpenRooms();
-                const pages = Math.max(1, Math.ceil(list.length / size));
-                // Past the last page (rooms filled up or went): the last one
-                const page = clampInt(message.page, 0, pages - 1, 0);
-                client.connection.send({
-                    t: "rooms",
-                    rooms: list.slice(page * size, (page + 1) * size),
-                    page,
-                    pages,
-                    total: list.length,
-                    // No room for another until one goes
-                    full: rooms.size >= maxRooms,
-                });
+                // Asking for the same page again is waiting, not doing
+                // anything (an older game asks every few seconds)
+                const page = clampInt(message.page, 0, Number.MAX_SAFE_INTEGER, 0);
+                if (page !== client.listPage) {
+                    client.lastActive = Date.now();
+                }
+                client.listPage = page;
+                client.listSize = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+                // Said again, as it was asked for
+                client.listSent = undefined;
+                sendRooms(client);
                 return;
             }
             case "create": {
@@ -1432,6 +1480,11 @@ export function createRelay(limits = {}) {
             country: clientCountry(req, socket, proxy),
             hideCountry: false,
             lastActive: Date.now(),
+            // The page of the open rooms this player's looking at, once they
+            // ask, and what of it they were sent last
+            listPage: undefined,
+            listSize: LIST_PAGE_SIZE,
+            listSent: undefined,
             upSecond: 0,
             upsThisSecond: 0,
         };
@@ -1459,6 +1512,8 @@ export function createRelay(limits = {}) {
             name: client.name,
             anyMap,
             country: client.country,
+            // Changes to the open rooms are sent without asking
+            listUpdates: true,
         });
         if (head && head.length > 0) {
             client.connection.receive(head);
@@ -1543,6 +1598,7 @@ export function createRelay(limits = {}) {
         close() {
             clearInterval(pinger);
             clearInterval(sweeper);
+            clearTimeout(listTimer);
             stopCloudflare();
             stopMetrics();
             for (const client of clients) {

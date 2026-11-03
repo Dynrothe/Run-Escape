@@ -7,13 +7,17 @@
 //
 // It hibernates between messages (WebSocket hibernation), so it costs next to
 // nothing while players sit in menus. What it must not forget, the rooms
-// list, is in its storage; the per-minute limits are fine to lose.
+// list, is in its storage; the per-minute limits are fine to lose. Changes to
+// the list are sent to everyone looking at it (outgoing messages are free),
+// so the game needn't keep asking.
 import { DurableObject } from "cloudflare:workers";
 
 import { playerName, roomName } from "../../name-gen.mjs";
 import {
     FULL_TEXT,
+    IDLE_CONNECTION_MS,
     LIST_PAGE_SIZE,
+    LIST_PUSH_MS,
     MAX_CONNECTIONS_PER_ADDRESS,
     MAX_CREATES_PER_MINUTE,
     MAX_JOINS_PER_MINUTE,
@@ -38,7 +42,7 @@ import {
 
 // A room that hasn't said it's there for this long is gone (it says so every
 // ROOM_HEARTBEAT_MS, in room.mjs)
-const ROOM_STALE_MS = 90_000;
+const ROOM_STALE_MS = 180_000;
 // A ticket's only good for a moment: the player goes straight to the room
 const TICKET_MS = 30_000;
 
@@ -55,6 +59,11 @@ export class Lobby extends DurableObject {
         this.wrongCodesFrom = new Map();
         this.limits = new WeakMap();
         this.openRooms = undefined;
+        // What each connection was last sent of the list, so a change that
+        // doesn't touch their page isn't sent again (forgotten on hibernating,
+        // which only means sending it once more)
+        this.sentRooms = new WeakMap();
+        this.pushTimer = undefined;
         // The client's keep-alive, answered without waking the lobby
         ctx.setWebSocketAutoResponse(
             new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'),
@@ -94,6 +103,7 @@ export class Lobby extends DurableObject {
                 name: player.name,
                 anyMap: this.anyMap,
                 country: countryCode(request.headers.get("x-country")),
+                listUpdates: true,
             }),
         );
         return new Response(null, { status: 101, webSocket: client });
@@ -116,13 +126,37 @@ export class Lobby extends DurableObject {
         const player = ws.deserializeAttachment();
         const send = (m) => ws.send(JSON.stringify(m));
         const error = (text) => send({ t: "error", message: text });
+        if (message.t !== "ping" && message.t !== "list" && player.listingSince !== undefined) {
+            // Doing something: no longer just waiting on the list
+            player.listingSince = undefined;
+            ws.serializeAttachment(player);
+        }
         switch (message.t) {
             case "ping":
                 send({ t: "pong" });
                 return;
-            case "list":
-                send(this.list(message));
+            case "list": {
+                const rooms = this.list(message);
+                const size = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+                const now = Date.now();
+                // Asking for the same page again is waiting, not doing anything
+                // (an older game asks every few seconds): a tab left open on
+                // the list is closed in the end, as on the Node relay
+                if (player.page === rooms.page && player.listingSince !== undefined) {
+                    if (now - player.listingSince > IDLE_CONNECTION_MS) {
+                        ws.close(1001, "Idle");
+                        return;
+                    }
+                } else {
+                    player.page = rooms.page;
+                    player.size = size;
+                    player.listingSince = now;
+                    ws.serializeAttachment(player);
+                }
+                this.sentRooms.set(ws, JSON.stringify(rooms));
+                send(rooms);
                 return;
+            }
             case "rename": {
                 player.name = this.newPlayerName();
                 ws.serializeAttachment(player);
@@ -249,23 +283,15 @@ export class Lobby extends DurableObject {
         } else {
             previous.lastSeen = Date.now();
         }
+        // Clears out rooms gone quiet (which sends the list round), as nobody
+        // asks for it often enough now to find them
+        this.liveRooms();
     }
 
     async roomGone(code) {
         this.rooms.delete(code);
-        this.openRooms = undefined;
+        this.listChanged();
         await this.ctx.storage.delete(`room:${code}`);
-    }
-
-    // For a plain GET of the relay: whether it's there, as the game asks
-    status() {
-        const live = this.liveRooms();
-        return {
-            coop: true,
-            players: this.ctx.getWebSockets().length,
-            rooms: live.length,
-            full: live.length >= MAX_ROOMS,
-        };
     }
 
     // ---- ----
@@ -274,8 +300,32 @@ export class Lobby extends DurableObject {
         const stored = { ...entry };
         delete stored.lastSeen;
         this.rooms.set(entry.code, { ...entry, lastSeen: Date.now() });
-        this.openRooms = undefined;
+        this.listChanged();
         await this.ctx.storage.put(`room:${entry.code}`, stored);
+    }
+
+    // The list's changed: everyone looking at it hears in a moment, once for
+    // however many changes come meanwhile
+    listChanged() {
+        this.openRooms = undefined;
+        this.pushTimer ??= setTimeout(() => {
+            this.pushTimer = undefined;
+            for (const ws of this.ctx.getWebSockets()) {
+                const player = ws.deserializeAttachment();
+                if (player?.page === undefined) {
+                    continue;
+                }
+                const text = JSON.stringify(this.list(player));
+                if (this.sentRooms.get(ws) !== text) {
+                    this.sentRooms.set(ws, text);
+                    try {
+                        ws.send(text);
+                    } catch {
+                        // Closing
+                    }
+                }
+            }
+        }, LIST_PUSH_MS);
     }
 
     liveRoom(code) {
