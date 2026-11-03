@@ -746,7 +746,8 @@ export const SISTERHOOD_SANCTUARY: MapRecipe = {
     squaresX: SQUARES,
     squaresY: SQUARES,
     margin: MARGIN,
-    // The middle of the arena, where her entrance puts the player anyway
+    // The middle of the arena, where she rises. The game starts the player PHOSANI_START_DISTANCE
+    // south of it (the MapDef's spawn), which is in POINTS as "the start"
     spawn: { x: MIDDLE, y: MIDDLE },
     build: (context) => buildDetail(context).grid,
     detail: buildDetail,
