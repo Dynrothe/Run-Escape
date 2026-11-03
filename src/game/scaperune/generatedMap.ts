@@ -1,7 +1,7 @@
 import { HSL_RGB_MAP, packHsl } from "../../rs/util/ColorUtil";
 import type { GameClient } from "../client/GameClient";
 import { setGeneratedMap } from "../content/maps";
-import type { TileGrid } from "./format";
+import { type TileGrid, cacheFloorId } from "./format";
 import { generatedRecipe } from "./generator";
 import { MapRecipe, getRecipeWorldTile } from "./recipe";
 import type { GeneratorSettings } from "./settings";
@@ -61,7 +61,7 @@ function drawGridPicture(client: GameClient, grid: TileGrid, canvas: HTMLCanvasE
     const getUnderlayRgb = (id: number) => {
         let rgb = colours.get(id);
         if (rgb === undefined) {
-            const type = underlays.load(id - 1);
+            const type = underlays.load(cacheFloorId(id));
             // As SceneBuilder.blendUnderlays works it out, for one tile
             const hue = ((type.getHueBlend() * 256) / type.getHueMultiplier()) | 0;
             rgb = HSL_RGB_MAP[packHsl(hue, type.saturation, type.lightness)];
@@ -75,7 +75,7 @@ function drawGridPicture(client: GameClient, grid: TileGrid, canvas: HTMLCanvasE
     for (let i = 0; i < rgb.length; i++) {
         const overlay = tiles.overlays[i];
         if (overlay !== 0) {
-            const type = overlays.load(overlay - 1);
+            const type = overlays.load(cacheFloorId(overlay));
             rgb[i] =
                 type.textureId !== -1
                     ? WATER_RGB

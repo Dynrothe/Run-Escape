@@ -10,7 +10,7 @@
 //   npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 3238,3204,11,13
 import fs from "node:fs";
 
-import { PlacedLoc } from "../../src/game/scaperune/format";
+import { PlacedLoc, cacheFloorId } from "../../src/game/scaperune/format";
 import { cutPrefab } from "../../src/game/scaperune/prefab";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
@@ -207,10 +207,11 @@ function drawPrefab(spec: string, x0: number, y0: number): void {
             const i = x + y * sizeX;
             let color = 0x3e4a34;
             if (overlays[i]) {
-                const type = overlayTypes.load(overlays[i] - 1);
+                const type = overlayTypes.load(cacheFloorId(overlays[i]));
                 color = type.textureId === -1 ? type.primaryRgb : 0x6688aa;
             } else if (underlays[i]) {
-                color = (underlayTypes.load(underlays[i] - 1) as UnderlayFloorType).rgbColor;
+                color = (underlayTypes.load(cacheFloorId(underlays[i])) as UnderlayFloorType)
+                    .rgbColor;
             }
             for (let py = 0; py < Math.ceil(tile * SIN); py++) {
                 for (let px = 0; px < Math.ceil(tile); px++) {

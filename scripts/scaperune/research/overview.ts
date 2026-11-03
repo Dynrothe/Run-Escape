@@ -6,6 +6,7 @@
 //   DEV_MAPS=1 npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_ysmar [ppt]
 import fs from "node:fs";
 
+import { cacheFloorId } from "../../../src/game/scaperune/format";
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../../src/game/scaperune/maps/shippedMaps";
 import { createBuildContext } from "../../../src/game/scaperune/squares";
@@ -33,9 +34,9 @@ const rgbOf = (kind: "u" | "o", id: number): number => {
     if (!colour.has(key)) {
         let rgb = 0x808080;
         if (kind === "u") {
-            rgb = (w.underlays.load(id - 1) as unknown as { rgbColor: number }).rgbColor;
+            rgb = (w.underlays.load(cacheFloorId(id)) as unknown as { rgbColor: number }).rgbColor;
         } else {
-            const type = w.overlays.load(id - 1);
+            const type = w.overlays.load(cacheFloorId(id));
             rgb =
                 type.textureId >= 0
                     ? type.textureId === 1

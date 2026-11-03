@@ -19,6 +19,20 @@ export const TILE_INSIDE = 0x4;
 // Drawn from the ground whatever floor it's on: the top of a city wall
 export const TILE_SHOWN = 0x8;
 
+// A floor's id as the map files (and so a grid, and a recipe) store it is the cache's id plus one,
+// with 0 for no floor. The floor loaders take the cache's: look a grid's floor up with
+// cacheFloorId, never by its own number.
+export function cacheFloorId(mapFileId: number): number {
+    if (mapFileId <= 0) {
+        throw new Error(`Map file floor ${mapFileId} is no floor`);
+    }
+    return mapFileId - 1;
+}
+
+export function mapFileFloorId(cacheId: number): number {
+    return cacheId + 1;
+}
+
 // One level of tiles, x + y * sizeX
 export type TileLevel = {
     // Corners, x + y * (sizeX + 1), in height units going up: from nothing on

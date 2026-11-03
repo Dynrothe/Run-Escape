@@ -5,7 +5,12 @@
 //   npx tsx scripts/scaperune/world-index.ts out.json
 import fs from "node:fs";
 
-import { createTileGrid, readLocs, readTerrain } from "../../src/game/scaperune/format";
+import {
+    cacheFloorId,
+    createTileGrid,
+    readLocs,
+    readTerrain,
+} from "../../src/game/scaperune/format";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
 import { UnderlayFloorType } from "../../src/rs/config/floortype/UnderlayFloorType";
@@ -93,13 +98,13 @@ const floorsUsed = (key: "underlays" | "overlays") => {
 };
 const underlays = Object.fromEntries(
     floorsUsed("underlays").map((id) => {
-        const type = underlayTypes.load(id - 1) as UnderlayFloorType;
+        const type = underlayTypes.load(cacheFloorId(id)) as UnderlayFloorType;
         return [id, { rgb: type.rgbColor.toString(16) }];
     }),
 );
 const overlays = Object.fromEntries(
     floorsUsed("overlays").map((id) => {
-        const type = overlayTypes.load(id - 1);
+        const type = overlayTypes.load(cacheFloorId(id));
         return [
             id,
             {

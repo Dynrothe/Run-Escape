@@ -10,7 +10,9 @@ import {
     TILE_BRIDGE,
     TILE_SHOWN,
     TileGrid,
+    cacheFloorId,
     createTileGrid,
+    mapFileFloorId,
     readLocs,
     readTerrain,
     writeLocs,
@@ -151,6 +153,18 @@ describe("map file formats", () => {
             x: 63,
             y: 0,
         });
+    });
+});
+
+describe("floor ids", () => {
+    it("are the cache's plus one in a map file", () => {
+        expect(cacheFloorId(1)).toBe(0);
+        expect(cacheFloorId(442)).toBe(441);
+        expect(mapFileFloorId(cacheFloorId(48))).toBe(48);
+    });
+
+    it("refuse no floor", () => {
+        expect(() => cacheFloorId(0)).toThrow();
     });
 });
 
