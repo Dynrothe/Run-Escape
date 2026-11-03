@@ -1,6 +1,9 @@
 import { once } from "node:events";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { Server, createServer } from "node:http";
 import { AddressInfo, Socket, connect as connectTcp } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
     RELAY_PATH,
@@ -114,6 +117,13 @@ class RawClient {
         while (!this.received.toString("latin1").includes(text)) {
             await new Promise((resolve) => setTimeout(resolve, 5));
         }
+    }
+
+    // The latest string the relay's sent under this name (a room's code, or
+    // the token to come back to it with)
+    latest(name: string): string | undefined {
+        const pattern = new RegExp(`"${name}":"([^"]+)"`, "g");
+        return [...this.received.toString("latin1").matchAll(pattern)].at(-1)?.[1];
     }
 
     // The close frame's code, once one's come
@@ -446,6 +456,191 @@ describe("co-op relay", () => {
         const { room } = await host.room();
         guests[0].socket.close();
         expect((await host.next("left")).id).toBe(room.members[1].id);
+    });
+
+    describe("coming back", () => {
+        const port = () => Number(new URL(url).port);
+        const resumeUrl = (code: string, token: string) =>
+            `${url}/room/${code}?resume=${encodeURIComponent(token)}`;
+        const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        // A guest whose connection can be dropped with no close frame, as a
+        // network does, in a room whose run has started
+        async function droppingGuest() {
+            const { host, code } = await party(0);
+            const raw = new RawClient(port());
+            await raw.saw("welcome");
+            raw.send({ t: "join", code, me: {} });
+            const { room } = await host.roomWhere((r) => r.members.length === 2);
+            host.send({ t: "start", game: {} });
+            await raw.saw('"t":"start"');
+            return {
+                host,
+                code,
+                raw,
+                id: room.members[1].id as string,
+                token: raw.latest("token")!,
+            };
+        }
+
+        async function resume(code: string, token: string): Promise<TestClient> {
+            const client = new TestClient(resumeUrl(code, token));
+            clients.push(client);
+            return client;
+        }
+
+        it("holds a dropped player's place, and takes them back with their token", async () => {
+            const { host, code, raw, id, token } = await droppingGuest();
+            raw.socket.destroy();
+            await wait(50);
+            const back = await resume(code, token);
+            const update = await back.next("room");
+            expect(update).toMatchObject({ you: id, token, room: { code, started: true } });
+            host.send({ t: "down", d: { upTo: 1, events: [] } });
+            expect((await back.next("down")).d.upTo).toBe(1);
+            back.send({ t: "up", d: { seq: 1 } });
+            expect((await host.next("up")).from).toBe(id);
+            expect(host.messages.some((m) => m.t === "left")).toBe(false);
+        });
+
+        it("lets a dropped player go once their place has been held long enough", async () => {
+            await restart({ resumeGraceMs: 50 });
+            const { host, code, raw, id, token } = await droppingGuest();
+            raw.socket.destroy();
+            expect((await host.next("left")).id).toBe(id);
+            const back = await resume(code, token);
+            expect((await back.next("error")).message).toMatch(/closed while you were away/);
+        });
+
+        it("turns away a token that isn't the room's, and keeps whoever's there", async () => {
+            const { host, code } = await party(1);
+            const stranger = await resume(code, "not-a-token");
+            expect((await stranger.next("error")).message).toMatch(/closed while you were away/);
+            const elsewhere = await resume("ZZZZZZZZ", "not-a-token");
+            expect((await elsewhere.next("error")).message).toMatch(/closed while you were away/);
+            host.send({ t: "ping" });
+            await host.next("pong");
+            expect((await host.room()).room.members).toHaveLength(2);
+        });
+
+        it("closes a connection that came back once its player's out of the room", async () => {
+            const { code, raw, token } = await droppingGuest();
+            raw.socket.destroy();
+            await wait(50);
+            const back = await resume(code, token);
+            await back.next("room");
+            const closed = new Promise((resolve) => back.socket.addEventListener("close", resolve));
+            back.send({ t: "leave" });
+            expect((await back.next("gone")).reason).toBe("left");
+            await closed;
+        });
+
+        it("ends the run when the host's place runs out", async () => {
+            await restart({ resumeGraceMs: 50 });
+            const host = new RawClient(port());
+            await host.saw("welcome");
+            host.send({ t: "create", me: {} });
+            await host.saw('"token":"');
+            const code = host.latest("code");
+            const guest = await connect();
+            guest.send({ t: "join", code, me: {} });
+            await guest.room();
+            host.send({ t: "start", game: {} });
+            await guest.next("start");
+            host.socket.destroy();
+            expect((await guest.next("gone")).reason).toBe("hostLeft");
+        });
+
+        it("keeps rooms through a restart with a rooms folder", async () => {
+            const dir = mkdtempSync(join(tmpdir(), "coop-rooms-"));
+            try {
+                await restart({ roomsDir: dir });
+                const { host, guests, code } = await party(1);
+                host.send({ t: "start", game: {} });
+                await guests[0].next("start");
+                const hostToken = (await host.roomWhere((r) => r.started)).token;
+                const guestUpdate = await guests[0].roomWhere((r) => r.started);
+                // Kept with its run started, and no token anyone could use
+                const saved = readFileSync(join(dir, `${code}.json`), "utf8");
+                expect(JSON.parse(saved).started).toBe(true);
+                expect(saved).not.toContain(hostToken);
+                expect(saved).not.toContain(guestUpdate.token);
+
+                // The relay stops, and its next start has the room back
+                relay.close();
+                await new Promise((resolve) => server.close(resolve));
+                clients.splice(0);
+                await start({ ...LOOSE, roomsDir: dir });
+                expect(relay.roomCount).toBe(1);
+
+                const hostBack = await resume(code, hostToken);
+                expect((await hostBack.next("room")).room).toMatchObject({ code, started: true });
+                const guestBack = await resume(code, guestUpdate.token);
+                expect((await guestBack.next("room")).you).toBe(guestUpdate.you);
+                hostBack.send({ t: "down", d: { upTo: 7, events: [] } });
+                expect((await guestBack.next("down")).d.upTo).toBe(7);
+                // New players aren't given the ids of those kept
+                const newcomer = await connect();
+                newcomer.send({ t: "create", me: {} });
+                const { room } = await newcomer.room();
+                expect(room.members[0].id).not.toBe(guestUpdate.you);
+                expect(room.members[0].id).not.toBe(guestUpdate.room.hostId);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it("lets a kept room go when nobody comes back to it", async () => {
+            const dir = mkdtempSync(join(tmpdir(), "coop-rooms-"));
+            try {
+                await restart({ roomsDir: dir, resumeGraceMs: 50 });
+                const { code } = await party(1);
+                expect(existsSync(join(dir, `${code}.json`))).toBe(true);
+                relay.close();
+                await new Promise((resolve) => server.close(resolve));
+                clients.splice(0);
+                await start({ ...LOOSE, roomsDir: dir, resumeGraceMs: 50 });
+                expect(relay.roomCount).toBe(1);
+                await expect.poll(() => relay.roomCount).toBe(0);
+                expect(existsSync(join(dir, `${code}.json`))).toBe(false);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it("starts with a rooms folder that has something odd in it", async () => {
+            const dir = mkdtempSync(join(tmpdir(), "coop-rooms-"));
+            try {
+                writeFileSync(join(dir, "BROKEN01.json"), "{ not json");
+                writeFileSync(join(dir, "EMPTY001.json"), JSON.stringify({ code: "EMPTY001" }));
+                writeFileSync(join(dir, "HALF0001.json.tmp"), "{");
+                const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+                try {
+                    await restart({ roomsDir: dir });
+                } finally {
+                    warn.mockRestore();
+                }
+                expect(relay.roomCount).toBe(0);
+                expect(readdirSync(dir)).toEqual([]);
+                await party(1);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it("forgets a room that's left, with a rooms folder", async () => {
+            const dir = mkdtempSync(join(tmpdir(), "coop-rooms-"));
+            try {
+                await restart({ roomsDir: dir });
+                const { host, code } = await party(0);
+                expect(existsSync(join(dir, `${code}.json`))).toBe(true);
+                host.send({ t: "leave" });
+                await host.next("gone");
+                expect(existsSync(join(dir, `${code}.json`))).toBe(false);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
     });
 
     it("takes big messages in one piece", async () => {
@@ -1079,14 +1274,17 @@ describe("co-op relay", () => {
         await host.roomWhere((r) => !r.started && r.members[1].characterId === "wizard");
     });
 
-    it("lets a seat go as soon as a connection ends without a close frame", async () => {
+    it("holds a seat a while when a connection ends without a close frame", async () => {
+        await restart({ resumeGraceMs: 200 });
         const { host, code } = await party(0);
         const raw = new RawClient(Number(new URL(url).port));
         await raw.saw("welcome");
         raw.socket.write(RawClient.frame(0x1, JSON.stringify({ t: "join", code, me: {} })));
         await host.roomWhere((r) => r.members.length === 2);
+        const ended = Date.now();
         raw.socket.end();
         await host.roomWhere((r) => r.members.length === 1);
+        expect(Date.now() - ended).toBeGreaterThanOrEqual(150);
     });
 
     it("slows down going in and out of rooms", async () => {

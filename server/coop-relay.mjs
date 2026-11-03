@@ -5,6 +5,14 @@
 //
 //   node server/coop-relay.mjs            # on port 8787, or PORT
 //   PROXY=cloudflare node server/coop-relay.mjs    # behind a proxy (client-ip.mjs)
+//   MULTIPLAYER_ROOMS_DIR=/var/lib/run-escape/rooms node server/coop-relay.mjs
+//                                         # rooms carry on through a restart
+//
+// A player whose connection drops (rather than closing) keeps their place
+// for RESUME_GRACE_MS, and their game comes back to coop/room/<code>?resume=
+// <token>, the token from their room updates: the same as the Cloudflare
+// relay's rooms. With MULTIPLAYER_ROOMS_DIR, each room is kept there too, so
+// a restart of the relay is a dropped connection for everyone in it.
 //
 // The dev server and `vite preview` run one too, at /coop (vite.config.ts),
 // and so does server/serve.mjs, which serves a build along with it. A plain
@@ -12,9 +20,11 @@
 // offer co-op.
 // The messages are JSON; src/game/client/coop/protocol.ts has their shapes.
 import { isUtf8 } from "node:buffer";
-import { createHash, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { isIP } from "node:net";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { clientAddress, proxyMode, viaProxy, watchCloudflareRanges } from "./client-ip.mjs";
@@ -90,6 +100,12 @@ export function maxRoomsSetting(env = process.env, argv = process.argv) {
     return rooms;
 }
 
+// Where rooms are kept to carry on through a restart: MULTIPLAYER_ROOMS_DIR, a
+// folder only the relay can read (it holds players' addresses). None by default.
+export function roomsDirSetting(env = process.env) {
+    return env.MULTIPLAYER_ROOMS_DIR?.trim() || undefined;
+}
+
 const MAX_PARTY = 4;
 // No game has more maps than this
 const MAX_UNLOCKED_MAPS = 200;
@@ -122,6 +138,13 @@ const MAX_WRONG_CODES_PER_MINUTE = 20;
 const MAX_WRONG_CODES_PER_NETWORK_PER_MINUTE = 80;
 // A room nobody's done anything in for this long is closed
 const IDLE_MS = 30 * 60_000;
+// A player whose connection drops keeps their place this long, and their game
+// keeps trying to come back for a little less (RESUME_WINDOW_MS in
+// CoopLobby.ts). The same as the Cloudflare relay's rooms.
+const RESUME_GRACE_MS = 15_000;
+// A kept room (MULTIPLAYER_ROOMS_DIR) is saved at most this often, except
+// when someone comes or goes or a run starts or ends, which are saved at once
+const SAVE_MS = 1000;
 // Messages that don't count as doing anything in a room, for IDLE_MS: pings,
 // browsing, and a player's own updates and name, which could otherwise be
 // sent now and then to hold a room for ever. A connection in no room only
@@ -199,8 +222,9 @@ class Connection {
         this.bytesPerSecond = bytesPerSecond;
         socket.setNoDelay(true);
         socket.on("data", (data) => this.receive(data));
-        socket.on("close", () => this.finish());
-        socket.on("error", () => this.finish());
+        // Gone with no close frame from either end: the network, most likely
+        socket.on("close", () => this.finish(true));
+        socket.on("error", () => this.finish(true));
         // The other end's gone without a close frame: nothing to wait for
         socket.on("end", () => socket.destroy());
     }
@@ -403,15 +427,15 @@ class Connection {
 
     ping() {
         if (!this.alive) {
-            // Nothing back since the last ping
-            this.close(1001);
+            // Nothing back since the last ping: lost, like a dropped one
+            this.close(1001, true);
             return;
         }
         this.alive = false;
         this.sendFrame(0x9, Buffer.alloc(0));
     }
 
-    close(code) {
+    close(code, abrupt = false) {
         if (this.closed) {
             return;
         }
@@ -422,17 +446,19 @@ class Connection {
         this.socket.end();
         // However it's going, it's gone in a few seconds
         setTimeout(() => this.socket.destroy(), 5000).unref?.();
-        this.finish();
+        this.finish(abrupt);
     }
 
-    finish() {
+    // abrupt: lost rather than closed by either end, so the player may well
+    // be coming back
+    finish(abrupt = false) {
         this.closed = true;
         this.chunks = [];
         this.fragments = [];
         if (this.onClose) {
             const onClose = this.onClose;
             this.onClose = undefined;
-            onClose();
+            onClose(abrupt);
         }
     }
 }
@@ -461,6 +487,34 @@ function depthOver(payload, max) {
         }
     }
     return false;
+}
+
+// The connection of a player kept from before a restart, until they're back:
+// what's sent to them goes nowhere, as to any dropped connection
+const AWAY = {
+    closed: true,
+    write() {},
+    sendFrame() {},
+    send() {},
+    close() {},
+    ping() {},
+};
+
+// Tokens are only kept as this, so a kept room's file can't be used to take
+// anyone's place
+function hashToken(token) {
+    return createHash("sha256").update(token).digest("base64url");
+}
+
+// The token a game's coming back to its room with, if it's one the relay
+// could have given
+function resumeToken(req) {
+    try {
+        const token = new URL(req.url ?? "/", "http://localhost").searchParams.get("resume");
+        return token && /^[A-Za-z0-9_-]{1,64}$/.test(token) ? token : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 // Turns an upgrade away and lets go of its socket, whether or not the other
@@ -621,6 +675,10 @@ export function createRelay(limits = {}) {
         anyMap = isAnyMapOn(),
         metrics = isMetricsOn(),
         metricsPort = metricsPortSetting(),
+        resumeGraceMs = RESUME_GRACE_MS,
+        // Where rooms are kept through a restart (see roomsDirSetting)
+        roomsDir = roomsDirSetting(),
+        saveMs = SAVE_MS,
     } = limits;
     // Behind Cloudflare, its addresses, fetched from its API
     const stopCloudflare = proxy === "cloudflare" ? watchCloudflareRanges() : () => {};
@@ -655,6 +713,8 @@ export function createRelay(limits = {}) {
     // The open rooms as the list shows them, worked out again only after a
     // room changes (everyone browsing asks every few seconds)
     let openRooms;
+    // Shutting down: kept rooms stay as they are for the next start
+    let closing = false;
 
     function metricsText() {
         let lobbyPlayers = 0;
@@ -662,11 +722,13 @@ export function createRelay(limits = {}) {
         let runningRooms = 0;
         let publicRooms = 0;
         for (const room of rooms.values()) {
+            // Not those away, whose connection's gone
+            const connected = room.members.filter((member) => clients.has(member)).length;
             if (room.started) {
                 runningRooms++;
-                playingPlayers += room.members.length;
+                playingPlayers += connected;
             } else {
-                lobbyPlayers += room.members.length;
+                lobbyPlayers += connected;
             }
             if (room.open) {
                 publicRooms++;
@@ -823,14 +885,21 @@ export function createRelay(limits = {}) {
         openRooms = undefined;
         const view = JSON.stringify(roomView(room));
         for (const member of room.members) {
-            const message = `{"t":"room","room":${view},"you":${JSON.stringify(member.id)}}`;
-            member.connection.sendFrame(0x1, Buffer.from(message, "utf8"));
+            member.connection.sendFrame(0x1, Buffer.from(roomMessage(member, view), "utf8"));
         }
     }
 
+    // A room update for this member, with their token to come back with
+    function roomMessage(member, view = JSON.stringify(roomView(member.room))) {
+        const token = member.token ? `,"token":${JSON.stringify(member.token)}` : "";
+        return `{"t":"room","room":${view},"you":${JSON.stringify(member.id)}${token}}`;
+    }
+
     // Tells everyone in a room how it is now, if it's been a while, and
-    // otherwise once when it has, with the latest (see ROOM_UPDATE_MS)
-    function roomChanged(room) {
+    // otherwise once when it has, with the latest (see ROOM_UPDATE_MS).
+    // now: someone's come or gone, saved before anyone hears of it.
+    function roomChanged(room, now = false) {
+        persist(room, now);
         // The list's stale as soon as the room is, sent round now or later
         openRooms = undefined;
         if (room.updateTimer) {
@@ -853,6 +922,8 @@ export function createRelay(limits = {}) {
     function membersChanged(room) {
         if (!room.started) {
             roomChanged(room);
+        } else {
+            persist(room);
         }
     }
 
@@ -890,13 +961,13 @@ export function createRelay(limits = {}) {
         }
         client.room = undefined;
         client.ready = false;
+        forgetPlace(client);
         room.members = room.members.filter((member) => member !== client);
         if (reason) {
-            client.connection.send({ t: "gone", reason });
+            told(client, reason);
         }
         if (room.members.length === 0) {
-            rooms.delete(room.code);
-            openRooms = undefined;
+            removeRoom(room);
             return;
         }
         if (room.hostId === client.id) {
@@ -913,18 +984,205 @@ export function createRelay(limits = {}) {
                 member.connection.send({ t: "left", id: client.id });
             }
         }
-        roomChanged(room);
+        roomChanged(room, true);
     }
 
     function disband(room, reason) {
-        rooms.delete(room.code);
-        openRooms = undefined;
+        removeRoom(room);
         for (const member of room.members) {
             member.room = undefined;
             member.ready = false;
-            member.connection.send({ t: "gone", reason });
+            forgetPlace(member);
+            told(member, reason);
         }
         room.members = [];
+    }
+
+    function removeRoom(room) {
+        rooms.delete(room.code);
+        openRooms = undefined;
+        clearTimeout(room.saveTimer);
+        if (roomsDir && !closing) {
+            try {
+                rmSync(roomFile(room.code), { force: true });
+            } catch (e) {
+                console.warn("Co-op relay: couldn't remove a kept room:", e);
+            }
+        }
+    }
+
+    // Tells a player they're out of their room. A connection that only came
+    // back to the room closes then, as the Cloudflare relay's rooms do, and
+    // their game connects to the lobby again.
+    function told(client, reason) {
+        client.connection.send({ t: "gone", reason });
+        if (client.roomOnly) {
+            client.connection.close(1000);
+        }
+    }
+
+    // ---- Coming back after a connection drops ----
+
+    function newToken(client) {
+        client.token = randomBytes(24).toString("base64url");
+        client.tokenHash = hashToken(client.token);
+    }
+
+    // Out of the room: their token's no use, and if they were away, their name's
+    // free again
+    function forgetPlace(client) {
+        client.token = client.tokenHash = undefined;
+        if (client.awayTimer) {
+            clearTimeout(client.awayTimer);
+            client.awayTimer = undefined;
+            playerNames.delete(client.name);
+        }
+    }
+
+    // Keeps a player whose connection dropped in their room for a while
+    function holdPlace(client) {
+        clearTimeout(client.awayTimer);
+        client.awayTimer = setTimeout(() => {
+            client.awayTimer = undefined;
+            playerNames.delete(client.name);
+            leaveRoom(client);
+        }, resumeGraceMs);
+        client.awayTimer.unref?.();
+    }
+
+    // The player a room's held for this token, if any
+    function heldFor(code, token) {
+        const hash = hashToken(token);
+        return rooms.get(code)?.members.find((member) => member.tokenHash === hash);
+    }
+
+    // ---- Keeping rooms through a restart (MULTIPLAYER_ROOMS_DIR) ----
+
+    function roomFile(code) {
+        return join(roomsDir, `${code}.json`);
+    }
+
+    // Saves a room, now or, if that was done in the last saveMs, once that's
+    // passed, so a host flicking settings can't make a write of every message.
+    // now: saved straight away, before anyone's told what changed.
+    function persist(room, now = false) {
+        if (!roomsDir || closing || rooms.get(room.code) !== room) {
+            return;
+        }
+        if (room.saveTimer && !now) {
+            room.saveWaiting = true;
+            return;
+        }
+        const text = JSON.stringify(savedRoom(room));
+        if (text !== room.savedText) {
+            try {
+                // Whole or not at all, should the relay stop mid-write
+                const file = roomFile(room.code);
+                writeFileSync(`${file}.tmp`, text, { mode: 0o600 });
+                renameSync(`${file}.tmp`, file);
+                room.savedText = text;
+            } catch (e) {
+                console.warn("Co-op relay: couldn't save a room:", e);
+            }
+        }
+        room.saveWaiting = false;
+        clearTimeout(room.saveTimer);
+        room.saveTimer = setTimeout(() => {
+            room.saveTimer = undefined;
+            if (room.saveWaiting) {
+                persist(room);
+            }
+        }, saveMs);
+        room.saveTimer.unref?.();
+    }
+
+    // A room as it's kept: tokens only as hashes
+    function savedRoom(room) {
+        return {
+            code: room.code,
+            name: room.name,
+            open: room.open,
+            hostId: room.hostId,
+            mapId: room.mapId,
+            endless: room.endless,
+            hard: room.hard,
+            started: room.started,
+            order: room.order,
+            kicked: [...room.kicked],
+            members: room.members.map((member) => ({
+                id: member.id,
+                name: member.name,
+                characterId: member.characterId,
+                ready: member.ready,
+                loadout: member.loadout,
+                unlocks: member.unlocks,
+                build: member.build,
+                address: member.address,
+                network: member.network,
+                tokenHash: member.tokenHash,
+            })),
+        };
+    }
+
+    // The rooms kept from before a restart, everyone in them away until they
+    // come back
+    function loadRooms() {
+        mkdirSync(roomsDir, { recursive: true, mode: 0o700 });
+        for (const file of readdirSync(roomsDir)) {
+            const path = join(roomsDir, file);
+            if (!file.endsWith(".json")) {
+                // A write that never finished
+                if (file.endsWith(".json.tmp")) {
+                    rmSync(path, { force: true });
+                }
+                continue;
+            }
+            let saved;
+            try {
+                saved = JSON.parse(readFileSync(path, "utf8"));
+                if (
+                    typeof saved?.code !== "string" ||
+                    !Array.isArray(saved.members) ||
+                    saved.members.length === 0 ||
+                    !saved.members.every((m) => typeof m?.id === "string")
+                ) {
+                    throw new Error("not a room");
+                }
+            } catch (e) {
+                console.warn(`Co-op relay: couldn't read the kept room ${file}:`, e);
+                rmSync(path, { force: true });
+                continue;
+            }
+            const { members, kicked, ...fields } = saved;
+            const room = {
+                ...fields,
+                members: [],
+                lastActive: Date.now(),
+                kicked: new Set(Array.isArray(kicked) ? kicked : []),
+                hostBytes: hostBurstBytes,
+                hostBytesAt: Date.now(),
+                savedText: JSON.stringify(saved),
+            };
+            for (const member of members) {
+                const client = {
+                    ...member,
+                    room,
+                    connection: AWAY,
+                    lastActive: Date.now(),
+                    upSecond: 0,
+                    upsThisSecond: 0,
+                };
+                room.members.push(client);
+                playerNames.add(client.name);
+                holdPlace(client);
+                nextId = Math.max(nextId, Number(client.id.slice(1)) + 1 || 0);
+            }
+            nextRoomOrder = Math.max(nextRoomOrder, (Number(room.order) || 0) + 1);
+            rooms.set(room.code, room);
+        }
+        if (rooms.size > 0) {
+            console.log(`Co-op relay: kept rooms waiting for their players: ${rooms.size}`);
+        }
     }
 
     // A name nobody connected has (name-gen.mjs). Names are a player's own
@@ -1155,7 +1413,8 @@ export function createRelay(limits = {}) {
                 counters.roomsCreated++;
                 counters.peakRooms = Math.max(counters.peakRooms, rooms.size);
                 client.room = created;
-                roomChanged(created);
+                newToken(client);
+                roomChanged(created, true);
                 return;
             }
             case "join": {
@@ -1216,7 +1475,8 @@ export function createRelay(limits = {}) {
                 client.ready = false;
                 target.members.push(client);
                 client.room = target;
-                roomChanged(target);
+                newToken(client);
+                roomChanged(target, true);
                 return;
             }
             case "leave":
@@ -1311,6 +1571,7 @@ export function createRelay(limits = {}) {
                         return;
                     }
                     room.started = true;
+                    persist(room, true);
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),
@@ -1327,7 +1588,7 @@ export function createRelay(limits = {}) {
                 // The host's back in the lobby: the room is again
                 if (isHost && room.started) {
                     room.started = false;
-                    roomChanged(room);
+                    roomChanged(room, true);
                 }
                 return;
             // The game's own traffic, nearly all of what comes through, goes on
@@ -1389,14 +1650,45 @@ export function createRelay(limits = {}) {
             refuse(socket, "503 Service Unavailable");
             return;
         }
-        addCount(connectionsFrom, address, 1);
-        addCount(connectionsFromNetwork, network, 1);
+        // Coming back to a room (coop/room/<code>?resume=<token>)
+        const code = /\/room\/([A-Za-z0-9]{1,16})$/.exec(requestPath(req))?.[1];
+        const token = code !== undefined ? resumeToken(req) : undefined;
+        if (code !== undefined && !token) {
+            refuse(socket, "400 Bad Request");
+            return;
+        }
         socket.write(
             "HTTP/1.1 101 Switching Protocols\r\n" +
                 "Upgrade: websocket\r\n" +
                 "Connection: Upgrade\r\n" +
                 `Sec-WebSocket-Accept: ${acceptKey(key)}\r\n\r\n`,
         );
+        if (token) {
+            const held = heldFor(code.toUpperCase(), token);
+            if (!held) {
+                const text = { t: "error", message: "The room closed while you were away." };
+                // Let go once it's sent, as with refuse
+                socket.write(encodeFrame(0x1, Buffer.from(JSON.stringify(text), "utf8")));
+                socket.end(encodeFrame(0x8, Buffer.from([0x03, 0xe8])), () => socket.destroy());
+                setTimeout(() => socket.destroy(), 1000).unref?.();
+                return;
+            }
+            // Back: anything still open from before is let go
+            const old = held.connection;
+            clearTimeout(held.awayTimer);
+            held.awayTimer = undefined;
+            held.address = address;
+            held.network = network;
+            held.roomOnly = true;
+            held.token = token;
+            connect(held, socket, address, network);
+            old.close(1000);
+            held.connection.sendFrame(0x1, Buffer.from(roomMessage(held), "utf8"));
+            if (head && head.length > 0) {
+                held.connection.receive(head);
+            }
+            return;
+        }
         const client = {
             id: `p${nextId++}`,
             name: newPlayerName(),
@@ -1413,21 +1705,7 @@ export function createRelay(limits = {}) {
             upSecond: 0,
             upsThisSecond: 0,
         };
-        client.connection = new Connection(
-            socket,
-            (message, payload) => handle(client, message, payload),
-            () => {
-                clients.delete(client);
-                playerNames.delete(client.name);
-                addCount(connectionsFrom, address, -1);
-                addCount(connectionsFromNetwork, network, -1);
-                leaveRoom(client);
-            },
-            bytesPerSecond,
-        );
-        clients.add(client);
-        counters.connections++;
-        counters.peakPlayers = Math.max(counters.peakPlayers, clients.size);
+        connect(client, socket, address, network);
         playerNames.add(client.name);
         // anyMap: the game shows rooms on maps the player hasn't got as locked
         // unless it's on
@@ -1435,6 +1713,40 @@ export function createRelay(limits = {}) {
         if (head && head.length > 0) {
             client.connection.receive(head);
         }
+    }
+
+    // Makes this socket the player's connection
+    function connect(client, socket, address, network) {
+        addCount(connectionsFrom, address, 1);
+        addCount(connectionsFromNetwork, network, 1);
+        const connection = new Connection(
+            socket,
+            (message, payload) => handle(client, message, payload),
+            (abrupt) => {
+                addCount(connectionsFrom, address, -1);
+                addCount(connectionsFromNetwork, network, -1);
+                // Taken over by the player coming back
+                if (client.connection !== connection) {
+                    return;
+                }
+                clients.delete(client);
+                if (abrupt && client.room && client.tokenHash && resumeGraceMs > 0 && !closing) {
+                    holdPlace(client);
+                    return;
+                }
+                playerNames.delete(client.name);
+                leaveRoom(client);
+            },
+            bytesPerSecond,
+        );
+        client.connection = connection;
+        clients.add(client);
+        counters.connections++;
+        counters.peakPlayers = Math.max(counters.peakPlayers, clients.size);
+    }
+
+    if (roomsDir) {
+        loadRooms();
     }
 
     const pinger = setInterval(() => {
@@ -1475,7 +1787,9 @@ export function createRelay(limits = {}) {
         // with nothing else to upgrade to, where they'd hang open)
         attach(server, path = RELAY_PATH, { closeOthers = false } = {}) {
             server.on("upgrade", (req, socket, head) => {
-                if (requestPath(req) === path) {
+                const requested = requestPath(req);
+                // Its rooms too, which players come back to
+                if (requested === path || requested?.startsWith(`${path}/room/`)) {
                     handleUpgrade(req, socket, head);
                 } else if (closeOthers) {
                     refuse(socket, "404 Not Found");
@@ -1512,11 +1826,19 @@ export function createRelay(limits = {}) {
         },
         // Closes idle rooms as if it were this time (for the tests)
         sweep,
+        // Kept rooms stay as they are, for the relay's next start
         close() {
+            closing = true;
             clearInterval(pinger);
             clearInterval(sweeper);
             stopCloudflare();
             stopMetrics();
+            for (const room of rooms.values()) {
+                clearTimeout(room.saveTimer);
+                for (const member of room.members) {
+                    clearTimeout(member.awayTimer);
+                }
+            }
             for (const client of clients) {
                 client.connection.close(1001);
             }

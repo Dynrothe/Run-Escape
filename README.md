@@ -118,6 +118,8 @@ Multiplayer where a relay answers, so a plain static host serves it as a single-
 `npm run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).
+`MULTIPLAYER_ROOMS_DIR` keeps co-op runs going through a restart of the server; see
+[Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 
 ## Desktop
 

@@ -59,7 +59,7 @@ const PING_INTERVAL_MS = 15_000;
 // A room's connection that drops (a network blip, or the relay restarting)
 // is tried again for this long before the room's given up on. The relay
 // holds the player's place a little longer (RESUME_GRACE_MS in
-// server/cloudflare/src/room.mjs).
+// server/coop-relay.mjs and server/cloudflare/src/room.mjs).
 export const RESUME_WINDOW_MS = 10_000;
 // Waits between tries, the last repeating
 const RESUME_DELAYS_MS = [0, 250, 500, 1000, 2000];
@@ -254,6 +254,14 @@ export class CoopLobby {
                 if (this.view.room && (this.roomSocket || this.resuming)) {
                     // The room has its own connection and carries on
                     this.lobbyLost = true;
+                    resolve();
+                    return;
+                }
+                if (this.view.room && this.resume) {
+                    // The Node relay's room was on this connection: back to
+                    // it on a connection of its own, and to the lobby after
+                    this.lobbyLost = true;
+                    this.startResuming();
                     resolve();
                     return;
                 }

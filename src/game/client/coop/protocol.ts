@@ -166,8 +166,8 @@ export type ServerMessage =
           // Every room the relay can hold is taken
           full: boolean;
       }
-    // token: to come back to the room with, should the connection drop (the
-    // Cloudflare relay's; coop/room/<code>?resume=<token>)
+    // token: to come back to the room with, should the connection drop
+    // (coop/room/<code>?resume=<token>, on either relay)
     | { t: "room"; room: RoomView; you: string; token?: string }
     // The relay keeps each room on its own connection (the Cloudflare relay,
     // server/cloudflare): make or join it there, at coop/room/<code>, with

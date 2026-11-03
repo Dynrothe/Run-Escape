@@ -77,6 +77,7 @@ the version in the corner).
   carries on.
 - Co-op: an item used just as the connection drops is used once it's back, and someone who joined,
   left or started a run just before a drop is remembered that way.
+- Co-op: the self-hosted relay supports reconnecting too, and can keep its rooms through a restart.
 - Huge numbers stay short: the damage panel, stats and hitsplats go on past trillions to Qa,
   Qi, Sx and on, then powers of ten, rather than growing digit by digit.
 - In very long endless runs, bones no longer stop dropping once coins and food have built up

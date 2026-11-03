@@ -81,8 +81,21 @@ packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names
 PORT=8787 node server/coop-relay.mjs
 ```
 
+A player whose connection drops keeps their place for 15 seconds while their game reconnects. To
+have runs carry on through a restart of the relay as well (a deploy, or a crash), give it a folder
+of its own to keep rooms in, which only the relay's user can read (it holds players' addresses):
+
+```
+MULTIPLAYER_ROOMS_DIR=/var/lib/run-escape/rooms PORT=8787 node server/coop-relay.mjs
+```
+
+Each room is a small file there, written when someone comes or goes or a run starts or ends (and
+at most once a second for other changes), and removed when the room closes. Players' tokens are
+kept only as hashes. The relay has to be back within about 10 seconds, which a service manager's
+restart is. Don't point two relays at the same folder.
+
 The game looks for it at `coop` beside the page (`wss://example.com/game/coop` for a game at
-`/game/`), so proxy that path to it. With nginx:
+`/game/`), so proxy that path, and what's under it, to it. With nginx:
 
 ```
 location /game/coop {
@@ -142,6 +155,7 @@ Its limits, at the top of `server/coop-relay.mjs`:
 | Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                           |
 | Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                           |
 | A room with nothing happening | closed after 30 minutes (pings, looking at the list, and players' own updates and names don't count)  |
+| A dropped player's place      | held 15 seconds for their game to reconnect                                                           |
 | A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                   |
 | What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                    |
 | A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                               |
@@ -951,20 +965,29 @@ a room goes over that connection (`ROOM_MESSAGES` in `CoopLobby.ts`); pings, the
 making or joining go to the lobby's. The Node relay never sends `goto`, so with it there's only
 the one connection. Change the protocol in both relays.
 
-Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
-`room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
-`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile, and the room
-(kept in storage) holds the player's place a little longer. A guest that misses some of the host's
-frames sees it from `from` on the next `down` and asks for them with a `resend` up message; the
-host keeps 20 seconds of what it's sent (longer than the room holds a dropped player) and answers
-once a second at most, from the earliest frame asked for, to every guest; each takes only frames
-after the ones it has, in messages of `RESEND_EVENTS` at most. That part works on either relay.
+Connections drop (a network blip, or the relay restarting: Cloudflare restarts its objects now and
+then), so both relays' `room` message carries a `token`. `CoopLobby` reconnects to
+`coop/room/<code>?resume=<token>` for `RESUME_WINDOW_MS` when the room's connection drops, holding
+what's said meanwhile, and the relay holds the player's place a little longer (`RESUME_GRACE_MS`).
+A guest that misses some of the host's frames sees it from `from` on the next `down` and asks for
+them with a `resend` up message; the host keeps 20 seconds of what it's sent (longer than the room
+holds a dropped player) and answers once a second at most, from the earliest frame asked for, to
+every guest; each takes only frames after the ones it has, in messages of `RESEND_EVENTS` at most.
 A guest numbers its actions that aren't decisions (`actionSeq`, so using an item), and the host's
 frames echo the number; after reconnecting it sends again those not echoed yet, and the host takes
-each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The room saves someone
-joining or leaving, and the run starting or ending, at once and before telling anyone; other
-changes at most once a second. The Node relay sends no token, so with it a dropped connection
-still ends a guest's run.
+each number once. Decisions have their own resend (`DECISION_RESEND_MS`). All of that is in the
+games, so it works the same on either relay. Both relays save someone joining or leaving, and the
+run starting or ending, at once and before telling anyone; other changes at most once a second.
+
+On the Node relay the room is on the lobby's one connection, so when that drops `CoopLobby` comes
+back on a connection of its own, as with Cloudflare. The relay closes that one once the player's
+out of the room, and the game connects to the lobby again (with a new name). The Node relay only
+holds a place for a connection that's lost (no close frame, or no answer to its pings): a player
+who closes theirs, or one the relay drops for its limits, is gone at once, as before. Its tests
+drop one with `RawClient`'s `socket.destroy()`. With `MULTIPLAYER_ROOMS_DIR` it also keeps each
+room in a file (see Co-op relay, above), so a restart is a dropped connection for everyone in its
+rooms. Rooms, members and settings are kept; the run itself is only in the players' games, which
+is why nothing more is needed.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request; the menu asks for its
