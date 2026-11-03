@@ -24,6 +24,12 @@ const protects: EnemyDef["protects"] = {
     damage: PROTECTS.damage,
 };
 
+// The first clears took little damage over a whole raid: a boss's hits do this much more than
+// they were first tuned at, and a bullet can hit again this soon after the last (a second
+// elsewhere), so standing in a pattern costs, as on Phosani's Nightmare (her 0.3)
+const HIT_HARDER = 1.5;
+const BULLET_GRACE = 0.5;
+
 // Splats (the blood 1579, the acid 1654) reach well past their middle: drawn at this size, all of
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
@@ -634,13 +640,14 @@ const POCKETED = new Set(["ring", "spiral", "spread", "wall"]);
 
 // A raid boss's attacks: the melee pocket, and when it attacks more often than its hits were
 // tuned for (every `from` seconds), each one lighter to match, for more to dodge and the same
-// damage over time. Expert mode's own attacks keep their damage, as the green ball's meant to kill.
+// damage over time, and HIT_HARDER on top. Expert mode's own attacks keep their damage, as the green
+// ball's meant to kill.
 function oftener(attacks: BossAttackDef[], from: number, to: number): BossAttackDef[] {
     return attacks.map((attack) => {
         const pattern = attack.pattern;
         return {
             ...attack,
-            damage: attack.expert ? attack.damage : (attack.damage * to) / from,
+            damage: attack.expert ? attack.damage : (attack.damage * to * HIT_HARDER) / from,
             pattern:
                 pattern && POCKETED.has(pattern.shape)
                     ? { ...pattern, from: pattern.from ?? MELEE_POCKET }
@@ -683,6 +690,12 @@ function withScale(scale: number, enemy: EnemyDef): EnemyDef {
 
 // The raid's own bosses. The Bloat, Sotetseg and Verzik need Morytania's, from enemies.ts.
 export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
+    return theatreBosses(byId).map((enemy) =>
+        enemy.boss ? { ...enemy, boss: { ...enemy.boss, bulletGrace: BULLET_GRACE } } : enemy,
+    );
+}
+
+function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     const verzikOne = byId("verzik_vitur");
     const verzikTwo = byId("verzik_vitur_risen");
     return [

@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Theatre of Blood's bosses are much tougher: two and a half to four times their hitpoints,
+  harder hits, and their bullets can hit twice as often.
+- The Theatre of Blood is brighter, the woods outside Canifis most of all.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

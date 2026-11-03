@@ -168,9 +168,10 @@ function tobRoom(id: TobRoomId, room: TobRoom, index: number): RaidRoomDef {
     };
 }
 
-// The Theatre's rooms in its own order. A raid's meant to be as hard as the Inferno: bosses' hitpoints
-// are set so each lasts a minute or more against a build with everything bought (simulate-run's
-// bot), lower on the Bloat, who walks his loop, and Sotetseg, whose maze is the danger.
+// The Theatre's rooms in its own order. Its bosses' hitpoints are set from players' clears, not the
+// bot's (it kills them at under half a player's pace): the first clears had each down in 12 to 45
+// seconds, and these are meant to give a fight of a couple of minutes, more so later on, as a
+// player's build grows through the raid. Lower on the Bloat, who walks his loop.
 const TOB_ROOMS: RaidRoomDef[] = [
     tobRoom(
         "maiden",
@@ -189,11 +190,11 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
             ]),
             events: roomEvents("nylocas_matomenos", "blood_spawn", 24),
-            // Canifis's woods by night, where the vampyres hunt: darker and redder than the
-            // village itself, so it doesn't read as a stroll past Canifis
-            hall: { brightness: 0.75, wash: "#e09090" },
+            // Canifis's woods by night, where the vampyres hunt: redder than the village itself,
+            // so it doesn't read as a stroll past Canifis, but lit enough to see its enemies by
+            hall: { brightness: 1.15, wash: "#f4c4c4" },
             boss: "maiden_of_sugadinti",
-            bossHp: 12000,
+            bossHp: 30000,
         },
         0,
     ),
@@ -217,7 +218,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("feral_vampyre", "ghast", 30),
             boss: "tob_pestilent_bloat",
-            bossHp: 8000,
+            bossHp: 20000,
         },
         1,
     ),
@@ -245,7 +246,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             // Meiyerditch is dark stone: brighter than the rest, or its alleys are lost
             hall: { brightness: 1.1 },
             boss: "nylocas_vasilias",
-            bossHp: 20000,
+            bossHp: 60000,
         },
         2,
     ),
@@ -270,7 +271,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("mutated_bloodveld", "vampyre_juvinate", 36),
             boss: "tob_sotetseg",
-            bossHp: 8000,
+            bossHp: 32000,
         },
         3,
     ),
@@ -295,7 +296,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("vyrewatch_sentinel", "nylocas_hagios", 50),
             boss: "xarpus",
-            bossHp: 24000,
+            bossHp: 84000,
         },
         4,
     ),
@@ -324,7 +325,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),
             boss: "tob_verzik_vitur",
             // Each of her three forms has this many hitpoints
-            bossHp: 16000,
+            bossHp: 48000,
         },
         5,
     ),
@@ -378,6 +379,6 @@ export const RAID_MAPS: MapDef[] = [
         victoryText: "The Theatre of Blood is complete!",
         music: "Massacre",
         scaperune: true,
-        brightness: 0.85,
+        brightness: 1,
     },
 ];

@@ -597,7 +597,9 @@ expert mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's 
 the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of,
 in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses'
 rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
-hits are lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`).
+hits are lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in
+`theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second. Their
+hitpoints (each room's `bossHp`) are tuned to players' clears, not the bot's: it dies to the Maiden.
 
 `?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
 its max; `?raidtest=short` does only the first.
