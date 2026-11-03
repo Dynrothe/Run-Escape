@@ -14,6 +14,7 @@ import {
 import { Placer, findSolidOverlaps } from "./placer";
 import { skipBlocking } from "./prefabs";
 import type { BuildContext, LocInfo } from "./recipe";
+import { cutRug } from "./rug";
 
 // Made-up locs, by id: what the cache would say about each
 const LOCS: Record<number, Partial<LocInfo>> = {
@@ -328,6 +329,92 @@ describe("skipBlocking", () => {
         expect(skip(at(1, 10, { level: 1 }))).toBe(true);
         // Under the bridge's the river, not the ground
         expect(skip(at(1, 10))).toBe(false);
+    });
+});
+
+describe("cutRug", () => {
+    // A map square of floor 7 at height 20, with a raised pad and a bridge on it
+    const square = createTileGrid(64, 64);
+    const floor = square.levels[0];
+    floor.heights.fill(20);
+    floor.overlays.fill(7);
+    floor.underlays.fill(3);
+    floor.flags[4 + 4 * 64] = 1;
+    for (const [x, y] of [
+        [6, 6],
+        [7, 6],
+        [6, 7],
+        [7, 7],
+    ]) {
+        floor.heights[x + y * 65] = 60;
+    }
+    // Something drawn from upstairs at 3,8; a bridge over 8,3; level 1's own floor at 2,2
+    square.levels[1].flags[3 + 8 * 64] = TILE_SHOWN;
+    square.levels[1].flags[8 + 3 * 64] = TILE_BRIDGE;
+    square.levels[1].overlays[2 + 2 * 64] = 9;
+    square.locs.push(
+        loc(6, 22, 3, 3),
+        loc(7, 22, 3, 4),
+        loc(1, 10, 3, 5),
+        loc(5, 0, 3, 6),
+        loc(6, 22, 6, 6),
+        loc(6, 22, 2, 2, { level: 1 }),
+    );
+    const data = { terrain: writeTerrain(square, 0, 0), locs: writeLocs(square, 0, 0) };
+    const rugContext: Pick<BuildContext, "maps" | "locs"> = {
+        maps: { getTerrainData: () => data.terrain, getLocData: () => data.locs },
+        locs: getLoc,
+    };
+    const tile = (rug: TileGrid, x: number, y: number) => x - 1 + (y - 1) * rug.sizeX;
+
+    it("keeps only floor and floor decoration that's walked on, on flat tiles of its level", () => {
+        const rug = cutRug(
+            rugContext,
+            { worldX: 1, worldY: 1, sizeX: 10, sizeY: 10 },
+            { maxStep: 4 },
+        );
+        const { overlays, underlays, flags } = rug.levels[0];
+        expect(overlays[tile(rug, 2, 2)]).toBe(7);
+        expect(underlays[tile(rug, 2, 2)]).toBe(3);
+        // Nothing blocks on a rug
+        expect(overlays[tile(rug, 4, 4)]).toBe(7);
+        expect(flags.every((f) => f === 0)).toBe(true);
+        // The pad and every tile touching its corners are left out
+        for (const [x, y] of [
+            [5, 5],
+            [6, 6],
+            [7, 7],
+            [7, 5],
+        ]) {
+            expect(overlays[tile(rug, x, y)], `${x},${y}`).toBe(0);
+        }
+        expect(overlays[tile(rug, 8, 8)]).toBe(7);
+        // As is what's another level's: under the bridge, and under what's drawn from upstairs
+        expect(overlays[tile(rug, 8, 3)]).toBe(0);
+        expect(overlays[tile(rug, 3, 8)]).toBe(0);
+        // The patterned floor stays; the spikes, the crate, the wall, and the floor on the
+        // pad don't
+        expect(rug.locs).toEqual([loc(6, 22, 2, 2)]);
+    });
+
+    it("lets more through with a bigger step, and comes down from another plane", () => {
+        const loose = cutRug(
+            rugContext,
+            { worldX: 1, worldY: 1, sizeX: 10, sizeY: 10 },
+            {
+                maxStep: 40,
+            },
+        );
+        expect(loose.levels[0].overlays[tile(loose, 6, 6)]).toBe(7);
+        const upstairs = cutRug(
+            rugContext,
+            { worldX: 1, worldY: 1, sizeX: 10, sizeY: 10 },
+            { plane: 1, maxStep: 4 },
+        );
+        expect(upstairs.levels[0].overlays[tile(upstairs, 2, 2)]).toBe(9);
+        expect(upstairs.levels[0].overlays[tile(upstairs, 4, 4)]).toBe(0);
+        expect(upstairs.levels[1].overlays.every((v) => v === 0)).toBe(true);
+        expect(upstairs.locs).toEqual([loc(6, 22, 1, 1)]);
     });
 });
 
