@@ -127,6 +127,7 @@ describe("seeded runs", () => {
     test("a party of four in the God Wars, armies fighting each other", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x9200c3ec);
+        // No unlockedItems restriction: adding a weapon changes this fixture's choice pool.
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x9f825f41);
     }, 60000);
 });
