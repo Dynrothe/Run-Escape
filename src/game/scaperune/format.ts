@@ -264,6 +264,12 @@ export function writeLocs(
                 loc.y < offsetY + MAP_SQUARE_SIZE,
         )
         .sort((a, b) => a.id - b.id || pack(a) - pack(b));
+    // Packing a tile shifts it, which would quietly drop half a tile
+    for (const loc of locs) {
+        if (!Number.isInteger(loc.x) || !Number.isInteger(loc.y)) {
+            throw new Error(`Loc ${loc.id} is off a whole tile, at ${loc.x},${loc.y}`);
+        }
+    }
 
     const out: number[] = [];
     let i = 0;
