@@ -218,6 +218,8 @@ desktop build.
   each page can allocate `coins + max(page.upgradesSpent)`. Only the maximum investment is reserved;
   use `getSkillCoins(save, style)` for a page's balance. Always pass the intended style to skill
   operations and run loadouts.
+  Partial skill refunds replay `upgradeOrder` and return later purchases' surcharge savings too.
+  Pages without valid order need Refund all before partial refunds; never estimate their chronology.
 - **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
   on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
   `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.

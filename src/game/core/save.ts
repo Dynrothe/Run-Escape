@@ -49,6 +49,7 @@ export type SkillPage = {
     upgrades: Record<string, number>;
     upgradesSpent: number;
     upgradeRefunds?: Record<string, number[]>;
+    upgradeOrder?: string[];
 };
 
 function createSkillPage(): SkillPage {
@@ -326,7 +327,47 @@ function migrateSkillPage(raw: unknown): SkillPage {
             page.upgradeRefunds = refunds;
         }
     }
+    if (
+        Array.isArray(data.upgradeOrder) &&
+        data.upgradeOrder.length ===
+            Object.values(page.upgrades).reduce((sum, rank) => sum + rank, 0)
+    ) {
+        const ranks: Record<string, number> = {};
+        const valid = data.upgradeOrder.every((id) => {
+            if (typeof id !== "string" || !SHOP_UPGRADE_BY_ID.has(id)) {
+                return false;
+            }
+            ranks[id] = (ranks[id] ?? 0) + 1;
+            return ranks[id] <= (page.upgrades[id] ?? 0);
+        });
+        if (valid && data.upgradeOrder.length > 0) {
+            const replay = replaySkillPurchases(data.upgradeOrder);
+            if (replay.upgradesSpent === page.upgradesSpent) {
+                return replay;
+            }
+        }
+    }
     return page;
+}
+
+function replaySkillPurchases(order: string[]): SkillPage {
+    const page = createSkillPage();
+    if (order.length > 0) {
+        page.upgradeOrder = [...order];
+        page.upgradeRefunds = {};
+        order.forEach((id, index) => {
+            const rank = page.upgrades[id] ?? 0;
+            const cost = getUpgradeCost(SHOP_UPGRADE_BY_ID.get(id)!, rank, index);
+            (page.upgradeRefunds![id] ??= []).push(cost);
+            page.upgrades[id] = rank + 1;
+            page.upgradesSpent += cost;
+        });
+    }
+    return page;
+}
+
+export function canRefundSkillPage(page: SkillPage): boolean {
+    return page.upgradeOrder !== undefined || Object.keys(page.upgrades).length === 0;
 }
 
 export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stats {
@@ -378,6 +419,10 @@ export function buyUpgrade(
     }
     const reserved = getMaxSkillSpending(save);
     const page = save.skillPages[style];
+    if (Object.keys(page.upgrades).length === 0) {
+        page.upgradeOrder = [];
+    }
+    page.upgradeOrder?.push(upgradeId);
     const refunds = getUpgradeRefunds(page);
     (refunds[upgradeId] ??= []).push(cost);
     page.upgradesSpent += cost;
@@ -394,23 +439,15 @@ export function refundUpgrade(
     const upgrade = SHOP_UPGRADE_BY_ID.get(upgradeId);
     const page = save.skillPages[style];
     const rank = page.upgrades[upgradeId] ?? 0;
-    if (!upgrade || rank <= 0) {
+    if (!upgrade || rank <= 0 || !page.upgradeOrder) {
         return false;
     }
     const reserved = getMaxSkillSpending(save);
-    const refunds = getUpgradeRefunds(page);
-    const refund = refunds[upgradeId].pop()!;
-    page.upgradesSpent -= refund;
+    const order = [...page.upgradeOrder];
+    order.splice(order.lastIndexOf(upgradeId), 1);
+    // Replay the remaining purchases so later ranks lose the refunded rank's surcharge.
+    save.skillPages[style] = replaySkillPurchases(order);
     save.coins += reserved - getMaxSkillSpending(save);
-    if (rank === 1) {
-        delete page.upgrades[upgradeId];
-        delete refunds[upgradeId];
-    } else {
-        page.upgrades[upgradeId] = rank - 1;
-    }
-    if (getTotalUpgradesBought(save, style) === 0) {
-        delete page.upgradeRefunds;
-    }
     return true;
 }
 
@@ -447,6 +484,7 @@ export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): vo
     save.coins += reserved - getMaxSkillSpending(save);
     page.upgrades = {};
     delete page.upgradeRefunds;
+    delete page.upgradeOrder;
 }
 
 // For saves from before spending was tracked: what buying these ranks one

@@ -930,6 +930,14 @@ export class GameClient implements GameFrameHandler {
     refundUpgrade(upgradeId: string, style: CombatStyle = "melee"): void {
         if (refundUpgrade(this.save, upgradeId, style)) {
             this.persist();
+        } else if (
+            this.save.skillPages[style].upgrades[upgradeId] > 0 &&
+            !this.save.skillPages[style].upgradeOrder
+        ) {
+            this.store.toast(
+                "Use Refund all on this class once to enable single-rank refunds.",
+                6000,
+            );
         }
     }
 
