@@ -16,6 +16,7 @@ import type { LocInfo } from "./recipe";
 // - Zones say where nothing goes (an arena, a way through a gate), and each placement can be let
 //   onto any of them by name.
 // - Every request is counted against what was placed, by kind, so a test can count the build.
+// - A loc off a whole tile throws (Ground.place does), as the map file would move it.
 // A stamp marks what blocks in it occupied too, given StampOptions.locs, so a Placer can dress
 // round a prefab.
 
@@ -136,6 +137,9 @@ export class Placer {
     // Something walked through, on one tile with nothing else on it. Painted floor is fine:
     // candles stand on stone.
     dress(id: number, x: number, y: number, options: PlaceOptions & { type: number }): boolean {
+        if (!Number.isInteger(x) || !Number.isInteger(y)) {
+            throw new Error(`Loc ${id} placed off a whole tile, at ${x},${y}`);
+        }
         const refusal = this.getSolidRefusal(x, y, options.allow);
         if (!refusal) {
             this.dressed[this.ground.tile(x, y)] = 1;

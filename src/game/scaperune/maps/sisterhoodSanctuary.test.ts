@@ -1,5 +1,9 @@
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
+import { GAME_CACHE_NAME } from "../../cache";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, createTileGrid, writeLocs, writeTerrain } from "../format";
 import { LOC_FLOOR_DECORATION, LOC_WALL } from "../mapBuild";
 import { BuildContext, getRecipeArena } from "../recipe";
@@ -147,4 +151,17 @@ describe("the Sisterhood Sanctuary", () => {
         expect(writeLocs(again, 0, 0)).toEqual(writeLocs(map.grid, 0, 0));
         expect(writeTerrain(again, 0, 0)).toEqual(writeTerrain(map.grid, 0, 0));
     });
+});
+
+// The table the test above builds from, held to the cache: each size, and what blocks by the
+// collision's rules. In a script, because the cache's loaders don't load under vitest.
+describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("the Sanctuary's loc table", () => {
+    it("matches the cache", async () => {
+        const { stdout } = await promisify(execFile)(
+            process.execPath,
+            ["--import", "tsx", "scripts/scaperune/check-solid-locs.ts"],
+            { encoding: "utf8", timeout: 120000 },
+        );
+        expect(stdout).toContain("The Sanctuary's loc table matches the cache");
+    }, 130000);
 });

@@ -236,6 +236,13 @@ describe("Placer", () => {
             "more crates: 0 of 2 (2 gave up)",
         ]);
     });
+
+    it("throws for a loc off a whole tile", () => {
+        const { ground, placer } = create();
+        expect(() => placer.solid(1, 2.5, 3)).toThrow(/whole tile/);
+        expect(() => placer.dress(8, 2, 3.5, { type: 10 })).toThrow(/whole tile/);
+        expect(() => ground.place(loc(1, 10, 1, 0.5), 1, 1)).toThrow(/whole tile/);
+    });
 });
 
 describe("findSolidOverlaps", () => {
@@ -321,5 +328,17 @@ describe("skipBlocking", () => {
         expect(skip(at(1, 10, { level: 1 }))).toBe(true);
         // Under the bridge's the river, not the ground
         expect(skip(at(1, 10))).toBe(false);
+    });
+});
+
+describe("whole tiles", () => {
+    it("won't write a loc off a whole tile", () => {
+        const grid = createTileGrid(64, 64);
+        grid.locs.push(loc(1, 10, 3, 4));
+        expect(() => writeLocs(grid, 0, 0)).not.toThrow();
+        grid.locs.push(loc(1, 10, 3.5, 4));
+        expect(() => writeLocs(grid, 0, 0)).toThrow(/whole tile/);
+        // Only what's on the square being written counts
+        expect(() => writeLocs(grid, 64, 0)).not.toThrow();
     });
 });

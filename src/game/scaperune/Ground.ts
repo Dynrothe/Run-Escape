@@ -238,6 +238,10 @@ export class Ground {
     // Puts a loc down on the tiles it fills, sizeX by sizeY as it's turned. They're reserved, and
     // occupied too unless it's floor decoration, which is walked over.
     place(loc: PlacedLoc, sizeX: number, sizeY: number): void {
+        // The map file packs a loc's tile into whole numbers, and would quietly move it
+        if (!Number.isInteger(loc.x) || !Number.isInteger(loc.y)) {
+            throw new Error(`Loc ${loc.id} placed off a whole tile, at ${loc.x},${loc.y}`);
+        }
         this.grid.locs.push(loc);
         const occupies = loc.type !== LOC_FLOOR_DECORATION;
         for (let ty = loc.y; ty < loc.y + sizeY; ty++) {
