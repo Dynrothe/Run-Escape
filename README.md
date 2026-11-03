@@ -35,6 +35,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, and the run going on while anyone's standing.
+  The Cloudflare relay can recover a run through brief relay restarts while everyone's game stays
+  open; see [recovery and compatibility](server/cloudflare/README.md#recovery-and-compatibility).
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank, and **quests** that pay out over many runs.
 

@@ -62,6 +62,14 @@ go stale. Add anything that cost you time to work out.
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
 
+Cloudflare run recovery lives in `server/cloudflare/src/recovery.mjs`, `CoopLobby` and `CoopRun`.
+Only parties whose members all advertise recovery version 1 use it. Keep the fixed 60-second
+deadline through resets, save lifecycle changes before acknowledging them, and verify frame/hash
+agreement before resuming. No per-frame storage writes: the host tab keeps bounded replay history.
+Retain the legacy room-token/resend protocol for older parties and the Node relay. See the
+Cloudflare README for deployment compatibility and restart checks. Its unit tests replace only
+the `cloudflare:workers` base class via Vitest's test-only alias; they do not emulate the runtime.
+
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's a trial, off unless the player turns on `movePrediction` in
 `DisplaySettings`, so a guest's `CoopRun.prediction` is often undefined. Keep predicted positions

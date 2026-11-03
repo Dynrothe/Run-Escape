@@ -8,6 +8,7 @@ import {
     Loadout,
     Member,
     MissingMap,
+    RecoveryCredentials,
     RoomListing,
     RoomView,
     ServerMessage,
@@ -37,6 +38,8 @@ export type CoopView = {
     available?: boolean;
     // The relay lets players into rooms on maps they haven't unlocked
     anyMap: boolean;
+    recovering?: boolean;
+    recoveryDeadline?: number;
 };
 
 export const OFFLINE: CoopView = {
@@ -67,6 +70,7 @@ const RESUME_DELAYS_MS = [0, 250, 500, 1000, 2000];
 const MAX_WAITING_MESSAGES = 2000;
 
 const GONE_TEXT: Record<GoneReason, string> = {
+    recoveryFailed: "The party couldn't reconnect safely. Your run has ended.",
     left: "",
     kicked: "The host removed you from the party.",
     disbanded: "The host disbanded the party.",
@@ -110,6 +114,11 @@ const ROOM_MESSAGES: ReadonlySet<ClientMessage["t"]> = new Set([
     "end",
     "up",
     "down",
+    "recoveryRequest",
+    "recoveryState",
+    "recoveryFrames",
+    "recoveryAck",
+    "recoveryAbort",
 ]);
 
 // The relay's address over plain HTTP, which answers whether it's there
@@ -146,6 +155,16 @@ export function describeMissing(need: MissingMap): string {
 // The connection to the co-op relay, and the room this player is in. What
 // the room's run does goes to whoever's set the on* handlers (GameClient).
 export class CoopLobby {
+    private credentials?: RecoveryCredentials;
+    private epoch?: string;
+    private recoveryDeadline = 0;
+    private deadlineTimer?: number;
+    private healthTimer?: number;
+    private lastRoomMessage = 0;
+    private backlog: string[] = [];
+    private backlogTimer?: number;
+    private backlogBytes = 0;
+    private backlogAt = 0;
     private socket?: WebSocket;
     // With a relay that keeps rooms on their own connections: the room's,
     // and one being made or joined (which takes over once the room says
@@ -176,6 +195,16 @@ export class CoopLobby {
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
+
+    onRecovering?: () => void;
+    onRecoverySync?: () => void;
+    onRecoveryReplay?: (to: string, frame: number, target: number) => void;
+    onRecoveryFrames?: (from: number, message: DownMessage) => void;
+    onRecovered?: () => void;
+
+    get canRecover(): boolean {
+        return !!this.credentials;
+    }
 
     onStart?: (game: GameStart) => void;
     onUp?: (from: string, message: UpMessage) => void;
@@ -295,7 +324,20 @@ export class CoopLobby {
     }
 
     private send(message: ClientMessage): void {
+        if (
+            this.view.recovering &&
+            !message.t.startsWith("recovery") &&
+            !["ping", "leave"].includes(message.t)
+        )
+            return;
+        if (this.backlog.length && ROOM_MESSAGES.has(message.t) && message.t !== "leave") {
+            if (this.backlog.length >= MAX_WAITING_MESSAGES)
+                this.roomLost("The room connection fell too far behind.");
+            else this.backlog.push(JSON.stringify(message));
+            return;
+        }
         if (this.resuming && ROOM_MESSAGES.has(message.t)) {
+            if (this.credentials) return;
             if (this.resuming.waiting.length < MAX_WAITING_MESSAGES) {
                 this.resuming.waiting.push(JSON.stringify(message));
             }
@@ -362,10 +404,12 @@ export class CoopLobby {
     // The room's connection, once it's in
     private useRoomSocket(socket: WebSocket): void {
         this.roomSocket = socket;
+        this.lastRoomMessage = Date.now();
         socket.onmessage = (event) => {
             if (socket !== this.roomSocket) {
                 return;
             }
+            this.lastRoomMessage = Date.now();
             let received: ServerMessage;
             try {
                 received = JSON.parse(String(event.data));
@@ -391,8 +435,13 @@ export class CoopLobby {
     }
 
     private startResuming(): void {
-        this.resuming = { since: Date.now(), tries: 0, waiting: [] };
-        this.onReconnecting?.();
+        if (this.resuming) return;
+        const waiting = this.backlog;
+        this.backlog = [];
+        window.clearTimeout(this.backlogTimer);
+        this.resuming = { since: Date.now(), tries: 0, waiting };
+        if (this.credentials) this.beginRecovery();
+        else this.onReconnecting?.();
         this.tryResuming();
     }
 
@@ -402,7 +451,10 @@ export class CoopLobby {
         if (!resuming || !resume) {
             return;
         }
-        if (Date.now() - resuming.since > RESUME_WINDOW_MS) {
+        const deadline = this.credentials
+            ? this.recoveryDeadline
+            : resuming.since + RESUME_WINDOW_MS;
+        if (Date.now() >= deadline) {
             this.roomLost("Lost the connection to the room.");
             return;
         }
@@ -415,7 +467,13 @@ export class CoopLobby {
             }
             let socket: WebSocket;
             try {
-                socket = new WebSocket(getRoomUrl(resume.code, resume.token, "resume"));
+                const url = new URL(getRoomUrl(resume.code, resume.token, "resume"));
+                if (this.credentials) {
+                    url.searchParams.set("runId", this.credentials.runId);
+                    url.searchParams.set("protocol", "1");
+                    url.searchParams.set("build", __BUILD_ID__);
+                }
+                socket = new WebSocket(url.toString());
             } catch {
                 this.tryResuming();
                 return;
@@ -432,7 +490,7 @@ export class CoopLobby {
                         this.tryResuming();
                     }
                 },
-                Math.max(0, RESUME_WINDOW_MS - (Date.now() - resuming.since)) + 1,
+                Math.min(4000, Math.max(0, deadline - Date.now())) + 1,
             );
             socket.onmessage = (event) => {
                 if (this.resuming !== resuming || resuming.socket !== socket) {
@@ -449,11 +507,15 @@ export class CoopLobby {
                     window.clearTimeout(resuming.giveUp);
                     this.resuming = undefined;
                     this.useRoomSocket(socket);
-                    for (const text of resuming.waiting) {
-                        socket.send(text);
-                    }
                     this.receive(received);
-                    this.onResumed?.();
+                    if (this.roomSocket !== socket || !this.view.room) return;
+                    if (!this.credentials) {
+                        this.backlog = resuming.waiting;
+                        this.backlogBytes = 128 * 1024;
+                        this.backlogAt = Date.now();
+                        this.drainBacklog();
+                        this.onResumed?.();
+                    }
                 } else if (received.t === "error") {
                     resuming.socket = undefined;
                     socket.close();
@@ -469,6 +531,69 @@ export class CoopLobby {
         }, delay);
     }
 
+    private beginRecovery(remainingMs?: number, epoch?: string): void {
+        if (!this.credentials) return;
+        this.recoveryDeadline ||= Date.now() + 60_000;
+        // The VM and browser clocks need not agree.
+        if (remainingMs !== undefined && Number.isFinite(remainingMs))
+            this.recoveryDeadline = Math.min(
+                this.recoveryDeadline,
+                Date.now() + Math.max(0, remainingMs),
+            );
+        this.epoch = epoch;
+        window.clearTimeout(this.deadlineTimer);
+        this.deadlineTimer = window.setTimeout(
+            () => this.failRecovery(),
+            Math.max(0, this.recoveryDeadline - Date.now()),
+        );
+        this.update({
+            recovering: true,
+            recoveryDeadline: this.recoveryDeadline,
+            error: undefined,
+        });
+        this.onRecovering?.();
+    }
+
+    private clearRecovery(): void {
+        this.credentials = undefined;
+        this.epoch = undefined;
+        this.recoveryDeadline = 0;
+        window.clearTimeout(this.deadlineTimer);
+        window.clearInterval(this.healthTimer);
+        this.update({ recovering: false, recoveryDeadline: undefined });
+    }
+
+    private failRecovery(): void {
+        this.send({ t: "leave" });
+        this.closeRoomSockets();
+        this.update({ room: undefined, error: GONE_TEXT.recoveryFailed });
+        this.refresh();
+        this.onGone?.("recoveryFailed");
+        this.outOfRoom();
+    }
+
+    // Older runs still queue messages. Pace their backlog below the room's
+    // frame/byte limits, preserving order while new messages arrive.
+    private drainBacklog(): void {
+        const socket = this.roomSocket;
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        const now = Date.now();
+        this.backlogBytes = Math.min(
+            256 * 1024,
+            this.backlogBytes + ((now - this.backlogAt) * 128 * 1024) / 1000,
+        );
+        this.backlogAt = now;
+        for (let i = 0; i < 16 && this.backlog.length; i++) {
+            const text = this.backlog[0];
+            if (text.length > this.backlogBytes) break;
+            this.backlogBytes -= text.length;
+            this.backlog.shift();
+            socket.send(text);
+        }
+        if (this.backlog.length)
+            this.backlogTimer = window.setTimeout(() => this.drainBacklog(), 100);
+    }
+
     private stopResuming(): void {
         const resuming = this.resuming;
         this.resuming = undefined;
@@ -481,6 +606,10 @@ export class CoopLobby {
 
     // The room's gone without a word from it
     private roomLost(error: string): void {
+        if (this.credentials) {
+            this.failRecovery();
+            return;
+        }
         this.stopResuming();
         this.resume = undefined;
         this.update({ room: undefined, error });
@@ -498,6 +627,9 @@ export class CoopLobby {
     }
 
     private closeRoomSockets(): void {
+        this.clearRecovery();
+        window.clearTimeout(this.backlogTimer);
+        this.backlog = [];
         this.stopResuming();
         this.resume = undefined;
         const sockets = [this.roomSocket, this.enteringSocket];
@@ -510,6 +642,29 @@ export class CoopLobby {
 
     private receive(message: ServerMessage): void {
         switch (message.t) {
+            case "recovering":
+                if (this.credentials?.runId === message.runId)
+                    this.beginRecovery(message.remainingMs, message.epoch);
+                break;
+            case "recoverySync":
+                if (this.matchesRecovery(message)) this.onRecoverySync?.();
+                break;
+            case "recoveryReplay":
+                if (this.matchesRecovery(message))
+                    this.onRecoveryReplay?.(message.to, message.frame, message.target);
+                break;
+            case "recoveryFrames":
+                if (this.matchesRecovery(message)) this.onRecoveryFrames?.(message.from, message.d);
+                break;
+            case "recoveryDone":
+                if (!this.matchesRecovery(message)) return;
+                window.clearTimeout(this.deadlineTimer);
+                this.recoveryDeadline = 0;
+                this.epoch = undefined;
+                this.update({ recovering: false, recoveryDeadline: undefined });
+                this.onRecovered?.();
+                break;
+
             case "welcome":
                 this.stopTimers();
                 this.update({
@@ -544,6 +699,18 @@ export class CoopLobby {
                 });
                 break;
             case "room":
+                if (this.view.room?.started && message.room.started) {
+                    for (const member of this.view.room.members)
+                        if (!message.room.members.some((m) => m.id === member.id))
+                            this.onLeft?.(member.id);
+                }
+                if (this.credentials && !message.room.started) {
+                    if (this.view.recovering) {
+                        this.failRecovery();
+                        return;
+                    }
+                    this.clearRecovery();
+                }
                 if (message.token) {
                     this.resume = { code: message.room.code, token: message.token };
                 }
@@ -553,6 +720,7 @@ export class CoopLobby {
                 this.enterRoom(message.code, message.ticket);
                 break;
             case "gone":
+                this.clearRecovery();
                 this.resume = undefined;
                 this.update({ room: undefined, error: GONE_TEXT[message.reason] || undefined });
                 this.refresh();
@@ -568,6 +736,25 @@ export class CoopLobby {
                 }
                 break;
             case "start":
+                this.clearRecovery();
+                if (
+                    this.roomSocket &&
+                    message.recovery?.protocol === 1 &&
+                    message.recovery.windowMs === 60_000 &&
+                    /^[a-f0-9]{32}$/.test(message.recovery.token) &&
+                    /^[a-f0-9]{32}$/.test(message.recovery.runId)
+                ) {
+                    this.credentials = message.recovery;
+                    this.healthTimer = window.setInterval(() => {
+                        const socket = this.roomSocket;
+                        if (socket && Date.now() - this.lastRoomMessage >= 6000) {
+                            this.roomSocket = undefined;
+                            socket.close();
+                            this.startResuming();
+                        } else if (socket?.readyState === WebSocket.OPEN)
+                            socket.send(JSON.stringify({ t: "ping" }));
+                    }, 2000);
+                }
                 this.onStart?.(message.game);
                 break;
             case "up":
@@ -644,11 +831,14 @@ export class CoopLobby {
     }
 
     private joinAs(): Partial<Member> {
-        return { ...this.me, ready: false, build: __BUILD_ID__ };
+        return { ...this.me, ready: false, build: __BUILD_ID__, recoveryVersion: 1 };
     }
 
     leave(): void {
         this.send({ t: "leave" });
+        this.clearRecovery();
+        this.backlog = [];
+        window.clearTimeout(this.backlogTimer);
         this.resume = undefined;
         this.update({ room: undefined });
         if (this.resuming) {
@@ -685,7 +875,12 @@ export class CoopLobby {
 
     // Back in the lobby after a run
     end(): void {
+        if (this.view.recovering) {
+            this.leave();
+            return;
+        }
         this.send({ t: "end" });
+        this.clearRecovery();
     }
 
     sendUp(message: UpMessage): void {
@@ -694,6 +889,60 @@ export class CoopLobby {
 
     sendDown(message: DownMessage): void {
         this.send({ t: "down", d: message });
+    }
+
+    private matchesRecovery(message: { runId: string; epoch: string }): boolean {
+        if (this.credentials && this.view.recovering && Date.now() >= this.recoveryDeadline) {
+            this.failRecovery();
+            return false;
+        }
+        return (
+            this.view.recovering === true &&
+            message.runId === this.credentials?.runId &&
+            message.epoch === this.epoch
+        );
+    }
+
+    recoveryState(frame: number, hash: number): void {
+        if (this.credentials && this.epoch)
+            this.send({
+                t: "recoveryState",
+                runId: this.credentials.runId,
+                epoch: this.epoch,
+                frame,
+                hash,
+            });
+    }
+    recoveryFrames(to: string, from: number, d: DownMessage): void {
+        if (this.credentials && this.epoch)
+            this.send({
+                t: "recoveryFrames",
+                runId: this.credentials.runId,
+                epoch: this.epoch,
+                to,
+                from,
+                d,
+            });
+    }
+    recoveryAck(frame: number, hash: number): void {
+        if (this.credentials && this.epoch)
+            this.send({
+                t: "recoveryAck",
+                runId: this.credentials.runId,
+                epoch: this.epoch,
+                frame,
+                hash,
+            });
+    }
+    recoveryAbort(): void {
+        if (this.credentials && this.epoch)
+            this.send({ t: "recoveryAbort", runId: this.credentials.runId, epoch: this.epoch });
+    }
+
+    recoveryRequest(): void {
+        if (!this.credentials || this.view.recovering) return;
+        this.send({ t: "recoveryRequest", runId: this.credentials.runId });
+        this.beginRecovery();
     }
 
     clearError(): void {

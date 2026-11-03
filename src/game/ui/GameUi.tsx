@@ -1202,6 +1202,11 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                         {toast.text}
                     </div>
                 ))}
+                {ui.coop.recovering && (
+                    <div className="ui-toast" role="status">
+                        Reconnecting to co-op. Your run is paused for up to 60 seconds.
+                    </div>
+                )}
             </div>
             {ui.overlay === "levelUp" && <LevelUpModal ui={ui} client={client} />}
             {ui.overlay === "chest" && ui.chest && (

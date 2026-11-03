@@ -289,6 +289,7 @@ for (const upgrade of SHOP_UPGRADES) {
 
 // Why a co-op run ended early, on its results
 const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
+    recoveryFailed: "The party couldn't reconnect safely. Your run has ended.",
     idle: "The room closed after half an hour with nothing happening.",
     kicked: "The host removed you from the party.",
     disbanded: "The host disbanded the party.",
@@ -462,6 +463,18 @@ export class GameClient implements GameFrameHandler {
             }
             this.toCoopRun((run) => run.resumed());
         };
+        this.coop.onRecovering = () => this.toCoopRun((run) => run.pauseForRecovery());
+        this.coop.onRecoverySync = () => this.toCoopRun((run) => run.reportRecoveryState());
+        this.coop.onRecoveryReplay = (to, frame, target) =>
+            this.toCoopRun((run) => run.replayTo(to, frame, target));
+        this.coop.onRecoveryFrames = (from, message) =>
+            this.toCoopRun((run) => run.receiveRecoveryFrames(from, message));
+        this.coop.onRecovered = () =>
+            this.toCoopRun((run) => {
+                this.accumulator = 0;
+                this.backgroundTime = performance.now();
+                run.resumeAfterRecovery();
+            });
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -1161,6 +1174,7 @@ export class GameClient implements GameFrameHandler {
         });
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
+        if (this.coop.canRecover) run.enableRecovery();
         run.setPrediction(this.display.movePrediction);
         this.coopRun = run;
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
@@ -1766,8 +1780,12 @@ export class GameClient implements GameFrameHandler {
         // moving goes on behind it)
         const deciding = this.store.getSnapshot().overlay !== "none" && !this.paused;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
-        this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
-        const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
+        this.accumulator = run.recovering
+            ? 0
+            : this.accumulator + Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
+        const catchUp = run.isHost
+            ? 0
+            : Math.max(0, run.behind - (run.recovering ? 0 : GUEST_BUFFER_FRAMES));
         const started = performance.now();
         let steps = 0;
         while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {

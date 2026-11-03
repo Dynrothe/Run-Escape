@@ -9,13 +9,12 @@
 //
 // Cloudflare restarts Durable Objects now and then (runtime updates, moving
 // them), which drops every connection and what's in memory. So the room keeps
-// itself in storage, and a player whose connection drops is held for
-// RESUME_GRACE_MS: their game reconnects with the token the room gave them
-// (coop/room/<code>?resume=<token>) and carries on. The host's game resends
-// frames a guest missed meanwhile (see CoopRun).
+// itself in storage. Capable parties pause and verify their simulation before
+// resuming within a fixed 60 seconds; older parties retain the short reconnect.
 import { DurableObject } from "cloudflare:workers";
 
 import { playerName } from "../../name-gen.mjs";
+import { RunRecovery } from "./recovery.mjs";
 import {
     IDLE_MS,
     MAX_LOADOUT_BYTES,
@@ -44,7 +43,7 @@ const RESUME_GRACE_MS = 15_000;
 // socket keeps this object running (and billed), and the lobby forgets a room
 // that never got made, so nothing else would end it.
 const ENTER_MS = 10_000;
-// The room's saved, and the lobby told, this often at most
+// Cosmetic updates are saved this often at most; lifecycle changes save immediately.
 const SAVE_MS = 1000;
 
 export class Room extends DurableObject {
@@ -57,6 +56,7 @@ export class Room extends DurableObject {
         this.room = undefined;
         // Kicked addresses outlast a room's members, for the room's life
         this.kicked = new Set();
+        this.recovery = new RunRecovery(this);
         // A room from before a restart
         ctx.blockConcurrencyWhile(() => this.load());
     }
@@ -66,7 +66,7 @@ export class Room extends DurableObject {
         const code = url.pathname.split("/").pop() ?? "";
         const resume = url.searchParams.get("resume");
         if (resume) {
-            return this.resume(resume);
+            return this.atomic(() => this.resume(resume, url.searchParams));
         }
         const who = await this.lobby.redeem(url.searchParams.get("ticket"), code);
         if (!who) {
@@ -116,19 +116,28 @@ export class Room extends DurableObject {
         member.socket = socket;
         socket.addEventListener("message", (event) => {
             if (member.socket === socket) {
-                this.receive(member, event.data);
+                void this.receive(member, event.data);
             }
         });
-        socket.addEventListener("close", () => this.lost(member, socket));
-        socket.addEventListener("error", () => this.lost(member, socket));
+        socket.addEventListener("close", () => this.atomic(() => this.lost(member, socket)));
+        socket.addEventListener("error", () => this.atomic(() => this.lost(member, socket)));
     }
 
     // A player's game coming back after its connection dropped
-    resume(token) {
+    resume(token, params) {
         const [client, server] = Object.values(new WebSocketPair());
         server.accept();
         const member = this.room?.members.find((m) => m.token === token && !m.closed);
-        if (!member) {
+        const recovery = this.room?.recovery;
+        if (
+            !member ||
+            (member.awayUntil && Date.now() >= member.awayUntil) ||
+            (recovery &&
+                (params?.get("runId") !== recovery.runId ||
+                    params?.get("protocol") !== "1" ||
+                    params?.get("build") !== recovery.build ||
+                    (recovery.deadline && Date.now() >= recovery.deadline)))
+        ) {
             server.send(
                 JSON.stringify({ t: "error", message: "The room closed while you were away." }),
             );
@@ -138,17 +147,22 @@ export class Room extends DurableObject {
         const old = member.socket;
         this.attach(member, server);
         member.limit = new RateLimit();
-        try {
-            old?.close(1000);
-        } catch {
-            // Already closed
-        }
+        member.awayUntil = undefined;
+        this.persist();
+        this.emit(() => {
+            try {
+                old?.close(1000);
+            } catch {
+                /* Already closed. */
+            }
+        });
         this.send(member, {
             t: "room",
             room: this.roomView(),
             you: member.id,
             token: member.token,
         });
+        if (recovery) this.recovery.pause();
         return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -163,7 +177,11 @@ export class Room extends DurableObject {
             return;
         }
         if (member.token && this.room?.members.includes(member)) {
-            this.holdPlace(member);
+            if (this.room.recovery) this.recovery.pause();
+            else {
+                this.holdPlace(member);
+                this.persist();
+            }
         } else {
             this.dropped(member);
         }
@@ -171,12 +189,17 @@ export class Room extends DurableObject {
 
     holdPlace(member) {
         clearTimeout(member.awayTimer);
-        member.awayTimer = setTimeout(() => {
-            member.awayTimer = undefined;
-            if (!member.socket) {
-                this.dropped(member);
-            }
-        }, RESUME_GRACE_MS);
+        member.awayUntil ??= Date.now() + RESUME_GRACE_MS;
+        member.awayTimer = setTimeout(
+            () =>
+                this.atomic(() => {
+                    member.awayTimer = undefined;
+                    if (!member.socket) {
+                        this.dropped(member);
+                    }
+                }),
+            Math.max(0, member.awayUntil - Date.now()),
+        );
     }
 
     // ---- Keeping the room through a restart ----
@@ -191,69 +214,89 @@ export class Room extends DurableObject {
         const { members, kicked, ...fields } = saved;
         const room = { ...fields, members: [] };
         this.room = room;
+        if (room.recovery && (room.recovery.protocol !== 1 || !room.started)) {
+            this.endRoom();
+            await this.save();
+            return;
+        }
         for (const memberFields of members) {
             const member = this.newMember(memberFields);
             room.members.push(member);
-            this.holdPlace(member);
+            if (!room.recovery) this.holdPlace(member);
         }
-        this.startHeartbeat(room);
+        if (room.recovery) this.recovery.pause();
+        await this.save();
+        if (this.room) this.startHeartbeat(room);
     }
 
-    // Saves the room and tells the lobby, now or, if that was done in the
-    // last SAVE_MS, once that's passed: a host flicking settings can't make
-    // a storage write of every message
-    persist() {
-        const room = this.room;
-        if (!room) {
-            return;
-        }
-        if (room.saveTimer) {
-            room.saveWaiting = true;
-            return;
-        }
-        this.tellLobby();
-        this.save();
-        room.saveTimer = setTimeout(() => {
-            room.saveTimer = undefined;
-            if (room.saveWaiting && this.room === room) {
-                room.saveWaiting = false;
-                this.persist();
+    // Lifecycle changes bypass the cosmetic save throttle. Buffer acknowledgements
+    // until storage succeeds; a failure resets the object instead of publishing
+    // state that a reconnect cannot restore. No game frame enters this path.
+    atomic(change) {
+        return this.ctx.blockConcurrencyWhile(async () => {
+            this.outbox = [];
+            this.dirty = false;
+            try {
+                const result = change();
+                if (this.dirty) await this.save();
+                const outbox = this.outbox;
+                this.outbox = undefined;
+                for (const send of outbox) send();
+                return result;
+            } finally {
+                this.outbox = undefined;
             }
-        }, SAVE_MS);
+        });
     }
 
-    save() {
+    emit(send) {
+        if (this.outbox) this.outbox.push(send);
+        else send();
+    }
+
+    persist() {
+        this.dirty = true;
+        this.emit(() => this.tellLobby());
+    }
+
+    saveCosmetic() {
+        const room = this.room;
+        if (!room || room.saveTimer) return;
+        room.saveTimer = setTimeout(
+            () =>
+                this.atomic(() => {
+                    room.saveTimer = undefined;
+                    if (this.room === room) this.persist();
+                }),
+            SAVE_MS,
+        );
+    }
+
+    async save() {
         const room = this.room;
         if (!room) {
+            await this.ctx.storage.deleteAll();
             return;
         }
-        const {
-            members,
-            heartbeat,
-            updateTimer,
-            updateWaiting,
-            saveTimer,
-            saveWaiting,
-            ...fields
-        } = room;
-        this.ctx.storage
-            .put("room", {
-                ...fields,
-                members: members.map((m) => ({
-                    id: m.id,
-                    name: m.name,
-                    address: m.address,
-                    kind: m.kind,
-                    characterId: m.characterId,
-                    ready: m.ready,
-                    loadout: m.loadout,
-                    unlocks: m.unlocks,
-                    build: m.build,
-                    token: m.token,
-                })),
-                kicked: [...this.kicked],
-            })
-            .catch((e) => console.warn("Co-op room: couldn't save the room:", e));
+        const { members, heartbeat, updateTimer, updateWaiting, saveTimer, ...fields } = room;
+        await this.ctx.storage.put("room", {
+            ...fields,
+            members: members.map((m) => ({
+                id: m.id,
+                name: m.name,
+                address: m.address,
+                kind: m.kind,
+                characterId: m.characterId,
+                ready: m.ready,
+                loadout: m.loadout,
+                unlocks: m.unlocks,
+                build: m.build,
+                token: m.token,
+                recoveryVersion: m.recoveryVersion,
+                awayUntil: m.awayUntil,
+            })),
+            kicked: [...this.kicked],
+        });
         // Clears out a room everyone's gone from, should the relay restart
         // with nobody coming back. Set once: alarm() sets the next.
         if (!room.alarmSet) {
@@ -263,35 +306,35 @@ export class Room extends DurableObject {
     }
 
     async alarm() {
+        const graceDeadline =
+            this.room?.recovery?.deadline ??
+            Math.max(0, ...(this.room?.members.map((member) => member.awayUntil ?? 0) ?? []));
         if (this.room?.members.some((member) => member.socket)) {
             this.ctx.storage.setAlarm(Date.now() + IDLE_MS).catch(() => {});
+        } else if (graceDeadline > Date.now()) {
+            await this.ctx.storage.setAlarm(graceDeadline);
         } else if (this.room) {
-            this.endRoom();
+            await this.atomic(() => this.endRoom());
         } else {
             await this.ctx.storage.deleteAll();
         }
     }
 
     receive(member, data) {
-        if (member.closed) {
-            return;
-        }
+        if (member.closed) return;
         if (!member.limit.allow(typeof data === "string" ? data.length : data.byteLength)) {
-            this.closeSocket(member, 1008);
-            this.dropped(member);
-            return;
+            return this.atomic(() => {
+                this.closeSocket(member, 1008);
+                this.dropped(member);
+            });
         }
         const message = parseMessage(data);
-        if (!message) {
+        if (!message) return;
+        if (["up", "down", "ping"].includes(message.t)) {
+            this.handle(member, message, data);
             return;
         }
-        try {
-            this.handle(member, message, data);
-        } catch (e) {
-            console.warn("Co-op room: dropped a connection over a message it couldn't handle:", e);
-            this.closeSocket(member, 1011);
-            this.dropped(member);
-        }
+        return this.atomic(() => this.handle(member, message, data));
     }
 
     send(member, message) {
@@ -300,11 +343,14 @@ export class Room extends DurableObject {
 
     sendText(member, text) {
         if (!member.closed && member.socket) {
-            try {
-                member.socket.send(text);
-            } catch {
-                // Gone; its close comes next
-            }
+            const socket = member.socket;
+            this.emit(() => {
+                try {
+                    socket.send(text);
+                } catch {
+                    /* Gone; its close comes next. */
+                }
+            });
         }
     }
 
@@ -314,11 +360,13 @@ export class Room extends DurableObject {
             clearTimeout(member.awayTimer);
             const socket = member.socket;
             member.socket = undefined;
-            try {
-                socket?.close(code);
-            } catch {
-                // Already closed
-            }
+            this.emit(() => {
+                try {
+                    socket?.close(code);
+                } catch {
+                    /* Already closed. */
+                }
+            });
         }
     }
 
@@ -355,12 +403,13 @@ export class Room extends DurableObject {
         };
     }
 
-    broadcastRoom() {
+    broadcastRoom(durable = true) {
         const view = this.roomView();
         for (const member of this.room.members) {
             this.send(member, { t: "room", room: view, you: member.id, token: member.token });
         }
-        this.persist();
+        if (durable) this.persist();
+        else this.saveCosmetic();
     }
 
     broadcastMembers() {
@@ -372,7 +421,7 @@ export class Room extends DurableObject {
             room.updateWaiting = true;
             return;
         }
-        this.broadcastRoom();
+        this.broadcastRoom(false);
         room.updateTimer = setTimeout(() => {
             room.updateTimer = undefined;
             if (room.updateWaiting && this.room === room) {
@@ -414,14 +463,19 @@ export class Room extends DurableObject {
         clearInterval(room.heartbeat);
         clearTimeout(room.updateTimer);
         clearTimeout(room.saveTimer);
+        this.recovery.clear();
         this.room = undefined;
         this.kicked.clear();
-        this.ctx.storage.deleteAll().catch(() => {});
-        this.lobby.roomGone(room.code).catch(() => {});
+        this.dirty = true;
+        this.emit(() => this.lobby.roomGone(room.code).catch(() => {}));
     }
 
     leaveRoom(client, reason) {
         const room = this.room;
+        if (room.recovery?.deadline) {
+            this.disband("recoveryFailed");
+            return;
+        }
         room.members = room.members.filter((member) => member !== client);
         client.ready = false;
         if (reason) {
@@ -474,6 +528,7 @@ export class Room extends DurableObject {
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
         }
+        if (message.recoveryVersion === 1) client.recoveryVersion = 1;
         if (typeof message.build === "string") {
             client.build = message.build.slice(0, 64);
         }
@@ -509,13 +564,14 @@ export class Room extends DurableObject {
         if (message.t !== "me") {
             room.lastActive = Date.now();
         }
+        if (this.recovery.handle(client, message, text)) return;
         const isHost = room.hostId === client.id;
         switch (message.t) {
             case "leave":
                 this.leaveRoom(client, "left");
                 return;
             case "me":
-                if (text.length <= MAX_ME_BYTES) {
+                if (!room.started && text.length <= MAX_ME_BYTES) {
                     this.setMember(client, message);
                     this.broadcastMembers();
                 }
@@ -589,6 +645,10 @@ export class Room extends DurableObject {
                 return;
             case "start":
                 if (isHost && !room.started) {
+                    if (room.members.some((member) => !member.socket)) {
+                        error("Wait for everyone to reconnect before starting.");
+                        return;
+                    }
                     const missing = missingMap(
                         this.anyMap,
                         room.members.map((member) => ({ client: member })),
@@ -611,15 +671,22 @@ export class Room extends DurableObject {
                         return;
                     }
                     room.started = true;
+                    this.recovery.start();
                     for (const member of room.members) {
                         member.ready = false;
-                        this.send(member, { t: "start", game: message.game });
+                        this.send(member, {
+                            t: "start",
+                            game: message.game,
+                            recovery: this.recovery.credentials(member),
+                        });
                     }
                     this.broadcastRoom();
                 }
                 return;
             case "end":
                 if (isHost && room.started) {
+                    this.recovery.clear();
+                    room.recovery = undefined;
                     room.started = false;
                     this.broadcastRoom();
                 }
@@ -627,7 +694,12 @@ export class Room extends DurableObject {
             case "up":
                 // A guest's input for the host, saying who it's from: the
                 // message as it came, with one more field last
-                if (room.started && !isHost && this.allowUp(client, text)) {
+                if (
+                    room.started &&
+                    !room.recovery?.deadline &&
+                    !isHost &&
+                    this.allowUp(client, text)
+                ) {
                     const host = room.members.find((m) => m.id === room.hostId);
                     if (host) {
                         const end = text.lastIndexOf("}");
@@ -639,7 +711,7 @@ export class Room extends DurableObject {
                 }
                 return;
             case "down":
-                if (isHost && room.started) {
+                if (isHost && room.started && !room.recovery?.deadline) {
                     for (const member of room.members) {
                         if (member !== client) {
                             this.sendText(member, text);
@@ -681,8 +753,8 @@ export class Room extends DurableObject {
         room.heartbeat = setInterval(() => {
             if (this.room !== room) {
                 clearInterval(room.heartbeat);
-            } else if (Date.now() - room.lastActive > IDLE_MS) {
-                this.disband("idle");
+            } else if (!room.recovery?.deadline && Date.now() - room.lastActive > IDLE_MS) {
+                this.atomic(() => this.disband("idle"));
             } else {
                 this.tellLobby();
             }

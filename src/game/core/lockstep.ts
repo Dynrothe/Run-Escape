@@ -29,6 +29,8 @@ export type FrameEvent = {
     // Echoed for the sender's visual prediction. Never used by the sim.
     moveSeq?: number;
     action?: CoopAction;
+    // Delivery acknowledgement only; never affects simulation or its hash.
+    actionSeq?: number;
     auto?: true;
     leave?: true;
 };
@@ -81,7 +83,10 @@ export function cleanFrameEvent(value: unknown, heroCount: number): FrameEvent |
     if (!value || typeof value !== "object") {
         return undefined;
     }
-    const { frame, hero, move, moveSeq, action, auto, leave } = value as Record<string, unknown>;
+    const { frame, hero, move, moveSeq, action, actionSeq, auto, leave } = value as Record<
+        string,
+        unknown
+    >;
     if (
         !Number.isSafeInteger(frame) ||
         !Number.isInteger(hero) ||
@@ -101,6 +106,8 @@ export function cleanFrameEvent(value: unknown, heroCount: number): FrameEvent |
         ...(cleanedMove && { move: cleanedMove }),
         ...(cleanedMove && cleanMoveSeq(moveSeq) !== undefined && { moveSeq: moveSeq as number }),
         ...(cleanedAction && { action: cleanedAction }),
+        ...(cleanedAction &&
+            cleanMoveSeq(actionSeq) !== undefined && { actionSeq: actionSeq as number }),
         ...(auto === true && { auto }),
         ...(leave === true && { leave }),
     };

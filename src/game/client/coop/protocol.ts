@@ -28,7 +28,7 @@ export type MemberView = {
 
 // What a player says about themselves: everything but their id and name,
 // which the relay gives
-export type Member = Omit<MemberView, "id" | "name">;
+export type Member = Omit<MemberView, "id" | "name"> & { recoveryVersion?: 1 };
 
 // What a player's missing to play on a room's map: the map (its endless or
 // hard mode too, for a room that's on them), and who, when it's someone else
@@ -100,30 +100,35 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
 
 // Why a player is out of a room
 // (idle: nothing happened in the room for half an hour)
-export type GoneReason = "left" | "kicked" | "disbanded" | "hostLeft" | "idle";
+export type GoneReason = "left" | "kicked" | "disbanded" | "hostLeft" | "idle" | "recoveryFailed";
 
 // A guest to the host: a move, something they did, or that their copy of the
 // run is ready to go (the map's loaded)
 export type UpMessage =
     | { move: [number, number]; moveSeq?: number }
-    | { action: CoopAction }
+    | { action: CoopAction; actionSeq?: number }
     | { loaded: true }
-    // The frames after this one again: some of the host's went missing (a
-    // dropped connection)
+    // Legacy gap recovery: ask for the host frames after this one again.
     | { resend: number };
 
 // The host to everyone: the frames up to `upTo` are out, with what happened
 // at them, and now and then a check that everyone's run still agrees
 export type DownMessage = {
-    // The frames before were in the message before this one, so a guest can
-    // tell when one's gone missing
+    // End of the previous packet, so a guest can detect a missing packet.
     from?: number;
     upTo: number;
     events: FrameEvent[];
     hash?: [number, number];
 };
 
+export type RecoveryCredentials = { protocol: 1; runId: string; token: string; windowMs: number };
+type RecoveryEnvelope = { runId: string; epoch: string };
+
 export type ClientMessage =
+    | { t: "recoveryRequest"; runId: string }
+    | (RecoveryEnvelope & { t: "recoveryState" | "recoveryAck"; frame: number; hash: number })
+    | (RecoveryEnvelope & { t: "recoveryFrames"; to: string; from: number; d: DownMessage })
+    | (RecoveryEnvelope & { t: "recoveryAbort" })
     | { t: "ping" }
     // A page of the open rooms (0 for the first), size to a page
     | { t: "list"; page?: number; size?: number }
@@ -149,6 +154,10 @@ export type ClientMessage =
     | { t: "down"; d: DownMessage };
 
 export type ServerMessage =
+    | (RecoveryEnvelope & { t: "recovering"; remainingMs: number })
+    | (RecoveryEnvelope & { t: "recoverySync" | "recoveryDone" })
+    | (RecoveryEnvelope & { t: "recoveryReplay"; to: string; frame: number; target: number })
+    | (RecoveryEnvelope & { t: "recoveryFrames"; from: number; d: DownMessage })
     // name: the one the relay's given this player. anyMap: rooms take players
     // whatever maps they have.
     | { t: "welcome"; id: string; name: string; anyMap?: boolean }
@@ -166,16 +175,13 @@ export type ServerMessage =
           // Every room the relay can hold is taken
           full: boolean;
       }
-    // token: to come back to the room with, should the connection drop (the
-    // Cloudflare relay's; coop/room/<code>?resume=<token>)
-    | { t: "room"; room: RoomView; you: string; token?: string }
-    // The relay keeps each room on its own connection (the Cloudflare relay,
-    // server/cloudflare): make or join it there, at coop/room/<code>, with
-    // this ticket. The Node relay never sends it.
+    // Cloudflare rooms have their own socket; the Node relay never sends goto.
     | { t: "goto"; code: string; ticket: string }
+    // Private seat token for the Cloudflare room's resume URL.
+    | { t: "room"; room: RoomView; you: string; token?: string }
     | { t: "gone"; reason: GoneReason }
     | { t: "error"; message: string; need?: MissingMap }
-    | { t: "start"; game: GameStart }
+    | { t: "start"; game: GameStart; recovery?: RecoveryCredentials }
     | { t: "left"; id: string }
     | { t: "up"; from: string; d: UpMessage }
     | { t: "down"; d: DownMessage };

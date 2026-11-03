@@ -14,6 +14,8 @@ the version in the corner).
 
 ### Fixed
 
+- Cloudflare co-op pauses and recovers through relay restarts for up to 60 seconds when everyone
+  has the updated game open. Reconnects verify the party's game state before play resumes.
 - Weapon cards and tooltips include fixed damage adjustments, including venom.
 - Weaker poison and burning ground no longer take ownership of a stronger lingering effect.
 - Co-op: a guest who misses some of the host's updates gets them again, rather than freezing.

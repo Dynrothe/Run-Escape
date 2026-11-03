@@ -266,6 +266,7 @@ export default defineConfig({
         sourcemap: true,
     },
     test: {
+        alias: { "cloudflare:workers": resolve("server/cloudflare/test/durable-object.mjs") },
         // Game logic tests need no DOM; UI tests can opt in with
         // `// @vitest-environment jsdom`.
         environment: "node",

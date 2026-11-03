@@ -182,6 +182,174 @@ describe("a relay that keeps each room on its own connection", () => {
         return { lobby, relay, room, onClosed, onResumed };
     }
 
+    const recovery = {
+        protocol: 1,
+        runId: "a".repeat(32),
+        token: "b".repeat(32),
+        windowMs: 60_000,
+    };
+    async function recoverable() {
+        const party = await inRoom();
+        party.room.receive({ t: "start", game: {}, recovery });
+        party.room.receive({
+            t: "room",
+            room: { ...ROOM, started: true },
+            you: "p1",
+            token: recovery.token,
+        });
+        return party;
+    }
+
+    it("pauses a capable run and waits for the matching barrier after its room reconnects", async () => {
+        const { lobby, room, onResumed, onClosed } = await recoverable();
+        const pause = vi.fn(),
+            sync = vi.fn(),
+            done = vi.fn();
+        lobby.onRecovering = pause;
+        lobby.onRecoverySync = sync;
+        lobby.onRecovered = done;
+        room.close();
+        expect(pause).toHaveBeenCalledOnce();
+        for (let i = 0; i < 500; i++) lobby.sendDown({ upTo: i, events: [] });
+        await vi.advanceTimersByTimeAsync(0);
+        const again = FakeSocket.all.at(-1)!;
+        const url = new URL(again.url);
+        expect(url.searchParams.get("resume")).toBe(recovery.token);
+        expect(url.searchParams.get("runId")).toBe(recovery.runId);
+        expect(url.searchParams.get("build")).toBe(__BUILD_ID__);
+        expect(url.searchParams.get("protocol")).toBe("1");
+        again.receive({
+            t: "room",
+            room: { ...ROOM, started: true },
+            you: "p1",
+            token: recovery.token,
+        });
+        expect(again.sent).toEqual([]);
+        expect(onResumed).not.toHaveBeenCalled();
+        const envelope = { runId: recovery.runId, epoch: "new-epoch" };
+        again.receive({ t: "recovering", ...envelope, remainingMs: 55_000 });
+        again.receive({ t: "recoverySync", ...envelope });
+        expect(sync).toHaveBeenCalledOnce();
+        again.receive({ t: "recoveryDone", ...envelope, epoch: "old-epoch" });
+        expect(done).not.toHaveBeenCalled();
+        lobby.sendDown({ upTo: 500, events: [] });
+        expect(again.sent).toEqual([]);
+        again.receive({ t: "recoveryDone", ...envelope });
+        expect(done).toHaveBeenCalledOnce();
+        lobby.sendDown({ upTo: 501, events: [] });
+        expect(again.sent.at(-1)?.t).toBe("down");
+        expect(onClosed).not.toHaveBeenCalled();
+        lobby.close();
+    });
+
+    it("does not extend the 60 second deadline when another attempt or epoch arrives", async () => {
+        const { lobby, room, onClosed } = await recoverable();
+        const gone = vi.fn();
+        lobby.onGone = gone;
+        room.close();
+        await vi.advanceTimersByTimeAsync(45_000);
+        const again = FakeSocket.all.at(-1)!;
+        again.receive({
+            t: "room",
+            room: { ...ROOM, started: true },
+            you: "p1",
+            token: recovery.token,
+        });
+        again.receive({
+            t: "recovering",
+            runId: recovery.runId,
+            epoch: "restart-again",
+            remainingMs: 60_000,
+        });
+        await vi.advanceTimersByTimeAsync(14_999);
+        expect(gone).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(gone).toHaveBeenCalledExactlyOnceWith("recoveryFailed");
+        expect(onClosed).not.toHaveBeenCalled();
+        expect(lobby.room).toBeUndefined();
+        lobby.close();
+    });
+
+    it("ends a capable run safely when its identity is rejected or its run ended during the outage", async () => {
+        for (const reply of [
+            { t: "error", message: "The room closed while you were away." },
+            { t: "room", room: ROOM, you: "p1", token: recovery.token },
+        ]) {
+            // Each scenario starts with a fresh lobby connection.
+            vi.useRealTimers();
+            FakeSocket.all = [];
+            const { lobby, room, onClosed } = await recoverable();
+            const gone = vi.fn();
+            lobby.onGone = gone;
+            room.close();
+            await vi.advanceTimersByTimeAsync(0);
+            FakeSocket.all.at(-1)!.receive(reply);
+            expect(gone).toHaveBeenCalledExactlyOnceWith("recoveryFailed");
+            expect(onClosed).not.toHaveBeenCalled();
+            expect(lobby.room).toBeUndefined();
+            lobby.close();
+        }
+    });
+
+    it("reconciles departures missed while the host was disconnected", async () => {
+        const { lobby, room } = await inRoom();
+        const view = { ...ROOM, started: true, members: [{ id: "p1" }, { id: "p2" }] };
+        room.receive({ t: "room", room: view, you: "p1", token: "secret" });
+        const left = vi.fn();
+        lobby.onLeft = left;
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        FakeSocket.all.at(-1)!.receive({
+            t: "room",
+            room: { ...view, members: [{ id: "p1" }] },
+            you: "p1",
+            token: "secret",
+        });
+        expect(left).toHaveBeenCalledExactlyOnceWith("p2");
+        lobby.close();
+    });
+
+    it("paces a legacy backlog instead of sending over 400 packets in one second", async () => {
+        const { lobby, room } = await inRoom();
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        for (let i = 0; i < 500; i++) lobby.sendDown({ from: i, upTo: i + 1, events: [] });
+        const again = FakeSocket.all.at(-1)!;
+        again.receive({ t: "room", room: { ...ROOM, started: true }, you: "p1", token: "secret" });
+        expect(again.sent).toHaveLength(16);
+        lobby.sendDown({ from: 500, upTo: 501, events: [] });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(again.sent.length).toBeLessThan(200);
+        await vi.advanceTimersByTimeAsync(2500);
+        expect(again.sent).toHaveLength(501);
+        expect(again.sent.map((m) => (m.d as { upTo: number }).upTo)).toEqual(
+            Array.from({ length: 501 }, (_, i) => i + 1),
+        );
+        lobby.close();
+    });
+
+    it("detects a silent room connection without relying on the lobby's pongs", async () => {
+        const { lobby, relay, room } = await inRoom();
+        // Install the watchdog timers after the fake clock; lobby timers stay stubbed.
+        vi.stubGlobal("window", {
+            location: { href: "https://example.com/game/" },
+            setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+            clearTimeout: (id: number) => clearTimeout(id),
+            setInterval: (f: () => void, ms: number) => setInterval(f, ms),
+            clearInterval: (id: number) => clearInterval(id),
+        });
+        room.receive({ t: "start", game: {}, recovery });
+        const pause = vi.fn();
+        lobby.onRecovering = pause;
+        for (let i = 0; i < 3; i++) {
+            relay.receive({ t: "pong" });
+            await vi.advanceTimersByTimeAsync(2000);
+        }
+        expect(room.readyState).toBe(FakeSocket.CLOSED);
+        expect(pause).toHaveBeenCalledOnce();
+        lobby.close();
+    });
+
     it("comes back to the room after its connection drops, and sends what waited", async () => {
         const { lobby, room, onClosed, onResumed } = await inRoom();
         room.close();

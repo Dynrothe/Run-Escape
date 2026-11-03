@@ -92,23 +92,58 @@ else, and no domain: it runs at a `workers.dev` address.
    only get it in a new launcher download.
 
 **Updating it** after changing anything in `server/cloudflare/` is `npx wrangler deploy` again.
-Rooms carry on through a deploy, as through Cloudflare's own restarts (see below).
+Compatible relay updates can recover existing runs as described below.
 
-**Restarts.** Cloudflare restarts Workers and Durable Objects now and then, on any plan: runtime
-updates, and moving objects between machines. Each one drops every connection to the object and
-what it had in memory, often more than once an hour. So:
+## Recovery and compatibility
 
-- A room keeps itself in storage, and gives each player a token when they make or join it.
-- A player whose connection drops keeps their place for 15 seconds. Their game reconnects to
-  `coop/room/<code>?resume=<token>` for up to 10 seconds, and the run carries on. Someone who
-  doesn't come back is let go, as if they'd left.
-- Frames the host sent meanwhile come again: each host message says where the one before it
-  ended, and a guest that sees a gap asks the host for what it missed (`resend` in `protocol.ts`,
-  kept for 20 seconds in `CoopRun`, and answered once a second at most).
-- The lobby's connection dropping doesn't touch a room: the game makes it again after.
+Cloudflare can reset a room and close its WebSockets during runtime updates or relay deployments.
+For a run started with recovery version 1 on **every** client, a disconnect pauses the party for
+up to **60 seconds**. The deadline includes reconnecting and replaying missed frames, and does not
+restart on another connection attempt or object reset. A silent connection is retried after six
+seconds without a room message; pings every two seconds detect this without waiting for TCP.
 
-`npm run check` tests coming back. To see a restart for yourself under `wrangler dev`, save any
-file in `src/` during a run: wrangler reloads, which drops everything as Cloudflare does.
+The room stores its roster, seat tokens, original build, run ID, protocol and recovery deadline.
+Create/join/start/leave/kick/end and recovery transitions are saved before acknowledgement;
+cosmetic updates remain coalesced. It stores no simulation snapshots and writes no game frames.
+Tokens are bearer credentials kept in room storage and the open tab, sent only to their owner.
+Use `wss://` outside local development and do not log resume URLs, which contain those tokens.
+
+On recovery, the host's **open tab** supplies missed events in acknowledged chunks. Each chunk is
+at most 8 KiB of JSON text; the relay caps replay traffic at 64 KiB/s with a 128 KiB burst budget
+(conservatively counting UTF-16 bytes). Host history is limited to 3,000 frames (60 simulation
+seconds) and 2 MiB of serialized text. All members must report the same frame and state hash before
+play resumes. Unacknowledged guest actions are retried with sequence numbers so they apply once.
+Loading/choice timers exclude the pause, and the simulation does not fast-forward the outage.
+
+This covers relay restarts and temporary connection loss, **not page reloads, closing the host's
+tab, host migration, or restoring a game from storage**. Missing history, different hashes, a
+player leaving during recovery, or the deadline expiring ends the run through the existing early
+results flow. A brief visible pause is expected; this is not a guarantee of seamless recovery.
+
+Compatibility:
+
+- Older Cloudflare clients and mixed parties keep the original 10-second reconnect attempt and
+  15-second seat hold, without coordinated recovery. Updated clients pace the legacy message
+  backlog and reconcile departures missed while disconnected; they keep the legacy 20-second
+  frame resend path. Old parties are not upgraded in the middle of a run.
+- Deploy this relay and the updated frontend to enable the new behavior for newly started
+  capable parties. The first deployment cannot protect runs started on older code retroactively.
+- Resume checks the seat token, run ID, protocol, and the **run's original build**, not the latest
+  frontend deployment. Tabs running that original build can recover after a frontend update.
+  Reloading into a different build cannot take over a live run. Bump the recovery protocol when
+  changing its meaning; keep support for active protocols when rolling out compatible updates.
+- The standalone Node relay is unchanged. These Cloudflare fixes do not install Node PR #69's
+  filesystem recovery, and the client retains the existing Node connection behavior.
+
+From the repository root, `npm test -- server/cloudflare/recovery.test.ts
+src/game/client/coop/CoopLobbyRooms.test.ts src/game/client/coop/CoopRun.test.ts` checks persistence,
+deadlines, compatibility, bounded replay, and lockstep/action recovery using fake sockets and
+storage. It does not run the Cloudflare runtime. `npm run check` from this directory still checks
+the legacy wire protocol. For a runtime smoke check, start `wrangler dev` and two updated game
+tabs, start a run, and save a file under `src/`: both tabs should pause, then resume together. Try
+a second reload while paused and a stop longer than 60 seconds; the deadline must not extend.
+Repeat with a guest reconnecting before the host, and confirm that a frontend redeploy alone
+does not invalidate the still-open original tabs.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
@@ -144,8 +179,8 @@ dashboard.
 
 **Against abuse.** Workers Paid has no spending cap, so the relay keeps what one connection can cost
 bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (an open
-socket keeps a room billed), a room's saved to storage at most once a second however often its
-host changes settings, and rooms are capped per address and in all, as on the Node relay. Before
+socket keeps a room billed), cosmetic room changes save at most once a second, lifecycle changes
+save immediately, and rooms are capped per address and in all, as on the Node relay. Before
 pointing a paid account at players, also:
 
 - set a billing notification (Manage account, Notifications), and

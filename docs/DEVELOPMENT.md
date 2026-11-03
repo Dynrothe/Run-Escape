@@ -828,22 +828,34 @@ from the host to everyone else. The host leaving a run ends it for everyone; in 
 room goes to the next player. The balance bot plays a party with `PARTY=4`, each player on their
 own, so it can't show teamwork.
 
-The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
+The Cloudflare relay (`server/cloudflare/`) extends the room protocol: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`
 then makes or joins the room on that room's own connection, at `coop/room/<code>`. What's said in
 a room goes over that connection (`ROOM_MESSAGES` in `CoopLobby.ts`); pings, the list and
 making or joining go to the lobby's. The Node relay never sends `goto`, so with it there's only
 the one connection. Change the protocol in both relays.
 
-Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
-`room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
-`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile, and the room
-(kept in storage) holds the player's place a little longer. A guest that misses some of the host's
-frames sees it from `from` on the next `down` and asks for them with a `resend` up message; the
-host keeps 20 seconds of what it's sent (longer than the room holds a dropped player) and answers
-once a second at most, from the earliest frame asked for, to every guest; each takes only frames
-after the ones it has. That part works on either relay. The Node relay sends no
-token, so with it a dropped connection still ends a guest's run.
+Cloudflare rooms issue a private seat token and persist their lifecycle before acknowledging it.
+For a run whose members all advertise `recoveryVersion: 1`, `start` also supplies a run ID,
+protocol and 60-second window. A disconnect pauses simulation and decision/loading timers.
+`CoopLobby` reconnects the room socket using the token, run ID, protocol and original build;
+`server/cloudflare/src/recovery.mjs` coordinates a frame/hash barrier. The host's open tab
+replays bounded chunks to each guest, one acknowledged chunk at a time. Play resumes only once
+all hashes and frames agree. Guest actions carry `actionSeq`, acknowledged when their frame is
+applied, and are retried without repeating their effect. Recovery deadlines survive resets and
+are never extended by retries. The relay stores no simulation data or per-frame history.
+
+Older Cloudflare clients and mixed parties keep the 10-second reconnect and 15-second seat hold.
+Updated clients pace the queued legacy messages and reconcile missing departures on reconnect.
+Legacy guests ask for a gap with `resend`; the host retains 20 seconds of frames and answers at
+most once a second. This also works through the Node relay, which still sends no resume token.
+The coordinated path instead retains 60 seconds / 2 MiB of history in the host tab, uses 8 KiB
+chunks and a relay replay budget, and never queues gameplay while paused. It needs every tab to
+stay open on the original build. A frontend redeploy does not change those running tabs; a page
+reload, incompatible build/protocol, missing history, hash disagreement or a 60-second outage
+ends recovery safely. See [Cloudflare recovery](../server/cloudflare/README.md#recovery-and-compatibility)
+for rollout and manual runtime checks. The first deployment cannot upgrade an already-running
+legacy party to coordinated recovery.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request; the menu asks for its
