@@ -316,7 +316,14 @@ describe("saving", () => {
         };
         const saveLock = { held, listen: () => () => {}, takeOver() {} };
         const client: GameClient = Object.create(GameClient.prototype);
-        Object.assign(client, { save, store, saveStore, saveLock, coop: { setMe() {} } });
+        Object.assign(client, {
+            save,
+            store,
+            saveStore,
+            saveLock,
+            coop: { setMe() {} },
+            cloud: { scheduleSaveSync() {} },
+        });
         // What's in storage, as another tab left it
         const setStored = (loaded: LoadedSave) => {
             next = loaded;

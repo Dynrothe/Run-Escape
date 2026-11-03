@@ -318,7 +318,7 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
-    readonly cloud: SpacetimeSync;
+    readonly cloud?: SpacetimeSync;
 
     sim?: Sim;
     paused = false;
@@ -465,7 +465,7 @@ export class GameClient implements GameFrameHandler {
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopBackgroundTicker();
         this.coop.close();
-        this.cloud.dispose();
+        this.cloud?.dispose();
         this.input.dispose();
         this.audio.dispose();
         if (this.renderer.game === this) {
@@ -961,43 +961,43 @@ export class GameClient implements GameFrameHandler {
         }
         // A fresh object so React sees the change
         this.store.set({ save: structuredClone(this.save) });
-        this.cloud.scheduleSaveSync(this.save);
+        this.cloud?.scheduleSaveSync(this.save);
     }
 
     signInCloud(): void {
-        void this.cloud.signInWithSpacetimeAuth();
+        void this.cloud?.signInWithSpacetimeAuth();
     }
 
     loginWithToken(token?: string): void {
-        this.cloud.loginWithToken(token);
+        this.cloud?.loginWithToken(token);
     }
 
     logoutCloud(): void {
-        this.cloud.logout();
+        this.cloud?.logout();
     }
 
     setCloudDisplayName(name: string): Promise<string | undefined> {
-        return this.cloud.setDisplayName(name);
+        return this.cloud ? this.cloud.setDisplayName(name) : Promise.resolve(undefined);
     }
 
     syncCloudDisplayName(): Promise<string | undefined> {
-        return this.cloud.syncDisplayName();
+        return this.cloud ? this.cloud.syncDisplayName() : Promise.resolve(undefined);
     }
 
     grantRole(identityHex: string, roleId: string | bigint | number, scopeId = 0n): Promise<string | undefined> {
-        return this.cloud.grantRole(identityHex, roleId, scopeId);
+        return this.cloud ? this.cloud.grantRole(identityHex, roleId, scopeId) : Promise.resolve(undefined);
     }
 
     revokeGrant(grantId: string | bigint | number): Promise<string | undefined> {
-        return this.cloud.revokeGrant(grantId);
+        return this.cloud ? this.cloud.revokeGrant(grantId) : Promise.resolve(undefined);
     }
 
     createScope(name: string, kind = "room", parent = 0n): Promise<string | undefined> {
-        return this.cloud.createScope(name, kind, parent);
+        return this.cloud ? this.cloud.createScope(name, kind, parent) : Promise.resolve(undefined);
     }
 
     getCloudToken(): string | undefined {
-        return this.cloud.getStoredToken();
+        return this.cloud?.getStoredToken();
     }
 
     // Builds a map's collision the first time it's played (a scene build of
@@ -1198,7 +1198,7 @@ export class GameClient implements GameFrameHandler {
         this.runRecorded = false;
         this.lastCheckpointSeconds = 0;
         this.tasksAnnounced.clear();
-        this.cloud.startRun(sim.map.id, sim.characterId, sim.seed, sim.endless);
+        this.cloud?.startRun(sim.map.id, sim.characterId, sim.seed, sim.endless);
         this.accumulator = 0;
         this.shownDps = 0;
         this.shownDpsTick = 0;
@@ -1402,7 +1402,7 @@ export class GameClient implements GameFrameHandler {
         if (this.sim && !this.sim.runOver) {
             this.paused = true;
             this.syncOverlay();
-            this.cloud.pauseRun(true);
+            this.cloud?.pauseRun(true);
         }
     }
 
@@ -1410,7 +1410,7 @@ export class GameClient implements GameFrameHandler {
         this.paused = false;
         this.accumulator = 0;
         this.syncOverlay();
-        this.cloud.pauseRun(false);
+        this.cloud?.pauseRun(false);
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept.
@@ -1496,7 +1496,7 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
-        const verification = this.cloud.submitRun(result);
+        const verification = this.cloud?.submitRun(result);
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -1525,9 +1525,10 @@ export class GameClient implements GameFrameHandler {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
                 endedEarly,
-                runVerified: verification.verified,
-                runVerifyReason: verification.verified ? undefined : verification.reason,
-                runSynced: verification.verified ? verification.synced : false,
+                runVerified: verification ? verification.verified : true,
+                runVerifyReason:
+                    verification && !verification.verified ? verification.reason : undefined,
+                runSynced: verification && verification.verified ? verification.synced : false,
             },
         });
         // The room sees this player's new unlocks and upgrades next run
@@ -1688,7 +1689,7 @@ export class GameClient implements GameFrameHandler {
             // Rolling Stateful Checkpoint: emit checkpoint every 5 minutes (300 seconds)
             if (sim.seconds - this.lastCheckpointSeconds >= 300) {
                 this.lastCheckpointSeconds = sim.seconds;
-                this.cloud.checkpointRun({
+                this.cloud?.checkpointRun({
                     seconds: sim.seconds,
                     round: sim.round,
                     kills: sim.kills,
