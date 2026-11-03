@@ -3,9 +3,43 @@ import { PlacedLoc, TileGrid } from "./format";
 // A rule about a range of loc ids, both ends in
 export type LocRange = [from: number, to: number];
 
+// Ids the cache places only in the Theatre of Blood's rooms (map squares 49 to 51, 66 to 69), and
+// nowhere else in the world. A range can take in ids the cache places nowhere at all.
+export const THEATRE_LOCS: LocRange[] = [
+    [2739, 2739],
+    [8718, 8718],
+    [32691, 32698],
+    [32701, 32717],
+    [32735, 32736],
+    [32741, 32755],
+    [32760, 32852],
+    [32862, 32862],
+    [32866, 32983],
+    [32989, 32989],
+    [32995, 33011],
+    [33013, 33028],
+    [33038, 33062],
+    [33066, 33080],
+    [33084, 33084],
+    [33113, 33113],
+];
+
+// Ids the cache places only in the Nightmare's dream, her arena (map square 60,155)
+export const NIGHTMARE_LOCS: LocRange[] = [
+    [37632, 37632],
+    [37634, 37705],
+    [37709, 37710],
+    [37713, 37714],
+    [37719, 37720],
+    [37724, 37724],
+    [37730, 37737],
+];
+
 // Locs that read wrong outside what they were built for. See the design research, section 8.
 // A curated list, not a rule about where a loc comes from: plenty of good outdoor locs are
-// never placed on the surface.
+// never placed on the surface. Raid floors and boss rooms are in it by range, since nothing
+// from one goes on a map but one of those on purpose: a shipped map lists what it allows
+// (MapRecipe.allowLocs).
 export const BANNED_LOCS: { ids: LocRange; why: string; inWater?: true }[] = [
     { ids: [45872, 45915], why: "the Tombs of Amascut's arena floor and its pillars" },
     { ids: [48328, 48333], why: "collapsed roof from a sunken city" },
@@ -13,6 +47,8 @@ export const BANNED_LOCS: { ids: LocRange; why: string; inWater?: true }[] = [
     { ids: [60436, 60444], why: "sea rocks: they sink 3.5 tiles", inWater: true },
     { ids: [14416, 14416], why: "lines a hole in the ground" },
     { ids: [14427, 14427], why: "a quad under the ground" },
+    ...THEATRE_LOCS.map((ids) => ({ ids, why: "from the Theatre of Blood's rooms, a raid" })),
+    ...NIGHTMARE_LOCS.map((ids) => ({ ids, why: "from the Nightmare's arena, a boss room" })),
 ];
 
 // Kit pieces: locs made to go with others (a wall's sections, half a model, one face of
@@ -98,13 +134,13 @@ export const BLOOD_WALL_ONLY = 13312;
 
 export type BannedLoc = { loc: PlacedLoc; why: string };
 
-// What's on the wrong ground
-export function findBannedLocs(grid: TileGrid): BannedLoc[] {
+// What's on the wrong ground, but for what a shipped map allows
+export function findBannedLocs(grid: TileGrid, allow: LocRange[] = []): BannedLoc[] {
     const { overlays } = grid.levels[0];
     const banned: BannedLoc[] = [];
     for (const loc of grid.locs) {
         const rule = findRule(BANNED_LOCS, loc.id);
-        if (!rule) {
+        if (!rule || isInRanges(allow, loc.id)) {
             continue;
         }
         const wet = WATER_OVERLAYS.has(overlays[loc.x + loc.y * grid.sizeX]);

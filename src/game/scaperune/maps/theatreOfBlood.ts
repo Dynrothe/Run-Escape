@@ -1,4 +1,5 @@
 import { Ground } from "../Ground";
+import { THEATRE_LOCS } from "../catalogue";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid, createTileGrid } from "../format";
 import { createRng } from "../noise";
@@ -367,6 +368,8 @@ function build(context: BuildContext): TileGrid {
 
 export const THEATRE_OF_BLOOD: MapRecipe = {
     id: "theatre_of_blood",
+    // A raid on purpose: its boss rooms are the real ones
+    allowLocs: THEATRE_LOCS,
     mapX: MAP_X,
     mapY: MAP_Y,
     squaresX: SQUARES_X,

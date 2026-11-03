@@ -17,6 +17,7 @@ import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
 import {
     BLOOD_WALL_ONLY,
     CROP_NAME,
+    LocRange,
     WATER_OVERLAYS,
     findBannedLocs,
     findLoneKitPieces,
@@ -920,12 +921,12 @@ function checkFalls(map: GeneratedMap): string[] {
     return problems;
 }
 
-// Nothing from the wrong place: the ban list, kit pieces without their set, blood that draws
-// nothing, foam away from a fall
-function checkCatalogue(map: GeneratedMap): string[] {
+// Nothing from the wrong place: the ban list (but for what the map allows), kit pieces without
+// their set, blood that draws nothing, foam away from a fall
+function checkCatalogue(map: GeneratedMap, allow?: LocRange[]): string[] {
     const { grid, falls, waterfalls } = map;
     const problems = [
-        ...findBannedLocs(grid).map(
+        ...findBannedLocs(grid, allow).map(
             ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
         ),
         ...findLoneKitPieces(grid, isStamped).map(
@@ -1197,6 +1198,8 @@ function checkMap(
     };
     const roadHeights = checkRoadHeights(map);
     const hidden = countHiddenTiles(map.grid, grid, origin, gridRect);
+    // A shipped map is warned, not failed: it went out looked at in the game
+    const catalogue = checkCatalogue(map, recipe.allowLocs);
     const problems = [
         ...bridges.problems,
         ...checkRoadsAndBuildings(map),
@@ -1210,7 +1213,7 @@ function checkMap(
         ...checkFalls(map),
         ...checkWalls(map, context, recipe.spawn, gridRect),
         ...describeClashes(findClashes(map, context.locs)),
-        ...(shipped ? [] : checkCatalogue(map)),
+        ...(shipped ? [] : catalogue),
         ...(shipped ? [] : checkLook(id, map, recipe.margin, createLocs(locTypeLoader), settings)),
     ];
     if (hidden > 0) {
@@ -1226,6 +1229,12 @@ function checkMap(
     );
     for (const problem of problems.slice(0, 16)) {
         console.log(`  ${problem}`);
+    }
+    if (shipped && catalogue.length > 0) {
+        console.log(`  ${catalogue.length} warnings from the catalogue:`);
+        for (const warning of catalogue.slice(0, 16)) {
+            console.log(`  warning: ${warning}`);
+        }
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
 }

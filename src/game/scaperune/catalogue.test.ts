@@ -6,10 +6,14 @@ import {
     KIT_PIECES,
     KitPiece,
     LocRange,
+    NIGHTMARE_LOCS,
+    THEATRE_LOCS,
+    findBannedLocs,
     findLoneKitPieces,
     findRule,
 } from "./catalogue";
 import { PlacedLoc, createTileGrid } from "./format";
+import { SCAPERUNE_MAPS } from "./maps/shippedMaps";
 
 function loc(id: number, x: number, y: number, level = 0): PlacedLoc {
     return { id, type: 10, rotation: 0, level, x, y };
@@ -96,10 +100,26 @@ describe("kit pieces", () => {
     });
 });
 
-describe("the lists", () => {
+describe("the ban list", () => {
+    it("bans the Theatre's and the Nightmare's own locs", () => {
+        expect(findBannedLocs(grid(loc(32763, 5, 5)))).toHaveLength(1);
+        expect(findBannedLocs(grid(loc(37730, 5, 5)))).toHaveLength(1);
+        // Blood's in both, and in the open: not theirs
+        expect(findBannedLocs(grid(loc(652, 5, 5), loc(37633, 6, 6)))).toEqual([]);
+    });
+
+    it("lets a map's allowed ranges through, and nothing else", () => {
+        const both = grid(loc(32763, 5, 5), loc(37730, 6, 6), loc(45881, 7, 7));
+        const allowed = findBannedLocs(both, THEATRE_LOCS).map(({ loc }) => loc.id);
+        expect(allowed).toEqual([37730, 45881]);
+        expect(findBannedLocs(both, [[0, 99999]])).toEqual([]);
+    });
+
     it.each([
         ["BANNED_LOCS", BANNED_LOCS.map(({ ids }) => ids)],
         ["KIT_PIECES", KIT_PIECES.map(({ ids }) => ids)],
+        ["THEATRE_LOCS", THEATRE_LOCS],
+        ["NIGHTMARE_LOCS", NIGHTMARE_LOCS],
     ])("%s has ranges in order", (_, ranges: LocRange[]) => {
         for (const [from, to] of ranges) {
             expect(from).toBeLessThanOrEqual(to);
@@ -110,4 +130,14 @@ describe("the lists", () => {
         expect(findRule(PIECES, 405)?.why).toBe("flags");
         expect(findRule(PIECES, 102)).toBeUndefined();
     });
+
+    it.each(SCAPERUNE_MAPS.map((recipe) => [recipe.id, recipe.allowLocs ?? []] as const))(
+        "%s only allows what's banned",
+        (_, allow) => {
+            for (const [from, to] of allow) {
+                const banned = BANNED_LOCS.some(({ ids: [a, b] }) => from <= b && to >= a);
+                expect(banned, `${from} to ${to}`).toBe(true);
+            }
+        },
+    );
 });
