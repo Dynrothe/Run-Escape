@@ -27,7 +27,8 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
   don't host an open room).
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
-  (not players' loadouts or ready); one that stops (its object restarted) drops off the list after 180. The rooms list is kept in the lobby's storage, so it survives the lobby hibernating.
+  (not players' loadouts or ready); one that stops (its object restarted) drops off the list after 180, or as soon as someone tries to join it. The rooms list is kept in the lobby's storage, so it
+  survives the lobby hibernating.
 - A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
   lobby for every game that loads otherwise.
 

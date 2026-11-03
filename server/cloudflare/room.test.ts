@@ -6,6 +6,7 @@ let saved: any;
 let writes: number;
 // What the room's told the lobby, newest last
 let listings: any[];
+let gone: string[];
 
 class Socket {
     sent: any[] = [];
@@ -28,7 +29,9 @@ const env = {
             roomUpdate: async (listing: any) => {
                 listings.push(listing);
             },
-            roomGone: async () => {},
+            roomGone: async (code: string) => {
+                gone.push(code);
+            },
         }),
     },
 };
@@ -84,6 +87,7 @@ describe("Cloudflare co-op room", () => {
         saved = undefined;
         writes = 0;
         listings = [];
+        gone = [];
     });
     afterEach(() => vi.useRealTimers());
 
@@ -144,6 +148,17 @@ describe("Cloudflare co-op room", () => {
         // As does someone leaving
         say(room, guest, { t: "leave" });
         expect(listings.at(-1).players).toBe(1);
+    });
+
+    it("takes a room that's gone off the lobby's list when someone tries to join it", async () => {
+        const room = await loadRoom();
+        room.code = "ABCDEFGH";
+        const guest = enter(room, "guest", "join");
+        // Closed after the error, which lets go of it
+        const socket = guest.socket;
+        say(room, guest, { t: "join", me });
+        expect(socket.sent.at(-1).t).toBe("error");
+        expect(gone).toEqual(["ABCDEFGH"]);
     });
 
     it("hides a hidden flag, but not an open room's host's", async () => {

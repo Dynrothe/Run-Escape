@@ -743,6 +743,12 @@ export class Room extends DurableObject {
             this.closeSocket(client);
         };
         if (client.kind !== "join" || !room) {
+            // A room the lobby still lists (it only sends players to one
+            // that's said it's there), gone without telling it: off the list
+            // now, rather than when it's gone quiet for long enough
+            if (client.kind === "join" && !room) {
+                this.lobby.roomGone(this.code).catch(() => {});
+            }
             error(`There's no room ${this.code}.`);
             return;
         }
