@@ -9,7 +9,7 @@ the version in the corner).
 
 - The co-op rooms list updates by itself when rooms open, fill or start, rather than every few
   seconds.
-- The co-op menu disconnects after 10 minutes with nothing happening. Try again reconnects.
+- The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
 
 ## 0.24.1 - 2026-11-04
 

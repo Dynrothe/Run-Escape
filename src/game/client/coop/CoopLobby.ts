@@ -61,10 +61,11 @@ const AVAILABLE_TIMEOUT_MS = 4000;
 const LIST_INTERVAL_MS = 5000;
 const PING_INTERVAL_MS = 30_000;
 // Out of a room with nothing done for this long, the connection's closed, so
-// a tab left on the list doesn't keep the relay busy (the relay has its own,
-// IDLE_CONNECTION_MS)
-export const LOBBY_IDLE_MS = 10 * 60_000;
-const IDLE_TEXT = "Disconnected after 10 minutes with nothing happening.";
+// a tab left on the list doesn't keep the relay busy. A minute under the
+// relays' own (IDLE_CONNECTION_MS), which check less often, so this message is
+// the one the player sees.
+export const LOBBY_IDLE_MS = 9 * 60_000;
+const IDLE_TEXT = "Disconnected after a while with nothing happening.";
 
 // A room's connection that drops (a network blip, or the relay restarting)
 // is tried again for this long before the room's given up on. The relay
@@ -634,12 +635,15 @@ export class CoopLobby {
         this.send({ t: "ping" });
     }
 
-    // The open rooms again: the page given (by the player), or the one shown
-    refresh(page?: number): void {
-        if (page !== undefined) {
-            this.activeAt = Date.now();
-        }
-        this.send({ t: "list", page: Math.max(0, page ?? this.view.roomsPage) });
+    // The open rooms again: this page of them (the one shown, by default)
+    refresh(page = this.view.roomsPage): void {
+        this.send({ t: "list", page: Math.max(0, page) });
+    }
+
+    // Another page, picked by the player, which is doing something here
+    showPage(page: number): void {
+        this.activeAt = Date.now();
+        this.refresh(page);
     }
 
     // Asks the relay for another name

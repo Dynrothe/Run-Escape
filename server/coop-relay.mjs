@@ -902,31 +902,31 @@ export function createRelay(limits = {}) {
         return openRooms;
     }
 
-    // A page of the open rooms, as a client last asked for it, which becomes
-    // the page they're on
-    function roomsPage(client) {
+    // A page of the open rooms, encoded, and which page it is
+    function roomsPage(page, size) {
         const list = getOpenRooms();
-        const pages = Math.max(1, Math.ceil(list.length / client.listSize));
+        const pages = Math.max(1, Math.ceil(list.length / size));
         // Past the last page (rooms filled up or went): the last one
-        const page = Math.min(client.listPage, pages - 1);
-        client.listPage = page;
-        return JSON.stringify({
+        const shown = Math.min(page, pages - 1);
+        const text = JSON.stringify({
             t: "rooms",
-            rooms: list.slice(page * client.listSize, (page + 1) * client.listSize),
-            page,
+            rooms: list.slice(shown * size, (shown + 1) * size),
+            page: shown,
             pages,
             total: list.length,
             // No room for another until one goes
             full: rooms.size >= maxRooms,
         });
+        return { page: shown, text };
     }
 
-    // Sends a client their page of the list, unless it's what they have
-    function sendRooms(client) {
-        const text = roomsPage(client);
-        if (text !== client.listSent) {
-            client.listSent = text;
-            client.connection.sendFrame(0x1, Buffer.from(text, "utf8"));
+    // Sends a client their page of the list, which becomes the page they're
+    // on, unless it's what they have
+    function sendRooms(client, page = roomsPage(client.listPage, client.listSize)) {
+        client.listPage = page.page;
+        if (page.text !== client.listSent) {
+            client.listSent = page.text;
+            client.connection.sendFrame(0x1, Buffer.from(page.text, "utf8"));
         }
     }
 
@@ -936,9 +936,15 @@ export function createRelay(limits = {}) {
         openRooms = undefined;
         listTimer ??= setTimeout(() => {
             listTimer = undefined;
+            // Each page's encoded once, for everyone looking at it
+            const pages = new Map();
             for (const client of clients) {
                 if (client.listPage !== undefined && !client.room) {
-                    sendRooms(client);
+                    const key = `${client.listPage}/${client.listSize}`;
+                    if (!pages.has(key)) {
+                        pages.set(key, roomsPage(client.listPage, client.listSize));
+                    }
+                    sendRooms(client, pages.get(key));
                 }
             }
         }, listPushMs);

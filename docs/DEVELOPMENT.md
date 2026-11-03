@@ -121,8 +121,8 @@ from its private network.
 
 The relay takes 800 connections in all, so give it room with `LimitNOFILE` if you raise that. A
 connection in no room that's done nothing but ping, or ask for the same page of rooms again, for
-10 minutes is closed: a tab left open on the list. The game closes its own after 10 minutes out of
-a room with nothing done (`LOBBY_IDLE_MS`), and a room left alone for half an hour is closed too.
+10 minutes is closed: a tab left open on the list. The game closes its own after 9 minutes out of
+a room with nothing done (`LOBBY_IDLE_MS`, a minute early so its own message is the one shown), and a room left alone for half an hour is closed too.
 
 Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
 proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)

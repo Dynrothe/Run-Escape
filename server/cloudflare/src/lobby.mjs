@@ -17,7 +17,6 @@ import {
     FULL_TEXT,
     IDLE_CONNECTION_MS,
     LIST_PAGE_SIZE,
-    LIST_PUSH_MS,
     MAX_CONNECTIONS_PER_ADDRESS,
     MAX_CREATES_PER_MINUTE,
     MAX_JOINS_PER_MINUTE,
@@ -45,6 +44,12 @@ import {
 const ROOM_STALE_MS = 180_000;
 // A ticket's only good for a moment: the player goes straight to the room
 const TICKET_MS = 30_000;
+// A room asked for but never made (a second click of Make, say) is gone after
+// this: its ticket's good for TICKET_MS, and the room waits ENTER_MS (in
+// room.mjs) for its create
+const PENDING_MS = 60_000;
+
+const pageSize = (size) => clampInt(size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
 
 export class Lobby extends DurableObject {
     constructor(ctx, env) {
@@ -63,7 +68,7 @@ export class Lobby extends DurableObject {
         // doesn't touch their page isn't sent again (forgotten on hibernating,
         // which only means sending it once more)
         this.sentRooms = new WeakMap();
-        this.pushTimer = undefined;
+        this.pushQueued = false;
         // The client's keep-alive, answered without waking the lobby
         ctx.setWebSocketAutoResponse(
             new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'),
@@ -126,7 +131,21 @@ export class Lobby extends DurableObject {
         const player = ws.deserializeAttachment();
         const send = (m) => ws.send(JSON.stringify(m));
         const error = (text) => send({ t: "error", message: text });
-        if (message.t !== "ping" && message.t !== "list" && player.listingSince !== undefined) {
+        if (message.t === "create" || message.t === "join") {
+            // Off to a room: no lists while they're in it (the game asks again
+            // when it's out, on "gone" or the room being lost)
+            if (player.page !== undefined) {
+                delete player.page;
+                delete player.size;
+                delete player.listingSince;
+                ws.serializeAttachment(player);
+                this.sentRooms.delete(ws);
+            }
+        } else if (
+            message.t !== "ping" &&
+            message.t !== "list" &&
+            player.listingSince !== undefined
+        ) {
             // Doing something: no longer just waiting on the list
             player.listingSince = undefined;
             ws.serializeAttachment(player);
@@ -137,12 +156,16 @@ export class Lobby extends DurableObject {
                 return;
             case "list": {
                 const rooms = this.list(message);
-                const size = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+                const size = pageSize(message.size);
                 const now = Date.now();
                 // Asking for the same page again is waiting, not doing anything
                 // (an older game asks every few seconds): a tab left open on
                 // the list is closed in the end, as on the Node relay
-                if (player.page === rooms.page && player.listingSince !== undefined) {
+                if (
+                    player.page === rooms.page &&
+                    player.size === size &&
+                    player.listingSince !== undefined
+                ) {
                     if (now - player.listingSince > IDLE_CONNECTION_MS) {
                         ws.close(1001, "Idle");
                         return;
@@ -304,34 +327,67 @@ export class Lobby extends DurableObject {
         await this.ctx.storage.put(`room:${entry.code}`, stored);
     }
 
-    // The list's changed: everyone looking at it hears in a moment, once for
-    // however many changes come meanwhile
+    // The list's changed: everyone looking at it hears straight after
+    // whatever changed it (changes made together go as one). Not on a timer,
+    // which would keep the lobby awake, and billed, until it went off.
     listChanged() {
         this.openRooms = undefined;
-        this.pushTimer ??= setTimeout(() => {
-            this.pushTimer = undefined;
-            for (const ws of this.ctx.getWebSockets()) {
-                const player = ws.deserializeAttachment();
-                if (player?.page === undefined) {
-                    continue;
-                }
-                const text = JSON.stringify(this.list(player));
-                if (this.sentRooms.get(ws) !== text) {
-                    this.sentRooms.set(ws, text);
-                    try {
-                        ws.send(text);
-                    } catch {
-                        // Closing
-                    }
+        if (!this.pushQueued) {
+            this.pushQueued = true;
+            queueMicrotask(() => {
+                this.pushQueued = false;
+                this.pushRooms();
+            });
+        }
+    }
+
+    // Each page's worked out once, for everyone looking at it
+    pushRooms() {
+        const live = this.liveRooms();
+        const pages = new Map();
+        for (const ws of this.ctx.getWebSockets()) {
+            const player = ws.deserializeAttachment();
+            if (player?.page === undefined) {
+                continue;
+            }
+            const size = pageSize(player.size);
+            const key = `${player.page}/${size}`;
+            let rooms = pages.get(key);
+            if (!rooms) {
+                const list = this.list({ page: player.page, size }, live);
+                rooms = { page: list.page, text: JSON.stringify(list) };
+                pages.set(key, rooms);
+            }
+            // The page they're on now, if theirs has gone (as the Node relay)
+            if (rooms.page !== player.page) {
+                player.page = rooms.page;
+                ws.serializeAttachment(player);
+            }
+            if (this.sentRooms.get(ws) !== rooms.text) {
+                this.sentRooms.set(ws, rooms.text);
+                try {
+                    ws.send(rooms.text);
+                } catch {
+                    // Closing
                 }
             }
-        }, LIST_PUSH_MS);
+        }
     }
 
     liveRoom(code) {
         const room = this.rooms.get(code);
-        if (room && Date.now() - room.lastSeen > ROOM_STALE_MS) {
-            // Gone without saying (its object restarted, or a ticket unused)
+        if (!room) {
+            return undefined;
+        }
+        // One never made goes by when it was asked for, which is stored (when
+        // it was last seen isn't: waking from hibernation sets it to now). One
+        // that's been made goes once it stops saying it's there, or when
+        // someone tries to join it, or at the latest when its own idle alarm
+        // ends it (room.mjs).
+        const gone = room.pending
+            ? Date.now() - room.order > PENDING_MS
+            : Date.now() - room.lastSeen > ROOM_STALE_MS;
+        if (gone) {
             this.roomGone(code);
             return undefined;
         }
@@ -342,8 +398,9 @@ export class Lobby extends DurableObject {
         return [...this.rooms.keys()].map((code) => this.liveRoom(code)).filter(Boolean);
     }
 
-    list(message) {
-        this.openRooms ??= this.liveRooms()
+    // A page of the open rooms (the last, if the one asked for has gone)
+    list(message, live = this.liveRooms()) {
+        this.openRooms ??= live
             .filter((room) => !room.pending && room.open && !room.started)
             .filter((room) => room.players < MAX_PARTY)
             .sort((a, b) => b.players - a.players || a.order - b.order)
@@ -359,7 +416,7 @@ export class Lobby extends DurableObject {
                 hard: room.hard === true,
             }));
         const all = this.openRooms;
-        const size = clampInt(message.size, 1, MAX_LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+        const size = pageSize(message.size);
         const pages = Math.max(1, Math.ceil(all.length / size));
         const page = clampInt(message.page, 0, pages - 1, 0);
         return {
@@ -368,7 +425,7 @@ export class Lobby extends DurableObject {
             page,
             pages,
             total: all.length,
-            full: this.liveRooms().length >= MAX_ROOMS,
+            full: live.length >= MAX_ROOMS,
         };
     }
 

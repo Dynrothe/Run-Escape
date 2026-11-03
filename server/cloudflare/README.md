@@ -27,10 +27,18 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
   don't host an open room).
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
-  (not players' loadouts or ready); one that stops (its object restarted) drops off the list after 180, or as soon as someone tries to join it. The rooms list is kept in the lobby's storage, so it
-  survives the lobby hibernating.
+  (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
+  and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
+  hibernation gives every room that long again, so on a quiet relay a room that died without a word
+  can stay until someone tries to join it, or its own 30-minute idle alarm ends it. A room asked for but never made (a second
+  click of Make) goes 60 seconds after it was asked for, however often the lobby wakes. The rooms
+  list is kept in the lobby's storage, so it survives the lobby hibernating.
+- The lobby stops sending a player the list when they make or join a room, and starts again when
+  they ask for it, which the game does on coming out of one.
 - A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
-  lobby for every game that loads otherwise.
+  lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
+  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
+check` tests the lobby itself.
 
 ## Setting it up
 

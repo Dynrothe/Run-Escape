@@ -308,12 +308,18 @@ describe("co-op relay", () => {
         browser.send({ t: "list" });
         expect((await browser.next("rooms")).rooms).toEqual([]);
         const open = await party(1, true);
-        const { rooms } = await browser.next("rooms");
+        // The room as it's made, then with the guest in (however the timing
+        // falls, the latest says so)
+        let rooms;
+        do {
+            ({ rooms } = await browser.next("rooms"));
+        } while (rooms[0]?.players !== 2);
         expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
-        expect(rooms[0].players).toBe(2);
         // Nothing that changes what they see, nothing sent
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        browser.messages.length = 0;
         await party(0, false);
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         expect(browser.messages.filter((m) => m.t === "rooms")).toEqual([]);
         // Not to those in a room, who aren't looking
         expect(open.host.messages.filter((m) => m.t === "rooms")).toEqual([]);

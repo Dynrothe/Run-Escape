@@ -302,7 +302,7 @@ describe("the lobby's timers", () => {
         const { lobby, relay } = await welcomed({ listUpdates: true });
         await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS - 60_000);
         // Looking at another page is doing something
-        lobby.refresh(1);
+        lobby.showPage(1);
         await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS - 60_000);
         expect(relay.readyState).toBe(FakeSocket.OPEN);
         await vi.advanceTimersByTimeAsync(2 * 60_000);
