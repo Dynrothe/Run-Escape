@@ -12,6 +12,8 @@ export type DisplaySettings = {
     damagePanel: boolean;
     // Caskets are high alched as they're opened, with no casket screen
     autoAlch: boolean;
+    // Equip only unambiguous casket upgrades, never replacing a set piece
+    autoEquip: boolean;
     // Joining a co-op game, your own movement shows before the host confirms
     // it. A trial for now, so it's off until a player turns it on.
     movePrediction: boolean;
@@ -31,6 +33,7 @@ function getDefaults(): DisplaySettings {
         questTracker: true,
         damagePanel: false,
         autoAlch: false,
+        autoEquip: false,
         movePrediction: false,
     };
 }
@@ -55,6 +58,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.autoAlch === "boolean") {
                 settings.autoAlch = data.autoAlch;
+            }
+            if (typeof data.autoEquip === "boolean") {
+                settings.autoEquip = data.autoEquip;
             }
             if (typeof data.movePrediction === "boolean") {
                 settings.movePrediction = data.movePrediction;

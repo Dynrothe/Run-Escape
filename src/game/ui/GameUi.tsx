@@ -303,6 +303,21 @@ function MovePredictionSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Auto equip"
+            text="Equip casket gear into empty slots or when no bonus drops and at least one improves. Always ask before replacing a set piece. Auto alch takes priority."
+        >
+            <Toggle
+                on={ui.display.autoEquip}
+                label="Auto equip"
+                onToggle={() => client.toggleAutoEquip()}
+            />
+        </Setting>
+    );
+}
+
 // The community server's invite
 const DISCORD_INVITE = "https://discord.gg/82gBtKz2Xx";
 const GITHUB_REPOSITORY = "https://github.com/Dynrothe/Run-Escape";
@@ -484,6 +499,7 @@ function SettingsPanel({
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
+                    <AutoEquipSetting ui={ui} client={client} />
                     <MovePredictionSetting ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
@@ -1889,6 +1905,7 @@ function PauseModal({
                         />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
+                        <AutoEquipSetting ui={ui} client={client} />
                         <MovePredictionSetting ui={ui} client={client} />
                     </div>
                 </div>

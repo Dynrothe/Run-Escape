@@ -568,6 +568,12 @@ can't land on the next decision unseen. An action the host turns away counts as 
 the client checks what the sim would refuse before sending it (a reroll with none left, or
 during a hilt choice), or a refused action would hold up the real one.
 
+Auto alch and Auto equip are local `DisplaySettings`, off by default. `GameClient.syncOverlay`
+sends the normal casket action through `act`, so solo and co-op keep the same equip/alch effects;
+never apply a local setting directly in `Sim`. Auto alch takes priority. Auto equip uses
+`Loot.shouldAutoEquip` (actual upgraded stats, no losses and at least one gain), not the
+rarity-based `shouldWear` recommendation, and never replaces any worn set piece without a prompt.
+
 Guests can predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. It's
 a trial for now: the `movePrediction` display setting (Settings and the pause menu) is off by
 default, and `CoopRun.setPrediction` applies it, mid-run too. Off, a guest has no prediction,

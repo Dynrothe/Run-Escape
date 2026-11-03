@@ -277,9 +277,7 @@ export type Toast = { id: number; text: string; until: number };
 // a newer version of it (which this one would undo), or it couldn't be read
 // and there's no room to keep a copy
 export type SaveBlock =
-    | { kind: "otherTab" }
-    | ({ kind: "newerGame" } & NewerSave)
-    | { kind: "noRoom" };
+    { kind: "otherTab" } | ({ kind: "newerGame" } & NewerSave) | { kind: "noRoom" };
 
 export type UiSnapshot = {
     screen: Screen;
@@ -374,6 +372,7 @@ export class GameStore {
                 questTracker: true,
                 damagePanel: false,
                 autoAlch: false,
+                autoEquip: false,
                 movePrediction: false,
             },
         };

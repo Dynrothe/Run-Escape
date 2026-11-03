@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Optional Auto equip in Settings and the pause menu equips casket gear into empty slots or when strictly better, always asking before replacing a set piece.
+
 ## 0.23.0 - 2026-11-02
 
 ### Added

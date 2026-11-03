@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
-import { hasBadNumber } from "../core/lockstep";
+import { hasBadNumber, syncHash } from "../core/lockstep";
 import { LoadedSave, SaveData, SaveStore, createSave } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
 import { DamageMeter } from "./DamageMeter";
 import { DisplaySettings, loadDisplaySettings, saveDisplaySettings } from "./DisplaySettings";
 import { GameClient, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
+import { CoopRun } from "./coop/CoopRun";
+import { UpMessage } from "./coop/protocol";
 
-function createSim(): Sim {
+function createSim(focus?: number): Sim {
     const row = ".".repeat(72);
     return new Sim({
         grid: makeGrid(Array(72).fill(row), 1000, 1000),
@@ -19,11 +21,20 @@ function createSim(): Sim {
         seed: 5,
         spawnX: 1036.5,
         spawnY: 1036.5,
+        party:
+            focus === undefined
+                ? undefined
+                : ["warrior", "wizard"].map((characterId) => ({
+                      name: characterId,
+                      characterId,
+                      metaStats: emptyStats(),
+                  })),
+        focus,
     });
 }
 
 // The client's run flow on its own: nothing it draws or plays is needed
-function createClient(sim: Sim, autoAlch: boolean) {
+function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
     const save = createSave();
     const store = new GameStore(save);
     const client: GameClient = Object.create(GameClient.prototype);
@@ -42,9 +53,10 @@ function createClient(sim: Sim, autoAlch: boolean) {
             questTracker: true,
             damagePanel: false,
             autoAlch,
+            autoEquip,
             movePrediction: false,
         },
-        sounds: { onEvents() {}, levelUp() {}, playerDied() {} },
+        sounds: { onEvents() {}, levelUp() {}, playerDied() {}, chest() {} },
         view: { onEvents() {} },
         finishRun() {},
     });
@@ -164,6 +176,215 @@ describe("the damage panel", () => {
         // How a run ends is the sim's business; only that it has matters here
         Object.defineProperty(sim, "runOver", { value: true });
         expect(isPlaying()).toBe(false);
+    });
+});
+
+describe("auto equip", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+        window.localStorage.clear();
+    });
+
+    function offer(sim: Sim, itemId: string, upgrades = 0): void {
+        sim.openCasket("easy");
+        Object.assign(sim.chests[sim.chests.length - 1], { itemId, upgrades });
+    }
+
+    test("defaults off for new and existing settings and remembers the toggle", () => {
+        window.localStorage.clear();
+        expect(loadDisplaySettings().autoEquip).toBe(false);
+        const key = "rune-survivors-display";
+        for (const data of [{ autoAlch: true }, { autoEquip: "true" }]) {
+            window.localStorage.setItem(key, JSON.stringify(data));
+            expect(loadDisplaySettings().autoEquip).toBe(false);
+        }
+        const { client, store } = createClient(createSim(), false);
+        expect(store.getSnapshot().display.autoEquip).toBe(false);
+        client.toggleAutoEquip();
+        expect(loadDisplaySettings().autoEquip).toBe(true);
+        expect(store.getSnapshot().display.autoEquip).toBe(true);
+        client.toggleAutoEquip();
+        expect(loadDisplaySettings().autoEquip).toBe(false);
+    });
+
+    test("off, even an empty slot still asks", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, false);
+        offer(sim, "rune_boots");
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(store.getSnapshot().overlay).toBe("chest");
+    });
+
+    test("matches clicking Equip, including upgrades, replaced gear's coins and stats", () => {
+        const clicked = createSim();
+        const auto = createSim();
+        const { store, sync } = createClient(auto, false, true);
+        for (const sim of [clicked, auto]) {
+            sim.equip("rune_boots", 1);
+            sim.takeEvents();
+            offer(sim, "dragon_boots", 2);
+        }
+        const coins = auto.alchValue("rune_boots", 1);
+        clicked.resolveChest("take");
+        sync();
+        expect(auto.gear).toEqual(clicked.gear);
+        expect(auto.gearUpgrades).toEqual(clicked.gearUpgrades);
+        expect(auto.stats).toEqual(clicked.stats);
+        expect(auto.coins).toBe(clicked.coins);
+        expect(auto.getResult()).toEqual(clicked.getResult());
+        expect(store.getSnapshot().overlay).toBe("none");
+        expect(store.getSnapshot().chest).toBeUndefined();
+        expect(store.getSnapshot().toasts.map((t) => t.text)).toEqual([
+            `Equipped Dragon boots; high alched Rune boots for ${coins.toLocaleString()} coins`,
+        ]);
+    });
+
+    test.each([
+        ["rune_boots", "rune_boots"],
+        ["climbing_boots", "dragon_boots"],
+        ["dragon_boots", "rune_boots"],
+        ["void_melee_helm", "slayer_helmet"],
+        ["crystal_helm", "corrupted_crystal_helm"],
+        ["rune_boots", "shark"],
+    ])("keeps the prompt for %s to %s", (wornId, offeredId) => {
+        const sim = createSim();
+        sim.equip(wornId);
+        const gear = { ...sim.gear };
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, offeredId);
+        sync();
+        expect(sim.gear).toEqual(gear);
+        expect(store.getSnapshot().overlay).toBe("chest");
+        expect(store.getSnapshot().chest?.item.id).toBe(offeredId);
+        client.resolveChest("alch");
+        expect(sim.gear).toEqual(gear);
+        expect(sim.chests).toHaveLength(0);
+    });
+
+    test("processes queued upgrades against newly equipped gear, stopping at a trade-off", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        for (const id of ["rune_boots", "dragon_boots", "climbing_boots", "rune_full_helm"]) {
+            offer(sim, id);
+        }
+        sync();
+        expect(sim.gear.feet).toBe("dragon_boots");
+        expect(sim.chests).toHaveLength(2);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        client.resolveChest("alch");
+        expect(sim.gear.head).toBe("rune_full_helm");
+        expect(sim.chests).toHaveLength(0);
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("auto alch still takes priority when both are on", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, true, true);
+        offer(sim, "rune_boots");
+        const coins = sim.coins;
+        const worth = sim.alchValue("rune_boots", 0);
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(sim.coins).toBe(coins + worth);
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("waits for a level up before equipping and preserves a pending level up afterwards", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        sim.xp = sim.xpForNextLevel;
+        sim.step(0, 0);
+        offer(sim, "rune_boots");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("levelUp");
+        expect(sim.gear.feet).toBeUndefined();
+        client.choose(0);
+        expect(sim.gear.feet).toBe("rune_boots");
+        expect(sim.chests).toHaveLength(0);
+        offer(sim, "rune_full_helm");
+        sim.xp = sim.xpForNextLevel;
+        sync();
+        expect(sim.gear.head).toBe("rune_full_helm");
+        expect(store.getSnapshot().overlay).toBe("levelUp");
+    });
+
+    test("does not take an offer after the run ends", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, false, true);
+        offer(sim, "rune_boots");
+        sim.state = "dead";
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(sim.chests).toHaveLength(1);
+        expect(store.getSnapshot().overlay).toBe("dead");
+    });
+
+    test("checks a rerolled casket before showing its new item", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, "shark");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("chest");
+        vi.spyOn(sim, "reroll").mockImplementation(() => {
+            sim.chests[0].itemId = "rune_boots";
+            return true;
+        });
+        expect(client.reroll()).toBe(true);
+        expect(sim.gear.feet).toBe("rune_boots");
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("a co-op guest sends one local choice and waits for the host to apply it", () => {
+        const host = createSim(0);
+        const guest = createSim(1);
+        for (const sim of [host, guest]) {
+            sim.as(0, () => sim.equip("dragon_boots"));
+            sim.as(1, () => {
+                offer(sim, "rune_boots");
+                offer(sim, "climbing_boots");
+            });
+        }
+        const messages: UpMessage[] = [];
+        const heroes = new Map([
+            ["host", 0],
+            ["guest", 1],
+        ]);
+        const guestRun = new CoopRun(
+            guest,
+            false,
+            { sendUp: (message) => messages.push(message), sendDown() {} },
+            heroes,
+            "host",
+        );
+        const hostRun = new CoopRun(
+            host,
+            true,
+            { sendUp() {}, sendDown: (message) => guestRun.receiveDown(message) },
+            heroes,
+            "host",
+        );
+        hostRun.receiveUp("guest", { loaded: true });
+        const { client, store, sync } = createClient(guest, false, true);
+        Object.assign(client, { coopRun: guestRun });
+        store.set({ overlay: "chest" });
+        sync();
+        sync();
+        expect(messages).toEqual([{ action: { kind: "chest", action: "take" } }]);
+        expect(guest.gear.feet).toBeUndefined();
+        expect(store.getSnapshot().overlay).toBe("none");
+        hostRun.receiveUp("guest", messages[0]);
+        hostRun.stepFrame();
+        hostRun.flush(true);
+        guestRun.stepFrame();
+        sync();
+        expect(guest.gear.feet).toBe("rune_boots");
+        expect(guest.heroes[0].gear.feet).toBe("dragon_boots");
+        expect(syncHash(guest)).toBe(syncHash(host));
+        expect(messages).toHaveLength(1);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        expect(store.getSnapshot().overlay).toBe("chest");
     });
 });
 

@@ -12,7 +12,7 @@ import {
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
 import { formatStats } from "../content/stats";
-import { CasketTier, GearSlot, ItemDef, SetDef } from "../content/types";
+import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
 
@@ -114,6 +114,39 @@ export function isBetterGear(
     thanUpgrades: number,
 ): boolean {
     return gearWorth(item, upgrades) > gearWorth(than, thanUpgrades);
+}
+
+// Unlike the rarity-based recommendation, automatic swaps must lose no
+// stats, and even an incomplete worn set stays the player's decision.
+export function shouldAutoEquip(
+    gear: Partial<Record<GearSlot, string>>,
+    gearUpgrades: Partial<Record<GearSlot, number>>,
+    item: ItemDef,
+    upgrades: number,
+): boolean {
+    if (item.kind !== "gear") {
+        return false;
+    }
+    const wornId = gear[item.slot];
+    if (wornId === undefined) {
+        return true;
+    }
+    const worn = getGear(wornId);
+    if (getItemSet(worn)) {
+        return false;
+    }
+    const offeredStats = getGearStats(item, upgrades);
+    const wornStats = getGearStats(worn, gearUpgrades[item.slot] ?? 0);
+    let better = false;
+    for (const key of Object.keys({ ...wornStats, ...offeredStats }) as StatKey[]) {
+        const offered = offeredStats[key] ?? 0;
+        const current = wornStats[key] ?? 0;
+        if (offered < current) {
+            return false;
+        }
+        better ||= offered > current;
+    }
+    return better;
 }
 
 // What wearing a piece does for the worn gear's sets: 1 when it's another
