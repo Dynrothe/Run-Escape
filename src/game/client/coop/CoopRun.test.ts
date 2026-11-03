@@ -116,6 +116,9 @@ describe("co-op recovery", () => {
             drop: () => {
                 dropping = true;
             },
+            deliver: () => {
+                dropping = false;
+            },
             advance: (ms: number) => {
                 now += ms;
             },
@@ -154,6 +157,24 @@ describe("co-op recovery", () => {
         p.step();
         p.step();
         expect(p.actions).toEqual([1]);
+    });
+
+    it("recovers a shed input packet without waiting for a socket restart", () => {
+        const p = party();
+        p.drop();
+        p.runs[1].act({ kind: "item", index: 0 });
+        p.deliver();
+        p.runs[1].act({ kind: "item", index: 1 });
+        p.advance(1001);
+        p.runs[1].flush();
+        p.step();
+        p.step();
+        expect(p.actions).toEqual([1, 2]);
+        p.advance(1001);
+        p.runs[1].flush();
+        p.step();
+        p.step();
+        expect(p.actions).toEqual([1, 2]);
     });
 
     it("chunks a large replay within the wire budget", () => {

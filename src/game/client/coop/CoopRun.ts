@@ -73,6 +73,7 @@ export class CoopRun {
     private historyHead = 0;
     private historyBytes = 0;
     private actionSeq = 0;
+    private actionRetryAt = 0;
     private pendingActions = new Map<number, CoopAction>();
     private acceptedActions = new Map<number, number>();
     // A guest's, while it's turned on (setPrediction)
@@ -216,6 +217,7 @@ export class CoopRun {
         } else {
             if (this.recoveryEnabled) {
                 const actionSeq = ++this.actionSeq;
+                if (this.pendingActions.size === 0) this.actionRetryAt = this.now() + 1000;
                 this.pendingActions.set(actionSeq, action);
                 this.link.sendUp({ action, actionSeq });
             } else this.link.sendUp({ action });
@@ -401,6 +403,16 @@ export class CoopRun {
     // The host's: sends the frames stepped since last time (quiet ones once
     // there are a couple, unless everything's to go now)
     flush(everything = false): void {
+        // The relay may shed a burst of guest input without closing the socket.
+        // Retry only unacknowledged actions, so a sequence gap cannot wedge input.
+        if (
+            !this.isHost &&
+            !this.recovering &&
+            this.pendingActions.size &&
+            this.now() >= this.actionRetryAt
+        ) {
+            this.resendActions();
+        }
         if (
             !this.isHost ||
             this.upTo === this.sentUpTo ||
@@ -440,6 +452,12 @@ export class CoopRun {
 
     enableRecovery(): void {
         this.recoveryEnabled = true;
+    }
+
+    private resendActions(): void {
+        this.actionRetryAt = this.now() + 1000;
+        for (const [actionSeq, action] of this.pendingActions)
+            this.link.sendUp({ action, actionSeq });
     }
 
     pauseForRecovery(): void {
@@ -539,8 +557,7 @@ export class CoopRun {
         this.moveSeqSent = 0;
         if (!this.isHost) {
             this.link.sendUp({ loaded: true });
-            for (const [actionSeq, action] of this.pendingActions)
-                this.link.sendUp({ action, actionSeq });
+            this.resendActions();
         }
     }
 }

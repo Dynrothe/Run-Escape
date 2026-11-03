@@ -224,7 +224,9 @@ The host retains up to 6,000 frames (120 seconds of simulation) with a 2 MiB ser
 budget, plus bounded object overhead. Guests request missing frames in small chunks under the
 relay's existing host byte budget. A fresh synchronization epoch discards stale replies, and
 every remaining player must reach the host's paused frame with the same state hash before
-resuming. Action sequence acknowledgements prevent a resent click from applying twice;
+resuming. Action sequence acknowledgements prevent a resent click from applying twice. At most
+eight outstanding actions retry once a second until acknowledged, including input shed by the
+relay's rate limit without a socket closure;
 movement is refreshed after resuming. Load and choice timers exclude the recovery pause.
 Missing history, divergent hashes or an expired deadline end recovery safely.
 
