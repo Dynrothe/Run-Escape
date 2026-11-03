@@ -124,6 +124,52 @@ export function findStranded(
     return stranded;
 }
 
+// A piece of ground that can all be walked round: how many tiles, the box round them, and one of
+// them to flood it again from (findReachable)
+export type Piece = TileRect & { size: number; from: { x: number; y: number } };
+
+// Every piece of open ground in a rectangle, as canStep walks, the biggest first: a cut that falls
+// into many small ones has nowhere for waves to come at you
+export function findPieces(
+    flags: Int32Array,
+    sizeX: number,
+    sizeY: number,
+    rect: TileRect = { x0: 0, y0: 0, x1: sizeX - 1, y1: sizeY - 1 },
+): Piece[] {
+    const grid = getStepGrid(flags, sizeX, rect);
+    const seen = new Uint8Array(sizeX * sizeY);
+    const pieces: Piece[] = [];
+    for (let y0 = rect.y0; y0 <= rect.y1; y0++) {
+        for (let x0 = rect.x0; x0 <= rect.x1; x0++) {
+            if (seen[x0 + y0 * sizeX] || grid.isSolid(x0, y0)) {
+                continue;
+            }
+            const piece: Piece = { x0, y0, x1: x0, y1: y0, size: 0, from: { x: x0, y: y0 } };
+            const queue = [x0 + y0 * sizeX];
+            seen[queue[0]] = 1;
+            while (queue.length > 0) {
+                const i = queue.pop()!;
+                const x = i % sizeX;
+                const y = (i / sizeX) | 0;
+                piece.size++;
+                piece.x0 = Math.min(piece.x0, x);
+                piece.y0 = Math.min(piece.y0, y);
+                piece.x1 = Math.max(piece.x1, x);
+                piece.y1 = Math.max(piece.y1, y);
+                for (let d = 0; d < 8; d++) {
+                    const j = x + DIR_X[d] + (y + DIR_Y[d]) * sizeX;
+                    if (!seen[j] && canStep(grid, x, y, DIR_X[d], DIR_Y[d])) {
+                        seen[j] = 1;
+                        queue.push(j);
+                    }
+                }
+            }
+            pieces.push(piece);
+        }
+    }
+    return pieces.sort((a, b) => b.size - a.size);
+}
+
 // Blocks a tile: on a bridge that's the level that's the ground floor
 export function blockTile(grid: TileGrid, i: number): void {
     const bridge = (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;

@@ -1,26 +1,32 @@
 import { describe, expect, it } from "vitest";
 
+import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { SceneTileModel } from "../../rs/scene/SceneTileModel";
 import { Ground } from "./Ground";
 import { findExits, getInsideTiles, getNearestExit } from "./building";
 import {
     SealRegion,
     assertReachable,
+    findPieces,
     findReachable,
     getCollisionFlags,
     sealFrom,
 } from "./collision";
 import {
     TILE_BLOCKED,
+    TILE_BRIDGE,
+    TILE_SHOWN,
     TileGrid,
+    cacheFloorId,
     createTileGrid,
+    mapFileFloorId,
     readLocs,
     readTerrain,
     writeLocs,
     writeTerrain,
 } from "./format";
 import { Point, smoothPath } from "./paths";
-import { rotatePrefab } from "./prefab";
+import { bringDown, cutPrefab, rotatePrefab } from "./prefab";
 import type { LocInfo } from "./recipe";
 import { OVERLAY_SHAPES, getCoveredSides, getOverlayShape } from "./shapes";
 
@@ -158,6 +164,18 @@ describe("map file formats", () => {
     });
 });
 
+describe("floor ids", () => {
+    it("are the cache's plus one in a map file", () => {
+        expect(cacheFloorId(1)).toBe(0);
+        expect(cacheFloorId(442)).toBe(441);
+        expect(mapFileFloorId(cacheFloorId(48))).toBe(48);
+    });
+
+    it("refuse no floor", () => {
+        expect(() => cacheFloorId(0)).toThrow();
+    });
+});
+
 describe("rotatePrefab", () => {
     // 3 tiles east-west by 2 tiles north-south, with a 2 by 1 loc in the corner
     const prefab = createTileGrid(3, 2);
@@ -189,6 +207,119 @@ describe("rotatePrefab", () => {
         expect(turned.levels[0].overlays).toEqual(prefab.levels[0].overlays);
         expect(turned.levels[0].rotations).toEqual(prefab.levels[0].rotations);
         expect(turned.locs[0]).toMatchObject({ x: 0, y: 0, rotation: 0 });
+    });
+});
+
+describe("planes", () => {
+    // A square of the world with something on each of its levels: level 1's a room upstairs
+    // with a bridge (level 2 holds its ground floor) and a tile drawn from the ground
+    function upstairs(): TileGrid {
+        const grid = createTileGrid(64, 64);
+        for (let level = 0; level < 4; level++) {
+            grid.levels[level].overlays[5 + 6 * 64] = 10 + level;
+            grid.locs.push({ id: 100 + level, type: 10, rotation: 0, level, x: 5, y: 6 });
+        }
+        grid.levels[0].flags[1] = TILE_BLOCKED;
+        grid.levels[1].flags[1] = TILE_SHOWN;
+        grid.levels[2].flags[1] = TILE_BRIDGE;
+        grid.levels[1].heights[0] = 40;
+        return grid;
+    }
+
+    it("brings a level and those over it down", () => {
+        const down = bringDown(upstairs(), 1);
+        expect([0, 1, 2, 3].map((level) => down.levels[level].overlays[5 + 6 * 64])).toEqual([
+            11, 12, 13, 0,
+        ]);
+        expect(down.locs.map((loc) => [loc.id, loc.level])).toEqual([
+            [101, 0],
+            [102, 1],
+            [103, 2],
+        ]);
+        // Heights stay as they were, over the level below
+        expect(down.levels[0].heights[0]).toBe(40);
+        // The new top level is empty, at an upper level's height
+        expect(down.levels[3].heights[0]).toBe(30);
+    });
+
+    it("brings each level's flags down with it", () => {
+        const down = bringDown(upstairs(), 1);
+        // Level 1's TILE_SHOWN is on the ground floor now, where it means nothing, and level 2's
+        // bridge is on level 1, so the old level 3 counts as walked on
+        expect(down.levels[0].flags[1]).toBe(TILE_SHOWN);
+        expect(down.levels[1].flags[1]).toBe(TILE_BRIDGE);
+        expect(down.levels[2].flags[1]).toBe(0);
+    });
+
+    it("leaves plane 0 alone", () => {
+        const grid = upstairs();
+        expect(bringDown(grid, 0)).toBe(grid);
+    });
+
+    it("cuts from a plane", () => {
+        const square = upstairs();
+        const maps = {
+            getTerrainData: (mapX: number, mapY: number) =>
+                mapX === 50 && mapY === 50 ? writeTerrain(square, 0, 0) : undefined,
+            getLocData: (mapX: number, mapY: number) =>
+                mapX === 50 && mapY === 50 ? writeLocs(square, 0, 0) : undefined,
+        };
+        const cut = cutPrefab(maps, 50 * 64 + 4, 50 * 64 + 4, 4, 4, { plane: 1 });
+        expect(cut.levels[0].overlays[1 + 2 * 4]).toBe(11);
+        expect(cut.locs).toContainEqual({ id: 101, type: 10, rotation: 0, level: 0, x: 1, y: 2 });
+        expect(cut.locs.some((loc) => loc.id === 100)).toBe(false);
+        const ground = cutPrefab(maps, 50 * 64 + 4, 50 * 64 + 4, 4, 4);
+        expect(ground.levels[0].overlays[1 + 2 * 4]).toBe(10);
+    });
+});
+
+describe("findPieces", () => {
+    // 7 by 3 tiles, split down x = 3 by things that block
+    const SIZE_X = 7;
+    const SIZE_Y = 3;
+    function split(): Int32Array {
+        const flags = new Int32Array(SIZE_X * SIZE_Y);
+        for (let y = 0; y < SIZE_Y; y++) {
+            flags[3 + y * SIZE_X] = CollisionFlag.OBJECT;
+        }
+        return flags;
+    }
+
+    it("finds each piece, the biggest first, with the box round it", () => {
+        const flags = split();
+        // A post in the east half, so it's the smaller
+        flags[5 + 1 * SIZE_X] = CollisionFlag.OBJECT;
+        const pieces = findPieces(flags, SIZE_X, SIZE_Y);
+        expect(pieces.map((piece) => piece.size)).toEqual([9, 8]);
+        expect(pieces[0]).toMatchObject({ x0: 0, y0: 0, x1: 2, y1: 2 });
+        expect(pieces[1]).toMatchObject({ x0: 4, y0: 0, x1: 6, y1: 2 });
+        expect(pieces[1].from.x).toBeGreaterThanOrEqual(4);
+    });
+
+    it("stops at a wall on a tile's edge", () => {
+        const flags = split();
+        // A wall between x = 0 and x = 1, all the way up
+        for (let y = 0; y < SIZE_Y; y++) {
+            flags[0 + y * SIZE_X] |= CollisionFlag.WALL_EAST;
+            flags[1 + y * SIZE_X] |= CollisionFlag.WALL_WEST;
+        }
+        const pieces = findPieces(flags, SIZE_X, SIZE_Y);
+        expect(pieces.map((piece) => piece.size)).toEqual([9, 6, 3]);
+    });
+
+    it("doesn't cut a corner between two things that block", () => {
+        const flags = new Int32Array(2 * 2);
+        flags[1] = CollisionFlag.OBJECT;
+        flags[2] = CollisionFlag.OBJECT;
+        expect(findPieces(flags, 2, 2).map((piece) => piece.size)).toEqual([1, 1]);
+    });
+
+    it("keeps to the rectangle", () => {
+        const pieces = findPieces(split(), SIZE_X, SIZE_Y, { x0: 1, y0: 0, x1: 4, y1: 1 });
+        expect(pieces.map((piece) => [piece.size, piece.x0, piece.x1])).toEqual([
+            [4, 1, 2],
+            [2, 4, 4],
+        ]);
     });
 });
 
