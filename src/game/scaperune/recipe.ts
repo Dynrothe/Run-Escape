@@ -52,6 +52,12 @@ export type MapRecipe = {
     build(context: BuildContext): TileGrid;
     // A hand-made map's own build with what check-maps.ts holds it to, if it wants checking
     detail?(context: BuildContext): GeneratedMap;
+    // A map of rooms that don't join up (a raid, a sealed arena): check-maps.ts then counts each
+    // region's open and stranded tiles from its own start rather than the whole arena's from the
+    // spawn, and fails on a region that leaks or anything open outside every region
+    regions?: MapRegion[];
+    // Tiles check-maps.ts holds to being open and reachable, beside the spawn
+    points?: MapPoint[];
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from

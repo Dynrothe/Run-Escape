@@ -1,6 +1,7 @@
 import { Ground } from "../Ground";
 import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid, createTileGrid } from "../format";
+import type { GeneratedMap } from "../generator";
 import { createRng } from "../noise";
 import { cutPrefab, rotatePrefab } from "../prefab";
 import { isDoor } from "../prefabs";
@@ -296,7 +297,7 @@ function stampHall(ground: Ground, context: BuildContext, place: RoomPlace): voi
     });
 }
 
-function build(context: BuildContext): TileGrid {
+function buildDetail(context: BuildContext): GeneratedMap {
     const ground = new Ground(SIZE_X, SIZE_Y);
     for (let y = 0; y <= SIZE_Y; y++) {
         for (let x = 0; x <= SIZE_X; x++) {
@@ -351,7 +352,22 @@ function build(context: BuildContext): TileGrid {
             ground.level0.flags[ground.tile(hall.x1 + 1, y)] |= TILE_BLOCKED;
         }
     }
-    return ground.grid;
+    // No roads, buildings or landmarks of the generator's to hold it to
+    return {
+        grid: ground.grid,
+        footprint: ground.footprint,
+        roadTiles: new Uint8Array(SIZE_X * SIZE_Y),
+        lines: [],
+        buildings: [],
+        landmarks: [],
+        passes: [],
+        walkSlope: 12,
+        caves: [],
+        falls: [],
+        waterfalls: [],
+        // Cut from the real world, upstairs and all
+        designed: PLACES.flatMap((place) => [place.hall, place.chamber]),
+    };
 }
 
 export const THEATRE_OF_BLOOD: MapRecipe = {
@@ -363,5 +379,8 @@ export const THEATRE_OF_BLOOD: MapRecipe = {
     margin: MARGIN,
     // The Maiden's hall
     spawn: PLACES[0].start,
-    build,
+    build: (context) => buildDetail(context).grid,
+    detail: buildDetail,
+    regions: REGIONS,
+    points: POINTS,
 };

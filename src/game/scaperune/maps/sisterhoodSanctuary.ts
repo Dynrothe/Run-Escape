@@ -744,4 +744,6 @@ export const SISTERHOOD_SANCTUARY: MapRecipe = {
     spawn: { x: MIDDLE, y: MIDDLE },
     build: (context) => buildDetail(context).grid,
     detail: buildDetail,
+    regions: [ARENA_REGION],
+    points: POINTS,
 };
