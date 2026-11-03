@@ -1,5 +1,7 @@
+import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import type { Ground } from "./Ground";
 import { Exit, findExits } from "./building";
+import { getLocBlocking, isOnGroundLevel } from "./collision";
 import type { PlacedLoc, TileGrid } from "./format";
 import { cutPrefab, rotatePrefab } from "./prefab";
 import type { BuildContext } from "./recipe";
@@ -115,6 +117,41 @@ export function loadPrefab(context: BuildContext, def: PrefabDef): TileGrid {
 
 export function isDoor(context: Pick<BuildContext, "locs">, loc: PlacedLoc): boolean {
     return loc.type <= 3 && DOOR_NAME.test(context.locs(loc.id).name);
+}
+
+export type SkipBlockingOptions = {
+    // Doors, gates and curtains off, so you can walk in
+    doors?: boolean;
+    // Props that block off: those on one tile, or every size. A prop is a normal or diagonal loc,
+    // or floor decoration; walls stay.
+    props?: "one-tile" | "all";
+    // The cut it's for, so that a loc on a bridge's level counts as on the ground there
+    prefab?: TileGrid;
+};
+
+// A stamp's skipLoc that leaves out what blocks the way through a cut, by getCollisionFlags' own
+// rules: a loc that isn't drawn never blocks, floor decoration only at clip 1 (a patterned floor
+// is clip 2, and stays), and normal locs at any clip over 0. Only the ground level blocks, so
+// what's upstairs stays too.
+export function skipBlocking(
+    context: Pick<BuildContext, "locs">,
+    options: SkipBlockingOptions,
+): (loc: PlacedLoc) => boolean {
+    const { doors = false, props, prefab } = options;
+    return (loc) => {
+        if (doors && isDoor(context, loc)) {
+            return true;
+        }
+        if (!props || loc.type <= LocModelType.WALL_DIAGONAL) {
+            return false;
+        }
+        const onGround = prefab ? isOnGroundLevel(prefab, loc) : loc.level === 0;
+        const info = context.locs(loc.id);
+        if (!onGround || getLocBlocking(loc.type, info) !== "tiles") {
+            return false;
+        }
+        return props === "all" || info.sizeX * info.sizeY === 1;
+    };
 }
 
 // What a building is, for the settings that turn them on and off

@@ -12,6 +12,7 @@ import {
     writeTerrain,
 } from "./format";
 import { Placer, findSolidOverlaps } from "./placer";
+import { skipBlocking } from "./prefabs";
 import type { BuildContext, LocInfo } from "./recipe";
 
 // Made-up locs, by id: what the cache would say about each
@@ -274,5 +275,51 @@ describe("findSolidOverlaps", () => {
         expect(findSolidOverlaps(grid, getLoc)).toEqual([5 + 5 * 8]);
         grid.locs.push(loc(1, 10, 6, 1, { level: 1 }));
         expect(findSolidOverlaps(grid, getLoc)).toEqual([5 + 5 * 8, 6 + 1 * 8]);
+    });
+});
+
+describe("skipBlocking", () => {
+    const at = (id: number, type: number, rest: Partial<PlacedLoc> = {}) =>
+        loc(id, type, 1, 1, rest);
+
+    it("takes doors off, and one-tile props that block, by the collision's rules", () => {
+        const skip = skipBlocking(context, { doors: true, props: "one-tile" });
+        expect(skip(at(4, 0))).toBe(true);
+        expect(skip(at(5, 0))).toBe(false);
+        // A crate goes, a statue (2 by 2) stays
+        expect(skip(at(1, 10))).toBe(true);
+        expect(skip(at(1, 11))).toBe(true);
+        expect(skip(at(2, 10))).toBe(false);
+        // Floor decoration only blocks at clip 1: a patterned floor stays
+        expect(skip(at(6, 22))).toBe(false);
+        expect(skip(at(7, 22))).toBe(true);
+        // What doesn't block stays: clip 0, or no model
+        expect(skip(at(8, 10))).toBe(false);
+        expect(skip(at(9, 10))).toBe(false);
+        // A diagonal wall's a wall, and wall decoration and roofs never block
+        expect(skip(at(1, 9))).toBe(false);
+        expect(skip(at(1, 4))).toBe(false);
+        expect(skip(at(1, 12))).toBe(false);
+        // Upstairs doesn't block the ground
+        expect(skip(at(1, 10, { level: 1 }))).toBe(false);
+    });
+
+    it("leaves doors alone unless asked, and takes every size of prop if asked", () => {
+        const all = skipBlocking(context, { props: "all" });
+        expect(all(at(4, 0))).toBe(false);
+        expect(all(at(2, 10))).toBe(true);
+        expect(all(at(10, 10))).toBe(true);
+        const doors = skipBlocking(context, { doors: true });
+        expect(doors(at(4, 0))).toBe(true);
+        expect(doors(at(1, 10))).toBe(false);
+    });
+
+    it("counts a loc on a bridge's level as on the ground, given the cut", () => {
+        const prefab = createTileGrid(4, 4);
+        prefab.levels[1].flags[1 + 4] |= TILE_BRIDGE;
+        const skip = skipBlocking(context, { props: "one-tile", prefab });
+        expect(skip(at(1, 10, { level: 1 }))).toBe(true);
+        // Under the bridge's the river, not the ground
+        expect(skip(at(1, 10))).toBe(false);
     });
 });
