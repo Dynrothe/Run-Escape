@@ -12,12 +12,14 @@
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { isStamped } from "../../src/game/scaperune/Ground";
 import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
 import {
     BLOOD_WALL_ONLY,
     CROP_NAME,
     WATER_OVERLAYS,
     findBannedLocs,
+    findLoneKitPieces,
 } from "../../src/game/scaperune/catalogue";
 import {
     CITY_WALL_IDS,
@@ -918,12 +920,18 @@ function checkFalls(map: GeneratedMap): string[] {
     return problems;
 }
 
-// Nothing from the wrong place: the ban list, blood that draws nothing, foam away from a fall
+// Nothing from the wrong place: the ban list, kit pieces without their set, blood that draws
+// nothing, foam away from a fall
 function checkCatalogue(map: GeneratedMap): string[] {
     const { grid, falls, waterfalls } = map;
-    const problems = findBannedLocs(grid).map(
-        ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
-    );
+    const problems = [
+        ...findBannedLocs(grid).map(
+            ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
+        ),
+        ...findLoneKitPieces(grid, isStamped).map(
+            ({ loc, why }) => `kit piece ${loc.id} at ${loc.x},${loc.y} without its set: ${why}`,
+        ),
+    ];
     const drops = [...falls, ...waterfalls];
     for (const { id, type, x, y } of grid.locs) {
         if (id === BLOOD_WALL_ONLY && type === 22) {
