@@ -1,6 +1,7 @@
 import { PHOSANI_START_DISTANCE } from "../../content/phosani";
 import { Ground } from "../Ground";
 import { BIOMES } from "../biomes";
+import { NIGHTMARE_LOCS } from "../catalogue";
 import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { dressGround, dressRock, paintRockFloor } from "../dress";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
@@ -734,6 +735,11 @@ export const SANCTUARY_BOSS_ARENA = {
 
 export const SISTERHOOD_SANCTUARY: MapRecipe = {
     id: "phosani",
+    // The boss room's own on purpose: the dream's floor and ring, and the Theatre's dead
+    allowLocs: [
+        ...NIGHTMARE_LOCS,
+        ...[...DEAD_RAIDERS.map(([id]) => id), EXHUMED].map((id): [number, number] => [id, id]),
+    ],
     // East of Hallowed Night's squares, and clear of the rest (see CLAUDE.md's traps)
     mapX: 78,
     mapY: 72,

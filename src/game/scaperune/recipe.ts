@@ -58,6 +58,9 @@ export type MapRecipe = {
     regions?: MapRegion[];
     // Tiles check-maps.ts holds to being open and reachable, beside the spawn
     points?: MapPoint[];
+    // Banned locs (catalogue.ts) this map uses on purpose, as ranges of ids: a raid's or a boss
+    // room's own, on a shipped map made of one. check-maps.ts holds it to the rest of the list.
+    allowLocs?: [from: number, to: number][];
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from

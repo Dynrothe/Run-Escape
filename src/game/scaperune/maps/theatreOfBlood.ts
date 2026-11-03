@@ -1,4 +1,5 @@
 import { Ground } from "../Ground";
+import { THEATRE_LOCS } from "../catalogue";
 import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
 import type { GeneratedMap } from "../generator";
@@ -355,6 +356,8 @@ function buildDetail(context: BuildContext): GeneratedMap {
 
 export const THEATRE_OF_BLOOD: MapRecipe = {
     id: "theatre_of_blood",
+    // A raid on purpose: its boss rooms are the real ones
+    allowLocs: THEATRE_LOCS,
     mapX: MAP_X,
     mapY: MAP_Y,
     squaresX: SQUARES_X,

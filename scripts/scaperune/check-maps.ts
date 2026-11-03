@@ -16,12 +16,15 @@
 //   SHOW=500 npx tsx scripts/scaperune/check-maps.ts          # more than 16 problems a map
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { FlowField } from "../../src/game/core/world/FlowField";
+import { isStamped } from "../../src/game/scaperune/Ground";
 import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
 import {
     BLOOD_WALL_ONLY,
     CROP_NAME,
+    LocRange,
     WATER_OVERLAYS,
     findBannedLocs,
+    findLoneKitPieces,
 } from "../../src/game/scaperune/catalogue";
 import {
     CITY_WALL_IDS,
@@ -935,12 +938,18 @@ function checkFalls(map: GeneratedMap): string[] {
     return problems;
 }
 
-// Nothing from the wrong place: the ban list, blood that draws nothing, foam away from a fall
-function checkCatalogue(map: GeneratedMap): string[] {
+// Nothing from the wrong place: the ban list (but for what the map allows), kit pieces without
+// their set, blood that draws nothing, foam away from a fall
+function checkCatalogue(map: GeneratedMap, allow?: LocRange[]): string[] {
     const { grid, falls, waterfalls } = map;
-    const problems = findBannedLocs(grid).map(
-        ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
-    );
+    const problems = [
+        ...findBannedLocs(grid, allow).map(
+            ({ loc, why }) => `banned loc ${loc.id} at ${loc.x},${loc.y}: ${why}`,
+        ),
+        ...findLoneKitPieces(grid, isStamped).map(
+            ({ loc, why }) => `kit piece ${loc.id} at ${loc.x},${loc.y} without its set: ${why}`,
+        ),
+    ];
     const drops = [...falls, ...waterfalls];
     for (const { id, type, x, y } of grid.locs) {
         if (id === BLOOD_WALL_ONLY && type === 22) {
@@ -1297,6 +1306,8 @@ function checkMap(
     };
     const roadHeights = checkRoadHeights(map);
     const hidden = countHiddenTiles(map.grid, grid, origin, gridRect);
+    // A shipped map is warned, not failed: it went out looked at in the game
+    const catalogue = checkCatalogue(map, recipe.allowLocs);
     const problems = [
         ...reach.problems,
         ...bridges.problems,
@@ -1311,7 +1322,7 @@ function checkMap(
         ...checkFalls(map),
         ...checkWalls(map, context, recipe.spawn, gridRect),
         ...describeClashes(findClashes(map, context.locs)),
-        ...(shipped ? [] : checkCatalogue(map)),
+        ...(shipped ? [] : catalogue),
         ...(shipped ? [] : checkLook(id, map, recipe.margin, createLocs(locTypeLoader), settings)),
     ];
     if (hidden > 0) {
@@ -1345,6 +1356,12 @@ function checkMap(
         shipped && describeSolidOverlaps(map.grid, findSolidOverlaps(map.grid, context.locs));
     if (overlaps) {
         console.log(`  warning: ${overlaps}`);
+    }
+    if (shipped && catalogue.length > 0) {
+        console.log(`  ${catalogue.length} warnings from the catalogue:`);
+        for (const warning of catalogue.slice(0, 16)) {
+            console.log(`  warning: ${warning}`);
+        }
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
 }

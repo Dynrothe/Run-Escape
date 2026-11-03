@@ -49,6 +49,14 @@ function smoothstep(t: number): number {
     return t * t * (3 - 2 * t);
 }
 
+// Locs that came onto a map in a stamped prefab, cut with whatever was round them in the real
+// place: check-maps.ts takes a kit piece among them as used whole (findLoneKitPieces)
+const STAMPED = new WeakSet<PlacedLoc>();
+
+export function isStamped(loc: PlacedLoc): boolean {
+    return STAMPED.has(loc);
+}
+
 // A map being built: our own ground, in plain tile terms, with prefabs stamped
 // on it.
 export class Ground {
@@ -393,6 +401,7 @@ export class Ground {
             if (options.locs) {
                 this.occupy(placed, options.locs(loc.id));
             }
+            STAMPED.add(placed);
             if (inside && loc.level === 0 && (loc.type <= 3 || loc.type === 9)) {
                 this.footprint[this.tile(loc.x + x, loc.y + y)] = 1;
                 this.reserved[this.tile(loc.x + x, loc.y + y)] = 1;
