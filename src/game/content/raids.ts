@@ -271,7 +271,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("mutated_bloodveld", "vampyre_juvinate", 36),
             boss: "tob_sotetseg",
-            bossHp: 32000,
+            bossHp: 48000,
         },
         3,
     ),
@@ -296,7 +296,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("vyrewatch_sentinel", "nylocas_hagios", 50),
             boss: "xarpus",
-            bossHp: 84000,
+            bossHp: 120000,
         },
         4,
     ),
@@ -355,7 +355,7 @@ export const RAID_MAPS: MapDef[] = [
             "**A melee raid in six rooms.** Survive each room's waves on the way through " +
             "Morytania, then kill its boss to move on: the Maiden, the Bloat, Nylocas Vasilias, " +
             "Sotetseg, Xarpus, then Verzik in Vampyrium.\n\n" +
-            "**Bosses pray against missiles and magic**, which do only 30% of their damage to them, " +
+            "**Bosses pray against missiles and magic**, which do only 15% of their damage to them, " +
             "and their bullets leave a gap up close.\n\n" +
             "**Raid points** come from fast, clean rooms. They pay coins, buy supplies between " +
             "rooms, and raise your chance of a purple at the end.\n\n" +

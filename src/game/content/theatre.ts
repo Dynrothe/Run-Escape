@@ -18,7 +18,7 @@ import { BossAttackDef, BossDef, CombatStyle, EnemyDef } from "./types";
 const BRIGHT = 0.6;
 
 // ToB's a melee raid: its bosses pray against missiles and magic, taking this share from them
-const PROTECTS = { styles: ["ranged", "magic"], damage: 0.3 } as const;
+const PROTECTS = { styles: ["ranged", "magic"], damage: 0.15 } as const;
 const protects: EnemyDef["protects"] = {
     styles: [...PROTECTS.styles] as CombatStyle[],
     damage: PROTECTS.damage,
@@ -634,7 +634,7 @@ function vasilias(): EnemyDef {
 
 // ToB's a melee raid: what a boss fires from itself starts this many tiles out, so there's a
 // pocket up close that its rings, spreads and walls never cross. Ranged and magic fight from
-// where they're thick, for a fifth of the damage (PROTECTS).
+// where they're thick, for 15% of the damage (PROTECTS).
 const MELEE_POCKET = 2.5;
 const POCKETED = new Set(["ring", "spiral", "spread", "wall"]);
 
@@ -754,7 +754,7 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 naps: {
                     every: 9,
                     seconds: 5,
-                    // With the prayer, missiles and magic do 1% while he walks
+                    // With the prayer, missiles and magic do under 1% while he walks
                     awakeDamage: 0.05,
                     wake: "Stomp",
                     seq: 8082,
