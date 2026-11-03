@@ -1,5 +1,6 @@
 import type { MapFileLoader } from "../../rs/map/MapFileLoader";
 import type { MapDef } from "../content/types";
+import type { TileRect } from "./collision";
 import { MAP_SQUARE_SIZE, type TileGrid } from "./format";
 import type { GeneratedMap } from "./generator";
 
@@ -21,6 +22,19 @@ export type BuildContext = {
     locs(id: number): LocInfo;
 };
 
+// A part of a map that's walked on its own, such as a raid's hall, a boss room or a sealed arena:
+// its open tiles are those that can be walked to from `from` without leaving `rect`. Grid tiles.
+export type MapRegion = {
+    name: string;
+    rect: TileRect;
+    from: { x: number; y: number };
+};
+
+// A tile the game puts someone on, such as where a party's brought in or where a boss turns up,
+// which has to be open and reachable: from its region's start if it names one, from the spawn if
+// not. Grid tiles.
+export type MapPoint = { name: string; x: number; y: number; region?: string };
+
 // A map: where its squares go in the world and how to build them. Its grid
 // starts at (mapX, mapY) and covers squaresX by squaresY map squares; the arena
 // is what's left inside margin squares of scenery on each side.
@@ -38,6 +52,12 @@ export type MapRecipe = {
     build(context: BuildContext): TileGrid;
     // A hand-made map's own build with what check-maps.ts holds it to, if it wants checking
     detail?(context: BuildContext): GeneratedMap;
+    // A map of rooms that don't join up (a raid, a sealed arena): check-maps.ts then counts each
+    // region's open and stranded tiles from its own start rather than the whole arena's from the
+    // spawn, and fails on a region that leaks or anything open outside every region
+    regions?: MapRegion[];
+    // Tiles check-maps.ts holds to being open and reachable, beside the spawn
+    points?: MapPoint[];
     // How a run here plays, if not like Lumbridge. Dev maps only.
     play?: {
         // The map to take waves and difficulty from

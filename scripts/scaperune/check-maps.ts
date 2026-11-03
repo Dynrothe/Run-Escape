@@ -1,5 +1,7 @@
 // Checks every generated dev map, and settings at their extremes, with the game's own
-// collision: every open tile must reach the spawn. Also that a road runs straight off
+// collision: every open tile must reach the spawn, or on a map of rooms (MapRecipe.regions) its
+// own room's start, and the spawn and every named point (MapRecipe.points) must be open and
+// reached. Shipped maps and hand-made ones with a `detail` too. Also that a road runs straight off
 // both ends of each bridge, the width of the gap in its fences, that no road goes through
 // a building, that a building's road ends at its door, and that a building without one
 // faces the nearest road. And for height: that collision comes from slopes and agrees with
@@ -11,7 +13,9 @@
 //
 //   npx tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
+//   SHOW=500 npx tsx scripts/scaperune/check-maps.ts          # more than 16 problems a map
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { FlowField } from "../../src/game/core/world/FlowField";
 import { BIOMES, WATERFALL } from "../../src/game/scaperune/biomes";
 import {
     BLOOD_WALL_ONLY,
@@ -58,6 +62,7 @@ import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";
 import { createRng } from "../../src/game/scaperune/noise";
 import {
     BuildContext,
+    MapPoint,
     MapRecipe,
     getRecipeArena,
     getRecipeWorldTile,
@@ -259,10 +264,13 @@ const ROAD_ALONE_OFF_DECK = 4;
 // How far a deck's end can be from the road running off it
 const DECK_STEP = 10;
 
-// Problems with the roads off a grid's bridges, and how many ran each way
+// Problems with the roads off a grid's bridges, and how many ran each way. A bridge wholly on
+// tiles a recipe says are designed (a place cut from the real world, with its own upstairs) is
+// counted but not held to the generator's rules.
 function checkBridgeRoads(
     grid: TileGrid,
     roadTiles: Uint8Array,
+    designed: TileRect[] = [],
 ): { problems: string[]; ways: number[] } {
     const { sizeX } = grid;
     const corners = sizeX + 1;
@@ -296,6 +304,9 @@ function checkBridgeRoads(
         ];
         const eastWest = x1 - x0 > y1 - y0;
         ways[eastWest ? 0 : 1]++;
+        if (designed.some((rect) => isInRect(rect, x0, y0) && isInRect(rect, x1, y1))) {
+            continue;
+        }
         const overlayAt = (along: number, across: number) => {
             const i = eastWest ? along + across * sizeX : across + along * sizeX;
             return { overlay: grid.levels[0].overlays[i], shape: grid.levels[0].shapes[i] };
@@ -436,7 +447,8 @@ function getCornerHeight(grid: TileGrid, x: number, y: number): number {
     return south + (north - south) * (cy - ty);
 }
 
-// Collision from height, and the same collision in the game and the generator
+// Collision from height, and the same collision in the game and the generator. A designed tile's
+// height is the real world's, which doesn't make its collision, so only the second holds there.
 function checkCollision(
     map: GeneratedMap,
     game: ArenaGrid,
@@ -444,7 +456,7 @@ function checkCollision(
     rect: { x0: number; y0: number; x1: number; y1: number },
     context: BuildContext,
 ): string[] {
-    const { grid, walkSlope } = map;
+    const { grid, walkSlope, designed = [] } = map;
     const problems: string[] = [];
     const corners = grid.sizeX + 1;
     const steps = getStepGrid(getCollisionFlags(grid, context.locs), grid.sizeX, rect);
@@ -456,7 +468,8 @@ function checkCollision(
             const solid = game.isSolid(origin.x + x, origin.y + y);
             disagree += solid === steps.isSolid(x, y) ? 0 : 1;
             const slope = getTileSlope(grid.levels[0].heights, corners, x, y);
-            if (slope > walkSlope && !solid && !(bridges[i] & TILE_BRIDGE)) {
+            const real = designed.some((cut) => isInRect(cut, x, y));
+            if (slope > walkSlope && !solid && !(bridges[i] & TILE_BRIDGE) && !real) {
                 problems.push(`too steep to walk but open at ${x},${y}: ${slope.toFixed(1)}`);
             }
         }
@@ -687,9 +700,10 @@ function checkFields(map: GeneratedMap, locs: (id: number) => LocMeta): string[]
 }
 
 // Every tile of water lies level, and only a fall can come between two levels of it. Corners
-// are shared, so that also makes a lake or a stretch of river one level all over.
+// are shared, so that also makes a lake or a stretch of river one level all over. A designed
+// tile's water is the real world's, and isn't held to it.
 function checkWater(map: GeneratedMap): string[] {
-    const { grid, waterDrops = [], falls, waterfalls } = map;
+    const { grid, waterDrops = [], falls, waterfalls, designed = [] } = map;
     const { sizeX, sizeY } = grid;
     const corners = sizeX + 1;
     const { heights, overlays } = grid.levels[0];
@@ -704,7 +718,8 @@ function checkWater(map: GeneratedMap): string[] {
             const at = x + y * corners;
             const round = [at, at + 1, at + corners, at + corners + 1].map((c) => heights[c]);
             const spread = Math.max(...round) - Math.min(...round);
-            if (spread > 0 && !waterDrops.some((drop) => isInRect(drop, x, y))) {
+            const dropped = [...waterDrops, ...designed].some((drop) => isInRect(drop, x, y));
+            if (spread > 0 && !dropped) {
                 tilted.push(i);
                 spreads.set(i, spread);
             }
@@ -1142,6 +1157,97 @@ function countHiddenTiles(
     return hidden;
 }
 
+// Every open tile reaches the player. On a map of rooms (MapRecipe.regions), each region's open
+// tiles reach its own start, its start reaches nothing outside it, and nothing open is outside
+// every region; otherwise the whole arena reaches the spawn. Then the spawn and each of
+// MapRecipe.points is open, and reached from its region's start (the spawn's, if it names none).
+function checkReach(
+    game: ArenaGrid,
+    recipe: MapRecipe,
+): { open: number; stranded: number; rooms?: string; problems: string[] } {
+    const problems: string[] = [];
+    const field = new FlowField(Math.max(game.sizeX, game.sizeY) * 2 + 2);
+    const world = (x: number, y: number) => getRecipeWorldTile(recipe, x, y);
+    const toWorld = ({ x0, y0, x1, y1 }: TileRect): TileRect => {
+        const min = world(x0, y0);
+        const max = world(x1, y1);
+        return {
+            x0: Math.floor(min.x),
+            y0: Math.floor(min.y),
+            x1: Math.floor(max.x),
+            y1: Math.floor(max.y),
+        };
+    };
+    const regions = recipe.regions ?? [];
+    const points = recipe.points ?? [];
+    for (const point of points) {
+        if (point.region !== undefined && !regions.some(({ name }) => name === point.region)) {
+            problems.push(`${point.name} is in ${point.region}, which isn't a region`);
+        }
+    }
+    // The points to reach from where the field was last started
+    const checkPoints = (from: string, here: MapPoint[]) => {
+        for (const point of here) {
+            const { x, y } = world(point.x, point.y);
+            const at = `${point.name} at ${point.x},${point.y}`;
+            if (game.isSolid(Math.floor(x), Math.floor(y))) {
+                problems.push(`${at} is solid`);
+            } else if (!field.isReachable(Math.floor(x), Math.floor(y))) {
+                problems.push(`${at} can't be reached from ${from}`);
+            }
+        }
+    };
+    let open = 0;
+    let stranded = 0;
+    const rooms: string[] = [];
+    for (const region of regions) {
+        const from = world(region.from.x, region.from.y);
+        const counts = countStranded(game, from.x, from.y, toWorld(region.rect), field);
+        open += counts.open;
+        stranded += counts.stranded;
+        rooms.push(
+            `${region.name} ${counts.open}` +
+                (counts.stranded ? ` (${counts.stranded} stranded)` : ""),
+        );
+        if (counts.leaked > 0) {
+            problems.push(
+                `${region.name} leaks: its start reaches ${counts.leaked} open tiles outside it`,
+            );
+        }
+        checkPoints(
+            `${region.name}'s start`,
+            points.filter((point) => point.region === region.name),
+        );
+    }
+    if (regions.length > 0) {
+        // Open, but in no region: nothing's meant to get there
+        const rects = regions.map(({ rect }) => toWorld(rect));
+        let loose = 0;
+        for (let y = game.baseY; y < game.baseY + game.sizeY; y++) {
+            for (let x = game.baseX; x < game.baseX + game.sizeX; x++) {
+                if (!game.isSolid(x, y) && !rects.some((rect) => isInRect(rect, x, y))) {
+                    loose++;
+                }
+            }
+        }
+        if (loose > 0) {
+            stranded += loose;
+            problems.push(`${loose} open tiles are outside every region`);
+        }
+    }
+    const spawn = world(recipe.spawn.x, recipe.spawn.y);
+    const whole = countStranded(game, spawn.x, spawn.y, undefined, field);
+    if (regions.length === 0) {
+        open = whole.open;
+        stranded = whole.stranded;
+    }
+    checkPoints("the spawn", [
+        { name: "the spawn", ...recipe.spawn },
+        ...points.filter((point) => point.region === undefined),
+    ]);
+    return { open, stranded, rooms: rooms.length > 0 ? rooms.join(", ") : undefined, problems };
+}
+
 const cache = loadGameCache();
 const only = process.env.ONLY ? new RegExp(process.env.ONLY) : undefined;
 
@@ -1174,9 +1280,9 @@ function checkMap(
     );
     const region = { ...getRecipeArena(recipe), plane: 0 };
     const grid = new ArenaGrid(buildRegionData(sceneBuilder, createVarManager(cache), region));
-    const spawn = getRecipeWorldTile(recipe, recipe.spawn.x, recipe.spawn.y);
-    const { open, stranded } = countStranded(grid, spawn.x, spawn.y);
-    const bridges = checkBridgeRoads(map.grid, map.roadTiles);
+    const reach = checkReach(grid, recipe);
+    const { open, stranded } = reach;
+    const bridges = checkBridgeRoads(map.grid, map.roadTiles, map.designed);
     const gridRect = {
         x0: recipe.margin * 64,
         y0: recipe.margin * 64,
@@ -1190,6 +1296,7 @@ function checkMap(
     const roadHeights = checkRoadHeights(map);
     const hidden = countHiddenTiles(map.grid, grid, origin, gridRect);
     const problems = [
+        ...reach.problems,
         ...bridges.problems,
         ...checkRoadsAndBuildings(map),
         ...checkCollision(map, grid, origin, gridRect, context),
@@ -1216,7 +1323,10 @@ function checkMap(
             `${map.landmarks.length} landmarks, ${map.falls.length} falls, ` +
             `passes ${map.passes.length}, steepest road ${roadHeights.steepest.toFixed(1)}`,
     );
-    for (const problem of problems.slice(0, 16)) {
+    if (reach.rooms) {
+        console.log(`  regions: ${reach.rooms}`);
+    }
+    for (const problem of problems.slice(0, Number(process.env.SHOW ?? 16))) {
         console.log(`  ${problem}`);
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
