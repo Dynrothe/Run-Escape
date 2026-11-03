@@ -1198,7 +1198,7 @@ export class GameClient implements GameFrameHandler {
         this.runRecorded = false;
         this.lastCheckpointSeconds = 0;
         this.tasksAnnounced.clear();
-        this.cloud.startRun(mapId, characterId, sim.seed, endless);
+        this.cloud.startRun(sim.map.id, sim.characterId, sim.seed, sim.endless);
         this.accumulator = 0;
         this.shownDps = 0;
         this.shownDpsTick = 0;

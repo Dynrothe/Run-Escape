@@ -811,7 +811,7 @@ export class SpacetimeSync {
                 roleId: String(grant.roleId),
                 roleName,
                 scopeId: String(grant.scopeId),
-                expiresAt: grant.expiresAt ? Number(grant.expiresAt.microsSinceEpoch / 1000n) : undefined,
+                expiresAt: grant.expiresAt ? Number(grant.expiresAt.microsSinceUnixEpoch / 1000n) : undefined,
             });
 
             if (myIdentity && grant.identity.isEqual(myIdentity)) {

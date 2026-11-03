@@ -1,3 +1,4 @@
+import { Timestamp } from "spacetimedb";
 import { describe, expect, test } from "vitest";
 
 import { RunResult } from "../core/Sim";
@@ -14,6 +15,7 @@ function mockRun(changes: Partial<RunResult> = {}): RunResult {
         characterId: "warrior",
         seed: 12345,
         endless: false,
+        hard: false,
         round: 1,
         victory: true,
         seconds,
@@ -22,10 +24,23 @@ function mockRun(changes: Partial<RunResult> = {}): RunResult {
         xp: 15000,
         kills: 800,
         coins: 1200,
+        caskets: 8,
         casketsOpened: 8,
         bossesKilled: ["count_draynor", "wise_old_man"],
         bossKillTicks: [24000, 45100],
         gearFound: ["coif"],
+        evolutionsMade: [],
+        trophies: [],
+        enemyKills: {},
+        stats: {
+            sources: [],
+            damageTaken: 0,
+            healed: 0,
+            highestHit: 0,
+            rerollsUsed: 0,
+            skips: 0,
+            bossKills: [],
+        },
         ...changes,
     };
 }
@@ -60,21 +75,27 @@ describe("anticheat", () => {
             const run = mockRun({ mapId: "nonexistent_dungeon" });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("Unknown map");
+            if (!res.valid) {
+                expect(res.reason).toContain("Unknown map");
+            }
         });
 
         test("rejects unknown character", () => {
             const run = mockRun({ characterId: "superman" });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("Unknown adventurer");
+            if (!res.valid) {
+                expect(res.reason).toContain("Unknown adventurer");
+            }
         });
 
         test("rejects duration/tick rate discrepancies", () => {
             const run = mockRun({ seconds: 900, ticks: 1000 }); // 1000 ticks = 20s
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("does not match elapsed seconds");
+            if (!res.valid) {
+                expect(res.reason).toContain("does not match elapsed seconds");
+            }
         });
 
         test("rejects excessive kills per second", () => {
@@ -88,7 +109,9 @@ describe("anticheat", () => {
             });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("exceeds plausible spawn limit");
+            if (!res.valid) {
+                expect(res.reason).toContain("exceeds plausible spawn limit");
+            }
         });
 
         test("rejects excessive coins per second", () => {
@@ -106,7 +129,9 @@ describe("anticheat", () => {
             });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("exceeds plausible maximum");
+            if (!res.valid) {
+                expect(res.reason).toContain("exceeds plausible maximum");
+            }
         });
 
         test("rejects standard run exceeding length", () => {
@@ -120,7 +145,9 @@ describe("anticheat", () => {
             });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("Non-endless run exceeds standard duration");
+            if (!res.valid) {
+                expect(res.reason).toContain("Non-endless run exceeds standard duration");
+            }
         });
 
         test("rejects boss kill before earliest spawn tick", () => {
@@ -132,7 +159,9 @@ describe("anticheat", () => {
             });
             const res = verifyRunResult(run);
             expect(res.valid).toBe(false);
-            expect(res.reason).toContain("before its earliest spawn");
+            if (!res.valid) {
+                expect(res.reason).toContain("before its earliest spawn");
+            }
         });
 
         test("computes standard score correctly", () => {
@@ -217,8 +246,9 @@ describe("anticheat", () => {
                 endlessBest: payload.endlessBest,
                 foundGear: payload.foundGear,
                 armoury: payload.armoury,
-                createdAt: BigInt(Date.now() * 1000),
-                updatedAt: BigInt(Date.now() * 1000),
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+                lastRunAt: Timestamp.now(),
             };
 
             const restored = fromPlayerSave(row);

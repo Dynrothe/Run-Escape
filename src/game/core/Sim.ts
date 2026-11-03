@@ -627,6 +627,7 @@ export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
     readonly rng: Rng;
+    readonly seed: number;
     readonly endless: boolean;
     readonly hard: boolean;
 
@@ -978,6 +979,7 @@ export class Sim {
         this.grid = options.grid;
         this.map = getMap(options.mapId ?? "lumbridge");
         this.rng = new Rng(options.seed);
+        this.seed = options.seed;
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
         this.hard = options.hard ?? false;

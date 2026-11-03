@@ -576,9 +576,6 @@ function CloudSyncSetting({ ui, client }: ScreenProps): JSX.Element {
         </>
     );
 }
-        </>
-    );
-}
 
 // Behind the title screen's Settings button
 function SettingsPanel({

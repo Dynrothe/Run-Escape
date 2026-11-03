@@ -46,6 +46,12 @@ function createUi(solo = false, hard = false): UiSnapshot {
         },
         result: {
             mapId: "lumbridge",
+            characterId: "warrior",
+            seed: 12345,
+            ticks: 123 * 50,
+            xp: 1000,
+            casketsOpened: solo ? 1 : 6,
+            bossKillTicks: [],
             endless: false,
             hard,
             round: 1,
