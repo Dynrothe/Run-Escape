@@ -54,6 +54,8 @@ Add it to `WEAPONS` in `weapons.ts`.
 
 Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, and `alsoAdds` puts
 the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item.
+The enabled prayer sprites are Chivalry 945, Piety 946, Rigour 1420 and Augury 1421.
+`slim-cache.ts` collects these sprites from the passive definitions automatically.
 
 ## Stat
 

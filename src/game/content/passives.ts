@@ -192,6 +192,7 @@ export const PASSIVES: PassiveDef[] = [
         rarity: "uncommon",
         // A dexterous prayer scroll
         iconObjId: 21034,
+        iconSpriteId: 1420,
     },
     {
         id: "augury",
@@ -205,6 +206,7 @@ export const PASSIVES: PassiveDef[] = [
         rarity: "uncommon",
         // An arcane prayer scroll
         iconObjId: 21079,
+        iconSpriteId: 1421,
         alsoAdds: ["duration"],
     },
     {

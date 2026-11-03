@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Fixed
+
+- Augury and Rigour show their prayer icons instead of prayer scrolls.
+
 ## 0.23.0 - 2026-11-02
 
 ### Added
