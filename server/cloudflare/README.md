@@ -101,6 +101,10 @@ For a run started with recovery version 1 on **every** client, a disconnect paus
 up to **60 seconds**. The deadline includes reconnecting and replaying missed frames, and does not
 restart on another connection attempt or object reset. A silent connection is retried after six
 seconds without a room message; pings every two seconds detect this without waiting for TCP.
+When only a guest disconnects while the host is connected, that guest keeps their seat for
+**15 seconds**, then the remaining party resumes without them. A full object reset gives missing
+seats the recovery window instead; with a verified host, stalled guests are removed one second
+before the deadline to leave time to deliver the resume. A missing host has the full 60 seconds.
 
 The room stores its roster, seat tokens, original build, run ID, protocol and recovery deadline.
 Create/join/start/leave/kick/end and recovery transitions are saved before acknowledgement;
@@ -114,11 +118,25 @@ at most 8 KiB of JSON text; the relay caps replay traffic at 64 KiB/s with a 128
 seconds) and 2 MiB of serialized text. All members must report the same frame and state hash before
 play resumes. Unacknowledged guest actions are retried with sequence numbers so they apply once.
 Loading/choice timers exclude the pause, and the simulation does not fast-forward the outage.
+Removing or reconnecting one seat preserves the other guests' replay progress. A removed guest's
+hero leaves on the next host frame after recovery, so the barrier still compares the same state.
+
+Gap requests must match a gap the relay observed in the forwarded host stream; a guest cannot
+pause others by inventing one. Client-triggered episodes, including disconnects and replacement
+sockets, have a 30-second per-seat cooldown and a limit of three per seat / twelve per run.
+Exceeding these removes the initiating guest (or closes the room for a host). Actual object resets
+do not consume those limits, including in long endless runs. Resumes are limited to one per second
+per seat and do not rotate everyone else's recovery epoch.
+
+Results-screen gear/unlock updates are still accepted; build/capability stay fixed during the run.
+Capable runs flush and stop at their terminal frame. After leaving results, a guest keeps only
+that frame and hash to answer recovery checks from the room screen, which also shows the countdown.
 
 This covers relay restarts and temporary connection loss, **not page reloads, closing the host's
-tab, host migration, or restoring a game from storage**. Missing history, different hashes, a
-player leaving during recovery, or the deadline expiring ends the run through the existing early
-results flow. A brief visible pause is expected; this is not a guarantee of seamless recovery.
+tab, host migration, or restoring a game from storage**. A guest's missing history, different hash,
+quit, abort or expired seat removes only that guest; an unrecoverable guest gets early results.
+Only a host failure ends recovery for the room. If the host's tab is still open, its run can carry
+on solo, as on the legacy path. A brief visible pause is expected; recovery is not seamless.
 
 Compatibility:
 
@@ -144,6 +162,10 @@ tabs, start a run, and save a file under `src/`: both tabs should pause, then re
 a second reload while paused and a stop longer than 60 seconds; the deadline must not extend.
 Repeat with a guest reconnecting before the host, and confirm that a frontend redeploy alone
 does not invalidate the still-open original tabs.
+Also close a guest tab (others resume after the seat hold), quit during a pause, and reset after a
+guest has left results (the room remains usable). Test on a phone with a full history backlog.
+Fake-storage tests count application writes, but do not verify Cloudflare billing, runtime event
+ordering, real reset/reconnect latency, or replay speed on phones; check those on a staging deploy.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
@@ -153,7 +175,7 @@ the same numbers as `coop-relay.mjs`.
 
 ## Cost
 
-Cloudflare bills Durable Objects by requests and by how long they're awake, not by bandwidth.
+Cloudflare bills Durable Objects for requests, awake duration, and storage operations/data.
 Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. A room is
 billed for every second it's open (at 128 MB), whether or not anything's happening, and the lobby
 only for the moments it's handling something.
@@ -176,6 +198,18 @@ four is around 37 a second. That works out to, for each hour a room is open:
 Check [Cloudflare's pricing](https://developers.cloudflare.com/durable-objects/platform/pricing)
 for the current numbers. Usage is under Workers & Pages, `run-escape-coop`, Metrics, in the
 dashboard.
+
+**Storage and recovery.** The estimates above cover normal gameplay requests and duration, not
+storage. This deployment uses SQLite-backed objects: key-value `put`/`delete` calls count as row
+writes, as do alarms. Room lifecycle changes save the roster before acknowledgement; cosmetic
+changes (including post-run gear) coalesce to at most one write per second. A normal recovery adds
+one room write when the pause begins and one when the barrier completes. Client-triggered episodes
+are capped at twelve per run (at most 24 such transition writes); object resets, disconnected-seat
+deadlines, departures, and other lifecycle changes add writes. Reattaching a socket during a pause
+does not write per attempt. State reports, replay chunks, acknowledgements and ordinary game frames
+do not write storage. Monitor actual reads/writes and alarms alongside requests/duration; the
+SQLite row-write and stored-data allowances also apply. These are application-level write counts,
+not a measured billing estimate for recovery.
 
 **Against abuse.** Workers Paid has no spending cap, so the relay keeps what one connection can cost
 bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (an open

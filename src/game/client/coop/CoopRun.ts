@@ -55,12 +55,12 @@ const RESEND_ASK_MS = 1000;
 
 export type CoopLink = {
     sendUp(message: UpMessage): void;
-    sendDown(message: DownMessage): void;
-    recoveryRequest?(): void;
+    sendDown(message: DownMessage, serialized?: string): void;
+    recoveryRequest?(frame: number, from: number, upTo: number): void;
     recoveryState?(frame: number, hash: number): void;
     recoveryFrames?(to: string, from: number, d: DownMessage): void;
     recoveryAck?(frame: number, hash: number): void;
-    recoveryAbort?(): void;
+    recoveryAbort?(to?: string): void;
 };
 
 // Plays a co-op run in lockstep (see core/lockstep.ts). The host steps when
@@ -348,7 +348,7 @@ export class CoopRun {
         if (Number.isSafeInteger(message.from) && message.from! > this.upTo) {
             // Some went missing: these come again with them
             if (this.recoveryEnabled) {
-                this.link.recoveryRequest?.();
+                this.link.recoveryRequest?.(this.upTo, message.from!, message.upTo);
                 return;
             }
             const now = this.now();
@@ -378,7 +378,9 @@ export class CoopRun {
     canStep(): boolean {
         if (this.recovering)
             return !this.isHost && this.replayUntil !== undefined && this.frame < this.replayUntil;
-        return this.isHost ? !this.waitingForLoad : this.frame < this.upTo;
+        return this.isHost
+            ? !(this.recoveryEnabled && this.sim.runOver) && !this.waitingForLoad
+            : this.frame < this.upTo;
     }
 
     // A guest's frames in hand
@@ -450,7 +452,10 @@ export class CoopRun {
         if (
             !this.isHost ||
             this.upTo === this.sentUpTo ||
-            (!everything && this.outgoing.length === 0 && this.upTo - this.sentUpTo < QUIET_FRAMES)
+            (!everything &&
+                !(this.recoveryEnabled && this.sim.runOver) &&
+                this.outgoing.length === 0 &&
+                this.upTo - this.sentUpTo < QUIET_FRAMES)
         ) {
             return;
         }
@@ -460,8 +465,9 @@ export class CoopRun {
             events: this.outgoing,
             ...(this.outgoingHash && { hash: this.outgoingHash }),
         };
-        if (this.recoveryEnabled) {
-            const bytes = JSON.stringify(message).length * 2;
+        const serialized = this.recoveryEnabled ? JSON.stringify(message) : undefined;
+        if (serialized !== undefined) {
+            const bytes = serialized.length * 2;
             this.history.push({ from: this.sentUpTo, message, bytes });
             this.historyBytes += bytes;
             while (
@@ -478,7 +484,7 @@ export class CoopRun {
                 this.historyHead = 0;
             }
         }
-        this.link.sendDown(message);
+        this.link.sendDown(message, serialized);
         if (!this.recoveryEnabled) {
             this.sent.push(message);
             while (this.sent.length > 0 && this.upTo - this.sent[0].upTo > RESEND_FRAMES)
@@ -533,7 +539,7 @@ export class CoopRun {
             from < 0 ||
             from < (this.history[this.historyHead]?.from ?? this.frame)
         ) {
-            this.link.recoveryAbort?.();
+            this.link.recoveryAbort?.(to);
             return;
         }
         let message: DownMessage = { upTo: from, events: [] };
@@ -551,7 +557,7 @@ export class CoopRun {
             if (JSON.stringify(candidate).length > 8 * 1024) break;
             message = candidate;
         }
-        if (message.upTo === from) this.link.recoveryAbort?.();
+        if (message.upTo === from) this.link.recoveryAbort?.(to);
         else this.link.recoveryFrames?.(to, from, message);
     }
 

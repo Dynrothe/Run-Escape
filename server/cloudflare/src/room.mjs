@@ -144,11 +144,18 @@ export class Room extends DurableObject {
             server.close(1000);
             return new Response(null, { status: 101, webSocket: client });
         }
+        if (Date.now() - (member.resumeAt ?? -Infinity) < 1000) {
+            server.close(1013);
+            return new Response(null, { status: 101, webSocket: client });
+        }
+        member.resumeAt = Date.now();
         const old = member.socket;
         this.attach(member, server);
         member.limit = new RateLimit();
-        member.awayUntil = undefined;
-        this.persist();
+        if (!recovery && member.awayUntil !== undefined) {
+            member.awayUntil = undefined;
+            this.persist();
+        }
         this.emit(() => {
             try {
                 old?.close(1000);
@@ -162,7 +169,7 @@ export class Room extends DurableObject {
             you: member.id,
             token: member.token,
         });
-        if (recovery) this.recovery.pause();
+        if (recovery) this.recovery.resumed(member);
         return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -177,7 +184,7 @@ export class Room extends DurableObject {
             return;
         }
         if (member.token && this.room?.members.includes(member)) {
-            if (this.room.recovery) this.recovery.pause();
+            if (this.room.recovery) this.recovery.disconnected(member);
             else {
                 this.holdPlace(member);
                 this.persist();
@@ -224,7 +231,7 @@ export class Room extends DurableObject {
             room.members.push(member);
             if (!room.recovery) this.holdPlace(member);
         }
-        if (room.recovery) this.recovery.pause();
+        if (room.recovery) this.recovery.restored();
         await this.save();
         if (this.room) this.startHeartbeat(room);
     }
@@ -232,12 +239,19 @@ export class Room extends DurableObject {
     // Lifecycle changes bypass the cosmetic save throttle. Buffer acknowledgements
     // until storage succeeds; a failure resets the object instead of publishing
     // state that a reconnect cannot restore. No game frame enters this path.
-    atomic(change) {
+    atomic(change, sender) {
         return this.ctx.blockConcurrencyWhile(async () => {
             this.outbox = [];
             this.dirty = false;
             try {
-                const result = change();
+                let result;
+                try {
+                    result = change();
+                } catch (error) {
+                    if (!sender) throw error;
+                    this.outbox = [];
+                    this.handlerFailed(sender, error);
+                }
                 if (this.dirty) await this.save();
                 const outbox = this.outbox;
                 this.outbox = undefined;
@@ -294,6 +308,8 @@ export class Room extends DurableObject {
                 token: m.token,
                 recoveryVersion: m.recoveryVersion,
                 awayUntil: m.awayUntil,
+                recoveryEpisodes: m.recoveryEpisodes,
+                recoveryAt: m.recoveryAt,
             })),
             kicked: [...this.kicked],
         });
@@ -331,10 +347,20 @@ export class Room extends DurableObject {
         const message = parseMessage(data);
         if (!message) return;
         if (["up", "down", "ping"].includes(message.t)) {
-            this.handle(member, message, data);
+            try {
+                this.handle(member, message, data);
+            } catch (error) {
+                return this.atomic(() => this.handlerFailed(member, error));
+            }
             return;
         }
-        return this.atomic(() => this.handle(member, message, data));
+        return this.atomic(() => this.handle(member, message, data), member);
+    }
+
+    handlerFailed(member, error) {
+        console.warn("Co-op room: dropped a connection after a handler error:", error);
+        this.closeSocket(member, 1011);
+        this.dropped(member);
     }
 
     send(member, message) {
@@ -472,10 +498,6 @@ export class Room extends DurableObject {
 
     leaveRoom(client, reason) {
         const room = this.room;
-        if (room.recovery?.deadline) {
-            this.disband("recoveryFailed");
-            return;
-        }
         room.members = room.members.filter((member) => member !== client);
         client.ready = false;
         if (reason) {
@@ -500,6 +522,7 @@ export class Room extends DurableObject {
             }
         }
         this.broadcastRoom();
+        this.recovery.removed(client);
     }
 
     disband(reason) {
@@ -528,8 +551,8 @@ export class Room extends DurableObject {
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
         }
-        if (message.recoveryVersion === 1) client.recoveryVersion = 1;
-        if (typeof message.build === "string") {
+        if (!this.room?.started && message.recoveryVersion === 1) client.recoveryVersion = 1;
+        if (!this.room?.started && typeof message.build === "string") {
             client.build = message.build.slice(0, 64);
         }
     }
@@ -571,9 +594,10 @@ export class Room extends DurableObject {
                 this.leaveRoom(client, "left");
                 return;
             case "me":
-                if (!room.started && text.length <= MAX_ME_BYTES) {
+                if (text.length <= MAX_ME_BYTES) {
                     this.setMember(client, message);
-                    this.broadcastMembers();
+                    if (room.started) this.saveCosmetic();
+                    else this.broadcastMembers();
                 }
                 return;
             case "rename":
@@ -714,6 +738,7 @@ export class Room extends DurableObject {
                 if (isHost && room.started && !room.recovery?.deadline) {
                     for (const member of room.members) {
                         if (member !== client) {
+                            if (member.socket) this.recovery.forwarded(member, message.d);
                             this.sendText(member, text);
                         }
                     }

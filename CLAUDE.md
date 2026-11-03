@@ -66,6 +66,11 @@ Cloudflare run recovery lives in `server/cloudflare/src/recovery.mjs`, `CoopLobb
 Only parties whose members all advertise recovery version 1 use it. Keep the fixed 60-second
 deadline through resets, save lifecycle changes before acknowledging them, and verify frame/hash
 agreement before resuming. No per-frame storage writes: the host tab keeps bounded replay history.
+Guest failures remove that seat only, with its hero's leave queued after the barrier; never reset
+other guests' replay progress when removing or reconnecting a seat. A single lost guest has a
+15-second hold; an object reset allows the full recovery window. Client-triggered episodes are
+bounded; actual object resets do not consume that allowance. Completed capable runs stop at their
+terminal frame (flush it even when quiet); `CoopLobby` retains just frame/hash after leaving results.
 Retain the legacy room-token/resend protocol for older parties and the Node relay. See the
 Cloudflare README for deployment compatibility and restart checks. Its unit tests replace only
 the `cloudflare:workers` base class via Vitest's test-only alias; they do not emulate the runtime.

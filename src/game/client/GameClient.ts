@@ -37,7 +37,7 @@ import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
-import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
+import { CoopAction, applyAction, hasBadNumber, syncHash } from "../core/lockstep";
 import {
     NewerSave,
     SaveData,
@@ -737,6 +737,10 @@ export class GameClient implements GameFrameHandler {
 
     // Kicked or disbanded, or the host left: a run that was going ends
     private onCoopGone(reason: GoneReason): void {
+        if (reason === "recoveryFailed" && this.coopRun?.isHost) {
+            this.onCoopClosed();
+            return;
+        }
         if (reason !== "left") {
             this.store.toast(ENDED_EARLY[reason] ?? "You left the party.", 5000);
         }
@@ -763,6 +767,8 @@ export class GameClient implements GameFrameHandler {
                 }
             }
             this.coopRun = undefined;
+            this.accumulator = 0;
+            this.backgroundTime = performance.now();
             // Solo now: a hidden tab no longer needs stepping
             this.stopBackgroundTicker();
             this.store.toast(
@@ -1466,6 +1472,8 @@ export class GameClient implements GameFrameHandler {
     // to the room. show: false when the next run's starting straight away.
     leaveRun(show = true): void {
         const wasCoop = this.coopRun !== undefined;
+        if (this.coopRun && this.sim?.runOver)
+            this.coop.completedRun(this.coopRun.frame, syncHash(this.sim));
         if (wasCoop && show && this.coop.isHost) {
             // The room's open for the next run
             this.coop.end();

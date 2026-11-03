@@ -204,7 +204,7 @@ describe("co-op recovery", () => {
         expect(p.runs[1].act({ kind: "item", index: 0 })).toBe(false);
     });
 
-    it("fails recovery when a guest has fallen beyond the bounded history", () => {
+    it("targets only the guest who has fallen beyond the bounded history", () => {
         const p = party();
         p.drop();
         // Only the transport history matters here; avoid running minutes of combat.
@@ -215,8 +215,47 @@ describe("co-op recovery", () => {
         }
         p.runs[0].pauseForRecovery();
         p.runs[0].replayTo("guest1", 0, p.runs[0].frame);
-        expect(p.aborted).toHaveBeenCalledOnce();
+        expect(p.aborted).toHaveBeenCalledExactlyOnceWith("guest1");
         expect(p.replay).toHaveLength(0);
+    });
+
+    it("queues a removed guest's leave after the barrier so the remaining simulations still agree", () => {
+        const p = party();
+        p.step();
+        p.drop();
+        p.step();
+        p.runs.forEach((run) => run.pauseForRecovery());
+        const hash = syncHash(p.runs[0].sim);
+        p.runs[0].playerLeft("guest1");
+        expect(syncHash(p.runs[0].sim)).toBe(hash);
+        p.recover();
+        p.step();
+        p.step();
+        p.runs[0].flush(true);
+        while (p.runs[2].canStep()) p.runs[2].stepFrame();
+        expect(p.runs[0].sim.heroes[1].left).toBe(true);
+        expect(p.runs[2].sim.heroes[1].left).toBe(true);
+        expect(syncHash(p.runs[2].sim)).toBe(syncHash(p.runs[0].sim));
+    });
+
+    it("keeps a completed recovery run at its terminal frame for room-screen recovery", () => {
+        const p = party();
+        // Make the next simulation frame terminal on every copy.
+        for (const run of p.runs) {
+            const step = run.sim.step.bind(run.sim);
+            vi.spyOn(run.sim, "step").mockImplementation(() => {
+                step();
+                run.sim.state = "dead";
+            });
+        }
+        p.step();
+        expect(p.runs[0].sim.runOver).toBe(true);
+        expect(p.runs.every((run) => !run.canStep())).toBe(true);
+        const finalFrame = p.runs[0].frame;
+        p.runs.forEach((run) => run.pauseForRecovery());
+        p.runs.forEach((run) => run.resumeAfterRecovery());
+        expect(p.runs.every((run) => run.frame === finalFrame && !run.canStep())).toBe(true);
+        expect(syncHash(p.runs[2].sim)).toBe(syncHash(p.runs[0].sim));
     });
 });
 

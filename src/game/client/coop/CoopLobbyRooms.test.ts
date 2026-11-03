@@ -236,6 +236,7 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(again.sent).toEqual([]);
         again.receive({ t: "recoveryDone", ...envelope });
         expect(done).toHaveBeenCalledOnce();
+        expect(again.sent).toEqual([]); // No unchanged cosmetics to write on every resume.
         lobby.sendDown({ upTo: 501, events: [] });
         expect(again.sent.at(-1)?.t).toBe("down");
         expect(onClosed).not.toHaveBeenCalled();
@@ -306,6 +307,69 @@ describe("a relay that keeps each room on its own connection", () => {
             token: "secret",
         });
         expect(left).toHaveBeenCalledExactlyOnceWith("p2");
+        lobby.close();
+    });
+
+    it("answers recovery from the room screen with only the completed run's frame and hash", async () => {
+        const { lobby, room } = await recoverable();
+        lobby.completedRun(123, 456);
+        lobby.onRecoverySync = vi.fn(); // No CoopRun remains after leaving results.
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        const again = FakeSocket.all.at(-1)!;
+        again.receive({
+            t: "room",
+            room: { ...ROOM, started: true },
+            you: "p1",
+            token: recovery.token,
+        });
+        const envelope = { runId: recovery.runId, epoch: "results-reset" };
+        again.receive({ t: "recovering", ...envelope, remainingMs: 60_000 });
+        lobby.setMe({ unlocks: { maps: ["lumbridge", "desert"], endless: [], hard: [] } });
+        again.receive({ t: "recoverySync", ...envelope });
+        expect(again.sent.at(-1)).toEqual({
+            t: "recoveryState",
+            ...envelope,
+            frame: 123,
+            hash: 456,
+        });
+        expect(lobby.onRecoverySync).not.toHaveBeenCalled();
+        again.receive({ t: "recoveryDone", ...envelope });
+        expect(lobby.room?.code).toBe(ROOM.code);
+        expect(again.sent.at(-1)).toMatchObject({
+            t: "me",
+            unlocks: { maps: ["lumbridge", "desert"] },
+        });
+        // The snapshot belongs to this run only.
+        again.receive({ t: "start", game: {}, recovery: { ...recovery, runId: "c".repeat(32) } });
+        const next = { runId: "c".repeat(32), epoch: "next-run" };
+        again.receive({ t: "recovering", ...next, remainingMs: 60_000 });
+        again.receive({ t: "recoverySync", ...next });
+        expect(lobby.onRecoverySync).toHaveBeenCalledOnce();
+        lobby.close();
+    });
+
+    it("uses the advertised window instead of silently disabling recovery", async () => {
+        const { lobby, room } = await inRoom();
+        const gone = vi.fn();
+        lobby.onGone = gone;
+        room.receive({ t: "start", game: {}, recovery: { ...recovery, windowMs: 20_000 } });
+        room.close();
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(gone).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(gone).toHaveBeenCalledExactlyOnceWith("recoveryFailed");
+        lobby.close();
+    });
+
+    it("rejects an unsupported recovery advertisement before starting", async () => {
+        const { lobby, room } = await inRoom();
+        lobby.onStart = vi.fn();
+        lobby.onGone = vi.fn();
+        room.receive({ t: "start", game: {}, recovery: { ...recovery, windowMs: -1 } });
+        expect(lobby.onStart).not.toHaveBeenCalled();
+        expect(lobby.onGone).toHaveBeenCalledExactlyOnceWith("recoveryFailed");
+        expect((lobby as any).view.error).toContain("unsupported reconnect protocol");
         lobby.close();
     });
 

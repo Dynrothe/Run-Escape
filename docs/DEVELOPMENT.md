@@ -844,6 +844,21 @@ replays bounded chunks to each guest, one acknowledged chunk at a time. Play res
 all hashes and frames agree. Guest actions carry `actionSeq`, acknowledged when their frame is
 applied, and are retried without repeating their effect. Recovery deadlines survive resets and
 are never extended by retries. The relay stores no simulation data or per-frame history.
+One lost guest keeps their seat for 15 seconds when the host is still connected. A full object
+reset allows the 60-second window; stalled guests are removed just before it expires if the host
+has reported, so the others can resume. Guest quits, aborts, hash mismatches and missing replay
+history remove only that guest. Their `leave` is queued for the first frame after recovery.
+The host can continue solo if recovery fails. Completed capable runs flush their terminal frame
+and stop stepping; leaving results retains only frame/hash in `CoopLobby` for recovery checks.
+The reconnect countdown also appears in the room. Results-screen `me` updates still save gear and
+unlocks, while build and recovery capability remain fixed during a run.
+
+`recoveryRequest` must match a gap observed in the host's forwarded stream. Client-triggered
+episodes (including socket replacements/disconnects) have a 30-second per-seat cooldown, at most
+three per seat and twelve per run. An offending guest is removed instead of pausing the party
+again. Actual object resets do not consume the allowance. Resumes are throttled to once per second
+per seat and do not write storage unless a durable transition is needed. Handler exceptions drop
+only the sender; storage failures still propagate so uncommitted transitions are not acknowledged.
 
 Older Cloudflare clients and mixed parties keep the 10-second reconnect and 15-second seat hold.
 Updated clients pace the queued legacy messages and reconcile missing departures on reconnect.
@@ -852,8 +867,9 @@ most once a second. This also works through the Node relay, which still sends no
 The coordinated path instead retains 60 seconds / 2 MiB of history in the host tab, uses 8 KiB
 chunks and a relay replay budget, and never queues gameplay while paused. It needs every tab to
 stay open on the original build. A frontend redeploy does not change those running tabs; a page
-reload, incompatible build/protocol, missing history, hash disagreement or a 60-second outage
-ends recovery safely. See [Cloudflare recovery](../server/cloudflare/README.md#recovery-and-compatibility)
+reload or incompatible build/protocol cannot take over a live seat. Unrecoverable guests receive
+early results; a missing or aborting host closes the room. See
+[Cloudflare recovery](../server/cloudflare/README.md#recovery-and-compatibility)
 for rollout and manual runtime checks. The first deployment cannot upgrade an already-running
 legacy party to coordinated recovery.
 

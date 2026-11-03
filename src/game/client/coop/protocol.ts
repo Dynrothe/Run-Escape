@@ -125,10 +125,10 @@ export type RecoveryCredentials = { protocol: 1; runId: string; token: string; w
 type RecoveryEnvelope = { runId: string; epoch: string };
 
 export type ClientMessage =
-    | { t: "recoveryRequest"; runId: string }
+    | { t: "recoveryRequest"; runId: string; frame: number; from: number; upTo: number }
     | (RecoveryEnvelope & { t: "recoveryState" | "recoveryAck"; frame: number; hash: number })
     | (RecoveryEnvelope & { t: "recoveryFrames"; to: string; from: number; d: DownMessage })
-    | (RecoveryEnvelope & { t: "recoveryAbort" })
+    | (RecoveryEnvelope & { t: "recoveryAbort"; to?: string })
     | { t: "ping" }
     // A page of the open rooms (0 for the first), size to a page
     | { t: "list"; page?: number; size?: number }

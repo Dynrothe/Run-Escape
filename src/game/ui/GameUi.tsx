@@ -146,6 +146,7 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
+            {ui.coop.recovering && <RecoveryNotice deadline={ui.coop.recoveryDeadline} />}
             {ui.saveBlock && !ui.saveBlockClosed && (
                 <SaveBlockPanel block={ui.saveBlock} client={client} />
             )}
@@ -1174,6 +1175,26 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function RecoveryNotice({ deadline }: { deadline?: number }): JSX.Element {
+    const [now, setNow] = useState(Date.now);
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const seconds =
+        deadline === undefined ? undefined : Math.max(0, Math.ceil((deadline - now) / 1000));
+    return (
+        <div className="ui-fill" style={{ zIndex: 20 }}>
+            <div className="ui-toasts">
+                <div className="ui-toast" role="status">
+                    Reconnecting to co-op.
+                    {seconds !== undefined && <span aria-live="off"> {seconds}s remaining.</span>}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
@@ -1202,11 +1223,6 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                         {toast.text}
                     </div>
                 ))}
-                {ui.coop.recovering && (
-                    <div className="ui-toast" role="status">
-                        Reconnecting to co-op. Your run is paused for up to 60 seconds.
-                    </div>
-                )}
             </div>
             {ui.overlay === "levelUp" && <LevelUpModal ui={ui} client={client} />}
             {ui.overlay === "chest" && ui.chest && (

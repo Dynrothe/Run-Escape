@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
-import { hasBadNumber } from "../core/lockstep";
+import { hasBadNumber, syncHash } from "../core/lockstep";
 import { LoadedSave, SaveData, SaveStore, createSave } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
 import { DamageMeter } from "./DamageMeter";
@@ -59,6 +59,54 @@ function createClient(sim: Sim, autoAlch: boolean) {
     };
     return { client, store, sync };
 }
+
+describe("co-op recovery failure", () => {
+    test("the host carries on solo without recording an early result", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const finishRun = vi.fn();
+        Object.assign(client, { coopRun: { isHost: true }, accumulator: 100, finishRun });
+        (client as any).onCoopGone("recoveryFailed");
+        expect((client as any).coopRun).toBeUndefined();
+        expect((client as any).accumulator).toBe(0);
+        expect((client as any).sim).toBe(sim);
+        expect(sim.runOver).toBe(false);
+        expect(finishRun).not.toHaveBeenCalled();
+    });
+
+    test("a guest who cannot recover still gets early results", () => {
+        const { client, store } = createClient(createSim(), false);
+        const finishRun = vi.fn();
+        Object.assign(client, { coopRun: { isHost: false }, finishRun, updateHud() {} });
+        (client as any).onCoopGone("recoveryFailed");
+        expect(finishRun).toHaveBeenCalledOnce();
+        expect((client as any).coopStopped).toBe(true);
+        expect(store.getSnapshot().overlay).toBe("dead");
+    });
+
+    test("leaving completed results keeps only the final frame/hash for reconnects", () => {
+        const sim = createSim();
+        sim.state = "dead";
+        const { client, store } = createClient(sim, false);
+        const completedRun = vi.fn();
+        Object.assign(client, {
+            coopRun: { isHost: false, frame: 17 },
+            coop: { completedRun, room: {} },
+            assets: { dropPlayers() {}, setCharacterLook() {} },
+            audio: { stopMusic() {} },
+            grids: { get: () => ({ plane: 0 }) },
+            renderer: { setPlane() {}, setSmoothTerrain() {}, setBrightness() {} },
+            view: { reset() {} },
+            cameraRig: {},
+        });
+        const hash = syncHash(sim);
+        client.leaveRun();
+        expect(completedRun).toHaveBeenCalledExactlyOnceWith(17, hash);
+        expect((client as any).coopRun).toBeUndefined();
+        expect((client as any).sim).toBeUndefined();
+        expect(store.getSnapshot().screen).toBe("coop");
+    });
+});
 
 describe("movement prediction", () => {
     test("is off unless it's been turned on, and is remembered", () => {
