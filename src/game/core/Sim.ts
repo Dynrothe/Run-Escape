@@ -28,7 +28,7 @@ import {
     roundCrowd,
     roundScale,
 } from "../content/endless";
-import { getEnemy } from "../content/enemies";
+import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
     HARD_BOSS_INTERVAL,
     HARD_COINS,
@@ -809,6 +809,8 @@ export class Sim {
     private partyScale: PartyScale;
     // What hard mode multiplies enemies' hitpoints and damage by (1 outside it)
     private readonly hardScale: { hp: number; damage: number };
+    // A boss pattern's bullets a volley on hard mode, times its own (MapDef.hard bullets)
+    private readonly bulletScale: number;
     // What each bone's worth for the party: its scale's experience, made up
     // for when the crowd's cap leaves no room for all of the party's extra
     private partyXp = 1;
@@ -1101,6 +1103,7 @@ export class Sim {
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
         this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
+        this.bulletScale = this.hard ? (this.map.hard?.bullets ?? 1) : 1;
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -3508,6 +3511,7 @@ export class Sim {
         elite: boolean,
         sound?: number,
         ignoreArmor = false,
+        armorCap?: number,
     ): number {
         const player = this.player;
         // Once the run's over nothing more lands, so a win can't turn into a
@@ -3515,7 +3519,11 @@ export class Sim {
         if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
             return 0;
         }
-        const armor = ignoreArmor ? 0 : this.stats.armor;
+        const armor = ignoreArmor
+            ? 0
+            : armorCap === undefined
+              ? this.stats.armor
+              : Math.min(this.stats.armor, damage * armorCap);
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
         this.damageTaken += amount;
@@ -5374,7 +5382,8 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        const count = pattern.count;
+        // A ring's gap is an angle, so more bullets leave it as wide
+        const count = Math.round(pattern.count * this.bulletScale);
         if (pattern.shape === "wall" || pattern.shape === "closing") {
             this.fireGappedVolley(emitter, boss, speed, life, turn);
             return;
@@ -5440,8 +5449,9 @@ export class Sim {
         turn: number,
     ): void {
         const pattern = emitter.attack.pattern!;
-        const count = pattern.count;
-        const gap = Math.min(pattern.gap ?? 2, count - 1);
+        // More bullets on hard (bulletScale), closer together, with as wide a way through
+        const count = Math.round(pattern.count * this.bulletScale);
+        const gap = Math.min(Math.round((pattern.gap ?? 2) * this.bulletScale), count - 1);
         // Anywhere round a ring; never at a wall's ends, which can be in a room's walls
         const gapStart =
             pattern.shape === "closing"
@@ -5462,7 +5472,7 @@ export class Sim {
                 this.tick,
             );
         if (pattern.shape === "wall") {
-            const spacing = pattern.spacing ?? pattern.radius * 2.5;
+            const spacing = (pattern.spacing ?? pattern.radius * 2.5) / this.bulletScale;
             const across = emitter.angle + Math.PI / 2;
             const from = pattern.from ?? 0;
             const startX = boss.x + fm.cos(emitter.angle) * from;
@@ -6669,6 +6679,7 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
+            ENEMY_BY_ID.get(enemyId)?.boss?.armorCap,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;

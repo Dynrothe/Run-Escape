@@ -29,6 +29,9 @@ const protects: EnemyDef["protects"] = {
 // elsewhere), so standing in a pattern costs, as on Phosani's Nightmare (her 0.3)
 const HIT_HARDER = 1.5;
 const BULLET_GRACE = 0.5;
+// Armour (Protect from Melee, Defence, gear) takes off at most this share of a boss's hit: fully
+// built, it had made nearly every hit a 1
+const ARMOR_CAP = 0.5;
 
 // Splats (the blood 1579, the acid 1654) reach well past their middle: drawn at this size, all of
 // a splat's on the ground it hurts
@@ -691,7 +694,9 @@ function withScale(scale: number, enemy: EnemyDef): EnemyDef {
 // The raid's own bosses. The Bloat, Sotetseg and Verzik need Morytania's, from enemies.ts.
 export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     return theatreBosses(byId).map((enemy) =>
-        enemy.boss ? { ...enemy, boss: { ...enemy.boss, bulletGrace: BULLET_GRACE } } : enemy,
+        enemy.boss
+            ? { ...enemy, boss: { ...enemy.boss, bulletGrace: BULLET_GRACE, armorCap: ARMOR_CAP } }
+            : enemy,
     );
 }
 

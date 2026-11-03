@@ -598,7 +598,10 @@ the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the 
 in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses'
 rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
 hits are lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in
-`theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second. Their
+`theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second.
+Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`). On hard and expert, every
+pattern fires `MapDef.hard.bullets` times its bullets (`Sim.bulletScale`): a ring's gap is an
+angle and keeps its width, and a wall's or closing ring's gap grows with the count. Their
 hitpoints (each room's `bossHp`) are tuned to players' clears, not the bot's: it dies to the Maiden.
 
 `?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at

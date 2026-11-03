@@ -779,6 +779,10 @@ export type BossDef = {
     // second when unset): what a bullet hell's worth of petals can do to
     // someone stood in them
     bulletGrace?: number;
+    // The most of each of its hits the player's armour can take off, as a share of the hit (all
+    // of it, down to 1, when unset): the Theatre's bosses, whose many small hits armour would
+    // otherwise turn to 1s
+    armorCap?: number;
     // A final boss: the run goes on this many seconds after it falls, for its
     // death animation to play before the victory screen, with nothing
     // landing on the players meanwhile (the run's time is to the fall)
@@ -1153,7 +1157,9 @@ export type MapDef = {
     // What hard mode multiplies those by here (see hard.ts for when it's unset).
     // More on the early maps, which a player with everything bought walks
     // through, and less on the late ones, which are hard enough already.
-    hard?: { hp: number; damage: number };
+    // bullets: what its bosses' patterns' bullets a volley are multiplied by, with their gaps kept
+    // as wide (a raid's, and so its expert mode's too)
+    hard?: { hp: number; damage: number; bullets?: number };
     waves: WaveDef[];
     events: RunEventDef[];
     // The countdown before the final boss, and the victory title

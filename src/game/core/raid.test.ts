@@ -328,8 +328,10 @@ const TEST_BOSS_IDS = [
 
 describe("the Theatre's bullet shapes", () => {
     // One volley of a boss's attack, from its own spot
-    function volley(attackName: string, bossId: string) {
+    // bulletScale: hard mode's bullets (MapDef.hard bullets)
+    function volley(attackName: string, bossId: string, bulletScale = 1) {
         const sim = raid();
+        Object.assign(sim, { bulletScale });
         const def = getEnemy(bossId);
         const attack = def.boss!.attacks.find((a) => a.name === attackName) as BossAttackDef;
         const boss = sim.spawnEnemy(def, "boss", { x: 1018.5, y: 1040.5 })!;
@@ -405,6 +407,27 @@ describe("the Theatre's bullet shapes", () => {
         }
     });
 
+    it("hard mode fires half as many bullets again, with as wide a way through", () => {
+        expect(getMap("theatre_of_blood").hard?.bullets).toBe(1.5);
+        // A ring: its gap is an angle
+        const ring = volley("Blood throw", "maiden_of_sugadinti");
+        const hardRing = volley("Blood throw", "maiden_of_sugadinti", 1.5);
+        const more = hardRing.shot.length / ring.shot.length;
+        expect(more).toBeGreaterThan(1.4);
+        expect(more).toBeLessThan(1.7);
+        // A wall: as long, closer together, and its gap as many tiles across
+        const wall = volley("The maze", "tob_sotetseg");
+        const hardWall = volley("The maze", "tob_sotetseg", 1.5);
+        const pattern = wall.attack.pattern!;
+        expect(wall.shot).toHaveLength(pattern.count - pattern.gap!);
+        expect(hardWall.shot).toHaveLength(
+            Math.round(pattern.count * 1.5) - Math.round(pattern.gap! * 1.5),
+        );
+        const across = (shot: { x: number }[]) =>
+            Math.max(...shot.map((b) => b.x)) - Math.min(...shot.map((b) => b.x));
+        expect(across(hardWall.shot)).toBeLessThanOrEqual(across(wall.shot) + 1);
+    });
+
     it("a closing ring forms round the player and comes in on them, with its gap", () => {
         const { attack, shot } = volley("Blood tide", "maiden_of_sugadinti");
         const pattern = attack.pattern!;
@@ -443,6 +466,24 @@ describe("the Theatre's bosses", () => {
         // Everything else, as it was
         expect(getEnemy("sotetseg").protects).toBeUndefined();
         expect(getEnemy("tob_sotetseg").protects?.styles).toEqual(["ranged", "magic"]);
+    });
+
+    it("armour takes at most half of a boss's hit, and all of anyone else's", () => {
+        const sim = raid();
+        sim.player.hp = sim.player.maxHp = 1000;
+        sim.stats.armor = 20;
+        const attack = getEnemy("maiden_of_sugadinti").boss!.attacks[0];
+        const taken = (enemyId: string) => {
+            const hp = sim.player.hp;
+            sim.player.invulnerable = 0;
+            sim["bossHit"](enemyId, undefined, attack, 12);
+            return hp - sim.player.hp;
+        };
+        // A raid boss's 12 loses no more than 6 to the 20 armour
+        expect(taken("maiden_of_sugadinti")).toBe(6);
+        expect(taken("tob_sotetseg")).toBe(6);
+        // Morytania's Sotetseg, as it was: down to 1
+        expect(taken("sotetseg")).toBe(1);
     });
 
     it("the Bloat takes little while he walks, all of it when he's down, and stomps getting up", () => {

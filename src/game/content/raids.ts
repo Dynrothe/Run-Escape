@@ -372,7 +372,8 @@ export const RAID_MAPS: MapDef[] = [
         spawn: TOB_ROOMS[0].start,
         // As hard as the Inferno, the campaign's hardest map
         difficulty: { hp: 3.75, damage: 2.7 },
-        hard: { hp: 1.4, damage: 1.2 },
+        // Hard mode, and expert with it: half as many bullets again in every pattern
+        hard: { hp: 1.4, damage: 1.2, bullets: 1.5 },
         ...allOf(TOB_ROOMS),
         raid: { rooms: TOB_ROOMS },
         finalBossWarning: "The Theatre's curtain rises... Verzik Vitur awaits!",

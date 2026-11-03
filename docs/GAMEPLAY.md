@@ -330,7 +330,8 @@ version and how to run it.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
-    - **Beaten once**: the Ghrazi rapier and hard mode.
+    - **Beaten once**: the Ghrazi rapier and hard mode, whose bosses fire half as many bullets
+      again in every pattern (and so on expert too).
     - **Beaten on hard**: the Holy Scythe of Vitur, and **expert mode**: hard mode with more of the
       real raid. The Nylocas only take their own style (grey melee, green ranged, blue magic),
       Nylocas Vasilias changes colour, the Maiden's Matomenos crawl to her and heal her, Xarpus

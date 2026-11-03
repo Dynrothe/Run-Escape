@@ -10,6 +10,10 @@ the version in the corner).
 - The Theatre of Blood's bosses are much tougher: two and a half to six times their hitpoints,
   harder hits, and their bullets can hit twice as often.
 - The Theatre of Blood's bosses take less from missiles and magic: 15% of their damage, from 30%.
+- Armour takes off at most half of a Theatre of Blood boss's hit, so Protect from Melee no longer
+  turns them all to 1s.
+- The Theatre of Blood's hard and expert modes fire half as many bullets again in every pattern,
+  with the gaps through them as wide.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04
