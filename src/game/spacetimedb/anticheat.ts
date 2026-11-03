@@ -20,6 +20,11 @@ const FINAL_BOSS_BY_MAP: Readonly<Record<string, string>> = {
     karamja: "tztok_jad",
     kourend: "alchemical_hydra",
     varlamore: "sol_heredit",
+    morytania: "verzik_vitur",
+    god_wars: "nex",
+    prifddinas: "corrupted_hunllef",
+    inferno: "jaltok_jad_finale",
+    halloween: "the_nightmare",
 };
 
 const BOSS_EARLIEST_SPAWN_SECONDS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
@@ -46,10 +51,42 @@ const BOSS_EARLIEST_SPAWN_SECONDS: Readonly<Record<string, Readonly<Record<strin
         javelin_colossus: 600,
         sol_heredit: 900,
     },
+    morytania: {
+        vanstrom_klause: 300,
+        pestilent_bloat: 450,
+        sotetseg: 600,
+        verzik_vitur: 900,
+    },
+    god_wars: {
+        commander_zilyana: 300,
+        kreearra: 450,
+        kril_tsutsaroth: 600,
+        nex: 900,
+        nex_ice: 900,
+    },
+    prifddinas: {
+        zulrah: 300,
+        zalcano: 450,
+        crystalline_hunllef: 600,
+        corrupted_hunllef: 900,
+    },
+    inferno: {
+        jaltok_jad: 300,
+        jal_zek_champion: 450,
+        tzhaar_ket_champion: 600,
+        jaltok_jad_finale: 900,
+    },
+    halloween: {
+        slash_bash: 300,
+        the_mimic: 600,
+        the_nightmare: 900,
+    },
     grand_exchange: { the_doubler: 240, lure_master: 240, bot_farm: 240, melodox: 240 },
     east_varrock: { clan_leader: 240, rune_2h_pure: 240, wildy_mage: 240 },
     falador: { player_moderator: 240, cursed_you: 240, mod_murdoch: 240 },
     last_man_standing: { ags_specer: 240, claws_specer: 240, lms_dharok: 240 },
+    castle_wars: { flag_carrier: 240, catapult_crew: 240, zamorak_tank_boss: 240 },
+    pest_control: { purple_portal: 180, blue_portal: 180, yellow_portal: 180, red_portal: 180 },
 };
 
 export type VerificationResult = { valid: true } | { valid: false; reason: string };
@@ -116,11 +153,17 @@ export function verifyRunResult(run: RunResult): VerificationResult {
                 };
             }
             const finalBoss = FINAL_BOSS_BY_MAP[run.mapId];
-            if (finalBoss && !run.bossesKilled.includes(finalBoss)) {
-                return {
-                    valid: false,
-                    reason: `Victory on ${run.mapId} requires defeating ${finalBoss}.`,
-                };
+            if (finalBoss) {
+                const defeated =
+                    run.mapId === "god_wars"
+                        ? run.bossesKilled.includes("nex") || run.bossesKilled.includes("nex_ice")
+                        : run.bossesKilled.includes(finalBoss);
+                if (!defeated) {
+                    return {
+                        valid: false,
+                        reason: `Victory on ${run.mapId} requires defeating ${finalBoss}.`,
+                    };
+                }
             }
         }
     } else {

@@ -458,6 +458,7 @@ name = "rune_survivors"
 version = "0.1.0"
 dependencies = [
  "log",
+ "serde_json",
  "spacetimedb",
 ]
 

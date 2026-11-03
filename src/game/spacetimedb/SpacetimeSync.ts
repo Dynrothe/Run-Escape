@@ -212,7 +212,10 @@ function extractJwtDisplayName(jwt: string): string | undefined {
         const claims = JSON.parse(payloadJson) as Record<string, unknown>;
         const raw =
             (typeof claims.preferred_username === "string" && claims.preferred_username) ||
+            (typeof claims.login === "string" && claims.login) ||
             (typeof claims.nickname === "string" && claims.nickname) ||
+            (typeof claims.username === "string" && claims.username) ||
+            (typeof claims.global_name === "string" && claims.global_name) ||
             (typeof claims.name === "string" && claims.name);
         if (!raw) {
             return undefined;
@@ -373,6 +376,26 @@ export class SpacetimeSync {
         }
         try {
             await this.conn.reducers.setDisplayName({ displayName: name.trim() });
+            return undefined;
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    /**
+     * Re-syncs the player's hiscore display name directly from their 3rd-party auth claims (e.g. Twitch).
+     */
+    async syncDisplayName(): Promise<string | undefined> {
+        if (!this.state.isLoggedIn) {
+            return "Please log in to sync your display name.";
+        }
+        if (!this.conn || !this.conn.isActive) {
+            return "Not connected to SpacetimeDB.";
+        }
+        try {
+            const token = this.getStoredToken();
+            const claimName = token ? extractJwtDisplayName(token) ?? "" : "";
+            await this.conn.reducers.setDisplayName({ displayName: claimName });
             return undefined;
         } catch (e) {
             return e instanceof Error ? e.message : String(e);

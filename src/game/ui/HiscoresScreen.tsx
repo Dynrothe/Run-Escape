@@ -22,7 +22,6 @@ export function HiscoresScreen({ ui, client }: Props): JSX.Element {
     const selectedMap = getMap(selectedMapId);
     const [mode, setMode] = useState<BoardMode>(selectedMap.fun ? "endless" : "endless");
 
-    const [nameInput, setNameInput] = useState(cloud.displayName ?? "");
     const [nameBusy, setNameBusy] = useState(false);
     const [nameFeedback, setNameFeedback] = useState<{ text: string; error: boolean }>();
 
@@ -32,39 +31,21 @@ export function HiscoresScreen({ ui, client }: Props): JSX.Element {
     const [grantFeedback, setGrantFeedback] = useState<string>();
     const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-    useEffect(() => {
-        if (cloud.displayName && !nameInput) {
-            setNameInput(cloud.displayName);
-        }
-    }, [cloud.displayName, nameInput]);
-
     // Fun maps are always endless
     const effectiveMode: BoardMode = selectedMap.fun ? "endless" : mode;
 
     const endlessEntries = cloud.endlessLeaderboard.filter((e) => e.mapId === selectedMapId);
     const standardEntries = cloud.standardLeaderboard.filter((e) => e.mapId === selectedMapId);
 
-    const syncAriaInvalid = (input: HTMLInputElement) => {
-        const check = validateDisplayName(input.value);
-        input.setCustomValidity(check.valid ? "" : check.reason);
-        input.setAttribute("aria-invalid", String(!input.validity.valid));
-    };
-
-    const onSubmitDisplayName = async (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const check = validateDisplayName(nameInput);
-        if (!check.valid) {
-            setNameFeedback({ text: check.reason, error: true });
-            return;
-        }
+    const onSyncDisplayName = async () => {
         setNameBusy(true);
         setNameFeedback(undefined);
-        const err = await client.setCloudDisplayName(nameInput);
+        const err = await client.syncCloudDisplayName();
         setNameBusy(false);
         if (err) {
             setNameFeedback({ text: err, error: true });
         } else {
-            setNameFeedback({ text: "Display name updated!", error: false });
+            setNameFeedback({ text: "Display name synced with account!", error: false });
         }
     };
 
@@ -140,44 +121,25 @@ export function HiscoresScreen({ ui, client }: Props): JSX.Element {
                         </div>
                     ) : (
                         cloud.status === "connected" && (
-                            <form className="ui-rsn-form" onSubmit={onSubmitDisplayName}>
+                            <div className="ui-rsn-form">
                                 <div className="ui-rsn-field">
-                                    <label htmlFor="rsn-input" className="ui-rsn-label">
-                                        Display name
-                                    </label>
+                                    <span className="ui-rsn-label">
+                                        Hiscores display name
+                                    </span>
                                     <span id="rsn-hint" className="ui-rsn-hint">
-                                        1–12 characters: letters, numbers, spaces, hyphens, or
-                                        underscores.
+                                        Linked to your 3rd-party account (e.g. Twitch).
                                     </span>
                                     <div className="ui-rsn-input-row">
-                                        <input
-                                            id="rsn-input"
-                                            className="ui-rsn-input"
-                                            type="text"
-                                            required
-                                            minLength={1}
-                                            maxLength={12}
-                                            pattern="^(?!.*  )[A-Za-z0-9 _\-]{1,12}$"
-                                            aria-describedby="rsn-hint rsn-feedback"
-                                            value={nameInput}
-                                            placeholder={cloud.displayName ?? "Adventurer"}
-                                            onChange={(e) => setNameInput(e.target.value)}
-                                            onBlur={(e) => syncAriaInvalid(e.currentTarget)}
-                                            onInput={(e) => {
-                                                if (
-                                                    e.currentTarget.getAttribute("aria-invalid") ===
-                                                    "true"
-                                                ) {
-                                                    syncAriaInvalid(e.currentTarget);
-                                                }
-                                            }}
-                                        />
+                                        <div className="ui-rsn-badge rs-border">
+                                            {cloud.displayName ?? "Adventurer"}
+                                        </div>
                                         <button
-                                            type="submit"
+                                            type="button"
                                             className="ui-button ui-button-small"
                                             disabled={nameBusy}
+                                            onClick={onSyncDisplayName}
                                         >
-                                            {nameBusy ? "Saving..." : "Set name"}
+                                            {nameBusy ? "Syncing..." : "Sync from account"}
                                         </button>
                                     </div>
                                     {nameFeedback && (
@@ -194,7 +156,7 @@ export function HiscoresScreen({ ui, client }: Props): JSX.Element {
                                         </span>
                                     )}
                                 </div>
-                            </form>
+                            </div>
                         )
                     )}
                 </div>

@@ -192,6 +192,11 @@ const CAMPAIGN_MAPS: &[&str] = &[
     "karamja",
     "kourend",
     "varlamore",
+    "morytania",
+    "god_wars",
+    "prifddinas",
+    "inferno",
+    "halloween",
 ];
 
 const FUN_MAPS: &[&str] = &[
@@ -199,6 +204,8 @@ const FUN_MAPS: &[&str] = &[
     "east_varrock",
     "falador",
     "last_man_standing",
+    "castle_wars",
+    "pest_control",
 ];
 
 const VALID_CHARACTERS: &[&str] = &[
@@ -221,10 +228,20 @@ const VALID_CHARACTERS: &[&str] = &[
     "shayzien_soldier",
     "gladiator",
     "javelineer",
+    "vampyre_hunter",
+    "werewolf",
+    "godsword_knight",
+    "armadyl_ranger",
+    "elf_archer",
+    "gauntlet_runner",
+    "infernal_champion",
+    "tzhaar_hur",
     "scammer",
     "f2p_pker",
     "durial321",
     "lms_sweat",
+    "castle_wars_veteran",
+    "void_knight",
     "dwarf",
 ];
 
@@ -245,6 +262,10 @@ const SHOP_UPGRADES: &[(&str, u32, u64)] = &[
     ("mining", 5, 200),
     ("hunter", 3, 500),
     ("ring_of_life", 1, 10000),
+    ("woodcutting", 3, 400),
+    ("smithing", 2, 10000),
+    ("crafting", 2, 7500),
+    ("runecraft", 3, 800),
 ];
 
 fn is_campaign_map(map_id: &str) -> bool {
@@ -259,6 +280,27 @@ fn is_valid_map(map_id: &str) -> bool {
     is_campaign_map(map_id) || is_fun_map(map_id)
 }
 
+fn is_map_unlocked(map_id: &str, map_victories: &[KeyCount]) -> bool {
+    if is_fun_map(map_id) || map_id == "lumbridge" || map_id == "halloween" {
+        return true;
+    }
+    let has_beaten = |m: &str| map_victories.iter().any(|v| v.id == m && v.count > 0);
+    match map_id {
+        "barrows" => has_beaten("lumbridge"),
+        "wilderness" => has_beaten("barrows"),
+        "desert" => has_beaten("wilderness"),
+        "fremennik" => has_beaten("desert"),
+        "karamja" => has_beaten("fremennik"),
+        "kourend" => has_beaten("karamja"),
+        "varlamore" => has_beaten("kourend"),
+        "morytania" => has_beaten("varlamore"),
+        "god_wars" => has_beaten("morytania"),
+        "prifddinas" => has_beaten("god_wars"),
+        "inferno" => has_beaten("prifddinas"),
+        _ => false,
+    }
+}
+
 fn final_boss_for_map(map_id: &str) -> Option<&'static str> {
     match map_id {
         "lumbridge" => Some("wise_old_man"),
@@ -269,6 +311,11 @@ fn final_boss_for_map(map_id: &str) -> Option<&'static str> {
         "karamja" => Some("tztok_jad"),
         "kourend" => Some("alchemical_hydra"),
         "varlamore" => Some("sol_heredit"),
+        "morytania" => Some("verzik_vitur"),
+        "god_wars" => Some("nex"),
+        "prifddinas" => Some("corrupted_hunllef"),
+        "inferno" => Some("jaltok_jad_finale"),
+        "halloween" => Some("the_nightmare"),
         _ => None,
     }
 }
@@ -315,11 +362,40 @@ fn boss_earliest_spawn_seconds(map_id: &str, boss_id: &str) -> Option<u32> {
         ("varlamore", "shockwave_colossus") => Some(450),
         ("varlamore", "javelin_colossus") => Some(600),
         ("varlamore", "sol_heredit") => Some(900),
-        // Fun maps (first boss at 240s)
+        // Morytania
+        ("morytania", "vanstrom_klause") => Some(300),
+        ("morytania", "pestilent_bloat") => Some(450),
+        ("morytania", "sotetseg") => Some(600),
+        ("morytania", "verzik_vitur") => Some(900),
+        // God Wars
+        ("god_wars", "commander_zilyana") => Some(300),
+        ("god_wars", "kreearra") => Some(450),
+        ("god_wars", "kril_tsutsaroth") => Some(600),
+        ("god_wars", "nex") | ("god_wars", "nex_ice") => Some(900),
+        // Prifddinas
+        ("prifddinas", "zulrah") => Some(300),
+        ("prifddinas", "zalcano") => Some(450),
+        ("prifddinas", "crystalline_hunllef") => Some(600),
+        ("prifddinas", "corrupted_hunllef") => Some(900),
+        // Inferno
+        ("inferno", "jaltok_jad") => Some(300),
+        ("inferno", "jal_zek_champion") => Some(450),
+        ("inferno", "tzhaar_ket_champion") => Some(600),
+        ("inferno", "jaltok_jad_finale") => Some(900),
+        // Halloween
+        ("halloween", "slash_bash") => Some(300),
+        ("halloween", "the_mimic") => Some(600),
+        ("halloween", "the_nightmare") => Some(900),
+        // Fun maps (first boss at 240s, pest control at 180s)
         ("grand_exchange", "the_doubler" | "lure_master" | "bot_farm" | "melodox") => Some(240),
         ("east_varrock", "clan_leader" | "rune_2h_pure" | "wildy_mage") => Some(240),
         ("falador", "player_moderator" | "cursed_you" | "mod_murdoch") => Some(240),
         ("last_man_standing", "ags_specer" | "claws_specer" | "lms_dharok") => Some(240),
+        ("castle_wars", "flag_carrier" | "catapult_crew" | "zamorak_tank_boss") => Some(240),
+        (
+            "pest_control",
+            "purple_portal" | "blue_portal" | "yellow_portal" | "red_portal",
+        ) => Some(180),
         _ => None,
     }
 }
@@ -438,6 +514,9 @@ pub fn verify_run(run: &RunSubmission) -> Result<(), String> {
         if run.round != 1 {
             return Err("Standard runs only have 1 round.".to_string());
         }
+        if run.seconds > 905.0 {
+            return Err("Non-endless run exceeds standard duration (15:05 limit).".to_string());
+        }
         if run.victory {
             if run.ticks < RUN_LENGTH_TICKS || run.seconds < RUN_LENGTH_SECONDS {
                 return Err(
@@ -445,7 +524,12 @@ pub fn verify_run(run: &RunSubmission) -> Result<(), String> {
                 );
             }
             if let Some(final_boss) = final_boss_for_map(&run.map_id) {
-                if !run.bosses_killed.iter().any(|b| b == final_boss) {
+                let defeated = if run.map_id == "god_wars" {
+                    run.bosses_killed.iter().any(|b| b == "nex" || b == "nex_ice")
+                } else {
+                    run.bosses_killed.iter().any(|b| b == final_boss)
+                };
+                if !defeated {
                     return Err(format!(
                         "Victory on {} requires defeating {}.",
                         run.map_id, final_boss
@@ -558,11 +642,10 @@ pub fn verify_run(run: &RunSubmission) -> Result<(), String> {
     Ok(())
 }
 
-fn default_player_save(identity: Identity, now: Timestamp) -> PlayerSave {
-    let short_id = identity.to_hex().chars().take(6).collect::<String>();
+fn default_player_save(identity: Identity, now: Timestamp, display_name: String) -> PlayerSave {
     PlayerSave {
         identity,
-        display_name: format!("Adv_{}", short_id),
+        display_name,
         created_at: now,
         updated_at: now,
         last_run_at: Timestamp::from_micros_since_unix_epoch(0),
@@ -585,6 +668,69 @@ fn default_player_save(identity: Identity, now: Timestamp) -> PlayerSave {
         endless_best: Vec::new(),
         found_gear: Vec::new(),
         armoury: Vec::new(),
+    }
+}
+
+/// Extracts the user's verified display name from 3rd party OIDC JWT claims (e.g. Twitch preferred_username).
+fn extract_jwt_display_name(ctx: &ReducerContext) -> Option<String> {
+    let auth = ctx.sender_auth();
+    let jwt = auth.jwt()?;
+    let payload = jwt.raw_payload();
+    let val: serde_json::Value = serde_json::from_str(payload).ok()?;
+
+    let raw = val
+        .get("preferred_username")
+        .or_else(|| val.get("login"))
+        .or_else(|| val.get("nickname"))
+        .or_else(|| val.get("username"))
+        .or_else(|| val.get("global_name"))
+        .or_else(|| val.get("name"))
+        .and_then(|v| v.as_str())?;
+
+    let mut clean = String::new();
+    let mut prev_space = false;
+    for ch in raw.chars() {
+        if clean.len() >= 12 {
+            break;
+        }
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            clean.push(ch);
+            prev_space = false;
+        } else if ch == ' ' {
+            if !prev_space && !clean.is_empty() {
+                clean.push(' ');
+                prev_space = true;
+            }
+        }
+    }
+    let trimmed = clean.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Resolves the player's display name from the 3rd party service, disambiguating collisions if taken.
+fn resolve_display_name(ctx: &ReducerContext, sender: Identity) -> String {
+    let base_name = extract_jwt_display_name(ctx).unwrap_or_else(|| {
+        let short_id = sender.to_hex().chars().take(6).collect::<String>();
+        format!("Adv_{}", short_id)
+    });
+
+    let clean_lower = base_name.to_lowercase();
+    let is_taken = ctx.db.player_save().iter().any(|r| {
+        r.identity != sender && r.display_name.to_lowercase() == clean_lower
+    });
+
+    if !is_taken {
+        base_name
+    } else {
+        let hex = sender.to_hex();
+        let suffix = format!("_{}", &hex[..3.min(hex.len())]);
+        let max_prefix_len = 12usize.saturating_sub(suffix.len());
+        let prefix: String = base_name.chars().take(max_prefix_len).collect();
+        format!("{}{}", prefix, suffix)
     }
 }
 
@@ -625,10 +771,20 @@ fn apply_unlocks_to_save(save: &mut PlayerSave, run: Option<&RunSubmission>) {
         ("shayzien_soldier", killed_boss("kourend", "sarachnis")),
         ("gladiator", has_beaten("varlamore", &save.map_victories)),
         ("javelineer", killed_boss("varlamore", "javelin_colossus")),
+        ("vampyre_hunter", has_beaten("morytania", &save.map_victories)),
+        ("werewolf", killed_boss("morytania", "pestilent_bloat")),
+        ("godsword_knight", has_beaten("god_wars", &save.map_victories)),
+        ("armadyl_ranger", killed_boss("god_wars", "kreearra")),
+        ("elf_archer", has_beaten("prifddinas", &save.map_victories)),
+        ("gauntlet_runner", survived("prifddinas", 600.0)),
+        ("infernal_champion", has_beaten("inferno", &save.map_victories)),
+        ("tzhaar_hur", killed_boss("inferno", "jaltok_jad")),
         ("scammer", survived("grand_exchange", 600.0)),
         ("f2p_pker", killed_boss("east_varrock", "clan_leader")),
         ("durial321", survived("falador", 366.0)),
         ("lms_sweat", killed_boss("last_man_standing", "ags_specer")),
+        ("castle_wars_veteran", killed_boss("castle_wars", "flag_carrier")),
+        ("void_knight", killed_boss("pest_control", "purple_portal")),
     ];
     for (char_id, earned) in char_tasks {
         if *earned {
@@ -638,43 +794,91 @@ fn apply_unlocks_to_save(save: &mut PlayerSave, run: Option<&RunSubmission>) {
 
     // Item unlocks
     let item_tasks: &[(&str, bool)] = &[
-        ("osmumtens_fang", has_beaten("desert", &save.map_victories)),
-        ("smoke_burst", killed_boss("desert", "fareed")),
-        ("blood_burst", killed_boss("desert", "dessous")),
-        ("shadow_burst", killed_boss("desert", "damis_risen")),
-        (
-            "dragon_hunter_crossbow",
-            has_beaten("fremennik", &save.map_victories),
-        ),
-        ("vengeance", killed_boss("fremennik", "dagannoth_prime")),
-        ("astral_runes", killed_boss("fremennik", "dagannoth_prime")),
-        ("tzhaar_ket_om", has_beaten("karamja", &save.map_victories)),
-        ("dragonfire_shield", killed_boss("karamja", "elvarg")),
-        ("obsidian_armour", killed_boss("karamja", "ket_zek")),
         ("toktz_xil_ul", killed_boss("karamja", "ket_zek")),
-        ("kodai_wand", has_beaten("kourend", &save.map_victories)),
+        ("smoke_burst", has_beaten("desert", &save.map_victories)),
+        ("shadow_burst", has_beaten("desert", &save.map_victories)),
+        ("blood_burst", has_beaten("desert", &save.map_victories)),
+        ("undead_grasp", killed_boss("kourend", "skotizo")),
+        ("colossal_blade", has_beaten("varlamore", &save.map_victories)),
+        ("astral_runes", killed_boss("fremennik", "dagannoth_prime")),
+        ("godsword", has_beaten("god_wars", &save.map_victories)),
+        ("dragon_claws", killed_boss("morytania", "pestilent_bloat")),
+        ("ivandis_flail", has_beaten("morytania", &save.map_victories)),
+        ("osmumtens_fang", has_beaten("desert", &save.map_victories)),
+        ("tzhaar_ket_om", has_beaten("karamja", &save.map_victories)),
         (
             "dragon_warhammer",
             killed_boss("kourend", "lizardman_shaman"),
         ),
-        ("book_of_the_dead", killed_boss("kourend", "skotizo")),
-        ("undead_grasp", killed_boss("kourend", "skotizo")),
-        (
-            "dizanas_quiver",
-            has_beaten("varlamore", &save.map_victories),
-        ),
-        (
-            "colossal_blade",
-            has_beaten("varlamore", &save.map_victories),
-        ),
+        ("dinhs_bulwark", has_beaten("kourend", &save.map_victories)),
         ("dual_macuahuitl", killed_boss("varlamore", "manticore")),
+        (
+            "thunder_khopesh",
+            has_beaten("varlamore", &save.map_victories),
+        ),
+        (
+            "dragon_hunter_crossbow",
+            has_beaten("fremennik", &save.map_victories),
+        ),
+        ("armadyl_crossbow", killed_boss("god_wars", "kreearra")),
+        ("crystal_bow", has_beaten("prifddinas", &save.map_victories)),
+        (
+            "eclipse_atlatl",
+            killed_boss("varlamore", "javelin_colossus"),
+        ),
+        (
+            "volatile_nightmare_staff",
+            killed_boss("halloween", "the_nightmare"),
+        ),
+        (
+            "inquisitors_mace",
+            killed_boss("halloween", "the_nightmare"),
+        ),
+        ("kodai_wand", has_beaten("kourend", &save.map_victories)),
+        ("crystal_staff", survived("prifddinas", 600.0)),
+        ("toktz_mej_tal", killed_boss("inferno", "jaltok_jad")),
         (
             "blue_moon_spear",
             killed_boss("varlamore", "shockwave_colossus"),
         ),
+        ("vengeance", killed_boss("fremennik", "dagannoth_prime")),
+        ("obsidian_armour", killed_boss("karamja", "ket_zek")),
+        ("book_of_the_dead", killed_boss("kourend", "skotizo")),
         (
-            "eclipse_atlatl",
-            killed_boss("varlamore", "javelin_colossus"),
+            "dizanas_quiver",
+            has_beaten("varlamore", &save.map_victories),
+        ),
+        ("dragonfire_shield", killed_boss("karamja", "elvarg")),
+        (
+            "zaryte_vambraces",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        ("crystal_helm", has_beaten("prifddinas", &save.map_victories)),
+        ("crystal_body", has_beaten("prifddinas", &save.map_victories)),
+        ("crystal_legs", has_beaten("prifddinas", &save.map_victories)),
+        (
+            "torva_full_helm",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        (
+            "torva_platebody",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        (
+            "torva_platelegs",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        (
+            "virtus_mask",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        (
+            "virtus_robe_top",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
+        ),
+        (
+            "virtus_robe_bottom",
+            killed_boss("god_wars", "nex_ice") || killed_boss("god_wars", "nex"),
         ),
     ];
     for (item_id, earned) in item_tasks {
@@ -722,11 +926,10 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 fn ensure_authenticated(ctx: &ReducerContext) -> Result<(), String> {
-    let sender = ctx.sender();
-    if sender == Identity::from_byte_array([0; 32]) {
+    if ctx.sender_auth().jwt().is_none() {
         return Err("Authentication required. Please log in via SpacetimeAuth.".to_string());
     }
-    // Auto-grant "player" role globally if user has no grants yet
+    let sender = ctx.sender();
     let grants_count = ctx.db.authz_grant().identity().filter(&sender).count();
     if grants_count == 0 {
         if let Some(player_role) = authz::find_role(ctx, authz::GLOBAL, "player") {
@@ -737,20 +940,21 @@ fn ensure_authenticated(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 #[spacetimedb::reducer]
-pub fn set_display_name(ctx: &ReducerContext, display_name: String) -> Result<(), String> {
+pub fn set_display_name(ctx: &ReducerContext, _display_name: String) -> Result<(), String> {
     ensure_authenticated(ctx)?;
     authz::require(ctx, "game.play", authz::GLOBAL)?;
-    let clean = validate_display_name(&display_name)?;
     let sender = ctx.sender();
+    let verified_name = resolve_display_name(ctx, sender);
+
     let existing = ctx
         .db
         .player_save()
         .identity()
         .find(sender)
-        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp));
+        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp, verified_name.clone()));
 
     let updated = PlayerSave {
-        display_name: clean.clone(),
+        display_name: verified_name.clone(),
         updated_at: ctx.timestamp,
         ..existing
     };
@@ -760,7 +964,7 @@ pub fn set_display_name(ctx: &ReducerContext, display_name: String) -> Result<()
         ctx.db.player_save().insert(updated);
     }
 
-    // Keep leaderboard rows in sync with the new display name
+    // Keep leaderboard rows in sync with the 3rd-party verified display name
     let endless_rows: Vec<LeaderboardEndless> = ctx
         .db
         .leaderboard_endless()
@@ -769,7 +973,7 @@ pub fn set_display_name(ctx: &ReducerContext, display_name: String) -> Result<()
         .collect();
     for row in endless_rows {
         ctx.db.leaderboard_endless().id().update(LeaderboardEndless {
-            display_name: clean.clone(),
+            display_name: verified_name.clone(),
             ..row
         });
     }
@@ -785,7 +989,7 @@ pub fn set_display_name(ctx: &ReducerContext, display_name: String) -> Result<()
             .leaderboard_standard()
             .id()
             .update(LeaderboardStandard {
-                display_name: clean.clone(),
+                display_name: verified_name.clone(),
                 ..row
             });
     }
@@ -812,6 +1016,23 @@ pub fn start_run(
     }
 
     let sender = ctx.sender();
+    let verified_name = resolve_display_name(ctx, sender);
+    let save = ctx
+        .db
+        .player_save()
+        .identity()
+        .find(sender)
+        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp, verified_name));
+
+    if !is_map_unlocked(&map_id, &save.map_victories) {
+        return Err(format!("Map '{}' is locked.", map_id));
+    }
+    if !save.unlocked_characters.contains(&character_id)
+        && !(map_id == "falador" && character_id == "durial321")
+    {
+        return Err(format!("Adventurer '{}' is locked.", character_id));
+    }
+
     let entry = ActiveRun {
         identity: sender,
         map_id,
@@ -954,59 +1175,61 @@ pub fn submit_run(ctx: &ReducerContext, run: RunSubmission) -> Result<(), String
     verify_run(&run)?;
 
     let sender = ctx.sender();
+    let verified_name = resolve_display_name(ctx, sender);
     let mut save = ctx
         .db
         .player_save()
         .identity()
         .find(sender)
-        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp));
+        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp, verified_name.clone()));
+    save.display_name = verified_name;
 
-    let active_run_opt = ctx.db.active_run().identity().find(sender);
-
-    // Wall-clock & active run anti-cheat verification:
-    // 1. If an active run handshake exists for this map & seed, verify strictly against started_at minus pause duration.
-    // 2. Otherwise fallback to last_run_at wall clock check.
-    if let Some(active) = &active_run_opt {
-        if active.map_id == run.map_id && active.seed == run.seed {
-            let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
-            let start_micros = active.started_at.to_micros_since_unix_epoch();
-            let total_wall_clock = ((now_micros.saturating_sub(start_micros)) as f64) / 1_000_000.0;
-            let mut pause_secs = active.paused_duration_secs;
-            if active.is_paused {
-                let last_micros = active.last_active_at.to_micros_since_unix_epoch();
-                if now_micros > last_micros {
-                    pause_secs += ((now_micros - last_micros) as f64) / 1_000_000.0;
-                }
-            }
-            let active_wall_clock = (total_wall_clock - pause_secs).max(0.0);
-            if run.seconds > active_wall_clock + 20.0 {
-                return Err(format!(
-                    "Submission rejected: claimed duration ({:.1}s) exceeds elapsed active run time ({:.1}s).",
-                    run.seconds, active_wall_clock
-                ));
-            }
-        }
-    } else {
-        let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
-        let last_run_micros = save.last_run_at.to_micros_since_unix_epoch();
-        if last_run_micros > 0 {
-            let elapsed_seconds = ((now_micros.saturating_sub(last_run_micros)) as f64) / 1_000_000.0;
-            if elapsed_seconds + 20.0 < run.seconds {
-                return Err(format!(
-                    "Submission rejected: claimed duration ({:.1}s) exceeds elapsed server time ({:.1}s).",
-                    run.seconds, elapsed_seconds
-                ));
-            }
-        }
+    if !is_map_unlocked(&run.map_id, &save.map_victories) {
+        return Err(format!("Map '{}' is locked.", run.map_id));
+    }
+    if !save.unlocked_characters.contains(&run.character_id)
+        && !(run.map_id == "falador" && run.character_id == "durial321")
+    {
+        return Err(format!("Adventurer '{}' is locked.", run.character_id));
     }
 
-    // Clean up active run row now that run is finished
-    if active_run_opt.is_some() {
-        ctx.db.active_run().identity().delete(sender);
+    // Strict Active Run Matching:
+    // Requires an active run handshake started with start_run strictly matching map, seed, character, and endless flag.
+    let Some(active) = ctx.db.active_run().identity().find(sender) else {
+        return Err("No active run session found. Runs must be started with start_run.".to_string());
+    };
+
+    if active.map_id != run.map_id
+        || active.seed != run.seed
+        || active.character_id != run.character_id
+        || active.endless != run.endless
+    {
+        return Err("Run parameters do not match active run session.".to_string());
     }
+
+    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+    let start_micros = active.started_at.to_micros_since_unix_epoch();
+    let total_wall_clock = ((now_micros.saturating_sub(start_micros)) as f64) / 1_000_000.0;
+    let mut pause_secs = active.paused_duration_secs;
+    if active.is_paused {
+        let last_micros = active.last_active_at.to_micros_since_unix_epoch();
+        if now_micros > last_micros {
+            pause_secs += ((now_micros - last_micros) as f64) / 1_000_000.0;
+        }
+    }
+    let active_wall_clock = (total_wall_clock - pause_secs).max(0.0);
+    if run.seconds > active_wall_clock + 20.0 {
+        return Err(format!(
+            "Submission rejected: claimed duration ({:.1}s) exceeds elapsed active run time ({:.1}s).",
+            run.seconds, active_wall_clock
+        ));
+    }
+
+    // Clean up active run row now that run has finished
+    ctx.db.active_run().identity().delete(sender);
     save.last_run_at = ctx.timestamp;
 
-    // Update progression stats
+    // Update progression stats monotonically
     save.coins = save.coins.saturating_add(run.coins as u64);
     save.total_coins = save.total_coins.saturating_add(run.coins as u64);
     save.runs = save.runs.saturating_add(1);
@@ -1161,21 +1384,16 @@ pub fn submit_run(ctx: &ReducerContext, run: RunSubmission) -> Result<(), String
 pub fn sync_save(ctx: &ReducerContext, payload: SavePayload) -> Result<(), String> {
     ensure_authenticated(ctx)?;
     authz::require(ctx, "game.play", authz::GLOBAL)?;
-    if payload.coins > payload.total_coins {
-        return Err("Current coins cannot exceed total coins earned.".to_string());
-    }
-    if payload.victories > payload.runs {
-        return Err("Victories cannot exceed total runs.".to_string());
-    }
-    if !payload.best_seconds.is_finite()
-        || payload.best_seconds < 0.0
-        || payload.best_seconds > MAX_RUN_SECONDS
-    {
-        return Err("Invalid best survival time.".to_string());
-    }
-    if payload.best_level > MAX_ENDLESS_LEVEL {
-        return Err("Invalid best level.".to_string());
-    }
+
+    let sender = ctx.sender();
+    let verified_name = resolve_display_name(ctx, sender);
+    let mut save = ctx
+        .db
+        .player_save()
+        .identity()
+        .find(sender)
+        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp, verified_name.clone()));
+    save.display_name = verified_name;
 
     // Validate shop upgrade ranks
     let mut clean_upgrades = Vec::new();
@@ -1195,8 +1413,12 @@ pub fn sync_save(ctx: &ReducerContext, payload: SavePayload) -> Result<(), Strin
         }
     }
 
+    // Validate armoury: only gear discovered in verified runs can be upgraded
     let mut clean_armoury = Vec::new();
     for entry in &payload.armoury {
+        if !save.found_gear.contains(&entry.id) {
+            return Err(format!("Cannot upgrade gear '{}' before finding it in a run.", entry.id));
+        }
         if entry.rank > 4 {
             return Err(format!(
                 "Armoury upgrade count for '{}' exceeds maximum.",
@@ -1208,63 +1430,20 @@ pub fn sync_save(ctx: &ReducerContext, payload: SavePayload) -> Result<(), Strin
         }
     }
 
-    let sender = ctx.sender();
-    let mut save = ctx
-        .db
-        .player_save()
-        .identity()
-        .find(sender)
-        .unwrap_or_else(|| default_player_save(sender, ctx.timestamp));
+    // Wealth integrity: Coins and upgrades must be backed strictly by total_coins earned in verified runs.
+    // Client progression state (total_coins, runs, victories, map_victories, kills, unlocks) cannot be modified by sync_save.
+    let available_wealth = save.coins.saturating_add(save.upgrades_spent).min(save.total_coins);
+    let mut total_spent = payload.upgrades_spent;
+    let mut upgrades = clean_upgrades;
+    if total_spent > available_wealth {
+        upgrades.clear();
+        total_spent = 0;
+    }
+    let coins = payload.coins.min(available_wealth.saturating_sub(total_spent));
 
-    // Merge monotonic records & sets, and adopt the latest shop/armoury allocation
-    for ch in &payload.unlocked_characters {
-        if VALID_CHARACTERS.contains(&ch.as_str()) {
-            push_unique(&mut save.unlocked_characters, ch);
-        }
-    }
-    for item in &payload.unlocked_items {
-        push_unique(&mut save.unlocked_items, item);
-    }
-    for gear in &payload.found_gear {
-        push_unique(&mut save.found_gear, gear);
-    }
-    for mv in &payload.map_victories {
-        if is_campaign_map(&mv.id) && mv.count > 0 {
-            if let Some(existing) = save.map_victories.iter_mut().find(|e| e.id == mv.id) {
-                existing.count = existing.count.max(mv.count);
-            } else {
-                save.map_victories.push(mv.clone());
-            }
-        }
-    }
-    for eb in &payload.endless_best {
-        if is_valid_map(&eb.map_id) && eb.round > 0 && eb.seconds.is_finite() && eb.seconds >= 0.0 {
-            if let Some(existing) = save
-                .endless_best
-                .iter_mut()
-                .find(|e| e.map_id == eb.map_id)
-            {
-                if eb.round > existing.round
-                    || (eb.round == existing.round && eb.seconds > existing.seconds)
-                {
-                    existing.round = eb.round;
-                    existing.seconds = eb.seconds;
-                }
-            } else {
-                save.endless_best.push(eb.clone());
-            }
-        }
-    }
-
-    save.runs = save.runs.max(payload.runs);
-    save.victories = save.victories.max(payload.victories);
-    save.total_kills = save.total_kills.max(payload.total_kills);
-    save.best_seconds = save.best_seconds.max(payload.best_seconds);
-    save.best_level = save.best_level.max(payload.best_level);
-    save.total_coins = save.total_coins.max(payload.total_coins);
-    save.coins = payload.coins.min(save.total_coins);
-    save.upgrades = clean_upgrades;
-    save.upgrades_spent = payload.upgrades_spent;
+    save.coins = coins;
+    save.upgrades = upgrades;
+    save.upgrades_spent = total_spent;
     save.armoury = clean_armoury;
     apply_unlocks_to_save(&mut save, None);
     save.updated_at = ctx.timestamp;

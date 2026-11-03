@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 [dependencies]
 spacetimedb = { version = "2.13.*", features = ["unstable"] }
 log = "0.4"
+serde_json = "1.0"

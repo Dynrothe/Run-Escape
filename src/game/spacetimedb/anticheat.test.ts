@@ -140,6 +140,43 @@ describe("anticheat", () => {
             const score = computeStandardScore(run);
             expect(score).toBeGreaterThan(100000); // 100,000 base for victory
         });
+
+        test("validates new campaign map boss victories (god_wars, morytania, prifddinas)", () => {
+            const gwdRun = mockRun({
+                mapId: "god_wars",
+                characterId: "godsword_knight",
+                victory: true,
+                seconds: 905,
+                bossesKilled: ["commander_zilyana", "kreearra", "kril_tsutsaroth", "nex_ice"],
+                bossKillTicks: [15000, 22500, 30000, 45100],
+            });
+            expect(verifyRunResult(gwdRun).valid).toBe(true);
+
+            const morytaniaRun = mockRun({
+                mapId: "morytania",
+                characterId: "vampyre_hunter",
+                victory: true,
+                seconds: 905,
+                bossesKilled: ["vanstrom_klause", "pestilent_bloat", "sotetseg", "verzik_vitur"],
+                bossKillTicks: [15000, 22500, 30000, 45100],
+            });
+            expect(verifyRunResult(morytaniaRun).valid).toBe(true);
+        });
+
+        test("validates new fun maps (pest_control, castle_wars)", () => {
+            const pcRun = mockRun({
+                mapId: "pest_control",
+                characterId: "void_knight",
+                endless: true,
+                victory: false,
+                round: 1,
+                seconds: 300,
+                ticks: 15000,
+                bossesKilled: ["purple_portal"],
+                bossKillTicks: [9500],
+            });
+            expect(verifyRunResult(pcRun).valid).toBe(true);
+        });
     });
 
     describe("Save payload conversions", () => {

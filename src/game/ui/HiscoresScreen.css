@@ -93,6 +93,16 @@
     gap: 6px;
 }
 
+.ui-rsn-badge {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    color: var(--ui-yellow);
+    background: rgba(20, 16, 11, 0.95);
+    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+}
+
 .ui-rsn-input {
     font-family: "OSRS Small", sans-serif;
     font-size: 16px;

@@ -980,6 +980,10 @@ export class GameClient implements GameFrameHandler {
         return this.cloud.setDisplayName(name);
     }
 
+    syncCloudDisplayName(): Promise<string | undefined> {
+        return this.cloud.syncDisplayName();
+    }
+
     grantRole(identityHex: string, roleId: string | bigint | number, scopeId = 0n): Promise<string | undefined> {
         return this.cloud.grantRole(identityHex, roleId, scopeId);
     }
