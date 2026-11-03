@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { SceneTileModel } from "../../rs/scene/SceneTileModel";
 import { Ground } from "./Ground";
 import { findExits, getInsideTiles, getNearestExit } from "./building";
+import { findPieces } from "./collision";
 import {
     TILE_BLOCKED,
     TILE_BRIDGE,
@@ -246,6 +248,56 @@ describe("planes", () => {
         expect(cut.locs.some((loc) => loc.id === 100)).toBe(false);
         const ground = cutPrefab(maps, 50 * 64 + 4, 50 * 64 + 4, 4, 4);
         expect(ground.levels[0].overlays[1 + 2 * 4]).toBe(10);
+    });
+});
+
+describe("findPieces", () => {
+    // 7 by 3 tiles, split down x = 3 by things that block
+    const SIZE_X = 7;
+    const SIZE_Y = 3;
+    function split(): Int32Array {
+        const flags = new Int32Array(SIZE_X * SIZE_Y);
+        for (let y = 0; y < SIZE_Y; y++) {
+            flags[3 + y * SIZE_X] = CollisionFlag.OBJECT;
+        }
+        return flags;
+    }
+
+    it("finds each piece, the biggest first, with the box round it", () => {
+        const flags = split();
+        // A post in the east half, so it's the smaller
+        flags[5 + 1 * SIZE_X] = CollisionFlag.OBJECT;
+        const pieces = findPieces(flags, SIZE_X, SIZE_Y);
+        expect(pieces.map((piece) => piece.size)).toEqual([9, 8]);
+        expect(pieces[0]).toMatchObject({ x0: 0, y0: 0, x1: 2, y1: 2 });
+        expect(pieces[1]).toMatchObject({ x0: 4, y0: 0, x1: 6, y1: 2 });
+        expect(pieces[1].from.x).toBeGreaterThanOrEqual(4);
+    });
+
+    it("stops at a wall on a tile's edge", () => {
+        const flags = split();
+        // A wall between x = 0 and x = 1, all the way up
+        for (let y = 0; y < SIZE_Y; y++) {
+            flags[0 + y * SIZE_X] |= CollisionFlag.WALL_EAST;
+            flags[1 + y * SIZE_X] |= CollisionFlag.WALL_WEST;
+        }
+        const pieces = findPieces(flags, SIZE_X, SIZE_Y);
+        expect(pieces.map((piece) => piece.size)).toEqual([9, 6, 3]);
+    });
+
+    it("doesn't cut a corner between two things that block", () => {
+        const flags = new Int32Array(2 * 2);
+        flags[1] = CollisionFlag.OBJECT;
+        flags[2] = CollisionFlag.OBJECT;
+        expect(findPieces(flags, 2, 2).map((piece) => piece.size)).toEqual([1, 1]);
+    });
+
+    it("keeps to the rectangle", () => {
+        const pieces = findPieces(split(), SIZE_X, SIZE_Y, { x0: 1, y0: 0, x1: 4, y1: 1 });
+        expect(pieces.map((piece) => [piece.size, piece.x0, piece.x1])).toEqual([
+            [4, 1, 2],
+            [2, 4, 4],
+        ]);
     });
 });
 
