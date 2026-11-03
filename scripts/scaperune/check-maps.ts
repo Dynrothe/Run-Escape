@@ -53,6 +53,7 @@ import {
     generatedRecipe,
     randomSettings,
 } from "../../src/game/scaperune/generator";
+import { describeHiddenFloor } from "../../src/game/scaperune/hiddenFloor";
 import { DEV_MAP_SETTINGS, SCAPERUNE_DEV_MAPS } from "../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";
 import { createRng } from "../../src/game/scaperune/noise";
@@ -1218,6 +1219,15 @@ function checkMap(
     );
     for (const problem of problems.slice(0, 16)) {
         console.log(`  ${problem}`);
+    }
+    const hiddenFloor = describeHiddenFloor(
+        map.grid,
+        context.locs,
+        sceneBuilder.overlayTypeLoader,
+        gridRect,
+    );
+    if (hiddenFloor) {
+        console.log(`  ${hiddenFloor}`);
     }
     return stranded === 0 && open >= 200 && problems.length === 0;
 }

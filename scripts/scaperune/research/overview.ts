@@ -1,12 +1,14 @@
 // A rectangle of the world (or a made map) from above, cheaply: a pixel or more a tile, floor
-// colour with light from the slope, walls black, scenery dark, water as it is. For finding
-// places and reading a layout, not for looks.
+// colour with light from the slope, walls black, scenery dark, water as it is, and the cache's
+// hidden floor (0xFF00FF overlays, which draw nothing) hatched black and grey. For finding places
+// and reading a layout, not for looks.
 //
 //   npx tsx scripts/scaperune/research/overview.ts out.png x y sizeX sizeY [pixelsPerTile]
 //   DEV_MAPS=1 npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_ysmar [ppt]
 import fs from "node:fs";
 
 import { cacheFloorId } from "../../../src/game/scaperune/format";
+import { isHiddenOverlay } from "../../../src/game/scaperune/hiddenFloor";
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../../src/game/scaperune/maps/shippedMaps";
 import { createBuildContext } from "../../../src/game/scaperune/squares";
@@ -28,6 +30,9 @@ if (a.startsWith("map=")) {
 const { sizeX, sizeY } = grid;
 const level = grid.levels[0];
 const corners = sizeX + 1;
+// Where the overlay draws nothing: hatched, not the cache's magenta
+const HIDDEN = -1;
+const HATCH = [0x000000, 0x505050];
 const colour = new Map<string, number>();
 const rgbOf = (kind: "u" | "o", id: number): number => {
     const key = kind + id;
@@ -37,12 +42,13 @@ const rgbOf = (kind: "u" | "o", id: number): number => {
             rgb = (w.underlays.load(cacheFloorId(id)) as unknown as { rgbColor: number }).rgbColor;
         } else {
             const type = w.overlays.load(cacheFloorId(id));
-            rgb =
-                type.textureId >= 0
-                    ? type.textureId === 1
-                        ? 0x2a4f8f
-                        : 0x7f7468
-                    : type.primaryRgb;
+            rgb = isHiddenOverlay(type)
+                ? HIDDEN
+                : type.textureId >= 0
+                  ? type.textureId === 1
+                      ? 0x2a4f8f
+                      : 0x7f7468
+                  : type.primaryRgb;
         }
         colour.set(key, rgb);
     }
@@ -78,6 +84,15 @@ for (let y = 0; y < sizeY; y++) {
                         40,
             ),
         );
+        if (c === HIDDEN) {
+            for (let py = 0; py < ppt; py++) {
+                for (let px = 0; px < ppt; px++) {
+                    const hatch = HATCH[((x * ppt + px + y * ppt + py) >> 1) & 1];
+                    put(x * ppt + px, y * ppt + py, hatch);
+                }
+            }
+            continue;
+        }
         const lit =
             (Math.min(255, ((c >> 16) & 255) * light) << 16) |
             (Math.min(255, ((c >> 8) & 255) * light) << 8) |
