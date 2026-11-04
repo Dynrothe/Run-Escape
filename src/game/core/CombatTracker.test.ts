@@ -168,6 +168,26 @@ describe("boss kills", () => {
         expect(done).not.toContain("checkmate");
     });
 
+    test("Zachariah stuck in a pillar, and stunned by his own court three times", () => {
+        const sim = createSim("zachariah");
+        const tracker = track(sim);
+        const guard = (cause: string, stunned = true): SimEvent => ({
+            type: "bossGuard",
+            enemyId: "justiciar_zachariah",
+            stunned,
+            cause,
+            ...at,
+        });
+        tracker.observe(sim, [spawned("justiciar_zachariah")]);
+        // A miss of his own only opens him up
+        expect(ids(tracker.observe(sim, [guard("Lunge", false)]))).toEqual([]);
+        expect(ids(tracker.observe(sim, [guard("Pillar")]))).toEqual(["stuck_in_the_stone"]);
+        tracker.observe(sim, [guard("Lightning"), guard("Knight's sword")]);
+        expect(ids(tracker.observe(sim, [guard("Lightning round you")]))).toEqual([
+            "contempt_of_court",
+        ]);
+    });
+
     test("damage done before the boss arrived doesn't count against it", () => {
         const sim = createSim("zachariah");
         const tracker = track(sim);

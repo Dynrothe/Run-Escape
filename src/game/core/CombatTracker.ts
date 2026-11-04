@@ -30,6 +30,8 @@ type Watch = {
     inTime?: Set<string>;
     kills?: number[];
     killed?: Set<string>;
+    // guardDown: how many times so far
+    count?: number;
 };
 
 const NO_TASKS: readonly CombatTaskDef[] = [];
@@ -260,6 +262,18 @@ export class CombatTracker {
                 return events.some((e) => e.type === "coinsReturned" && e.enemyId === goal.enemyId);
             case "stayInReach":
                 return this.checkReach(watch, goal, sim, events);
+            case "guardDown":
+                for (const e of events) {
+                    if (
+                        e.type === "bossGuard" &&
+                        e.enemyId === goal.bossId &&
+                        (e.stunned || !goal.stunned) &&
+                        goal.causes.includes(e.cause)
+                    ) {
+                        watch.count = (watch.count ?? 0) + 1;
+                    }
+                }
+                return (watch.count ?? 0) >= goal.count;
         }
     }
 

@@ -43,7 +43,7 @@ export const COMBAT_SPEED_SECONDS = {
     dagannothKings: 60,
     tripleJads: 10,
     phosani: 270,
-    zachariah: 315,
+    zachariah: 210,
 };
 
 const NEX = ["nex", "nex_shadow", "nex_blood", "nex_ice"];
@@ -391,7 +391,9 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: {
             kind: "kill",
             bossIds: ZACHARIAH,
-            without: [{ attacks: ["Lunge", "Lunge (following)", "Ice barrage, then lunge"] }],
+            without: [
+                { attacks: ["Lunge", "Lunges", "Lunge (following)", "Ice barrage, then lunge"] },
+            ],
         },
     },
     {
@@ -405,6 +407,44 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
             kind: "kill",
             bossIds: ZACHARIAH,
             without: [{ attacks: ["Shock wave", "Flurry"] }],
+        },
+    },
+    {
+        id: "stuck_in_the_stone",
+        name: "Stuck in the Stone",
+        description: "Make Justiciar Zachariah lunge into a pillar.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "zachariah",
+        goal: {
+            kind: "guardDown",
+            bossId: "justiciar_zachariah",
+            causes: ["Pillar"],
+            count: 1,
+            stunned: true,
+        },
+    },
+    {
+        id: "contempt_of_court",
+        name: "Contempt of Court",
+        description:
+            "In one fight, stun Justiciar Zachariah with his own court three times: his " +
+            "lightning struck under him, or a knight's sword through him.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "zachariah",
+        goal: {
+            kind: "guardDown",
+            bossId: "justiciar_zachariah",
+            causes: [
+                "Lightning",
+                "Lightning round you",
+                "Knight's sword",
+                "Knight's swords",
+                "Knight's sword (following)",
+            ],
+            count: 3,
+            stunned: true,
         },
     },
     {

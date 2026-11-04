@@ -1461,7 +1461,11 @@ export type CombatGoal =
     | { kind: "coinsBack"; enemyId: string }
     // From a boss's arrival to its kill, never out of the fight's strike reach for longer than
     // this many seconds at a time (not while it kneels or leaps)
-    | { kind: "stayInReach"; bossId: string; seconds: number };
+    | { kind: "stayInReach"; bossId: string; seconds: number }
+    // In one run, a boss's guard dropped (BossDef.guard) count times by any of these causes (its
+    // own attacks' names that missed, its arena's that caught it, or "Pillar"); stunned: only
+    // the times it was stunned
+    | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean };
 
 export type CombatTaskDef = {
     // Never renamed: it's in saves

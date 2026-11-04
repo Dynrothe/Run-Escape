@@ -20,6 +20,7 @@ function goalEnemies(goal: CombatGoal): string[] {
             return goal.enemyIds;
         case "reachPhase":
         case "stayInReach":
+        case "guardDown":
         case "killTogether":
             return [goal.bossId];
         case "kill":
@@ -79,6 +80,21 @@ describe("Combat Achievements' tasks", () => {
                         expect(names.has(attack), `${task.id}: ${attack}`).toBe(true);
                     }
                 }
+            }
+        }
+    });
+
+    test("count a guard dropped by its boss's own attacks, by name, or a pillar", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind !== "guardDown") {
+                continue;
+            }
+            const boss = ENEMY_BY_ID.get(goal.bossId)!.boss!;
+            expect(boss.guard, task.id).toBeDefined();
+            const names = new Set(["Pillar", ...boss.attacks.map((a) => a.name)]);
+            for (const cause of goal.causes) {
+                expect(names.has(cause), `${task.id}: ${cause}`).toBe(true);
             }
         }
     });
