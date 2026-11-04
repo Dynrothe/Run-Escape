@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Co-op: a casket gives every player who's up an item of their own, not just the one who picks
+  it up. Its coins still go to the party once, and caskets drop as often as they do solo.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed
