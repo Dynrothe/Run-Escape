@@ -110,7 +110,183 @@ export const KIT_PIECES: KitPiece[] = [
         set: [[37786, 37809]],
         reach: 1,
     },
+    // The Hallowed Sepulchre (map squares 34 to 40, 90 to 94), built as walkways floating in black.
+    // Its floor is type 22 stone tiles, by tier: the lobby 38111 to 38128, Floors 1 and 2 38129 to
+    // 38172, Floors 3 and 4 38185 to 38254, Floor 5 38283 to 38353. Its edges and walls belong to a
+    // walkway of their tier, and the zachariah map (maps/owlsCourt.ts) builds with them.
+    ...sepulchreEdges([38173, 38184], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreEdges([38255, 38257], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreEdges([38261, 38264], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreEdges([38268, 38280], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreEdges([38355, 38356], [38283, 38353], "Floor 5"),
+    ...sepulchreEdges([38360, 38363], [38283, 38353], "Floor 5"),
+    ...sepulchreEdges([38368, 38369], [38283, 38353], "Floor 5"),
+    ...sepulchreEdges([50020, 50022], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreEdges([50023, 50025], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreEdges([50026, 50028], [38129, 38172], "Floors 1 and 2"),
+    // Its gold and blue runner (Floors 3 and 4): border, ends and middle make a rug only together
+    {
+        ids: [38233, 38254],
+        why: "the Sepulchre's gold and blue runner: alone, its border and end tiles are loose scraps",
+        set: [[38233, 38254]],
+        reach: 1,
+    },
+    // Tall walls: a stone face on one side and flat black on the other, 4 tiles high, standing a
+    // level under a walkway's edge (or round its rooms), so they need the walkway beside them
+    ...sepulchreWalls([38672, 38672], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38853, 38853], [38111, 38128], "the lobby"),
+    ...sepulchreWalls([38856, 38859], [38111, 38128], "the lobby"),
+    ...sepulchreWalls([38874, 38875], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreWalls([38878, 38880], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreWalls([38890, 38890], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreWalls([38894, 38896], [38129, 38172], "Floors 1 and 2"),
+    ...sepulchreWalls([38923, 38924], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38932, 38932], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38945, 38945], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38949, 38949], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38953, 38953], [38185, 38254], "Floors 3 and 4"),
+    ...sepulchreWalls([38988, 38988], [38283, 38353], "Floor 5"),
+    ...sepulchreWalls([39001, 39001], [38283, 38353], "Floor 5"),
+    ...sepulchreWalls([39008, 39008], [38283, 38353], "Floor 5"),
+    ...sepulchreWalls([39020, 39020], [38283, 38353], "Floor 5"),
+    // Wall pillars, niches, lit windows and hangings: half black, made to stand in a line of their
+    // level's tall wall (kit-scan.ts: one-sided, and always with it)
+    ...inWallLine([38877, 38877], 38875),
+    ...inWallLine([38884, 38889], 38875),
+    ...inWallLine([38892, 38892], 38890),
+    ...inWallLine([38897, 38904], 38890),
+    ...inWallLine([38926, 38929], 38924),
+    ...inWallLine([38933, 38944], 38924),
+    ...inWallLine([38947, 38947], 38945),
+    ...inWallLine([38950, 38950], 38945),
+    ...inWallLine([38954, 38965], 38945),
+    ...inWallLine([38989, 38989], 38988),
+    ...inWallLine([38992, 38998], 38988),
+    // The gold hangings stand in Floor 5's lower and middle walls alike
+    {
+        ids: [38999, 39000],
+        why: "the Sepulchre's gold hangings are half black: they stand in a line of its tall wall",
+        set: [[38988, 39001]],
+    },
+    ...inWallLine([39003, 39005], 39001),
+    ...inWallLine([39015, 39019], 39001),
+    ...inWallLine([39022, 39024], 39020),
+    ...inWallLine([39034, 39038], 39020),
+    // Floor 5's banner columns: the base on one level and the top on the one over it
+    {
+        ids: [38768, 38768],
+        why: "the top of the Sepulchre's banner column: its base (38769) stands a level under it",
+        set: [[38769, 38769]],
+        reach: 0,
+    },
+    {
+        ids: [38769, 38769],
+        why: "the base of the Sepulchre's banner column: its top (38768) stands a level over it",
+        set: [[38768, 38768]],
+        reach: 0,
+    },
+    // A wizard statue's fire is what it's for: statues either side of a lane 3 wide, a fire laid
+    // across each row of it
+    {
+        ids: [38409, 38425],
+        why: "a Sepulchre wizard statue is half a fire trap: it faces its fire across a lane",
+        set: [[38427, 38427]],
+        reach: 3,
+    },
+    {
+        ids: [38427, 38427],
+        why: "the Sepulchre's fire jet comes out of the wizard statues either side of its lane",
+        set: [[38409, 38425]],
+        reach: 3,
+    },
+    // Stairs lead down a level, with black backs: fine only cut with what they lead to
+    { ids: [38452, 38452], why: "the Sepulchre's stairs lead down a level, and are black behind" },
+    { ids: [38461, 38469], why: "the Sepulchre's stairs lead down a level, and are black behind" },
+    { ids: [38471, 38476], why: "the Sepulchre's stairs lead down a level, and are black behind" },
+    { ids: [38601, 38601], why: "the Sepulchre's stairs lead up a level, and are black behind" },
+    { ids: [38603, 38603], why: "the Sepulchre's stairs lead up a level, and are black behind" },
+    { ids: [38612, 38612], why: "the Sepulchre's stair landing leads to another level" },
+    { ids: [38763, 38764], why: "the Sepulchre's stair landings lead to another level" },
+    {
+        ids: [38849, 38852],
+        why: "the Sepulchre's stairs lead to another level, and are black behind",
+    },
+    // See-through water over a dark bottom a tile down, which is a hole on ground of its own
+    {
+        ids: [38373, 38373],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    {
+        ids: [38375, 38375],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    {
+        ids: [38377, 38377],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    { ids: [38379, 38380], why: "the Sepulchre's water is a tile deep: a hole on other ground" },
+    {
+        ids: [38754, 38754],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    {
+        ids: [38756, 38756],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    {
+        ids: [38758, 38758],
+        why: "the Sepulchre's water edges are a tile deep: holes on other ground",
+    },
+    { ids: [38761, 38761], why: "the Sepulchre's water is a tile deep: a hole on other ground" },
+    // Plain black boxes that fill its void between levels, and the lobby's black ceiling
+    {
+        ids: [38670, 38670],
+        why: "the Sepulchre's black box fills its void: a black block anywhere else",
+    },
+    {
+        ids: [38686, 38686],
+        why: "the Sepulchre's black box fills its void: a black block anywhere else",
+    },
+    {
+        ids: [38748, 38749],
+        why: "the Sepulchre lobby's black ceiling, drawn: a black slab anywhere else",
+    },
 ];
+
+// The Sepulchre's edge lips and parapets, by tier: they hang under a walkway's edge from the void
+// tile beside it, and mean a drop
+function sepulchreEdges(ids: LocRange, floor: LocRange, tier: string): KitPiece[] {
+    return [
+        {
+            ids,
+            why: `the Sepulchre's edge (${tier}) hangs under a walkway's edge: a floating sliver alone`,
+            set: [floor],
+            reach: 1,
+        },
+    ];
+}
+
+function sepulchreWalls(ids: LocRange, floor: LocRange, tier: string): KitPiece[] {
+    return [
+        {
+            ids,
+            why: `the Sepulchre's tall wall (${tier}) is black behind: it needs its walkway beside it`,
+            set: [floor],
+            reach: 1,
+        },
+    ];
+}
+
+// Pieces of a level's wall line, which need that wall within a tile or two
+function inWallLine(ids: LocRange, wall: number): KitPiece[] {
+    return [
+        {
+            ids,
+            why: "a piece of the Sepulchre's wall line, half black: alone it's a hole",
+            set: [[wall, wall]],
+        },
+    ];
+}
 
 export type LocRule = { ids: LocRange };
 
