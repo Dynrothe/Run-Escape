@@ -35,6 +35,16 @@ describe("saveFile", () => {
         return shareSpy;
     }
 
+    test("downloads a file of bytes, so Safari can't open it as a page instead", () => {
+        setNavigator({});
+        saveFile(NAME, '{"coins":5}', "application/json");
+        expect(downloaded).toEqual([NAME]);
+        const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+        expect(blob.type).toBe("application/octet-stream");
+        // The same bytes (jsdom's Blob can't be read back)
+        expect(blob.size).toBe('{"coins":5}'.length);
+    });
+
     test("downloads in a browser that isn't an installed game on iOS", () => {
         const share = vi.fn(async () => {});
         setNavigator({ canShare: () => true, share });

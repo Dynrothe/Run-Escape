@@ -33,6 +33,8 @@ the version in the corner).
 - Controller button icons showed as broken images in the Windows app. Fixed by Okaeri.
 - A PlayStation controller through DS4Windows showed as two controllers taking turns, and its
   buttons did nothing on the menus. Fixed by Okaeri.
+- Exporting your save on an iPhone downloads the file, rather than opening it as a page in
+  older versions of Safari. Fixed by Okaeri.
 
 ## 0.24.1 - 2026-11-04
 

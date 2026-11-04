@@ -1,5 +1,10 @@
+// A download link's file is a stream of bytes to the browser, whatever's in it: one marked as JSON,
+// iOS Safari can open as a page instead of downloading (on some phones, with no choice offered).
+// The file's name keeps its .json, and its bytes are the same.
+const DOWNLOAD_TYPE = "application/octet-stream";
+
 function download(file: File): void {
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(new Blob([file], { type: DOWNLOAD_TYPE }));
     const link = document.createElement("a");
     link.href = url;
     link.download = file.name;
