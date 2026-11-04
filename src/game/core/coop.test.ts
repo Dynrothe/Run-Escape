@@ -234,6 +234,35 @@ describe("co-op", () => {
         expect(b.chests).toHaveLength(1);
     });
 
+    it("gives every player who's up a casket's item of their own, as one casket opened", () => {
+        const sim = createParty(["warrior", "wizard", "ranger"]);
+        const [a, b, c] = sim.heroes;
+        down(sim, c);
+        const coins = sim.coins;
+        sim.dropPickup("casket", a.player.x + 0.2, a.player.y, 1, { tier: "easy" });
+        for (let i = 0; i < 5; i++) {
+            sim.step();
+        }
+        expect(sim.pickups.filter((p) => p.kind === "casket")).toHaveLength(0);
+        expect(a.chests).toHaveLength(1);
+        expect(b.chests).toHaveLength(1);
+        // Down, they couldn't choose
+        expect(c.chests).toHaveLength(0);
+        // Its coins are the party's, paid once
+        const paid = a.chests[0].coins;
+        expect(paid).toBeGreaterThan(0);
+        expect(b.chests[0].coins).toBe(paid);
+        expect(sim.coins).toBe(coins + paid);
+        expect(sim.state).toBe("chest");
+        // The run waits for both
+        sim.as(a.index, () => sim.resolveChest("take"));
+        expect(sim.state).toBe("chest");
+        sim.as(b.index, () => sim.resolveChest("take"));
+        expect(sim.state).toBe("playing");
+        expect(sim.casketsOpened).toBe(1);
+        expect([a.casketsOpened, b.casketsOpened, c.casketsOpened]).toEqual([1, 1, 0]);
+    });
+
     it("starts a revive over when the teammate steps away", () => {
         const sim = createParty(["warrior", "wizard"]);
         const [a, b] = sim.heroes;
@@ -669,7 +698,6 @@ describe("co-op", () => {
             bossHp: 1,
             damage: 1,
             xp: 1,
-            caskets: 1,
         });
         const two = getPartyScale(2);
         expect(two.crowd).toBeGreaterThan(1);
