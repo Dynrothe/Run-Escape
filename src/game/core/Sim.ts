@@ -287,7 +287,7 @@ const MAX_POOLS = 12;
 const RELOCATE_DISTANCE = 34;
 // A raid's room, cleared: seconds to gather what's on the ground before the next
 const RAID_CLEARED_SECONDS = 2;
-// The waves a raid's room has at the least, when its last boss took long (RaidDef.minWaveSeconds)
+// The waves a raid's room has at the least (RaidDef.minWaveSeconds)
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
@@ -795,10 +795,13 @@ export class Sim {
     private readonly weaponDamageMultipliers: Partial<Record<DamageSource, number>>;
     // The final boss is up
     bossSpawned = false;
-    // Raids (MapDef.raid): the room the party's in, the tick its waves started, and where it's at:
-    // its waves, its boss's fight, or cleared and about to move on (since raidStageTick)
+    // Raids (MapDef.raid): the room the party's in, and where it's at: its waves, its boss's
+    // fight, or cleared and about to move on (since raidStageTick)
     raidRoom = 0;
+    // The tick the room began (its waves and events go by its own clock, from then), and the
+    // tick its boss comes: when its waves are done, or now if the portal's taken
     raidRoomStartTick = 0;
+    raidBossDueTick = 0;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
     raidStageTick = 0;
@@ -1114,6 +1117,9 @@ export class Sim {
         this.raidTeleports = this.map.raid ? (options.raidTeleports ?? 0) : 0;
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
+        if (this.map.raid) {
+            this.raidBossDueTick = this.raidWaveLength(0) * TICKS_PER_SECOND;
+        }
         this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
         this.bulletScale = this.hard ? (this.map.hard?.bullets ?? 1) : 1;
         const party: HeroOptions[] = options.party ?? [
@@ -2452,22 +2458,38 @@ export class Sim {
         return this.map.raid?.rooms[this.raidRoom];
     }
 
-    // The run's second this room's boss comes: when it says, with a room's least waves first
-    private get raidBossDue(): number {
+    // Seconds of waves a raid's room has before its boss: the gap between its `at` and the last
+    // room's, timed on the room's own clock, so how long a boss took, or a portal, never changes it
+    private raidWaveLength(index: number): number {
         const raid = this.map.raid!;
-        const room = raid.rooms[this.raidRoom];
-        const start = this.raidRoomStartTick / TICKS_PER_SECOND;
         const testRoom = this.testing?.raidRoomSeconds;
         if (testRoom) {
-            return Math.max((this.raidRoom + 1) * testRoom, start + testRoom / 4);
+            return testRoom;
         }
-        return Math.max(room.at, start + (raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS));
+        const length = raid.rooms[index].at - (raid.rooms[index - 1]?.at ?? 0);
+        return Math.max(length, raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS);
     }
 
     private get directorSeconds(): number {
         return this.map.raid
             ? (this.tick - this.raidRoomStartTick) / TICKS_PER_SECOND
             : this.mapSeconds;
+    }
+
+    // What enemies' hitpoints and damage, and caskets, go by: the run's clock, or in a raid where
+    // its room would be with no boss time before it, so a long fight with an earlier boss doesn't
+    // make a later room's waves tougher than its `at` says
+    // A casket's tier goes by the run's time, or a raid's pace (paceSeconds)
+    private get casketSeconds(): number {
+        return this.raidRoomDef ? this.paceSeconds : this.seconds;
+    }
+
+    private get paceSeconds(): number {
+        const room = this.raidRoomDef;
+        if (!room) {
+            return this.mapSeconds;
+        }
+        return room.at - this.raidWaveLength(this.raidRoom) + this.directorSeconds;
     }
 
     private currentWave() {
@@ -2822,7 +2844,7 @@ export class Sim {
             return undefined;
         }
         // Enemies start hitting harder after 5 minutes (of the round)
-        const minutes = this.mapSeconds / 60;
+        const minutes = this.paceSeconds / 60;
         const hpScale = this.enemyHpScale();
         const damageScale = 1 + Math.max(0, minutes - 5) * 0.03;
         // Bosses are tuned as they are (or for the map they're on); later maps
@@ -2971,7 +2993,7 @@ export class Sim {
     // Enemies get tougher faster as the run (or round) goes on: gently for the
     // first few minutes, then 1.9x hitpoints at 10 minutes and 2.65x at 15
     private enemyHpScale(): number {
-        const minutes = this.mapSeconds / 60;
+        const minutes = this.paceSeconds / 60;
         return 1 + minutes * 0.05 + minutes * minutes * 0.004;
     }
 
@@ -4114,7 +4136,9 @@ export class Sim {
         const room = raid.rooms[this.raidRoom];
         const last = this.raidRoom === raid.rooms.length - 1;
         if (this.raidStage === "waves") {
-            if (this.seconds >= this.raidBossDue) {
+            // Its time's up, or the portal brought it on (and if the boss couldn't come yet, it
+            // tries again next tick)
+            if (this.tick >= this.raidBossDueTick) {
                 this.startRaidBoss(room, last);
             } else {
                 this.stepTeleporter(room);
@@ -4154,6 +4178,7 @@ export class Sim {
         this.raidStage = "waves";
         this.raidStageTick = this.tick;
         this.raidRoomStartTick = this.tick;
+        this.raidBossDueTick = this.tick + this.raidWaveLength(index) * TICKS_PER_SECOND;
         this.raidShopQueue = [];
         this.eventIndex = 0;
         this.spawnAccumulator = 0;
@@ -9350,7 +9375,11 @@ export class Sim {
     // ---- Pickups ----
 
     dropCasket(x: number, y: number, elite: boolean): void {
-        this.dropCasketOfTier(rollCasketTier(this.rng, this.seconds, elite, this.stats.luck), x, y);
+        this.dropCasketOfTier(
+            rollCasketTier(this.rng, this.casketSeconds, elite, this.stats.luck),
+            x,
+            y,
+        );
     }
 
     // guaranteed: past the chance of a late endless casket, though not its limit
@@ -10177,7 +10206,7 @@ export class Sim {
                 this.heal(this.player.maxHp * effect.fraction);
                 break;
             case "casket": {
-                const tier = rollCasketTier(this.rng, this.seconds, true, this.stats.luck);
+                const tier = rollCasketTier(this.rng, this.casketSeconds, true, this.stats.luck);
                 this.dropCasketOfTier(tier, visitor.x, visitor.y, true);
                 break;
             }
@@ -10307,6 +10336,8 @@ export class Sim {
             const raid = this.map.raid!;
             const room = raid.rooms[this.raidRoom];
             this.raidTeleportsLeft--;
+            // The portal cancels the room's boss timer: its boss comes now
+            this.raidBossDueTick = this.tick;
             this.leaveEvent();
             this.emit({
                 type: "notice",
@@ -10494,7 +10525,9 @@ export class Sim {
     get timeLeftForBoss(): number {
         const room = this.raidRoomDef;
         if (room) {
-            return this.raidStage === "waves" ? Math.max(0, this.raidBossDue - this.seconds) : 0;
+            return this.raidStage === "waves"
+                ? Math.max(0, (this.raidBossDueTick - this.tick) / TICKS_PER_SECOND)
+                : 0;
         }
         return Math.max(0, RUN_LENGTH - this.mapSeconds);
     }

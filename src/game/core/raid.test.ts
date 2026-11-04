@@ -3,8 +3,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
-import { TROPHIES } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
+import { describeUnlockTask } from "../content/unlocks";
+import { getWeapon } from "../content/weapons";
 import { yawFromVector } from "./PlayerMovement";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm } from "./fmath";
@@ -169,8 +171,8 @@ describe("raids", () => {
         expect(sim.player.y).toBeCloseTo(1010.5);
         expect(sim.timeLeftForBoss).toBeGreaterThan(28);
 
-        // Its boss is due at the run's 80th second, about 47 seconds into the room
-        toRoomSecond(sim, 50);
+        // Its boss is due 50 seconds into the room (the gap between the rooms' `at`)
+        toRoomSecond(sim, 51);
         expect(sim.raidStage).toBe("boss");
         const boss = sim.enemies.find((enemy) => enemy.boss && !enemy.dead)!;
         expect(boss.def.id).toBe("giant_rat");
@@ -234,15 +236,19 @@ describe("raids", () => {
         expect(isEndlessUnlocked(save, "theatre_of_blood")).toBe(false);
     });
 
-    it("unlocks the Ghrazi rapier for beating the Theatre, and the Holy scythe on hard", () => {
+    it("unlocks the Ghrazi rapier and the Holy scythe from the chest, not for a win", () => {
         const earned = (save: ReturnType<typeof createSave>) =>
             getEarnedUnlocks(save).items.map((item) => item.id);
         const save = createSave();
-        expect(earned(save)).not.toContain("ghrazi_rapier");
         save.mapVictories.theatre_of_blood = 1;
+        save.hardVictories.theatre_of_blood = 1;
+        save.expertVictories.theatre_of_blood = 1;
+        expect(earned(save)).not.toContain("ghrazi_rapier");
+        expect(earned(save)).not.toContain("holy_scythe_of_vitur");
+        save.trophies.push("ghrazi_rapier");
         expect(earned(save)).toContain("ghrazi_rapier");
         expect(earned(save)).not.toContain("holy_scythe_of_vitur");
-        save.hardVictories.theatre_of_blood = 1;
+        save.trophies.push("holy_scythe_of_vitur_uncharged");
         expect(earned(save)).toContain("holy_scythe_of_vitur");
     });
 
@@ -265,6 +271,19 @@ describe("raids", () => {
                 expect(getEnemy(enemyId).shot, `${id}: ${enemyId}`).toBeDefined();
             }
         }
+    });
+
+    it("has the rapier in every mode's chest, and the Holy scythe on hard and expert's only", () => {
+        const rapier = TROPHY_BY_ID.get("ghrazi_rapier")!.from;
+        const scythe = TROPHY_BY_ID.get("holy_scythe_of_vitur_uncharged")!.from;
+        expect(rapier.kind === "raid" && !rapier.hard && !rapier.expert).toBe(true);
+        expect(scythe.kind === "raid" && scythe.hard && !scythe.expert).toBe(true);
+        expect(describeUnlockTask(getWeapon("ghrazi_rapier").unlock!)).toBe(
+            "Find a Ghrazi rapier in the Theatre of Blood chest",
+        );
+        expect(describeUnlockTask(getWeapon("holy_scythe_of_vitur").unlock!)).toBe(
+            "Find a Holy Scythe of Vitur (uncharged) in the Theatre of Blood chest on hard or expert",
+        );
     });
 
     it("scores a room on how fast its boss went down and how little you were hurt", () => {
@@ -1223,6 +1242,26 @@ describe("expert mode", () => {
     });
 });
 
+describe("a raid room's pace", () => {
+    it("scales its enemies and caskets by where it'd be with no boss time before it", () => {
+        const rooms = TEST_RAID.raid!.rooms;
+        const fresh = raid();
+        fresh["beginRaidRoom"](1);
+        const late = raid();
+        // As if the bosses before it took five minutes
+        late.tick += 300 * TICKS_PER_SECOND;
+        late["beginRaidRoom"](1);
+        const expected = rooms[1].at - late["raidWaveLength"](1);
+        expect(late["paceSeconds"]).toBeCloseTo(expected);
+        expect(late["paceSeconds"]).toBeCloseTo(fresh["paceSeconds"]);
+        expect(late["enemyHpScale"]()).toBeCloseTo(fresh["enemyHpScale"]());
+        expect(late["casketSeconds"]).toBeCloseTo(fresh["casketSeconds"]);
+        // and runs on with the room's own clock
+        late.tick += 10 * TICKS_PER_SECOND;
+        expect(late["paceSeconds"]).toBeCloseTo(expected + 10);
+    });
+});
+
 describe("raid teleporters", () => {
     const room = () => TEST_RAID.raid!.rooms[0];
     function walkUp(sim: Sim): void {
@@ -1240,6 +1279,27 @@ describe("raid teleporters", () => {
         expect(sim.chooseEventOption(0)).toBe(true);
         expect(sim.raidStage).toBe("boss");
         expect(sim.raidTeleportsLeft).toBe(1);
+        // The room's boss timer is cancelled
+        expect(sim.raidBossDueTick).toBeLessThanOrEqual(sim.tick);
+        expect(sim.timeLeftForBoss).toBe(0);
+    });
+
+    it("leave the next room its full waves, not the time saved as well", () => {
+        const sim = raid(false, 2);
+        toRoomSecond(sim, 5);
+        walkUp(sim);
+        sim.chooseEventOption(0);
+        killBosses(sim);
+        expect(sim.raidStage).toBe("cleared");
+        toRoomSecond(sim, 8);
+        expect(sim.raidRoom).toBe(1);
+        // 50 seconds of waves, as it'd have had without the teleport
+        expect(sim.timeLeftForBoss).toBeGreaterThan(49);
+        expect(sim.timeLeftForBoss).toBeLessThanOrEqual(50);
+        toRoomSecond(sim, 49);
+        expect(sim.raidStage).toBe("waves");
+        toRoomSecond(sim, 51);
+        expect(sim.raidStage).toBe("boss");
     });
 
     it("can be turned down, and ask again only once you've stepped away", () => {

@@ -49,6 +49,9 @@ the version in the corner).
     can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
   - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
+- The Theatre of Blood's weapons come from its chest: a Ghrazi rapier in the chest unlocks the
+  rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which unlocks the
+  Holy Scythe. Weapons already unlocked stay unlocked.
 
 ### Fixed
 
@@ -70,6 +73,8 @@ the version in the corner).
     longer ignores grey ones. Thralls and the cannon go for any Nylocas.
   - Venom stops when Nylocas Vasilias changes to a colour its weapon can't hurt.
 - Turning hard mode off turns expert off with it.
+- The Theatre of Blood: a room's waves always last five minutes. Killing a boss quickly, or taking
+  a portal, used to make the next room's waves longer by the time saved.
 
 ## 0.24.1 - 2026-11-04
 

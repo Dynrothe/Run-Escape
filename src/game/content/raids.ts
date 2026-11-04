@@ -127,8 +127,8 @@ export const RAID_SUPPLY_CHEST: RandomEventDef = {
     effect: { kind: "shop", leaveLabel: "On to the next room" },
 };
 
-// Each room's boss comes at the next of these marks in the run, as the campaign's bosses do: five
-// minutes, ten, and so on to Verzik at thirty
+// Each room's waves last this long from when it starts, however quickly the last boss went down
+// (its `at` is where it'd fall with no time spent on bosses: five minutes, ten, and so on)
 const ROOM_MINUTES = 5;
 // A room's waves: a new one every WAVE_STEP seconds, WAVES_A_ROOM of them
 const WAVE_STEP = 60;
@@ -375,6 +375,9 @@ export const RAID_MAPS: MapDef[] = [
             "and there's nowhere safe by them: up close they stomp, bite and burst.\n\n" +
             "**Raid points** come from fast, clean rooms. They pay coins, buy supplies between " +
             "rooms, and raise your chance of a purple at the end.\n\n" +
+            "**Weapons come from the chest**, not for clearing: a Ghrazi rapier from it unlocks " +
+            "the rapier, a chance each clear. On hard or expert it can also hold the Holy Scythe " +
+            "of Vitur, which unlocks the Holy Scythe.\n\n" +
             "**Portals:** once you've killed a room's boss, its hall has a portal straight to it " +
             "(three a raid).\n\n" +
             "**Hard mode** opens when you beat the raid.\n\n" +

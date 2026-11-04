@@ -1093,7 +1093,9 @@ export type UnlockTask =
     // Kill this boss in a run on the map
     | { kind: "killBoss"; mapId: string; enemyId: string }
     // Last this many seconds in a run on the map
-    | { kind: "survive"; mapId: string; seconds: number };
+    | { kind: "survive"; mapId: string; seconds: number }
+    // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
+    | { kind: "raidChest"; mapId: string; trophyId: string };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =
@@ -1240,7 +1242,7 @@ export type MapDef = {
 // room, and the last room's boss is the final boss.
 export type RaidDef = {
     rooms: RaidRoomDef[];
-    // Seconds of waves a room has at the least, however long the last boss took (60 when unset)
+    // Seconds of waves a room has at the least (60 when unset)
     minWaveSeconds?: number;
 };
 
@@ -1269,8 +1271,9 @@ export type RaidRoomDef = {
     // Where the hall's teleporter stands, in world tiles: walking up to it offers to skip the
     // rest of the room's waves (Sim's raidTeleports)
     teleporter?: { x: number; y: number };
-    // The run's second the boss comes, as a campaign map's do (or minWaveSeconds into the room,
-    // if that's later). The waves' starts and the events' times are from the room's start.
+    // The run's second the boss comes if no boss before took any time: the room's
+    // waves last the gap between this and the last room's (at least minWaveSeconds), from when
+    // the room starts. The waves' starts and the events' times are from the room's start too.
     at: number;
     waves: WaveDef[];
     events: RunEventDef[];

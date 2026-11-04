@@ -4,6 +4,7 @@ import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
 import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { LOCKABLE_ITEMS } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
 import {
@@ -826,6 +827,10 @@ describe("save", () => {
                 expect(bossesOn(task.mapId)).toContain(task.enemyId);
             } else if (task.kind === "survive") {
                 expect(task.seconds).toBeLessThan(RUN_LENGTH);
+            } else if (task.kind === "raidChest") {
+                // A real trophy, from this raid's chest
+                const from = TROPHY_BY_ID.get(task.trophyId)?.from;
+                expect(from, task.trophyId).toMatchObject({ kind: "raid", mapId: task.mapId });
             } else {
                 expect(getMap(task.mapId)).toBeDefined();
             }
