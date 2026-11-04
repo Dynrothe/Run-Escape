@@ -1068,8 +1068,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `client/GameTouch.ts` is the stick, with no DOM. `GameInput.getMoveVector` reads it when no key
   is down, so the sim gets the same input a keyboard gives: length 0 or 1.
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
-  on top. Its buttons act on `pointerdown`, because a browser won't fire `click` for a second finger
-  while the thumb's down.
+  on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
+  `click` for a second finger while the thumb's down. `ui/InventoryItem.tsx` shares the bag buttons
+  with the desktop HUD: hover or hold for 500 ms to read the same `ItemView.lines` as the casket.
+  Releasing a hold never uses the item; moving away, cancellation or losing focus cancels the tap.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
@@ -1097,6 +1099,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
+Keep the CDP session open for the whole gesture; `touchEnd` lists the fingers being lifted,
+not the ones still touching the screen.
 
 ### Controllers
 

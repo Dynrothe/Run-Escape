@@ -15,6 +15,8 @@ the version in the corner).
   sees yours in co-op.
 - A favourite adventurer, by Okaeri: pick Make favourite in an adventurer's details, and the game
   starts on them every time you open it.
+- Item descriptions, by Deivid Smarzaro: hover over an item in your bag, or hold it on a phone,
+  to read what it does without using it.
 
 ### Changed
 
