@@ -23,7 +23,7 @@ import {
     isFunMap,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
-import { getFoundPets } from "../content/pets";
+import { PET_BY_ID, getFoundPets } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -157,6 +157,9 @@ const ATTRACT_PITCH = -260;
 const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
+// The pet taken along stands beside the character on the menus: tiles to their side and behind
+const PREVIEW_PET_SIDE = 1.1;
+const PREVIEW_PET_BACK = 0.4;
 const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
@@ -2444,11 +2447,11 @@ export class GameClient implements GameFrameHandler {
             this.view.submitActors(actors, sim, this.getAlpha());
             return;
         }
-        // Title screen: just the character
+        // Title screen: just the character, and their pet
         const model = this.assets.getPlayer();
+        const tick = Math.floor(this.attractTick);
         if (model) {
             const anim = model.getAnim(this.assets.getPlayerStance().idle);
-            const tick = Math.floor(this.attractTick);
             actors.draw(
                 model,
                 anim,
@@ -2456,6 +2459,22 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
+                0,
+            );
+        }
+        const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);
+        const petModel = pet && this.assets.get("pet:" + pet.id);
+        if (pet && petModel) {
+            const anim = petModel.getAnim(pet.idleSeq);
+            const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;
+            const y = TITLE_MAP.spawn.y - PREVIEW_PET_BACK;
+            actors.draw(
+                petModel,
+                anim,
+                anim.getFrame(tick),
+                x,
+                this.grid.getHeight(x, y) / 128,
+                y,
                 0,
             );
         }
