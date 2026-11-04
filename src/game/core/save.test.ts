@@ -492,6 +492,22 @@ describe("save", () => {
         expect(isMapUnlocked(guest, CAMPAIGN_MAPS[1].id)).toBe(false);
     });
 
+    test("Justiciar Zachariah's fight opens once Phosani's is beaten: the Wolf's trial, then the Owl's", () => {
+        const save = createSave();
+        expect(getMap("zachariah").fight?.requires).toBe("phosani");
+        expect(CAMPAIGN_MAPS.some((map) => map.id === "zachariah")).toBe(false);
+        recordRun(save, run("halloween", { victory: true, seconds: 900, level: 40 }));
+        expect(isMapUnlocked(save, "phosani")).toBe(true);
+        expect(isMapUnlocked(save, "zachariah")).toBe(false);
+        recordRun(save, run("phosani", { victory: true, seconds: 300, level: 20 }));
+        expect(isMapUnlocked(save, "zachariah")).toBe(true);
+        expect(isEndlessUnlocked(save, "zachariah")).toBe(false);
+        expect(isHardUnlocked(save, "zachariah")).toBe(false);
+        recordRun(save, run("zachariah", { victory: true, seconds: 300, level: 1 }));
+        expect(isHardUnlocked(save, "zachariah")).toBe(true);
+        expect(save.unlockedCharacters).not.toContain("saradominist");
+    });
+
     test("wins from before maps count as Lumbridge wins", () => {
         expect(migrateSave({ version: 1, victories: 2 }).mapVictories).toEqual({ lumbridge: 2 });
         expect(migrateSave({ version: 1, victories: 0 }).mapVictories).toEqual({});

@@ -568,7 +568,8 @@ export const CHARACTERS: CharacterDef[] = [
         name: "Saradominist",
         description:
             "Made for Justiciar Zachariah, and everyone plays them there, and nowhere else: " +
-            "starts with Saradomin Strike, moves 20% faster and has 20% more hitpoints.",
+            "starts with Saradomin Strike, moves 20% faster, has 20% more hitpoints and " +
+            "heals 6 hitpoints a minute.",
         style: "magic",
         startingWeapon: "saradomin_strike",
         // Saradomin's vestments: the mitre, robes, cloak and stole
@@ -579,9 +580,10 @@ export const CHARACTERS: CharacterDef[] = [
             [EquipSlot.CAPE]: 10446,
             [EquipSlot.AMULET]: 10470,
         },
-        // As the Inquisitor's: feet, and hitpoints to learn him on. The damage is the strike's
-        // alone, at the level the map says, and only from near him.
-        bonus: { moveSpeed: 0.2, maxHp: 0.2 },
+        // As the Inquisitor's: feet, and hitpoints to learn him on, and a little back over the
+        // fight, as nothing in his court heals (her totems' blasts do). The damage is the
+        // strike's alone, at the level the map says, and only from near him.
+        bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 6 },
         only: "zachariah",
     },
 ];

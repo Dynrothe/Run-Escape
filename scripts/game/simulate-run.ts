@@ -31,6 +31,7 @@ import { RUN_LENGTH } from "../../src/game/content/waves";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
+import { behindPillar } from "../../src/game/core/arena";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -284,7 +285,125 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             const length = Math.hypot(awayX, awayY);
             return { x: awayX / length, y: awayY / length };
         }
+        // Off a lunge's strip, out of a square blast, off a wave's or a thrown sword's line, as a
+        // person reads them (BossAttackDef.line, square, wave, boomerang)
+        const windup = state.windup;
+        const across = (x: number, y: number, dirX: number, dirY: number, half: number) => {
+            const along = (player.x - x) * dirX + (player.y - y) * dirY;
+            const side = (player.x - x) * -dirY + (player.y - y) * dirX;
+            return along > -1 && Math.abs(side) < half + 0.8
+                ? { x: -dirY * (side >= 0 ? 1 : -1), y: dirX * (side >= 0 ? 1 : -1) }
+                : undefined;
+        };
+        if (windup?.attack.line) {
+            const step = across(
+                boss.x,
+                boss.y,
+                windup.dirX,
+                windup.dirY,
+                windup.attack.line.width / 2,
+            );
+            if (step) {
+                return step;
+            }
+        }
+        if (windup?.attack.square) {
+            const half = windup.attack.square / 2 + 0.7;
+            for (const spot of windup.targets) {
+                const dx = player.x - spot.x;
+                const dy = player.y - spot.y;
+                if (Math.abs(dx) < half && Math.abs(dy) < half) {
+                    return Math.abs(dx) > Math.abs(dy)
+                        ? { x: Math.sign(dx) || 1, y: 0 }
+                        : { x: 0, y: Math.sign(dy) || 1 };
+                }
+            }
+        }
+        if (windup && (windup.attack.wave || windup.attack.boomerang)) {
+            const half = windup.attack.radius ?? 0.35;
+            const lines = windup.from
+                ? windup.from.map((s) => {
+                      const x = s.x + (s.size ?? 1) / 2;
+                      const y = s.y + (s.size ?? 1) / 2;
+                      const t = windup.targets[0];
+                      const l = Math.max(0.001, Math.hypot(t.x - x, t.y - y));
+                      return { x, y, dirX: (t.x - x) / l, dirY: (t.y - y) / l };
+                  })
+                : [{ x: boss.x, y: boss.y, dirX: windup.dirX, dirY: windup.dirY }];
+            for (const line of lines) {
+                const step = across(line.x, line.y, line.dirX, line.dirY, half);
+                if (step) {
+                    return step;
+                }
+            }
+        }
+        for (const projectile of sim.enemyProjectiles) {
+            if (!projectile.hit) {
+                continue;
+            }
+            const speed = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy));
+            const step = across(
+                projectile.x,
+                projectile.y,
+                projectile.vx / speed,
+                projectile.vy / speed,
+                projectile.radius,
+            );
+            if (step) {
+                return step;
+            }
+        }
+        // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
+        // spot within reach that's hidden from it
+        const pillars = sim.map.features?.pillars;
+        if (state.windup?.attack.cover && pillars) {
+            let best: { x: number; y: number } | undefined;
+            let bestDistance = Infinity;
+            for (let dy = -10; dy <= 10; dy++) {
+                for (let dx = -10; dx <= 10; dx++) {
+                    const x = Math.floor(player.x) + dx + 0.5;
+                    const y = Math.floor(player.y) + dy + 0.5;
+                    const distance = Math.hypot(dx, dy);
+                    if (
+                        distance < bestDistance &&
+                        !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
+                        !pillars.some(
+                            (p) =>
+                                x > p.x - 0.5 &&
+                                x < p.x + p.size + 0.5 &&
+                                y > p.y - 0.5 &&
+                                y < p.y + p.size + 0.5,
+                        ) &&
+                        behindPillar(pillars, boss.x, boss.y, x, y)
+                    ) {
+                        best = { x, y };
+                        bestDistance = distance;
+                    }
+                }
+            }
+            if (best) {
+                return Math.hypot(best.x - player.x, best.y - player.y) < 0.3
+                    ? { x: 0, y: 0 }
+                    : towards(best.x, best.y);
+            }
+        }
         for (const hazard of sim.hazards) {
+            // A checker's cell (GroundHazard.half), once it's shown: off it the short way
+            const half = hazard.half;
+            if (half) {
+                const dx = player.x - hazard.x;
+                const dy = player.y - hazard.y;
+                if (
+                    sim.tick >= hazard.startTick &&
+                    Math.abs(dx) < half + 0.6 &&
+                    Math.abs(dy) < half + 0.6
+                ) {
+                    return Math.abs(dx) > Math.abs(dy)
+                        ? { x: Math.sign(dx) || 1, y: 0 }
+                        : { x: 0, y: Math.sign(dy) || 1 };
+                }
+                continue;
+            }
             const away = Math.hypot(player.x - hazard.x, player.y - hazard.y);
             if (away < hazard.radius + 1.2) {
                 return towards(
@@ -293,6 +412,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 );
             }
         }
+    }
+    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him
+    const reach = sim.map.fight?.strikeReach;
+    if (reach !== undefined && Math.hypot(boss.x - player.x, boss.y - player.y) > reach - 1.5) {
+        return towards(boss.x, boss.y);
     }
     let target: { x: number; y: number } | undefined;
     let nearest = Infinity;

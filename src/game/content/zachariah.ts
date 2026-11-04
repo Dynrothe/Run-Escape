@@ -59,8 +59,8 @@ const lane = (i: number) => [i * 3, i * 3 + 1, i * 3 + 2];
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Saradominist's Saradomin Strike's level,
 // and how near him they have to be for it to reach him, in tiles from his middle
-export const ZACHARIAH_HITPOINTS = 1500;
-export const ZACHARIAH_STRIKE_LEVEL = 8;
+export const ZACHARIAH_HITPOINTS = 2000;
+export const ZACHARIAH_STRIKE_LEVEL = 7;
 export const ZACHARIAH_STRIKE_REACH = 8.5;
 
 // Tiles south of him the player stands as he comes down, as the map starts them
@@ -185,7 +185,15 @@ const LIGHTNING: BossAttackDef = {
     windupSound: 4364,
     sound: 4428,
     impactSpotAnim: 1796,
-    ground: { spots: [{ shape: "checker", then: 1.6 }], radius: 1.5, spotAnim: 1797, fit: 1 },
+    // The cells about to be struck glow red and gold, as the Sepulchre's strange tiles do
+    ground: {
+        spots: [{ shape: "checker", then: 1.6 }],
+        radius: 1.5,
+        locId: 56669,
+        // Its star inside the cell, and plain to see: it's the warning of a big hit everywhere
+        fit: 0.85,
+        alpha: 0.55,
+    },
 };
 
 const ATTACKS: BossAttackDef[] = [
@@ -208,6 +216,8 @@ const ATTACKS: BossAttackDef[] = [
         spotAnim: 1515,
         speed: 6.5,
         radius: 0.75,
+        // The justiciars' blue impact, on whoever it binds for as long as it does
+        impactSpotAnim: 1458,
         wave: { reach: 12 },
         onHit: { pull: 2.4, pullSeconds: 0.3, bind: 1.7, attack: "Flurry" },
         shout: "Kneel!",
@@ -267,7 +277,8 @@ const ATTACKS: BossAttackDef[] = [
         impactSpotAnim: 1458,
         radius: 40,
         toMiddle: true,
-        cover: {},
+        // The safe tiles glow blue, as the strange tiles do
+        cover: { locId: 56670 },
         message: "Hide from his gaze!",
         shout: "Face judgement!",
     },
@@ -354,6 +365,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 subtitle: "#9cc0ee",
                 edge: null,
                 vignette: null,
+                lean: true,
                 dark: [2, 6, 18],
             },
             intro: {
