@@ -15,6 +15,7 @@ import { MAP_BY_ID, getMap } from "../content/maps";
 import { APMEKEN, APMEKEN_WAVES } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { applyAction } from "./lockstep";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
 
@@ -361,11 +362,69 @@ describe("the Tombs' invocations", () => {
 });
 
 describe("a death in the Tombs", () => {
+    // Down, then the respawn the popup asks for, if the raid isn't over
     function die(sim: Sim): void {
         sim.revivesLeft = 0;
         sim.player.invulnerable = 0;
         sim["damagePlayer"](1e6, "test", false, undefined, true);
+        if (!sim.runOver) {
+            expect(sim.state).toBe("fallen");
+            expect(sim.respawnTombs()).toBe(true);
+        }
     }
+
+    it("waits for a respawn before the room starts over", () => {
+        const sim = apmeken();
+        sim.revivesLeft = 0;
+        sim["damagePlayer"](1e6, "test", false, undefined, true);
+        expect(sim.state).toBe("fallen");
+        const tick = sim.tick;
+        sim.step();
+        expect(sim.tick).toBe(tick);
+        expect(applyAction(sim, { kind: "respawn" })).toBe(true);
+        expect(sim.state).toBe("playing");
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        expect(applyAction(sim, { kind: "respawn" })).toBe(false);
+    });
+
+    it("in co-op, fails the room only once everyone's down", () => {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_TOMBS.id,
+            characterId: "",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: ["warrior", "wizard"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        for (const hero of sim.heroes) {
+            sim.as(hero.index, () => {
+                sim.weapons = [];
+            });
+        }
+        sim.player.x = sim.player.prevX = 1031;
+        sim.step();
+        expect(sim.tombsPath).toBe("apmeken");
+        const [a, b] = sim.heroes;
+        const down = (hero: typeof a) =>
+            sim.as(hero.index, () => {
+                sim.revivesLeft = 0;
+                sim.player.invulnerable = 0;
+                sim["damagePlayer"](1e6, "test", false, undefined, true);
+            });
+        down(a);
+        expect(a.down).toBe(true);
+        expect(sim.state).toBe("playing");
+        down(b);
+        expect(sim.state).toBe("fallen");
+        sim.respawnTombs();
+        expect(a.down || b.down).toBe(false);
+    });
 
     it("starts the room over instead of ending the run, everyone up on full hitpoints", () => {
         const sim = apmeken();

@@ -20,7 +20,15 @@ export type Screen =
     | "coop"
     | "run";
 
-export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
+export type RunOverlay =
+    | "none"
+    | "levelUp"
+    | "chest"
+    | "event"
+    | "paused"
+    | "fallen"
+    | "dead"
+    | "victory";
 
 export type SlotView = {
     id: string;

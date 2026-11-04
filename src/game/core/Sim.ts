@@ -495,7 +495,9 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
 ]);
 
 // levelUp and chest wait for the player to choose
-export type SimState = "playing" | "levelUp" | "chest" | "event" | "dead" | "victory";
+// fallen: the Tombs' party is down in a room, and it starts over once someone respawns
+// (Sim.respawnTombs)
+export type SimState = "playing" | "levelUp" | "chest" | "event" | "fallen" | "dead" | "victory";
 
 export type SimOptions = {
     // Tests and offline balance comparisons; live runs use the shipped config.
@@ -4507,6 +4509,17 @@ export class Sim {
         return room !== undefined && room.wave <= room.beaten;
     }
 
+    // The Tombs' party down in a room (state "fallen"), the room starts over when a player asks:
+    // in OSRS they'd walk back in from the safe area, here it's a tap
+    respawnTombs(): boolean {
+        if (this.state !== "fallen") {
+            return false;
+        }
+        this.failTombsRoom();
+        this.state = "playing";
+        return true;
+    }
+
     // Everyone down in a Tombs room: it starts over, everyone up at its start on full hitpoints.
     // What they've got they keep (their levels, weapons, gear); what they used is gone. The waves
     // they'd beaten come again for nothing.
@@ -4555,9 +4568,22 @@ export class Sim {
         });
     }
 
-    // Done with a path: back to the Nexus, with what's on the floor
+    // Done with a path: back to the Nexus, with what's on the floor. Co-op: anyone still down is
+    // back up for the next, as OSRS's party rejoins once a room's done.
     private leaveTombsPath(): void {
         const tombs = this.map.tombs!;
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (hero.down && !hero.left) {
+                this.use(hero);
+                hero.down = false;
+                hero.revive = undefined;
+                this.player.hp = this.player.maxHp;
+                this.player.deathTick = -1;
+            }
+        }
+        this.use(current);
+        this.rescaleParty();
         if (this.tombsPath && !this.tombsPathsDone.includes(this.tombsPath)) {
             this.tombsPathsDone.push(this.tombsPath);
         }
@@ -7388,7 +7414,8 @@ export class Sim {
         this.hero.outTick = this.tick;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
-                this.failTombsRoom();
+                this.state = "fallen";
+                this.emit({ type: "heroDown" });
                 return;
             }
             this.endRun("dead");
