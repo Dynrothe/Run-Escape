@@ -156,8 +156,8 @@ const RAMPAGE_FLASH = 0.25;
 // second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
-// Pets are drawn as big as thralls
-const PET_SCALE = 1.5;
+// Pets as the cache has them: smaller than the player, as in OSRS
+const PET_SCALE = 1;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
