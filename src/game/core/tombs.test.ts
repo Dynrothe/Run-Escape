@@ -671,6 +671,34 @@ describe("Ba-Ba", () => {
         expect(sim.player.y).toBeLessThan(before - 3);
     });
 
+    it("rolls five boulders a row, the way through at most two lanes from the last", () => {
+        const { sim, boss } = rolling();
+        const rows: { added: number; gap: number }[] = [];
+        const fire = sim["fireGappedVolley"].bind(sim);
+        sim["fireGappedVolley"] = (...args: Parameters<typeof fire>) => {
+            const before = sim.bullets.count;
+            fire(...args);
+            rows.push({ added: sim.bullets.count - before, gap: boss.bossState!.wallGap! });
+        };
+        // At the foot, out of their way, so nothing ends it early
+        for (let i = 0; i < 15 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.x = sim.player.prevX = 1031.5;
+            sim.player.y = sim.player.prevY = 1028.5;
+            sim.step();
+        }
+        expect(rows.length).toBeGreaterThan(5);
+        rows.forEach((row, i) => {
+            expect(row.added).toBe(5);
+            if (i > 0) {
+                expect(Math.abs(row.gap - rows[i - 1].gap)).toBeLessThanOrEqual(2);
+            }
+        });
+        // and it goes everywhere, ends included, over a phase
+        expect(new Set(rows.map((r) => r.gap)).size).toBeGreaterThan(2);
+    });
+
     it("stops her boulders once someone gets back up to her", () => {
         const { sim, boss } = rolling();
         // Up the side, well away from her: the top rows are what count

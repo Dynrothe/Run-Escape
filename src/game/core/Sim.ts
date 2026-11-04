@@ -6335,16 +6335,29 @@ export class Sim {
         turn: number,
     ): void {
         const pattern = emitter.attack.pattern!;
+        // Lanes (BulletPatternDef.gapStep): as they are, whatever the mode
+        const lanes = pattern.shape === "wall" && pattern.gapStep !== undefined;
+        const scale = lanes ? 1 : this.bulletScale;
         // More bullets on hard (bulletScale), closer together, with as wide a way through
-        const count = Math.round(pattern.count * this.bulletScale);
+        const count = Math.round(pattern.count * scale);
         // The gap's width is its bullets plus one spacing: as many again, so at least as wide
-        const gapWidth = ((pattern.gap ?? 2) + 1) * this.bulletScale;
+        const gapWidth = ((pattern.gap ?? 2) + 1) * scale;
         const gap = Math.min(Math.round(gapWidth - 1), count - 1);
         // Anywhere round a ring; never at a wall's ends, which can be in a room's walls
-        const gapStart =
+        let gapStart =
             pattern.shape === "closing"
                 ? this.rng.int(count)
                 : 1 + this.rng.int(Math.max(1, count - gap - 1));
+        const state = boss.bossState;
+        if (lanes && state) {
+            // Any lane, ends too, within gapStep of the last wall's
+            const last = state.wallGap;
+            const step = pattern.gapStep!;
+            const lo = last === undefined ? 0 : Math.max(0, last - step);
+            const hi = last === undefined ? count - gap : Math.min(count - gap, last + step);
+            gapStart = lo + this.rng.int(hi - lo + 1);
+            state.wallGap = gapStart;
+        }
         const inGap = (i: number) => (i - gapStart + count) % count < gap;
         const add = (x: number, y: number, angle: number, ticks: number) =>
             this.bullets.add(
@@ -6360,7 +6373,7 @@ export class Sim {
                 this.tick,
             );
         if (pattern.shape === "wall") {
-            const spacing = (pattern.spacing ?? pattern.radius * 2.5) / this.bulletScale;
+            const spacing = (pattern.spacing ?? pattern.radius * 2.5) / scale;
             const across = emitter.angle + Math.PI / 2;
             const from = pattern.from ?? 0;
             const startX = boss.x + fm.cos(emitter.angle) * from;
@@ -7042,6 +7055,7 @@ export class Sim {
         enemy.y = enemy.prevY = at.altar.y;
         enemy.vx = enemy.vy = 0;
         enemy.bossState!.windup = undefined;
+        enemy.bossState!.wallGap = undefined;
         const current = this.hero;
         this.heroes.forEach((hero, i) => {
             const player = hero.player;

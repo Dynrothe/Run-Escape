@@ -106,6 +106,8 @@ export type BossWalkers = {
 export type BossState = {
     // Ticks until each of the boss's attacks can be used again
     cooldowns: number[];
+    // Where its last wall's way through was, in lanes (BulletPatternDef.gapStep)
+    wallGap?: number;
     windup?: BossWindup;
     // Taken from the player, given back when the boss dies
     stolenCoins: number;

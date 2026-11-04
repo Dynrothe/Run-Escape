@@ -420,6 +420,10 @@ export type BulletPatternDef = {
     origin?: "target";
     // Walls: straight down the arena (south), whoever's where (Ba-Ba's boulders, from her altar)
     heading?: "south";
+    // Walls: count lanes side by side, the gap's lane (ends included) moving at most this many from
+    // the last volley's, so the next way through can always be reached (Ba-Ba's boulders: five
+    // and a gap, as in OSRS). The lanes stay as they are on hard.
+    gapStep?: number;
     // Tiles a hit knocks the player on, the way the bullet's going
     knockback?: number;
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:

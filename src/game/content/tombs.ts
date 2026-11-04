@@ -287,18 +287,19 @@ export const BA_BA: EnemyDef = {
                 invoked: { id: "boulderdash", speed: 2 },
                 pattern: {
                     shape: "wall",
-                    // Across her arena's floor (15 tiles), not out over its walls
-                    count: 10,
+                    // Six lanes across her arena's floor (15 tiles): five boulders and a way
+                    // through, at most two lanes from the last row's, as in OSRS
+                    count: 6,
                     volleys: 1,
                     interval: 1,
                     speed: 3.2,
                     // From her altar to the arena's foot, and no further: not into the safe room
                     range: 19,
-                    radius: 0.85,
-                    // One boulder missing: about a tile and a half to slip through
+                    radius: 1.1,
                     gap: 1,
-                    spacing: 1.6,
-                    scale: 2,
+                    gapStep: 2,
+                    spacing: 2.5,
+                    scale: 2.6,
                     heading: "south",
                     knockback: 4,
                 },
