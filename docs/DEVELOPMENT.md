@@ -607,9 +607,10 @@ its max; `?raidtest=short` does only the first.
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
 never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, behind the
 player and clear of thralls (with the map's collision, and back beside them past `PET_LEASH`), and
-`GameView` draws it. So a pet can't change a run, and co-op's copies agree without it. A co-op
-player's pet goes in their `Loadout` as `pet`, which the relays pass on whole, so it needed no
-relay change; a pet id a game doesn't know is left out. Every pet is baked in `getBaseRequests`
+`GameView` draws it (on the menus, `GameClient.submitActors` stands it beside the character). So
+a pet can't change a run, and co-op's copies agree without it. A co-op player's pet goes in their
+`Loadout` as `pet`, which the relays pass on whole, so it needed no relay change; a pet id a game
+doesn't know is left out. Every pet is baked in `getBaseRequests`
 (a party can bring any of them), and `slim-cache.ts` picks them up from there. A new pet needs a
 trophy that drops it and an entry in `PETS` with the follower NPC's id and animations
 (`scripts/cache/find-npcs.ts`; the lower of two ids is the follower).
