@@ -800,8 +800,10 @@ export class Sim {
     raidRoomStartTick = 0;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
-    // The Tombs' Nexus: the door each hero's at, if any (stepTombs)
+    // The Tombs' Nexus: the door each hero's at, if any (stepTombs), and the path the party's on,
+    // undefined in the Nexus
     private readonly tombsDoors = new Map<number, string | undefined>();
+    tombsPath: string | undefined;
     raidStageTick = 0;
     // Who's still to have their turn at a cleared room's supply chest
     private raidShopQueue: number[] = [];
@@ -4148,11 +4150,12 @@ export class Sim {
         }
     }
 
-    // The Tombs of Amascut's Nexus: walking up to a path's door. No path's room is built yet, so
-    // each says so, once as a player comes up to it (the door they're at is kept on tombsDoors).
+    // The Tombs of Amascut's Nexus: walking up to a path's door takes the party into its room, or
+    // for a path that isn't built yet says so, once as a player comes up to it (the door they're at
+    // is kept on tombsDoors).
     private stepTombs(): void {
         const tombs = this.map.tombs;
-        if (!tombs || this.runOver || this.state !== "playing") {
+        if (!tombs || this.runOver || this.state !== "playing" || this.tombsPath !== undefined) {
             return;
         }
         const current = this.hero;
@@ -4168,12 +4171,26 @@ export class Sim {
                 continue;
             }
             this.tombsDoors.set(hero.index, at?.id);
+            if (at?.room) {
+                this.enterTombsPath(at.id, at.room.arrive);
+                return;
+            }
             if (at) {
                 this.use(hero);
                 this.emit({ type: "notice", message: `${at.name}: not open yet.` }, true);
             }
         }
         this.use(current);
+    }
+
+    // Into a path's room, the whole party, with what's on the floor
+    private enterTombsPath(id: string, arrive: { x: number; y: number }): void {
+        const path = this.map.tombs!.paths.find((p) => p.id === id)!;
+        this.tombsPath = id;
+        this.tombsDoors.clear();
+        this.gatherHall();
+        this.moveParty(arrive);
+        this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
     }
 
     // A room's waves, from the top, in its hall

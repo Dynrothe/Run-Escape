@@ -34,7 +34,16 @@ const TEST_TOMBS: MapDef = {
     waves: [],
     events: [],
     tombs: {
-        paths: [{ id: "apmeken", name: "Path of Apmeken", door: { x: 1042.5, y: 1036.5 } }],
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            { id: "het", name: "Path of Het", door: { x: 1042.5, y: 1036.5 } },
+            {
+                id: "apmeken",
+                name: "Path of Apmeken",
+                door: { x: 1030.5, y: 1036.5 },
+                room: { arrive: { x: 1036.5, y: 1060.5 } },
+            },
+        ],
     },
 };
 MAP_BY_ID.set(TEST_TOMBS.id, TEST_TOMBS);
@@ -147,13 +156,27 @@ describe("the Tombs of Amascut", () => {
         expect(sim.raidLevel).toBe(0);
     });
 
+    it("take the party into a path's room through its door", () => {
+        const sim = tombs([]);
+        sim.weapons = [];
+        sim.dropPickup("coins", 1040.5, 1030.5, 5);
+        sim.player.x = sim.player.prevX = 1031;
+        sim.step();
+        expect(sim.tombsPath).toBe("apmeken");
+        expect(sim.player.x).toBeCloseTo(1036.5);
+        expect(sim.player.y).toBeCloseTo(1060.5);
+        expect(
+            sim.takeEvents().some((e) => e.type === "notice" && e.message.includes("Apmeken")),
+        ).toBe(true);
+    });
+
     it("say a path's door isn't open yet, once as you come up to it", () => {
         const sim = tombs([]);
         sim.weapons = [];
         const notices = () =>
             sim
                 .takeEvents()
-                .filter((e) => e.type === "notice" && e.message.includes("Path of Apmeken"));
+                .filter((e) => e.type === "notice" && e.message.includes("Path of Het"));
         sim.step();
         expect(notices()).toHaveLength(0);
         sim.player.x = sim.player.prevX = 1041;
@@ -163,7 +186,7 @@ describe("the Tombs of Amascut", () => {
         sim.step();
         expect(notices()).toHaveLength(0);
         // Away and back: it says so again
-        sim.player.x = sim.player.prevX = 1030;
+        sim.player.x = sim.player.prevX = 1036.5;
         sim.step();
         sim.player.x = sim.player.prevX = 1041;
         sim.step();

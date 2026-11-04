@@ -1231,14 +1231,19 @@ export type MapDef = {
 };
 
 export type TombsDef = {
+    // Where the party stands in the Nexus, in world tiles: where a raid starts, and where a path
+    // brings it back to
+    nexus: { x: number; y: number };
     paths: TombsPathDef[];
 };
 
-// A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to
+// A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to, and
+// its room once it's built: where the party's brought in
 export type TombsPathDef = {
     id: string;
     name: string;
     door: { x: number; y: number };
+    room?: { arrive: { x: number; y: number } };
 };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into
