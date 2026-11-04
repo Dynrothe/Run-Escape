@@ -85,7 +85,7 @@ function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
 
 // On to a second of the room, through what that second brings
 function toRoomSecond(sim: Sim, seconds: number): void {
-    const target = sim.raidRoomStartTick + Math.round(seconds * TICKS_PER_SECOND);
+    const target = sim.tick - sim.raidRoomTicks + Math.round(seconds * TICKS_PER_SECOND);
     // Level ups, caskets and random events pause the run: they're skipped here
     for (let steps = 0; sim.tick < target && !sim.runOver; steps++) {
         expect(steps).toBeLessThan(100_000);
@@ -696,6 +696,9 @@ describe("raid teleporters", () => {
         expect(sim.chooseEventOption(0)).toBe(true);
         expect(sim.raidStage).toBe("boss");
         expect(sim.raidTeleportsLeft).toBe(1);
+        // The room's boss timer is cancelled
+        expect(sim.raidBossTicks).toBeUndefined();
+        expect(sim.timeLeftForBoss).toBe(0);
     });
 
     it("leave the next room its full waves, not the time saved as well", () => {

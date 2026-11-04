@@ -783,10 +783,14 @@ export class Sim {
     private readonly weaponDamageMultipliers: Partial<Record<DamageSource, number>>;
     // The final boss is up
     bossSpawned = false;
-    // Raids (MapDef.raid): the room the party's in, the tick its waves started, and where it's at:
-    // its waves, its boss's fight, or cleared and about to move on (since raidStageTick)
+    // Raids (MapDef.raid): the room the party's in, and where it's at: its waves, its boss's
+    // fight, or cleared and about to move on (since raidStageTick)
     raidRoom = 0;
-    raidRoomStartTick = 0;
+    // The room's own clocks, apart from the run's: ticks since it began (what its waves and
+    // events go by), and the ticks until its boss comes, undefined once the portal's been taken
+    // or the boss has come
+    raidRoomTicks = 0;
+    raidBossTicks: number | undefined;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
     raidStageTick = 0;
@@ -1100,6 +1104,9 @@ export class Sim {
         this.raidTeleports = this.map.raid ? (options.raidTeleports ?? 0) : 0;
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
+        if (this.map.raid) {
+            this.raidBossTicks = this.raidWaveLength(0) * TICKS_PER_SECOND;
+        }
         this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
         const party: HeroOptions[] = options.party ?? [
             {
@@ -2437,25 +2444,20 @@ export class Sim {
         return this.map.raid?.rooms[this.raidRoom];
     }
 
-    // The run's second this room's boss comes: its waves' length after the room started (the gap
-    // between its `at` and the last room's), so a boss killed quickly, or a teleport, doesn't
-    // leave the next room's waves the longer for it
-    private get raidBossDue(): number {
+    // Seconds of waves a raid's room has before its boss: the gap between its `at` and the last
+    // room's, timed on the room's own clock, so how long a boss took, or a portal, never changes it
+    private raidWaveLength(index: number): number {
         const raid = this.map.raid!;
-        const room = raid.rooms[this.raidRoom];
-        const start = this.raidRoomStartTick / TICKS_PER_SECOND;
         const testRoom = this.testing?.raidRoomSeconds;
         if (testRoom) {
-            return start + testRoom;
+            return testRoom;
         }
-        const length = room.at - (raid.rooms[this.raidRoom - 1]?.at ?? 0);
-        return start + Math.max(length, raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS);
+        const length = raid.rooms[index].at - (raid.rooms[index - 1]?.at ?? 0);
+        return Math.max(length, raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS);
     }
 
     private get directorSeconds(): number {
-        return this.map.raid
-            ? (this.tick - this.raidRoomStartTick) / TICKS_PER_SECOND
-            : this.mapSeconds;
+        return this.map.raid ? this.raidRoomTicks / TICKS_PER_SECOND : this.mapSeconds;
     }
 
     private currentWave() {
@@ -4089,8 +4091,14 @@ export class Sim {
         }
         const room = raid.rooms[this.raidRoom];
         const last = this.raidRoom === raid.rooms.length - 1;
+        this.raidRoomTicks++;
         if (this.raidStage === "waves") {
-            if (this.seconds >= this.raidBossDue) {
+            if (this.raidBossTicks !== undefined) {
+                this.raidBossTicks--;
+            }
+            // Its timer's run out (or the portal cancelled it, and the boss couldn't come yet)
+            if (this.raidBossTicks === undefined || this.raidBossTicks <= 0) {
+                this.raidBossTicks = undefined;
                 this.startRaidBoss(room, last);
             } else {
                 this.stepTeleporter(room);
@@ -4129,7 +4137,8 @@ export class Sim {
         const next = raid.rooms[index];
         this.raidStage = "waves";
         this.raidStageTick = this.tick;
-        this.raidRoomStartTick = this.tick;
+        this.raidRoomTicks = 0;
+        this.raidBossTicks = this.raidWaveLength(index) * TICKS_PER_SECOND;
         this.raidShopQueue = [];
         this.eventIndex = 0;
         this.spawnAccumulator = 0;
@@ -10032,6 +10041,8 @@ export class Sim {
             const raid = this.map.raid!;
             const room = raid.rooms[this.raidRoom];
             this.raidTeleportsLeft--;
+            // The portal cancels the room's boss timer: its boss comes now
+            this.raidBossTicks = undefined;
             this.leaveEvent();
             this.emit({
                 type: "notice",
@@ -10219,7 +10230,9 @@ export class Sim {
     get timeLeftForBoss(): number {
         const room = this.raidRoomDef;
         if (room) {
-            return this.raidStage === "waves" ? Math.max(0, this.raidBossDue - this.seconds) : 0;
+            return this.raidStage === "waves" && this.raidBossTicks !== undefined
+                ? Math.max(0, this.raidBossTicks / TICKS_PER_SECOND)
+                : 0;
         }
         return Math.max(0, RUN_LENGTH - this.mapSeconds);
     }
