@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.25.0 - 2026-11-05
 
 ### Added
 
@@ -20,6 +20,8 @@ the version in the corner).
 
 ### Changed
 
+- Co-op has moved to a new server, with each room close to its host. In the Windows app, download
+  the new zip to keep Multiplayer: older ones can't reach it.
 - The co-op rooms list, by trippy22: it updates by itself when rooms open, fill or start, rather
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
