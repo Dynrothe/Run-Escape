@@ -166,6 +166,25 @@ describe("Cloudflare co-op lobby", () => {
         expect(stored.size).toBe(0);
     });
 
+    it("lets a room that's stopped saying it's there go, however often the lobby wakes", async () => {
+        let lobby = await makeLobby();
+        await lobby.roomUpdate(listing("AAAAAAAA"));
+        await lobby.roomUpdate(listing("BBBBBBBB"));
+        // A ended without the lobby hearing; B's heartbeat wakes it every minute
+        for (let minute = 0; minute < 40; minute++) {
+            vi.advanceTimersByTime(60_000);
+            lobby = await makeLobby();
+            await lobby.roomUpdate(listing("BBBBBBBB"));
+            if (minute === 20) {
+                // Still there a while, as a room that's only quiet could be
+                expect(lobby.liveRooms()).toHaveLength(2);
+            }
+        }
+        expect(lobby.liveRooms().map((room: any) => room.code)).toEqual(["BBBBBBBB"]);
+        await Promise.resolve();
+        expect([...stored.keys()]).toEqual(["room:BBBBBBBB"]);
+    });
+
     it("closes a connection that only asks for the same page, for ten minutes", async () => {
         const lobby = await makeLobby();
         // Two pages of one

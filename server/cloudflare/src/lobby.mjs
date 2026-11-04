@@ -42,6 +42,13 @@ import {
 // A room that hasn't said it's there for this long is gone (it says so every
 // ROOM_HEARTBEAT_MS, in room.mjs)
 const ROOM_STALE_MS = 180_000;
+// When a room last said so is stored this often at most (a write each), as
+// waking from hibernation forgets it. A room silent since its stored time for
+// ROOM_LOST_MS is gone however often the lobby wakes: one that ended without
+// the lobby hearing (its call failed) can't stay on the list, or hold its
+// slot toward the room limits, for ever.
+const SEEN_SAVE_MS = 30 * 60_000;
+const ROOM_LOST_MS = SEEN_SAVE_MS + ROOM_STALE_MS;
 // A ticket's only good for a moment: the player goes straight to the room
 const TICKET_MS = 30_000;
 // A room asked for but never made (a second click of Make, say) is gone after
@@ -76,8 +83,14 @@ export class Lobby extends DurableObject {
         ctx.blockConcurrencyWhile(async () => {
             const now = Date.now();
             for (const [, entry] of await ctx.storage.list({ prefix: "room:" })) {
-                // Just woken: give each room time to say it's still there
-                this.rooms.set(entry.code, { ...entry, lastSeen: now });
+                // Just woken: give each room time to say it's still there,
+                // within ROOM_LOST_MS of when it last did (by its order, for
+                // a room stored before seenAt was)
+                this.rooms.set(entry.code, {
+                    ...entry,
+                    lastSeen: now,
+                    seenAt: entry.seenAt ?? entry.order ?? now,
+                });
             }
         });
     }
@@ -176,8 +189,9 @@ export class Lobby extends DurableObject {
                     player.listingSince = now;
                     ws.serializeAttachment(player);
                 }
-                this.sentRooms.set(ws, JSON.stringify(rooms));
-                send(rooms);
+                const text = JSON.stringify(rooms);
+                this.sentRooms.set(ws, text);
+                ws.send(text);
                 return;
             }
             case "rename": {
@@ -305,6 +319,10 @@ export class Lobby extends DurableObject {
             await this.putRoom({ ...entry, order: previous?.order ?? entry.order });
         } else {
             previous.lastSeen = Date.now();
+            if (previous.lastSeen - previous.seenAt > SEEN_SAVE_MS) {
+                previous.seenAt = previous.lastSeen;
+                await this.saveRoom(previous);
+            }
         }
         // Clears out rooms gone quiet (which sends the list round), as nobody
         // asks for it often enough now to find them
@@ -320,11 +338,17 @@ export class Lobby extends DurableObject {
     // ---- ----
 
     async putRoom(entry) {
-        const stored = { ...entry };
-        delete stored.lastSeen;
-        this.rooms.set(entry.code, { ...entry, lastSeen: Date.now() });
+        const now = Date.now();
+        const room = { ...entry, lastSeen: now, seenAt: now };
+        this.rooms.set(entry.code, room);
         this.listChanged();
-        await this.ctx.storage.put(`room:${entry.code}`, stored);
+        await this.saveRoom(room);
+    }
+
+    // All but lastSeen, which waking sets afresh
+    saveRoom(room) {
+        const { lastSeen, ...stored } = room;
+        return this.ctx.storage.put(`room:${room.code}`, stored);
     }
 
     // The list's changed: everyone looking at it hears straight after
@@ -381,12 +405,13 @@ export class Lobby extends DurableObject {
         }
         // One never made goes by when it was asked for, which is stored (when
         // it was last seen isn't: waking from hibernation sets it to now). One
-        // that's been made goes once it stops saying it's there, or when
-        // someone tries to join it, or at the latest when its own idle alarm
-        // ends it (room.mjs).
+        // that's been made goes once it stops saying it's there: soon while
+        // the lobby's awake, or ROOM_LOST_MS after the stored time it last
+        // did, however often it wakes. Or when someone tries to join it.
+        const now = Date.now();
         const gone = room.pending
-            ? Date.now() - room.order > PENDING_MS
-            : Date.now() - room.lastSeen > ROOM_STALE_MS;
+            ? now - room.order > PENDING_MS
+            : now - room.lastSeen > ROOM_STALE_MS || now - room.seenAt > ROOM_LOST_MS;
         if (gone) {
             this.roomGone(code);
             return undefined;
