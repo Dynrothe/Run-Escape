@@ -168,7 +168,7 @@ describe("boss kills", () => {
         expect(done).not.toContain("checkmate");
     });
 
-    test("Zachariah stuck in a pillar, and stunned by his own court three times", () => {
+    test("Zachariah stuck in a pillar, and stunned by his own lightning three times", () => {
         const sim = createSim("zachariah");
         const tracker = track(sim);
         const guard = (cause: string, stunned = true): SimEvent => ({
@@ -182,7 +182,7 @@ describe("boss kills", () => {
         // A miss of his own only opens him up
         expect(ids(tracker.observe(sim, [guard("Lunge", false)]))).toEqual([]);
         expect(ids(tracker.observe(sim, [guard("Pillar")]))).toEqual(["stuck_in_the_stone"]);
-        tracker.observe(sim, [guard("Lightning"), guard("Knight's sword")]);
+        tracker.observe(sim, [guard("Lightning"), guard("Lightning")]);
         expect(ids(tracker.observe(sim, [guard("Lightning round you")]))).toEqual([
             "contempt_of_court",
         ]);

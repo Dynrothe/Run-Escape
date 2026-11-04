@@ -428,21 +428,15 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         id: "contempt_of_court",
         name: "Contempt of Court",
         description:
-            "In one fight, stun Justiciar Zachariah with his own court three times: his " +
-            "lightning struck under him, or a knight's sword through him.",
+            "In one fight, stun Justiciar Zachariah with his own lightning three times, " +
+            "struck under him.",
         tier: "elite",
         type: "mechanical",
         mapId: "zachariah",
         goal: {
             kind: "guardDown",
             bossId: "justiciar_zachariah",
-            causes: [
-                "Lightning",
-                "Lightning round you",
-                "Knight's sword",
-                "Knight's swords",
-                "Knight's sword (following)",
-            ],
+            causes: ["Lightning", "Lightning round you"],
             count: 3,
             stunned: true,
         },
