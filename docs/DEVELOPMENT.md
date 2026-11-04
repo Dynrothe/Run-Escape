@@ -566,8 +566,10 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
       does nothing, the stars over it) when its arena's attack with `turns` catches it
       (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`), with its sounds as it drops. The view tints a boss whose
-      guard's down gold.
+      (`BossState.dash`, `stepDash`), with its sounds as it drops; after a stun, `stunGrace`
+      seconds when nothing stuns it (`BossState.stunGraceEnd`). The view tints a boss whose
+      guard's down gold. A phased boss with `barPerPhase` shows each phase as a full bar
+      (`getPhaseBarFraction` in `GameClient`).
     - A boss attack's `strikeAt` times its animation to land with it: held on its first frame
       (the blow drawn back) until it's that far from landing (`BossWindup.seqTick`,
       `Sim.playWindup`). Players held for an entrance with `BossIntroDef.faces` face the boss
@@ -578,7 +580,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       touch screen have no item bar, and its results a Retry (`GameClient.retry`).
     - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
       through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
-      run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. Its damage
+      run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. A press that
+      can't go off yet is held a moment (`Hero.abilityHeldUntil`, `stepHeldAbilities`), and
+      `openReach` is its reach while the boss's guard is down. Its damage
       is `ability:<id>` for the run's stats; what the arena did to its boss is `court`.
     - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
       `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and

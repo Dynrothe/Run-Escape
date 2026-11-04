@@ -43,8 +43,8 @@ otherwise:
 - **The effects** (section 7): the stomp rings, the dust, the lunge's trail, Smite's light, the
   faint flashes and the camera shake.
 - **The design of fighting back** (section 4): his guard dropping when he misses, his court
-  turning on him (its bolts, its lightning and the pillars; not the swords since round 5), and
-  Smite.
+  turning on him (its bolts and the pillars; not the swords since round 5, nor his lightning
+  since round 6), and Smite.
 
 Phase 1's length isn't on the list: that's still being tuned (section 6).
 
@@ -119,7 +119,7 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
 `line.dash`, `MapDef.fight.ability`):
 
 1. **His guard drops when he misses (the punish window).** A Lunge or Shock wave that reaches no
-   one leaves his guard down for a second and a half: he fights on, but takes **double damage**
+   one leaves his guard down for two seconds (1 in round 2, 1.5 in rounds 3 to 5): he fights on, but takes **double damage**
    from everything, and the strike goes off at once for anyone in reach. His lunge carries him
    to the end of its strip (his front where the strip ends; stopping at whoever it hits), so a
    sidestep leaves him right beside you, open. Dodging well is how you deal damage. The tell:
@@ -128,24 +128,26 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
    louder (sparkles, a pulsing ring, a label, a chime); Dynny found that too obvious, and it's
    back to round 2's look with the sound added (section 6).
 2. **His court turns on him (turning his attacks).** He chases you, so you can lead him into his
-   own traps: a bolt that reaches him stops there and hurts him (8), a lightning cell struck
-   under his middle hurts him (40) and stuns him, and a lunge that runs into a pillar sticks his
-   sword in the stone and stuns him. (The knights' swords did too, until round 5: thrown at you
-   with him chasing you, they went through him nearly every time.)
-   Stunned, he stands with the stars round his head (80) for 2.5 s, doing nothing at all, and
-   takes double. Stand in front of a pillar for his lunge, or on the colour that's about to be
-   struck safe with him on the other.
+   own traps: a bolt that reaches him stops there and hurts him (8), and a lunge that runs into a
+   pillar sticks his sword in the stone and stuns him: he stands with the stars round his head
+   (80) for 2.5 s, doing nothing at all, and takes double. Then he can't be stunned for 8 s
+   (`guard.stunGrace`): a pillar he runs into meanwhile only drops his guard, and his blue light
+   flares round him as he shrugs it off. Stand in front of a pillar for his lunge. (The knights'
+   swords stunned him until round 5, and his lightning until round 6: both caught him nearly
+   every time, with no luring in it.)
 3. **Smite (the active).** The fight's button: Space on a keyboard, the bottom face button on a
    pad, and a big round button in the items' corner on a touch screen (a boss fight has no
 items, so the 1-4 bar and the touch items aren't shown) (they all go through
    co-op's actions, `CoopAction` `ability`, so each player has their own). It calls Saradomin's
    light down on him (1221, with the stomp ring running out under him) for 50, from no more than
-   **3.5 tiles off his middle**, every 4 s. Out of reach it does
-   nothing and costs nothing. It's doubled while his guard's down, so its moment is right after
-   a dodge, when the lunge has left him beside you, and the button shines gold then.
+   **3.5 tiles off his middle** (4.5 while his guard's down), every 4 s. Out of reach it does
+   nothing and costs nothing, but a press up to 0.3 s too soon (still charging, or him up to 1.5
+   tiles out of reach) is held and goes off as soon as it can. It's doubled while his guard's
+   down, so its moment is right after a dodge, when the lunge has left him beside you, and the
+   button shines gold then.
 
-Rewarded risk: Smite's reach is inside his lunge and flurry, and luring him onto lightning means
-standing next to it. Readable: every opening has its own look on him (the gold glow, the stars),
+Rewarded risk: Smite's reach is inside his lunge and flurry, and luring his lunge into a pillar
+means standing in its way. Readable: every opening has its own look on him (the gold glow, the stars),
 a word on the boss bar, and a damage number twice the size.
 
 Other ideas weighed and left out: a parry with a timing window (co-op's frames add input delay,
@@ -263,6 +265,46 @@ Dynny, after round 4:
    runs right across the court as he rises into the next phase (a faint gold flash, a shake), and
    the boss bar's "Phase n/3" pulses (`threshold.impact`, `riseImpact`).
 
+### Round 6
+
+Dynny, after round 5:
+
+1. **"You can permanently stun the boss by standing behind a pillar."** Standing still south of a
+   pillar with him north of it, he lunged into it again as soon as each stun ended: stunned 53-58%
+   of a minute, 13-14 stuns (seeds 1-3). Now, after a stun, he can't be stunned again for 8 s:
+   what would have stunned him only drops his guard, his blue light (1458) flaring as he shrugs
+   it off. The same spot gets him stunned 21% of a minute, 5 stuns, the most it can (2.5 s in
+   every 10.5). A test holds him to that.
+2. **"One phase should be the full hp bar."** The boss bar shows each phase as a full bar of its
+   own, full as the phase begins and empty at the next threshold (`BossPhasesDef.barPerPhase`,
+   `getPhaseBarFraction`); the hitpoints and the splits are as they were. Only his fight asks
+   for it; Phosani's bar is as it was.
+3. **"Still very hard to actually hit the smite attack."** Smite lands the moment it's pressed,
+   so it was all in being in time and in reach. A missed lunge carries him 5.8 tiles down his
+   strip, so from a sidestep 1.35 tiles off it, with him 1.5 to 3 tiles away as it began, he
+   ends 3 to 4.5 tiles off, past Smite's 3.5. His guard was down 1.5 s from the miss, a fifth of
+   it spent on his dash. And a press a moment early (still charging, or him just out of reach)
+   was refused outright. Now his guard's down for 2 s, Smite reaches 4.5 tiles while it is, and
+   a press up to 0.3 s early is held and goes off as soon as it can.
+4. **"The ground circle attack should not stun him, it cancels the attack almost every time."**
+   His lightning no longer touches him: it's his own. Only a lunge into a pillar stuns him now,
+   and the bolts still hurt him.
+5. **The Owl's gaze: "Sometimes I get still hit when standing on the tiles."** Two mismatches. The
+   blue tiles were worked out once, on the first frame of the windup, from where he stood
+   then, but the gaze is cast from the court's middle he leaps to: the shadows drawn were from
+   the wrong place until the next gaze. And a tile was drawn safe when its middle was hidden,
+   while the hit went by the player's own middle, so standing near a safe tile's edge could
+   still be seen. Now the shadows are from where it's cast from the start (`BossWindup.at`), and
+   whoever has any part of themselves on a shadowed tile, or their middle hidden, is spared
+   (`inShadow` in `core/arena.ts`, the same tiles the view draws, tested tile by tile).
+6. **"The room gets brighter by him shining light and the safe areas are darker in shadow."** The
+   blue strange-tile glows (56670) are gone. As he raises his sword the whole scene brightens,
+   up to 60% brighter as it lands (the renderer's own brightness, `getGazeLight`, and a faint warm wash over the screen), and the
+   shadowed tiles are darkened on the floor, deepening as it comes. The shadows are a colour
+   overlay, a deliberate exception to real assets: nothing in the cache casts a pillar's shadow,
+   and they're the one thing on the floor that has to be read exactly. Neither flashes or moves,
+   so they read the same with Screen shake off or less motion asked for.
+
 With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 24-27 s and the
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
 45-53 s and 4:48-5:14.
@@ -321,7 +363,8 @@ Real assets first, with these exceptions, all the same red the game's existing b
 the lunge's strip, the ice's square, the wave's and the swords' lines, and the flurry's circle
 (the existing swing warning). The reach ring is a faint white circle. The lightning's warning is
 a yellow strange tile's animated swirl (spotanim 1800) on each cell, and the gaze's safe tiles are
-the blue strange tile's glow (56670). His guard down is his own model tinted gold and glinting
+darkened on the floor, the pillars' shadows, while the scene's brightened round them (round 6:
+nothing in the cache casts a shadow). His guard down is his own model tinted gold and glinting
 (the hit flash the game already has), and the impacts' screen flashes are a third as strong as
 a power-up's.
 

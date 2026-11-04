@@ -12,10 +12,13 @@ the version in the corner).
   itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
   from close by. With its own track, Blade of Forgotten Justice.
   - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
-    him into his own court's bolts and lightning, or make him lunge into a pillar, and he's
-    stunned.
+    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+    for a few seconds after).
   - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
-    a heavy blow from right beside him, twice as hard while his guard's down.
+    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+    early still lands.
+  - Each phase has its own full health bar.
+  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
   - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
     slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
     a burst of light as he kneels, and a ring across the court as he rises.
