@@ -163,14 +163,14 @@ export const APMEKEN_WAVES: string[][] = [
     ["baboon_shaman", "volatile_baboon", "volatile_baboon", "cursed_baboon", "cursed_baboon"],
 ];
 
-// The stream of baboons between the waves, what levels a run up there: how many at once and how
-// often, rising with the wave the room's on
+// The stream of baboons alongside the waves, for experience: a few at a time and slowly, rising a
+// little with the wave the room's on. No minimum, so nothing comes out all at once.
 export function getApmekenTrickle(wave: number): WaveDef {
     return {
         start: 0,
-        spawnRate: 1.2 + wave * 0.35,
-        minAlive: 6 + wave * 2,
-        maxAlive: 16 + wave * 4,
+        spawnRate: 0.35 + wave * 0.08,
+        minAlive: 0,
+        maxAlive: 4 + wave,
         enemies:
             wave < 2
                 ? [
@@ -204,7 +204,9 @@ export const APMEKEN_SPOTANIMS = {
 // What fails, and what that costs. Path levels (the invocations) make it all quicker.
 export const APMEKEN = {
     // Seconds a wave can go on before the next comes anyway
-    waveSeconds: 40,
+    waveSeconds: 60,
+    // Seconds between a wave's baboons coming out of the walls, one at a time, as OSRS's do
+    stagger: 1.5,
     // Seconds between issues, from when the last was fixed or failed (less a second a path level)
     issueEvery: 9,
     // Seconds to fix one before it goes (less one and a half a path level)
@@ -221,8 +223,8 @@ export const APMEKEN = {
     worse: 0.5,
     // The room's enemies start as the Theatre's first hall's do (a run comes in at level one),
     // and get this much tougher with each wave, and with each path level
-    waveHp: 0.3,
-    waveDamage: 0.18,
+    waveHp: 0.15,
+    waveDamage: 0.08,
     levelHp: 0.5,
     levelDamage: 0.3,
 };

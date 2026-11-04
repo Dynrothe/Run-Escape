@@ -736,6 +736,9 @@ type ApmekenRoom = {
     beaten: number;
     // Someone's walked through the barrier from the safe corridor: until then it waits
     started: boolean;
+    // The wave's baboons still to come out of the walls, and when the next does
+    pending: string[];
+    nextOutTick: number;
 };
 
 export class Sim {
@@ -4293,6 +4296,8 @@ export class Sim {
                 missed: 0,
                 beaten: -1,
                 started: false,
+                pending: [],
+                nextOutTick: 0,
             };
             this.emit({
                 type: "notice",
@@ -4374,17 +4379,34 @@ export class Sim {
         for (let i = 0; i < this.tombsPathLevel; i++) {
             ids.push(ids[0]);
         }
-        const current = this.hero;
-        this.useSpawnHero();
-        room.group = ids.flatMap((id) => {
-            const enemy = this.spawnEnemy(getEnemy(id), "normal");
-            return enemy ? [enemy.uid] : [];
-        });
-        this.use(current);
+        // Out of the walls one at a time (stepApmekenGroup), the first now
+        room.group = [];
+        room.pending = ids;
+        room.nextOutTick = this.tick;
+        this.stepApmekenGroup(room);
         this.emit({
             type: "notice",
             message: `Wave ${room.wave + 1} of ${APMEKEN_WAVES.length}`,
         });
+    }
+
+    // The next of a wave's baboons out of the walls, once it's time
+    private stepApmekenGroup(room: ApmekenRoom): void {
+        if (room.pending.length === 0 || this.tick < room.nextOutTick) {
+            return;
+        }
+        const id = room.pending.shift()!;
+        const current = this.hero;
+        this.useSpawnHero();
+        const enemy = this.spawnEnemy(getEnemy(id), "normal");
+        this.use(current);
+        if (enemy) {
+            room.group.push(enemy.uid);
+        } else {
+            // Nowhere to put it this tick: it tries again next
+            room.pending.unshift(id);
+        }
+        room.nextOutTick = this.tick + secondsToTicks(enemy ? APMEKEN.stagger : 0);
     }
 
     // The Apmeken room: its waves, one when the last is beaten (with a casket for it) or has been
@@ -4415,8 +4437,9 @@ export class Sim {
             return;
         }
         this.holdTombsGate();
+        this.stepApmekenGroup(room);
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
-        const beaten = room.group.every((uid) => !alive.has(uid));
+        const beaten = room.pending.length === 0 && room.group.every((uid) => !alive.has(uid));
         if (beaten && !this.tombsReplaying) {
             const player = this.hero.player;
             this.dropCasket(player.x + 0.8, player.y, false);
@@ -4610,6 +4633,7 @@ export class Sim {
             room.issue = undefined;
             room.missed = 0;
             room.started = false;
+            room.pending = [];
         }
         const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({

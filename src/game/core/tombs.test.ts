@@ -246,7 +246,16 @@ function seconds(sim: Sim, count: number, at?: { x: number; y: number }): void {
     }
 }
 
+// Out of the walls one at a time: on until the whole wave's out
+function allOut(sim: Sim): void {
+    for (let i = 0; i < 40 && sim.apmeken!.pending.length > 0; i++) {
+        seconds(sim, APMEKEN.stagger, { x: sim.player.x, y: sim.player.y });
+    }
+    expect(sim.apmeken!.pending).toHaveLength(0);
+}
+
 function killGroup(sim: Sim): void {
+    allOut(sim);
     const group = new Set(sim.apmeken!.group);
     for (const enemy of sim.enemies) {
         if (group.has(enemy.uid) && !enemy.dead) {
@@ -256,9 +265,12 @@ function killGroup(sim: Sim): void {
 }
 
 describe("the Apmeken room", () => {
-    it("sends its first wave as the party comes in", () => {
+    it("sends its first wave as the party comes in, out of the walls one at a time", () => {
         const sim = apmeken();
         expect(sim.apmeken!.wave).toBe(0);
+        expect(sim.apmeken!.group).toHaveLength(1);
+        expect(sim.apmeken!.pending).toHaveLength(APMEKEN_WAVES[0].length - 1);
+        allOut(sim);
         const group = sim.enemies.filter((e) => sim.apmeken!.group.includes(e.uid));
         expect(group.map((e) => e.def.id).sort()).toEqual([...APMEKEN_WAVES[0]].sort());
     });
@@ -323,7 +335,8 @@ describe("the Apmeken room", () => {
         expect(apmeken().tombsPathLevel).toBe(0);
         const master = apmeken(["pathmaster"]);
         expect(master.tombsPathLevel).toBe(3);
-        expect(master.apmeken!.group).toHaveLength(APMEKEN_WAVES[0].length + 3);
+        const room = master.apmeken!;
+        expect(room.group.length + room.pending.length).toBe(APMEKEN_WAVES[0].length + 3);
     });
 });
 
