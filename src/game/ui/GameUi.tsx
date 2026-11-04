@@ -1971,6 +1971,7 @@ const Hud = memo(function Hud({
                     <KillsAndCoins client={client} />
                     {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
                     <RaidRoomInfo client={client} />
+                    <TombsWaveInfo client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2035,6 +2036,23 @@ function RaidRoomInfo({ client }: { client: GameClient }): JSX.Element | null {
                 {room.points} pts
             </div>
         </>
+    );
+}
+
+// The Tombs' Apmeken room: always the wave it's on, so it's never a guess
+function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const wave = useHudNumber(client, (n) => n.tombsWave);
+    if (!wave) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            {wave.done
+                ? "Room done"
+                : wave.waiting
+                  ? "Through the barrier to begin"
+                  : `Wave ${wave.wave} / ${wave.of}`}
+        </div>
     );
 }
 

@@ -30,6 +30,7 @@ import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
+import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -2336,6 +2337,12 @@ export class GameClient implements GameFrameHandler {
                 waves: sim.raidStage === "waves",
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
+            },
+            tombsWave: sim.apmeken && {
+                wave: Math.max(0, sim.apmeken.wave) + 1,
+                of: APMEKEN_WAVES.length,
+                waiting: !sim.apmeken.started,
+                done: sim.apmeken.doneTick !== undefined,
             },
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
