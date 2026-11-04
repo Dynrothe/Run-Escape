@@ -7,9 +7,9 @@ the version in the corner).
 
 ### Added
 
-- Pets: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow you around
-  on your runs. Pick one under the adventurers. They're only for looks, and your party sees yours
-  in co-op.
+- Pets, by Okaeri: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow
+  you around on your runs. Pick one under the adventurers. They're only for looks, and your party
+  sees yours in co-op.
 
 ## 0.24.1 - 2026-11-04
 

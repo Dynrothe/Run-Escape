@@ -1,5 +1,5 @@
 // Lists NPC types whose name matches, with their combat level, size and
-// idle/walk animations.
+// idle/walk animations, and whether it's a pet's follower.
 //
 //   npx tsx scripts/cache/find-npcs.ts goblin
 //   npx tsx scripts/cache/find-npcs.ts "^count draynor$"
@@ -32,6 +32,8 @@ for (let id = 0; id < npcTypeLoader.getCount(); id++) {
             `walk ${npc.getWalkSeqId(basTypeLoader)}`,
             `models [${npc.modelIds?.join(",")}]`,
             attackable ? "attackable" : "",
+            // The pet that follows its owner (a pet's other NPC of the same name doesn't)
+            npc.isFollower ? "follower" : "",
             npc.transforms ? "transforms" : "",
         ].join("  "),
     );

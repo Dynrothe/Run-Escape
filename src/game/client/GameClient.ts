@@ -23,7 +23,7 @@ import {
     isFunMap,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
-import { PET_BY_ID, getFoundPets } from "../content/pets";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -567,7 +567,7 @@ export class GameClient implements GameFrameHandler {
 
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
-        if (petId !== undefined && !getFoundPets(this.save.trophies).some((p) => p.id === petId)) {
+        if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
             return;
         }
         this.save.pet = petId;
@@ -1115,9 +1115,13 @@ export class GameClient implements GameFrameHandler {
         this.grids.delete(mapId);
     }
 
-    // Loads a map's collision and enemies for a run, with the loading screen if
-    // it takes a moment. False if it couldn't.
-    private async travelTo(mapId: string, back: Screen): Promise<boolean> {
+    // Loads a map's collision and enemies for a run, and the party's pets, with
+    // the loading screen if it takes a moment. False if it couldn't.
+    private async travelTo(
+        mapId: string,
+        back: Screen,
+        pets: (string | undefined)[],
+    ): Promise<boolean> {
         const map = getMap(mapId);
         const enemies = getMapEnemies(map);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
@@ -1127,11 +1131,14 @@ export class GameClient implements GameFrameHandler {
                 loadingProgress: 25,
             });
         }
+        // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
+        const petsBaked = this.assets.loadPets(pets);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
+            await petsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1154,7 +1161,7 @@ export class GameClient implements GameFrameHandler {
         const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        if (!(await this.travelTo(mapId, "characters"))) {
+        if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
             return;
         }
         usePortableMath(false);
@@ -1225,7 +1232,11 @@ export class GameClient implements GameFrameHandler {
             // Still on the last run's results
             this.leaveRun(false);
         }
-        if (!(await this.travelTo(game.mapId, "coop"))) {
+        // Each hero's pet, only for looks (another player's game could send anything)
+        const pets = game.heroes.map((hero) =>
+            typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
+        );
+        if (!(await this.travelTo(game.mapId, "coop", pets))) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1269,12 +1280,7 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(
-            sim,
-            game.heroes.map((hero) =>
-                typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
-            ),
-        );
+        this.enterRun(sim, pets);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1884,6 +1890,12 @@ export class GameClient implements GameFrameHandler {
         this.view.localPlayerPose = this.coopStopped
             ? undefined
             : this.coopRun?.prediction?.render(alpha);
+        // Pets walk behind their players as they're drawn: a co-op guest's own hero where
+        // prediction has them, ahead of the sim
+        const predicted = this.view.localPlayerPose;
+        this.view.pets.update(sim, (hero) =>
+            predicted?.hero === hero ? predicted : sim.heroes[hero]?.player,
+        );
         const { x: px, y: py } = getPlayerPose(
             sim,
             this.viewHero,
@@ -2463,7 +2475,7 @@ export class GameClient implements GameFrameHandler {
             );
         }
         const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);
-        const petModel = pet && this.assets.get("pet:" + pet.id);
+        const petModel = pet && this.assets.getPet(pet.id);
         if (pet && petModel) {
             const anim = petModel.getAnim(pet.idleSeq);
             const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;

@@ -605,15 +605,28 @@ its max; `?raidtest=short` does only the first.
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
-never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, behind the
-player and clear of thralls (with the map's collision, and back beside them past `PET_LEASH`), and
-`GameView` draws it (on the menus, `GameClient.submitActors` stands it beside the character). So
-a pet can't change a run, and co-op's copies agree without it. A co-op player's pet goes in their
-`Loadout` as `pet`, which the relays pass on whole, so it needed no relay change; a pet id a game
-doesn't know is left out. Every pet is baked in `getBaseRequests`
-(a party can bring any of them), and `slim-cache.ts` picks them up from there. A new pet needs a
-trophy that drops it and an entry in `PETS` with the follower NPC's id and animations
-(`scripts/cache/find-npcs.ts`; the lower of two ids is the follower).
+never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
+`GameClient.update`, and `GameView` only draws it (on the menus, `GameClient.submitActors` stands
+it beside the character). So a pet can't change a run, and co-op's copies agree without it.
+
+- **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
+  is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks
+  with the map's collision, and stands still when a wall keeps it from its spot, rather than
+  walking on the spot. Past `PET_LEASH` it's put back beside its player, moved out from where they
+  stand so it's never put in a wall.
+- **Its speed** is its player's (`walkSpeed` in `core/PlayerMovement.ts`, sled and boots and all)
+  and a bit more. `walkToward` there is the step it shares with thralls.
+- **Co-op:** a player's pet goes in their `Loadout` as `pet`, which the relays pass on whole, so it
+  needed no relay change. A pet id a game doesn't know is left out.
+- **Baking:** most players haven't found one, so pets aren't in `getBaseRequests`.
+  `GameAssets.getPet` bakes one the first time it's drawn, and `travelTo` bakes the party's with
+  the map. `slim-cache.ts` keeps every one (`getPetRequests`).
+- **The Pet row** (`PetRow`, under the adventurers) is one line on a phone held sideways, its name
+  hidden and its tiles swiped, so the adventurers above it keep their room.
+- **A new pet** needs a trophy that drops it and an entry in `PETS` with the follower NPC's id and
+  animations. The cache has two NPCs for each pet: `scripts/cache/find-npcs.ts` marks the one
+  that's the follower (it's the one with the Metamorphosis option). The other one looks different
+  for some pets.
 
 ### What gets drawn
 

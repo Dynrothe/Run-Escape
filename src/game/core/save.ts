@@ -18,7 +18,7 @@ import {
     isRaidMap,
     isSeasonalMap,
 } from "../content/maps";
-import { PET_BY_ID } from "../content/pets";
+import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -267,11 +267,7 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
-    if (
-        typeof data.pet === "string" &&
-        PET_BY_ID.has(data.pet) &&
-        save.trophies.includes(data.pet)
-    ) {
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
     if (Array.isArray(data.questsDone)) {

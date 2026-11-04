@@ -156,8 +156,6 @@ const RAMPAGE_FLASH = 0.25;
 // second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
-// Pets as the cache has them: smaller than the player, as in OSRS
-const PET_SCALE = 1;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
@@ -412,7 +410,7 @@ export class GameView {
             this.drawThrall(actors, sim, thrall, alpha);
         }
 
-        this.pets.update(sim);
+        // Walked by GameClient on the sim's ticks; here they're only drawn
         for (const pet of this.pets.pets) {
             if (this.pets.shown(sim, pet)) {
                 this.drawPet(actors, sim, pet, alpha);
@@ -734,9 +732,10 @@ export class GameView {
         });
     }
 
+    // At the cache's size, smaller than the player as in OSRS
     private drawPet(actors: ActorRenderer, sim: Sim, pet: PetFollower, alpha: number): void {
         const def = pet.def;
-        const model = this.assets.get("pet:" + def.id);
+        const model = this.assets.getPet(def.id);
         if (!model) {
             return;
         }
@@ -751,7 +750,6 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             pet.yaw,
-            { scale: PET_SCALE },
         );
     }
 

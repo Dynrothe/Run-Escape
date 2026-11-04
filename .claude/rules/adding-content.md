@@ -215,8 +215,10 @@ as it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs
 
 A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
 (`from`), then an entry in `PETS` (`pets.ts`) with its id, the follower NPC and its idle and walk
-animations from `scripts/cache/find-npcs.ts`. It's baked and offered once found, with nothing else
-to add. Pets never go in the sim: see Pets in `docs/DEVELOPMENT.md`.
+animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
+script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
+offered once found, with nothing else to add. Pets never go in the sim: see Pets in
+`docs/DEVELOPMENT.md`.
 
 ## Adventurer
 
