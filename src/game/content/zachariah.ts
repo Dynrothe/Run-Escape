@@ -497,7 +497,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 stunHeight: 2.4,
                 // Gold sparkles rising round him and a holy chime (prayer_boost) as his guard
                 // drops: the moment to step in and smite, on a phone too
-                open: { spots: [{ spotAnim: GOLD_SPARKLES, fit: 2.4 }] },
+                open: { spots: [{ spotAnim: GOLD_SPARKLES, fit: 1.8 }] },
                 exposeSound: 2671,
                 stunSound: 2671,
                 stuck: {

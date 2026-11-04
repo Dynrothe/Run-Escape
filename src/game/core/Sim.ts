@@ -6736,7 +6736,8 @@ export class Sim {
             }
         }
         if (!wasOpen || stunned) {
-            this.showImpact(guard.open, boss.x, boss.y);
+            // Round it, wherever its lunge carries it
+            this.showImpact(guard.open, boss.x, boss.y, undefined, boss.uid);
         }
         const sound = stunned ? guard.stunSound : guard.exposeSound;
         if (sound !== undefined) {
@@ -6860,12 +6861,13 @@ export class Sim {
         x: number,
         y: number,
         along?: { dirX: number; dirY: number; length: number },
+        follows = 0,
     ): void {
         if (!impact) {
             return;
         }
         for (const spot of impact.spots ?? []) {
-            this.addImpactSpot(spot, x, y);
+            this.addImpactSpot(spot, x, y, follows);
         }
         const trail = impact.trail;
         if (trail && along) {
@@ -6888,9 +6890,15 @@ export class Sim {
         }
     }
 
-    // One of an impact's spot animations, played once, scaled to its fit
-    private addImpactSpot(spot: ImpactSpotDef, x: number, y: number): Effect | undefined {
-        const effect = this.addEffect(spot.spotAnim, x, y, 0, IMPACT_TICKS);
+    // One of an impact's spot animations, played once, scaled to its fit (following an enemy,
+    // by uid, if set)
+    private addImpactSpot(
+        spot: ImpactSpotDef,
+        x: number,
+        y: number,
+        follows = 0,
+    ): Effect | undefined {
+        const effect = this.addEffect(spot.spotAnim, x, y, 0, IMPACT_TICKS, follows);
         if (effect) {
             effect.once = true;
             if (spot.fit !== undefined) {
