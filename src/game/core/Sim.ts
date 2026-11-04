@@ -83,6 +83,7 @@ import {
     APMEKEN,
     APMEKEN_SPOTANIMS,
     APMEKEN_WAVES,
+    JUNGLE_JAPES,
     TOMBS_BOSSES,
     getApmekenTrickle,
 } from "../content/tombs";
@@ -866,6 +867,8 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // Jungle Japes's banana peels, in a path boss's fight
+    tombsPeels: { x: number; y: number; endTick: number }[] = [];
     // The Apmeken room while the party's in it
     apmeken: ApmekenRoom | undefined;
     raidStageTick = 0;
@@ -4484,12 +4487,15 @@ export class Sim {
             return;
         }
         if (fight.beatenTick !== undefined) {
+            this.tombsPeels = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
                 this.leaveTombsPath();
             }
             return;
         }
         if (fight.uid === -1) {
+            // Not up (yet, or again after a death): nothing of the last fight's left lying about
+            this.tombsPeels = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
             // behind the party, not under them
             const rise = def.line.y + TOMBS_BOSS_RISE;
@@ -4523,6 +4529,53 @@ export class Sim {
             return;
         }
         this.stepTombsPit(boss);
+        this.stepTombsPeels();
+    }
+
+    // Jungle Japes: a baboon killed in a path boss's fight leaves a banana peel where it fell
+    private dropTombsPeel(enemy: Enemy): void {
+        const fight = this.apmeken?.boss;
+        if (
+            !fight ||
+            fight.uid === -1 ||
+            fight.beatenTick !== undefined ||
+            !this.invoked("jungle_japes")
+        ) {
+            return;
+        }
+        this.tombsPeels.push({
+            x: enemy.x,
+            y: enemy.y,
+            endTick: this.tick + secondsToTicks(JUNGLE_JAPES.seconds),
+        });
+    }
+
+    // Whoever steps on a peel slips, rooted for a moment, and it's gone
+    private stepTombsPeels(): void {
+        if (this.tombsPeels.length === 0) {
+            return;
+        }
+        const current = this.hero;
+        this.tombsPeels = this.tombsPeels.filter((peel) => {
+            if (this.tick >= peel.endTick) {
+                return false;
+            }
+            const hero = this.heroes.find(
+                (one) =>
+                    this.isUp(one) &&
+                    fm.hypot(one.player.x - peel.x, one.player.y - peel.y) <=
+                        JUNGLE_JAPES.radius + one.player.radius,
+            );
+            if (!hero) {
+                return true;
+            }
+            this.use(hero);
+            const player = this.player;
+            player.frozen = Math.max(player.frozen, secondsToTicks(JUNGLE_JAPES.stun));
+            this.emit({ type: "notice", message: "You slip on a banana peel!" }, true);
+            return false;
+        });
+        this.use(current);
     }
 
     // Mind the Gap: whoever's in the gap at the arena's foot falls (knocked there by her boulders,
@@ -8082,6 +8135,9 @@ export class Sim {
 
         if (!byEnemy && !enemy.noDrops) {
             this.dropLoot(enemy);
+        }
+        if (!enemy.boss) {
+            this.dropTombsPeel(enemy);
         }
         if (enemy.boss) {
             this.funBossDown(enemy);

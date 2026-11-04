@@ -275,7 +275,8 @@ export const BA_BA: EnemyDef = {
                     volleys: 1,
                     interval: 1,
                     speed: 3.2,
-                    range: 40,
+                    // From her altar to the arena's foot, and no further: not into the safe room
+                    range: 22,
                     radius: 0.85,
                     gap: 3,
                     spacing: 1.6,
@@ -294,6 +295,10 @@ TOMBS_ENEMIES.push(BA_BA);
 // hitpoints and damage go up by these shares a level, so one left till last holds up to a party
 // that's levelled through the rest of the raid
 export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
+
+// Jungle Japes: each of Ba-Ba's baboons drops a banana peel as it dies, there for `seconds`.
+// Stepping within `radius` of one roots you for `stun` seconds. Drawn as the Banana (1963).
+export const JUNGLE_JAPES = { seconds: 20, radius: 0.5, stun: 1.5, objId: 1963 };
 
 // ---- The Apmeken room ----
 

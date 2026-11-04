@@ -11,6 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
+import { JUNGLE_JAPES } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -157,6 +158,8 @@ const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 // The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
 const TOMBS_GATE_YAW = 512;
+// Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
+const PEEL_SCALE = 2;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
@@ -548,6 +551,7 @@ export class GameView {
             this.drawTeleporter(actors, sim, teleporter);
         }
         this.drawTombsGate(actors, sim);
+        this.drawTombsPeels(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -676,6 +680,21 @@ export class GameView {
                 tile.y,
                 TOMBS_GATE_YAW,
             );
+        }
+    }
+
+    // Jungle Japes's banana peels, lying where her baboons fell
+    private drawTombsPeels(actors: ActorRenderer, sim: Sim): void {
+        const model = sim.tombsPeels.length > 0 && this.assets.get("obj:" + JUNGLE_JAPES.objId);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const frame = anim.getFrame(0);
+        for (const peel of sim.tombsPeels) {
+            actors.draw(model, anim, frame, peel.x, this.ground(sim, peel.x, peel.y), peel.y, 0, {
+                scale: PEEL_SCALE,
+            });
         }
     }
 

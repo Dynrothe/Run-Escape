@@ -250,7 +250,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "baba",
         level: 5,
         description: "Her baboons drop banana peels that stun you.",
-        comes: "Ba-Ba",
     },
     {
         id: "shaking_things_up",

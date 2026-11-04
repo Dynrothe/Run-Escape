@@ -704,6 +704,37 @@ describe("Ba-Ba", () => {
         expect(sim.player.y).toBeCloseTo(1028.5, 0);
     });
 
+    it("leaves a banana peel where a baboon dies with Jungle Japes, which roots whoever steps on it", () => {
+        const plain = atBaba();
+        const one = plain.spawnEnemy(getEnemy("baboon_brawler"), "normal", {
+            x: 1030.5,
+            y: 1034.5,
+        })!;
+        plain["killEnemy"](one);
+        expect(plain.tombsPeels).toHaveLength(0);
+        const sim = atBaba(["jungle_japes"]);
+        const baboon = sim.spawnEnemy(getEnemy("baboon_brawler"), "normal", {
+            x: 1030.5,
+            y: 1034.5,
+        })!;
+        sim["killEnemy"](baboon);
+        expect(sim.tombsPeels).toHaveLength(1);
+        const peel = sim.tombsPeels[0];
+        sim.player.x = sim.player.prevX = peel.x;
+        sim.player.y = sim.player.prevY = peel.y;
+        sim.step();
+        expect(sim.tombsPeels).toHaveLength(0);
+        expect(sim.player.frozen).toBeGreaterThan(0);
+    });
+
+    it("rolls her boulders no further than the arena's foot", () => {
+        const boulders = baba(atBaba()).def.boss!.attacks.find(
+            (a) => a.name === "Rolling boulders",
+        )!;
+        // From her altar to her arena's foot, on the real map
+        expect(boulders.pattern!.range).toBeLessThanOrEqual(22);
+    });
+
     it("is tougher with each path level", () => {
         const first = baba(atBaba()).maxHp;
         // (and its raid level, which scales it too)
