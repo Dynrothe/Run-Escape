@@ -274,6 +274,17 @@ export class CombatTracker {
                     }
                 }
                 return (watch.count ?? 0) >= goal.count;
+            case "abilityHits":
+                for (const e of events) {
+                    if (
+                        e.type === "ability" &&
+                        e.abilityId === goal.abilityId &&
+                        (e.opened || !goal.opened)
+                    ) {
+                        watch.count = (watch.count ?? 0) + 1;
+                    }
+                }
+                return (watch.count ?? 0) >= goal.count;
         }
     }
 

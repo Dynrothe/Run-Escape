@@ -1465,7 +1465,10 @@ export type CombatGoal =
     // In one run, a boss's guard dropped (BossDef.guard) count times by any of these causes (its
     // own attacks' names that missed, its arena's that caught it, or "Pillar"); stunned: only
     // the times it was stunned
-    | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean };
+    | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean }
+    // In one run, the fight's button (MapDef.fight.ability) landed count times; opened: only
+    // while the boss's guard was down (BossDef.guard)
+    | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean };
 
 export type CombatTaskDef = {
     // Never renamed: it's in saves

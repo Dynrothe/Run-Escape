@@ -168,7 +168,7 @@ describe("boss kills", () => {
         expect(done).not.toContain("checkmate");
     });
 
-    test("Zachariah stuck in a pillar, and stunned by his own lightning three times", () => {
+    test("Zachariah stuck in a pillar, and three Smites while his guard's down", () => {
         const sim = createSim("zachariah");
         const tracker = track(sim);
         const guard = (cause: string, stunned = true): SimEvent => ({
@@ -182,10 +182,18 @@ describe("boss kills", () => {
         // A miss of his own only opens him up
         expect(ids(tracker.observe(sim, [guard("Lunge", false)]))).toEqual([]);
         expect(ids(tracker.observe(sim, [guard("Pillar")]))).toEqual(["stuck_in_the_stone"]);
-        tracker.observe(sim, [guard("Lightning"), guard("Lightning")]);
-        expect(ids(tracker.observe(sim, [guard("Lightning round you")]))).toEqual([
-            "contempt_of_court",
-        ]);
+        const smite = (opened: boolean): SimEvent => ({
+            type: "ability",
+            abilityId: "smite",
+            enemyId: "justiciar_zachariah",
+            sound: -1,
+            opened,
+            ...at,
+        });
+        // One while his guard's up doesn't count
+        tracker.observe(sim, [smite(true), smite(false), smite(true)]);
+        expect(tracker.done).not.toContain("contempt_of_court");
+        expect(ids(tracker.observe(sim, [smite(true)]))).toEqual(["contempt_of_court"]);
     });
 
     test("damage done before the boss arrived doesn't count against it", () => {

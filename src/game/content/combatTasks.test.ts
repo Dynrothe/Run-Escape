@@ -99,6 +99,17 @@ describe("Combat Achievements' tasks", () => {
         }
     });
 
+    test("count landings of a button the map's fight has", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind === "abilityHits") {
+                expect(MAP_BY_ID.get(task.mapId!)?.fight?.ability?.id, task.id).toBe(
+                    goal.abilityId,
+                );
+            }
+        }
+    });
+
     test("can each be followed on some map, and the bosses they name are on it", () => {
         for (const task of COMBAT_TASKS) {
             const maps = ALL_MAPS.filter((map) => canTrackOn(task, map));
