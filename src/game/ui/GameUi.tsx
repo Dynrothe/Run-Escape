@@ -1447,7 +1447,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                 <h2>Skills</h2>
                 <p className="ui-subtle">Coins found in runs train your skills for good.</p>
                 {!singleRefunds && (
-                    <p className="ui-subtle">
+                    <p className="ui-subtle ui-shop-notice">
                         This class's purchase order wasn't saved, so single ranks can't be refunded.
                         Use Refund all once to start keeping it.
                     </p>

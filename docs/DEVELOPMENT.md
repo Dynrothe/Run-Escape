@@ -1148,7 +1148,8 @@ hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointe
 never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
 without blocking the desktop right-click shortcut or the refund button.
 A page with ranks but no order can't refund single ranks: its arrow buttons are disabled and
-greyed, and the Skills screen says to use Refund all, which starts a new order. Pages saved before
+greyed, and the Skills screen says to use Refund all, which starts a new order. That notice
+(`.ui-shop-notice`) stays on phones, where `Mobile.css` hides the screen's subtitle. Pages saved before
 the order was kept have the price paid for each rank instead (`upgradeRefunds`, which only migration
 reads). A price says how many ranks were bought before it, so migration rebuilds the order when the
 prices make one unbroken run that replays to exactly the same prices. A page that refunded single

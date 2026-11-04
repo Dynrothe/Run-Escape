@@ -496,10 +496,15 @@
         font-size: 18px;
     }
 
-    /* Skills */
+    /* Skills: the subtitle goes, but not why the refund arrows are greyed */
 
-    .ui-shop > .ui-subtle {
+    .ui-shop > .ui-subtle:not(.ui-shop-notice) {
         display: none;
+    }
+
+    .ui-shop-notice {
+        flex-shrink: 0;
+        font-size: 14px;
     }
 
     .ui-shop-grid {
