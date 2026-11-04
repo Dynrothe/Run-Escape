@@ -109,6 +109,7 @@ import {
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
+import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
@@ -403,6 +404,7 @@ export class GameClient implements GameFrameHandler {
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
     private coopRun?: CoopRun;
+    private reportRun?: ReturnType<typeof startRunAnalytics>;
     // The hero the camera follows: this player's, or in co-op while they're
     // down, a teammate's
     private viewHero = 0;
@@ -918,6 +920,11 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ autoEquip: !this.display.autoEquip });
     }
 
+    // Takes hold for the run being played too: its report is only sent at the end
+    toggleRunStats(): void {
+        this.setDisplay({ runStats: !this.display.runStats });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -1334,6 +1341,14 @@ export class GameClient implements GameFrameHandler {
         }
         this.paused = false;
         this.runRecorded = false;
+        this.reportRun = this.options.stress
+            ? undefined
+            : startRunAnalytics(
+                  sim,
+                  this.coopRun && { isHost: this.coopRun.isHost, relay: this.coop.relayKind },
+                  RUN_ANALYTICS_URL,
+                  () => this.display.runStats,
+              );
         this.tasksAnnounced.clear();
         this.accumulator = 0;
         this.shownDps = 0;
@@ -1611,7 +1626,7 @@ export class GameClient implements GameFrameHandler {
     // or let go on the GPU
     endRunForReload(): void {
         if (this.sim) {
-            this.finishRun();
+            this.finishRun(undefined, "disconnected");
         }
         if (this.coopRun) {
             this.coop.leave();
@@ -1650,6 +1665,7 @@ export class GameClient implements GameFrameHandler {
         usePortableMath(false);
         this.assets.dropPlayers(1);
         this.sim = undefined;
+        this.reportRun = undefined;
         this.paused = false;
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
@@ -1679,12 +1695,17 @@ export class GameClient implements GameFrameHandler {
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
-    private finishRun(endedEarly?: string): void {
+    private finishRun(
+        endedEarly?: string,
+        early: "abandoned" | "disconnected" = endedEarly ? "disconnected" : "abandoned",
+    ): void {
         const sim = this.sim;
         if (!sim || this.runRecorded) {
             return;
         }
         this.runRecorded = true;
+        void this.reportRun?.(early);
+        this.reportRun = undefined;
         const result = sim.getResult();
         const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(

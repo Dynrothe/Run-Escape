@@ -18,6 +18,8 @@ export type DisplaySettings = {
     movePrediction: boolean;
     // Other co-op players see your country's flag, where the relay knows it
     coopFlag: boolean;
+    // A finished run's anonymous stats go to the build's collector, if it has one (RunAnalytics)
+    runStats: boolean;
     // Frames a second at most (frameCap)
     frameRate: FrameRate;
 };
@@ -62,6 +64,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
         autoEquip: false,
         movePrediction: true,
         coopFlag: true,
+        runStats: true,
         frameRate: "auto",
     };
 }
@@ -98,6 +101,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.coopFlag === "boolean") {
                 settings.coopFlag = data.coopFlag;
+            }
+            if (typeof data.runStats === "boolean") {
+                settings.runStats = data.runStats;
             }
             // Saved before there was a choice: auto
             if (FRAME_RATES.includes(data.frameRate)) {

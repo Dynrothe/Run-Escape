@@ -148,6 +148,9 @@ the same numbers as `coop-relay.mjs`.
 
 ## Cost
 
+For gameplay statistics from solo games and either relay, see the separate
+[Cloudflare D1 collector](../analytics/README.md). It does not add requests to the lobby or rooms.
+
 Cloudflare bills Durable Objects by requests and by how long they're awake, not by bandwidth.
 Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. Each
 call from a room to the lobby (`redeem`, `roomUpdate`, `roomGone`) and each connection is a whole

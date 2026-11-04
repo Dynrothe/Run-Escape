@@ -136,6 +136,10 @@ describe("the co-op flag", () => {
         expect(loadDisplaySettings().coopFlag).toBe(true);
         saveDisplaySettings({ ...loadDisplaySettings(), coopFlag: false });
         expect(loadDisplaySettings().coopFlag).toBe(false);
+        // Sharing run stats is on for settings saved before it existed, and remembered off
+        expect(loadDisplaySettings().runStats).toBe(true);
+        saveDisplaySettings({ ...loadDisplaySettings(), runStats: false });
+        expect(loadDisplaySettings().runStats).toBe(false);
         vi.unstubAllGlobals();
     });
 
