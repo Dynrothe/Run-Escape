@@ -185,14 +185,15 @@ const LIGHTNING: BossAttackDef = {
     windupSound: 4364,
     sound: 4428,
     impactSpotAnim: 1796,
-    // The cells about to be struck glow red and gold, as the Sepulchre's strange tiles do
+    // The cells about to be struck swirl gold, as a yellow strange tile does when it's stepped on
+    // (1800, animated)
     ground: {
         spots: [{ shape: "checker", then: 1.6 }],
         radius: 1.5,
-        locId: 56669,
-        // Its star inside the cell, and plain to see: it's the warning of a big hit everywhere
+        spotAnim: 1800,
+        // Inside the cell, and plain to see: it's the warning of a big hit everywhere
         fit: 0.85,
-        alpha: 0.55,
+        alpha: 0.8,
     },
 };
 

@@ -103,8 +103,8 @@ three slashes take 15, half the Saradominist's hitpoints.
 Real assets first, with these exceptions, all the same red the game's existing boss warnings use:
 the lunge's strip, the ice's square, the wave's and the swords' lines, and the flurry's circle
 (the existing swing warning). The reach ring is a faint white circle. The lightning's warning is
-the Sepulchre's yellow strange-tile glow (56669) on each cell, and the gaze's safe tiles its blue
-one (56670).
+a yellow strange tile's animated swirl (spotanim 1800) on each cell, and the gaze's safe tiles are
+the blue strange tile's glow (56670).
 
 ## 6. Numbers from the bot
 
