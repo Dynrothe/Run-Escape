@@ -16,12 +16,13 @@ const IDLE = 9741;
 const WALK = 9739;
 const DEATH = 9744;
 
-// The thrower's rock: a small one of the baboon's own (model 46350)
+// The thrower's rock: a thrown rock (1727, a boss's elsewhere). 2242 to 2244 are the baboon's own
+// model 46350, which looks like a chest in flight.
 const THROWN_ROCK: EnemyShotDef = {
     range: 7,
-    interval: 2.6,
+    interval: 3.2,
     speed: 8,
-    spotAnim: 2243,
+    spotAnim: 1727,
     seq: 9743,
     sound: 5962,
 };
@@ -29,7 +30,7 @@ const THROWN_ROCK: EnemyShotDef = {
 // The mage's spell: an earth blast until the baboons' own is found
 const BABOON_SPELL: EnemyShotDef = {
     range: 8,
-    interval: 3,
+    interval: 3.4,
     speed: 9,
     castSpotAnim: 138,
     spotAnim: 139,
@@ -177,8 +178,9 @@ export function getApmekenTrickle(wave: number): WaveDef {
                   ]
                 : [
                       { id: "baboon_brawler", weight: 3 },
-                      { id: "baboon_thrower", weight: 2 },
-                      { id: "baboon_mage", weight: 2 },
+                      // Few shooters in the stream: a crowd of them is a wall of shots
+                      { id: "baboon_thrower", weight: 1 },
+                      { id: "baboon_mage", weight: 1 },
                       { id: "baboon_thrall", weight: 3 },
                   ],
     };
