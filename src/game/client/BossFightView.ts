@@ -58,6 +58,11 @@ const LANE_CHEVRON_GAP = 4;
 const THROW_LINE_ALPHA = 0.3;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
 const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
+// A boss with its guard down (BossDef.guard): a gold ring round its feet, this far out past its
+// edge, pulsing this many times a second, and what it says under it
+const GUARD_RING = 0.8;
+const GUARD_PULSE = 6;
+const GUARD_COLOUR = "255, 205, 70";
 // The safe tiles out of a gaze's sight, while it winds up
 const SHADOW_ALPHA = 0.5;
 // A charge's lane is shown this long once it's picked, at this alpha, and
@@ -558,6 +563,7 @@ export class BossFightView {
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawSquareEdge(overlay, sim, scale);
         this.drawReach(overlay, sim, alpha, scale);
+        this.drawGuard(overlay, sim, alpha, now, scale);
         this.flashQuarters(overlay, sim, alpha);
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
@@ -713,7 +719,6 @@ export class BossFightView {
         t: number,
     ): void {
         const attack = windup.attack;
-        const reach = attack.boomerang?.reach ?? attack.wave?.reach ?? attack.range;
         const half = attack.radius ?? 0.35;
         const lines: { x: number; y: number; dirX: number; dirY: number }[] = [];
         if (windup.from) {
@@ -728,6 +733,7 @@ export class BossFightView {
         }
         const ctx = overlay.ctx;
         for (const { x, y, dirX, dirY } of lines) {
+            const reach = sim.throwReach(attack, x, y, dirX, dirY);
             const sideX = -dirY * half;
             const sideY = dirX * half;
             const endX = x + dirX * reach;
@@ -765,6 +771,41 @@ export class BossFightView {
         ctx.lineWidth = Math.max(1, 2 * scale);
         ctx.strokeStyle = REACH_COLOUR;
         ctx.stroke();
+    }
+
+    // A boss with its guard down (BossDef.guard), plain to see on a phone: a gold ring round
+    // its feet, pulsing, and "Guard down!" or "Stunned!" in gold just in front of it. A colour
+    // overlay, small, as the reach ring is: its gold tint and the stars are the real-asset half.
+    private drawGuard(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
+        const boss = sim.shownBoss;
+        if (!boss || boss.dead || !boss.def.boss?.guard || !sim.isExposed(boss)) {
+            return;
+        }
+        const x = lerp(boss.prevX, boss.x, alpha);
+        const y = lerp(boss.prevY, boss.y, alpha);
+        const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * Math.PI * 2 * GUARD_PULSE);
+        const ctx = overlay.ctx;
+        this.traceCircle(overlay, sim, x, y, boss.radius + GUARD_RING, 32);
+        ctx.fillStyle = `rgba(${GUARD_COLOUR}, ${0.12 + 0.12 * pulse})`;
+        ctx.fill();
+        ctx.lineWidth = Math.max(2, (3 + 3 * pulse) * scale);
+        ctx.strokeStyle = `rgba(${GUARD_COLOUR}, ${0.7 + 0.3 * pulse})`;
+        ctx.stroke();
+        // In front of it (south, towards the camera), clear of its shouts over its head
+        const ty = y - boss.radius - GUARD_RING - 0.4;
+        const p = overlay.project(x, this.ground(sim, x, ty), ty, this.a);
+        if (p.behind) {
+            return;
+        }
+        const pixel = Math.max(1, Math.round(scale));
+        ctx.font = `${18 * pixel}px "OSRS Bold", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const text = sim.isStunned(boss) ? "Stunned!" : "Guard down!";
+        ctx.fillStyle = "#000";
+        ctx.fillText(text, p.x + pixel, p.y + pixel);
+        ctx.fillStyle = `rgb(${GUARD_COLOUR})`;
+        ctx.fillText(text, p.x, p.y);
     }
 
     // A fight in a set square (MapDef.bossArena) can't be walked out of, and on

@@ -184,6 +184,7 @@ function getSpotAnimIds(): number[] {
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
+        addImpact(guard?.open);
         addImpact(enemy.boss?.leash?.jump?.land);
         addImpact(enemy.boss?.intro?.land);
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);

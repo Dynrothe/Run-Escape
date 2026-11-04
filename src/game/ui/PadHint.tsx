@@ -64,7 +64,7 @@ const PAD_CONTROLS: { icons: (PadButton | "move")[]; text: string }[] = [
     { icons: ["move"], text: "Move (the d-pad too)" },
     {
         icons: ["leftBumper", "rightBumper", "leftTrigger", "rightTrigger"],
-        text: "Use items 1 to 4",
+        text: "Use items 1 to 4 (a boss fight has none)",
     },
     { icons: ["start"], text: "Pause and resume; on the map screen, enter the map" },
     { icons: ["back"], text: "Show or hide the damage panel" },

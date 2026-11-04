@@ -1570,7 +1570,11 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <ReviveNote revive={ui.revive} />
             )}
             {isCoarsePointer && hud && (
-                <TouchControls inventory={hud.inventory} overlay={ui.overlay} client={client} />
+                <TouchControls
+                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    overlay={ui.overlay}
+                    client={client}
+                />
             )}
             <div className="ui-toasts">
                 {ui.toasts.map((toast) => (
@@ -1819,7 +1823,10 @@ const Hud = memo(function Hud({
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
-                    <Inventory inventory={hud.inventory} client={client} />
+                    {/* A boss fight has no items, only its own button */}
+                    {!getMap(hud.mapId).fight && (
+                        <Inventory inventory={hud.inventory} client={client} />
+                    )}
                     <AbilityButton client={client} />
                 </div>
                 <HpBar client={client} />
@@ -2841,7 +2848,20 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    <button className="ui-button ui-button-go" onClick={() => client.leaveRun()}>
+                    {/* A boss fight on your own: straight into it again */}
+                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                        <button className="ui-button ui-button-go" onClick={() => client.retry()}>
+                            Retry
+                        </button>
+                    )}
+                    <button
+                        className={
+                            !ui.coop.room && getMap(ui.mapId).fight
+                                ? "ui-button"
+                                : "ui-button ui-button-go"
+                        }
+                        onClick={() => client.leaveRun()}
+                    >
                         {ui.coop.room ? "Back to the party" : "Back to the title"}
                     </button>
                 </div>

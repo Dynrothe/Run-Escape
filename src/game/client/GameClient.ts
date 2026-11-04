@@ -1617,6 +1617,16 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
+    // The same boss fight again, from its results (MapDef.fight), on your own
+    retry(): void {
+        const mapId = this.sim?.map.id;
+        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+            return;
+        }
+        this.leaveRun();
+        void this.startRun(mapId);
+    }
+
     leaveRun(show = true): void {
         const wasCoop = this.coopRun !== undefined;
         if (wasCoop && show && this.coop.isHost) {

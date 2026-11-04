@@ -58,8 +58,8 @@ const TEAMMATE_DOWN_COLOR = "#9a9a9a";
 // Shielded enemies (that can't be hurt yet) are washed in lilac
 const SHIELDED_TINT = 0xd0b8ff;
 // A boss with its guard down (BossDef.guard): warmed gold, and glinting as it pulses
-const EXPOSED_TINT = 0xffc860;
-const EXPOSED_FLASH = 0.3;
+const EXPOSED_TINT = 0xffb830;
+const EXPOSED_FLASH = 0.5;
 const EXPOSED_PULSE = 12;
 // A blockable attack winding up shows the shelter behind the glyph out this
 // far from the boss, in tiles
