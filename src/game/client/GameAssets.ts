@@ -290,6 +290,36 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
+export function getStatueModelKey(locId: number): string {
+    return "statue:" + locId;
+}
+
+// The statues (and jets) a boss's attacks animate, by loc, with their animations
+export function getStatueSeqs(enemy: EnemyDef): Map<number, number[]> {
+    const seqs = new Map<number, number[]>();
+    const add = (locId: number, ...ids: (number | undefined)[]) => {
+        const list = seqs.get(locId) ?? [];
+        for (const id of ids) {
+            if (id !== undefined && id !== -1 && !list.includes(id)) {
+                list.push(id);
+            }
+        }
+        seqs.set(locId, list);
+    };
+    for (const attack of enemy.boss?.attacks ?? []) {
+        const statues = attack.statues;
+        if (statues) {
+            add(statues.locId, statues.windupSeq, statues.seq, attack.boomerang?.catchSeq);
+        }
+        const cycle = attack.cycle;
+        if (cycle) {
+            add(cycle.locId, cycle.seqs.warn, cycle.seqs.burn, cycle.seqs.out);
+        }
+    }
+    return seqs;
+}
+
 // The baked model for an enemy's look while shielded (EnemyDef.shield.look)
 export function getShieldedModelKey(def: EnemyDef): string {
     return "npc:" + def.id + ":shielded";
@@ -333,7 +363,8 @@ function getRequestBody(request: BakeRequest): string {
         case "obj":
             return `obj:${request.objId}:${request.count}`;
         case "loc":
-            return `loc:${request.locId}:${request.animated ? 1 : 0}`;
+            // A statue's (seqs) isn't plain scenery
+            return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
     }
 }
 
@@ -451,6 +482,16 @@ export class GameAssets {
                     requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
                 }
             }
+        }
+        // The arena's statues and jets its attacks animate (BossAttackDef.statues,
+        // cycle), standing still and with each animation
+        for (const [locId, seqIds] of getStatueSeqs(enemy)) {
+            requests.push({
+                kind: "loc",
+                key: getStatueModelKey(locId),
+                locId,
+                seqs: [-1, ...seqIds],
+            });
         }
         return requests;
     }

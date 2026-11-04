@@ -27,11 +27,58 @@ import {
     getPowerUpLookRequests,
     getRunAttackSeqs,
     getShieldedModelKey,
+    getStatueModelKey,
     lookHas,
 } from "./GameAssets";
 import { getGameSoundIds } from "./GameSounds";
 
 describe("enemy bakes", () => {
+    test("bake an arena fight's statues and jets with every animation its attacks play", () => {
+        const phosani = getEnemy("phosanis_nightmare");
+        const attack = phosani.boss!.attacks[0];
+        const boss = {
+            ...phosani,
+            boss: {
+                ...phosani.boss!,
+                phases: {
+                    ...phosani.boss!.phases!,
+                    threshold: { seconds: 2, seq: 7965, riseSeq: 7962 },
+                },
+                attacks: [
+                    { ...attack, statues: { locId: 38445, windupSeq: 8682, seq: 8684 } },
+                    {
+                        ...attack,
+                        statues: { locId: 38432, windupSeq: 8667 },
+                        boomerang: { reach: 20, catchSeq: 8668 },
+                    },
+                    {
+                        ...attack,
+                        cycle: {
+                            period: 4,
+                            stagger: 1,
+                            warn: 1,
+                            burn: 1,
+                            out: 1,
+                            interval: 1,
+                            locId: 38427,
+                            seqs: { warn: 8661, burn: 8662, out: 8663 },
+                        },
+                    },
+                ],
+            },
+        };
+        const requests = GameAssets.getEnemyRequests([boss]);
+        const seqs = (key: string) => {
+            const request = requests.find((r) => r.key === key);
+            return request?.kind === "loc" ? request.seqs : undefined;
+        };
+        expect(seqs(getStatueModelKey(38445))).toEqual([-1, 8682, 8684]);
+        expect(seqs(getStatueModelKey(38432))).toEqual([-1, 8667, 8668]);
+        expect(seqs(getStatueModelKey(38427))).toEqual([-1, 8661, 8662, 8663]);
+        const npc = requests.find((r) => r.key === getEnemyModelKey(boss, 0));
+        expect(npc?.kind === "npc" && npc.seqIds).toEqual(expect.arrayContaining([7965, 7962]));
+    });
+
     test("have every model GameView asks for", () => {
         for (const enemy of ENEMIES) {
             const keys = GameAssets.getEnemyRequests([enemy]).map((r) => r.key);

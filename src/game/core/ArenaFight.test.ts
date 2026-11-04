@@ -779,3 +779,97 @@ describe("the gaze, and hiding from it", () => {
         expect(hpOf(sim)).toBeLessThan(hp);
     });
 });
+
+describe("fire on a rhythm", () => {
+    const fire = attack({
+        name: "Bridge fire",
+        kind: "ground",
+        damage: 4,
+        sound: 1234,
+        cycle: {
+            period: 4,
+            stagger: 1,
+            warn: 1,
+            burn: 1.5,
+            out: 0.5,
+            interval: 0.5,
+            locId: 38427,
+            seqs: { warn: 8661, burn: 8662, out: 8663 },
+        },
+    });
+    const FIRES: ArenaFeatures = {
+        fires: [10, 12, 14].map((y) => ({ y: BASE + y, x0: BASE + 30, x1: BASE + 32 })),
+    };
+
+    function fight(): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        sim.map.features = FIRES;
+        const phases: BossPhasesDef = {
+            ...THREE_PHASES,
+            phases: [{}, { ambients: [{ attack: "Bridge fire", interval: 0 }] }, {}],
+        };
+        const boss = startFight(sim, bossDef({ attacks: [fire], phases }), 900);
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = BASE + 50;
+        return { sim, boss };
+    }
+
+    test("not till a phase that has it, then every row in turn: warn, burn, out", () => {
+        const { sim, boss } = fight();
+        place(sim, BASE + 31.5, BASE + 10.5);
+        const hp = hpOf(sim);
+        run(sim, 5);
+        expect(hpOf(sim)).toBe(hp);
+        expect(boss.bossState!.cycles).toBeUndefined();
+        boss.hp = 601;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        run(sim, 0.02);
+        const cycle = boss.bossState!.cycles![0];
+        expect(cycle.attack.name).toBe("Bridge fire");
+        // The first row warns for a second, then burns them every half second
+        // for a second and a half
+        run(sim, 0.95);
+        expect(hpOf(sim)).toBe(hp);
+        sim.takeEvents();
+        run(sim, 0.1);
+        expect(hpOf(sim)).toBeLessThan(hp);
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({ type: "bossAttack", sound: 1234 }),
+        );
+        run(sim, 1.5);
+        const burnt = hp - hpOf(sim);
+        expect(sim.damageByAttack["Bridge fire"]).toBe(burnt);
+        // Then nothing till it comes round again, its period on
+        const after = hpOf(sim);
+        run(sim, 2.3);
+        expect(hpOf(sim)).toBe(after);
+        run(sim, 0.2);
+        expect(hpOf(sim)).toBeLessThan(after);
+    });
+
+    test("the next row's a stagger behind, so it's crossable on the beat", () => {
+        const { sim, boss } = fight();
+        boss.hp = 601;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        place(sim, BASE + 31.5, BASE + 12.5);
+        const hp = hpOf(sim);
+        run(sim, 1.95);
+        expect(hpOf(sim)).toBe(hp);
+        run(sim, 0.2);
+        expect(hpOf(sim)).toBeLessThan(hp);
+    });
+
+    test("off the row, or once a phase leaves it out, it's nothing", () => {
+        const { sim, boss } = fight();
+        boss.hp = 601;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        place(sim, BASE + 33.5 + sim.player.radius + 0.05, BASE + 10.5);
+        const hp = hpOf(sim);
+        run(sim, 4);
+        expect(hpOf(sim)).toBe(hp);
+        boss.hp = 301;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        run(sim, 0.02);
+        expect(boss.bossState!.cycles).toBeUndefined();
+    });
+});

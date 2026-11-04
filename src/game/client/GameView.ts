@@ -260,7 +260,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
-            this.fight.onEvent(event, now);
+            this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);

@@ -1,8 +1,8 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
-import { BossAttackDef } from "../content/types";
+import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
-import { behindPillar, pillarHit } from "../core/arena";
+import { behindPillar, cycleStage, pillarHit, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -11,7 +11,7 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
-import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey } from "./GameAssets";
+import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey, getStatueModelKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 
 // What a boss with a fight of its own puts in the world (BossDef.phases,
@@ -72,6 +72,11 @@ const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
 
+// A fight-drawn statue, by its loc and south-west tile
+function statueKey(locId: number, at: { x: number; y: number }): string {
+    return `${locId}:${at.x}:${at.y}`;
+}
+
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
@@ -89,20 +94,26 @@ export class BossFightView {
     private curseEndedAt = -1;
     // The tiles out of a gaze's sight (BossAttackDef.cover), worked out once a windup
     private shadows?: { windup: BossWindup; tiles: { x: number; y: number }[] };
+    // What each statue the fight draws is playing (Sim's statueSeq), and since
+    // which tick, by loc and tile
+    private statueSeqs = new Map<string, { seq: number; tick: number }>();
 
     constructor(private readonly assets: GameAssets) {}
 
     reset(): void {
         this.beams = [];
         this.shadows = undefined;
+        this.statueSeqs.clear();
         this.curseOn = false;
         this.curseEndedAt = -1;
     }
 
-    onEvent(event: SimEvent, now: number): void {
+    onEvent(event: SimEvent, now: number, tick: number): void {
         if (event.type === "totemBlast") {
             const { x, y, toX, toY } = event;
             this.beams.push({ x, y, toX, toY, start: now });
+        } else if (event.type === "statueSeq") {
+            this.statueSeqs.set(statueKey(event.locId, event), { seq: event.seq, tick });
         }
     }
 
@@ -120,6 +131,8 @@ export class BossFightView {
         this.drawBullets(actors, sim, alpha);
         this.drawRowWarnings(actors, sim);
         this.drawShadows(actors, sim);
+        this.drawStatues(actors, sim);
+        this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -302,6 +315,107 @@ export class BossFightView {
                         options,
                     );
                 }
+            }
+        }
+    }
+
+    // The bosses whose arena this is: the map's final boss from the start (its
+    // statues stand before it rises), and whoever's shown
+    private fightBosses(sim: Sim): EnemyDef[] {
+        const defs: EnemyDef[] = [];
+        const event = sim.map.events.find((e) => e.kind === "finalBoss");
+        const final = event && getEnemy(event.enemyId);
+        if (final?.boss) {
+            defs.push(final);
+        }
+        const shown = sim.shownBoss?.def;
+        if (shown?.boss && !defs.includes(shown)) {
+            defs.push(shown);
+        }
+        return defs;
+    }
+
+    // The arena's statues its attacks animate (BossAttackDef.statues): the map
+    // leaves their models out, so they're drawn here, standing still until
+    // they're told to play something, then holding its last frame
+    private drawStatues(actors: ActorRenderer, sim: Sim): void {
+        const features = sim.map.features;
+        if (!features) {
+            return;
+        }
+        const drawn = new Set<string>();
+        for (const def of this.fightBosses(sim)) {
+            for (const attack of def.boss!.attacks) {
+                const statues = attack.statues;
+                if (!statues) {
+                    continue;
+                }
+                const model = this.assets.get(getStatueModelKey(statues.locId));
+                if (!model) {
+                    continue;
+                }
+                const list: readonly ArenaStatue[] = statues.group
+                    ? (features.statues?.[statues.group] ?? [])
+                    : attack.pattern?.rows
+                      ? (features.bolts ?? []).flatMap((row) => row.statues)
+                      : attack.from === "knights"
+                        ? (features.knights ?? [])
+                        : [];
+                for (const statue of list) {
+                    const key = statueKey(statues.locId, statue);
+                    if (drawn.has(key)) {
+                        continue;
+                    }
+                    drawn.add(key);
+                    const playing = this.statueSeqs.get(key);
+                    const anim = model.getAnim(playing?.seq ?? -1);
+                    const frame = playing ? anim.getFrame(sim.tick - playing.tick, false) : 0;
+                    const { x, y } = statueMiddle(statue);
+                    actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, statue.yaw ?? 0);
+                }
+            }
+        }
+    }
+
+    // The arena's fire jets on their rhythm (BossAttackDef.cycle): coming out,
+    // burning and going back in, each row as the sim has it; nothing while a row's
+    // out of it
+    private drawFires(actors: ActorRenderer, sim: Sim): void {
+        const rows = sim.map.features?.fires;
+        if (!rows) {
+            return;
+        }
+        for (const enemy of sim.enemies) {
+            for (const cycle of enemy.bossState?.cycles ?? []) {
+                const def = cycle.attack.cycle!;
+                const model = this.assets.get(getStatueModelKey(def.locId));
+                if (!model || enemy.dead) {
+                    continue;
+                }
+                rows.forEach((row, i) => {
+                    const { stage, since } = cycleStage(
+                        def,
+                        cycle.startTick,
+                        i,
+                        sim.tick,
+                        TICKS_PER_SECOND,
+                    );
+                    if (stage === "idle") {
+                        return;
+                    }
+                    const anim = model.getAnim(def.seqs[stage]);
+                    const x = (row.x0 + row.x1 + 1) / 2;
+                    const y = row.y + 0.5;
+                    actors.draw(
+                        model,
+                        anim,
+                        anim.getFrame(since, stage === "burn"),
+                        x,
+                        this.ground(sim, x, y),
+                        y,
+                        row.yaw ?? 0,
+                    );
+                });
             }
         }
     }
