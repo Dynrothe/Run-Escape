@@ -211,6 +211,9 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 // Ticks between a staring boss saying it'll turn and turning (BossDef.stare)
 const STARE_WARNING = Math.round(0.75 * TICKS_PER_SECOND);
+// Seconds between a stare's hits back: weapons fire on their own, so where you stand is all
+// there is to stop them, and it shouldn't be the whole fight
+const STARE_EVERY = 1;
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
@@ -7109,7 +7112,7 @@ export class Sim {
             this.showBlocked(enemy);
             const hero = this.hero;
             if (this.tick >= (hero.staredUntil ?? 0)) {
-                hero.staredUntil = this.tick + secondsToTicks(0.5);
+                hero.staredUntil = this.tick + secondsToTicks(STARE_EVERY);
                 // As its own hits do: hard's share, and armour taking at most its cap
                 const boss = enemy.def.boss!;
                 this.damagePlayer(
