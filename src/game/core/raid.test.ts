@@ -442,11 +442,19 @@ describe("the Theatre's bullet shapes", () => {
         const pattern = wall.attack.pattern!;
         expect(wall.shot).toHaveLength(pattern.count - pattern.gap!);
         expect(hardWall.shot).toHaveLength(
-            Math.round(pattern.count * 1.5) - Math.round(pattern.gap! * 1.5),
+            Math.round(pattern.count * 1.5) - Math.round((pattern.gap! + 1) * 1.5 - 1),
         );
-        const across = (shot: { x: number }[]) =>
-            Math.max(...shot.map((b) => b.x)) - Math.min(...shot.map((b) => b.x));
+        const xs = (shot: { x: number }[]) => shot.map((b) => b.x).sort((a, b) => a - b);
+        const across = (shot: { x: number }[]) => xs(shot)[xs(shot).length - 1] - xs(shot)[0];
         expect(across(hardWall.shot)).toBeLessThanOrEqual(across(wall.shot) + 1);
+        // The way through, bullet middle to middle, at least as wide
+        const widest = (shot: { x: number }[]) =>
+            Math.max(
+                ...xs(shot)
+                    .slice(1)
+                    .map((x, i) => x - xs(shot)[i]),
+            );
+        expect(widest(hardWall.shot)).toBeGreaterThanOrEqual(widest(wall.shot) - 1e-6);
     });
 
     it("a closing ring forms round the player and comes in on them, with its gap", () => {
@@ -650,13 +658,10 @@ describe("expert mode", () => {
         expect(grey.def.id).toBe("nylocas_vasilias_ranged");
     });
 
-    it("has Nylocas Vasilias take less from the wrong style on normal, prayer and all", () => {
+    it("has each colour of Nylocas Vasilias take its own style in full on normal, others less", () => {
         const sim = raid(false);
-        const dealt = (weaponId: string) => {
-            const boss = sim.spawnEnemy(getEnemy("nylocas_vasilias"), "boss", {
-                x: 1030.5,
-                y: 1030.5,
-            })!;
+        const dealt = (form: string, weaponId: string) => {
+            const boss = sim.spawnEnemy(getEnemy(form), "boss", { x: 1030.5, y: 1030.5 })!;
             sim["damageSource"] = `weapon:${weaponId}`;
             let total = 0;
             for (let i = 0; i < 40; i++) {
@@ -665,12 +670,49 @@ describe("expert mode", () => {
             boss.dead = true;
             return total;
         };
-        const melee = dealt("scythe_of_vitur");
-        // Grey: the other styles' share, and the raid's prayer against them on top
         const share = getEnemy("nylocas_vasilias").boss!.colours!.offStyle!;
         const prayer = getEnemy("nylocas_vasilias").protects!.damage;
-        expect(dealt("twisted_bow") / melee).toBeCloseTo(share * prayer, 2);
-        expect(dealt("sanguinesti_staff") / melee).toBeCloseTo(share * prayer, 2);
+        // Grey: melee in full; missiles and magic the colour's share, and the prayer on top
+        const melee = dealt("nylocas_vasilias", "scythe_of_vitur");
+        expect(dealt("nylocas_vasilias", "twisted_bow") / melee).toBeCloseTo(share * prayer, 2);
+        expect(dealt("nylocas_vasilias", "sanguinesti_staff") / melee).toBeCloseTo(
+            share * prayer,
+            2,
+        );
+        // Green: missiles through its prayer for ownStyle, more than melee's share; magic both
+        const own = getEnemy("nylocas_vasilias").boss!.colours!.ownStyle!;
+        expect(own).toBeGreaterThan(share);
+        const green = "nylocas_vasilias_ranged";
+        expect(dealt(green, "twisted_bow") / melee).toBeCloseTo(own, 1);
+        expect(dealt(green, "scythe_of_vitur") / melee).toBeCloseTo(share, 1);
+        expect(dealt(green, "sanguinesti_staff") / melee).toBeCloseTo(share * prayer, 2);
+        // Blue: magic the same
+        const blue = "nylocas_vasilias_magic";
+        expect(dealt(blue, "sanguinesti_staff") / melee).toBeCloseTo(own, 1);
+        expect(dealt(blue, "scythe_of_vitur") / melee).toBeCloseTo(share, 1);
+    });
+
+    it("never picks an attack kept for its boss's shadow realm, exhumes or yellows otherwise", () => {
+        const sim = raid();
+        const def = getEnemy("xarpus");
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        // Out of his pool for good, with every attack ready
+        boss.bossState!.ordealsDone = def.boss!.exhumes!.at.length;
+        const picked = () => boss.bossState!.windup?.attack;
+        let picks = 0;
+        for (let i = 0; i < 300; i++) {
+            boss.bossState!.windup = undefined;
+            boss.bossState!.cooldowns.fill(0);
+            boss.attackCooldown = 0;
+            sim.tick++;
+            sim["stepBoss"](boss, 2);
+            const attack = picked();
+            if (attack) {
+                picks++;
+                expect(attack.ordeal, attack.name).not.toBe(true);
+            }
+        }
+        expect(picks).toBeGreaterThan(50);
     });
 
     it("has Sotetseg drag you into his shadow realm, where he can't be hurt and only mazes", () => {

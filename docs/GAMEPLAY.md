@@ -291,7 +291,7 @@ version and how to run it.
       minotaurs.
     - **Morytania**: Mort Myre's ghasts, shades and zombies, werewolves, vampyre juveniles and
       juvinates, vyrewatch, nail beasts, mutated bloodvelds and the Theatre of Blood's Nylocas
-      (the big ones split in two, and the green and blue ones shoot from range).
+      (the big ones split in two).
     - **God Wars Dungeon**: the armies of Bandos, Armadyl, Saradomin and Zamorak, who march in
       from their own sides and fight each other as much as you: goblins, orks and cyclopes,
       aviansies, knights and priests, imps, hellhounds and bloodvelds, and the gods' spiritual
@@ -333,7 +333,9 @@ version and how to run it.
       down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
       drags you into his shadow realm, where he can't be hurt and there's only his maze to get
       through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
-      smother them, those left healing him; and Verzik gets up twice.
+      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      throws her yellows, which only miss you in the glowing pool that comes with each. The
+      raid's green and blue Nylocas shoot from range.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.

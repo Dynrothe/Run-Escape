@@ -4710,8 +4710,7 @@ export const ENEMIES: EnemyDef[] = [
     },
     // The Nylocas, in their three colours (grey melee, green ranged, blue
     // magic). The big ones split into two small ones when they die, like they
-    // do in the Theatre. Green shoots the Theatre's own Nylocas projectile
-    // (1559, 1561 big); blue has none of its own in the cache, so Water Wave.
+    // do in the Theatre.
     {
         id: "nylocas_ischyros",
         name: "Nylocas Ischyros",
@@ -4742,7 +4741,6 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.35,
         xp: 14,
         onlyStyle: "ranged",
-        shot: { range: 7, interval: 2.2, speed: 8, spotAnim: 1559, sound: 3605 },
         sounds: { attack: 3605, hit: 3607, death: 3606 },
     },
     {
@@ -4759,14 +4757,6 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.35,
         xp: 14,
         onlyStyle: "magic",
-        shot: {
-            range: 7,
-            interval: 2.4,
-            speed: 7,
-            spotAnim: 162,
-            impactSpotAnim: 163,
-            sound: 3605,
-        },
         sounds: { attack: 3605, hit: 3607, death: 3606 },
     },
     {
@@ -4802,7 +4792,6 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 24,
         onlyStyle: "ranged",
-        shot: { range: 7, interval: 2.2, speed: 8, spotAnim: 1561, sound: 3605 },
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.4,
@@ -4822,14 +4811,6 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 24,
         onlyStyle: "magic",
-        shot: {
-            range: 7,
-            interval: 2.4,
-            speed: 7,
-            spotAnim: 162,
-            impactSpotAnim: 163,
-            sound: 3605,
-        },
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.4,

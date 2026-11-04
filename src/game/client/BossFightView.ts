@@ -142,7 +142,8 @@ export class BossFightView {
                 {
                     scale: (fit * hazard.radius * 128) / Math.max(1, model.radius),
                     flash: lit,
-                    alpha: WARNING_ALPHA,
+                    // An exhumed or a safe pool is somewhere to go, not to keep off: as it is
+                    alpha: ground.smother || ground.safe ? 1 : WARNING_ALPHA,
                 },
             );
         }

@@ -229,17 +229,17 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(2, [
                 [
                     { id: "nylocas_ischyros", weight: 3 },
-                    { id: "nylocas_toxobolos", weight: 1 },
+                    { id: "tob_nylocas_toxobolos", weight: 1 },
                 ],
                 [
                     { id: "nylocas_ischyros", weight: 2 },
-                    { id: "nylocas_toxobolos", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_toxobolos", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
                 [
                     { id: "big_nylocas_ischyros", weight: 1 },
-                    { id: "nylocas_toxobolos", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_toxobolos", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
             ]),
             events: roomEvents("big_nylocas_ischyros", "nylocas_ischyros", 40),
@@ -266,7 +266,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 [
                     { id: "mutated_bloodveld", weight: 2 },
                     { id: "vampyre_juvinate", weight: 2 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
                 ],
             ]),
             events: roomEvents("mutated_bloodveld", "vampyre_juvinate", 36),
@@ -282,11 +282,11 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(4, [
                 [
                     { id: "vyrewatch", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
                 [
                     { id: "vyrewatch", weight: 2 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                     { id: "mutated_bloodveld", weight: 1 },
                 ],
                 [
@@ -294,7 +294,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
                     { id: "vyrewatch", weight: 2 },
                 ],
             ]),
-            events: roomEvents("vyrewatch_sentinel", "nylocas_hagios", 50),
+            events: roomEvents("vyrewatch_sentinel", "tob_nylocas_hagios", 50),
             boss: "xarpus",
             bossHp: 120000,
         },
@@ -311,15 +311,15 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                     { id: "vyrewatch", weight: 1 },
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
                     { id: "big_nylocas_ischyros", weight: 1 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                 ],
             ]),
             events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),

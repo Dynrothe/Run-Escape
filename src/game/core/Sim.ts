@@ -4387,6 +4387,11 @@ export class Sim {
             return 1;
         }
         const style = getWeaponStyle(getWeapon(source.slice("weapon:".length)));
+        // On normal, a colour prays less against its own style (BossDef.colours.ownStyle)
+        const colours = enemy.def.boss?.colours;
+        if (colours?.offStyle !== undefined && style === enemy.def.onlyStyle) {
+            return protects.styles.includes(style) ? (colours.ownStyle ?? 1) : 1;
+        }
         return protects.styles.includes(style) ? protects.damage : 1;
     }
 
@@ -5464,7 +5469,9 @@ export class Sim {
         const pattern = emitter.attack.pattern!;
         // More bullets on hard (bulletScale), closer together, with as wide a way through
         const count = Math.round(pattern.count * this.bulletScale);
-        const gap = Math.min(Math.round((pattern.gap ?? 2) * this.bulletScale), count - 1);
+        // The gap's width is its bullets plus one spacing: as many again, so at least as wide
+        const gapWidth = ((pattern.gap ?? 2) + 1) * this.bulletScale;
+        const gap = Math.min(Math.round(gapWidth - 1), count - 1);
         // Anywhere round a ring; never at a wall's ends, which can be in a room's walls
         const gapStart =
             pattern.shape === "closing"
@@ -6100,7 +6107,8 @@ export class Sim {
         const ordeal = state.ordeal;
         if (ordeal) {
             if (this.tick < ordeal.endTick && ordeal.left !== 0) {
-                enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+                // Held to its end, however a tick goes (a boss can skip stepBoss on a jump)
+                enemy.shieldEnd = Math.max(enemy.shieldEnd, ordeal.endTick);
                 return;
             }
             state.ordeal = undefined;
@@ -6132,7 +6140,7 @@ export class Sim {
             left: exhumes ? exhumes.count : -1,
             during: { attacks: of.attacks, interval: of.interval },
         };
-        enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+        enemy.shieldEnd = Math.max(enemy.shieldEnd, state.ordeal.endTick);
         this.emit({ type: "notice", message: of.message });
     }
 

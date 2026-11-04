@@ -606,8 +606,10 @@ hit it from untouched. Each has something for a player keeping away too: a closi
 leap (`minRange`) or ground marks on them. Each boss has a mechanic of its own that makes the
 fight longer by making it harder, not by more hitpoints: the Maiden's healers (`summonsAt` with
 `nylocas_matomenos_healer`), the Bloat's naps, Nylocas Vasilias's colours on normal
-(`colours.offStyle`, which stands in for its prayer), Sotetseg's `shadowRealm` and Xarpus's
-`exhumes` (both run by `stepOrdeal`, an exhumed by `stepExhumed`).
+(`colours.offStyle`: the other styles do that share, with the prayer on top for missiles and
+magic; its own gets through the prayer for `ownStyle`), Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by
+`stepOrdeal`, an exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that
+shoot (`RAID_NYLOCAS`, `tob_` ids), so Morytania's play as they did.
 Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`). On hard and expert, every
 pattern fires `MapDef.hard.bullets` times its bullets (`Sim.bulletScale`): a ring's gap is an
 angle and keeps its width, and a wall's or closing ring's gap grows with the count. Their

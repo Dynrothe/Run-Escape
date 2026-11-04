@@ -22,8 +22,8 @@ the version in the corner).
   less of the fight.
 - Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
   her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-  and Xarpus can't be hurt until his exhumeds are smothered.
-- The green and blue Nylocas shoot: arrows and water waves from range, as in the Theatre.
+  Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+- The Theatre of Blood's green and blue Nylocas shoot from range.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04

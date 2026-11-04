@@ -468,7 +468,9 @@ export type GroundPatternDef = {
     smother?: { seconds: number; heal: number; healSpotAnim?: number; smotheredSpotAnim?: number };
 };
 
-// A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes)
+// A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes,
+// yellows). It picks among them at random, whatever their range, cooldown or enraged, so an
+// attack named here is used as it is (Sotetseg's faster maze, before he's enraged).
 export type BossOrdealDef = {
     at: number[];
     attacks: string[];
@@ -810,8 +812,9 @@ export type BossDef = {
     // On a raid's expert mode, it changes into the next of these forms every `every` seconds,
     // keeping its hitpoints (Nylocas Vasilias's colours: each takes one style, EnemyDef.onlyStyle).
     // With offStyle it changes on normal too, where any other style does that share of its damage
-    // (none on expert), on top of its prayer (EnemyDef.protects).
-    colours?: { every: number; forms: string[]; offStyle?: number };
+    // (none on expert), on top of its prayer (EnemyDef.protects); its own style gets through its
+    // prayer for ownStyle instead (1 unless set).
+    colours?: { every: number; forms: string[]; offStyle?: number; ownStyle?: number };
     // Sotetseg's shadow realm: at each of these shares of his hitpoints he drags you into it for
     // seconds, where he can't be hurt and does only these attacks (by name), interval apart
     shadowRealm?: BossOrdealDef & { seconds: number };
@@ -819,6 +822,7 @@ export type BossDef = {
     // his pool, can't be hurt, and does only these attacks, one of them raising the exhumeds (a
     // ground attack with GroundPatternDef.smother), until count of them have been smothered, or
     // seconds have gone, when he rises healed leftHeal of his hitpoints for each one still to go
+    // (on top of what each exhumed that went unsmothered healed him)
     exhumes?: BossOrdealDef & { count: number; seconds: number; leftHeal: number };
     // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
     // throws only these, balls that hit hard unless you're in the pool that comes with each one

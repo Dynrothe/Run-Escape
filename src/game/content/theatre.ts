@@ -1,4 +1,4 @@
-import { BossAttackDef, BossDef, CombatStyle, EnemyDef } from "./types";
+import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./types";
 
 // The Theatre of Blood raid's bosses (raids.ts), fought in their own rooms, each as a bullet hell
 // built round what its real fight is known for: the Maiden's blood closing in, the Bloat's flies,
@@ -767,14 +767,16 @@ function vasilias(): EnemyDef {
         boss: {
             attackInterval: 2.0,
             keepDistance: 4,
-            // Its colours on normal too: the other styles do 40%, its prayer as well, so a
-            // one-style build waits out two colours in three, and one with all three switches
-            colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.4 },
+            // Its colours on normal too: the other styles do a quarter (its prayer as well, for
+            // missiles and magic), so a one-style build waits out two colours in three, and one
+            // with all three switches. Its own style gets through its prayer for 35%, more than
+            // melee's quarter, but not so much a max bow beats it in a few seconds.
+            colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.25, ownStyle: 0.35 },
             enrage: { message: "Nylocas Vasilias shrieks!" },
             summonsAt: [
                 { hp: 0.75, enemyId: "nylocas_ischyros", count: 6 },
-                { hp: 0.5, enemyId: "nylocas_toxobolos", count: 6 },
-                { hp: 0.25, enemyId: "nylocas_hagios", count: 6 },
+                { hp: 0.5, enemyId: "tob_nylocas_toxobolos", count: 6 },
+                { hp: 0.25, enemyId: "tob_nylocas_hagios", count: 6 },
             ],
             attacks: oftener(VASILIAS_ATTACKS, 2.2, 2.0),
         },
@@ -835,10 +837,32 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     );
 }
 
+// The raid's green and blue Nylocas shoot, as in the Theatre: copies of Morytania's, which don't,
+// so Morytania plays as it did. Green fires the Theatre's own Nylocas projectile (1559, 1561 for
+// the big ones); blue has none of its own in the cache, so Water Wave (162, 163).
+const RAID_NYLOCAS: [string, EnemyShotDef][] = [
+    ["nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1559, sound: 3605 }],
+    ["big_nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1561, sound: 3605 }],
+    [
+        "nylocas_hagios",
+        { range: 7, interval: 3.2, speed: 7, spotAnim: 162, impactSpotAnim: 163, sound: 3605 },
+    ],
+    [
+        "big_nylocas_hagios",
+        { range: 7, interval: 3.2, speed: 7, spotAnim: 162, impactSpotAnim: 163, sound: 3605 },
+    ],
+];
+
 function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     const verzikOne = byId("verzik_vitur");
     const verzikTwo = byId("verzik_vitur_risen");
     return [
+        ...RAID_NYLOCAS.map(([id, shot]): EnemyDef => {
+            const base = byId(id);
+            // A big one splits into the raid's small ones
+            const splits = base.splits && { ...base.splits, into: "tob_" + base.splits.into };
+            return { ...base, id: "tob_" + id, shot, ...(splits && { splits }) };
+        }),
         {
             id: "maiden_of_sugadinti",
             name: "The Maiden of Sugadinti",
