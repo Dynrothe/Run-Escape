@@ -356,7 +356,7 @@ export const RAID_MAPS: MapDef[] = [
             "Morytania, then kill its boss to move on: the Maiden, the Bloat, Nylocas Vasilias, " +
             "Sotetseg, Xarpus, then Verzik in Vampyrium.\n\n" +
             "**Bosses pray against missiles and magic**, which do only 15% of their damage to them, " +
-            "and their bullets leave a gap up close.\n\n" +
+            "and there's nowhere safe by them: up close they stomp, bite and burst.\n\n" +
             "**Raid points** come from fast, clean rooms. They pay coins, buy supplies between " +
             "rooms, and raise your chance of a purple at the end.\n\n" +
             "**Portals:** once you've killed a room's boss, its hall has a portal straight to it " +

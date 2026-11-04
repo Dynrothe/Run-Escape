@@ -209,7 +209,12 @@ which exports where everything is. `waves` and `events` on the `MapDef` are ever
 bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a file of their own
 (`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays
 as it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`,
-`stare`, `expert` on an attack) and do nothing off a raid's expert mode.
+`stare`, `expert` on an attack) and do nothing off a raid's expert mode, but `colours.offStyle`
+brings a boss's colours to normal too. A boss's own mechanic can be a while it can't be hurt:
+`shadowRealm` (for so many seconds) or `exhumes` (until so many of its smother ground marks are
+stood on), each at shares of its hitpoints, doing only the attacks they name meanwhile
+(`stepOrdeal` in `Sim.ts`). The balance bot has to know how to play a new one
+(`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
 
 ## Adventurer
 

@@ -17,6 +17,13 @@ the version in the corner).
 - Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
   has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
   new one marked on the ground first.
+- Keeping away from a Theatre of Blood boss isn't safe either: the Pestilent Bloat's flies and
+  Verzik's power blasts close in round you, and Verzik's spider leaps on you. The Bloat naps for
+  less of the fight.
+- Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
+  her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+  and Xarpus can't be hurt until his exhumeds are smothered.
+- The green and blue Nylocas shoot: arrows and water waves from range, as in the Theatre.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04

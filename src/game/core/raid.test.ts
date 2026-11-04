@@ -398,7 +398,10 @@ describe("the Theatre's bullet shapes", () => {
 
     it("makes standing on a raid boss cost: about half its attacks up close hit all round it", () => {
         for (const id of TEST_BOSS_IDS) {
-            const attacks = getEnemy(id).boss!.attacks.filter((a) => !a.enraged && !a.expert);
+            // What it can pick with the player right by it
+            const attacks = getEnemy(id).boss!.attacks.filter(
+                (a) => !a.enraged && !a.expert && (a.minRange ?? 0) <= 1,
+            );
             // Hits everywhere within reach of the boss's middle: a swing round it, or a mark under it
             const reach = (a: BossAttackDef) =>
                 a.kind === "swing" && a.cone === undefined
@@ -410,6 +413,18 @@ describe("the Theatre's bullet shapes", () => {
             expect(close.length, id).toBeGreaterThan(0);
             const weight = (list: BossAttackDef[]) => list.reduce((sum, a) => sum + a.weight, 0);
             expect(weight(close) / weight(attacks), id).toBeGreaterThanOrEqual(0.4);
+        }
+    });
+
+    it("leaves no ring round a still boss that melee reaches and its slam doesn't", () => {
+        // The scythe's reach, from the boss's middle, with a boss's radius of 0.5
+        const longestReach = 4.35;
+        for (const id of ["maiden_of_sugadinti", "xarpus", "tob_verzik_vitur"]) {
+            const slam = getEnemy(id).boss!.attacks.find((a) =>
+                a.ground?.spots.some((spot) => spot.shape === "under"),
+            )!;
+            expect(slam.range, id).toBeGreaterThanOrEqual(longestReach);
+            expect(slam.ground!.radius, id).toBeGreaterThanOrEqual(longestReach - 0.35);
         }
     });
 
@@ -623,15 +638,179 @@ describe("expert mode", () => {
         expect(boss.def.id).toBe("nylocas_vasilias_ranged");
         expect(boss.def.onlyStyle).toBe("ranged");
         expect(boss.hp).toBe(hp);
-        // Not off expert mode
+        // On normal too (BossDef.colours.offStyle)
         const calm = raid(false);
         const grey = calm.spawnEnemy(getEnemy("nylocas_vasilias"), "boss", {
             x: 1030.5,
             y: 1030.5,
         })!;
-        calm.tick += Math.round(every * 3 * TICKS_PER_SECOND);
         calm["stepColours"](grey);
-        expect(grey.def.id).toBe("nylocas_vasilias");
+        calm.tick += Math.round(every * TICKS_PER_SECOND);
+        calm["stepColours"](grey);
+        expect(grey.def.id).toBe("nylocas_vasilias_ranged");
+    });
+
+    it("has Nylocas Vasilias take less from the wrong style on normal, prayer and all", () => {
+        const sim = raid(false);
+        const dealt = (weaponId: string) => {
+            const boss = sim.spawnEnemy(getEnemy("nylocas_vasilias"), "boss", {
+                x: 1030.5,
+                y: 1030.5,
+            })!;
+            sim["damageSource"] = `weapon:${weaponId}`;
+            let total = 0;
+            for (let i = 0; i < 40; i++) {
+                total += sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y);
+            }
+            boss.dead = true;
+            return total;
+        };
+        const melee = dealt("scythe_of_vitur");
+        // Grey: the other styles' share, and the raid's prayer against them on top
+        const share = getEnemy("nylocas_vasilias").boss!.colours!.offStyle!;
+        const prayer = getEnemy("nylocas_vasilias").protects!.damage;
+        expect(dealt("twisted_bow") / melee).toBeCloseTo(share * prayer, 2);
+        expect(dealt("sanguinesti_staff") / melee).toBeCloseTo(share * prayer, 2);
+    });
+
+    it("has Sotetseg drag you into his shadow realm, where he can't be hurt and only mazes", () => {
+        const sim = raid();
+        const def = getEnemy("tob_sotetseg");
+        const realm = def.boss!.shadowRealm!;
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        boss.hp = Math.floor(boss.maxHp * realm.at[0]);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeDefined();
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(sim["keepsTo"](boss)?.attacks).toEqual(realm.attacks);
+        // Out again once its time's up, and hurt as ever
+        sim.tick += Math.round(realm.seconds * TICKS_PER_SECOND);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBeGreaterThan(0);
+        // And not again until the next share
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        boss.hp = Math.floor(boss.maxHp * realm.at[1]);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeDefined();
+    });
+
+    it("has Xarpus rise only once his exhumeds are smothered, those left healing him", () => {
+        const sim = raid();
+        const def = getEnemy("xarpus");
+        const exhumes = def.boss!.exhumes!;
+        const attack = def.boss!.attacks.find((a) => a.ground?.smother)!;
+        const smother = attack.ground!.smother!;
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        // He comes up in his pool, out of reach
+        sim["stepOrdeal"](boss);
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
+        const exhumed = (x: number, y: number) => {
+            const hazard = {
+                uid: 900 + sim.hazards.length,
+                enemyUid: boss.uid,
+                attack,
+                x,
+                y,
+                radius: attack.ground!.radius,
+                damage: 0,
+                startTick: sim.tick,
+                landTick: sim.tick,
+                endTick: sim.tick + 1000,
+                armed: false,
+                fuseTick: -1,
+                grabEnd: 0,
+                hit: [],
+                lingerEnd:
+                    sim.tick + Math.round(attack.ground!.lingers!.seconds * TICKS_PER_SECOND),
+                nextHurt: sim.tick + 1000,
+            };
+            sim.hazards.push(hazard);
+            return hazard;
+        };
+        // One left alone heals him as it goes
+        boss.hp = boss.maxHp - 10000;
+        const left = exhumed(sim.player.x + 6, sim.player.y);
+        sim.tick = left.lingerEnd;
+        sim["stepHazards"]();
+        expect(boss.hp).toBe(boss.maxHp - 10000 + Math.round(boss.maxHp * smother.heal));
+        expect(sim.hazards).not.toContain(left);
+        expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
+        // Each one stood on is smothered, and once they all are he rises
+        for (let i = 0; i < exhumes.count; i++) {
+            const one = exhumed(sim.player.x, sim.player.y);
+            for (let t = 0; t <= Math.round(smother.seconds * TICKS_PER_SECOND); t++) {
+                sim["stepHazards"]();
+            }
+            expect(sim.hazards).not.toContain(one);
+        }
+        expect(boss.bossState!.ordeal!.left).toBe(0);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBeGreaterThan(0);
+        // Never raised outside his exhumes
+        expect(attack.ordeal).toBe(true);
+        expect(sim["keepsTo"](boss)).toBeUndefined();
+    });
+
+    it("has Xarpus rise after a while anyway, healed for each exhumed left", () => {
+        const sim = raid();
+        const def = getEnemy("xarpus");
+        const exhumes = def.boss!.exhumes!;
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        sim["stepOrdeal"](boss);
+        boss.hp = boss.maxHp / 2;
+        sim.tick += Math.round(exhumes.seconds * TICKS_PER_SECOND);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        expect(boss.hp).toBe(
+            boss.maxHp / 2 + Math.round(boss.maxHp * exhumes.leftHeal * exhumes.count),
+        );
+    });
+
+    it("has Verzik's spider throw her yellows, where only a pool keeps you safe", () => {
+        const sim = raid();
+        const def = getEnemy("tob_verzik_vitur_spider");
+        const yellows = def.boss!.yellows!;
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        boss.hp = Math.floor(boss.maxHp * yellows.at[0]);
+        sim["stepOrdeal"](boss);
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(sim["keepsTo"](boss)?.attacks).toEqual(yellows.attacks);
+        const ball = def.boss!.attacks.find((a) => a.name === "Yellows")!;
+        expect(ball.ordeal).toBe(true);
+        expect(ball.expert).toBeUndefined();
+        expect(ball.ground?.safe).toBe(true);
+        sim.tick += Math.round(yellows.seconds * TICKS_PER_SECOND);
+        sim["stepOrdeal"](boss);
+        expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBeGreaterThan(0);
+    });
+
+    it("starts a risen form's shadow realm, exhumes or yellows over", () => {
+        const sim = raid();
+        const boss = sim.spawnEnemy(getEnemy("tob_verzik_vitur_risen"), "boss", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        boss.bossState!.ordealsDone = 2;
+        boss.hp = 0;
+        sim["riseAgain"](boss);
+        expect(boss.def.id).toBe("tob_verzik_vitur_spider");
+        expect(boss.bossState!.ordealsDone).toBe(0);
+    });
+
+    it("has the Maiden call Nylocas that crawl to her and feed her, on normal too", () => {
+        const summons = getEnemy("maiden_of_sugadinti").boss!.summonsAt!;
+        const feeders = summons.filter((s) => getEnemy(s.enemyId).heals);
+        expect(feeders.length).toBeGreaterThanOrEqual(3);
+        for (const s of feeders) {
+            expect(getEnemy(s.enemyId).heals!.targets).toContain("maiden_of_sugadinti");
+        }
     });
 
     it("pays twice the coins, and gives one of Lil' Zik's looks each clear", () => {

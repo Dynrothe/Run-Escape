@@ -40,10 +40,12 @@ const SPLAT_FIT = 0.8;
 // Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
 // close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
 // the time there. A slam marks the ground under the boss as it winds up, so there's time to step
-// out and back in.
-const CLOSE_REACH = 4;
+// out and back in. The slams are the stationary bosses' (the Maiden, Xarpus, Verzik's throne),
+// where you could otherwise stand just inside the longest melee reach (the scythe's, about 4.35
+// tiles) and outside the slam's, so they reach past it, and wind up longer for it.
+const CLOSE_REACH = 4.6;
 const CLOSE_WEIGHT = 10;
-const SLAM_RADIUS = 3;
+const SLAM_RADIUS = 4;
 function slam(
     name: string,
     spotAnim: number,
@@ -56,9 +58,9 @@ function slam(
         kind: "ground",
         sound,
         damage,
-        windup: 1.2,
+        windup: 1.5,
         cooldown: 4,
-        range: CLOSE_REACH - 0.5,
+        range: CLOSE_REACH,
         weight: CLOSE_WEIGHT,
         ground: { spots: [{ shape: "under" }], radius: SLAM_RADIUS, spotAnim, fit },
     };
@@ -161,14 +163,16 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
 
 const BLOAT_ATTACKS: BossAttackDef[] = [
     {
+        // Wide enough to reach the longest melee weapon's reach (CLOSE_REACH), and he wakes with
+        // it
         name: "Stomp",
         kind: "swing",
         sound: 918,
         damage: 6,
-        windup: 0.9,
+        windup: 1.1,
         cooldown: 0,
-        range: 3.4,
-        radius: 3.2,
+        range: CLOSE_REACH,
+        radius: 4,
         weight: 3,
     },
     {
@@ -201,7 +205,7 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         weight: 3,
         pattern: {
             shape: "wall",
-            count: 6,
+            count: 10,
             volleys: 3,
             interval: 1,
             speed: 4,
@@ -209,6 +213,30 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
             radius: 0.4,
             gap: 2,
             spacing: 0.9,
+            bright: BRIGHT,
+        },
+    },
+    {
+        // His flies close in round you wherever you are, so keeping away from him isn't safe
+        name: "Fly swarm",
+        kind: "pattern",
+        spotAnim: 1568,
+        sound: 292,
+        damage: 2,
+        windup: 1.0,
+        cooldown: 6,
+        range: 40,
+        weight: 4,
+        pattern: {
+            shape: "closing",
+            count: 18,
+            volleys: 3,
+            interval: 0.9,
+            speed: 4.5,
+            range: 20,
+            radius: 0.4,
+            gap: 3,
+            distance: 6,
             bright: BRIGHT,
         },
     },
@@ -420,6 +448,26 @@ const SOTETSEG_ATTACKS: BossAttackDef[] = [
 ];
 
 const XARPUS_ATTACKS: BossAttackDef[] = [
+    {
+        // His exhumeds (32743) come up out of the floor: stand on one to smother it, or it heals
+        // him (his energy orb, 1550). Only in his exhumes (BossDef.exhumes).
+        name: "Exhumeds",
+        kind: "ground",
+        ordeal: true,
+        sound: 3606,
+        damage: 0,
+        windup: 0.6,
+        cooldown: 0,
+        range: 40,
+        weight: 1,
+        ground: {
+            spots: [{ shape: "scatter", count: 3, spread: 7, awayFrom: 2 }],
+            radius: 0.9,
+            locId: 32743,
+            lingers: { seconds: 6, interval: 60, damage: 0 },
+            smother: { seconds: 1, heal: 0.04, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
+        },
+    },
     // Acid all round his pool
     slam("Acid burst", 1654, 3606, 4, SPLAT_FIT),
     {
@@ -435,7 +483,8 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
         ground: {
             spots: [{ shape: "player" }, { shape: "scatter", count: 1, spread: 5 }],
             radius: 1.3,
-            lingers: { seconds: 6, interval: 0.6, damage: 0.5 },
+            // Not so long that hard's longer fight fills the floor for good
+            lingers: { seconds: 4.5, interval: 0.6, damage: 0.35 },
             spotAnim: 1654,
             fit: SPLAT_FIT,
         },
@@ -492,6 +541,30 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
 const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
     // Lightning round her throne (her other forms have their bounce and claws)
     slam("Lightning burst", 1585, 879, 5),
+    {
+        // Closes in round you, near her or far: her throne's other attacks were easy to dodge
+        name: "Power blast tide",
+        kind: "pattern",
+        spotAnim: 1580,
+        sound: 879,
+        damage: 3,
+        windup: 1.2,
+        cooldown: 6,
+        range: 40,
+        weight: 3,
+        pattern: {
+            shape: "closing",
+            count: 16,
+            volleys: 2,
+            interval: 1.2,
+            speed: 4,
+            range: 20,
+            radius: 0.45,
+            gap: 3,
+            distance: 7,
+            bright: BRIGHT,
+        },
+    },
     {
         name: "Power blast ring",
         kind: "pattern",
@@ -555,6 +628,44 @@ const VERZIK_TWO_ATTACKS: BossAttackDef[] = [
     },
 ];
 const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
+    {
+        // Her yellows: a slow ball that follows you and hits hard, unless you're standing in the
+        // glowing pool that comes with it. Only in her yellows (BossDef.yellows); expert's doom
+        // ball is the deadly one.
+        name: "Yellows",
+        kind: "projectile",
+        ordeal: true,
+        spotAnim: 1598,
+        sound: 879,
+        damage: 12,
+        windup: 1.2,
+        cooldown: 0,
+        range: 40,
+        weight: 1,
+        speed: 3,
+        homing: 0.08,
+        ground: {
+            spots: [{ shape: "scatter", count: 1, spread: 7, awayFrom: 4 }],
+            radius: 1.6,
+            safe: true,
+            lingers: { seconds: 6, interval: 60, damage: 0 },
+            spotAnim: 1581,
+        },
+    },
+    {
+        // Keep away from her claws and she jumps on you
+        name: "Leap",
+        kind: "blast",
+        sound: 3605,
+        damage: 8,
+        windup: 1.2,
+        cooldown: 5,
+        range: 40,
+        minRange: 6,
+        radius: 2.4,
+        weight: 8,
+        leap: true,
+    },
     {
         // Expert mode: a slow green ball that follows you and kills you, unless you're standing
         // in the glowing circle that comes with it
@@ -656,7 +767,9 @@ function vasilias(): EnemyDef {
         boss: {
             attackInterval: 2.0,
             keepDistance: 4,
-            colours: { every: 8, forms: VASILIAS_FORMS },
+            // Its colours on normal too: the other styles do 40%, its prayer as well, so a
+            // one-style build waits out two colours in three, and one with all three switches
+            colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.4 },
             enrage: { message: "Nylocas Vasilias shrieks!" },
             summonsAt: [
                 { hp: 0.75, enemyId: "nylocas_ischyros", count: 6 },
@@ -751,19 +864,37 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             boss: {
                 attackInterval: 2,
                 enrage: { message: "The Maiden's blood boils!" },
+                // Her Nylocas Matomenos crawl to her and feed her, as in OSRS: kill them on the
+                // way, or she's back up the hitpoints you took
                 summonsAt: [
                     {
-                        hp: 0.7,
-                        enemyId: "nylocas_matomenos",
+                        hp: 0.8,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
                         count: 4,
-                        message: "Nylocas Matomenos crawl out to the Maiden!",
+                        message: "Nylocas Matomenos crawl to the Maiden to feed her! Kill them!",
+                    },
+                    {
+                        hp: 0.6,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
+                        count: 6,
+                        message: "More Nylocas crawl to the Maiden!",
                     },
                     { hp: 0.5, enemyId: "blood_spawn", count: 6 },
                     {
-                        hp: 0.3,
-                        enemyId: "nylocas_matomenos",
+                        hp: 0.4,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
                         count: 6,
-                        message: "More Nylocas crawl out to the Maiden!",
+                        message: "More Nylocas crawl to the Maiden!",
+                    },
+                    {
+                        hp: 0.2,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
+                        count: 8,
+                        message: "The Nylocas swarm to the Maiden!",
                     },
                 ],
                 // Lighter again: a hit's moment of safety used to soak up more of her bullets
@@ -780,7 +911,9 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 attackInterval: 3,
                 naps: {
                     every: 9,
-                    seconds: 5,
+                    // Short enough that he's up for most of a fight: dodging him while he's
+                    // awake is the fight, not waiting for him to go down
+                    seconds: 3.5,
                     // With the prayer, missiles and magic do under 1% while he walks
                     awakeDamage: 0.05,
                     wake: "Stomp",
@@ -816,7 +949,19 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 byId("sotetseg"),
                 "tob_sotetseg",
                 SOTETSEG_ATTACKS,
-                { attackInterval: 1.9 },
+                {
+                    attackInterval: 1.9,
+                    // He drags you into his shadow realm: no hitting him, only his maze to get
+                    // through, a row after another
+                    shadowRealm: {
+                        at: [0.66, 0.33],
+                        seconds: 16,
+                        attacks: ["The maze", "The maze (faster)", "Ball of death"],
+                        interval: 0.6,
+                        message: "Sotetseg drags you into the shadow realm! Survive his maze!",
+                        endMessage: "You escape the shadow realm. Sotetseg can be hurt again!",
+                    },
+                },
                 true,
                 2.4,
             ),
@@ -844,6 +989,19 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             boss: {
                 attackInterval: 1.7,
                 enrage: { message: "Xarpus screeches, poison spraying everywhere!" },
+                // He comes up out of his pool, and goes back down at half: he can't be hurt until
+                // his exhumeds are smothered, and those left heal him
+                exhumes: {
+                    at: [1, 0.5],
+                    count: 8,
+                    // Not forever, for whoever doesn't know to: he rises the better for each left
+                    seconds: 30,
+                    leftHeal: 0.04,
+                    attacks: ["Exhumeds", "Exhumeds", "Acid"],
+                    interval: 1.4,
+                    message: "Xarpus sinks into his pool! Stand on his exhumeds to smother them!",
+                    endMessage: "Xarpus rises from his pool!",
+                },
                 // Expert mode: he stares one way, and hitting him from in front hurts you
                 stare: {
                     every: 6,
@@ -874,7 +1032,17 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             byId("verzik_vitur_spider"),
             "tob_verzik_vitur_spider",
             VERZIK_THREE_ATTACKS,
-            { attackInterval: 2.6 },
+            {
+                attackInterval: 2.6,
+                yellows: {
+                    at: [0.66, 0.33],
+                    seconds: 12,
+                    attacks: ["Yellows", "Yellows", "Webs"],
+                    interval: 1.4,
+                    message: "Verzik throws her yellows! Get into a glowing pool as each lands!",
+                    endMessage: "Verzik's yellows are spent. She can be hurt again!",
+                },
+            },
             false,
             2.9,
         ),

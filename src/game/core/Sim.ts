@@ -102,6 +102,7 @@ import {
     EnemySpawnsDef,
     EnemyTag,
     GearSlot,
+    GroundPatternDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -4327,6 +4328,17 @@ export class Sim {
     }
 
     // A weapon's hit an expert raid's Nylocas won't take (EnemyDef.onlyStyle)
+    // Normal mode: the share a colour takes from another style's weapon (BossDef.colours.offStyle)
+    private offColour(enemy: Enemy): number {
+        const share = enemy.def.boss?.colours?.offStyle;
+        const only = enemy.def.onlyStyle;
+        const source = this.damageSource;
+        if (this.expert || share === undefined || !only || !source.startsWith("weapon:")) {
+            return 1;
+        }
+        return getWeaponStyle(getWeapon(source.slice("weapon:".length))) === only ? 1 : share;
+    }
+
     private wrongStyle(enemy: Enemy): boolean {
         const only = enemy.def.onlyStyle;
         const source = this.damageSource;
@@ -4336,10 +4348,11 @@ export class Sim {
         return getWeaponStyle(getWeapon(source.slice("weapon:".length))) !== only;
     }
 
-    // Expert mode: the next of BossDef.colours' forms, keeping its hitpoints, every so often
+    // Expert mode (and normal, with offStyle): the next of BossDef.colours' forms, keeping its
+    // hitpoints, every so often
     private stepColours(enemy: Enemy): void {
         const colours = enemy.def.boss?.colours;
-        if (!this.expert || !colours) {
+        if (!colours || (!this.expert && colours.offStyle === undefined)) {
             return;
         }
         const state = enemy.bossState!;
@@ -4358,7 +4371,7 @@ export class Sim {
         const style = form.onlyStyle;
         this.emit({
             type: "notice",
-            message: `${form.name} turns ${style === "melee" ? "grey" : style === "ranged" ? "green" : "blue"}! Only ${style} hurts it.`,
+            message: `${form.name} turns ${style === "melee" ? "grey" : style === "ranged" ? "green" : "blue"}! ${this.expert ? "Only" : "Mostly"} ${style} hurts it.`,
         });
     }
 
@@ -5620,6 +5633,12 @@ export class Sim {
         const landed: boolean[] = [];
         for (const hazard of hazards) {
             if (hazard.lingerEnd !== -1) {
+                // An exhumed: smothered, or healing its boss as it goes
+                const smother = hazard.attack.ground?.smother;
+                if (smother) {
+                    spent = this.stepExhumed(hazard, smother) || spent;
+                    continue;
+                }
                 // On the ground, hurting whoever stands in it now and then
                 if (tick >= hazard.lingerEnd) {
                     hazard.endTick = -1;
@@ -5941,6 +5960,7 @@ export class Sim {
             this.enrage(enemy);
         }
         this.callSummons(enemy, false);
+        this.stepOrdeal(enemy);
         this.stepStomp(enemy);
         for (let i = 0; i < state.cooldowns.length; i++) {
             if (state.cooldowns[i] > 0) {
@@ -6047,7 +6067,9 @@ export class Sim {
                 (!attack.enraged || state.enraged) &&
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
-                !(attack.parasite && this.parasite)
+                !(attack.parasite && this.parasite) &&
+                // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
+                !attack.ordeal
             ) {
                 usable.push(i);
             }
@@ -6064,7 +6086,100 @@ export class Sim {
 
     // What a boss keeps to, standing where it is: the attacks the flowers it's
     // among call for, or its finale's
+    // Sotetseg's shadow realm and Xarpus's exhumes (BossDef.shadowRealm, exhumes): past each of
+    // their shares of its hitpoints, it can't be hurt for a while, doing only what they call for
+    private stepOrdeal(enemy: Enemy): void {
+        const state = enemy.bossState!;
+        const def = enemy.def.boss!;
+        const realm = def.shadowRealm ?? def.yellows;
+        const exhumes = def.exhumes;
+        const of = realm ?? exhumes;
+        if (!of) {
+            return;
+        }
+        const ordeal = state.ordeal;
+        if (ordeal) {
+            if (this.tick < ordeal.endTick && ordeal.left !== 0) {
+                enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+                return;
+            }
+            state.ordeal = undefined;
+            enemy.shieldEnd = 0;
+            // Out of time with exhumeds still up: he rises the better for each
+            if (exhumes && ordeal.left > 0) {
+                const heal = Math.round(enemy.maxHp * exhumes.leftHeal * ordeal.left);
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + heal);
+            }
+            // What's left of its exhumeds sinks with it
+            this.hazards = this.hazards.filter(
+                (hazard) => hazard.enemyUid !== enemy.uid || !hazard.attack.ground?.smother,
+            );
+            this.emit({ type: "notice", message: of.endMessage });
+            return;
+        }
+        const done = state.ordealsDone ?? 0;
+        if (done >= of.at.length || enemy.hp > enemy.maxHp * of.at[done]) {
+            return;
+        }
+        // One at a time, however far a hit took it past them
+        let next = done + 1;
+        while (next < of.at.length && enemy.hp <= enemy.maxHp * of.at[next]) {
+            next++;
+        }
+        state.ordealsDone = next;
+        state.ordeal = {
+            endTick: this.tick + secondsToTicks((realm ?? exhumes!).seconds),
+            left: exhumes ? exhumes.count : -1,
+            during: { attacks: of.attacks, interval: of.interval },
+        };
+        enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+        this.emit({ type: "notice", message: of.message });
+    }
+
+    // An exhumed (GroundPatternDef.smother): stood in long enough, by anyone, it's smothered and
+    // counts towards its boss's exhumes; left until it goes, it heals the boss. True once it's gone.
+    private stepExhumed(
+        hazard: GroundHazard,
+        smother: NonNullable<GroundPatternDef["smother"]>,
+    ): boolean {
+        let on = false;
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            on ||=
+                fm.hypot(player.x - hazard.x, player.y - hazard.y) <= hazard.radius + player.radius;
+        });
+        if (on) {
+            hazard.stood = (hazard.stood ?? 0) + 1;
+        }
+        const smothered = (hazard.stood ?? 0) >= secondsToTicks(smother.seconds);
+        if (!smothered && this.tick < hazard.lingerEnd) {
+            return false;
+        }
+        hazard.endTick = -1;
+        const boss = this.enemies.find((e) => e.uid === hazard.enemyUid);
+        if (smothered) {
+            if (smother.smotheredSpotAnim !== undefined) {
+                this.addEffect(smother.smotheredSpotAnim, hazard.x, hazard.y, 0, 40);
+            }
+            const ordeal = boss?.bossState?.ordeal;
+            if (ordeal && ordeal.left > 0) {
+                ordeal.left--;
+            }
+        } else if (boss && !boss.dead) {
+            boss.hp = Math.min(boss.maxHp, boss.hp + Math.round(boss.maxHp * smother.heal));
+            if (smother.healSpotAnim !== undefined) {
+                this.addEffect(smother.healSpotAnim, hazard.x, hazard.y, 0, 40);
+            }
+        }
+        return true;
+    }
+
     private keepsTo(enemy: Enemy): QuartersDef["during"] | undefined {
+        // In Sotetseg's shadow realm, or Xarpus's pool (BossDef.shadowRealm, exhumes)
+        const ordeal = enemy.bossState?.ordeal;
+        if (ordeal) {
+            return ordeal.during;
+        }
         const phase = enemy.bossState?.phase;
         if (phase?.stage === "finale") {
             return enemy.def.boss?.phases?.finale;
@@ -6470,6 +6585,9 @@ export class Sim {
             state.cooldowns = form.boss?.attacks.map(() => 0) ?? [];
             state.enraged = false;
             state.summonsDone = 0;
+            // Its new form's own shadow realm, exhumes or yellows, from the top
+            state.ordealsDone = 0;
+            state.ordeal = undefined;
         }
         this.emit({
             type: "bossRose",
@@ -6496,7 +6614,8 @@ export class Sim {
             const summoned = getEnemy(summon.enemyId);
             let spawned = 0;
             for (let i = 0; i < summon.count; i++) {
-                if (this.spawnNear(enemy, summoned, 2, i, summon.count, all ? 8 : 3)) {
+                const distance = summon.distance ?? 2;
+                if (this.spawnNear(enemy, summoned, distance, i, summon.count, all ? 8 : 3)) {
                     spawned++;
                 }
             }
@@ -6939,6 +7058,8 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
+        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle)
+        const offColour = poison ? 1 : this.offColour(enemy);
         // And a staring boss turns a hit from in front back on whoever made it
         if (!poison && this.staredAt(enemy)) {
             this.showBlocked(enemy);
@@ -6952,7 +7073,7 @@ export class Sim {
         }
         const naps = enemy.def.boss?.naps;
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
-        const prayed = this.prayedAgainst(enemy) * guard;
+        const prayed = this.prayedAgainst(enemy) * guard * offColour;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;

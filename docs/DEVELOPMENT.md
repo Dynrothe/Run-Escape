@@ -600,7 +600,14 @@ hits are lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`
 `theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second.
 Every one has an attack for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a
 ground mark under it), and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set
-`BulletPatternDef.from`, so there's no safe spot on them.
+`BulletPatternDef.from`, so there's no safe spot on them. `CLOSE_REACH` is past the longest
+melee reach (the scythe's), and the slams are as wide, so there's no ring round a still boss to
+hit it from untouched. Each has something for a player keeping away too: a closing ring, a
+leap (`minRange`) or ground marks on them. Each boss has a mechanic of its own that makes the
+fight longer by making it harder, not by more hitpoints: the Maiden's healers (`summonsAt` with
+`nylocas_matomenos_healer`), the Bloat's naps, Nylocas Vasilias's colours on normal
+(`colours.offStyle`, which stands in for its prayer), Sotetseg's `shadowRealm` and Xarpus's
+`exhumes` (both run by `stepOrdeal`, an exhumed by `stepExhumed`).
 Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`). On hard and expert, every
 pattern fires `MapDef.hard.bullets` times its bullets (`Sim.bulletScale`): a ring's gap is an
 angle and keeps its width, and a wall's or closing ring's gap grows with the count. Their
