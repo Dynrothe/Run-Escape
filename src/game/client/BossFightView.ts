@@ -188,7 +188,8 @@ export class BossFightView {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)
             const attack = sim.bulletSources[source[slot]]!.attack;
-            const model = this.assets.get("spot:" + attack.spotAnim);
+            // A blast's shards can have a look of their own (BossAttackDef.shards)
+            const model = this.assets.get("spot:" + (attack.shards?.spotAnim ?? attack.spotAnim));
             if (!model) {
                 continue;
             }
@@ -203,7 +204,7 @@ export class BossFightView {
                 pattern?.scale ?? attack.shards?.scale ?? 1,
                 (radius[slot] * 128) / Math.max(1, model.radius),
             );
-            options.flash = pattern?.bright ?? 0;
+            options.flash = pattern?.bright ?? attack.shards?.bright ?? 0;
             actors.draw(
                 model,
                 anim,

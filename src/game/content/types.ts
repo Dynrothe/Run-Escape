@@ -653,6 +653,10 @@ export type BossAttackDef = {
         radius: number;
         damage: number;
         scale?: number;
+        // Drawn as this spot animation rather than the attack's own (the rock that falls is too
+        // small and dark to dodge the pieces of), and lit up this much against dark ground (0 to 1)
+        spotAnim?: number;
+        bright?: number;
     };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];

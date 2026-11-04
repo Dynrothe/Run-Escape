@@ -155,7 +155,12 @@ function getSpotAnimIds(): number[] {
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
-            add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
+            add(
+                attack.castSpotAnim,
+                attack.spotAnim,
+                attack.impactSpotAnim,
+                attack.shards?.spotAnim,
+            );
             add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
             // An exhumed's orb as it heals its boss, and its end as it's smothered
             add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);

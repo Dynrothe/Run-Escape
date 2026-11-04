@@ -219,7 +219,17 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Breaking up where it lands, into shards flying out
                 spotAnim: ROCK,
-                shards: { count: 12, speed: 5, range: 6, radius: 0.35, damage: 2, scale: 1.4 },
+                // Her dark boulder, lit up, few and slow enough to see the way between
+                shards: {
+                    count: 8,
+                    speed: 3.5,
+                    range: 6,
+                    radius: 0.45,
+                    damage: 2,
+                    scale: 1.4,
+                    spotAnim: BOULDER,
+                    bright: 0.35,
+                },
                 seq: 9743,
                 sound: 5962,
                 message: "Rocks fall from above! Move off the shadow!",
@@ -238,7 +248,15 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Her dark boulder, not the pale rock, so its shards stand out on the floor
                 spotAnim: BOULDER,
-                shards: { count: 16, speed: 4, range: 9, radius: 0.45, damage: 3, scale: 1.4 },
+                shards: {
+                    count: 16,
+                    speed: 4,
+                    range: 9,
+                    radius: 0.45,
+                    damage: 3,
+                    scale: 1.4,
+                    bright: 0.35,
+                },
                 seq: 9748,
                 sound: 5962,
                 message: "Ba-Ba hurls a boulder! Get out of the circle, then between the shards!",
