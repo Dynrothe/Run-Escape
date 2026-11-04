@@ -402,7 +402,8 @@ src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
             of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
-            (what each map's tasks bring in); quests (what each asks for and pays); hard (hard
+            (what each map's tasks bring in); quests (what each asks for and pays); combatTasks
+            (Combat Achievements: tasks, tiers, coins and rewards); hard (hard
             mode's numbers); raids (a raid's rooms, points, supply chest, teleporters) and theatre
             (the Theatre of Blood's bosses)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
@@ -424,6 +425,8 @@ src/game/
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
+    CombatTracker.ts  follows a solo run's Combat Achievements from outside the sim: it reads the
+                      sim and each tick's events, and never writes to them
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count), and LocalSaveStore (the
@@ -1314,6 +1317,13 @@ prices make one unbroken run that replays to exactly the same prices. A page tha
 ranks the old way leaves gaps and gets none. Never guess an order.
 Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
 the page has ranks, even with no spending recorded.
+
+Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
+(task id to kills so far, or `task:map` to 1 for each map a beat-them-all task has had beaten). A
+save from before it gets the kill counts, wins and endless rounds its records show, once, without
+coins; later saves never look at those records for them, since co-op runs add to them and co-op
+doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
+only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
 
 ### Notice
 

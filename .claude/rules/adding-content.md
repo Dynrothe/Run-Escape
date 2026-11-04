@@ -248,3 +248,20 @@ and usually an `unlock` task.
 ## Quest
 
 Add it to `quests.ts`. Tests check every quest can be done, so its enemy ids must exist.
+
+## Combat task
+
+Add it to `COMBAT_TASKS` in `combatTasks.ts`, with a `goal` from `CombatGoal` in `types.ts`. Its id
+goes in saves, so never rename one. Its name mustn't be a quest's (two Inferno quests already have
+OSRS combat achievements' names). `combatTasks.test.ts` checks its enemy and map ids, and that every
+attack a task avoids is one its boss has by that name, so renaming a boss's attack fails it rather
+than making the task impossible. Its coins and points come from its tier, and the tiers' reward
+thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`.
+
+- Goals that need nothing new from the sim are checked in `core/CombatTracker.ts`, which only reads
+  the sim and its events. A goal that can't be seen from those needs a new event: an `emit` that
+  only reads state is hash-neutral, and `runHash.test.ts` must stay as it is.
+- Only kill counts, map wins and endless rounds are retroactive: `applyRetroCombatTasks` in
+  `save.ts` gives old saves those once, at the version 12 migration, without coins.
+- Co-op runs never count, so there's no party field and no co-op task.
+- A new boss fight should come with its tasks.

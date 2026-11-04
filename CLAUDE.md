@@ -43,6 +43,8 @@ go stale. Add anything that cost you time to work out.
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Combat Achievements: tasks, tiers, coins, rewards      | `src/game/content/combatTasks.ts`                                      |
+| What follows a run's Combat Achievements               | `src/game/core/CombatTracker.ts`                                       |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
@@ -72,6 +74,11 @@ go stale. Add anything that cost you time to work out.
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
+
+Combat Achievements are for solo runs only. `CombatTracker` watches the `Sim` and each tick's events
+from outside it, and must never write to either: the run's hash has to come out the same with it
+(`CombatTracker.test.ts` checks). `GameClient.drainEvents` hands it every tick's events, so drain
+them through that, not `sim.takeEvents()` on its own.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in

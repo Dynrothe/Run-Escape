@@ -41,7 +41,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
   reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
-  you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
+  you bank on independent Melee, Ranged and Magic pages, **quests** that pay out over many runs,
+  and **Combat Achievements**, challenges for solo runs in six tiers.
 
 [docs/GAMEPLAY.md](docs/GAMEPLAY.md) goes through all of it, map by map. [CHANGELOG.md](CHANGELOG.md)
 has what changed in each version.

@@ -25,6 +25,10 @@ the version in the corner).
   - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
+- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
+  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
+- Saves get the Combat Achievements their kill counts, wins and endless rounds had already done,
+  without the coins.
 
 ### Changed
 

@@ -676,6 +676,14 @@ version and how to run it.
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got, and the
   ones done all over if the map has what they're after (no Ratcatchers in the Inferno).
+- **Combat Achievements** (on the title screen) are challenges for solo runs, in six tiers from
+  Easy to Grandmaster: kill a boss without it hitting you, avoid one of its attacks, beat a map
+  under a restriction, or kill it fast. Each pays its tier's coins once (100 to 3,000) when the run
+  it's done in ends, with a toast when it's done, and its points earn each tier's reward,
+  Ghommal's hilt 1 to 6, for the Collection log. Kill counts add up over solo runs. Co-op runs,
+  the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
+  endless rounds they'd already done, without the coins. The screen has an overview of the tiers
+  and every task, with filters by tier, type and map.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).
