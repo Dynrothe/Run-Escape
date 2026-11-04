@@ -216,6 +216,11 @@ marks are stood on, or its time's up), each at shares of its hitpoints, doing on
 they name meanwhile (`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used only then. The balance bot has to know how to play a new one
 (`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
 
+The Tombs of Amascut is being built a room or a boss at a time, as a dev map
+(`scaperune/maps/tombsOfAmascut.ts`), to the plan in `docs/design/tombs-of-amascut.md`: keep it
+off the Raids tab until it's finished. A new invocation goes in `INVOCATIONS`
+(`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`

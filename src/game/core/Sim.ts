@@ -38,6 +38,7 @@ import {
     HARD_XP,
     getHardScale,
 } from "../content/hard";
+import { cleanInvocations, getRaidLevel, getRaidLevelScale } from "../content/invocations";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
@@ -280,6 +281,9 @@ const RAID_CLEARED_SECONDS = 2;
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
+// How close to a door in the Tombs' Nexus counts as at it (tiles from its middle; doors are 3 by 3
+// at most, and solid)
+const TOMBS_DOOR_REACH = 2.8;
 const FLOW_FIELD_SIZE = 96;
 const FLOW_FIELD_INTERVAL = 8;
 // A ditch jump, in ticks from its start: the leap is from JUMP_LEAVE to
@@ -500,6 +504,9 @@ export type SimOptions = {
     // A raid's expert mode: hard mode, and the Nylocas only hurt by their own style
     // (EnemyDef.onlyStyle, BossDef.colours). Ignored off a raid.
     expert?: boolean;
+    // The Tombs of Amascut's invocations (content/invocations.ts), which take hard mode's place
+    // there. Ignored anywhere else.
+    invocations?: string[];
     // The pieces upgraded in the Armoury, which caskets give as what they've
     // become (none when unset)
     armoury?: ArmouryUpgrades;
@@ -704,6 +711,9 @@ export class Sim {
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
+    // The Tombs of Amascut: the invocations on, and the raid level they come to
+    readonly invocations: string[];
+    readonly raidLevel: number;
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -790,6 +800,8 @@ export class Sim {
     raidRoomStartTick = 0;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
+    // The Tombs' Nexus: the door each hero's at, if any (stepTombs)
+    private readonly tombsDoors = new Map<number, string | undefined>();
     raidStageTick = 0;
     // Who's still to have their turn at a cleared room's supply chest
     private raidShopQueue: number[] = [];
@@ -1098,12 +1110,19 @@ export class Sim {
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
-        this.hard = (options.hard ?? false) || this.expert;
+        // The Tombs go by their invocations instead
+        this.hard = ((options.hard ?? false) || this.expert) && !this.map.tombs;
+        this.invocations = this.map.tombs ? cleanInvocations(options.invocations ?? []) : [];
+        this.raidLevel = getRaidLevel(this.invocations);
         this.testing = options.testing;
         this.raidTeleports = this.map.raid ? (options.raidTeleports ?? 0) : 0;
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
-        this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
+        this.hardScale = this.map.tombs
+            ? getRaidLevelScale(this.raidLevel)
+            : this.hard
+              ? getHardScale(this.map)
+              : { hp: 1, damage: 1 };
         this.bulletScale = this.hard ? (this.map.hard?.bullets ?? 1) : 1;
         const party: HeroOptions[] = options.party ?? [
             {
@@ -2301,6 +2320,7 @@ export class Sim {
             this.nextRound();
         }
         this.stepRaid();
+        this.stepTombs();
         this.stepIntro();
         this.stepDirector();
         this.stepChat();
@@ -4126,6 +4146,34 @@ export class Sim {
         } else if (this.tick - this.raidStageTick >= RAID_CLEARED_SECONDS * TICKS_PER_SECOND) {
             this.beginRaidRoom(this.raidRoom + 1);
         }
+    }
+
+    // The Tombs of Amascut's Nexus: walking up to a path's door. No path's room is built yet, so
+    // each says so, once as a player comes up to it (the door they're at is kept on tombsDoors).
+    private stepTombs(): void {
+        const tombs = this.map.tombs;
+        if (!tombs || this.runOver || this.state !== "playing") {
+            return;
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            const { x, y } = hero.player;
+            const at = tombs.paths.find(
+                (path) => fm.hypot(path.door.x - x, path.door.y - y) <= TOMBS_DOOR_REACH,
+            );
+            if (at?.id === this.tombsDoors.get(hero.index)) {
+                continue;
+            }
+            this.tombsDoors.set(hero.index, at?.id);
+            if (at) {
+                this.use(hero);
+                this.emit({ type: "notice", message: `${at.name}: not open yet.` }, true);
+            }
+        }
+        this.use(current);
     }
 
     // A room's waves, from the top, in its hall

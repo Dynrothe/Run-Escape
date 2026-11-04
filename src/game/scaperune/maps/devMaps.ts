@@ -12,6 +12,7 @@ import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
 import { SHATTERED_REALM } from "./shatteredRealm";
 import { TERRAIN_TEST } from "./terrainTest";
+import { TOMBS_OF_AMASCUT } from "./tombsOfAmascut";
 import { VARDHELM } from "./vardhelm";
 import { WALL_SHEET } from "./wallSheet";
 
@@ -134,4 +135,5 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     VARDHELM,
     KALUAS_WAKE,
     SHATTERED_REALM,
+    TOMBS_OF_AMASCUT,
 ];

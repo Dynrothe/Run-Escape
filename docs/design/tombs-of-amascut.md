@@ -1,0 +1,179 @@
+# The Tombs of Amascut: design
+
+The plan for the game's second raid, before it's built: what it is, how each room and boss works,
+and the order it's built in. Written 2026-11-04, on the `feat/toa-base` branch. As each piece lands
+its section here becomes the record of it, the way `phosanis-nightmare.md` is for her fight.
+
+The research behind it is OSRS's own (the OSRS Wiki's Tombs of Amascut, Invocations and boss pages,
+and the runescapeguides.com Wardens and Kephri guides), and what the game's cache has (section 9).
+OSRS changed almost nothing in the raid after September 2025, so the cache (2026-09-30) is
+missing none of it.
+
+## 1. What it is
+
+The most interactive raid in the game. In OSRS each boss has a puzzle room before it, and that's
+kept: you start in the Nexus, pick any of the four paths, solve its room, then fight its boss. Once
+all four are done, the Wardens. Unlike OSRS's rooms, ours roll a variant as you come in and change
+while you're in them, so no two raids play alike.
+
+It isn't released until the whole raid is done. Until then it's a dev map (`tombs_of_amascut`, on
+the map screen's Dev tab, dev server only), and each piece goes in as a pull request of its own.
+
+## 2. Principles
+
+- **Real assets, real mechanics.** Every boss, room and effect is the cache's own (section 9), and
+  every mechanic OSRS has is kept, as bullets to dodge where a survivor game needs it. Zebak's
+  thrown rocks are bullets; Ba-Ba's big boulder bursts into bullets.
+- **Played by moving.** Weapons fire on their own, so every puzzle is solved by where you stand
+  or walk: carrying water by standing under a fall, pushing a mirror by walking into it, fixing a
+  pillar by standing at it, choosing an obelisk by which one's nearest your weapons.
+- **Fought through waves.** A puzzle room is never quiet. Its waves are what you level up on.
+- **Hard, and the Wardens nuts.** Every boss is meant to be learnt, with OSRS's tells, but none is
+  a walk. The Wardens are three phases of everything at once.
+- **Dynamic.** A room picks its variant on entry, and something about it changes partway.
+
+## 3. How a raid runs
+
+- **Before it**: the invocation board (section 7) on the setup screen, in place of endless, hard
+  and expert. What's picked comes to a raid level.
+- **The Nexus**: the real room, with the four path doors (Apmeken, Het, Scabaras, Crondis) and the
+  entry. Walk up to a door to take its path.
+- **A path**: its puzzle room, then its boss in its real arena, then back to the Nexus.
+- **Rooms grow with the raid**: the third or fourth path done is tougher than the first, so any
+  order plays fair (and Walk the Path levels them up further).
+- **The Helpful Spirit**: in the Nexus after two paths and again after four, a supply pick bought
+  with raid points, as the Theatre of Blood's chest is.
+- **The Wardens**, once all four paths are done, then the chest.
+
+## 4. Level-ups and gear without timed waves
+
+The waves no longer run on a clock, but they're still where experience and caskets come from.
+
+- **A room's waves are tied to its puzzle.** It has a set number of them, and each step of the
+  puzzle solved sends the next. Every step drops a casket.
+- **Stalling is pushed back on.** A room's hazards and swarms grow while nothing's solved, as
+  Crondis's crocodiles turn up after about 40 seconds in OSRS.
+- **No farming.** Once a room's waves are spent, whatever still comes gives almost no experience.
+
+## 5. The puzzle rooms
+
+- **Apmeken** (first to be built). Eight waves of baboons. "Sight" is a pickup: whoever holds it
+  sees which pillar or vent is failing, and fixes it by standing on it. Shamans summon more
+  baboons unless killed first, volatiles explode into their own pack, venom baboons leave poison
+  lanes. In co-op, corrupted teammates gather to be cleansed.
+- **Het.** The caster statue's beam, routed onto the seal by pushing mirrors (walk into one). The
+  beam burns enemies as well as you, so it's a weapon you aim through the room. Orbs of Darkness
+  cross in straight lines and dirty the mirrors; some mirrors turn on their own. When the beam
+  lands the seal is down for 9 seconds, and every weapon hits it.
+- **Scabaras.** Three of four puzzles in a random order, then the number tablet, with scarab
+  swarms chasing throughout: memory tiles (walk the sequence), Lights Out plates (enemies can knock
+  you onto the wrong one), obelisk order (your weapons hit the nearest), and the tablet (walk over
+  glyphs that add up to the target; over sends a punishment wave). Take too long and tiles shuffle.
+- **Crondis.** You carry the water: stand under a fall to fill up, walk it to the palm, and a hit
+  spills half. Falls dry up and move. Crocodiles go for the palm and drink from it. Spike statues
+  fire down lanes, and poison clouds sweep the room, light (a warning) before dark.
+
+## 6. The bosses
+
+- **Ba-Ba** (first to be built): rolling boulders in lanes, with a cracked one in each row that
+  can be shot; rockfall, a shadow and then a rock throw to take cover from behind debris or a
+  sarcophagus; her big boulder bursting into bullets; the shockwave cone; baboons setting off the
+  sarcophagi.
+- **Akkha**: prays against your style and swaps (the Theatre's colours already do this); four
+  quadrants with their effects (fire burns, shadow drains, lightning blocks prayer, ice slows);
+  shadows at 80/60/40/20% to kill before their bars fill; Memory Blast's safe quadrants; trailing
+  orbs that come wherever you move, so the answer is to stand still.
+- **Kephri**: fireballs on marked tiles; Dung Strike; eggs that burst unless killed; her shield's
+  scarab swarms, running at her from six spawns, each one that gets there restoring it, so your
+  weapons have to cut them down; spitting, arcane and soldier scarabs.
+- **Zebak**: rocks and splitting pots as bullets; Great Roar (hide behind a boulder); the tidal
+  wave with a gap that shrinks; poison pools that a pushed jug washes away; an enrage below 25%.
+- **The Wardens**, three phases:
+    1. The obelisk, with orbs down troughs (blocking one picks which Warden comes next) and the
+       floating pyramids.
+    2. The Warden, with the obelisk's converging, windmill and lightning-skull patterns, style
+       changes, the freezing projectile, and its core thrown out for five times the damage.
+    3. Floor slams, energy siphons to destroy, two path bosses' phantoms (Akkha and Kephri with
+       Elidinis' Warden, Zebak and Ba-Ba with Tumeken's), everything at once, and at 5% the floor
+       falling away row by row.
+
+## 7. Invocations
+
+`content/invocations.ts`. They replace endless, hard and expert there: the Theatre of Blood keeps
+its switches. Only one of a group marked `one` (attempts, time limit, Helpful Spirit, path level)
+is on at a time. Each adds to the raid level, which makes every enemy 2% tougher every 5 levels
+(hitpoints all the way, damage up to 150% more), as OSRS's does, and will raise raid points and
+the purple chance. Bands: Entry under 150, Normal under 300, Expert from there.
+
+| Group          | Here                                                           |
+| -------------- | -------------------------------------------------------------- |
+| Attempts       | revives for the whole raid, down to none                       |
+| Time limit     | a clock for the raid; running out lowers the loot, not the run |
+| Helpful Spirit | smaller supply picks                                           |
+| Path level     | more puzzle, faster hazards, denser bullets                    |
+| Paths          | Walk the Path: finishing a path levels others up               |
+| Prayer         | armour stops less; a hit leaves you open                       |
+| Restoration    | no food, no regeneration, specials less often                  |
+| Each boss      | OSRS's own: Boulderdash's boulders twice as fast, and so on    |
+
+The raid level's scaling works now, for every invocation (the sim's `hardScale` is the raid
+level's there). What else each does comes with its part of the raid (`comes` on each, shown on the
+board as "Not in yet"). The other bosses' invocations go in with their bosses.
+
+## 8. The order it's built in
+
+Each a pull request, merged with the raid still a dev map:
+
+1. **The base** (this): this document, the dev map with the Nexus cut from the real raid, and the
+   invocation board with its raid level.
+2. The Apmeken room.
+3. Ba-Ba.
+4. Het and Akkha, Scabaras and Kephri, Crondis and Zebak, a room then its boss each time.
+5. The Wardens.
+6. The Helpful Spirit, the chest, its loot, and moving it to the Raids tab.
+
+## 9. What the cache has
+
+Cache `osrs-241_2026-09-30`. Ids from `scripts/cache/find-npcs.ts`, `find-locs.ts` and
+`dump-square.ts`; the spot animations from a lister of those whose model or animation is in the
+raid's ranges.
+
+- **Rooms** (map squares, all with terrain and readable locs): Nexus 55,80; Scabaras 55,82; Kephri
+  55,84; the tomb 57,80; Het 57,82; Akkha 57,84 (plane 1); Wardens' first two phases 59,80;
+  Apmeken 59,82; Ba-Ba 59,84; Wardens' third 61,80; Crondis 61,82; Zebak 61,84.
+- **Ba-Ba** 11778 to 11780 (idle 9741, walk 9737); her rolling boulders 11782 and 11783 (size 3);
+  baboons: brawler 11709/11712, thrower 11710/11713, mage 11711/11714, shaman 11715, volatile
+  11716, cursed 11717, thrall 11718.
+- **Akkha** 11789 to 11796, his shadows 11797 to 11799, the orbs: lightning 11800, darkness 11801,
+  burning 11802, frozen 11803, unstable 11804.
+- **Zebak** 11730/11732, his tail 11731/11734, jugs 11735/11736, waves 11738 and 11739.
+- **Kephri** 11719 to 11722, her swarm 11723, soldier 11724, spitting 11725, arcane 11726 and
+  agile 11727 scarabs.
+- **The Wardens**: the first form with its obelisk 11746 to 11749, fighting 11753 to 11757, the
+  last 11761 to 11764, the obelisk 11750 to 11752, the core 11770/11771, the energy siphon 11772,
+  the phantoms of Zebak 11774, Ba-Ba 11775, Kephri 11776 and Akkha 11777.
+- **Pets**: Tumeken's and Elidinis' Guardians (11652/11653), their damaged recolours, Akkhito,
+  Babi, Kephriti and Zebo.
+- **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455/45457; Zebak's
+  waterfall 45398/45399; pillars 45530/45531; pressure plates 45340/45344 and tiles 45356 to 45364;
+  Ba-Ba's throne 45756 and sarcophagi 45752/46044; the invocation board 46073.
+- **Spot animations** about 2114 to 2271: the puzzle rooms 2114 to 2140, Kephri 2141 to 2171,
+  Zebak 2172 to 2192, the Wardens 2201 to 2241, Ba-Ba 2242 to 2246, Akkha's elements 2249 to 2255.
+  Which is which is a guess from their neighbours until each is looked at.
+- **Not there**: the Het beam isn't a loc or an NPC, so it'll be drawn from one of the puzzle
+  rooms' spot animations if one fits. Many of the rooms' props have no name, and `find-locs.ts`
+  can't list them: `dump-square.ts` with `WHERE=` can.
+
+## 10. The base, as built
+
+- **The map**: `scaperune/maps/tombsOfAmascut.ts`, at map squares 86 to 93 by 66 to 69: a grid of
+  one-square cells, six by two, one for each room, with only the Nexus filled so far. The Nexus is
+  cut from world 3536,5130 (32 by 36), stood level, and sealed to what can be walked to from the
+  entry: 303 tiles. It's listed in `maps/devMaps.ts`, which a build leaves out, so none of it
+  ships. Its id doesn't start with `scaperune_`, so the catalogue's ban on the raid's own floor
+  doesn't apply.
+- **The Nexus doors**: `MapDef.tombs.paths`, each with its door's middle. Walking up to one says
+  it isn't open yet (`Sim.stepTombs`), once as you come up to it.
+- **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
+  What's picked is kept in the save (`SaveData.invocations`) and goes to the run as
+  `SimOptions.invocations`.

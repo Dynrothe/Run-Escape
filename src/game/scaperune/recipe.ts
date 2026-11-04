@@ -58,6 +58,7 @@ export type MapRecipe = {
             | "finalBossWarning"
             | "victoryText"
             | "fun"
+            | "tombs"
         >
     >;
 };

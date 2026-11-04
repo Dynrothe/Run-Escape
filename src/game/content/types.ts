@@ -1224,6 +1224,21 @@ export type MapDef = {
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and
     // events are then every room's, for what bakes and checks a map's enemies.
     raid?: RaidDef;
+    // The Tombs of Amascut (in development, a dev map: docs/design/tombs-of-amascut.md): a Nexus
+    // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
+    // place of hard mode
+    tombs?: TombsDef;
+};
+
+export type TombsDef = {
+    paths: TombsPathDef[];
+};
+
+// A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to
+export type TombsPathDef = {
+    id: string;
+    name: string;
+    door: { x: number; y: number };
 };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into

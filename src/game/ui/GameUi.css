@@ -2211,3 +2211,66 @@
 .ui-pad-control-text {
     color: var(--ui-white);
 }
+
+/* The Tombs of Amascut's invocation board (and the button to it, in the setup bar) */
+.ui-invocations-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.ui-invocations-level {
+    color: var(--ui-yellow);
+    font-size: 13px;
+}
+
+.ui-invocations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(980px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+}
+
+.ui-invocations-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.ui-invocations-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-invocation {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 8px;
+}
+
+.ui-invocation-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.ui-invocation-level {
+    color: var(--ui-yellow);
+}
+
+.ui-invocation-soon {
+    color: #8a7f6a;
+    font-size: 13px;
+}
+
+.ui-invocations-bar {
+    display: flex;
+    justify-content: space-between;
+}

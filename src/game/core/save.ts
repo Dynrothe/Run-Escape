@@ -6,6 +6,7 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
+import { cleanInvocations } from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
@@ -101,6 +102,8 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The Tombs of Amascut's invocations, as last picked (content/invocations.ts)
+    invocations?: string[];
 };
 
 // The round reached, and how long the run lasted
@@ -263,6 +266,9 @@ export function migrateSave(raw: unknown): SaveData {
                 save.trophies.push(id);
             }
         }
+    }
+    if (Array.isArray(data.invocations)) {
+        save.invocations = cleanInvocations(data.invocations);
     }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {
@@ -652,7 +658,7 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
 // has been beaten, or once it's been beaten itself (a co-op guest can win on
 // a map the host had open). The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
-    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId)) {
+    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
     }
     // A boss fight opens once the map it's the hard mode of has been beaten

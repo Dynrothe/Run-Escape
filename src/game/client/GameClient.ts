@@ -9,6 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -559,6 +560,18 @@ export class GameClient implements GameFrameHandler {
             this.assets.setCharacterLook(characterId);
         }
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
+    }
+
+    // The Tombs of Amascut's invocation board: on if it was off (taking off any it can't be on
+    // with), off if it was on
+    toggleInvocation(id: string): void {
+        this.save.invocations = toggleInvocation(this.save.invocations ?? [], id);
+        this.persist();
+    }
+
+    clearInvocations(): void {
+        this.save.invocations = [];
+        this.persist();
     }
 
     // The map for the next run. Hosting a room, it's the room's map: the relay
@@ -1158,6 +1171,7 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,

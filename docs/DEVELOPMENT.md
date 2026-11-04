@@ -585,6 +585,11 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 
 ### Raids
 
+The Tombs of Amascut is in development, as a dev map until it's finished: its plan, and what's
+built so far, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
+door to each path), and its invocations (`content/invocations.ts`) take hard mode's place there:
+the sim's `hardScale` is their raid level's (`getRaidLevelScale`), and `hard` stays off.
+
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
 where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due (`RaidRoomDef.at`,
 a run second, as a campaign boss's), then the party's moved into its boss room (`startRaidBoss`,

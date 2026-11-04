@@ -31,6 +31,13 @@ import {
 import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import {
+    INVOCATIONS,
+    INVOCATION_GROUPS,
+    getRaidBand,
+    getRaidLevel,
+    getRaidLevelScale,
+} from "../content/invocations";
+import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
     FIGHT_MAPS,
@@ -813,29 +820,129 @@ function TitleHint(): JSX.Element {
 // Adventurers on the left and maps on the right, so the adventurer picked
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
+    const map = getMap(ui.mapId);
+    const [board, setBoard] = useState(false);
     return (
         <div className="ui-fill ui-select">
-            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(getMap(ui.mapId))} />
+            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
             <MapPanel ui={ui} client={client} />
             <div className="ui-panel rs-border rs-background ui-select-bar">
                 <button className="ui-button" onClick={() => client.showScreen("title")}>
                     Back
                 </button>
                 <Coins amount={ui.save.coins} />
-                {/* A raid ends with its last room: no endless */}
-                {!getMap(ui.mapId).raid && <EndlessSwitch ui={ui} client={client} />}
-                <HardSwitch ui={ui} client={client} />
-                {getMap(ui.mapId).raid && ui.coop.status === "offline" && (
-                    <ExpertSwitch ui={ui} client={client} />
+                {map.tombs ? (
+                    // The Tombs go by their invocations instead of endless and hard mode
+                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                ) : (
+                    <>
+                        {/* A raid ends with its last room: no endless */}
+                        {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+                        <HardSwitch ui={ui} client={client} />
+                        {map.raid && ui.coop.status === "offline" && (
+                            <ExpertSwitch ui={ui} client={client} />
+                        )}
+                    </>
                 )}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && " hard"}
-                    {ui.endless && !getMap(ui.mapId).fun && " endless"}
+                    <KeyHint pad="start" /> Enter {map.name}
+                    {ui.hard && !map.tombs && " hard"}
+                    {ui.endless && !map.fun && !map.tombs && " endless"}
                 </button>
+            </div>
+            {board && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
+        </div>
+    );
+}
+
+// The Tombs of Amascut's raid level, and the way to its invocation board
+function InvocationsButton({ ui, onOpen }: { ui: UiSnapshot; onOpen: () => void }): JSX.Element {
+    const level = getRaidLevel(ui.save.invocations ?? []);
+    return (
+        <button className="ui-button ui-invocations-button" onClick={onOpen}>
+            Invocations
+            <span className="ui-invocations-level">
+                Raid level {level} ({getRaidBand(level)})
+            </span>
+        </button>
+    );
+}
+
+// Every invocation, by group: on or off, what each adds to the raid level and what it does. One
+// of a group that allows only one takes the last off.
+function InvocationBoard({
+    ui,
+    client,
+    onClose,
+}: ScreenProps & { onClose: () => void }): JSX.Element {
+    const on = ui.save.invocations ?? [];
+    const level = getRaidLevel(on);
+    const scale = getRaidLevelScale(level);
+    return (
+        <div className="ui-modal">
+            <div className="ui-panel rs-border rs-background ui-invocations">
+                <h2>Invocations</h2>
+                <p className="ui-subtle">
+                    Raid level {level} ({getRaidBand(level)}): enemies have{" "}
+                    {Math.round((scale.hp - 1) * 100)}% more hitpoints and hit{" "}
+                    {Math.round((scale.damage - 1) * 100)}% harder.
+                </p>
+                <div className="ui-invocations-groups">
+                    {INVOCATION_GROUPS.map((group) => (
+                        <div key={group.id} className="ui-invocations-group">
+                            <div className="ui-style-name">
+                                {group.name}
+                                {group.one && <span className="ui-style-treasure">pick one</span>}
+                            </div>
+                            {INVOCATIONS.filter((invocation) => invocation.group === group.id).map(
+                                (invocation) => {
+                                    const picked = on.includes(invocation.id);
+                                    return (
+                                        <button
+                                            key={invocation.id}
+                                            className={
+                                                "ui-card ui-invocation" +
+                                                (picked ? " ui-card-selected" : "")
+                                            }
+                                            aria-pressed={picked}
+                                            onClick={() => client.toggleInvocation(invocation.id)}
+                                        >
+                                            <span className="ui-invocation-head">
+                                                <span className="ui-card-title">
+                                                    {invocation.name}
+                                                </span>
+                                                <span className="ui-invocation-level">
+                                                    +{invocation.level}
+                                                </span>
+                                            </span>
+                                            <span className="ui-card-text">
+                                                {invocation.description}
+                                            </span>
+                                            {invocation.comes && (
+                                                <span className="ui-invocation-soon">
+                                                    Not in yet: comes with {invocation.comes}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                },
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div className="ui-invocations-bar">
+                    <button className="ui-button" onClick={() => client.clearInvocations()}>
+                        Clear
+                    </button>
+                    <button className="ui-button ui-button-go" onClick={onClose}>
+                        Done
+                    </button>
+                </div>
             </div>
         </div>
     );
