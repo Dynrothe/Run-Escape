@@ -238,8 +238,14 @@ export type BossView = {
     fight?: {
         phase: number;
         phases: number;
-        // finale: its last stand, and fraction is the time left in it
-        stage: "shield" | "totems" | "finale";
+        // finale: its last stand, and fraction is the time left in it; hp: a
+        // fight on its hitpoints alone (no totems)
+        stage: "shield" | "totems" | "finale" | "hp";
+        // The bar's line under it (BossPhasesDef phases' status), when it has its own
+        status?: string;
+        // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
+        // and the player's out of it
+        outOfReach?: boolean;
         // How charged each totem is, 0 to 1
         totems: number[];
         curseAttacks?: number;

@@ -1943,18 +1943,25 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             ) : (
                 <div className="ui-boss-bar">
                     <div
-                        className={boss.fight ? "ui-boss-fill ui-boss-fill-shield" : "ui-boss-fill"}
+                        className={
+                            boss.fight && boss.fight.stage !== "hp"
+                                ? "ui-boss-fill ui-boss-fill-shield"
+                                : "ui-boss-fill"
+                        }
                         style={{ transform: `scaleX(${boss.fraction})` }}
                     />
                 </div>
             )}
             {boss.fight && (
                 <div className="ui-boss-status">
-                    {boss.fight.stage === "totems"
-                        ? "Charge the totems!"
-                        : boss.fight.stage === "finale"
-                          ? "Stay on your feet!"
-                          : "Break her shield!"}
+                    {boss.fight.outOfReach
+                        ? "Out of reach!"
+                        : (boss.fight.status ??
+                          (boss.fight.stage === "totems"
+                              ? "Charge the totems!"
+                              : boss.fight.stage === "finale"
+                                ? "Stay on your feet!"
+                                : "Break her shield!"))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
                     )}

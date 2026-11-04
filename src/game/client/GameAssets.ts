@@ -154,11 +154,11 @@ function getSpotAnimIds(): number[] {
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
-            add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
+            add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim, attack.cover?.spotAnim);
             add(...(attack.impactSpotAnims ?? []));
         }
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
-        add(enemy.boss?.phases?.totems.blastSpotAnim);
+        add(enemy.boss?.phases?.totems?.blastSpotAnim, enemy.boss?.phases?.threshold?.spotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);
         add(enemy.revives?.spotAnim, enemy.splits?.spotAnim, enemy.explodes?.spotAnim);
         add(enemy.blinks?.castSpotAnim, enemy.blinks?.impactSpotAnim);
@@ -290,6 +290,36 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
+export function getStatueModelKey(locId: number): string {
+    return "statue:" + locId;
+}
+
+// The statues (and jets) a boss's attacks animate, by loc, with their animations
+export function getStatueSeqs(enemy: EnemyDef): Map<number, number[]> {
+    const seqs = new Map<number, number[]>();
+    const add = (locId: number, ...ids: (number | undefined)[]) => {
+        const list = seqs.get(locId) ?? [];
+        for (const id of ids) {
+            if (id !== undefined && id !== -1 && !list.includes(id)) {
+                list.push(id);
+            }
+        }
+        seqs.set(locId, list);
+    };
+    for (const attack of enemy.boss?.attacks ?? []) {
+        const statues = attack.statues;
+        if (statues) {
+            add(statues.locId, statues.windupSeq, statues.seq, attack.boomerang?.catchSeq);
+        }
+        const cycle = attack.cycle;
+        if (cycle) {
+            add(cycle.locId, cycle.seqs.warn, cycle.seqs.burn, cycle.seqs.out);
+        }
+    }
+    return seqs;
+}
+
 // The baked model for an enemy's look while shielded (EnemyDef.shield.look)
 export function getShieldedModelKey(def: EnemyDef): string {
     return "npc:" + def.id + ":shielded";
@@ -333,7 +363,8 @@ function getRequestBody(request: BakeRequest): string {
         case "obj":
             return `obj:${request.objId}:${request.count}`;
         case "loc":
-            return `loc:${request.locId}:${request.animated ? 1 : 0}`;
+            // A statue's (seqs) isn't plain scenery
+            return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
     }
 }
 
@@ -410,6 +441,8 @@ export class GameAssets {
             enemy.boss?.surgeSeq ?? -1,
             enemy.boss?.leash?.jump?.downSeq ?? -1,
             enemy.boss?.leash?.jump?.upSeq ?? -1,
+            enemy.boss?.phases?.threshold?.seq ?? -1,
+            enemy.boss?.phases?.threshold?.riseSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -439,11 +472,26 @@ export class GameAssets {
         // Scenery its attacks grow, here rather than in what every run bakes
         for (const attack of enemy.boss?.attacks ?? []) {
             const quarters = attack.quarters;
-            for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
+            for (const locId of [
+                quarters?.safeLocId,
+                quarters?.hurtLocId,
+                attack.ground?.locId,
+                attack.cover?.locId,
+            ]) {
                 if (locId !== undefined) {
                     requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
                 }
             }
+        }
+        // The arena's statues and jets its attacks animate (BossAttackDef.statues,
+        // cycle), standing still and with each animation
+        for (const [locId, seqIds] of getStatueSeqs(enemy)) {
+            requests.push({
+                kind: "loc",
+                key: getStatueModelKey(locId),
+                locId,
+                seqs: [-1, ...seqIds],
+            });
         }
         return requests;
     }

@@ -1,5 +1,8 @@
-import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
+import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
+import { behindPillar, cycleStage, pillarHit, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -8,7 +11,7 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
-import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey } from "./GameAssets";
+import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey, getStatueModelKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 
 // What a boss with a fight of its own puts in the world (BossDef.phases,
@@ -51,6 +54,16 @@ const GRAB_WARNING_ALPHA = 0.45;
 // The tick of the hands' animation the warning holds: just up out of the ground
 const GRAB_WARNING_TICK = 40;
 const LANE_CHEVRON_GAP = 4;
+// A row of bolts about to fly (BulletPatternDef.rows): its bolts, this far apart
+// along it and this faint
+const ROW_WARNING_GAP = 2;
+const ROW_WARNING_ALPHA = 0.25;
+// The line a wave or a thrown sword will take, at most this solid as it's let go
+const THROW_LINE_ALPHA = 0.3;
+// The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
+const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
+// The safe tiles out of a gaze's sight, while it winds up
+const SHADOW_ALPHA = 0.5;
 // A charge's lane is shown this long once it's picked, at this alpha, and
 // then not at all: a glimpse to read, not a line to stare at
 const LANE_SHOW_SECONDS = 1;
@@ -62,6 +75,11 @@ const TOTEM_ARROW = 14;
 const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
+
+// A fight-drawn statue, by its loc and south-west tile
+function statueKey(locId: number, at: { x: number; y: number }): string {
+    return `${locId}:${at.x}:${at.y}`;
+}
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
@@ -78,19 +96,28 @@ export class BossFightView {
     // Whether the curse was on last frame, and when (ms) it lifted, for its flash
     private curseOn = false;
     private curseEndedAt = -1;
+    // The tiles out of a gaze's sight (BossAttackDef.cover), worked out once a windup
+    private shadows?: { windup: BossWindup; tiles: { x: number; y: number }[] };
+    // What each statue the fight draws is playing (Sim's statueSeq), and since
+    // which tick, by loc and tile
+    private statueSeqs = new Map<string, { seq: number; tick: number }>();
 
     constructor(private readonly assets: GameAssets) {}
 
     reset(): void {
         this.beams = [];
+        this.shadows = undefined;
+        this.statueSeqs.clear();
         this.curseOn = false;
         this.curseEndedAt = -1;
     }
 
-    onEvent(event: SimEvent, now: number): void {
+    onEvent(event: SimEvent, now: number, tick: number): void {
         if (event.type === "totemBlast") {
             const { x, y, toX, toY } = event;
             this.beams.push({ x, y, toX, toY, start: now });
+        } else if (event.type === "statueSeq") {
+            this.statueSeqs.set(statueKey(event.locId, event), { seq: event.seq, tick });
         }
     }
 
@@ -106,6 +133,10 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
+        this.drawRowWarnings(actors, sim);
+        this.drawShadows(actors, sim);
+        this.drawStatues(actors, sim);
+        this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -116,6 +147,10 @@ export class BossFightView {
     // Her real portals and spores, at the size of what they do: nothing else marks
     // them, and a real portal's fill is its countdown
     private drawHazard(actors: ActorRenderer, sim: Sim, hazard: GroundHazard): void {
+        // A checker's second colour isn't shown till the first lands
+        if (sim.tick < hazard.startTick) {
+            return;
+        }
         const ground = hazard.attack.ground!;
         // A mark with a grab is its hands alone: faint until it lands
         const model = ground.grab
@@ -187,13 +222,13 @@ export class BossFightView {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)
             const attack = sim.bulletSources[source[slot]]!.attack;
-            const model = this.assets.get("spot:" + attack.spotAnim);
-            if (!model) {
+            const look = this.bulletLook(attack);
+            if (!look) {
                 continue;
             }
+            const { model, anim } = look;
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
-            const anim = model.anims[0];
             const pattern = attack.pattern!;
             // Never smaller than what it hits, however it's scaled to be seen:
             // what looks like a miss has to be one
@@ -212,6 +247,264 @@ export class BossFightView {
                 yawFromVector(vx[slot], vy[slot]),
                 options,
             );
+        }
+    }
+
+    // What a bullet's drawn as: its spot animation, or an NPC (BossAttackDef.lookId)
+    private bulletLook(attack: BossAttackDef): { model: ActorModel; anim: ActorAnim } | undefined {
+        if (attack.lookId !== undefined) {
+            const look = getEnemy(attack.lookId);
+            const model = this.assets.get(getEnemyModelKey(look, 0));
+            return model && { model, anim: model.getAnim(look.idleSeq) };
+        }
+        const model = this.assets.get("spot:" + attack.spotAnim);
+        return model && { model, anim: model.anims[0] };
+    }
+
+    // The rows a volley's about to go down (BulletPatternDef.rows), each laid out
+    // faintly with its own bolts, as its statues draw: from the row's start to
+    // where it'll stop, at the first pillar in its way
+    private drawRowWarnings(actors: ActorRenderer, sim: Sim): void {
+        const rows = sim.map.features?.bolts;
+        if (!rows) {
+            return;
+        }
+        for (const emitter of sim.bulletEmitters) {
+            const pattern = emitter.attack.pattern!;
+            if (
+                !emitter.rows ||
+                emitter.volleysLeft < pattern.volleys ||
+                sim.tick >= emitter.nextTick
+            ) {
+                continue;
+            }
+            const look = this.bulletLook(emitter.attack);
+            if (!look) {
+                continue;
+            }
+            const { model, anim } = look;
+            const options = {
+                scale: Math.max(
+                    pattern.scale ?? 1,
+                    (pattern.radius * 128) / Math.max(1, model.radius),
+                ),
+                alpha: ROW_WARNING_ALPHA,
+            };
+            const frame = anim.getFrame(0);
+            for (const index of emitter.rows) {
+                const row = rows[index];
+                if (!row) {
+                    continue;
+                }
+                const dir = row.toX >= row.fromX ? 1 : -1;
+                const length = Math.abs(row.toX - row.fromX);
+                const y = row.y + 0.5;
+                const stop = pattern.pillars
+                    ? Math.min(
+                          length,
+                          pillarHit(sim.map.features?.pillars, row.fromX + 0.5, y, dir, 0, length),
+                      )
+                    : length;
+                const yaw = yawFromVector(dir, 0);
+                for (let along = 0; along <= stop; along += ROW_WARNING_GAP) {
+                    const x = row.fromX + 0.5 + dir * along;
+                    actors.draw(
+                        model,
+                        anim,
+                        frame,
+                        x,
+                        this.ground(sim, x, y) - BULLET_HEIGHT,
+                        y,
+                        yaw,
+                        options,
+                    );
+                }
+            }
+        }
+    }
+
+    // The bosses whose arena this is: the map's final boss from the start (its
+    // statues stand before it rises), and whoever's shown
+    private fightBosses(sim: Sim): EnemyDef[] {
+        const defs: EnemyDef[] = [];
+        const event = sim.map.events.find((e) => e.kind === "finalBoss");
+        const final = event && getEnemy(event.enemyId);
+        if (final?.boss) {
+            defs.push(final);
+        }
+        const shown = sim.shownBoss?.def;
+        if (shown?.boss && !defs.includes(shown)) {
+            defs.push(shown);
+        }
+        return defs;
+    }
+
+    // The arena's statues its attacks animate (BossAttackDef.statues): the map
+    // leaves their models out, so they're drawn here, standing still until
+    // they're told to play something, then holding its last frame
+    private drawStatues(actors: ActorRenderer, sim: Sim): void {
+        const features = sim.map.features;
+        if (!features) {
+            return;
+        }
+        const drawn = new Set<string>();
+        for (const def of this.fightBosses(sim)) {
+            for (const attack of def.boss!.attacks) {
+                const statues = attack.statues;
+                if (!statues) {
+                    continue;
+                }
+                const model = this.assets.get(getStatueModelKey(statues.locId));
+                if (!model) {
+                    continue;
+                }
+                const list: readonly ArenaStatue[] = statues.group
+                    ? (features.statues?.[statues.group] ?? [])
+                    : attack.pattern?.rows
+                      ? (features.bolts ?? []).flatMap((row) => row.statues)
+                      : attack.from === "knights"
+                        ? (features.knights ?? [])
+                        : [];
+                for (const statue of list) {
+                    const key = statueKey(statues.locId, statue);
+                    if (drawn.has(key)) {
+                        continue;
+                    }
+                    drawn.add(key);
+                    const playing = this.statueSeqs.get(key);
+                    const anim = model.getAnim(playing?.seq ?? -1);
+                    const frame = playing ? anim.getFrame(sim.tick - playing.tick, false) : 0;
+                    const { x, y } = statueMiddle(statue);
+                    actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, statue.yaw ?? 0);
+                }
+            }
+        }
+    }
+
+    // The arena's fire jets on their rhythm (BossAttackDef.cycle): coming out,
+    // burning and going back in, each row as the sim has it; nothing while a row's
+    // out of it
+    private drawFires(actors: ActorRenderer, sim: Sim): void {
+        const rows = sim.map.features?.fires;
+        if (!rows) {
+            return;
+        }
+        for (const enemy of sim.enemies) {
+            for (const cycle of enemy.bossState?.cycles ?? []) {
+                const def = cycle.attack.cycle!;
+                const model = this.assets.get(getStatueModelKey(def.locId));
+                if (!model || enemy.dead) {
+                    continue;
+                }
+                rows.forEach((row, i) => {
+                    const { stage, since } = cycleStage(
+                        def,
+                        cycle.startTick,
+                        i,
+                        sim.tick,
+                        TICKS_PER_SECOND,
+                    );
+                    if (stage === "idle") {
+                        return;
+                    }
+                    const anim = model.getAnim(def.seqs[stage]);
+                    const x = (row.x0 + row.x1 + 1) / 2;
+                    const y = row.y + 0.5;
+                    actors.draw(
+                        model,
+                        anim,
+                        anim.getFrame(since, stage === "burn"),
+                        x,
+                        this.ground(sim, x, y),
+                        y,
+                        row.yaw ?? 0,
+                    );
+                });
+            }
+        }
+    }
+
+    // Where its gaze can't see (BossAttackDef.cover) while it winds up: every
+    // tile of the bossArena in its reach that a pillar hides from it, so the
+    // safe ground's there to be read
+    private shadowTiles(sim: Sim, enemy: Enemy, windup: BossWindup): { x: number; y: number }[] {
+        if (this.shadows?.windup === windup) {
+            return this.shadows.tiles;
+        }
+        const tiles: { x: number; y: number }[] = [];
+        const pillars = sim.map.features?.pillars;
+        const arena = sim.bossArena;
+        const reach = windup.attack.radius ?? 2;
+        const grid = sim.grid;
+        for (let tx = Math.floor(arena.minX); tx < Math.ceil(arena.maxX); tx++) {
+            for (let ty = Math.floor(arena.minY); ty < Math.ceil(arena.maxY); ty++) {
+                const x = tx + 0.5;
+                const y = ty + 0.5;
+                if (
+                    Math.hypot(x - enemy.x, y - enemy.y) <= reach &&
+                    grid.contains(tx, ty) &&
+                    !grid.isSolid(tx, ty) &&
+                    behindPillar(pillars, enemy.x, enemy.y, x, y)
+                ) {
+                    tiles.push({ x, y });
+                }
+            }
+        }
+        this.shadows = { windup, tiles };
+        return tiles;
+    }
+
+    private drawShadows(actors: ActorRenderer, sim: Sim): void {
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const cover = windup?.attack.cover;
+            if (!windup || !cover || enemy.dead) {
+                continue;
+            }
+            const key = cover.locId !== undefined ? "loc:" + cover.locId : "spot:" + cover.spotAnim;
+            const model =
+                cover.locId !== undefined || cover.spotAnim !== undefined
+                    ? this.assets.get(key)
+                    : undefined;
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(sim.tick - windup.startTick);
+            const options = { scale: 64 / Math.max(1, model.radius), alpha: SHADOW_ALPHA };
+            const player = sim.player;
+            for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
+                if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
+                    continue;
+                }
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, options);
+            }
+        }
+    }
+
+    // A gaze with nothing of its own to show its shadows by (cover with no
+    // locId or spotAnim): the tiles darkened, as the last resort
+    private drawShadowTiles(
+        overlay: Overlay,
+        sim: Sim,
+        enemy: Enemy,
+        windup: BossWindup,
+        t: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const player = sim.player;
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.25 + 0.25 * t})`;
+        for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
+            if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
+                continue;
+            }
+            this.traceGround(overlay, sim, [
+                { x: x - 0.5, y: y - 0.5 },
+                { x: x + 0.5, y: y - 0.5 },
+                { x: x + 0.5, y: y + 0.5 },
+                { x: x - 0.5, y: y + 0.5 },
+            ]);
+            ctx.fill();
         }
     }
 
@@ -314,6 +607,7 @@ export class BossFightView {
 
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawSquareEdge(overlay, sim, scale);
+        this.drawReach(overlay, sim, alpha, scale);
         this.flashQuarters(overlay, sim, alpha);
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
@@ -338,8 +632,18 @@ export class BossFightView {
                     }
                 } else if (windup.attack.cone !== undefined) {
                     this.drawCone(overlay, sim, enemy, windup, t, scale);
+                } else if (
+                    windup.attack.cover &&
+                    windup.attack.cover.locId === undefined &&
+                    windup.attack.cover.spotAnim === undefined
+                ) {
+                    ctx.globalAlpha = 1;
+                    this.drawShadowTiles(overlay, sim, enemy, windup, t);
+                    ctx.globalAlpha = WARNING_ALPHA;
                 } else if (windup.attack.pattern) {
                     this.drawAim(overlay, sim, enemy, windup, t, scale);
+                } else if (windup.attack.wave || windup.attack.boomerang) {
+                    this.drawThrowLines(overlay, sim, enemy, windup, t);
                 }
             }
             ctx.globalAlpha = 1;
@@ -394,7 +698,8 @@ export class BossFightView {
 
     // Traces a shape on the ground, each edge split up to follow it. Corners
     // behind the camera are left out: only a shape well off the screen has any.
-    private traceGround(overlay: Overlay, sim: Sim, corners: { x: number; y: number }[]): void {
+    // A shape on the ground, its edges split to lie on it (GameView's strips and squares too)
+    traceGround(overlay: Overlay, sim: Sim, corners: { x: number; y: number }[]): void {
         const ctx = overlay.ctx;
         ctx.beginPath();
         let first = true;
@@ -447,11 +752,77 @@ export class BossFightView {
         }
     }
 
+    // The line a wave or a thrown sword will take (BossAttackDef.wave, boomerang),
+    // as wide as what it hits and as far as it goes: from the boss the way it's
+    // aimed, or from each statue throwing it at where the player stood
+    private drawThrowLines(
+        overlay: Overlay,
+        sim: Sim,
+        enemy: Enemy,
+        windup: BossWindup,
+        t: number,
+    ): void {
+        const attack = windup.attack;
+        const reach = attack.boomerang?.reach ?? attack.wave?.reach ?? attack.range;
+        const half = attack.radius ?? 0.35;
+        const lines: { x: number; y: number; dirX: number; dirY: number }[] = [];
+        if (windup.from) {
+            const target = windup.targets[0];
+            for (const statue of windup.from) {
+                const { x, y } = statueMiddle(statue);
+                const length = Math.max(0.001, Math.hypot(target.x - x, target.y - y));
+                lines.push({ x, y, dirX: (target.x - x) / length, dirY: (target.y - y) / length });
+            }
+        } else {
+            lines.push({ x: enemy.x, y: enemy.y, dirX: windup.dirX, dirY: windup.dirY });
+        }
+        const ctx = overlay.ctx;
+        for (const { x, y, dirX, dirY } of lines) {
+            const sideX = -dirY * half;
+            const sideY = dirX * half;
+            const endX = x + dirX * reach;
+            const endY = y + dirY * reach;
+            this.traceGround(overlay, sim, [
+                { x: x + sideX, y: y + sideY },
+                { x: endX + sideX, y: endY + sideY },
+                { x: endX - sideX, y: endY - sideY },
+                { x: x - sideX, y: y - sideY },
+            ]);
+            ctx.fillStyle = "rgb(255, 60, 40)";
+            ctx.globalAlpha = THROW_LINE_ALPHA * (0.5 + 0.5 * t);
+            ctx.fill();
+        }
+        ctx.globalAlpha = WARNING_ALPHA;
+    }
+
+    // A fight whose weapon only reaches so far (MapDef.fight.strikeReach): while the
+    // boss is out of it, how far it reaches, faintly round the player (the boss
+    // bar says so too)
+    private drawReach(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const reach = sim.map.fight?.strikeReach;
+        const boss = sim.shownBoss;
+        const player = sim.player;
+        if (reach === undefined || !boss || boss.dead || sim.intro) {
+            return;
+        }
+        if (Math.hypot(boss.x - player.x, boss.y - player.y) <= reach) {
+            return;
+        }
+        const x = lerp(player.prevX, player.x, alpha);
+        const y = lerp(player.prevY, player.y, alpha);
+        this.traceCircle(overlay, sim, x, y, reach, 48);
+        const ctx = overlay.ctx;
+        ctx.lineWidth = Math.max(1, 2 * scale);
+        ctx.strokeStyle = REACH_COLOUR;
+        ctx.stroke();
+    }
+
     // A fight in a set square (MapDef.bossArena) can't be walked out of, and on
     // open ground nothing else says why the player has stopped
     private drawSquareEdge(overlay: Overlay, sim: Sim, scale: number): void {
         const boss = sim.shownBoss;
-        if (!sim.map.bossArena || !boss?.def.boss?.phases || boss.dead) {
+        const edge = boss?.def.boss?.look?.edge;
+        if (!sim.map.bossArena || !boss?.def.boss?.phases || boss.dead || edge === null) {
             return;
         }
         const { minX, minY, maxX, maxY } = sim.bossArena;
@@ -463,7 +834,7 @@ export class BossFightView {
         ]);
         const ctx = overlay.ctx;
         ctx.lineWidth = Math.max(2, 4 * scale);
-        ctx.strokeStyle = "rgba(255, 110, 215, 0.8)";
+        ctx.strokeStyle = edge ?? "rgba(255, 110, 215, 0.8)";
         ctx.stroke();
     }
 
@@ -629,8 +1000,9 @@ export class BossFightView {
         const height = overlay.height;
         const ctx = overlay.ctx;
         // Still dim around the edges for as long as she's up
-        if (boss?.def.boss?.intro && !boss.dead && !sim.intro) {
-            this.vignette(ctx, width, height, "rgba(10, 0, 20, 0.5)");
+        const vignette = boss?.def.boss?.look?.vignette;
+        if (boss?.def.boss?.intro && !boss.dead && !sim.intro && vignette !== null) {
+            this.vignette(ctx, width, height, vignette ?? "rgba(10, 0, 20, 0.5)");
         }
         const curse = sim.curse;
         if (curse) {
@@ -822,11 +1194,13 @@ export class BossFightView {
         const cx = p.behind ? width / 2 : p.x;
         const cy = p.behind ? height / 2 : p.y;
         const reach = Math.hypot(width, height);
+        const look = intro.def.boss!.look;
+        const [r, g, b] = look?.dark ?? [8, 0, 18];
         // A wide light, as she's a big thing, and it reaches the player beside her
         const dark = ctx.createRadialGradient(cx, cy, height * 0.2, cx, cy, reach * 0.62);
-        dark.addColorStop(0, `rgba(8, 0, 18, ${0.12 * fade})`);
-        dark.addColorStop(0.45, `rgba(8, 0, 18, ${0.5 * fade})`);
-        dark.addColorStop(1, `rgba(8, 0, 18, ${DARK * fade})`);
+        dark.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.12 * fade})`);
+        dark.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${0.5 * fade})`);
+        dark.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${DARK * fade})`);
         ctx.fillStyle = dark;
         ctx.fillRect(0, 0, width, height);
 
@@ -846,13 +1220,13 @@ export class BossFightView {
         const y = height * 0.72;
         ctx.fillStyle = "#000000";
         ctx.fillText(def.title, width / 2 + pixel, y + pixel);
-        ctx.fillStyle = "#ff9ae6";
+        ctx.fillStyle = look?.title ?? "#ff9ae6";
         ctx.fillText(def.title, width / 2, y);
         if (def.subtitle) {
             ctx.font = `${12 * pixel}px "OSRS Bold", sans-serif`;
             ctx.fillStyle = "#000000";
             ctx.fillText(def.subtitle, width / 2 + pixel, y + 18 * pixel + pixel);
-            ctx.fillStyle = "#e8d0ff";
+            ctx.fillStyle = look?.subtitle ?? "#e8d0ff";
             ctx.fillText(def.subtitle, width / 2, y + 18 * pixel);
         }
         ctx.globalAlpha = 1;

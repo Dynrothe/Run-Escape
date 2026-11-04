@@ -364,7 +364,8 @@ export type BulletPatternDef = {
     // spread: a fan aimed at the player; wall: a line across, coming at the
     // player, with a gap somewhere new each volley (Sotetseg's maze); closing: a
     // ring round the player, distance tiles out, closing in, with a gap
-    shape: "ring" | "spiral" | "spread" | "wall" | "closing";
+    // rows: down the map's bolt rows (ArenaFeatures.bolts), see rows
+    shape: "ring" | "spiral" | "spread" | "wall" | "closing" | "rows";
     // Bullets a volley, how many volleys, and seconds between them
     count: number;
     volleys: number;
@@ -419,6 +420,17 @@ export type BulletPatternDef = {
     // Fired in bursts: count volleys at interval, then pause seconds before
     // the next burst, so a sweep's arm has holes along it to run through
     burst?: { count: number; pause: number };
+    // Rows: each time the attack's used, the next of these sets of the map's bolt
+    // rows (by index, in turn), every volley a bolt down each row of the set from
+    // its fromX to its toX (count's not used)
+    rows?: { sets: number[][] };
+    // Stopped by the map's pillars (ArenaFeatures.pillars): a bolt's flight is cut
+    // short at the first one in its way, worked out as it's fired, so it costs
+    // nothing in the air. Straight bullets only (no curve).
+    pillars?: boolean;
+    // Seconds from its beginning to its first volley: the warning of one that's
+    // an ambient, with no windup of its own (the statues drawing)
+    delay?: number;
 };
 
 // Where a boss's "ground" attack marks the ground, each spot radius tiles
@@ -434,6 +446,11 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // checker: every cell of one colour of the map's checker (ArenaFeatures.checker),
+        // at random, square; then the other colour's cells, shown from when the first
+        // land and landing then seconds after. With cross, only the cells within cross
+        // cells of the player's, along its row and column.
+        | { shape: "checker"; then: number; cross?: number }
     )[];
     radius: number;
     // Set: it stays armed this many seconds after the windup, going off under
@@ -637,6 +654,58 @@ export type BossAttackDef = {
     // on the player only if the glyph isn't between them and the boss, and
     // projectiles break on it, so the player can hide behind it.
     blockable?: boolean;
+    // Swings: a straight strip from the boss, width tiles across and length long,
+    // the way it faced as it began, rather than round it (a lunge)
+    line?: { width: number; length: number };
+    // Blasts: a square this many tiles across on each spot (on the middle of its
+    // tile for an odd size), rather than radius round it; impactSpotAnim on every
+    // tile of it
+    square?: number;
+    // Projectiles: a wave along the ground rather than a shot: it goes on through
+    // whoever it hits (each once) for reach tiles, along where they were as it
+    // began (as a boomerang does), not where they are as it's fired
+    wave?: { reach: number };
+    // Projectiles: out reach tiles the way they're thrown, then back the way they
+    // came to where they were thrown from, hitting each player once each way; at
+    // the end catchSeq on the statue that threw it (statues) and catchSound
+    boomerang?: { reach: number; catchSeq?: number; catchSound?: number };
+    // Projectiles: thrown from count of the map's knight statues (ArenaFeatures.knights),
+    // picked at random as it begins, at where the player was then, not from the boss
+    from?: "knights";
+    // Projectiles and bullets: drawn as this enemy (its NPC, playing its idleSeq),
+    // never spawned, rather than as spotAnim (the knights' spinning sword)
+    lookId?: string;
+    // Whoever it hits: dragged to pull tiles from the boss (just clear of it at the
+    // nearest) over pullSeconds (0.25
+    // when unset), held there for bind seconds, and the boss straight on with
+    // attack (by name) on them, whatever it was winding up (a shock wave that binds,
+    // then a flurry)
+    onHit?: { pull?: number; pullSeconds?: number; bind?: number; attack?: string };
+    // Swings: whoever's out of its sight behind a pillar of the map's
+    // (ArenaFeatures.pillars) is spared. While it winds up, the tiles that are
+    // in the bossArena are each shown with locId or spotAnim, faintly.
+    cover?: { locId?: number; spotAnim?: number };
+    // The map's statues it's done with, drawn by the fight (the map leaves their
+    // model out): its own (a row attack's rows', the knights that throw) or all
+    // of ArenaFeatures.statues' group. windupSeq plays from its beginning till it's
+    // fired (a pattern's delay too), then seq.
+    statues?: { locId: number; group?: string; windupSeq?: number; seq?: number };
+    // An ambient that's a rhythm, not attacks (BossPhasesDef ambients): every row
+    // of the map's fires (ArenaFeatures.fires), each stagger seconds behind the
+    // last, warns for warn seconds, burns for burn (hurting whoever's on it,
+    // once every interval) and goes out for out, every period seconds, from the
+    // first phase it's in until the fight's over or a phase leaves it out. Drawn
+    // as locId playing seqs at each row; sound as each starts to burn.
+    cycle?: {
+        period: number;
+        stagger: number;
+        warn: number;
+        burn: number;
+        out: number;
+        interval: number;
+        locId: number;
+        seqs: { warn: number; burn: number; out: number };
+    };
 };
 
 // A big entrance: the player can't be hit, the screen goes dark, and everything
@@ -668,8 +737,11 @@ export type BossIntroDef = {
 };
 
 // A pattern a boss keeps up by itself (BossPhasesDef ambient): the attack,
-// by name, and seconds between one beginning and the next
-export type BossAmbientDef = { attack: string; interval: number };
+// by name, and seconds between one beginning and the next. A ground attack
+// (its marks) or a cycle (BossAttackDef.cycle, which runs on its own rhythm and
+// ignores interval) can be one too. delay: seconds into the phase it first
+// begins (0 when unset).
+export type BossAmbientDef = { attack: string; interval: number; delay?: number };
 
 // A boss fought in phases: a shield to break, then totems in the arena's
 // corners to charge with hits, whose blast takes away a share of its
@@ -682,10 +754,20 @@ export type BossPhasesDef = {
     // holds and cooldowns: the floor the fight's dodged on. tempo multiplies
     // its interval between attacks and its patterns' windups (not the big
     // hits'), and speed its walk, so each phase is a gear up on the last.
+    // Without totems there's no shield: until is the share of its hitpoints at which
+    // the next phase begins (an even split when unset), and hits go to its
+    // hitpoints. status: the boss bar's line through the phase (the Nightmare's own
+    // when unset), and message: on screen as it begins (status when unset).
+    // ambients: more of what ambient is, each on its own timer (or a cycle,
+    // BossAttackDef.cycle, running the whole phase).
     phases: {
-        shield: number;
+        shield?: number;
+        until?: number;
+        status?: string;
+        message?: string;
         opener?: string;
         ambient?: BossAmbientDef;
+        ambients?: BossAmbientDef[];
         tempo?: number;
         speed?: number;
     }[];
@@ -701,7 +783,9 @@ export type BossPhasesDef = {
         ambient?: BossAmbientDef;
         message: string;
     };
-    totems: {
+    // Without them, the phases go by its hitpoints (phases' until), each change a
+    // pause (threshold), and it dies at none, as anything does
+    totems?: {
         // The enemies: stands idle, can be charged, and is charged
         idleId: string;
         chargingId: string;
@@ -723,6 +807,22 @@ export type BossPhasesDef = {
     blastMessage: string;
     // Of the player's hitpoints, given back by each blast
     blastHeal?: number;
+    // Without totems, at each phase's hitpoints: for seconds it can't be hurt and
+    // does nothing of its own but seq (it kneels), riseSeq for its last
+    // riseSeconds (it gets up), with shout over it, sound and spotAnim on it
+    threshold?: {
+        seconds: number;
+        seq?: number;
+        riseSeq?: number;
+        riseSeconds?: number;
+        shout?: string;
+        sound?: number;
+        spotAnim?: number;
+    };
+    // The player kept in the map's bossArena while it's up (the Nightmare's
+    // square); false lets them out of it, onto the rest of an arena its collision
+    // keeps them in (a court with a bridge off it)
+    confine?: boolean;
 };
 
 // How a boss fights, after the real fight in OSRS
@@ -816,6 +916,50 @@ export type BossDef = {
     // Its animation as it charges (BossAttackDef surge), and as it stands
     // winding one up
     surgeSeq?: number;
+    // How its fight looks, where it isn't the Nightmare's (BossLookDef)
+    look?: BossLookDef;
+};
+
+// The shared fight screen's colours (CSS), for a boss that isn't to look like the
+// Nightmare: each unset is hers. edge: the stroke round the bossArena while it's
+// up, or none (a court whose edges are drops). vignette: the dim round the
+// screen's edges while it's up, or none. dark: its entrance's dark (r, g, b).
+export type BossLookDef = {
+    title?: string;
+    subtitle?: string;
+    edge?: string | null;
+    vignette?: string | null;
+    dark?: [number, number, number];
+};
+
+// A statue a fight draws, and animates (BossAttackDef.statues), in world tiles:
+// its south-west tile, how many tiles across, and how it's turned (2048ths).
+export type ArenaStatue = { x: number; y: number; size?: number; yaw?: number };
+
+// What a boss's attacks read from the arena (MapDef.features), in world tiles: a
+// ScapeRune recipe exports it map-local, and the MapDef moves it to the world
+// with moveFeatures. A tile x, y is the square from x to x + 1.
+export type ArenaFeatures = {
+    // Cells of cell tiles from x0, y0, cols by rows; a cell's colour is (cx + cy) % 2
+    checker?: { x0: number; y0: number; cell: number; cols: number; rows: number };
+    // Square, size tiles across from their south-west tile: they block bolts
+    // (BulletPatternDef.pillars) and a boss's sight (BossAttackDef.cover)
+    pillars?: { x: number; y: number; size: number }[];
+    // Rows bolts fly along, tile row y, from tile fromX to tile toX (dir: the sign
+    // of the way), and the statues that fire them
+    bolts?: { y: number; fromX: number; toX: number; dir: 1 | -1; statues: ArenaStatue[] }[];
+    // The knight statues (BossAttackDef.from): thrown from their middles
+    knights?: ArenaStatue[];
+    // Rows of fire jets (BossAttackDef.cycle): tile row y, tiles x0 to x1, the
+    // jet's loc drawn at the middle turned yaw
+    fires?: { y: number; x0: number; x1: number; yaw?: number }[];
+    // Scenery hazards shouldn't land on
+    dais?: { x: number; y: number; w: number; h: number };
+    // Where a boss rising atMiddle (BossIntroDef) rises instead of the bossArena's
+    // middle, the party distance tiles south of it (tile middles: x + 0.5)
+    rise?: { x: number; y: number };
+    // Other statues an attack animates, by group (BossAttackDef.statues group)
+    statues?: Record<string, ArenaStatue[]>;
 };
 
 // How a character fights, for the weapons only their class can find
@@ -1139,6 +1283,8 @@ export type MapDef = {
     // totems' corners, its surges' lanes), in world tiles; all of the arena
     // when unset
     bossArena?: { baseX: number; baseY: number; size: number };
+    // What its boss's attacks read from the arena: pillars, rows, statues
+    features?: ArenaFeatures;
     // The plane (level) the arena is on: 0, the ground floor, when unset. Some
     // dungeons are higher up (the God Wars Dungeon's main cave is on plane 2);
     // only this plane is drawn, so the ones under it don't show through.
@@ -1179,7 +1325,9 @@ export type MapDef = {
     // id) has been beaten; it can't be endless. Everyone plays character there,
     // an adventurer made for the fight, whose starting weapon begins at
     // weaponLevel: that's the whole kit, and the fight's balanced to it.
-    fight?: { requires: string; character: string; weaponLevel: number };
+    // strikeReach: tiles a strike (WeaponDef kind strike) finds its targets
+    // within, when it isn't the usual 12 (the boss has to be close to be hit)
+    fight?: { requires: string; character: string; weaponLevel: number; strikeReach?: number };
     // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and

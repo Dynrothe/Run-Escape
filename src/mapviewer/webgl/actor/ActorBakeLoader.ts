@@ -283,7 +283,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         }
                         return model;
                     };
-                    const seqIds = request.animated ? [locType.seqId] : [];
+                    const seqIds = request.seqs ?? (request.animated ? [locType.seqId] : []);
                     sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
                     break;
                 }

@@ -23,6 +23,7 @@ import {
 } from "../core/Sim";
 import {
     Enemy,
+    EnemyProjectile,
     FairyRing,
     FallingRock,
     Glyph,
@@ -259,7 +260,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
-            this.fight.onEvent(event, now);
+            this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
@@ -432,6 +433,10 @@ export class GameView {
         }
 
         for (const projectile of sim.enemyProjectiles) {
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                this.drawSweeping(actors, sim, projectile, alpha, tick);
+                continue;
+            }
             const spotAnim = projectile.attack.spotAnim;
             const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
             if (!model || !hasGeometry(model)) {
@@ -675,6 +680,42 @@ export class GameView {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
         });
+    }
+
+    // A wave along the ground, or what's thrown drawn as an NPC (a knight's spinning
+    // sword, BossAttackDef.lookId), never smaller than what it hits
+    private drawSweeping(
+        actors: ActorRenderer,
+        sim: Sim,
+        projectile: EnemyProjectile,
+        alpha: number,
+        tick: number,
+    ): void {
+        const attack = projectile.attack;
+        const look = attack.lookId !== undefined ? getEnemy(attack.lookId) : undefined;
+        const model = look
+            ? this.assets.get(getEnemyModelKey(look, 0))
+            : this.assets.get("spot:" + attack.spotAnim);
+        if (!model) {
+            return;
+        }
+        const anim = look ? model.getAnim(look.idleSeq) : model.anims[0];
+        const x = lerp(projectile.prevX, projectile.x, alpha);
+        const y = lerp(projectile.prevY, projectile.y, alpha);
+        const scale = Math.max(
+            look?.scale ?? 1,
+            (projectile.radius * 128) / Math.max(1, model.radius),
+        );
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(tick - projectile.startTick),
+            x,
+            this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
+            y,
+            projectile.yaw,
+            { scale },
+        );
     }
 
     // A boss's glyph, idling as it slides, facing the boss
@@ -1111,7 +1152,11 @@ export class GameView {
                 kind === "quarters" ||
                 kind === "surge" ||
                 kind === "pattern" ||
-                windup.attack.cone !== undefined
+                windup.attack.cone !== undefined ||
+                // It hits everywhere it can see: the shadows are what's shown
+                windup.attack.cover !== undefined ||
+                // Thrown by the arena's statues, not the boss: their lines are shown
+                windup.attack.from !== undefined
             ) {
                 continue;
             }
@@ -1119,7 +1164,30 @@ export class GameView {
                 // Where to hide instead of where it hits (it hits everywhere else)
                 continue;
             }
-            if (kind === "swing" || kind === "blast") {
+            const line = kind === "swing" ? windup.attack.line : undefined;
+            const square = kind === "blast" ? windup.attack.square : undefined;
+            if (line || square) {
+                // A lunge's strip, filling from the boss out; a blast's squares, from the middle
+                const shapes = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, 1)]
+                    : windup.targets.map((spot) => squareCorners(spot.x, spot.y, square! / 2));
+                const filled = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, t)]
+                    : windup.targets.map((spot) =>
+                          squareCorners(spot.x, spot.y, (square! / 2) * t),
+                      );
+                for (let i = 0; i < shapes.length; i++) {
+                    this.fight.traceGround(overlay, sim, shapes[i]);
+                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                    this.fight.traceGround(overlay, sim, filled[i]);
+                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+                    ctx.fill();
+                }
+            } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
                 const spots =
                     kind === "blast"
@@ -1233,6 +1301,10 @@ export class GameView {
     ): void {
         const ctx = overlay.ctx;
         for (const projectile of sim.enemyProjectiles) {
+            // Big enough to see as they are
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                continue;
+            }
             const x = lerp(projectile.prevX, projectile.x, alpha);
             const y = lerp(projectile.prevY, projectile.y, alpha);
             const p = overlay.project(
@@ -1942,3 +2014,34 @@ export function formatTime(seconds: number): string {
 }
 
 export { TICKS_PER_SECOND };
+
+// A lunge's strip (BossAttackDef.line) on the ground, the first share of its length
+function stripCorners(
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    line: { width: number; length: number },
+    share: number,
+): { x: number; y: number }[] {
+    const sideX = (-dirY * line.width) / 2;
+    const sideY = (dirX * line.width) / 2;
+    const endX = x + dirX * line.length * share;
+    const endY = y + dirY * line.length * share;
+    return [
+        { x: x + sideX, y: y + sideY },
+        { x: endX + sideX, y: endY + sideY },
+        { x: endX - sideX, y: endY - sideY },
+        { x: x - sideX, y: y - sideY },
+    ];
+}
+
+// A square half tiles either way of x, y
+function squareCorners(x: number, y: number, half: number): { x: number; y: number }[] {
+    return [
+        { x: x - half, y: y - half },
+        { x: x + half, y: y - half },
+        { x: x + half, y: y + half },
+        { x: x - half, y: y + half },
+    ];
+}

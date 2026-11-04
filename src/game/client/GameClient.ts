@@ -2273,16 +2273,26 @@ export class GameClient implements GameFrameHandler {
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
             if (phase && !shownBoss.dead) {
-                const finale = shownBoss.def.boss?.phases?.finale;
+                const phases = shownBoss.def.boss?.phases;
+                const finale = phases?.finale;
                 boss.fraction =
                     phase.stage === "finale" && finale
                         ? Math.max(0, (phase.finaleEnd ?? 0) - sim.tick) /
                           (finale.seconds * TICKS_PER_SECOND)
-                        : phase.shield / phase.shieldMax;
+                        : phase.stage === "hp"
+                          ? shownBoss.hp / shownBoss.maxHp
+                          : phase.shield / phase.shieldMax;
+                const reach = sim.map.fight?.strikeReach;
+                const player = sim.player;
                 boss.fight = {
                     phase: phase.index + 1,
-                    phases: shownBoss.def.boss?.phases?.phases.length ?? 1,
+                    phases: phases?.phases.length ?? 1,
                     stage: phase.stage,
+                    status:
+                        phase.stage === "finale" ? undefined : phases?.phases[phase.index]?.status,
+                    outOfReach:
+                        reach !== undefined &&
+                        Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,
                     totems: phase.totems.map((totem) =>
                         phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
                     ),
