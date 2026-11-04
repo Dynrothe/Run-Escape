@@ -1071,7 +1071,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/InventoryItem.tsx` shares the bag buttons
   with the desktop HUD: hover or hold for 500 ms to read the same `ItemView.lines` as the casket.
-  Releasing a hold never uses the item; moving away, cancellation or losing focus cancels the tap.
+  Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
+  further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
+  The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
+  clicks still use the item.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.

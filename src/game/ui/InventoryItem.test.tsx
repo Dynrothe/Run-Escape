@@ -123,6 +123,61 @@ test("a second finger cannot end the first finger's hold", () => {
     expect(onUse).not.toHaveBeenCalled();
 });
 
+test("a held description stays up while the finger drifts", () => {
+    const { button, onUse } = renderItem();
+    pointer(button, "pointerdown");
+    act(() => vi.advanceTimersByTime(500));
+    pointer(button, "pointermove", { x: 40, y: 30 });
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    pointer(button, "pointerup", { x: 40, y: 30 });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(onUse).not.toHaveBeenCalled();
+});
+
+test("after a touch tap on the desktop layout, only its own click is ignored", () => {
+    const { button, onUse } = renderItem(false);
+    pointer(button, "pointerdown");
+    pointer(button, "pointerup");
+    fireEvent.click(button);
+    expect(onUse).toHaveBeenCalledTimes(1);
+    // A screen reader's click later, with no key or pointer before it
+    act(() => vi.advanceTimersByTime(400));
+    fireEvent.click(button, { detail: 0 });
+    expect(onUse).toHaveBeenCalledTimes(2);
+    // Enter or Space on the focused slot, straight after another tap
+    pointer(button, "pointerdown");
+    pointer(button, "pointerup");
+    fireEvent.keyDown(button, { key: " " });
+    fireEvent.click(button, { detail: 0 });
+    expect(onUse).toHaveBeenCalledTimes(4);
+});
+
+test("a mouse on the touch layout uses an item on release and keeps its description", () => {
+    const { button, onUse } = renderItem(true);
+    pointer(button, "pointerover", { pointerType: "mouse" });
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    pointer(button, "pointerdown", { pointerType: "mouse" });
+    pointer(button, "pointerup", { pointerType: "mouse" });
+    fireEvent.click(button);
+    expect(onUse).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+});
+
+test("a slot that fills or changes under the mouse describes its new item", () => {
+    const onUse = vi.fn();
+    const anglerfish = { item: getItemView(getItem("anglerfish")), count: 1 };
+    const { rerender } = render(<InventoryItem slot={null} index={0} onUse={onUse} />);
+    const button = screen.getByRole("button", { name: "Empty item slot 1" });
+    pointer(button, "pointerover", { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    rerender(<InventoryItem slot={slot} index={0} onUse={onUse} />);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(slot.item.name);
+    rerender(<InventoryItem slot={anglerfish} index={0} onUse={onUse} />);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(anglerfish.item.name);
+    pointer(button, "pointerout", { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+});
+
 test("releasing outside the tap area never consumes the item", () => {
     const { button, onUse } = renderItem();
     pointer(button, "pointerdown");

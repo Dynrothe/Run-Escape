@@ -8,7 +8,7 @@ export const STICK_RADIUS = 56;
 export const STICK_DEAD_ZONE = 0.16;
 
 // A finger that moves further than this isn't tapping, in CSS pixels
-const TAP_SLOP = 12;
+export const TAP_SLOP = 12;
 
 export type MoveVector = { x: number; y: number };
 
