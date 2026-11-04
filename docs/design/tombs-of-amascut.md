@@ -146,12 +146,12 @@ unlocks something in the game.
       Tumeken's Light, on a long cooldown, heals in full and cures poison.
 - **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the
   divine pouch, four runes instead of three. Here the thread puts the pouch in the level-up
-  choices, as a rare passive, offered to magic adventurers only (it's a rune pouch, and it gives
-  Tumeken's shadow's style a perk of the raid's, as the fang and keris are melee's and Masori
-  ranged's). It takes a passive slot and gives a weapon slot, at one level only: the price is a
-  passive, and with it maybe an evolution, since passives are what weapons evolve with. The slot
-  takes any weapon the adventurer could have, as theirs are almost all magic anyway, so there's no
-  slot of a kind of its own to build.
+  choices, as a rare passive, for every adventurer. It takes a passive slot (the price, and with
+  it maybe an evolution, since passives are what weapons evolve with) and gives a slot that holds
+  a magic weapon only, at one level. Holding it, magic weapons are offered to an adventurer of any
+  style, for that slot. So a melee or ranged build can carry the third style the Theatre of
+  Blood's expert mode asks for (its Nylocas take nothing from the wrong one), and a magic build
+  gets one more spell. (It was magic adventurers only at first; that did nothing for expert.)
 
 ## 9. The order it's built in
 
