@@ -639,6 +639,9 @@ export type BossAttackDef = {
     // The Tombs of Amascut: with this invocation on, the attack's that much bigger, quicker or
     // harder (Boulderdash's boulders twice as fast, Shaking Things Up's wider shockwave)
     invoked?: { id: string; speed?: number; radius?: number; damage?: number };
+    // Blasts: each one breaks up where it lands into count shards flying out all round (drawn as
+    // the attack's spotAnim), each doing damage (Ba-Ba's rockfall)
+    shards?: { count: number; speed: number; range: number; radius: number; damage: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat
@@ -1275,12 +1278,13 @@ export type TombsPathDef = {
         // Where its enemies come in, in world tiles: the Apmeken room's holes in the walls
         entrances?: { x: number; y: number }[];
         // The path's boss, after its room: the party's brought to arrive, and it rises at `at`
-        // once someone's walked past world x `line` (towards it), as the room waits for the barrier
+        // once someone's walked north past world y `line.y` (out of the safe area at its arena's
+        // south end), as the room waits for the barrier; up, that line holds
         boss?: {
             enemyId: string;
             arrive: { x: number; y: number };
             at: { x: number; y: number };
-            line: number;
+            line: { y: number };
         };
     };
 };

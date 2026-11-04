@@ -51,9 +51,9 @@ const TEST_TOMBS: MapDef = {
                     ],
                     boss: {
                         enemyId: "ba_ba",
-                        arrive: { x: 1020.5, y: 1046.5 },
-                        at: { x: 1040.5, y: 1046.5 },
-                        line: 1026,
+                        arrive: { x: 1036.5, y: 1020.5 },
+                        at: { x: 1036.5, y: 1040.5 },
+                        line: { y: 1026 },
                     },
                 },
             },
@@ -324,9 +324,9 @@ describe("the Apmeken room", () => {
         }
         expect(sim.apmeken!.doneTick).toBeDefined();
         // On to Ba-Ba: she rises once someone's walked in, and the path's done once she's dead
-        seconds(sim, 3.5, { x: 1020.5, y: 1046.5 });
+        seconds(sim, 3.5, { x: 1036.5, y: 1020.5 });
         expect(sim.apmeken!.boss).toEqual({ uid: -1, beatenTick: undefined });
-        seconds(sim, 0.2, { x: 1028.5, y: 1046.5 });
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         const baba = sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
         expect(baba).toBeDefined();
         sim.damageEnemy(baba, 1e9, 0, baba.x, baba.y);
@@ -538,7 +538,7 @@ describe("Ba-Ba", () => {
     function atBaba(invocations: string[] = []): Sim {
         const sim = apmeken(invocations);
         expect(sim.devSkipToTombsBoss()).toBe(true);
-        seconds(sim, 0.2, { x: 1028.5, y: 1046.5 });
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         return sim;
     }
     const baba = (sim: Sim) => sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
@@ -547,14 +547,14 @@ describe("Ba-Ba", () => {
         const sim = apmeken();
         expect(sim.devSkipToTombsBoss()).toBe(true);
         expect(sim.devSkipToTombsBoss()).toBe(false);
-        seconds(sim, 1, { x: 1020.5, y: 1046.5 });
+        seconds(sim, 1, { x: 1036.5, y: 1020.5 });
         expect(sim.enemies.some((e) => e.def.id === "ba_ba")).toBe(false);
-        seconds(sim, 0.2, { x: 1028.5, y: 1046.5 });
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         expect(baba(sim)).toBeDefined();
         // Up, the entrance is behind a line nobody goes back over
-        sim.player.x = sim.player.prevX = 1020.5;
+        sim.player.y = sim.player.prevY = 1020.5;
         sim.step();
-        expect(sim.player.x).toBeGreaterThanOrEqual(1026);
+        expect(sim.player.y).toBeGreaterThanOrEqual(1026);
     });
 
     it("starts over when the party dies to her, back at the arena's start", () => {
@@ -563,9 +563,9 @@ describe("Ba-Ba", () => {
         sim.player.invulnerable = 0;
         sim["damagePlayer"](1e6, "test", false, undefined, true);
         expect(sim.runOver).toBe(false);
-        expect(sim.player.x).toBeCloseTo(1020.5);
+        expect(sim.player.y).toBeCloseTo(1020.5);
         expect(sim.apmeken!.boss!.uid).toBe(-1);
-        seconds(sim, 0.2, { x: 1028.5, y: 1046.5 });
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         const again = baba(sim);
         expect(again.hp).toBe(again.maxHp);
     });
@@ -574,7 +574,7 @@ describe("Ba-Ba", () => {
         const sim = atBaba();
         const boss = baba(sim);
         boss.hp = Math.floor(boss.maxHp * 0.65);
-        seconds(sim, 0.5, { x: 1028.5, y: 1046.5 });
+        seconds(sim, 0.5, { x: 1036.5, y: 1028.5 });
         expect(boss.bossState!.ordeal).toBeDefined();
         expect(boss.bossState!.ordeal!.during.attacks).toEqual(["Rolling boulders"]);
         expect(boss.shieldEnd).toBeGreaterThan(sim.tick);
@@ -588,24 +588,30 @@ describe("Ba-Ba", () => {
         expect(attack(dash, "Rolling boulders").pattern!.speed).toBe(
             attack(plain, "Rolling boulders").pattern!.speed * 2,
         );
-        expect(attack(dash, "Shockwave").radius).toBeCloseTo(
-            attack(plain, "Shockwave").radius! * 1.4,
+        expect(attack(dash, "Shockwave").ground!.radius).toBeCloseTo(
+            attack(plain, "Shockwave").ground!.radius * 1.4,
         );
         // The same copy each time
         expect(attack(dash, "Rolling boulders")).toBe(attack(dash, "Rolling boulders"));
     });
 
-    it("bursts a boulder out of where the player stood", () => {
+    it("breaks her boulder into shards where it lands", () => {
         const sim = atBaba();
         const boss = baba(sim);
         const boulder = boss.def.boss!.attacks.find((a) => a.name === "Boulder")!;
         const at = { x: sim.player.x, y: sim.player.y };
         sim["startBossAttack"](boss, boulder);
-        sim.player.x = sim.player.prevX = at.x - 4;
         const before = sim.bullets.count;
-        seconds(sim, boulder.windup + 0.2, { x: at.x - 4, y: at.y });
-        expect(sim.bullets.count).toBeGreaterThan(before);
-        const emitter = sim["emitters"].find((e) => e.attack.name === "Boulder");
-        expect(emitter?.originX).toBeCloseTo(at.x);
+        seconds(sim, boulder.windup + 0.1, { x: at.x - 4, y: at.y });
+        expect(sim.bullets.count).toBeGreaterThanOrEqual(before + boulder.shards!.count);
+    });
+
+    it("can't hurt the player in god mode, on the dev server", () => {
+        const sim = atBaba();
+        sim.devGod = true;
+        sim.player.invulnerable = 0;
+        const hp = sim.player.hp;
+        expect(sim["damagePlayer"](50, "test", false)).toBe(0);
+        expect(sim.player.hp).toBe(hp);
     });
 });

@@ -851,6 +851,8 @@ export class Sim {
     tombsPathsDone: string[] = [];
     // Ticks spent in the Nexus, which the run's clock leaves out
     nexusTicks = 0;
+    // Dev only: nothing hurts the player (GameClient.toggleDevGod), for watching a fight's mechanics
+    devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
     // The Apmeken room while the party's in it
@@ -3625,7 +3627,13 @@ export class Sim {
         const player = this.player;
         // Once the run's over nothing more lands, so a win can't turn into a
         // death (or spend a revive) later in the tick it's won
-        if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
+        if (
+            this.runOver ||
+            this.victoryAt >= 0 ||
+            this.hero.down ||
+            this.isImmune(this.hero) ||
+            this.devGod
+        ) {
             return 0;
         }
         // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
@@ -4464,7 +4472,7 @@ export class Sim {
             return;
         }
         if (fight.uid === -1) {
-            if (this.heroes.some((hero) => this.isUp(hero) && hero.player.x > def.line)) {
+            if (this.heroes.some((hero) => this.isUp(hero) && hero.player.y > def.line.y)) {
                 const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
                 if (enemy) {
                     fight.uid = enemy.uid;
@@ -4476,9 +4484,9 @@ export class Sim {
         // room's barrier
         for (const hero of this.heroes) {
             const player = hero.player;
-            const limit = def.line + player.radius;
-            if (player.x < limit) {
-                player.x = limit;
+            const limit = def.line.y + player.radius;
+            if (player.y < limit) {
+                player.y = limit;
             }
         }
         const boss = this.enemies.find((e) => e.uid === fight.uid);
@@ -6055,6 +6063,47 @@ export class Sim {
 
     // Frees the slots of dead bosses, once no bullet or volley of theirs is
     // left to point at them, for the next pattern to take
+    // A blast breaking up where it lands (BossAttackDef.shards): bullets out all round from there
+    private fireShards(
+        enemy: Enemy,
+        attack: BossAttackDef,
+        shards: NonNullable<BossAttackDef["shards"]>,
+        x: number,
+        y: number,
+    ): void {
+        let source = this.bulletSources.findIndex(
+            (s) => s !== undefined && s.attack === attack && s.enemy === enemy,
+        );
+        if (source === -1) {
+            this.freeBulletSources();
+            source = this.bulletSources.indexOf(undefined);
+            if (source === -1) {
+                source = this.bulletSources.length;
+            }
+            this.bulletSources[source] = { attack, enemy };
+        }
+        const speed = shards.speed / TICKS_PER_SECOND;
+        const life = Math.ceil(shards.range / speed);
+        const damage =
+            (this.getBossDamage(enemy, attack) * shards.damage) / Math.max(1, attack.damage);
+        const turn = this.rng.range(0, Math.PI * 2);
+        for (let i = 0; i < shards.count; i++) {
+            const angle = turn + (i * Math.PI * 2) / shards.count;
+            this.bullets.add(
+                x + fm.cos(angle) * 0.4,
+                y + fm.sin(angle) * 0.4,
+                fm.cos(angle) * speed,
+                fm.sin(angle) * speed,
+                0,
+                shards.radius,
+                damage,
+                life,
+                source,
+                this.tick,
+            );
+        }
+    }
+
     private freeBulletSources(): void {
         const sources = this.bulletSources;
         const bullets = this.bullets;
@@ -7054,6 +7103,9 @@ export class Sim {
                 this.emit({ type: "bossSwing", x, y, radius });
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
                     this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
+                }
+                if (attack.kind === "blast" && attack.shards) {
+                    this.fireShards(enemy, attack, attack.shards, x, y);
                 }
             }
             // Co-op: on anyone it lands on

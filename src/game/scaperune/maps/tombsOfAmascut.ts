@@ -1,8 +1,8 @@
 import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
-import { MAP_SQUARE_SIZE, TileGrid } from "../format";
-import { cutPrefab } from "../prefab";
+import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
+import { cutPrefab, rotatePrefab } from "../prefab";
 import { BuildContext, MapRecipe } from "../recipe";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
@@ -39,8 +39,16 @@ type RoomCut = {
     sizeY: number;
     plane: number;
     cell: [column: number, row: number];
+    // Where the party comes in, in tiles from the corner as it lies once turned
     arrive: [x: number, y: number];
+    // Quarter turns clockwise, as it's cut (rotatePrefab)
+    turns?: number;
 };
+
+// A cut's size as it lies, turned
+function turnedSize(cut: RoomCut): [x: number, y: number] {
+    return (cut.turns ?? 0) & 1 ? [cut.sizeY, cut.sizeX] : [cut.sizeX, cut.sizeY];
+}
 
 // The Nexus, in square 55,80: the entry at the south, a path door at each corner. The doors'
 // south-west tiles, from the cut's corner (scripts/cache/dump-square.ts 55,80, locs 46155 to
@@ -80,9 +88,10 @@ const APMEKEN: RoomCut = {
     arrive: [33, 13],
 };
 
-// Ba-Ba's arena, in square 59,84: in on the west, past the teleport crystal (local 18,32), her
-// throne on the east (46,31), debris for cover all over it. She rises in front of her throne
-// once the party's walked in past FIGHT_LINE.
+// Ba-Ba's arena, in square 59,84: the entrance room on the west, with the teleport crystal
+// (local 18,32), the safe area as in OSRS, through a passage (its barrier, wall loc 45860 at x 20
+// and 21, comes out of the map: the sim holds the line instead) to the arena, her throne on the
+// east (46,31), debris for cover all over it. She rises once the party's through the passage.
 const BA_BA_ARENA: RoomCut = {
     x: 3786,
     y: 5396,
@@ -90,11 +99,23 @@ const BA_BA_ARENA: RoomCut = {
     sizeY: 25,
     plane: 0,
     cell: [2, 0],
-    arrive: [13, 12],
+    // Turned three quarters clockwise: her throne's to the north and the entrance south, so her
+    // boulders roll down the screen at you, as in OSRS. In the cut's own tiles (west to east)
+    // the entrance room is x 3 to 8 and the passage 9 to 12 at y 11 to 13; turned, a tile (x, y)
+    // lies at (24 - y, x).
+    arrive: [12, 6],
+    turns: 3,
 };
-const BA_BA_AT = [31, 12];
-// Tiles from the arena cut's west edge: past it, the fight's on
-const FIGHT_LINE = 17;
+// The entrance's barrier, which comes out of the map, and its passage's tiles (from the cut's corner)
+const BA_BA_BARRIER = 45860;
+// What edges the barrier on both sides of the passage (ground decoration that blocks)
+const BA_BA_BARRIER_EDGE = [45861, 45862, 45863, 45864, 45865];
+// (the cut's own tiles, before it's turned)
+const BA_BA_PASSAGE = [9, 10, 11].flatMap((x) => [11, 12, 13].map((y) => [x, y]));
+
+// Where she rises (turned), and the row past which (north) the fight's on: the passage's far end
+const BA_BA_AT = [12, 31];
+const FIGHT_LINE = 12;
 
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
@@ -103,8 +124,8 @@ const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
 function cellCorner(cut: RoomCut): { x: number; y: number } {
     const [column, row] = cut.cell;
     return {
-        x: ARENA_MIN + column * CELL + Math.floor((CELL - cut.sizeX) / 2),
-        y: ARENA_MIN + row * CELL + Math.floor((CELL - cut.sizeY) / 2),
+        x: ARENA_MIN + column * CELL + Math.floor((CELL - turnedSize(cut)[0]) / 2),
+        y: ARENA_MIN + row * CELL + Math.floor((CELL - turnedSize(cut)[1]) / 2),
     };
 }
 
@@ -117,7 +138,12 @@ const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA].map((cut) => {
     return {
         cut,
         at,
-        rect: { x0: at.x, y0: at.y, x1: at.x + cut.sizeX - 1, y1: at.y + cut.sizeY - 1 },
+        rect: {
+            x0: at.x,
+            y0: at.y,
+            x1: at.x + turnedSize(cut)[0] - 1,
+            y1: at.y + turnedSize(cut)[1] - 1,
+        },
         arrive: { x: at.x + cut.arrive[0], y: at.y + cut.arrive[1] },
     };
 });
@@ -148,7 +174,7 @@ export const TOA_PLACES = {
     baba: {
         arrive: worldTile(BA_BA_ROOM.arrive.x, BA_BA_ROOM.arrive.y),
         at: worldTile(BA_BA_ROOM.at.x + BA_BA_AT[0], BA_BA_ROOM.at.y + BA_BA_AT[1]),
-        line: MAP_X * MAP_SQUARE_SIZE + BA_BA_ROOM.at.x + FIGHT_LINE,
+        line: { y: MAP_Y * MAP_SQUARE_SIZE + BA_BA_ROOM.at.y + FIGHT_LINE + 1 },
     },
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
@@ -220,8 +246,28 @@ function build(context: BuildContext): TileGrid {
         const { cut } = room;
         // The Apmeken room's east barrier is the sim's (APMEKEN, above)
         const gateX = 59 * MAP_SQUARE_SIZE - APMEKEN.x + APMEKEN_GATE.x;
+        const prefab = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY);
+        // Left out, in the cut's own tiles, before it's turned
+        prefab.locs = prefab.locs.filter(
+            (loc) =>
+                !(cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX) &&
+                !(
+                    cut === BA_BA_ARENA &&
+                    (loc.id === BA_BA_BARRIER ||
+                        BA_BA_BARRIER_EDGE.includes(loc.id) ||
+                        // The invisible wall (85) sealing the arena's west side, across the
+                        // passage only
+                        (loc.id === 85 && loc.x === 12 && loc.y >= 11 && loc.y <= 13))
+                ),
+        );
+        // The passage's floor, blocked where its barrier stood: open, as the sim holds the line
+        if (cut === BA_BA_ARENA) {
+            for (const [x, y] of BA_BA_PASSAGE) {
+                prefab.levels[0].flags[x + y * cut.sizeX] &= ~TILE_BLOCKED;
+            }
+        }
         ground.stamp(
-            cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY),
+            cut.turns ? rotatePrefab(prefab, cut.turns, context.locs) : prefab,
             room.at.x,
             room.at.y,
             {
@@ -229,7 +275,6 @@ function build(context: BuildContext): TileGrid {
                 feather: 0,
                 flatten: true,
                 height: FLOOR_HEIGHT,
-                skipLoc: (loc) => cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX,
             },
         );
     }

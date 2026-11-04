@@ -1972,6 +1972,7 @@ const Hud = memo(function Hud({
                     {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
                     <RaidRoomInfo client={client} />
                     <TombsWaveInfo client={client} />
+                    <DevGodButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2036,6 +2037,23 @@ function RaidRoomInfo({ client }: { client: GameClient }): JSX.Element | null {
                 {room.points} pts
             </div>
         </>
+    );
+}
+
+// Dev server only: god mode, for watching a fight's mechanics without dying to them
+function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
+    const on = useHudNumber(client, (n) => n.devGod);
+    if (!import.meta.env.DEV || on === undefined) {
+        return null;
+    }
+    return (
+        <button
+            className="ui-button ui-button-small"
+            aria-pressed={on}
+            onClick={() => client.toggleDevGod()}
+        >
+            God mode (dev): {on ? "on" : "off"}
+        </button>
     );
 }
 

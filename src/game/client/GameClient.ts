@@ -563,6 +563,15 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // Dev only: god mode, nothing hurting the player (Sim.devGod), for watching a fight
+    toggleDevGod(): void {
+        const sim = this.sim;
+        if (import.meta.env.DEV && !this.coopRun && sim) {
+            sim.devGod = !sim.devGod;
+            this.updateHud(true);
+        }
+    }
+
     // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
     devSkipToTombsBoss(): void {
         if (import.meta.env.DEV && !this.coopRun) {
@@ -2354,6 +2363,7 @@ export class GameClient implements GameFrameHandler {
                           done: sim.apmeken.doneTick !== undefined,
                       }
                     : undefined,
+            devGod: import.meta.env.DEV ? sim.devGod : undefined,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,

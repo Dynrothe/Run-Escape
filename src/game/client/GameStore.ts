@@ -168,6 +168,8 @@ export type HudNumbers = {
     // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
     // the party to walk through the barrier, or beaten
     tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean };
+    // Dev server only: god mode's on (GameClient.toggleDevGod)
+    devGod?: boolean;
     hp: number;
     maxHp: number;
     // The hitpoints bar turns green, like the client's orb
