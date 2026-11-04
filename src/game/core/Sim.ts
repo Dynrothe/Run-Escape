@@ -275,7 +275,7 @@ const MAX_POOLS = 12;
 const RELOCATE_DISTANCE = 34;
 // A raid's room, cleared: seconds to gather what's on the ground before the next
 const RAID_CLEARED_SECONDS = 2;
-// The waves a raid's room has at the least, when its last boss took long (RaidDef.minWaveSeconds)
+// The waves a raid's room has at the least (RaidDef.minWaveSeconds)
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
@@ -2437,16 +2437,19 @@ export class Sim {
         return this.map.raid?.rooms[this.raidRoom];
     }
 
-    // The run's second this room's boss comes: when it says, with a room's least waves first
+    // The run's second this room's boss comes: its waves' length after the room started (the gap
+    // between its `at` and the last room's), so a boss killed quickly, or a teleport, doesn't
+    // leave the next room's waves the longer for it
     private get raidBossDue(): number {
         const raid = this.map.raid!;
         const room = raid.rooms[this.raidRoom];
         const start = this.raidRoomStartTick / TICKS_PER_SECOND;
         const testRoom = this.testing?.raidRoomSeconds;
         if (testRoom) {
-            return Math.max((this.raidRoom + 1) * testRoom, start + testRoom / 4);
+            return start + testRoom;
         }
-        return Math.max(room.at, start + (raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS));
+        const length = room.at - (raid.rooms[this.raidRoom - 1]?.at ?? 0);
+        return start + Math.max(length, raid.minWaveSeconds ?? RAID_MIN_WAVE_SECONDS);
     }
 
     private get directorSeconds(): number {

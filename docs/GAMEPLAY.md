@@ -317,9 +317,9 @@ version and how to run it.
       once it's beaten.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
-  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and at the next five minute
-  mark of the run (Verzik at thirty) the party's taken into the boss's real room from OSRS, cut out
-  of the cache. Killing it gives raid points (for clearing it, killing the boss fast and taking
+  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the
+  room (however quickly the last boss went down) the party's taken into the boss's real room from
+  OSRS, cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and taking
   little damage), coins for them, and a supply chest between rooms that sells food and potions
   for points. The last boss's chest rolls for a purple,
   more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'

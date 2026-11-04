@@ -1192,7 +1192,7 @@ export type MapDef = {
 // room, and the last room's boss is the final boss.
 export type RaidDef = {
     rooms: RaidRoomDef[];
-    // Seconds of waves a room has at the least, however long the last boss took (60 when unset)
+    // Seconds of waves a room has at the least (60 when unset)
     minWaveSeconds?: number;
 };
 
@@ -1221,8 +1221,9 @@ export type RaidRoomDef = {
     // Where the hall's teleporter stands, in world tiles: walking up to it offers to skip the
     // rest of the room's waves (Sim's raidTeleports)
     teleporter?: { x: number; y: number };
-    // The run's second the boss comes, as a campaign map's do (or minWaveSeconds into the room,
-    // if that's later). The waves' starts and the events' times are from the room's start.
+    // The run's second the boss comes if no boss before took any time: the room's
+    // waves last the gap between this and the last room's (at least minWaveSeconds), from when
+    // the room starts. The waves' starts and the events' times are from the room's start too.
     at: number;
     waves: WaveDef[];
     events: RunEventDef[];

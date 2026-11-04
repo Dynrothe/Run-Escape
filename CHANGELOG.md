@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- The Theatre of Blood: a room's waves always last five minutes. Killing a boss quickly, or taking
+  a portal, used to make the next room's waves longer by the time saved.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

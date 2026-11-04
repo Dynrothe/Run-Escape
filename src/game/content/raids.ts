@@ -123,8 +123,8 @@ export const RAID_SUPPLY_CHEST: RandomEventDef = {
     effect: { kind: "shop", leaveLabel: "On to the next room" },
 };
 
-// Each room's boss comes at the next of these marks in the run, as the campaign's bosses do: five
-// minutes, ten, and so on to Verzik at thirty
+// Each room's waves last this long from when it starts, however quickly the last boss went down
+// (its `at` is where it'd fall with no time spent on bosses: five minutes, ten, and so on)
 const ROOM_MINUTES = 5;
 // A room's waves: a new one every WAVE_STEP seconds, WAVES_A_ROOM of them
 const WAVE_STEP = 60;

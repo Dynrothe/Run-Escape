@@ -166,8 +166,8 @@ describe("raids", () => {
         expect(sim.player.y).toBeCloseTo(1010.5);
         expect(sim.timeLeftForBoss).toBeGreaterThan(28);
 
-        // Its boss is due at the run's 80th second, about 47 seconds into the room
-        toRoomSecond(sim, 50);
+        // Its boss is due 50 seconds into the room (the gap between the rooms' `at`)
+        toRoomSecond(sim, 51);
         expect(sim.raidStage).toBe("boss");
         const boss = sim.enemies.find((enemy) => enemy.boss && !enemy.dead)!;
         expect(boss.def.id).toBe("giant_rat");
@@ -696,6 +696,24 @@ describe("raid teleporters", () => {
         expect(sim.chooseEventOption(0)).toBe(true);
         expect(sim.raidStage).toBe("boss");
         expect(sim.raidTeleportsLeft).toBe(1);
+    });
+
+    it("leave the next room its full waves, not the time saved as well", () => {
+        const sim = raid(false, 2);
+        toRoomSecond(sim, 5);
+        walkUp(sim);
+        sim.chooseEventOption(0);
+        killBosses(sim);
+        expect(sim.raidStage).toBe("cleared");
+        toRoomSecond(sim, 8);
+        expect(sim.raidRoom).toBe(1);
+        // 50 seconds of waves, as it'd have had without the teleport
+        expect(sim.timeLeftForBoss).toBeGreaterThan(49);
+        expect(sim.timeLeftForBoss).toBeLessThanOrEqual(50);
+        toRoomSecond(sim, 49);
+        expect(sim.raidStage).toBe("waves");
+        toRoomSecond(sim, 51);
+        expect(sim.raidStage).toBe("boss");
     });
 
     it("can be turned down, and ask again only once you've stepped away", () => {
