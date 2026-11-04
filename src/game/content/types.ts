@@ -1267,6 +1267,9 @@ export type RaidRoomDef = {
     events: RunEventDef[];
     boss: string;
     bossHp?: number;
+    // Seconds its boss can take for all of a room's speed points (getRoomPoints): what its fight's
+    // tuned to take a strong player
+    par: number;
     // How its hall looks while its waves are on: drawn this bright (as MapDef.brightness, lower
     // darker), and the screen washed with this colour (multiplied over it, so white is no change)
     hall?: { brightness?: number; wash?: string };

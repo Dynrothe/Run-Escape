@@ -8,13 +8,12 @@ import { LUMBRIDGE_WAVES } from "./waves";
 // campaign's chain.
 
 // Raid points, per player, for each room cleared: some for clearing it, more for killing its boss
-// fast (all of SPEED_POINTS within FAST_SECONDS of it turning up, none by SLOW_SECONDS) and for
-// taking little damage in the room (all of SAFE_POINTS with none taken, none at a whole
-// hitpoints bar's worth)
+// fast (all of SPEED_POINTS within its room's par, RaidRoomDef.par, of it turning up, none by
+// SLOW_PAR times that) and for taking little damage in the room (all of SAFE_POINTS with none
+// taken, none at a whole hitpoints bar's worth)
 export const CLEAR_POINTS = 50;
 export const SPEED_POINTS = 100;
-export const FAST_SECONDS = 20;
-export const SLOW_SECONDS = 120;
+export const SLOW_PAR = 2.5;
 export const SAFE_POINTS = 50;
 
 // Coins for each raid point a room's cleared with (the party's average), and on hard mode this
@@ -31,8 +30,13 @@ export const PURPLE_POINTS = 2500;
 export const PURPLE_CHANCE: [min: number, max: number] = [0.05, 0.65];
 export const HARD_UNIQUE_CHANCE = 0.25;
 
-export function getRoomPoints(bossSeconds: number, damageTaken: number, maxHp: number): number {
-    const speed = 1 - (bossSeconds - FAST_SECONDS) / (SLOW_SECONDS - FAST_SECONDS);
+export function getRoomPoints(
+    bossSeconds: number,
+    damageTaken: number,
+    maxHp: number,
+    par: number,
+): number {
+    const speed = 1 - (bossSeconds - par) / (par * SLOW_PAR - par);
     const safe = 1 - damageTaken / Math.max(1, maxHp);
     return Math.round(
         CLEAR_POINTS +
@@ -194,6 +198,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             // so it doesn't read as a stroll past Canifis, but lit enough to see its enemies by
             hall: { brightness: 1.15, wash: "#f4c4c4" },
             boss: "maiden_of_sugadinti",
+            // Seconds for all its speed points (early: fast is fine)
+            par: 30,
             bossHp: 30000,
         },
         0,
@@ -218,6 +224,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("feral_vampyre", "ghast", 30),
             boss: "tob_pestilent_bloat",
+            // Seconds for all its speed points (early)
+            par: 60,
             bossHp: 20000,
         },
         1,
@@ -246,6 +254,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             // Meiyerditch is dark stone: brighter than the rest, or its alleys are lost
             hall: { brightness: 1.1 },
             boss: "nylocas_vasilias",
+            // Seconds for all its speed points (mid)
+            par: 90,
             bossHp: 60000,
         },
         2,
@@ -271,6 +281,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("mutated_bloodveld", "vampyre_juvinate", 36),
             boss: "tob_sotetseg",
+            // Seconds for all its speed points (mid)
+            par: 90,
             bossHp: 48000,
         },
         3,
@@ -296,6 +308,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("vyrewatch_sentinel", "tob_nylocas_hagios", 50),
             boss: "xarpus",
+            // Seconds for all its speed points (late)
+            par: 150,
             bossHp: 120000,
         },
         4,
@@ -324,6 +338,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),
             boss: "tob_verzik_vitur",
+            // Seconds for all its speed points (late, her three forms)
+            par: 150,
             // Each of her three forms has this many hitpoints
             bossHp: 48000,
         },
