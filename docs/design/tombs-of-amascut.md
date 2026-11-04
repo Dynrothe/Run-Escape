@@ -145,9 +145,13 @@ unlocks something in the game.
     - **Of the sun** (Jewel of the Sun): heals on every kill and hits harder below 25% health;
       Tumeken's Light, on a long cooldown, heals in full and cures poison.
 - **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the
-  divine pouch, four runes instead of three. Here it's a passive, offered to every style: one more
-  weapon slot. Rarer than a purple's other rolls, since it's strong for any build. (A fixed pair of
-  spells was the other idea; a slot was picked as it helps every build, not only one.)
+  divine pouch, four runes instead of three. Here the thread puts the pouch in the level-up
+  choices, as a rare passive, offered to magic adventurers only (it's a rune pouch, and it gives
+  Tumeken's shadow's style a perk of the raid's, as the fang and keris are melee's and Masori
+  ranged's). It takes a passive slot and gives a weapon slot, at one level only: the price is a
+  passive, and with it maybe an evolution, since passives are what weapons evolve with. The slot
+  takes any weapon the adventurer could have, as theirs are almost all magic anyway, so there's no
+  slot of a kind of its own to build.
 
 ## 9. The order it's built in
 
