@@ -7,6 +7,8 @@ export type Loadout = {
     metaStats: Record<string, number>;
     unlockedItems: string[];
     armoury: Record<string, number>;
+    // Their pet (pets.ts), only for looks: the sim never sees it
+    pet?: string;
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which
@@ -158,7 +160,15 @@ export type ServerMessage =
     // name: the one the relay's given this player. anyMap: rooms take players
     // whatever maps they have. country: theirs, as others see it on their
     // flag, if the relay knows it.
-    | { t: "welcome"; id: string; name: string; anyMap?: boolean; country?: string }
+    | {
+          t: "welcome";
+          id: string;
+          name: string;
+          anyMap?: boolean;
+          country?: string;
+          // The open rooms come again whenever they change, without asking
+          listUpdates?: boolean;
+      }
     // This player's new name, after asking for one
     | { t: "named"; name: string }
     | { t: "pong" }

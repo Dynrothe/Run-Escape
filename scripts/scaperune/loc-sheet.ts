@@ -4,13 +4,18 @@
 //
 //   npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1278:22 10820
 //
+// Drawn smaller, a tall loc looks like a small one, so compare sizes with TRUE_SCALE=1: every loc
+// at TILE_PIXELS a tile (26 if not set), on its footprint, in cells as big as the biggest needs.
+//
+//   TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 37646 37730 37865
+//
 // An id can have a loc type after it (10 if not). A prefab's rectangle, world x,y,sizeX,sizeY,
 // is drawn from above, floor and all, as the generator would have it:
 //
 //   npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 3238,3204,11,13
 import fs from "node:fs";
 
-import { PlacedLoc } from "../../src/game/scaperune/format";
+import { PlacedLoc, cacheFloorId } from "../../src/game/scaperune/format";
 import { cutPrefab } from "../../src/game/scaperune/prefab";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
@@ -21,11 +26,12 @@ import { HSL_RGB_MAP, blendLight } from "../../src/rs/util/ColorUtil";
 import { loadGameCache } from "../cache/scene-util";
 import { encodePng } from "./png";
 
-const CELL = Number(process.env.CELL ?? 120);
+const TRUE_SCALE = process.env.TRUE_SCALE === "1";
 const LABEL = 8;
-const COLUMNS = Math.floor(960 / CELL);
-const TILE_PIXELS = 26;
+const TILE_PIXELS = Number(process.env.TILE_PIXELS ?? 26);
 const TILE = 128;
+// The footprint's floor, drawn under a loc at true scale
+const FOOTPRINT = 0x2e3828;
 const PITCH = (70 * Math.PI) / 180;
 const SIN = Math.sin(PITCH);
 const COS = Math.cos(PITCH);
@@ -59,6 +65,39 @@ const loader = new LocModelLoader(
     factory.getSkeletalSeqLoader(),
 );
 
+// How far a loc's model reaches from its middle on the sheet, in model units
+function getReach(id: number, type: number): number {
+    let reach = 1;
+    try {
+        const data = loader.getLocModelData(locTypes.load(id), type as LocModelType, 0);
+        for (let v = 0; v < (data?.verticesCount ?? 0); v++) {
+            const x = data!.verticesX[v];
+            const h = -data!.verticesY[v];
+            const z = data!.verticesZ[v];
+            reach = Math.max(reach, Math.abs(x), Math.abs(z * SIN + h * COS));
+        }
+    } catch {
+        return reach;
+    }
+    return reach;
+}
+
+// The cell a spec needs at true scale: the model's reach either side of its middle, or a prefab's
+// tiles
+function getTrueCell(spec: string): number {
+    if (spec.includes(",")) {
+        const [, , sizeX, sizeY] = spec.split(",").map(Number);
+        return Math.ceil(Math.max(sizeX, sizeY) * TILE_PIXELS + LABEL + 4);
+    }
+    const [id, type] = spec.split(":").map(Number);
+    return Math.ceil(2 * ((getReach(id, type ?? 10) * TILE_PIXELS) / TILE + LABEL));
+}
+
+const CELL = Math.max(
+    Number(process.env.CELL ?? 120),
+    ...(TRUE_SCALE ? specs.map(getTrueCell) : []),
+);
+const COLUMNS = Math.max(1, Math.floor(960 / CELL));
 const rows = Math.ceil(specs.length / COLUMNS);
 const width = CELL * COLUMNS;
 const height = CELL * rows;
@@ -176,20 +215,25 @@ function drawOneLoc(spec: string, x0: number, y0: number): void {
     const def = locTypes.load(id);
     label(`${id}`, x0 + 2, y0 + 1);
     label(`${def.sizeX}x${def.sizeY}`, x0 + CELL - 26, y0 + 1);
-    let reach = 1;
-    try {
-        const data = loader.getLocModelData(def, (type ?? 10) as LocModelType, 0);
-        for (let v = 0; v < (data?.verticesCount ?? 0); v++) {
-            const x = data!.verticesX[v];
-            const h = -data!.verticesY[v];
-            const z = data!.verticesZ[v];
-            reach = Math.max(reach, Math.abs(x), Math.abs(z * SIN + h * COS));
+    const reach = getReach(id, type ?? 10);
+    const fit = TRUE_SCALE
+        ? TILE_PIXELS / TILE
+        : Math.min(TILE_PIXELS / TILE, (CELL / 2 - LABEL) / reach);
+    const middleX = x0 + CELL / 2;
+    const middleY = y0 + (TRUE_SCALE ? CELL / 2 + LABEL / 2 : CELL * 0.62);
+    if (TRUE_SCALE) {
+        // Its tiles, seen from the camera's pitch, so its size reads against them
+        const halfX = (def.sizeX * TILE_PIXELS) / 2;
+        const halfY = (def.sizeY * TILE_PIXELS * SIN) / 2;
+        for (let y = Math.round(middleY - halfY); y < middleY + halfY; y++) {
+            for (let x = Math.round(middleX - halfX); x < middleX + halfX; x++) {
+                if (y >= y0 + LABEL) {
+                    put(x, y, FOOTPRINT);
+                }
+            }
         }
-    } catch {
-        return;
     }
-    const fit = Math.min(TILE_PIXELS / TILE, (CELL / 2 - LABEL) / reach);
-    drawLoc({ id, type: type ?? 10, rotation: 0 }, fit, x0 + CELL / 2, y0 + CELL * 0.62, x0, y0);
+    drawLoc({ id, type: type ?? 10, rotation: 0 }, fit, middleX, middleY, x0, y0);
 }
 
 function drawPrefab(spec: string, x0: number, y0: number): void {
@@ -197,7 +241,7 @@ function drawPrefab(spec: string, x0: number, y0: number): void {
     const prefab = cutPrefab(maps, worldX, worldY, sizeX, sizeY);
     label(`${worldX}x${worldY}`, x0 + 2, y0 + 1);
     label(`${sizeX}x${sizeY}`, x0 + CELL - 26, y0 + 1);
-    const tile = (CELL - LABEL - 4) / Math.max(sizeX, sizeY);
+    const tile = TRUE_SCALE ? TILE_PIXELS : (CELL - LABEL - 4) / Math.max(sizeX, sizeY);
     const fit = tile / TILE;
     const left = x0 + 2;
     const bottom = y0 + CELL - 2;
@@ -207,10 +251,11 @@ function drawPrefab(spec: string, x0: number, y0: number): void {
             const i = x + y * sizeX;
             let color = 0x3e4a34;
             if (overlays[i]) {
-                const type = overlayTypes.load(overlays[i] - 1);
+                const type = overlayTypes.load(cacheFloorId(overlays[i]));
                 color = type.textureId === -1 ? type.primaryRgb : 0x6688aa;
             } else if (underlays[i]) {
-                color = (underlayTypes.load(underlays[i] - 1) as UnderlayFloorType).rgbColor;
+                color = (underlayTypes.load(cacheFloorId(underlays[i])) as UnderlayFloorType)
+                    .rgbColor;
             }
             for (let py = 0; py < Math.ceil(tile * SIN); py++) {
                 for (let px = 0; px < Math.ceil(tile); px++) {

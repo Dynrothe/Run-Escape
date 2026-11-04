@@ -4,7 +4,7 @@ import { isCoarsePointer } from "../../util/DeviceUtil";
 import { GameClient } from "../client/GameClient";
 import { InventorySlotView, UiSnapshot } from "../client/GameStore";
 import { STICK_RADIUS, SharedTaps } from "../client/GameTouch";
-import { ItemIcon } from "./ItemIcon";
+import { InventoryItem } from "./InventoryItem";
 import "./Mobile.css";
 
 // Too narrow for the game's layouts. Mobile.css has the same one.
@@ -93,7 +93,7 @@ type Props = {
 // What a run needs on a touch screen. The whole screen is the stick, with the
 // buttons on top. Fingers go by pointer events on the zone, so the thumb stays
 // on the stick while another finger taps (a click wouldn't fire for that one,
-// which is why the buttons act on the press too).
+// which is why item taps finish on pointerup rather than click).
 export const TouchControls = memo(function TouchControls({
     inventory,
     overlay,
@@ -186,18 +186,13 @@ export const TouchControls = memo(function TouchControls({
                 {inventory.map((slot, i) => (
                     <div key={i} className="ui-touch-item-place">
                         {slot && (
-                            <button
-                                data-silent
-                                className="ui-touch-item"
-                                style={{ borderColor: slot.item.rarity.color }}
-                                aria-label={slot.item.name}
-                                onPointerDown={() => client.useItem(i)}
-                            >
-                                <ItemIcon objId={slot.item.objId} size={36} />
-                                {slot.count > 1 && (
-                                    <span className="ui-inv-count">{slot.count}</span>
-                                )}
-                            </button>
+                            <InventoryItem
+                                slot={slot}
+                                index={i}
+                                onUse={() => client.useItem(i)}
+                                touch
+                                disabled={overlay !== "none"}
+                            />
                         )}
                     </div>
                 ))}

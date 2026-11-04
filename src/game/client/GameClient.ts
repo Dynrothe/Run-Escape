@@ -23,6 +23,7 @@ import {
     isFunMap,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -34,7 +35,7 @@ import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
-import { ChestAction } from "../core/Loot";
+import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
@@ -52,6 +53,7 @@ import {
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
@@ -156,6 +158,9 @@ const ATTRACT_PITCH = -260;
 const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
+// The pet taken along stands beside the character on the menus: tiles to their side and behind
+const PREVIEW_PET_SIDE = 1.1;
+const PREVIEW_PET_BACK = 0.4;
 const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
@@ -419,9 +424,10 @@ export class GameClient implements GameFrameHandler {
     private appearanceVersions: number[] = [];
     // Each hero's level-up choices their look was last baked for
     private lookChoices: (UpgradeChoice[] | undefined)[] = [];
-    // The casket Auto alch last sent off (a co-op one takes a frame to come
-    // back, and shouldn't go twice)
-    private autoAlchedUid = -1;
+    // The casket Auto alch or Auto equip answered, until that's done (co-op's
+    // comes back with a frame: it shouldn't go twice, or show the casket
+    // meanwhile)
+    private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
@@ -550,6 +556,16 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ screen });
     }
 
+    // The adventurer the game starts on (or none, to start on the first again)
+    toggleFavouriteCharacter(characterId: string): void {
+        if (!this.save.unlockedCharacters.includes(characterId)) {
+            return;
+        }
+        this.save.favouriteCharacter =
+            this.save.favouriteCharacter === characterId ? undefined : characterId;
+        this.persist();
+    }
+
     selectCharacter(characterId: string): void {
         if (!this.save.unlockedCharacters.includes(characterId)) {
             return;
@@ -559,6 +575,16 @@ export class GameClient implements GameFrameHandler {
             this.assets.setCharacterLook(characterId);
         }
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
+    }
+
+    // The pet to take along (one of the trophies found), or none
+    selectPet(petId: string | undefined): void {
+        if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
+            return;
+        }
+        this.save.pet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
     }
 
     // The map for the next run. Hosting a room, it's the room's map: the relay
@@ -613,7 +639,8 @@ export class GameClient implements GameFrameHandler {
         }
         const { mapId, hard } = this.store.getSnapshot();
         if (hard || isHardUnlocked(this.save, mapId)) {
-            this.store.set({ hard: !hard });
+            // Expert is hard mode too: off with it
+            this.store.set(hard ? { hard: false, expert: false } : { hard: true });
         }
     }
 
@@ -686,7 +713,7 @@ export class GameClient implements GameFrameHandler {
 
     // Another page of the open rooms
     showRoomsPage(page: number): void {
-        this.coop.refresh(page);
+        this.coop.showPage(page);
     }
 
     joinRoom(code: string): void {
@@ -742,6 +769,7 @@ export class GameClient implements GameFrameHandler {
             {
                 ...this.save.armoury,
             },
+            this.save.pet,
         );
     }
 
@@ -884,6 +912,10 @@ export class GameClient implements GameFrameHandler {
 
     toggleAutoAlch(): void {
         this.setDisplay({ autoAlch: !this.display.autoAlch });
+    }
+
+    toggleAutoEquip(): void {
+        this.setDisplay({ autoEquip: !this.display.autoEquip });
     }
 
     toggleQuestTracker(): void {
@@ -1039,17 +1071,24 @@ export class GameClient implements GameFrameHandler {
 
     // Swaps in an imported save in place of this one
     replaceSave(save: SaveData): void {
-        this.useSave(save);
+        this.useSave(save, true);
         this.persist();
     }
 
-    // Plays on with this save
-    private useSave(save: SaveData): void {
+    // Plays on with this save. toFavourite: go to its favourite, as it would
+    // start on, if it has one that's open (an import; a save given back by
+    // another tab leaves the pick alone)
+    private useSave(save: SaveData, toFavourite = false): void {
         this.save = save;
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
-        if (!save.unlockedCharacters.includes(characterId)) {
-            this.selectCharacter(save.unlockedCharacters[0]);
+        const starting = getStartingCharacter(save);
+        const favourite = toFavourite && starting === save.favouriteCharacter;
+        if (
+            characterId !== starting &&
+            (favourite || !save.unlockedCharacters.includes(characterId))
+        ) {
+            this.selectCharacter(starting);
         }
         if (!isMapUnlocked(save, mapId)) {
             this.store.set({ mapId: MAPS[0].id });
@@ -1100,9 +1139,13 @@ export class GameClient implements GameFrameHandler {
         this.grids.delete(mapId);
     }
 
-    // Loads a map's collision and enemies for a run, with the loading screen if
-    // it takes a moment. False if it couldn't.
-    private async travelTo(mapId: string, back: Screen): Promise<boolean> {
+    // Loads a map's collision and enemies for a run, and the party's pets, with
+    // the loading screen if it takes a moment. False if it couldn't.
+    private async travelTo(
+        mapId: string,
+        back: Screen,
+        pets: (string | undefined)[],
+    ): Promise<boolean> {
         const map = getMap(mapId);
         const enemies = getMapEnemies(map);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
@@ -1112,11 +1155,14 @@ export class GameClient implements GameFrameHandler {
                 loadingProgress: 25,
             });
         }
+        // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
+        const petsBaked = this.assets.loadPets(pets);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
+            await petsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1139,7 +1185,7 @@ export class GameClient implements GameFrameHandler {
         const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        if (!(await this.travelTo(mapId, "characters"))) {
+        if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
             return;
         }
         usePortableMath(false);
@@ -1165,7 +1211,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim);
+        this.enterRun(sim, [this.save.pet]);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1210,7 +1256,11 @@ export class GameClient implements GameFrameHandler {
             // Still on the last run's results
             this.leaveRun(false);
         }
-        if (!(await this.travelTo(game.mapId, "coop"))) {
+        // Each hero's pet, only for looks (another player's game could send anything)
+        const pets = game.heroes.map((hero) =>
+            typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
+        );
+        if (!(await this.travelTo(game.mapId, "coop", pets))) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1254,7 +1304,7 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim);
+        this.enterRun(sim, pets);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1264,7 +1314,8 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private enterRun(sim: Sim): void {
+    // pets: each hero's pet, in the party's order
+    private enterRun(sim: Sim, pets: (string | undefined)[]): void {
         const map = sim.map;
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
@@ -1291,11 +1342,12 @@ export class GameClient implements GameFrameHandler {
         this.appearanceVersions = [];
         this.lookChoices = [];
         this.decisionKey = "";
-        this.autoAlchedUid = -1;
+        this.autoChest = undefined;
         this.coopStopped = false;
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
+        this.view.pets.setPets(pets);
         this.cameraRig.pitch = RUN_PITCH;
         this.cameraRig.distance =
             isCoarsePointer && window.innerHeight <= PHONE_MAX_HEIGHT
@@ -1473,7 +1525,10 @@ export class GameClient implements GameFrameHandler {
     }
 
     private afterReroll(sim: Sim): void {
-        if (sim.state === "chest") {
+        if (sim.state === "chest" && this.autoChestAction(sim)) {
+            // Auto equip takes the new item, with no casket to burst open
+            this.syncOverlay();
+        } else if (sim.state === "chest") {
             const chest = getChestView(sim);
             // The UI bursts the casket open again for the new item
             if (chest) {
@@ -1862,6 +1917,12 @@ export class GameClient implements GameFrameHandler {
         this.view.localPlayerPose = this.coopStopped
             ? undefined
             : this.coopRun?.prediction?.render(alpha);
+        // Pets walk behind their players as they're drawn: a co-op guest's own hero where
+        // prediction has them, ahead of the sim
+        const predicted = this.view.localPlayerPose;
+        this.view.pets.update(sim, (hero) =>
+            predicted?.hero === hero ? predicted : sim.heroes[hero]?.player,
+        );
         const { x: px, y: py } = getPlayerPose(
             sim,
             this.viewHero,
@@ -1971,6 +2032,21 @@ export class GameClient implements GameFrameHandler {
         if (key !== this.decisionKey) {
             this.decisionKey = key;
             this.syncOverlay();
+        }
+        // Only while frames are coming: a reconnecting lobby holds what's
+        // sent, and a pile of answers would go on to the next caskets
+        if (steps > 0) {
+            this.resendAutoChest(sim, run);
+        }
+    }
+
+    // An automatic casket answer still waiting for its frame: CoopRun.act
+    // drops it until it's waited long enough to be lost or turned away, then
+    // sends it again. The casket's hidden, so there's nothing to click.
+    private resendAutoChest(sim: Sim, run: CoopRun): void {
+        const answer = this.autoChest;
+        if (answer && sim.state === "chest" && sim.chest?.uid === answer.uid) {
+            run.act({ kind: "chest", action: answer.action });
         }
     }
 
@@ -2152,11 +2228,21 @@ export class GameClient implements GameFrameHandler {
                         this.store.toast(event.message);
                     }
                     break;
+                // An automatic answer had no casket screen to show what it was
                 case "alch":
-                    // There was no casket screen to show what it was
-                    if (this.display.autoAlch) {
+                    if (this.autoChestDone(sim)) {
                         this.store.toast(
                             `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                        );
+                    }
+                    break;
+                case "equip":
+                    if (this.autoChestDone(sim)) {
+                        this.store.toast(
+                            `Equipped ${getItem(event.itemId).name}` +
+                                (event.replacedId
+                                    ? `; high alched ${getItem(event.replacedId).name} for ${event.coins.toLocaleString()} coins`
+                                    : ""),
                         );
                     }
                     break;
@@ -2196,6 +2282,62 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // What Auto alch or Auto equip would do with the open casket's item, if
+    // either takes it (Auto alch first)
+    private autoChestAction(sim: Sim): ChestAction | undefined {
+        const chest = sim.state === "chest" ? sim.chest : undefined;
+        if (!chest) {
+            return undefined;
+        }
+        if (this.display.autoAlch) {
+            return "alch";
+        }
+        const item = getItem(chest.itemId);
+        return this.display.autoEquip &&
+            shouldAutoEquip(sim.gear, sim.gearUpgrades, item, chest.upgrades)
+            ? "take"
+            : undefined;
+    }
+
+    // Answers the open casket for Auto alch or Auto equip, as its button
+    // would, with no casket screen (co-op's answer takes a frame or more to
+    // come back, and the menu can still open meanwhile). False when the
+    // casket's the player's to answer.
+    private autoAnswerChest(sim: Sim, waitingOn: string[]): boolean {
+        const chest = sim.chest;
+        if (!chest) {
+            return false;
+        }
+        const answered = this.autoChest?.uid === chest.uid;
+        const action = answered ? undefined : this.autoChestAction(sim);
+        if (!answered && !action) {
+            return false;
+        }
+        const overlay = this.paused ? "paused" : "none";
+        this.store.set({ overlay, chest: undefined, choices: [], waitingOn });
+        if (!action) {
+            // Sent already (resendAutoChest sends a lost one again)
+            return true;
+        }
+        this.autoChest = { uid: chest.uid, action };
+        if (this.act({ kind: "chest", action })) {
+            return true;
+        }
+        this.autoChest = undefined;
+        return false;
+    }
+
+    // Whether an alch or equip just done was the automatic answer's (which is
+    // then over), rather than the player's own click
+    private autoChestDone(sim: Sim): boolean {
+        const answer = this.autoChest;
+        if (!answer || sim.chests.some((chest) => chest.uid === answer.uid)) {
+            return false;
+        }
+        this.autoChest = undefined;
+        return true;
+    }
+
     // Shows whichever modal the run's state calls for
     private syncOverlay(): void {
         const sim = this.sim;
@@ -2213,15 +2355,12 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
-        } else if (sim.state === "chest" && sim.chest && this.display.autoAlch) {
-            // As if the High alch button had been clicked; this comes back here
-            // for whatever's next. Co-op's comes back a frame later, so once
-            // for each casket.
-            if (sim.chest.uid !== this.autoAlchedUid) {
-                this.autoAlchedUid = sim.chest.uid;
-                this.resolveChest("alch");
-            }
         } else if (sim.state === "chest" && sim.chest) {
+            if (this.autoAnswerChest(sim, waitingOn)) {
+                return;
+            }
+            // Any earlier automatic answer is done, as this one's first in line
+            this.autoChest = undefined;
             const chest = getChestView(sim);
             const shown = this.store.getSnapshot();
             // Co-op: the same casket again keeps its animation where it is
@@ -2425,11 +2564,11 @@ export class GameClient implements GameFrameHandler {
             this.view.submitActors(actors, sim, this.getAlpha());
             return;
         }
-        // Title screen: just the character
+        // Title screen: just the character, and their pet
         const model = this.assets.getPlayer();
+        const tick = Math.floor(this.attractTick);
         if (model) {
             const anim = model.getAnim(this.assets.getPlayerStance().idle);
-            const tick = Math.floor(this.attractTick);
             actors.draw(
                 model,
                 anim,
@@ -2437,6 +2576,22 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
+                0,
+            );
+        }
+        const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);
+        const petModel = pet && this.assets.getPet(pet.id);
+        if (pet && petModel) {
+            const anim = petModel.getAnim(pet.idleSeq);
+            const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;
+            const y = TITLE_MAP.spawn.y - PREVIEW_PET_BACK;
+            actors.draw(
+                petModel,
+                anim,
+                anim.getFrame(tick),
+                x,
+                this.grid.getHeight(x, y) / 128,
+                y,
                 0,
             );
         }

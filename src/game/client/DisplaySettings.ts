@@ -12,6 +12,8 @@ export type DisplaySettings = {
     damagePanel: boolean;
     // Caskets are high alched as they're opened, with no casket screen
     autoAlch: boolean;
+    // Equip only unambiguous casket upgrades, never replacing a set piece
+    autoEquip: boolean;
     // Joining a co-op game, your own movement shows before the host confirms it
     movePrediction: boolean;
     // Other co-op players see your country's flag, where the relay knows it
@@ -46,7 +48,7 @@ const SETTINGS_KEY = "rune-survivors-display";
 const PREDICTION_ON_BY_DEFAULT = "movePredictionDefaultOn";
 
 // The menu camera stands still for anyone who's asked for less motion
-function getDefaults(): DisplaySettings {
+export function getDefaultDisplaySettings(): DisplaySettings {
     let reducedMotion = false;
     try {
         reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -57,6 +59,7 @@ function getDefaults(): DisplaySettings {
         questTracker: true,
         damagePanel: false,
         autoAlch: false,
+        autoEquip: false,
         movePrediction: true,
         coopFlag: true,
         frameRate: "auto",
@@ -64,7 +67,7 @@ function getDefaults(): DisplaySettings {
 }
 
 export function loadDisplaySettings(): DisplaySettings {
-    const settings = getDefaults();
+    const settings = getDefaultDisplaySettings();
     try {
         const json = window.localStorage.getItem(SETTINGS_KEY);
         if (json) {
@@ -83,6 +86,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.autoAlch === "boolean") {
                 settings.autoAlch = data.autoAlch;
+            }
+            if (typeof data.autoEquip === "boolean") {
+                settings.autoEquip = data.autoEquip;
             }
             if (
                 typeof data.movePrediction === "boolean" &&

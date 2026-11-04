@@ -16,6 +16,7 @@ npx tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's m
 npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
 npx tsx scripts/cache/find-locs.ts multicannon           # scenery
 npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+npx tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
 ```
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
@@ -60,7 +61,11 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 ## Passive
 
 Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, and `alsoAdds` puts
-the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item.
+the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item
+(a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
+with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
+one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
+there, and `slim-cache.ts` keeps them.
 
 ## Stat
 
@@ -74,6 +79,8 @@ starting weapon).
 Add it to `SHOP_UPGRADES` in `shop.ts`, themed as an OSRS skill, with its `stat`. Costs and
 refunds come from `getUpgradeCost` and the save code, independently for each combat style's
 `skillPages` allocation. New ones don't need a save migration.
+A single rank's refund reprices the page's later ranks from its saved purchase order, at today's
+prices, and never gives back more than the page spent, so changing a cost needs no migration either.
 
 ## Gear and utility items
 
@@ -207,9 +214,23 @@ another, each with its waves, events, boss and where things are. Its arena is a 
 with a hall for each room's waves and its boss room cut from the cache (`maps/theatreOfBlood.ts`),
 which exports where everything is. `waves` and `events` on the `MapDef` are every room's, for what
 bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a file of their own
-(`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays
-as it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`,
-`stare`, `expert` on an attack) and do nothing off a raid's expert mode.
+(`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays as
+it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`, `stare`,
+`expert` on an attack) and do nothing off a raid's expert mode, but `colours.offStyle` brings a
+boss's colours to normal too. A boss's own mechanic can be a while it can't be hurt: `shadowRealm`
+or `yellows` (for so many seconds) or `exhumes` (until so many of its smother ground marks are stood
+on, or its time's up), each at shares of its hitpoints, doing only the attacks they name meanwhile
+(`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used only then. The balance bot has to know
+how to play a new one (`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
+
+## Pet
+
+A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
+(`from`), then an entry in `PETS` (`pets.ts`) with its id, the follower NPC and its idle and walk
+animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
+script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
+offered once found, with nothing else to add. Pets never go in the sim: see Pets in
+`docs/DEVELOPMENT.md`.
 
 ## Adventurer
 

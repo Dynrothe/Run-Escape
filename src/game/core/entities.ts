@@ -136,9 +136,17 @@ export type BossState = {
     // BossDef.stare: the way it's staring (radians, none until it does), and when it next turns
     stareAngle?: number;
     nextStare?: number;
+    // Where it'll stare once it turns at nextStare, picked and said a moment before
+    stareNext?: number;
     // BossDef.stomp: hits since the player stepped under it, and the next one
     stomps?: number;
     nextStomp?: number;
+    // BossDef.shadowRealm, exhumes or yellows: how many have begun, and the one it's in, until
+    // endTick or, for exhumes, its exhumeds are all smothered (left, -1 for the others)
+    ordealsDone?: number;
+    ordeal?: { endTick: number; left: number; during: { attacks: string[]; interval: number } };
+    // One's due but waiting for expert's projectile to land: no more of expert's own meanwhile
+    ordealHeld?: boolean;
 };
 
 // A boss's big entrance (BossDef.intro)
@@ -168,6 +176,9 @@ export type EnemyLeaving = {
 export type GroundHazard = {
     uid: number;
     enemyUid: number;
+    // Its boss's EnemyDef id, kept for once the boss is gone (what its hits are said to be from,
+    // and its armour cap)
+    enemyId: string;
     attack: BossAttackDef;
     x: number;
     y: number;
@@ -186,6 +197,8 @@ export type GroundHazard = {
     // and when it next hurts whoever's in it
     lingerEnd: number;
     nextHurt: number;
+    // An exhumed's ticks stood in so far (GroundPatternDef.smother)
+    stood?: number;
 };
 
 // A boss's corpse flowers (BossAttackDef quarters), crossing at (x, y). The

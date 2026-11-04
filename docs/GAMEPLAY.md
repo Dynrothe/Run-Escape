@@ -72,7 +72,8 @@ version and how to run it.
 - **Adventurers**: three to start with, each with their own starting weapon, outfit and bonus.
   The rest join for beating a map or for a task done on one (in a single run, however it ends);
   the adventurer screen says what each one wants, and a task done mid-run rings the town
-  crier's bell.
+  crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
+  on them.
 
     | Adventurer          | Fights with | Starts with            | Bonus                               | Joins for                                            |
     | ------------------- | ----------- | ---------------------- | ----------------------------------- | ---------------------------------------------------- |
@@ -156,12 +157,12 @@ version and how to run it.
       the bigger the target. The **Nightmare staff**, Phosani's own, has her grasping claws come
       up out of the ground under enemies around you every few seconds, hands and all, with bosses
       and elites grabbed twice more.
-- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, or killing
-  one of its mid-run bosses, brings a weapon, a passive or a piece of gear into the game for
-  every run after (a toast and the results screen say so). Until then it's never offered or
-  dropped. Each map's card shows what it holds, faded until it's earned, and says on hover what
-  to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there from the
-  start.
+- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, killing one of
+  its mid-run bosses, or finding something in a raid's chest, brings a weapon, a passive or a piece
+  of gear into the game for every run after (a toast and the results screen say so). Until then it's
+  never offered or dropped. Each map's card shows what it holds, faded until it's earned, and says
+  on hover what to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there
+  from the start.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
@@ -176,7 +177,6 @@ version and how to run it.
     | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
     | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
     | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
-    | ToB (raid)     | Ghrazi rapier; on hard, Holy Scythe of Vitur     |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -205,6 +205,12 @@ version and how to run it.
 - **Auto alch** (off by default, in Settings and the pause menu) high alchs every casket as it's
   opened, gear and rare finds included, with a line saying what it was and no casket screen. It's
   the same as clicking High alch: alching a piece of a set you've started stops that set too.
+- **Auto equip** (off by default, in Settings and the pause menu) equips casket gear into empty
+  slots, or replaces gear only if no stat bonus decreases and at least one increases, including
+  Armoury and endless upgrades. Equal gear, trade-offs and utility items still ask. Replacing a
+  worn set piece always asks, even before its set bonus is active or when upgrading within the
+  same set. Replaced gear is high alched as usual, with a line saying what was equipped and alched.
+  Auto alch takes priority if both settings are on.
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
@@ -242,6 +248,10 @@ version and how to run it.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
   mask or a Scythe inside, for the Collection log. Those do nothing in a run.
+- **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, and Lil' Zik from
+  Verzik with its looks from expert clears) can be taken along, picked under the adventurers. It
+  follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
+  in co-op the party sees each other's.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -317,24 +327,37 @@ version and how to run it.
       once it's beaten.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
-  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and at the next five minute
-  mark of the run (Verzik at thirty) the party's taken into the boss's real room from OSRS, cut out
-  of the cache. Killing it gives raid points (for clearing it, killing the boss fast and taking
-  little damage), coins for them, and a supply chest between rooms that sells food and potions
-  for points. The last boss's chest rolls for a purple,
-  more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'
-  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, and what
-  they fire from themselves starts a couple of tiles out, so there's a pocket up close that only
-  melee gets to stand in. A line at the top of the screen says what the hall wants of you, and
-  whatever bones and coins are still on its floor when the boss comes go with you.
+  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
+  (however quickly the last boss went down) the party's taken into the boss's real room from OSRS,
+  cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and
+  taking little damage), coins for them, and a supply chest between rooms that sells food and
+  potions for points. The last boss's chest rolls for a purple, more likely the more points you
+  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
+  from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
+  can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
+  against missiles and magic, so melee hits hardest, but there's nowhere safe by them: what they
+  fire from themselves starts from their middle, and up close about half of what each boss does is a
+  stomp, bite, claws or burst all round it, the bursts marked on the ground first. A line at the top
+  of the screen says what the hall wants of you, and whatever bones and coins are still on its floor
+  when the boss comes go with you.
+    - **Each boss has its own mechanic**, from the real raid: the Maiden's Nylocas crawl to her
+      and feed her unless you kill them on the way; the Bloat only really takes damage while he's
+      down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
+      drags you into his shadow realm, where he can't be hurt and there's only his maze to get
+      through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
+      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      throws her yellows, which only miss you in the glowing pool that comes with each. The
+      raid's green and blue Nylocas shoot from range.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
-    - **Beaten once**: the Ghrazi rapier and hard mode.
-    - **Beaten on hard**: the Holy Scythe of Vitur, and **expert mode**: hard mode with more of the
-      real raid. The Nylocas only take their own style (grey melee, green ranged, blue magic),
-      Nylocas Vasilias changes colour, the Maiden's Matomenos crawl to her and heal her, Xarpus
-      stares one way and hurts whoever hits him from in front, and Verzik's spider throws a ball
+    - **Beaten once**: hard mode, whose bosses fire half as many bullets again in every pattern (and
+      so on expert too).
+    - **Beaten on hard**: **expert mode**: hard mode with more of the real raid. The Nylocas only
+      take their own style (grey melee, green ranged, blue magic), Nylocas Vasilias's colours too,
+      so it takes all three styles (weapons don't aim at one they can't hurt), the Maiden's Nylocas
+      feed her more, Xarpus stares one way, and a moment before he turns faces where he'll stare and
+      says which side, and hurts whoever hits him from in front, and Verzik's spider throws a ball
       that kills anyone outside its glowing circle. Twice the coins, and one of Lil' Zik's looks
       each clear.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
@@ -510,9 +533,11 @@ version and how to run it.
   the selected class can still spend. Refunding one page never creates extra gold or changes the others.
   A run uses its adventurer's class page, including in co-op. Existing shared skills move to Melee;
   the other pages start empty. All three pages are kept when exporting and importing a save.
-  Click or tap a bought skill's arrow button to refund one rank, even when maxed, for its purchase
-  price. On desktop, right-clicking its card does the same; touch long presses do not refund.
-  Older saves without purchase prices split their tracked spending across ranks by base price.
+  Click or tap a bought skill's arrow button to refund its last rank, even when maxed. Skills bought
+  after it get cheaper without it, and the refund includes that too.
+  On desktop, right-clicking its card does the same; touch long presses do not refund.
+  A class page from an older save whose purchase order can't be worked out needs Refund all once
+  before single ranks can be refunded.
   **Refund all** returns the selected page's remaining investment and resets only that class's skills.
   **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.
   **Firemaking** gives up to 3 banishes a run. Banish a new weapon or passive on a level up and

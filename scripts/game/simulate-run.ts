@@ -234,10 +234,27 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     const boss = sim.shownBoss;
     const state = boss?.bossState;
     const phase = state?.phase;
+    const player = sim.player;
+    // Xarpus's exhumeds: stood on until they're smothered, or he can't be hurt (BossDef.exhumes)
+    let mark: { x: number; y: number } | undefined;
+    let markAway = Infinity;
+    // And Verzik's yellows: into a pool before the ball gets there (GroundPatternDef.safe)
+    for (const hazard of sim.hazards) {
+        const away = Math.hypot(hazard.x - player.x, hazard.y - player.y);
+        const ground = hazard.attack.ground;
+        if ((ground?.smother || ground?.safe) && hazard.endTick !== -1 && away < markAway) {
+            mark = hazard;
+            markAway = away;
+        }
+    }
+    if (mark) {
+        return markAway < 0.5
+            ? { x: 0, y: 0 }
+            : { x: (mark.x - player.x) / markAway, y: (mark.y - player.y) / markAway };
+    }
     if (!boss || !state || !phase || boss.dead) {
         return undefined;
     }
-    const player = sim.player;
     const towards = (x: number, y: number) => {
         const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
         return { x: (x - player.x) / length, y: (y - player.y) / length };

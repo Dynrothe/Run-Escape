@@ -10,7 +10,11 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - **The lobby** (`src/lobby.mjs`) is one Durable Object for the whole relay. Every player connects
   to it first, at `/coop`, for their name, the open rooms list, and making or joining a room. It
   hibernates between messages, so players sitting in menus cost next to nothing, and its pings are
-  answered without waking it.
+  answered without waking it. It sends the open rooms to everyone looking at them when they change,
+  so the game doesn't ask every few seconds, and closes a connection that's only asked for the
+  same page for 10 minutes (an older game's, left open on the list). Pings never reach it, so it
+  can't close a connection that only pings: the game closes its own after 9 minutes on the list
+  with nothing done (`LOBBY_IDLE_MS` in `CoopLobby.ts`).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
   inputs go through a relay close to the host rather than one fixed place.
@@ -24,9 +28,22 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   address from Cloudflare's `CF-Connecting-IP`, for the limits, and their country from
   `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
   don't host an open room).
-- A room tells the lobby it's there every 30 seconds; one that stops (its object restarted) drops
-  off the list after 90. The rooms list is kept in the lobby's storage, so it survives the lobby
+- A room tells the lobby it's there every 60 seconds, and when something the list shows changes
+  (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
+  and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
+  hibernation forgets when each room last spoke, so the lobby also stores that, every 30 minutes at
+  most (`SEEN_SAVE_MS`): a room that ended without the lobby hearing goes within about half an hour
+  of that, however often the lobby wakes, and invite-only ones too, which nobody can try to join
+  from the list. A room asked for but never made (a second click of Make) goes 60 seconds after it
+  was asked for. The rooms list is kept in the lobby's storage, so it survives the lobby
   hibernating.
+- The lobby stops sending a player the list when they make or join a room, and starts again when
+  they ask for it, which the game does whenever it's back on the list: out of a room, or turned
+  away from one.
+- A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
+  lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
+  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
+check` tests the lobby itself.
 
 ## Setting it up
 
@@ -71,7 +88,7 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 
     ```sh
     curl https://run-escape-coop.<your-subdomain>.workers.dev/coop
-    # {"coop":true,"players":0,"rooms":0,"full":false}
+    # {"coop":true}
     npm run check -- wss://run-escape-coop.<your-subdomain>.workers.dev/coop
     ```
 
@@ -116,6 +133,13 @@ what it had in memory, often more than once an hour. So:
 Node, with `test/durable-object.mjs` in place of `cloudflare:workers` (see `vite.config.ts`). To see a restart for yourself under `wrangler dev`, save any
 file in `src/` during a run: wrangler reloads, which drops everything as Cloudflare does.
 
+**Closing connections.** When a player's game closes a connection (leaving for another room,
+closing the co-op menu, closing the tab), the room or lobby has to answer it: at `wrangler.toml`'s
+compatibility date Cloudflare doesn't do that by itself. Both call `answerClose` in
+`src/shared.mjs`. A close that isn't answered leaves the player's browser waiting until it gives up
+and drops the connection, so it ends abnormally instead of cleanly. A connection that's cut (a
+phone locking, a lost signal) has no close to answer, and still ends abnormally.
+
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
 the same numbers as `coop-relay.mjs`.
@@ -125,9 +149,17 @@ the same numbers as `coop-relay.mjs`.
 ## Cost
 
 Cloudflare bills Durable Objects by requests and by how long they're awake, not by bandwidth.
-Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. A room is
-billed for every second it's open (at 128 MB), whether or not anything's happening, and the lobby
-only for the moments it's handling something.
+Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. Each
+call from a room to the lobby (`redeem`, `roomUpdate`, `roomGone`) and each connection is a whole
+request. The dashboard's Metrics count every message as one, so they show far more than is billed.
+A room is billed for every second it's open (at 128 MB), whether or not anything's happening, and
+the lobby only for the moments it's handling something.
+
+What the lobby gets: each connected player's pings (`PING_INTERVAL_MS` in `CoopLobby.ts`, answered
+without waking it), each room's heartbeat (`ROOM_HEARTBEAT_MS` in `room.mjs`) and its calls when
+what the list shows changes, a storage write for each room now and then (`SEEN_SAVE_MS`), and a
+message for each page of rooms someone looks at. A game from before the lists were sent asks for
+its page every few seconds until it's closed.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
 frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
