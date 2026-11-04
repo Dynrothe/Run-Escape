@@ -43,7 +43,8 @@ otherwise:
 - **The effects** (section 7): the stomp rings, the dust, the lunge's trail, Smite's light, the
   faint flashes and the camera shake.
 - **The design of fighting back** (section 4): his guard dropping when he misses, his court
-  turning on him, and Smite.
+  turning on him (its bolts, its lightning and the pillars; not the swords since round 5), and
+  Smite.
 
 Phase 1's length isn't on the list: that's still being tuned (section 6).
 
@@ -128,8 +129,9 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
    back to round 2's look with the sound added (section 6).
 2. **His court turns on him (turning his attacks).** He chases you, so you can lead him into his
    own traps: a bolt that reaches him stops there and hurts him (8), a lightning cell struck
-   under his middle hurts him (40) and stuns him, a knight's sword through him hurts (30) and
-   stuns him, and a lunge that runs into a pillar sticks his sword in the stone and stuns him.
+   under his middle hurts him (40) and stuns him, and a lunge that runs into a pillar sticks his
+   sword in the stone and stuns him. (The knights' swords did too, until round 5: thrown at you
+   with him chasing you, they went through him nearly every time.)
    Stunned, he stands with the stars round his head (80) for 2.5 s, doing nothing at all, and
    takes double. Stand in front of a pillar for his lunge, or on the colour that's about to be
    struck safe with him on the other.
@@ -243,6 +245,23 @@ Dynny, after round 3:
    the stomp ring and his blue impact. The ice, the lightning and the gaze are timed the same way.
 5. **The ice barrage quicker:** 0.85 s, from 1.1, as quick as his lunge. From the square's middle
    it's 1.85 tiles out, 0.46 s at a walk.
+
+### Round 5
+
+Dynny, after round 4:
+
+1. **"The water wave spell effect points the wrong direction."** His shock wave's sprite (1515,
+   the flat blue crescent) was drawn with its bow leading and its tips pointing back at him. It's
+   turned round now (`BossAttackDef.spotYaw`), its tips pointing the way it goes, at whoever
+   it's cast at; checked going south and east.
+2. **"The flying swords should not stun him, they stun him always."** Thrown from a knight at
+   where you stood, with him chasing you, a sword went through him nearly every throw. They no
+   longer touch him at all; the bolts, the lightning and a lunge into a pillar still do.
+3. **A tell for a phase change.** He already kneels for 2.4 s at each threshold, untouchable, with
+   "You will be judged!" and a toast for the phase. Now his blue light bursts round him as he
+   goes down (1458 and the stomp ring, a faint pale blue flash, a small shake), the stomp ring
+   runs right across the court as he rises into the next phase (a faint gold flash, a shake), and
+   the boss bar's "Phase n/3" pulses (`threshold.impact`, `riseImpact`).
 
 With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 24-27 s and the
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
