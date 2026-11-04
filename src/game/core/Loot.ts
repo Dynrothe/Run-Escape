@@ -12,7 +12,7 @@ import {
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
 import { formatStats } from "../content/stats";
-import { CasketTier, GearSlot, ItemDef, SetDef } from "../content/types";
+import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
 
@@ -116,6 +116,44 @@ export function isBetterGear(
     return gearWorth(item, upgrades) > gearWorth(than, thanUpgrades);
 }
 
+// How far apart two stats have to be to count as different: an upgrade's
+// stats are multiplied out (0.1 upgraded once is 0.15000000000000002), so
+// equal pieces can differ in the last digit
+const STAT_TOLERANCE = 1e-9;
+
+// Unlike the rarity-based recommendation, automatic swaps must lose no
+// stats, and even an incomplete worn set stays the player's decision.
+export function shouldAutoEquip(
+    gear: Partial<Record<GearSlot, string>>,
+    gearUpgrades: Partial<Record<GearSlot, number>>,
+    item: ItemDef,
+    upgrades: number,
+): boolean {
+    if (item.kind !== "gear") {
+        return false;
+    }
+    const wornId = gear[item.slot];
+    if (wornId === undefined) {
+        return true;
+    }
+    const worn = getGear(wornId);
+    if (getItemSet(worn)) {
+        return false;
+    }
+    const offeredStats = getGearStats(item, upgrades);
+    const wornStats = getGearStats(worn, gearUpgrades[item.slot] ?? 0);
+    let better = false;
+    for (const key of Object.keys({ ...wornStats, ...offeredStats }) as StatKey[]) {
+        const offered = offeredStats[key] ?? 0;
+        const current = wornStats[key] ?? 0;
+        if (offered < current - STAT_TOLERANCE) {
+            return false;
+        }
+        better ||= offered > current + STAT_TOLERANCE;
+    }
+    return better;
+}
+
 // What wearing a piece does for the worn gear's sets: 1 when it's another
 // piece of a set started but without its bonus yet, -1 when it takes off a
 // piece of a set whose bonus would go, 0 otherwise
@@ -207,6 +245,18 @@ function missingSetPieces(
     });
 }
 
+// Items banished this run (by the id a casket gives, before the Armoury's
+// upgrades), and sets: banishing a set's piece banishes all of it
+export type BanishedItems = { items: ReadonlySet<string>; sets: ReadonlySet<string> };
+
+export function isBanished(item: ItemDef, banished: BanishedItems | undefined): boolean {
+    return (
+        !!banished &&
+        (banished.items.has(item.id) ||
+            (item.kind === "gear" && item.set !== undefined && banished.sets.has(item.set)))
+    );
+}
+
 // How likely an item is to be in a casket for this player: never the piece
 // they're already wearing (unless it would come more upgraded), gear that
 // would be an upgrade (or another piece of a set they've started) over a
@@ -265,7 +315,9 @@ function itemWeight(
 // armoury: the pieces upgraded in the Armoury (none when unset).
 // declinedSets: sets the player has turned a piece of down this run (see
 // getStartedSet), which stop being brought (none when unset).
-// party: a co-op run, the only place an extra revive turns up. Returns the item
+// party: a co-op run, the only place an extra revive turns up.
+// banished: items, and sets, banished this run, which never come (none when unset).
+// Returns the item
 // as it's found, before the Armoury's upgrades (see getUpgradedGear).
 export function rollCasketItem(
     rng: Rng,
@@ -279,6 +331,7 @@ export function rollCasketItem(
     armoury?: ArmouryUpgrades,
     declinedSets?: ReadonlySet<string>,
     party = false,
+    banished?: BanishedItems,
 ): string {
     const rarity = rollRarityFrom(CASKETS[tier].rarityWeights, () => rng.next(), luck);
     const index = RARITY_ORDER.indexOf(rarity);
@@ -303,7 +356,9 @@ export function rollCasketItem(
         const pool = CASKET_ITEMS.filter((item) => item.rarity === r);
         const pick = rng.weightedIndex(
             pool.map((item) =>
-                itemWeight(item, gear, poison, exclude, unlocked, upgrades, armoury, party),
+                isBanished(item, banished)
+                    ? 0
+                    : itemWeight(item, gear, poison, exclude, unlocked, upgrades, armoury, party),
             ),
         );
         if (pick !== -1) {
