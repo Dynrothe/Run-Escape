@@ -505,3 +505,198 @@ export const APMEKEN = {
     levelHp: 0.5,
     levelDamage: 0.3,
 };
+
+// ---- The Het room ----
+
+// Scarabs, for the Het room's waves (the room has none in OSRS, but a run's levels and gear come
+// from waves): Kephri's swarms and the scarabs of her path, the swarms die to anything
+export const HET_ENEMIES: EnemyDef[] = [
+    {
+        id: "scarab_swarm",
+        name: "Scarab Swarm",
+        npcId: 11723,
+        idleSeq: 9606,
+        walkSeq: 9606,
+        attackSeq: 9605,
+        deathSeq: 9608,
+        hp: 4,
+        damage: 1,
+        speed: 2.4,
+        radius: 0.4,
+        xp: 6,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    {
+        id: "agile_scarab",
+        name: "Agile Scarab",
+        npcId: 11727,
+        idleSeq: 9592,
+        walkSeq: 9592,
+        attackSeq: 9593,
+        deathSeq: 9590,
+        hp: 10,
+        damage: 2,
+        speed: 2.6,
+        radius: 0.4,
+        xp: 12,
+        shot: {
+            range: 6,
+            interval: 2.6,
+            speed: 9,
+            spotAnim: 2152,
+            impactSpotAnim: 2154,
+            sound: -1,
+        },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    {
+        id: "spitting_scarab",
+        name: "Spitting Scarab",
+        npcId: 11725,
+        idleSeq: 9586,
+        walkSeq: 9584,
+        attackSeq: 9585,
+        deathSeq: 9598,
+        hp: 40,
+        damage: 3,
+        speed: 1.6,
+        radius: 1.2,
+        xp: 40,
+        shot: { range: 8, interval: 3, speed: 7, spotAnim: 2153, impactSpotAnim: 2155, sound: -1 },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    // The room's goal: shielded (11706) until the beam reaches the Shielded statue, then weakened
+    // (11707) for a while, when weapons can hurt it (Sim.stepHet)
+    {
+        id: "hets_seal",
+        name: "Het's Seal",
+        npcId: 11707,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 250,
+        damage: 0,
+        speed: 0,
+        radius: 1.5,
+        xp: 200,
+        knockbackResist: 1,
+        stationary: true,
+        healthBar: true,
+        shield: { seconds: 0, look: { npcId: 11706, idleSeq: -1 } },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    // Never spawned: what an Orb of Darkness is drawn as (Sim's Het room's orbs aren't enemies)
+    {
+        id: "het_orb",
+        name: "Orb of Darkness",
+        npcId: 11708,
+        idleSeq: 9542,
+        walkSeq: 9542,
+        attackSeq: 9542,
+        deathSeq: 9542,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 0,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+];
+TOMBS_ENEMIES.push(...HET_ENEMIES);
+
+// The Het room's waves: one as it starts, and one each time the beam opens the seal, with a
+// casket each time (so the room always gives at least sealSteps of them)
+export const HET_WAVES: string[][] = [
+    [
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+    ],
+    [
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "agile_scarab",
+        "agile_scarab",
+    ],
+    [
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "agile_scarab",
+        "agile_scarab",
+        "agile_scarab",
+        "spitting_scarab",
+    ],
+    [
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "scarab_swarm",
+        "agile_scarab",
+        "agile_scarab",
+        "agile_scarab",
+        "agile_scarab",
+        "spitting_scarab",
+        "spitting_scarab",
+    ],
+];
+
+// The swarms streaming in meanwhile, more with each wave
+export function getHetTrickle(wave: number): WaveDef {
+    return {
+        start: 0,
+        spawnRate: 0.45 + wave * 0.1,
+        minAlive: 0,
+        maxAlive: 6 + wave * 2,
+        enemies: [
+            { id: "scarab_swarm", weight: 4 },
+            ...(wave >= 1 ? [{ id: "agile_scarab", weight: 1 }] : []),
+        ],
+    };
+}
+
+// The Het room's numbers (OSRS's where it has them). The beam pulses every beamEvery seconds
+// (9 ticks), shown for beamShow, burning whoever stands in it for beamDamage and enemies for
+// beamEnemyDamage; reaching the Shielded statue opens the seal for `open` seconds (15 ticks),
+// each opening taking at most a sealSteps'th of its hitpoints, so it always takes that many.
+// Orbs of Darkness cross the floor every orbEvery seconds at orbSpeed tiles a second, hitting
+// for orbDamage, more and quicker with the path level; one that crosses a mirror dirties it.
+// Mirrors: 4 on the beam's way round the seal, and decoys more. Everything a room's enemies
+// are scaled by (tombsRoomScale) scales the hurt too.
+export const HET = {
+    beamEvery: 5.4,
+    beamShow: 0.8,
+    beamDamage: 3,
+    beamEnemyDamage: 30,
+    open: 9,
+    sealSteps: 3,
+    orbEvery: 3.6,
+    orbEveryLeast: 1.1,
+    orbQuicker: 0.35,
+    orbSpeed: 2.6,
+    orbFaster: 0.3,
+    orbDamage: 4,
+    orbRadius: 0.55,
+    decoys: 3,
+    // Tiles from a mirror's middle that count as walking into it (once, till you step off)
+    touchReach: 1,
+    // The beam's spot animations: each tile it crosses, and where it stops (2120)
+    beamSpotAnims: { across: 2114, along: 2064, impact: 2120 },
+    mirrorLoc: 45456,
+    dirtyLoc: 45457,
+};

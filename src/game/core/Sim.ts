@@ -83,11 +83,14 @@ import {
     APMEKEN,
     APMEKEN_SPOTANIMS,
     APMEKEN_WAVES,
+    HET,
+    HET_WAVES,
     JUNGLE_JAPES,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     TOMBS_BOSSES,
     getApmekenTrickle,
+    getHetTrickle,
 } from "../content/tombs";
 import {
     PUMPKIN_CHANCE,
@@ -752,6 +755,27 @@ type TombsRoom = {
     // The path's boss, once the room's beaten: its uid once it's risen (-1 till someone walks in),
     // and when it fell
     boss?: { uid: number; beatenTick?: number };
+    // The Het room's puzzle, once it's begun (Sim.stepHet)
+    het?: HetRoom;
+};
+
+type HetDef = NonNullable<NonNullable<TombsPathDef["room"]>["het"]>;
+
+// A Het room mirror, on a tile's middle: "/" (turn 0) or "\" (turn 1), and dirty (the beam
+// stops at it) once an Orb of Darkness has crossed it. touching: by hero, so walking into it
+// turns it (or cleans it) once.
+type HetMirror = { x: number; y: number; turn: 0 | 1; dirty: boolean; touching: boolean[] };
+type HetRoom = {
+    mirrors: HetMirror[];
+    nextBeamTick: number;
+    // The last pulse's way, corner to corner, for drawing it, and whether it reached the target
+    beam?: { points: { x: number; y: number }[]; tick: number; hit: boolean };
+    sealUid: number;
+    // Weakened until this tick, from this many hitpoints (an opening takes at most a sealSteps'th)
+    openUntil: number;
+    openFromHp: number;
+    orbs: { x: number; y: number; vx: number; vy: number }[];
+    nextOrbTick: number;
 };
 
 // Dev only: what Sim.devSkipToTombsBoss hands over, to do some damage with
@@ -4342,7 +4366,7 @@ export class Sim {
         this.gatherHall();
         this.moveParty(arrive);
         this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
-        if (path.room?.puzzle === "apmeken") {
+        if (path.room?.puzzle) {
             this.tombsRoom = {
                 wave: -1,
                 group: [],
@@ -4431,9 +4455,17 @@ export class Sim {
     private get activeWaves(): WaveDef[] {
         if (this.map.tombs) {
             const room = this.tombsRoom;
-            return room && room.started && room.doneTick === undefined
-                ? [this.apmekenTrickle(room.wave)]
-                : [];
+            if (!room || !room.started || room.doneTick !== undefined || room.boss) {
+                return [];
+            }
+            // The Het room's swarms, or the Apmeken room's baboons
+            if (this.tombsPathRoom?.het) {
+                const trickle = getHetTrickle(Math.max(0, room.wave));
+                return [
+                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                ];
+            }
+            return [this.apmekenTrickle(room.wave)];
         }
         return this.raidRoomDef?.waves ?? this.map.waves;
     }
@@ -4680,12 +4712,16 @@ export class Sim {
     devSkipToTombsBoss(): boolean {
         const room = this.tombsRoom;
         const boss = this.tombsPathRoom?.boss;
-        if (!room || room.boss || !boss) {
+        if (!room || room.boss || room.doneTick !== undefined) {
             return false;
         }
         room.pending = [];
         room.issue = undefined;
         room.doneTick = this.tick;
+        // No boss for the path yet: the room's just done
+        if (!boss) {
+            return true;
+        }
         this.enterTombsBoss(room, boss);
         // Something to do some damage with, weapon slots or not
         if (!this.weapons.some((w) => w.def.id === DEV_BOSS_WEAPON)) {
@@ -4726,7 +4762,8 @@ export class Sim {
     private stepApmeken(): void {
         const room = this.tombsRoom;
         const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
-        if (!room || !spots || this.runOver || this.state !== "playing") {
+        const het = this.tombsPathRoom?.het;
+        if (!room || (!spots && !het) || this.runOver || this.state !== "playing") {
             return;
         }
         if (room.boss) {
@@ -4752,13 +4789,21 @@ export class Sim {
                 !gate || this.heroes.some((hero) => this.isUp(hero) && hero.player.x < gate.x);
             if (through) {
                 room.started = true;
-                room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
-                this.nextApmekenWave();
+                if (het) {
+                    this.startHet(room, het);
+                } else {
+                    room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
+                    this.nextApmekenWave();
+                }
             }
             return;
         }
         this.holdTombsGate();
         this.stepApmekenGroup(room);
+        if (het) {
+            this.stepHet(room, het);
+            return;
+        }
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
         const beaten = room.pending.length === 0 && room.group.every((uid) => !alive.has(uid));
         if (beaten && !this.tombsReplaying) {
@@ -4771,7 +4816,355 @@ export class Sim {
                 return;
             }
         }
-        this.stepApmekenIssue(room, spots);
+        this.stepApmekenIssue(room, spots!);
+    }
+
+    // ---- The Het room ----
+
+    // Begins: its mirrors laid out afresh, the seal up and shielded, the first wave in
+    private startHet(room: TombsRoom, def: HetDef): void {
+        const seal = this.spawnEnemy(getEnemy("hets_seal"), "normal", def.seal);
+        if (seal) {
+            seal.noDrops = true;
+            seal.shieldEnd = this.tick + 2;
+        }
+        room.het = {
+            mirrors: this.layOutHet(def),
+            nextBeamTick: this.tick + secondsToTicks(HET.beamEvery),
+            sealUid: seal?.uid ?? -1,
+            openUntil: -1,
+            openFromHp: 0,
+            orbs: [],
+            nextOrbTick: this.tick + secondsToTicks(HET.orbEvery),
+        };
+        this.nextHetWave(room);
+        this.emit({
+            type: "notice",
+            message: "Turn the mirrors to bring the beam round to the Shielded statue!",
+        });
+    }
+
+    // A way round the seal for the beam, a mirror at each turn, and decoys: each turned wrong as
+    // it starts. Down from the caster, across one side of the seal, down past it and back to the
+    // beam's column, then on down into the Shielded statue.
+    private layOutHet(def: HetDef): HetMirror[] {
+        const bx = Math.floor(def.beam.x);
+        const by = Math.floor(def.beam.y);
+        const sealX = Math.floor(def.seal.x);
+        const sealY = Math.floor(def.seal.y);
+        const targetTop = Math.floor(def.target.y1) - 1;
+        const heroes = this.heroes.length;
+        const tile = (x: number, y: number) => ({
+            x,
+            y,
+            turn: 0 as 0 | 1,
+            dirty: false,
+            touching: new Array<boolean>(heroes).fill(false),
+        });
+        const open = (x: number, y: number) => this.grid.contains(x, y) && !this.grid.isSolid(x, y);
+        let route: HetMirror[] = [];
+        // Every tile of the beam's way round, which decoys keep off
+        const onWay = new Set<string>();
+        for (let attempt = 0; attempt < 40; attempt++) {
+            const side = this.rng.chance(0.5) ? 1 : -1;
+            const across = bx + side * (3 + this.rng.int(4));
+            const top = sealY + 2 + this.rng.int(Math.max(1, by - sealY - 2));
+            const bottom = sealY - 2 - this.rng.int(Math.max(1, sealY - 2 - targetTop - 1));
+            const corners = [
+                [bx, top],
+                [across, top],
+                [across, bottom],
+                [bx, bottom],
+            ];
+            // Every tile of the way open, and the seal off it
+            const way: [number, number][] = [];
+            const line = (x0: number, y0: number, x1: number, y1: number) => {
+                const dx = Math.sign(x1 - x0);
+                const dy = Math.sign(y1 - y0);
+                for (let x = x0, y = y0; ; x += dx, y += dy) {
+                    way.push([x, y]);
+                    if (x === x1 && y === y1) {
+                        break;
+                    }
+                }
+            };
+            line(bx, by, bx, top);
+            line(bx, top, across, top);
+            line(across, top, across, bottom);
+            line(across, bottom, bx, bottom);
+            line(bx, bottom, bx, targetTop + 1);
+            const clear = way.every(
+                ([x, y]) => open(x, y) && (Math.abs(x - sealX) > 1 || Math.abs(y - sealY) > 1),
+            );
+            if (!clear) {
+                continue;
+            }
+            for (const [x, y] of way) {
+                onWay.add(x + "," + y);
+            }
+            // "/" turns south into west and west into south, "\" south into east and east into
+            // south (Sim.traceHetBeam)
+            const turns: (0 | 1)[] = side > 0 ? [1, 1, 0, 0] : [0, 0, 1, 1];
+            route = corners.map(([x, y], i) => ({ ...tile(x + 0.5, y + 0.5), turn: turns[i] }));
+            // Turned wrong, two at least, so it's never done as it starts
+            let wrong = 0;
+            route.forEach((mirror, i) => {
+                if (this.rng.chance(0.5) || (i >= 2 && wrong < 2)) {
+                    mirror.turn = (1 - mirror.turn) as 0 | 1;
+                    wrong++;
+                }
+            });
+            break;
+        }
+        // Decoys, on open floor off the beam's straight way and not beside another mirror
+        const decoys: HetMirror[] = [];
+        const want = HET.decoys + this.tombsPathLevel;
+        const floor = def.floor;
+        for (let attempt = 0; attempt < 200 && decoys.length < want; attempt++) {
+            const x = Math.floor(this.rng.range(floor.x0, floor.x1));
+            const y = Math.floor(this.rng.range(floor.y0, floor.y1));
+            const near = [...route, ...decoys].some(
+                (m) => Math.abs(m.x - 0.5 - x) <= 1 && Math.abs(m.y - 0.5 - y) <= 1,
+            );
+            if (
+                near ||
+                onWay.has(x + "," + y) ||
+                !open(x, y) ||
+                (Math.abs(x - sealX) <= 2 && Math.abs(y - sealY) <= 2) ||
+                x === bx
+            ) {
+                continue;
+            }
+            decoys.push({ ...tile(x + 0.5, y + 0.5), turn: this.rng.chance(0.5) ? 1 : 0 });
+        }
+        return [...route, ...decoys];
+    }
+
+    // The beam's way from the caster: straight on, turned by each clean mirror, until it stops
+    // (a wall, the seal, a dirty mirror) or reaches the Shielded statue
+    private traceHetBeam(
+        room: HetRoom,
+        def: HetDef,
+    ): { points: { x: number; y: number }[]; hit: boolean } {
+        let x = Math.floor(def.beam.x);
+        let y = Math.floor(def.beam.y);
+        let dx = 0;
+        let dy = -1;
+        const sealX = Math.floor(def.seal.x);
+        const sealY = Math.floor(def.seal.y);
+        const t = def.target;
+        const points = [{ x: x + 0.5, y: y + 0.5 }];
+        for (let steps = 0; steps < 120; steps++) {
+            if (x + 0.5 > t.x0 && x + 0.5 < t.x1 && y + 0.5 > t.y0 && y + 0.5 < t.y1) {
+                points.push({ x: x + 0.5, y: y + 0.5 });
+                return { points, hit: true };
+            }
+            const blocked =
+                !this.grid.contains(x, y) ||
+                this.grid.isSolid(x, y) ||
+                (Math.abs(x - sealX) <= 1 && Math.abs(y - sealY) <= 1);
+            const mirror = room.mirrors.find((m) => Math.floor(m.x) === x && Math.floor(m.y) === y);
+            if (blocked || mirror?.dirty) {
+                points.push({ x: x + 0.5, y: y + 0.5 });
+                return { points, hit: false };
+            }
+            if (mirror) {
+                points.push({ x: x + 0.5, y: y + 0.5 });
+                // "/": (dx, dy) to (dy, dx); "\": to (-dy, -dx)
+                [dx, dy] = mirror.turn === 0 ? [dy, dx] : [-dy, -dx];
+            }
+            x += dx;
+            y += dy;
+        }
+        points.push({ x: x + 0.5, y: y + 0.5 });
+        return { points, hit: false };
+    }
+
+    private stepHet(room: TombsRoom, def: HetDef): void {
+        const het = room.het;
+        if (!het) {
+            return;
+        }
+        const seal = this.enemies.find((e) => e.uid === het.sealUid && !e.dead);
+        if (!seal) {
+            // Broken: the room's done
+            room.doneTick = this.tick;
+            het.orbs = [];
+            this.emit({ type: "notice", message: "Het's Seal breaks! The way on is open." });
+            return;
+        }
+        this.stepHetMirrors(het);
+        this.stepHetOrbs(het, def);
+        // Shut again once its time's up, or an opening's taken its share (the last can finish it)
+        const share = seal.maxHp / HET.sealSteps;
+        const open =
+            this.tick < het.openUntil &&
+            !(seal.hp <= het.openFromHp - share && seal.hp > share * 0.5);
+        if (!open) {
+            het.openUntil = -1;
+            seal.shieldEnd = Math.max(seal.shieldEnd, this.tick + 2);
+        }
+        if (this.tick < het.nextBeamTick) {
+            return;
+        }
+        het.nextBeamTick = this.tick + secondsToTicks(HET.beamEvery);
+        const traced = this.traceHetBeam(het, def);
+        het.beam = { ...traced, tick: this.tick };
+        this.burnHetBeam(traced.points);
+        if (traced.hit && het.openUntil === -1) {
+            het.openUntil = this.tick + secondsToTicks(HET.open);
+            het.openFromHp = seal.hp;
+            seal.shieldEnd = 0;
+            this.emit({ type: "notice", message: "The beam hits the statue: Het's Seal weakens!" });
+            if (!this.tombsReplaying) {
+                const player = this.hero.player;
+                this.dropCasket(player.x + 0.8, player.y, false);
+            }
+            this.nextHetWave(room);
+        }
+    }
+
+    // Whoever stands in the beam is burnt a little, and enemies in it a lot: aim it through them
+    private burnHetBeam(points: { x: number; y: number }[]): void {
+        const near = (x: number, y: number, reach: number) => {
+            for (let i = 1; i < points.length; i++) {
+                const a = points[i - 1];
+                const b = points[i];
+                const minX = Math.min(a.x, b.x) - reach;
+                const maxX = Math.max(a.x, b.x) + reach;
+                const minY = Math.min(a.y, b.y) - reach;
+                const maxY = Math.max(a.y, b.y) + reach;
+                if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const scale = this.tombsRoomScale();
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (near(player.x, player.y, 0.5)) {
+                this.damagePlayer(HET.beamDamage * scale.damage, "hets_seal", false);
+            }
+        });
+        this.damageSource = "other";
+        for (const enemy of this.enemies) {
+            if (!enemy.dead && enemy.def.id !== "hets_seal" && near(enemy.x, enemy.y, 0.5)) {
+                this.damageEnemy(enemy, HET.beamEnemyDamage * scale.hp, 0, enemy.x, enemy.y);
+            }
+        }
+    }
+
+    // Walking into a mirror turns it, or cleans it if it's dirty: once, till you step away. They're
+    // solid, so you can't stand in one.
+    private stepHetMirrors(het: HetRoom): void {
+        for (const mirror of het.mirrors) {
+            for (const hero of this.heroes) {
+                const player = hero.player;
+                const dx = player.x - mirror.x;
+                const dy = player.y - mirror.y;
+                const distance = fm.hypot(dx, dy);
+                const touching = this.isUp(hero) && distance <= HET.touchReach;
+                if (touching && !mirror.touching[hero.index]) {
+                    if (mirror.dirty) {
+                        mirror.dirty = false;
+                        this.emit({ type: "notice", message: "You clean the mirror." }, true);
+                    } else {
+                        mirror.turn = (1 - mirror.turn) as 0 | 1;
+                    }
+                }
+                mirror.touching[hero.index] = touching;
+                const edge = 0.5 + player.radius;
+                if (distance < edge) {
+                    const nx = distance > 0.001 ? dx / distance : 0;
+                    const ny = distance > 0.001 ? dy / distance : -1;
+                    moveCircle(
+                        this.grid,
+                        player,
+                        nx * (edge - distance),
+                        ny * (edge - distance),
+                        player.radius,
+                    );
+                }
+            }
+        }
+    }
+
+    // Orbs of Darkness: across the floor in straight lines, more and quicker with the path level,
+    // hurting whoever they touch and dirtying any mirror they cross
+    private stepHetOrbs(het: HetRoom, def: HetDef): void {
+        const level = this.tombsPathLevel;
+        const floor = def.floor;
+        if (this.tick >= het.nextOrbTick) {
+            const every = Math.max(HET.orbEveryLeast, HET.orbEvery - HET.orbQuicker * level);
+            het.nextOrbTick = this.tick + secondsToTicks(every);
+            const speed = (HET.orbSpeed + HET.orbFaster * level) / TICKS_PER_SECOND;
+            // Stacked from path level 2: one place, more than one orb
+            const count = 1 + Math.floor(level / 2);
+            const across = this.rng.chance(0.5);
+            const forward = this.rng.chance(0.5);
+            const lane = across
+                ? Math.floor(this.rng.range(floor.y0, floor.y1)) + 0.5
+                : Math.floor(this.rng.range(floor.x0, floor.x1)) + 0.5;
+            for (let i = 0; i < count; i++) {
+                const behind = i * 0.6;
+                het.orbs.push(
+                    across
+                        ? {
+                              x: forward ? floor.x0 - behind : floor.x1 + behind,
+                              y: lane,
+                              vx: forward ? speed : -speed,
+                              vy: 0,
+                          }
+                        : {
+                              x: lane,
+                              y: forward ? floor.y0 - behind : floor.y1 + behind,
+                              vx: 0,
+                              vy: forward ? speed : -speed,
+                          },
+                );
+            }
+        }
+        const damage = HET.orbDamage * this.tombsRoomScale().damage;
+        het.orbs = het.orbs.filter((orb) => {
+            orb.x += orb.vx;
+            orb.y += orb.vy;
+            for (const mirror of het.mirrors) {
+                if (fm.hypot(orb.x - mirror.x, orb.y - mirror.y) < 0.5) {
+                    mirror.dirty = true;
+                }
+            }
+            let hit = false;
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                if (
+                    !hit &&
+                    fm.hypot(player.x - orb.x, player.y - orb.y) <= HET.orbRadius + player.radius
+                ) {
+                    hit = true;
+                    this.damagePlayer(damage, "het_orb", false);
+                }
+            });
+            const inside =
+                orb.x >= floor.x0 - 2 &&
+                orb.x <= floor.x1 + 2 &&
+                orb.y >= floor.y0 - 2 &&
+                orb.y <= floor.y1 + 2;
+            return !hit && inside;
+        });
+    }
+
+    // The next of the Het room's waves (the last again once they're all out), out of its edges
+    private nextHetWave(room: TombsRoom): void {
+        room.wave = Math.min(room.wave + 1, HET_WAVES.length - 1);
+        room.waveTick = this.tick;
+        const ids = [...HET_WAVES[room.wave]];
+        for (let i = 0; i < this.tombsPathLevel; i++) {
+            ids.push(ids[ids.length - 1]);
+        }
+        room.group = [];
+        room.pending = [...room.pending, ...ids];
+        room.nextOutTick = this.tick;
     }
 
     private stepApmekenIssue(room: TombsRoom, spots: TombsSpotDef[]): void {
@@ -4965,6 +5358,8 @@ export class Sim {
             room.missed = 0;
             room.started = false;
             room.pending = [];
+            // The Het room's laid out afresh, as OSRS's is after a wipe
+            room.het = undefined;
         }
         const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({

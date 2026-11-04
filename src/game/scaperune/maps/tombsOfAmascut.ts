@@ -104,6 +104,25 @@ const HET: RoomCut = {
 };
 // Its entry barrier, in the cut's own tiles (local x 21 in square 57,82)
 const HET_GATE = { x: 7, y: [12, 13, 14] };
+// Its puzzle, in tiles from the turned cut's corner (OSRS places these as the room starts, so
+// they're not in the map). The room's a round floor about 21 across, its middle a 3 by 3 mound
+// where Het's Seal stands. The Caster statue (45486) stands in the north alcove and fires south;
+// the Shielded statue (45485) in the south one, the beam's target. Straight down, the seal's in
+// the way: mirrors take it round.
+const HET_CASTER = [17, 22];
+const HET_TARGET = [17, 4];
+const HET_SEAL = [18.5, 14.5];
+// Where mirrors can go and Orbs of Darkness cross, and where its enemies come in
+const HET_FLOOR = { x0: 9, y0: 5, x1: 27, y1: 23 };
+const HET_ENTRANCES = [
+    [10, 14],
+    [12, 20],
+    [12, 8],
+    [24, 20],
+    [24, 8],
+];
+const HET_SOURCE_LOC = 45486;
+const HET_TARGET_LOC = 45485;
 
 // Ba-Ba's arena, in square 59,84: the entrance room on the west, with the teleport crystal
 // (local 18,32), the safe area as in OSRS, through a passage (its barrier, wall loc 45860 at x 20
@@ -204,6 +223,38 @@ export const TOA_PLACES = {
         ) as Record<ToaPathId, { x: number; y: number }>,
     },
     // Ba-Ba's arena: where the party comes in, where she rises, and the line past which she does
+    het: {
+        arrive: worldTile(HET_ROOM.arrive.x, HET_ROOM.arrive.y),
+        // The barrier's line (its tiles' west edge) and its tiles' middles, as Apmeken's
+        gate: {
+            x: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + (36 - HET_GATE.x),
+            locId: APMEKEN_BARRIER_LOC,
+            tiles: HET_GATE.y.map((y) =>
+                worldTile(HET_ROOM.at.x + 36 - HET_GATE.x, HET_ROOM.at.y + 27 - y),
+            ),
+        },
+        entrances: HET_ENTRANCES.map(([x, y]) => worldTile(HET_ROOM.at.x + x, HET_ROOM.at.y + y)),
+        puzzle: {
+            // The beam leaves the caster's south side, heading south (world -y)
+            beam: worldTile(HET_ROOM.at.x + HET_CASTER[0] + 1, HET_ROOM.at.y + HET_CASTER[1] - 1),
+            target: {
+                x0: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_TARGET[0],
+                y0: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_TARGET[1],
+                x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_TARGET[0] + 3,
+                y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_TARGET[1] + 3,
+            },
+            seal: {
+                x: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_SEAL[0],
+                y: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_SEAL[1],
+            },
+            floor: {
+                x0: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x0,
+                y0: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y0,
+                x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x1,
+                y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
+            },
+        },
+    },
     baba: {
         arrive: worldTile(BA_BA_ROOM.arrive.x, BA_BA_ROOM.arrive.y),
         at: worldTile(BA_BA_ROOM.at.x + BA_BA_AT[0], BA_BA_ROOM.at.y + BA_BA_AT[1]),
@@ -325,6 +376,19 @@ function build(context: BuildContext): TileGrid {
                 height: FLOOR_HEIGHT,
             },
         );
+        // The Het room's statues, which OSRS places as the room starts
+        if (cut === HET) {
+            for (const [id, [x, y]] of [
+                [HET_SOURCE_LOC, HET_CASTER],
+                [HET_TARGET_LOC, HET_TARGET],
+            ] as const) {
+                ground.place(
+                    { id, type: 10, rotation: 0, level: 0, x: room.at.x + x, y: room.at.y + y },
+                    3,
+                    3,
+                );
+            }
+        }
     }
 
     // Only what can be walked to in each room from where the party's brought in is open: the rest
@@ -408,6 +472,15 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                 id,
                 name: PATH_NAMES[id],
                 door: TOA_PLACES.nexus.doors[id],
+                ...(id === "het" && {
+                    room: {
+                        arrive: TOA_PLACES.het.arrive,
+                        puzzle: "het" as const,
+                        gate: TOA_PLACES.het.gate,
+                        entrances: TOA_PLACES.het.entrances,
+                        het: TOA_PLACES.het.puzzle,
+                    },
+                }),
                 ...(id === "apmeken" && {
                     room: {
                         arrive: TOA_PLACES.apmeken.arrive,

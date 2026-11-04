@@ -2070,7 +2070,7 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
                     ? "Room done"
                     : wave.waiting
                       ? "Through the barrier to begin"
-                      : `Wave ${wave.wave} / ${wave.of}`}
+                      : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
             </div>
             {/* Dev server only: straight to the boss, for testing it */}
             {import.meta.env.DEV && !wave.done && (

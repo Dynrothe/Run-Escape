@@ -942,3 +942,160 @@ describe("Ba-Ba", () => {
         );
     });
 });
+
+// The Het room in the open field: the beam down from the north, the seal in the middle, the
+// Shielded statue south of it, and no barrier, so it starts as soon as the party's in
+const HET_DEF = {
+    beam: { x: 1036.5, y: 1050.5 },
+    target: { x0: 1035, y0: 1027, x1: 1038, y1: 1030 },
+    seal: { x: 1036.5, y: 1040.5 },
+    floor: { x0: 1026, y0: 1029, x1: 1047, y1: 1052 },
+};
+const TEST_HET: MapDef = {
+    ...TEST_TOMBS,
+    id: "test_het",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                id: "het",
+                name: "Path of Het",
+                door: { x: 1042.5, y: 1036.5 },
+                room: {
+                    arrive: { x: 1046.5, y: 1040.5 },
+                    puzzle: "het",
+                    entrances: [{ x: 1028.5, y: 1040.5 }],
+                    het: HET_DEF,
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_HET.id, TEST_HET);
+
+describe("the Het room", () => {
+    function het(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_HET.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.tombsPath).toBe("het");
+        // Out of the way of everything, and kept up
+        sim.player.x = sim.player.prevX = 1046.5;
+        sim.player.y = sim.player.prevY = 1033.5;
+        sim.step();
+        expect(sim.tombsRoom!.het).toBeDefined();
+        return sim;
+    }
+    const room = (sim: Sim) => sim.tombsRoom!.het!;
+    const trace = (sim: Sim) => sim["traceHetBeam"](room(sim), HET_DEF);
+    const seal = (sim: Sim) => sim.enemies.find((e) => e.def.id === "hets_seal" && !e.dead);
+
+    it("lays the mirrors out with a way round the seal, turned wrong as it starts", () => {
+        const ways = new Set<string>();
+        for (let seed = 1; seed <= 6; seed++) {
+            const sim = het([], seed);
+            ways.add(
+                JSON.stringify(
+                    room(sim)
+                        .mirrors.slice(0, 4)
+                        .map((m) => [m.x, m.y]),
+                ),
+            );
+            expect(trace(sim).hit).toBe(false);
+            // Some way of turning the four on its route gets it to the statue
+            const route = room(sim).mirrors.slice(0, 4);
+            let solved = false;
+            for (let turns = 0; turns < 16 && !solved; turns++) {
+                route.forEach((m, i) => (m.turn = ((turns >> i) & 1) as 0 | 1));
+                solved = trace(sim).hit;
+            }
+            expect(solved).toBe(true);
+            expect(room(sim).mirrors.length).toBeGreaterThan(4);
+        }
+        // and it's not the same way each time
+        expect(ways.size).toBeGreaterThan(1);
+    });
+
+    it("turns a mirror you walk into, once, and cleans a dirty one instead", () => {
+        const sim = het();
+        const mirror = room(sim).mirrors[0];
+        const turn = mirror.turn;
+        sim.player.x = sim.player.prevX = mirror.x + 0.9;
+        sim.player.y = sim.player.prevY = mirror.y;
+        sim.step();
+        expect(mirror.turn).toBe(1 - turn);
+        sim.step();
+        expect(mirror.turn).toBe(1 - turn);
+        sim.player.x = sim.player.prevX = mirror.x + 4;
+        sim.step();
+        mirror.dirty = true;
+        sim.player.x = sim.player.prevX = mirror.x + 0.9;
+        sim.step();
+        expect(mirror.dirty).toBe(false);
+        expect(mirror.turn).toBe(1 - turn);
+    });
+
+    it("opens the seal when the beam reaches the statue: a casket, the next wave, its share of hitpoints", () => {
+        const sim = het();
+        const route = room(sim).mirrors.slice(0, 4);
+        for (let turns = 0; turns < 16 && !trace(sim).hit; turns++) {
+            route.forEach((m, i) => (m.turn = ((turns >> i) & 1) as 0 | 1));
+        }
+        expect(trace(sim).hit).toBe(true);
+        // Nothing to turn them back on the way
+        sim.player.x = sim.player.prevX = 1046.5;
+        sim.player.y = sim.player.prevY = 1033.5;
+        const wave = sim.tombsRoom!.wave;
+        const caskets = sim.pickups.filter((p) => p.kind === "casket").length;
+        room(sim).nextBeamTick = sim.tick;
+        room(sim).nextOrbTick = sim.tick + 10_000;
+        sim.step();
+        const target = seal(sim)!;
+        expect(target.shieldEnd).toBe(0);
+        expect(sim.tombsRoom!.wave).toBe(wave + 1);
+        expect(sim.pickups.filter((p) => p.kind === "casket").length).toBe(caskets + 1);
+        // A big hit takes only its share before it shuts again
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(target, target.maxHp * 0.6, 0, target.x, target.y);
+        sim.step();
+        expect(target.shieldEnd).toBeGreaterThan(sim.tick);
+        expect(sim.damageEnemy(target, 50, 0, target.x, target.y)).toBe(0);
+    });
+
+    it("sends Orbs of Darkness across that hurt and dirty the mirrors they cross", () => {
+        const sim = het(["pathfinder"]);
+        const mirror = room(sim).mirrors[0];
+        room(sim).orbs.push({ x: mirror.x - 3, y: mirror.y, vx: 0.2, vy: 0 });
+        room(sim).nextOrbTick = sim.tick + 10_000;
+        for (let i = 0; i < 20; i++) {
+            sim.step();
+        }
+        expect(mirror.dirty).toBe(true);
+        // and into the player
+        sim.player.invulnerable = 0;
+        const hp = sim.player.hp;
+        room(sim).orbs.push({ x: sim.player.x - 1, y: sim.player.y, vx: 0.2, vy: 0 });
+        for (let i = 0; i < 8; i++) {
+            sim.step();
+        }
+        expect(sim.player.hp).toBeLessThan(hp);
+    });
+
+    it("is done once the seal breaks", () => {
+        const sim = het();
+        const target = seal(sim)!;
+        sim["killEnemy"](target);
+        sim.step();
+        expect(sim.tombsRoom!.doneTick).toBeDefined();
+    });
+});

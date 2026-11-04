@@ -1320,8 +1320,17 @@ export type TombsPathDef = {
         arrive: { x: number; y: number };
         // What it's played as (content/tombs.ts), and the spots its issues come at (Apmeken's
         // pillars and vents: their middles in world tiles, and how close counts as at one)
-        puzzle?: "apmeken";
+        puzzle?: "apmeken" | "het";
         spots?: TombsSpotDef[];
+        // The Het room's puzzle, in world tiles: where the Caster statue's beam starts (heading
+        // south), the Shielded statue it has to reach (a rect), Het's Seal's middle, and the floor
+        // the mirrors and Orbs of Darkness keep to
+        het?: {
+            beam: { x: number; y: number };
+            target: { x0: number; y0: number; x1: number; y1: number };
+            seal: { x: number; y: number };
+            floor: { x0: number; y0: number; x1: number; y1: number };
+        };
         // The barrier between the safe corridor and the room (east of it): the party comes in
         // behind it, and the room starts once someone walks through. It's the sim's: a line at
         // world x, held while the room's on, and the loc drawn on its tiles while it's shut.

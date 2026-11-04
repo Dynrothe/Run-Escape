@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
+import { HET, JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -553,6 +553,7 @@ export class GameView {
         this.drawTombsGate(actors, sim);
         this.drawTombsPeels(actors, sim);
         this.drawSarcophagi(actors, sim);
+        this.drawHet(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -681,6 +682,85 @@ export class GameView {
                 tile.y,
                 TOMBS_GATE_YAW,
             );
+        }
+    }
+
+    // The Het room: its mirrors (dirty ones as they look), the beam's last pulse for a moment,
+    // tile by tile along its way, and the Orbs of Darkness rolling
+    private drawHet(actors: ActorRenderer, sim: Sim): void {
+        const het = sim.tombsRoom?.het;
+        if (!het) {
+            return;
+        }
+        const clean = this.assets.get("loc:" + HET.mirrorLoc);
+        const dirty = this.assets.get("loc:" + HET.dirtyLoc);
+        for (const mirror of het.mirrors) {
+            const model = mirror.dirty ? (dirty ?? clean) : clean;
+            if (model) {
+                const height = this.ground(sim, mirror.x, mirror.y);
+                actors.draw(
+                    model,
+                    model.anims[0],
+                    0,
+                    mirror.x,
+                    height,
+                    mirror.y,
+                    mirror.turn * 512,
+                );
+            }
+        }
+        const beam = het.beam;
+        if (beam && sim.tick - beam.tick < Math.round(HET.beamShow * TICKS_PER_SECOND)) {
+            const along = this.assets.get("spot:" + HET.beamSpotAnims.along);
+            const across = this.assets.get("spot:" + HET.beamSpotAnims.across);
+            const age = sim.tick - beam.tick;
+            for (let i = 1; i < beam.points.length; i++) {
+                const a = beam.points[i - 1];
+                const b = beam.points[i];
+                const vertical = a.x === b.x;
+                const model = vertical ? along : across;
+                if (!model) {
+                    continue;
+                }
+                const steps = Math.round(Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)));
+                for (let t = 0; t <= steps; t++) {
+                    const x = a.x + ((b.x - a.x) * t) / Math.max(1, steps);
+                    const y = a.y + ((b.y - a.y) * t) / Math.max(1, steps);
+                    const anim = model.anims[0];
+                    actors.draw(model, anim, anim.getFrame(age), x, this.ground(sim, x, y), y, 0);
+                }
+            }
+            const impact = this.assets.get("spot:" + HET.beamSpotAnims.impact);
+            const end = beam.points[beam.points.length - 1];
+            if (impact && !beam.hit) {
+                const anim = impact.anims[0];
+                actors.draw(
+                    impact,
+                    anim,
+                    anim.getFrame(age),
+                    end.x,
+                    this.ground(sim, end.x, end.y),
+                    end.y,
+                    0,
+                );
+            }
+        }
+        const orbDef = getEnemy("het_orb");
+        const orb = this.assets.get(getEnemyModelKey(orbDef, 0));
+        if (orb) {
+            const anim = orb.getAnim(orbDef.walkSeq);
+            for (const one of het.orbs) {
+                const yaw = yawFromVector(one.vx, one.vy);
+                actors.draw(
+                    orb,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    one.x,
+                    this.ground(sim, one.x, one.y),
+                    one.y,
+                    yaw,
+                );
+            }
         }
     }
 

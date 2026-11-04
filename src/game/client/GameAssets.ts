@@ -29,6 +29,7 @@ import { PlayerStance, getPlayerStance } from "../content/stances";
 import {
     APMEKEN_BARRIER_LOC,
     APMEKEN_SPOTANIMS,
+    HET,
     JUNGLE_JAPES,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
@@ -158,6 +159,8 @@ function getSpotAnimIds(): number[] {
     }
     // Ba-Ba's sarcophagi's blasts, which are no attack of hers
     add(SARCOPHAGUS_BLAST.spotAnim);
+    // The Het room's beam, along and across, and where it stops
+    add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
@@ -573,6 +576,9 @@ export class GameAssets {
         objIds.add(JUNGLE_JAPES.objId);
         // Ba-Ba's sarcophagi, open
         locIds.add(SARCOPHAGI.loc);
+        // The Het room's mirrors, clean and dirty
+        locIds.add(HET.mirrorLoc);
+        locIds.add(HET.dirtyLoc);
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
         }

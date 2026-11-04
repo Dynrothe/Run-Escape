@@ -30,7 +30,7 @@ import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
-import { APMEKEN_WAVES } from "../content/tombs";
+import { APMEKEN_WAVES, HET } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -2356,12 +2356,21 @@ export class GameClient implements GameFrameHandler {
             },
             tombsWave:
                 sim.tombsRoom && !sim.tombsRoom.boss
-                    ? {
-                          wave: Math.max(0, sim.tombsRoom.wave) + 1,
-                          of: APMEKEN_WAVES.length,
-                          waiting: !sim.tombsRoom.started,
-                          done: sim.tombsRoom.doneTick !== undefined,
-                      }
+                    ? sim.tombsRoom.het
+                        ? {
+                              // The Het room counts the seal's openings, not waves
+                              label: "Seal opened",
+                              wave: Math.max(0, sim.tombsRoom.wave),
+                              of: HET.sealSteps,
+                              waiting: false,
+                              done: sim.tombsRoom.doneTick !== undefined,
+                          }
+                        : {
+                              wave: Math.max(0, sim.tombsRoom.wave) + 1,
+                              of: APMEKEN_WAVES.length,
+                              waiting: !sim.tombsRoom.started,
+                              done: sim.tombsRoom.doneTick !== undefined,
+                          }
                     : undefined,
             devGod: import.meta.env.DEV ? sim.devGod : undefined,
             hp: Math.max(0, Math.round(sim.player.hp)),
