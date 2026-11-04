@@ -45,7 +45,12 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
-import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    COLLECTION_LOG_OBJ,
+    COMBAT_ACHIEVEMENTS_OBJ,
+    REFUND_SPRITE,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
@@ -72,6 +77,7 @@ import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
@@ -150,6 +156,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
+            break;
+        case "combatAchievements":
+            screen = <CombatAchievementsScreen ui={ui} client={client} />;
             break;
         case "collectionLog":
             screen = <CollectionLogScreen ui={ui} client={client} />;
@@ -768,6 +777,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             name="Quests"
                             spriteId={TITLE_TAB_SPRITES.quests}
                             onClick={() => client.showScreen("quests")}
+                        />
+                        <TitleTile
+                            name="Combat Achievements"
+                            objId={COMBAT_ACHIEVEMENTS_OBJ}
+                            onClick={() => client.showScreen("combatAchievements")}
                         />
                         <TitleTile
                             name="Collection log"
@@ -2741,6 +2755,12 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result?.quests.map((quest) => (
                     <p key={quest.name} className="ui-unlocked">
                         Quest complete: {quest.name}! <Coins amount={quest.coins} />
+                    </p>
+                ))}
+                {result?.combatTasks.map((task) => (
+                    <p key={task.name} className="ui-unlocked">
+                        Combat task complete: {task.name} ({task.tier})!{" "}
+                        <Coins amount={task.coins} />
                     </p>
                 ))}
                 {multiplayer && player && (

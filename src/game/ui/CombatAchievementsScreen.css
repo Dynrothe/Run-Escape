@@ -1,0 +1,234 @@
+/* Combat Achievements: points and the next tier at the top, then the tiers or the task list */
+
+.ui-ca {
+    width: min(860px, calc(94vw / var(--ui-scale)));
+    max-height: calc(92vh / var(--ui-scale));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-ca > h2,
+.ui-ca > .ui-row,
+.ui-ca-header,
+.ui-ca-filters {
+    flex-shrink: 0;
+}
+
+.ui-ca-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 6px;
+    color: #b8aa8a;
+}
+
+.ui-ca-value {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
+.ui-ca-next {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    color: var(--ui-green);
+}
+
+.ui-ca-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.ui-ca-filter {
+    padding: 1px 7px;
+}
+
+.ui-ca-list {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* A bar like the client's progress bars, its numbers over it */
+.ui-ca-bar {
+    position: relative;
+    display: block;
+    min-width: 0;
+    height: 18px;
+    background: #3a0d0d;
+    border: 1px solid #000;
+    text-align: center;
+}
+
+.ui-ca-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: #1c6d1c;
+}
+
+.ui-ca-bar-text {
+    position: relative;
+    line-height: 18px;
+    color: var(--ui-white);
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Overview: a row a tier, its hilt, tasks done and its reward */
+.ui-ca-tier {
+    display: grid;
+    grid-template-columns: 36px 110px minmax(120px, 1fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    border-bottom: 1px solid var(--ui-divider);
+}
+
+.ui-ca-tier-icon {
+    display: flex;
+    justify-content: center;
+}
+
+.ui-ca-unearned {
+    opacity: 0.35;
+    filter: grayscale(1);
+}
+
+.ui-ca-tier-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+}
+
+.ui-ca-tier-reward {
+    color: #b8aa8a;
+}
+
+/* Each tier's colour, for its name wherever it's shown */
+.ui-ca-tier-easy {
+    color: #c7b48a;
+}
+
+.ui-ca-tier-medium {
+    color: #9fb8c8;
+}
+
+.ui-ca-tier-hard {
+    color: #7fd37f;
+}
+
+.ui-ca-tier-elite {
+    color: #6fb0ff;
+}
+
+.ui-ca-tier-master {
+    color: #d68cff;
+}
+
+.ui-ca-tier-grandmaster {
+    color: var(--ui-orange);
+}
+
+/* Tasks: tier, name and what it asks, type, how far it's got, points */
+.ui-ca-task {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr) 90px 70px 44px;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--ui-divider);
+}
+
+.ui-ca-task-tier {
+    font-family: "OSRS Bold", sans-serif;
+}
+
+.ui-ca-task-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ui-ca-task-name {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-red);
+}
+
+.ui-ca-task-started .ui-ca-task-name {
+    color: var(--ui-yellow);
+}
+
+.ui-ca-task-done .ui-ca-task-name,
+.ui-ca-task-done .ui-ca-task-state {
+    color: var(--ui-green);
+}
+
+.ui-ca-task-description {
+    font-size: 15px;
+    color: var(--ui-text);
+}
+
+.ui-ca-task-where {
+    color: #8a7f6a;
+}
+
+.ui-ca-task-type,
+.ui-ca-task-points {
+    color: #b8aa8a;
+}
+
+.ui-ca-task-state,
+.ui-ca-task-points {
+    text-align: right;
+}
+
+.ui-ca-task-done .ui-ca-task-description,
+.ui-ca-locked {
+    opacity: 0.6;
+}
+
+.ui-ca-count {
+    color: #b8aa8a;
+}
+
+/* Narrow windows: one column, the details under the name */
+@media (max-width: 759px) {
+    .ui-ca-header {
+        flex-wrap: wrap;
+        gap: 4px 12px;
+    }
+
+    .ui-ca-next {
+        flex-basis: 100%;
+    }
+
+    .ui-ca-tier {
+        grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr);
+        row-gap: 2px;
+        padding: 3px 0;
+    }
+
+    .ui-ca-tier-reward {
+        grid-column: 2 / -1;
+    }
+
+    .ui-ca-task {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        row-gap: 0;
+    }
+
+    .ui-ca-task-tier {
+        grid-row: 1;
+    }
+
+    .ui-ca-task-text {
+        grid-row: 2;
+        grid-column: 1 / -1;
+    }
+
+    .ui-ca-task-type {
+        display: none;
+    }
+}
