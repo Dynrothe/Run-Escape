@@ -9,6 +9,9 @@ export const TITLE_TAB_SPRITES = {
 
 export const COLLECTION_LOG_OBJ = 22711;
 
+// Combat Achievements' tile: Ghommal's hilt 6, the top tier's reward
+export const COMBAT_ACHIEVEMENTS_OBJ = 25936;
+
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim
 // cache by scripts/cache/slim-cache.ts.
 export const REFUND_SPRITE = 1021;

@@ -1375,6 +1375,107 @@ export type QuestDef = {
     coins: number;
 };
 
+// Combat Achievements (combatTasks.ts): challenges done in solo runs, by tier
+export type CombatTier = "easy" | "medium" | "hard" | "elite" | "master" | "grandmaster";
+export type CombatTaskType =
+    | "killCount"
+    | "speed"
+    | "perfection"
+    | "restriction"
+    | "mechanical"
+    | "stamina";
+
+// What a kill has to be without, from its boss's arrival to its kill: hits from the boss
+// (hitBy), damage from these attacks by name, any damage at all, being cursed, a sleepwalker
+// reaching it, or a parasite taking hold
+export type CombatAvoid =
+    | "hits"
+    | "damage"
+    | "curse"
+    | "sleepwalkers"
+    | "parasite"
+    | { attacks: string[] };
+
+// What a run has to keep to while it beats its map
+export type CombatRules = {
+    // One weapon at most (evolutions replace it in place)
+    oneWeapon?: boolean;
+    // No rerolls, skips or banishes
+    noTakeBacks?: boolean;
+    noPassives?: boolean;
+    // No casket gear put on
+    noGear?: boolean;
+    // No Skills upgrades on the adventurer's page, and nothing in the Armoury
+    noUpgrades?: boolean;
+    // A raid: no teleporter used, no raid points spent at the supply chest
+    noTeleports?: boolean;
+    noSupplies?: boolean;
+};
+
+export type CombatGoal =
+    // Over every solo run (and old saves' runs, at migration). maps: these, the campaign's, or
+    // any that can be won; all: every one of them, rather than one
+    | {
+          kind: "beatMap";
+          maps: string[] | "campaign" | "any";
+          all?: boolean;
+          hard?: boolean;
+          expert?: boolean;
+      }
+    | { kind: "killCount"; enemyIds: string[]; count: number }
+    | { kind: "endlessRound"; round: number; hard?: boolean }
+    // In one run: a phased boss reaching this phase (counted from 1)
+    | { kind: "reachPhase"; bossId: string; phase: number }
+    // Kill a boss (bossIds: all its forms, the first the one that arrives) without any of
+    // these, within this many seconds of its arrival if set. from: "finale" times it from its
+    // last stand rather than its arrival.
+    | {
+          kind: "kill";
+          bossIds: string[];
+          without?: CombatAvoid[];
+          within?: number;
+          from?: "finale";
+      }
+    // Each of these bosses killed within this many seconds of its own arrival
+    | { kind: "killEachWithin"; bossIds: string[]; seconds: number }
+    // Each of the map's bosses killed before the next one's due (its events), up to the last
+    | { kind: "killBeforeNext"; mapId: string }
+    // count of this boss killed within this many seconds, first to last
+    | { kind: "killTogether"; bossId: string; count: number; seconds: number }
+    // Beat the map (maps: these, or the campaign's from this one on), keeping to these. hard: on
+    // hard mode; within: seconds; damage: taken at most; hpAbove: never below this fraction.
+    | {
+          kind: "win";
+          maps: string[] | { campaignFrom: string };
+          hard?: boolean;
+          within?: number;
+          damage?: number;
+          hpAbove?: number;
+          rules?: CombatRules;
+      }
+    // Evolve this many weapons in one run
+    | { kind: "evolve"; count: number }
+    // Clear a raid's room (counted from 0)
+    | { kind: "clearRoom"; room: number }
+    // Kill this enemy before it gets away with the coins it stole
+    | { kind: "coinsBack"; enemyId: string }
+    // From a boss's arrival to its kill, never out of the fight's strike reach for longer than
+    // this many seconds at a time (not while it kneels or leaps)
+    | { kind: "stayInReach"; bossId: string; seconds: number };
+
+export type CombatTaskDef = {
+    // Never renamed: it's in saves
+    id: string;
+    name: string;
+    description: string;
+    tier: CombatTier;
+    type: CombatTaskType;
+    // The map it's done on: which runs track it, and the list's groups. None for the ones done
+    // all over.
+    mapId?: string;
+    goal: CombatGoal;
+};
+
 export type CharacterDef = {
     id: string;
     name: string;

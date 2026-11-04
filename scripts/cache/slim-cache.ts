@@ -42,6 +42,7 @@ import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import {
     COLLECTION_LOG_OBJ,
+    COMBAT_ACHIEVEMENTS_OBJ,
     REFUND_SPRITE,
     TITLE_TAB_SPRITES,
 } from "../../src/game/content/titleIcons";
@@ -167,6 +168,7 @@ function getWornObjs(): [EquipSlot, number][] {
 function getContentObjIds(): number[] {
     const ids = new Set<number>([
         COLLECTION_LOG_OBJ,
+        COMBAT_ACHIEVEMENTS_OBJ,
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
     ]);

@@ -1,3 +1,5 @@
+import { CombatTier } from "./types";
+
 // Trophies: rare finds, kept in the Collection log, and in the save once they're
 // found. They do nothing in a run, but a few bring a weapon into the game (the
 // Theatre of Blood's rapier and Holy Scythe: UnlockTask "raidChest").
@@ -9,7 +11,9 @@ export type TrophySource =
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
     // openRaidChest has the chance), and a hard raid's own are a roll of their own. An expert
     // raid's own: one of them each time it's beaten.
-    | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean };
+    | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean }
+    // Combat Achievements: a tier's reward, once enough points are had (combatTasks.ts)
+    | { kind: "combatTier"; tier: CombatTier };
 
 export type TrophyDef = {
     id: string;
@@ -191,6 +195,27 @@ TROPHIES.push(
             hardChance: 1,
         },
     },
+);
+
+// Combat Achievements' tier rewards, as in OSRS. Last, so nothing that rolls for a trophy meets
+// them first.
+TROPHIES.push(
+    ...(
+        [
+            ["easy", "Easy", 1, 25926],
+            ["medium", "Medium", 2, 25928],
+            ["hard", "Hard", 3, 25930],
+            ["elite", "Elite", 4, 25932],
+            ["master", "Master", 5, 25934],
+            ["grandmaster", "Grandmaster", 6, 25936],
+        ] as const
+    ).map(([tier, name, n, objId]) => ({
+        id: `ghommals_hilt_${n}`,
+        name: `Ghommal's hilt ${n}`,
+        objId,
+        how: `The ${name} tier's reward in Combat Achievements.`,
+        from: { kind: "combatTier", tier } as const,
+    })),
 );
 
 export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => [t.id, t]));
