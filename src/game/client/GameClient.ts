@@ -1050,21 +1050,24 @@ export class GameClient implements GameFrameHandler {
 
     // Swaps in an imported save in place of this one
     replaceSave(save: SaveData): void {
-        this.useSave(save);
-        // Its favourite, as it would start on
-        if (save.favouriteCharacter) {
-            this.selectCharacter(getStartingCharacter(save));
-        }
+        this.useSave(save, true);
         this.persist();
     }
 
-    // Plays on with this save
-    private useSave(save: SaveData): void {
+    // Plays on with this save. toFavourite: go to its favourite, as it would
+    // start on, if it has one that's open (an import; a save given back by
+    // another tab leaves the pick alone)
+    private useSave(save: SaveData, toFavourite = false): void {
         this.save = save;
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
-        if (!save.unlockedCharacters.includes(characterId)) {
-            this.selectCharacter(getStartingCharacter(save));
+        const starting = getStartingCharacter(save);
+        const favourite = toFavourite && starting === save.favouriteCharacter;
+        if (
+            characterId !== starting &&
+            (favourite || !save.unlockedCharacters.includes(characterId))
+        ) {
+            this.selectCharacter(starting);
         }
         if (!isMapUnlocked(save, mapId)) {
             this.store.set({ mapId: MAPS[0].id });

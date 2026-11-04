@@ -218,6 +218,7 @@ function renderMaps(mapId = "lumbridge") {
     const actions = {
         selectMap: vi.fn((id: string) => store.set({ mapId: id })),
         selectCharacter: vi.fn(),
+        toggleFavouriteCharacter: vi.fn(),
         playClick: vi.fn(),
     };
     render(<GameUi store={store} client={actions as unknown as GameClient} />);
@@ -240,6 +241,39 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
     renderMaps("theatre_of_blood");
     expect(screen.getByRole("tab", { name: "Bosses" })).toHaveAttribute("aria-selected", "true");
 }, 30000);
+
+test("the favourite button is the shown adventurer's, and stays as focus moves to it", () => {
+    expect.hasAssertions();
+    const actions = renderMaps();
+    const shown = () =>
+        document.querySelector(".ui-select-adventurers .ui-card-title")?.textContent;
+    // Focus on an adventurer who isn't the one picked shows theirs
+    const ranger = screen.getByRole("button", { name: "Ranger" });
+    fireEvent.focus(ranger);
+    expect(shown()).toBe("Ranger");
+    const favourite = screen.getByRole("button", { name: "Make favourite" });
+    // Going on to their button keeps them, and the button with them
+    fireEvent.focusOut(ranger, { relatedTarget: favourite });
+    expect(shown()).toBe("Ranger");
+    expect(favourite).toBeInTheDocument();
+    fireEvent.click(favourite);
+    expect(actions.toggleFavouriteCharacter).toHaveBeenCalledExactlyOnceWith("ranger");
+    // Leaving the panel goes back to the one picked
+    fireEvent.focusOut(favourite, { relatedTarget: screen.getByRole("tab", { name: "Campaign" }) });
+    expect(shown()).toBe("Warrior");
+    // None for one who isn't open yet
+    fireEvent.focus(document.querySelector(".ui-select-adventurers .ui-card-locked")!);
+    expect(screen.queryByRole("button", { name: "Make favourite" })).toBeNull();
+});
+
+test("a map's own adventurer has no favourite button", () => {
+    expect.hasAssertions();
+    renderMaps("falador");
+    expect(document.querySelector(".ui-select-adventurers .ui-card-title")?.textContent).toBe(
+        "Durial321",
+    );
+    expect(screen.queryByRole("button", { name: "Make favourite" })).toBeNull();
+});
 
 test("map tabs support arrow keys and wrap", () => {
     expect.hasAssertions();

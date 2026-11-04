@@ -680,6 +680,12 @@ describe("the favourite adventurer", () => {
         expect(migrateSave({ ...save, favouriteCharacter: "nobody" }).favouriteCharacter).toBe(
             undefined,
         );
+        // Not a map's own adventurer, who's never picked
+        const only = CHARACTERS.find((c) => c.only)!.id;
+        expect(migrateSave({ ...save, favouriteCharacter: only }).favouriteCharacter).toBe(
+            undefined,
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: 3 }).favouriteCharacter).toBe(undefined);
     });
 
     it("is what the game starts on, while it's open", () => {

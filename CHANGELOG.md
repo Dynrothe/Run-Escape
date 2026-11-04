@@ -7,8 +7,8 @@ the version in the corner).
 
 ### Added
 
-- A favourite adventurer: pick Make favourite in an adventurer's details, and the game starts on
-  them every time you open it.
+- A favourite adventurer, by Okaeri: pick Make favourite in an adventurer's details, and the game
+  starts on them every time you open it.
 
 ## 0.24.1 - 2026-11-04
 

@@ -246,6 +246,12 @@
         min-width: 44px;
     }
 
+    /* No taller than the icon beside it, so the details don't jump between
+       adventurers with the button and those without */
+    .ui-favourite {
+        min-height: 36px;
+    }
+
     .ui-volume {
         height: 32px;
     }

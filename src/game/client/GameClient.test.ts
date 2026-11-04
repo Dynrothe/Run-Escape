@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
 import { hasBadNumber } from "../core/lockstep";
@@ -726,6 +726,73 @@ describe("saving", () => {
         expect(saved).toEqual([createSave()]);
         client.closeUnreadableNotice();
         expect(store.getSnapshot().unreadableSave).toBeUndefined();
+    });
+
+    describe("the favourite adventurer", () => {
+        const locked = CHARACTERS.find((c) => c.unlock)!.id;
+
+        // With the pick's look and co-op's word of it watched
+        function createPicking() {
+            const saving = createSaving(true);
+            const setCharacterLook = vi.fn();
+            const setMe = vi.fn();
+            Object.assign(saving.client, { assets: { setCharacterLook }, coop: { setMe } });
+            return { ...saving, setCharacterLook, setMe };
+        }
+
+        test("is saved, and taken off again, only for an adventurer that's open", () => {
+            const { client, store, saved } = createPicking();
+            client.toggleFavouriteCharacter("wizard");
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["wizard"]);
+            expect(store.getSnapshot().save.favouriteCharacter).toBe("wizard");
+            // It's not the pick
+            expect(store.getSnapshot().characterId).toBe("warrior");
+            client.toggleFavouriteCharacter("wizard");
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["wizard", undefined]);
+            client.toggleFavouriteCharacter(locked);
+            expect(client.save.favouriteCharacter).toBeUndefined();
+            expect(saved).toHaveLength(2);
+        });
+
+        test("an imported save goes to its favourite, picked once", () => {
+            const { client, store, saved, setCharacterLook, setMe } = createPicking();
+            client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
+            expect(store.getSnapshot().characterId).toBe("ranger");
+            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setMe).toHaveBeenCalledTimes(1);
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["ranger"]);
+        });
+
+        test("an imported save's favourite that isn't open in it leaves the pick alone", () => {
+            const { client, store, setCharacterLook } = createPicking();
+            store.set({ characterId: "wizard" });
+            client.replaceSave({ ...createSave(), favouriteCharacter: locked });
+            expect(store.getSnapshot().characterId).toBe("wizard");
+            expect(setCharacterLook).not.toHaveBeenCalled();
+        });
+
+        test("a pick that isn't open in an imported save goes to its favourite, once", () => {
+            const { client, store, setCharacterLook, setMe } = createPicking();
+            client.save.unlockedCharacters.push(locked);
+            store.set({ characterId: locked });
+            client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
+            expect(store.getSnapshot().characterId).toBe("ranger");
+            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setMe).toHaveBeenCalledTimes(1);
+        });
+
+        test("a save given back by another tab leaves an open pick alone", () => {
+            const { client, store, setStored, lockChanged } = createPicking();
+            store.set({ characterId: "wizard" });
+            setStored({ save: { ...createSave(), favouriteCharacter: "ranger" } });
+            lockChanged(true);
+            expect(client.save.favouriteCharacter).toBe("ranger");
+            expect(store.getSnapshot().characterId).toBe("wizard");
+            // One that isn't open in it goes to the favourite
+            store.set({ characterId: locked });
+            lockChanged(true);
+            expect(store.getSnapshot().characterId).toBe("ranger");
+        });
     });
 });
 

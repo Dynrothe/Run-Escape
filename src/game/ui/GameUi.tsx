@@ -1018,6 +1018,7 @@ export function AdventurerPanel({
     // The roster: not an adventurer played on one map alone (CharacterDef.only)
     const roster = CHARACTERS.filter((c) => !c.only);
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
+    const shown = fixed ?? peek ?? ui.characterId;
     return (
         <div
             className={
@@ -1025,6 +1026,13 @@ export function AdventurerPanel({
                 (fixed ? " ui-select-fixed" : "")
             }
             onMouseLeave={stopPeeking(setPeek)}
+            // Only focus leaving the panel: moving to the favourite button mustn't swap the
+            // details, and the button, out from under the click
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setPeek(undefined);
+                }
+            }}
         >
             <h2 className="ui-select-heading">
                 Adventurer
@@ -1073,7 +1081,6 @@ export function AdventurerPanel({
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
-                                                onBlur={() => setPeek(undefined)}
                                                 onClick={() => {
                                                     setPeek(character.id);
                                                     client.selectCharacter(character.id);
@@ -1101,24 +1108,24 @@ export function AdventurerPanel({
                 })}
             </div>
             <AdventurerDetails
-                key={fixed ?? peek ?? ui.characterId}
+                key={shown}
                 save={ui.save}
-                character={getCharacter(fixed ?? peek ?? ui.characterId)}
-                client={fixed ? undefined : client}
+                character={getCharacter(shown)}
+                onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
             />
         </div>
     );
 }
 
-// client: for the favourite button (not on a map's own adventurer, who can't be picked)
+// onFavourite: the favourite button's (not on a map's own adventurer, who can't be picked)
 function AdventurerDetails({
     save,
     character,
-    client,
+    onFavourite,
 }: {
     save: SaveData;
     character: CharacterDef;
-    client?: GameClient;
+    onFavourite?: () => void;
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
@@ -1130,19 +1137,19 @@ function AdventurerDetails({
                     <div className="ui-card-title">{character.name}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
-                {client && unlocked && (
+                {onFavourite && unlocked && (
+                    // The label says whether it's on, so no aria-pressed as well
                     <button
                         className={
                             "ui-button ui-button-small ui-favourite" +
                             (favourite ? " ui-favourite-on" : "")
                         }
-                        aria-pressed={favourite}
                         title={
                             favourite
                                 ? "The game starts on this adventurer. Click to stop."
                                 : "Start the game on this adventurer"
                         }
-                        onClick={() => client.toggleFavouriteCharacter(character.id)}
+                        onClick={onFavourite}
                     >
                         {favourite ? "Favourite" : "Make favourite"}
                     </button>
