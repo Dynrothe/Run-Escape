@@ -58,6 +58,8 @@ const LANE_CHEVRON_GAP = 4;
 // along it and this faint
 const ROW_WARNING_GAP = 2;
 const ROW_WARNING_ALPHA = 0.25;
+// The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
+const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
 // The safe tiles out of a gaze's sight, while it winds up
 const SHADOW_ALPHA = 0.5;
 // A charge's lane is shown this long once it's picked, at this alpha, and
@@ -603,6 +605,7 @@ export class BossFightView {
 
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawSquareEdge(overlay, sim, scale);
+        this.drawReach(overlay, sim, alpha, scale);
         this.flashQuarters(overlay, sim, alpha);
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
@@ -745,11 +748,34 @@ export class BossFightView {
         }
     }
 
+    // A fight whose weapon only reaches so far (MapDef.fight.strikeReach): while the
+    // boss is out of it, how far it reaches, faintly round the player (the boss
+    // bar says so too)
+    private drawReach(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const reach = sim.map.fight?.strikeReach;
+        const boss = sim.shownBoss;
+        const player = sim.player;
+        if (reach === undefined || !boss || boss.dead || sim.intro) {
+            return;
+        }
+        if (Math.hypot(boss.x - player.x, boss.y - player.y) <= reach) {
+            return;
+        }
+        const x = lerp(player.prevX, player.x, alpha);
+        const y = lerp(player.prevY, player.y, alpha);
+        this.traceCircle(overlay, sim, x, y, reach, 48);
+        const ctx = overlay.ctx;
+        ctx.lineWidth = Math.max(1, 2 * scale);
+        ctx.strokeStyle = REACH_COLOUR;
+        ctx.stroke();
+    }
+
     // A fight in a set square (MapDef.bossArena) can't be walked out of, and on
     // open ground nothing else says why the player has stopped
     private drawSquareEdge(overlay: Overlay, sim: Sim, scale: number): void {
         const boss = sim.shownBoss;
-        if (!sim.map.bossArena || !boss?.def.boss?.phases || boss.dead) {
+        const edge = boss?.def.boss?.look?.edge;
+        if (!sim.map.bossArena || !boss?.def.boss?.phases || boss.dead || edge === null) {
             return;
         }
         const { minX, minY, maxX, maxY } = sim.bossArena;
@@ -761,7 +787,7 @@ export class BossFightView {
         ]);
         const ctx = overlay.ctx;
         ctx.lineWidth = Math.max(2, 4 * scale);
-        ctx.strokeStyle = "rgba(255, 110, 215, 0.8)";
+        ctx.strokeStyle = edge ?? "rgba(255, 110, 215, 0.8)";
         ctx.stroke();
     }
 
@@ -927,8 +953,9 @@ export class BossFightView {
         const height = overlay.height;
         const ctx = overlay.ctx;
         // Still dim around the edges for as long as she's up
-        if (boss?.def.boss?.intro && !boss.dead && !sim.intro) {
-            this.vignette(ctx, width, height, "rgba(10, 0, 20, 0.5)");
+        const vignette = boss?.def.boss?.look?.vignette;
+        if (boss?.def.boss?.intro && !boss.dead && !sim.intro && vignette !== null) {
+            this.vignette(ctx, width, height, vignette ?? "rgba(10, 0, 20, 0.5)");
         }
         const curse = sim.curse;
         if (curse) {
@@ -1120,11 +1147,13 @@ export class BossFightView {
         const cx = p.behind ? width / 2 : p.x;
         const cy = p.behind ? height / 2 : p.y;
         const reach = Math.hypot(width, height);
+        const look = intro.def.boss!.look;
+        const [r, g, b] = look?.dark ?? [8, 0, 18];
         // A wide light, as she's a big thing, and it reaches the player beside her
         const dark = ctx.createRadialGradient(cx, cy, height * 0.2, cx, cy, reach * 0.62);
-        dark.addColorStop(0, `rgba(8, 0, 18, ${0.12 * fade})`);
-        dark.addColorStop(0.45, `rgba(8, 0, 18, ${0.5 * fade})`);
-        dark.addColorStop(1, `rgba(8, 0, 18, ${DARK * fade})`);
+        dark.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.12 * fade})`);
+        dark.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${0.5 * fade})`);
+        dark.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${DARK * fade})`);
         ctx.fillStyle = dark;
         ctx.fillRect(0, 0, width, height);
 
@@ -1144,13 +1173,13 @@ export class BossFightView {
         const y = height * 0.72;
         ctx.fillStyle = "#000000";
         ctx.fillText(def.title, width / 2 + pixel, y + pixel);
-        ctx.fillStyle = "#ff9ae6";
+        ctx.fillStyle = look?.title ?? "#ff9ae6";
         ctx.fillText(def.title, width / 2, y);
         if (def.subtitle) {
             ctx.font = `${12 * pixel}px "OSRS Bold", sans-serif`;
             ctx.fillStyle = "#000000";
             ctx.fillText(def.subtitle, width / 2 + pixel, y + 18 * pixel + pixel);
-            ctx.fillStyle = "#e8d0ff";
+            ctx.fillStyle = look?.subtitle ?? "#e8d0ff";
             ctx.fillText(def.subtitle, width / 2, y + 18 * pixel);
         }
         ctx.globalAlpha = 1;

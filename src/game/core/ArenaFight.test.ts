@@ -873,3 +873,31 @@ describe("fire on a rhythm", () => {
         expect(boss.bossState!.cycles).toBeUndefined();
     });
 });
+
+describe("a strike's reach in a fight", () => {
+    function fight(reach: number | undefined, distance: number): number {
+        const sim = createSim();
+        if (reach !== undefined) {
+            sim.map.fight!.strikeReach = reach;
+        }
+        sim.addWeapon("saradomin_strike");
+        const boss = startFight(sim, bossDef({ phases: THREE_PHASES }), 5000);
+        place(sim, MIDDLE, MIDDLE);
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = MIDDLE + distance;
+        boss.speed = 0;
+        const hp = boss.hp;
+        run(sim, 7);
+        return hp - boss.hp;
+    }
+
+    test("strikes him only within the fight's reach", () => {
+        expect(fight(8, 9.5)).toBe(0);
+        expect(fight(8, 6)).toBeGreaterThan(0);
+    });
+
+    test("anywhere else it's the usual twelve tiles", () => {
+        expect(fight(undefined, 9.5)).toBeGreaterThan(0);
+        expect(fight(undefined, 12.5)).toBe(0);
+    });
+});
