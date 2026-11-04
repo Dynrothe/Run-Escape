@@ -41,6 +41,7 @@ import {
     getMap,
     getMapCharacter,
 } from "../content/maps";
+import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -1117,11 +1118,58 @@ export function AdventurerPanel({
                     );
                 })}
             </div>
+            <PetRow ui={ui} client={client} />
             <AdventurerDetails
                 key={fixed ?? peek ?? ui.characterId}
                 save={ui.save}
                 character={getCharacter(fixed ?? peek ?? ui.characterId)}
             />
+        </div>
+    );
+}
+
+// The pet to take along, from those found (looks only): none until one's been found
+function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
+    const found = getFoundPets(ui.save.trophies);
+    if (found.length === 0) {
+        return null;
+    }
+    const chosen = ui.save.pet;
+    const name = chosen ? getPetTrophy(PET_BY_ID.get(chosen)!).name : "None";
+    return (
+        <div className="ui-pet-row">
+            <span className="ui-pet-label">
+                Pet: <span className="ui-pet-name">{name}</span>
+            </span>
+            <div className="ui-pet-tiles">
+                <button
+                    className={"ui-card ui-pet-tile" + (chosen ? "" : " ui-card-selected")}
+                    aria-label="No pet"
+                    aria-pressed={!chosen}
+                    title="No pet"
+                    onClick={() => client.selectPet(undefined)}
+                >
+                    <span className="ui-pet-none">None</span>
+                </button>
+                {found.map((pet) => {
+                    const trophy = getPetTrophy(pet);
+                    const selected = pet.id === chosen;
+                    return (
+                        <button
+                            key={pet.id}
+                            className={
+                                "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
+                            }
+                            aria-label={trophy.name}
+                            aria-pressed={selected}
+                            title={trophy.name}
+                            onClick={() => client.selectPet(pet.id)}
+                        >
+                            <ItemIcon objId={trophy.objId} size={26} />
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 }

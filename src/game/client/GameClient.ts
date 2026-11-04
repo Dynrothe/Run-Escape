@@ -23,6 +23,7 @@ import {
     isFunMap,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -156,6 +157,9 @@ const ATTRACT_PITCH = -260;
 const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
+// The pet taken along stands beside the character on the menus: tiles to their side and behind
+const PREVIEW_PET_SIDE = 1.1;
+const PREVIEW_PET_BACK = 0.4;
 const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
@@ -562,6 +566,16 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // The pet to take along (one of the trophies found), or none
+    selectPet(petId: string | undefined): void {
+        if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
+            return;
+        }
+        this.save.pet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The map for the next run. Hosting a room, it's the room's map: the relay
     // says it back in a room update, which the lobby shows, so nothing's
     // changed here until it has. Endless and hard mode stay on where everyone
@@ -743,6 +757,7 @@ export class GameClient implements GameFrameHandler {
             {
                 ...this.save.armoury,
             },
+            this.save.pet,
         );
     }
 
@@ -1105,9 +1120,13 @@ export class GameClient implements GameFrameHandler {
         this.grids.delete(mapId);
     }
 
-    // Loads a map's collision and enemies for a run, with the loading screen if
-    // it takes a moment. False if it couldn't.
-    private async travelTo(mapId: string, back: Screen): Promise<boolean> {
+    // Loads a map's collision and enemies for a run, and the party's pets, with
+    // the loading screen if it takes a moment. False if it couldn't.
+    private async travelTo(
+        mapId: string,
+        back: Screen,
+        pets: (string | undefined)[],
+    ): Promise<boolean> {
         const map = getMap(mapId);
         const enemies = getMapEnemies(map);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
@@ -1117,11 +1136,14 @@ export class GameClient implements GameFrameHandler {
                 loadingProgress: 25,
             });
         }
+        // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
+        const petsBaked = this.assets.loadPets(pets);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
+            await petsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1144,7 +1166,7 @@ export class GameClient implements GameFrameHandler {
         const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        if (!(await this.travelTo(mapId, "characters"))) {
+        if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
             return;
         }
         usePortableMath(false);
@@ -1170,7 +1192,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim);
+        this.enterRun(sim, [this.save.pet]);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1215,7 +1237,11 @@ export class GameClient implements GameFrameHandler {
             // Still on the last run's results
             this.leaveRun(false);
         }
-        if (!(await this.travelTo(game.mapId, "coop"))) {
+        // Each hero's pet, only for looks (another player's game could send anything)
+        const pets = game.heroes.map((hero) =>
+            typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
+        );
+        if (!(await this.travelTo(game.mapId, "coop", pets))) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1259,7 +1285,7 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim);
+        this.enterRun(sim, pets);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1269,7 +1295,8 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private enterRun(sim: Sim): void {
+    // pets: each hero's pet, in the party's order
+    private enterRun(sim: Sim, pets: (string | undefined)[]): void {
         const map = sim.map;
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
@@ -1301,6 +1328,7 @@ export class GameClient implements GameFrameHandler {
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
+        this.view.pets.setPets(pets);
         this.cameraRig.pitch = RUN_PITCH;
         this.cameraRig.distance =
             isCoarsePointer && window.innerHeight <= PHONE_MAX_HEIGHT
@@ -1870,6 +1898,12 @@ export class GameClient implements GameFrameHandler {
         this.view.localPlayerPose = this.coopStopped
             ? undefined
             : this.coopRun?.prediction?.render(alpha);
+        // Pets walk behind their players as they're drawn: a co-op guest's own hero where
+        // prediction has them, ahead of the sim
+        const predicted = this.view.localPlayerPose;
+        this.view.pets.update(sim, (hero) =>
+            predicted?.hero === hero ? predicted : sim.heroes[hero]?.player,
+        );
         const { x: px, y: py } = getPlayerPose(
             sim,
             this.viewHero,
@@ -2511,11 +2545,11 @@ export class GameClient implements GameFrameHandler {
             this.view.submitActors(actors, sim, this.getAlpha());
             return;
         }
-        // Title screen: just the character
+        // Title screen: just the character, and their pet
         const model = this.assets.getPlayer();
+        const tick = Math.floor(this.attractTick);
         if (model) {
             const anim = model.getAnim(this.assets.getPlayerStance().idle);
-            const tick = Math.floor(this.attractTick);
             actors.draw(
                 model,
                 anim,
@@ -2523,6 +2557,22 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
+                0,
+            );
+        }
+        const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);
+        const petModel = pet && this.assets.getPet(pet.id);
+        if (pet && petModel) {
+            const anim = petModel.getAnim(pet.idleSeq);
+            const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;
+            const y = TITLE_MAP.spawn.y - PREVIEW_PET_BACK;
+            actors.draw(
+                petModel,
+                anim,
+                anim.getFrame(tick),
+                x,
+                this.grid.getHeight(x, y) / 128,
+                y,
                 0,
             );
         }

@@ -832,6 +832,17 @@ describe("save", () => {
     });
 });
 
+describe("pets", () => {
+    it("keeps the pet taken along, only if it's been found", () => {
+        const save = createSave();
+        save.trophies.push("lil_zik");
+        expect(migrateSave({ ...save, pet: "lil_zik" }).pet).toBe("lil_zik");
+        expect(migrateSave({ ...save, pet: "lil_maiden" }).pet).toBeUndefined();
+        expect(migrateSave({ ...save, pet: "not_a_pet" }).pet).toBeUndefined();
+        expect(migrateSave(save).pet).toBeUndefined();
+    });
+});
+
 describe("hard mode", () => {
     const hardWin = (mapId: string) => run(mapId, { hard: true, victory: true, seconds: 900 });
 

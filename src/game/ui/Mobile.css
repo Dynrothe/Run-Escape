@@ -459,6 +459,35 @@
         overflow-y: auto;
     }
 
+    /* The pet on one line, its tiles scrolling sideways, so the adventurers keep their room. The
+       one picked is the tile lit up. */
+    .ui-pet-row {
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        padding: 0 2px;
+    }
+
+    .ui-pet-name {
+        display: none;
+    }
+
+    /* Swiped, with no scrollbar: one would make the row a third taller */
+    .ui-pet-tiles {
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow-x: auto;
+        touch-action: pan-x;
+        scrollbar-width: none;
+    }
+
+    .ui-pet-tiles::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ui-pet-tile {
+        flex-shrink: 0;
+    }
+
     .ui-map-pages {
         flex: 1 1 0;
     }

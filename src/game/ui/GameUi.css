@@ -751,6 +751,41 @@
     padding: 0;
 }
 
+/* The pet taken along, under the adventurers */
+.ui-pet-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 2px;
+}
+
+.ui-pet-label {
+    color: #ff981f;
+    white-space: nowrap;
+}
+
+.ui-pet-name {
+    color: #ffffff;
+}
+
+.ui-pet-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.ui-pet-tile {
+    justify-content: center;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+}
+
+.ui-pet-none {
+    font-size: 12px;
+}
+
 .ui-tile-badge {
     position: absolute;
     right: 1px;

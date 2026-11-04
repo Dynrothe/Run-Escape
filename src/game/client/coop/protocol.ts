@@ -7,6 +7,8 @@ export type Loadout = {
     metaStats: Record<string, number>;
     unlockedItems: string[];
     armoury: Record<string, number>;
+    // Their pet (pets.ts), only for looks: the sim never sees it
+    pet?: string;
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which

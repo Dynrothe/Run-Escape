@@ -133,7 +133,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
-import { movePlayer, yawFromVector } from "./PlayerMovement";
+import { movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -8253,22 +8253,16 @@ export class Sim {
                 goalY = player.y + fm.sin(angle) * THRALL_FOLLOW_DISTANCE;
                 stop = 0.3;
             }
-            const dx = goalX - thrall.x;
-            const dy = goalY - thrall.y;
-            const distance = fm.hypot(dx, dy);
-            thrall.moving = distance > stop;
-            if (thrall.moving) {
-                const move = Math.min(THRALL_SPEED, distance - stop);
-                const moveX = (dx / distance) * move;
-                const moveY = (dy / distance) * move;
-                if (def.ghost) {
-                    thrall.x += moveX;
-                    thrall.y += moveY;
-                } else {
-                    moveCircle(this.grid, thrall, moveX, moveY, THRALL_RADIUS);
-                }
-                thrall.yaw = yawFromVector(dx, dy);
-            }
+            thrall.moving = walkToward(
+                this.grid,
+                thrall,
+                goalX,
+                goalY,
+                stop,
+                THRALL_SPEED,
+                THRALL_RADIUS,
+                def.ghost === true,
+            );
             // Stuck behind a wall: back beside the player
             if (fm.hypot(player.x - thrall.x, player.y - thrall.y) > THRALL_LEASH) {
                 thrall.x = thrall.prevX = player.x;

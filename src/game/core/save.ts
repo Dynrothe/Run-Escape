@@ -18,6 +18,7 @@ import {
     isRaidMap,
     isSeasonalMap,
 } from "../content/maps";
+import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -104,6 +105,8 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The pet taken along on runs (pets.ts), one of the trophies found
+    pet?: string;
 };
 
 // The round reached, and how long the run lasted
@@ -266,6 +269,9 @@ export function migrateSave(raw: unknown): SaveData {
                 save.trophies.push(id);
             }
         }
+    }
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
+        save.pet = data.pet;
     }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {

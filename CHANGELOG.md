@@ -10,6 +10,9 @@ the version in the corner).
 - Auto equip, by Deivid Smarzaro: an option in Settings and the pause menu that wears casket gear
   in an empty slot, or gear that beats what's worn without being worse at anything. Anything else
   still asks, as does replacing a piece of a set. Auto alch comes first if both are on.
+- Pets, by Okaeri: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow
+  you around on your runs. Pick one under the adventurers. They're only for looks, and your party
+  sees yours in co-op.
 
 ### Changed
 

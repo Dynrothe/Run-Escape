@@ -248,6 +248,10 @@ version and how to run it.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
   mask or a Scythe inside, for the Collection log. Those do nothing in a run.
+- **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, and Lil' Zik from
+  Verzik with its looks from expert clears) can be taken along, picked under the adventurers. It
+  follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
+  in co-op the party sees each other's.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
