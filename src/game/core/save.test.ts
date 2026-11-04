@@ -23,6 +23,7 @@ import {
     getNextUpgradeCost,
     getQuestProgress,
     getSkillCoins,
+    getStartingCharacter,
     importSave,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -667,6 +668,27 @@ describe("save", () => {
                 expect(getMap(task.mapId)).toBeDefined();
             }
         }
+    });
+});
+
+describe("the favourite adventurer", () => {
+    it("is kept in the save, only as an adventurer this game has", () => {
+        const save = createSave();
+        expect(migrateSave({ ...save, favouriteCharacter: "wizard" }).favouriteCharacter).toBe(
+            "wizard",
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: "nobody" }).favouriteCharacter).toBe(
+            undefined,
+        );
+    });
+
+    it("is what the game starts on, while it's open", () => {
+        const save = createSave();
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
+        save.favouriteCharacter = save.unlockedCharacters[1];
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[1]);
+        save.favouriteCharacter = CHARACTERS.find((c) => c.unlock)!.id;
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
     });
 });
 

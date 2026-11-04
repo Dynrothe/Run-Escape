@@ -1104,19 +1104,24 @@ export function AdventurerPanel({
                 key={fixed ?? peek ?? ui.characterId}
                 save={ui.save}
                 character={getCharacter(fixed ?? peek ?? ui.characterId)}
+                client={fixed ? undefined : client}
             />
         </div>
     );
 }
 
+// client: for the favourite button (not on a map's own adventurer, who can't be picked)
 function AdventurerDetails({
     save,
     character,
+    client,
 }: {
     save: SaveData;
     character: CharacterDef;
+    client?: GameClient;
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
+    const favourite = save.favouriteCharacter === character.id;
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -1125,6 +1130,23 @@ function AdventurerDetails({
                     <div className="ui-card-title">{character.name}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
+                {client && unlocked && (
+                    <button
+                        className={
+                            "ui-button ui-button-small ui-favourite" +
+                            (favourite ? " ui-favourite-on" : "")
+                        }
+                        aria-pressed={favourite}
+                        title={
+                            favourite
+                                ? "The game starts on this adventurer. Click to stop."
+                                : "Start the game on this adventurer"
+                        }
+                        onClick={() => client.toggleFavouriteCharacter(character.id)}
+                    >
+                        {favourite ? "Favourite" : "Make favourite"}
+                    </button>
+                )}
             </div>
             <div className="ui-card-text">{character.description}</div>
             {!unlocked && character.unlock && (

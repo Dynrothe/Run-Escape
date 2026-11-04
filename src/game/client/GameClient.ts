@@ -52,6 +52,7 @@ import {
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
@@ -550,6 +551,16 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ screen });
     }
 
+    // The adventurer the game starts on (or none, to start on the first again)
+    toggleFavouriteCharacter(characterId: string): void {
+        if (!this.save.unlockedCharacters.includes(characterId)) {
+            return;
+        }
+        this.save.favouriteCharacter =
+            this.save.favouriteCharacter === characterId ? undefined : characterId;
+        this.persist();
+    }
+
     selectCharacter(characterId: string): void {
         if (!this.save.unlockedCharacters.includes(characterId)) {
             return;
@@ -1040,6 +1051,10 @@ export class GameClient implements GameFrameHandler {
     // Swaps in an imported save in place of this one
     replaceSave(save: SaveData): void {
         this.useSave(save);
+        // Its favourite, as it would start on
+        if (save.favouriteCharacter) {
+            this.selectCharacter(getStartingCharacter(save));
+        }
         this.persist();
     }
 
@@ -1049,7 +1064,7 @@ export class GameClient implements GameFrameHandler {
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
         if (!save.unlockedCharacters.includes(characterId)) {
-            this.selectCharacter(save.unlockedCharacters[0]);
+            this.selectCharacter(getStartingCharacter(save));
         }
         if (!isMapUnlocked(save, mapId)) {
             this.store.set({ mapId: MAPS[0].id });

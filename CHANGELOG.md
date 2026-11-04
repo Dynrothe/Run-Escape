@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- A favourite adventurer: pick Make favourite in an adventurer's details, and the game starts on
+  them every time you open it.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

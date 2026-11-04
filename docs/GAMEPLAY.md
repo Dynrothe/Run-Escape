@@ -72,7 +72,8 @@ version and how to run it.
 - **Adventurers**: three to start with, each with their own starting weapon, outfit and bonus.
   The rest join for beating a map or for a task done on one (in a single run, however it ends);
   the adventurer screen says what each one wants, and a task done mid-run rings the town
-  crier's bell.
+  crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
+  on them.
 
     | Adventurer          | Fights with | Starts with            | Bonus                               | Joins for                                            |
     | ------------------- | ----------- | ---------------------- | ----------------------------------- | ---------------------------------------------------- |

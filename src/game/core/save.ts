@@ -101,6 +101,8 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The adventurer the game starts on, picked as a favourite
+    favouriteCharacter?: string;
 };
 
 // The round reached, and how long the run lasted
@@ -264,6 +266,12 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (
+        typeof data.favouriteCharacter === "string" &&
+        CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)
+    ) {
+        save.favouriteCharacter = data.favouriteCharacter;
+    }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {
             if (QUEST_BY_ID.has(id) && !save.questsDone.includes(id)) {
@@ -274,6 +282,15 @@ export function migrateSave(raw: unknown): SaveData {
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
     return save;
+}
+
+// The adventurer the game starts on: the favourite, if it's open, or else the first that is
+export function getStartingCharacter(save: SaveData): string {
+    const favourite = save.favouriteCharacter;
+    if (favourite && save.unlockedCharacters.includes(favourite)) {
+        return favourite;
+    }
+    return save.unlockedCharacters[0] ?? "warrior";
 }
 
 // Gear that can come out of a casket (not one of the Armoury's variants)
