@@ -6300,7 +6300,12 @@ export class Sim {
         if (usable.length === 0) {
             return;
         }
-        const index = usable[this.rng.weightedIndex(usable.map((i) => def.attacks[i].weight))];
+        const pick = this.rng.weightedIndex(usable.map((i) => def.attacks[i].weight));
+        // Only ones used by name (weight 0) to hand
+        if (pick === -1) {
+            return;
+        }
+        const index = usable[pick];
         const attack = def.attacks[index];
         state.cooldowns[index] = Math.round(attack.cooldown * TICKS_PER_SECOND);
         state.chain = attack.chain ? { attack, left: attack.chain.times } : undefined;
@@ -6437,7 +6442,9 @@ export class Sim {
         }
     }
 
-    // On the player, and the rest of a blast of several scattered around them
+    // On the player, and the rest of a blast of several scattered around them.
+    // A square (BossAttackDef.square) lies on the tiles: an odd one on the middle
+    // of the tile the spot's in, an even one on the nearest corner.
     private pickBlastTargets(attack: BossAttackDef): { x: number; y: number }[] {
         const player = this.player;
         const targets = [{ x: player.x, y: player.y }];
@@ -6449,7 +6456,28 @@ export class Sim {
                 y: player.y + fm.sin(angle) * distance,
             });
         }
+        const square = attack.square;
+        if (square) {
+            const snap = (v: number) => (square % 2 === 1 ? Math.floor(v) + 0.5 : Math.round(v));
+            for (const target of targets) {
+                target.x = snap(target.x);
+                target.y = snap(target.y);
+            }
+        }
         return targets;
+    }
+
+    // A square blast lands on every tile of it (BossAttackDef.square)
+    private squareImpact(attack: BossAttackDef, x: number, y: number, half: number): void {
+        const impact = attack.impactSpotAnim;
+        if (impact === undefined) {
+            return;
+        }
+        for (let tx = Math.floor(x - half); tx < x + half; tx++) {
+            for (let ty = Math.floor(y - half); ty < y + half; ty++) {
+                this.addEffect(impact, tx + 0.5, ty + 0.5, 0, 40);
+            }
+        }
     }
 
     // Dharok's hits grow as his hitpoints drop; harder maps hit harder
@@ -6477,8 +6505,17 @@ export class Sim {
                 this.leapTo(enemy, spots[0]);
             }
             const radius = attack.radius ?? 2;
+            // A lunge's strip (BossAttackDef.line), a blast's square (square)
+            const line = attack.kind === "swing" ? attack.line : undefined;
+            const half = attack.kind === "blast" && attack.square ? attack.square / 2 : 0;
             for (const { x, y } of spots) {
-                this.emit({ type: "bossSwing", x, y, radius });
+                if (half > 0) {
+                    this.squareImpact(attack, x, y, half);
+                    continue;
+                }
+                if (!line) {
+                    this.emit({ type: "bossSwing", x, y, radius });
+                }
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
                     this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
                 }
@@ -6486,9 +6523,26 @@ export class Sim {
             // Co-op: on anyone it lands on
             this.forEachHeroInReach(() => {
                 const player = this.player;
-                let hit = spots.some(
-                    ({ x, y }) => fm.hypot(player.x - x, player.y - y) <= radius + player.radius,
-                );
+                let hit = line
+                    ? inStrip(
+                          player.x,
+                          player.y,
+                          player.radius,
+                          enemy.x,
+                          enemy.y,
+                          windup.dirX,
+                          windup.dirY,
+                          line.length,
+                          line.width,
+                      )
+                    : half > 0
+                      ? spots.some(({ x, y }) =>
+                            circleInBox(player.x, player.y, player.radius, x, y, half, half),
+                        )
+                      : spots.some(
+                            ({ x, y }) =>
+                                fm.hypot(player.x - x, player.y - y) <= radius + player.radius,
+                        );
                 if (hit && attack.cone !== undefined) {
                     hit = this.inCone(enemy, windup, attack, attack.cone);
                 }

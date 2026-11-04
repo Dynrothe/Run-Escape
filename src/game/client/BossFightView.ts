@@ -394,7 +394,8 @@ export class BossFightView {
 
     // Traces a shape on the ground, each edge split up to follow it. Corners
     // behind the camera are left out: only a shape well off the screen has any.
-    private traceGround(overlay: Overlay, sim: Sim, corners: { x: number; y: number }[]): void {
+    // A shape on the ground, its edges split to lie on it (GameView's strips and squares too)
+    traceGround(overlay: Overlay, sim: Sim, corners: { x: number; y: number }[]): void {
         const ctx = overlay.ctx;
         ctx.beginPath();
         let first = true;

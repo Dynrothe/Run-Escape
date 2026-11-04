@@ -270,3 +270,71 @@ describe("phases without totems", () => {
         expect(sim.player.y).toBeLessThan(BASE + 19);
     });
 });
+
+describe("a lunge's strip and a square blast", () => {
+    const lunge = attack({ name: "Lunge", kind: "swing", line: { width: 2, length: 7 } });
+    const ice = attack({
+        name: "Ice",
+        kind: "blast",
+        square: 3,
+        impactSpotAnim: 369,
+        effect: { kind: "freeze", seconds: 1.5 },
+    });
+
+    function fight(): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        const boss = startFight(sim, bossDef({ attacks: [lunge, ice] }));
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = MIDDLE;
+        return { sim, boss };
+    }
+
+    test("a lunge hits down its strip, the way it faced as it began, and nowhere else", () => {
+        for (const [dx, dy, hit] of [
+            [0, 6.5, true], // down the strip, near its end
+            [0.9, 3, true], // just in its width
+            [1.6, 3, false], // beside it
+            [0, -1.2, false], // behind him
+            [0, 8, false], // past its end
+            [2.5, 0, false], // beside him
+        ] as const) {
+            const { sim, boss } = fight();
+            place(sim, MIDDLE, MIDDLE + 5);
+            use(sim, boss, "Lunge");
+            // It's aimed as it begins: stepping off now is too late only if it lands
+            place(sim, MIDDLE + dx, MIDDLE + dy);
+            const hp = hpOf(sim);
+            run(sim, lunge.windup + 0.05);
+            expect([dx, dy, hpOf(sim) < hp]).toEqual([dx, dy, hit]);
+        }
+    });
+
+    test("the square lands on the tile they stood on, all of it, and freezes them", () => {
+        const { sim, boss } = fight();
+        place(sim, MIDDLE + 5.2, MIDDLE + 5.9);
+        use(sim, boss, "Ice");
+        const windup = boss.bossState!.windup!;
+        expect(windup.targets[0]).toEqual({ x: MIDDLE + 5.5, y: MIDDLE + 5.5 });
+        // A corner of the square, not of its circle
+        place(sim, MIDDLE + 6.9, MIDDLE + 6.9);
+        const hp = hpOf(sim);
+        sim.takeEvents();
+        run(sim, ice.windup + 0.05);
+        expect(hpOf(sim)).toBeLessThan(hp);
+        expect(sim.player.frozen).toBeGreaterThan(0);
+        // Ice on every one of its nine tiles
+        const ices = sim.effects.filter((e) => e.spotAnim === 369 && e.x !== sim.player.x);
+        expect(ices.length).toBeGreaterThanOrEqual(9);
+    });
+
+    test("a step clear of the square's edge is clear of it", () => {
+        const { sim, boss } = fight();
+        place(sim, MIDDLE + 5.5, MIDDLE + 5.5);
+        use(sim, boss, "Ice");
+        place(sim, MIDDLE + 7 + sim.player.radius + 0.05, MIDDLE + 5.5);
+        const hp = hpOf(sim);
+        run(sim, ice.windup + 0.05);
+        expect(hpOf(sim)).toBe(hp);
+        expect(sim.player.frozen).toBe(0);
+    });
+});

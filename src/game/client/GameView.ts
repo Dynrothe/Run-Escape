@@ -1119,7 +1119,30 @@ export class GameView {
                 // Where to hide instead of where it hits (it hits everywhere else)
                 continue;
             }
-            if (kind === "swing" || kind === "blast") {
+            const line = kind === "swing" ? windup.attack.line : undefined;
+            const square = kind === "blast" ? windup.attack.square : undefined;
+            if (line || square) {
+                // A lunge's strip, filling from the boss out; a blast's squares, from the middle
+                const shapes = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, 1)]
+                    : windup.targets.map((spot) => squareCorners(spot.x, spot.y, square! / 2));
+                const filled = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, t)]
+                    : windup.targets.map((spot) =>
+                          squareCorners(spot.x, spot.y, (square! / 2) * t),
+                      );
+                for (let i = 0; i < shapes.length; i++) {
+                    this.fight.traceGround(overlay, sim, shapes[i]);
+                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                    this.fight.traceGround(overlay, sim, filled[i]);
+                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+                    ctx.fill();
+                }
+            } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
                 const spots =
                     kind === "blast"
@@ -1942,3 +1965,34 @@ export function formatTime(seconds: number): string {
 }
 
 export { TICKS_PER_SECOND };
+
+// A lunge's strip (BossAttackDef.line) on the ground, the first share of its length
+function stripCorners(
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    line: { width: number; length: number },
+    share: number,
+): { x: number; y: number }[] {
+    const sideX = (-dirY * line.width) / 2;
+    const sideY = (dirX * line.width) / 2;
+    const endX = x + dirX * line.length * share;
+    const endY = y + dirY * line.length * share;
+    return [
+        { x: x + sideX, y: y + sideY },
+        { x: endX + sideX, y: endY + sideY },
+        { x: endX - sideX, y: endY - sideY },
+        { x: x - sideX, y: y - sideY },
+    ];
+}
+
+// A square half tiles either way of x, y
+function squareCorners(x: number, y: number, half: number): { x: number; y: number }[] {
+    return [
+        { x: x - half, y: y - half },
+        { x: x + half, y: y - half },
+        { x: x + half, y: y + half },
+        { x: x - half, y: y + half },
+    ];
+}
