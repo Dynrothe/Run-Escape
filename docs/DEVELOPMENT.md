@@ -914,11 +914,12 @@ class, evolution and normal/hard mode examples. Weapon damage rules use the star
 throughout the run.
 
 How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
-one goes down, is revived or leaves, with each of those down or gone still counting as half a
-player (`PLAYER_GONE`). Caskets aren't scaled: `Sim.openCaskets` opens one for every hero who's up
-when anyone picks one up, each with its own item (on that hero's luck and gear) and the coins,
-which are the party's, paid once (the teammates' `openCasket` gets `partyCoins`). It counts once
-towards the run's `casketsOpened`, and once to each opener's `Hero.casketsOpened`.
+one goes down, is revived or leaves, with each of those down or gone still counting as half a player
+(`PLAYER_GONE`). An ordinary kill's casket chance is times `PartyScale.caskets` (`1 / (1 + 0.45` for
+each player past the first), and elites' and bosses' aren't, as `Sim.openCaskets` opens one for
+every hero who's up when anyone picks one up, each with its own item (on that hero's luck and gear)
+and the coins, which are the party's, paid once (the teammates' `openCasket` gets `partyCoins`). It
+counts once towards the run's `casketsOpened`, and once to each opener's `Hero.casketsOpened`.
 
 Revives are in `content/coop.ts` too (how many a player gets, the hitpoints each brings back,
 how long a teammate stands over them, how long the immunity lasts, and the extra revive's item,

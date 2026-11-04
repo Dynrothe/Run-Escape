@@ -24,10 +24,16 @@ export type PartyScale = {
     damage: number;
     // Multiplies the experience in enemies' bones
     xp: number;
+    // Multiplies the chance of a casket from an ordinary kill (elites' and bosses' are as solo)
+    caskets: number;
 };
 
-// Caskets aren't scaled: one opened gives every player who's up an item of their own
-// (Sim.collect), so a party's crowd is enough of them.
+// One casket opened gives every player who's up an item of their own (Sim.collect), and a
+// bigger party kills more, so ordinary kills drop fewer: 1 / (1 + CASKETS_PER_PLAYER for each
+// player past the first), x0.69 for two, x0.53 for three and x0.43 for four. That leaves each
+// player about as many items as solo (they were +30% with two and +60% with four). Elites' and
+// bosses' caskets already match solo, so they're left alone.
+const CASKETS_PER_PLAYER = 0.45;
 
 // Each player past the first adds this much of each (the experience, takes
 // it away)
@@ -58,6 +64,7 @@ export function getPartyScale(players: number): PartyScale {
         bossHp: 1 + BOSS_HP_PER_PLAYER * extra,
         damage: 1 + DAMAGE_PER_PLAYER * extra,
         xp: 1 + XP_PER_PLAYER * extra,
+        caskets: 1 / (1 + CASKETS_PER_PLAYER * extra),
     };
 }
 

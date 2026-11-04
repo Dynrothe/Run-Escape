@@ -572,11 +572,11 @@ version and how to run it.
       offer) has it decided for them: the first reward, taking the casket, or walking away. The
       host can kick a player from the menu mid-run, and everyone has to be on the same version of
       the game.
-    - A casket gives every player who's up an item of their own (rolled on their own luck and
-      gear), whoever picks it up, and its coins once to the shared pot. Caskets drop as often as
-      solo, so the bigger crowd brings more of them. Power-ups hit as hard against the tougher
-      crowd. The Highwayman takes his share of the
-      shared coins once, however many of you he hits.
+    - A casket gives every player who's up an item of their own (rolled on their own luck and gear),
+      whoever picks it up, and its coins once to the shared pot. Ordinary kills drop fewer the
+      bigger the party (x0.69 for two, x0.43 for four), as a party kills more, so each player gets
+      about as many items as solo. Power-ups hit as hard against the tougher crowd. The Highwayman
+      takes his share of the shared coins once, however many of you he hits.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party

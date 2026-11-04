@@ -7237,7 +7237,10 @@ export class Sim {
                 enemy.y,
                 master,
             );
-        } else if (!enemy.boss && this.rng.chance(CASKET_DROP_CHANCE * luck)) {
+        } else if (
+            !enemy.boss &&
+            this.rng.chance(CASKET_DROP_CHANCE * luck * this.partyScale.caskets)
+        ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));

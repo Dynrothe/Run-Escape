@@ -8,7 +8,8 @@ the version in the corner).
 ### Changed
 
 - Co-op: a casket gives every player who's up an item of their own, not just the one who picks
-  it up. Its coins still go to the party once, and caskets drop as often as they do solo.
+  it up. Its coins still go to the party once. Ordinary kills drop fewer of them the bigger the
+  party, as it kills more, so each player gets about as many items as solo.
 
 ## 0.24.1 - 2026-11-04
 

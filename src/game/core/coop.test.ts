@@ -698,6 +698,7 @@ describe("co-op", () => {
             bossHp: 1,
             damage: 1,
             xp: 1,
+            caskets: 1,
         });
         const two = getPartyScale(2);
         expect(two.crowd).toBeGreaterThan(1);
@@ -714,6 +715,19 @@ describe("co-op", () => {
         expect(together.damageScale).toBeGreaterThan(alone.damageScale);
         // A bigger crowd's bones are worth a little less each
         expect(together.xp).toBeLessThan(alone.xp);
+    });
+
+    it("drops fewer caskets from ordinary kills for a bigger party, as each opens for all", () => {
+        // About as many items each as solo: a bigger party kills more
+        expect(getPartyScale(2).caskets).toBeCloseTo(0.69, 2);
+        expect(getPartyScale(3).caskets).toBeCloseTo(0.53, 2);
+        expect(getPartyScale(4).caskets).toBeCloseTo(0.43, 2);
+        // Elites' caskets are left as they are
+        const duo = createParty(["warrior", "wizard"]);
+        const elite = duo.spawnEnemy(getEnemy("goblin"), "elite")!;
+        const before = duo.pickups.filter((p) => p.kind === "casket").length;
+        duo["killEnemy"](elite);
+        expect(duo.pickups.filter((p) => p.kind === "casket").length).toBe(before + 1);
     });
 
     it("has a boss's pools and bullets land on each of the party, and curse just one", () => {
