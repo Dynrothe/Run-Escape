@@ -485,7 +485,7 @@ version and how to run it.
     - **Justiciar Zachariah**: the Justiciar of the Owl, whose court is his weapon. Only
       Saradomin Strike hurts him, and only from close by: out of its reach the boss bar says so,
       and a faint ring shows how far it reaches. Three phases on his hitpoints, no shield and no
-      totems: at 78% and 40% he kneels a moment, untouchable, and rises into the next, and the
+      totems: at 85% and 45% he kneels a moment, untouchable, and rises into the next, and the
       court wakes a little more. His own: a **Lunge**, a strip two wide and seven long the way he
       faced, which carries him down it (step off it; behind and beside him are safe), twice in a
       row from the second phase; his **Shock wave**, a blue wave along
@@ -503,11 +503,14 @@ version and how to run it.
       once. Nothing in his court heals, but the Saradominist heals a little over the fight. His
       hits are small and come quickly; the gaze takes about half your hitpoints.
       **Fighting back**: a lunge or a shock wave of his that misses leaves his guard down for a
-      second (he glows gold and takes double damage); his court's bolts, lightning and swords
+      second and a half (gold sparkles rise, a chime rings, a gold ring pulses round him and he takes
+      double damage); his court's bolts, lightning and swords
       hurt him too, and lightning, a sword or a lunge into a pillar stuns him (the stars round
       his head) for longer. **Smite**, the fight's own button (Space, a controller's A, or the
       round button on a touch screen), calls a heavy blow down on him from right beside him, every
-      five seconds, and it's doubled while his guard's down.
+      four seconds, and it's doubled while his guard's down. His lightning hurts only within the
+      swirl on each cell, and the knights' swords fly right across the court. A boss fight has no
+      items, so no item bar, and its results have Retry.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

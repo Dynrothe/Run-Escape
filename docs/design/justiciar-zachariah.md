@@ -1,7 +1,8 @@
 # Justiciar Zachariah: design and numbers
 
 The fight's design, the decisions behind it, and its numbers, written 2026-11-04 on the
-`zachariah` branch, and reworked the same day after Dynny's first playtest (section 5). The data
+`zachariah` branch, and reworked the same day after Dynny's first two playtests (sections 5 and
+6). What he's said works is in section 1; keep it. The data
 in `src/game/content/zachariah.ts` is the truth if these drift. The arena is
 `src/game/scaperune/maps/owlsCourt.ts`; the engine pieces it's made of are under Arena fights in
 `docs/DEVELOPMENT.md`. Phosani's design record (`phosanis-nightmare.md`) is where most of the
@@ -29,6 +30,23 @@ Smite punishes him from up close** (section 4).
 | Structure   | Shield, totems, three phases, finale  | Hitpoints, three phases, a kneel between                                          |
 | Rest        | Totem blasts heal 15%                 | A pillar's shadow, the floor's safe colour; the Saradominist heals 10 a minute    |
 
+### What's working (playtest 2026-11-04)
+
+Dynny, after round 2: "the attack patterns are good, the pacing is good, effects are good. This
+fight up to this point has been very well designed." Keep these as they are unless he says
+otherwise:
+
+- **The attack patterns**: his lunge, shock wave and ice, the crossbow rows, the checker
+  lightning, the knights' swords, the gaze and the bridge's fire, and the phase 3 combos.
+- **The pacing**: an attack every 1.5 s (times the phase's tempo), the double lunge from phase 2,
+  and the crossbow volleys every 4, 3.6 and 3.2 s by phase.
+- **The effects** (section 7): the stomp rings, the dust, the lunge's trail, Smite's light, the
+  faint flashes and the camera shake.
+- **The design of fighting back** (section 4): his guard dropping when he misses, his court
+  turning on him, and Smite.
+
+Phase 1's length isn't on the list: that's still being tuned (section 6).
+
 ## 2. The arena
 
 The Owl's Court (`owlsCourt.ts`, recipe `zachariah`): a 27 by 27 court of plain stone with a gold
@@ -50,14 +68,14 @@ aim 8682 and fire 8684, throw 8667 and catch 8668, extend 8661, blaze 8662 and r
 
 ## 3. The fight
 
-Hitpoints 5,600 (the event's). His own attacks reach 16 tiles; past that he kneels and comes
+Hitpoints 4,200 (the event's). His own attacks reach 16 tiles; past that he kneels and comes
 down by you (his descent, 7964), throwing up dust and cracking the floor where he lands.
 
 | Phase | Hitpoints | Status              | Adds                                                                              |
 | ----- | --------- | ------------------- | --------------------------------------------------------------------------------- |
-| 1     | 100-78%   | The trial begins    | Lunge, Shock wave, Ice barrage; crossbow rows every 4 s                           |
-| 2     | 78-40%    | The Sepulchre wakes | Lightning (its opener), Lunges, the knight's sword; rows every 3.6 s; bridge fire |
-| 3     | 40-0%     | The verdict         | The Owl's gaze (its opener), the combos, both knights; rows every 3.2 s           |
+| 1     | 100-85%   | The trial begins    | Lunge, Shock wave, Ice barrage; crossbow rows every 4 s                           |
+| 2     | 85-45%    | The Sepulchre wakes | Lightning (its opener), Lunges, the knight's sword; rows every 3.6 s; bridge fire |
+| 3     | 45-0%     | The verdict         | The Owl's gaze (its opener), the combos, both knights; rows every 3.2 s           |
 
 He starts an attack every 1.5 s, times the phase's tempo (1, 0.9, 0.8). At each threshold he
 kneels (7965) for 2.4 s, untouchable and doing nothing, and rises (7962) into the next phase.
@@ -71,11 +89,11 @@ mistake.
 
 | Attack                                               | Damage                   | Warning              | To be clear                             | Takes          |
 | ---------------------------------------------------- | ------------------------ | -------------------- | --------------------------------------- | -------------- |
-| Lunge: strip 2 wide, 7 long; he dashes 4.5 down it   | 7                        | 0.85 s (0.65 again)  | 1 + 0.35 tiles sideways                 | 0.34 s         |
+| Lunge: strip 2 wide, 7 long; he dashes to its end    | 7                        | 0.85 s (0.65 again)  | 1 + 0.35 tiles sideways                 | 0.34 s         |
 | Shock wave: 1.5 wide, 6.5 tiles/s, 12 tiles          | 2, then the flurry 3 x 3 | 1 s + its flight     | 0.75 + 0.35 sideways                    | 0.28 s         |
 | Ice barrage: 3 by 3 square                           | 3, frozen 1.5 s          | 1.1 s                | 1.5 + 0.35 from its middle              | 0.46 s         |
-| Lightning: one colour's cells, then the other's      | 7                        | 1.4 s, then 1.4 s    | 1.5 + 0.35 into the next cell           | 0.46 s         |
-| Knight's sword: 2.6 wide, 9 tiles/s, out 27 and back | 6 each way               | 1.2 s + its flight   | 1.3 + 0.35 sideways                     | 0.41 s         |
+| Lightning: the circle on each cell of one colour     | 7                        | 1.4 s, then 1.4 s    | 1.28 + 0.35 from a cell's middle        | 0.41 s         |
+| Knight's sword: 2.6 wide, 9 tiles/s, across and back | 6 each way               | 1.2 s + its flight   | 1.3 + 0.35 sideways                     | 0.41 s         |
 | The Owl's gaze                                       | 14                       | 2.4 s after his leap | into a pillar's shadow, at most 8 tiles | 2 s            |
 | Crossbow rows: 3 volleys, 0.5 s apart, 9.5 tiles/s   | 2 a bolt (0.6 s grace)   | 1.2 s (the aim)      | 1.5 + 0.35 + 0.3 out of a lane          | 0.54 s         |
 | Bridge fire: a row burns 1.2 s every 4.5 s           | 3 every 0.5 s            | 0.8 s                | all four rows out together 1.8 s        | 1.1 s to cross |
@@ -100,11 +118,14 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
 `line.dash`, `MapDef.fight.ability`):
 
 1. **His guard drops when he misses (the punish window).** A Lunge or Shock wave that reaches no
-   one leaves his guard down for a second: he fights on, but takes **double damage** from
-   everything, his model glows gold, the boss bar says "Guard down!", and the strike goes off at
-   once for anyone in reach. His lunge now carries him 4.5 tiles down its strip (stopping at
-   whoever it hits), so a sidestep leaves him right beside you, open. Dodging well is how you
-   deal damage.
+   one leaves his guard down for a second and a half: he fights on, but takes **double damage**
+   from everything, and the strike goes off at once for anyone in reach. His lunge carries him
+   to the end of its strip (his front where the strip ends; stopping at whoever it hits), so a
+   sidestep leaves him right beside you, open. Dodging well is how you deal damage. The tell
+   (round 3: "hard to see when he flashes gold"): gold sparkles rise round him (1414) with a
+   holy chime (2671, prayer_boost) as it drops, his model's tinted a deep gold and glints, a gold
+   ring pulses round his feet with "Guard down!" (or "Stunned!") in gold just in front of him,
+   and the boss bar says it too.
 2. **His court turns on him (turning his attacks).** He chases you, so you can lead him into his
    own traps: a bolt that reaches him stops there and hurts him (8), a lightning cell struck
    under his middle hurts him (40) and stuns him, a knight's sword through him hurts (30) and
@@ -113,10 +134,11 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
    takes double. Stand in front of a pillar for his lunge, or on the colour that's about to be
    struck safe with him on the other.
 3. **Smite (the active).** The fight's button: Space on a keyboard, the bottom face button on a
-   pad, and a big round button over the items' corner on a touch screen (they all go through
+   pad, and a big round button in the items' corner on a touch screen (a boss fight has no
+items, so the 1-4 bar and the touch items aren't shown) (they all go through
    co-op's actions, `CoopAction` `ability`, so each player has their own). It calls Saradomin's
-   light down on him (1221, with the stomp ring running out under him) for 40, from no more than
-   **3.5 tiles off his middle**, every 5 s. Out of reach it does
+   light down on him (1221, with the stomp ring running out under him) for 50, from no more than
+   **3.5 tiles off his middle**, every 4 s. Out of reach it does
    nothing and costs nothing. It's doubled while his guard's down, so its moment is right after
    a dodge, when the lunge has left him beside you, and the button shines gold then.
 
@@ -149,12 +171,53 @@ lunge from phase 2, rows every 4 to 3.2 s, and smaller hits. Hitpoints 5,600, ph
 | After, the bot using Smite       | 40-45 s | 69-73 s   | 70-83 s   | 2:58-3:20   |
 | After, the bot never using Smite | 56-63 s | 100-119 s | 107-118 s | 4:29-4:52   |
 
-The target is about **four minutes for a good player**: the bot dodges what it reads and smites
-every opening, but never lures him into his court, and stands in reach more than a person does.
-A player who never presses Smite takes about five, the old fight's length, but with twice the
-attacks and the openings in it.
+Round 2's target was about four minutes for a good player.
 
-## 6. What it looks like when he hits (impacts)
+## 6. Round 3: phase 1 still too long
+
+Dynny, after round 2: "The phase 1 lasts way too long still, I can get him barely over half hp
+before the execute." Nothing in the fight is called an execute and nothing in it is timed: no
+enrage, no time limit. The likeliest reading is his shock wave ("Kneel!"), the drag, bind and
+flurry, killing him halfway through phase 1. Either way the fix is the same: a person deals far
+less than the bot does (he got 5,600's phase 1 about half done, where the bot cleared it in 40 s),
+so phase 1 has to be short at a person's damage.
+
+- Hitpoints 5,600 to **4,200**, and phase 1 the first **15%** (630), not 22% (1,232). Phase 2 is
+  85-45%, phase 3 the last 45%.
+- His guard stays down **1.5 s** after a miss, not 1: time to see it and step in.
+- Smite **50 every 4 s**, from 40 every 5.
+
+`SLOPPY=1` plays as a less careful person: it backs off out of reach 3 s in every 10 and misses
+about half its chances to Smite (`SMITE=0` with it never smites at all). With `GOD=1`, seeds 1
+to 3:
+
+|                                     | Phase 1 | Phase 2   | Phase 3   | Whole fight |
+| ----------------------------------- | ------- | --------- | --------- | ----------- |
+| Round 2, the bot using Smite        | 34-37 s | 72-82 s   | 66-94 s   | 3:02-3:21   |
+| Round 2, sloppy (in reach 72-83%)   | 37-44 s | 98-105 s  | 90-111 s  | 3:50-4:05   |
+| Round 3, the bot using Smite        | 22-23 s | 43-54 s   | 57-66 s   | 2:02-2:21   |
+| Round 3, sloppy (in reach 67-71%)   | 18-25 s | 66-73 s   | 59-85 s   | 2:36-2:48   |
+| Round 3, sloppy, never using Smite  | 28-34 s | 98-120 s  | 85-126 s  | 3:31-4:33   |
+
+(The round 2 rows are with round 3's other fixes in: the lunge's full dash and the swords' full
+throw.) A person is slower than even the sloppy bot, so phase 1 should be well under a minute
+for someone using Smite now and then, and the fight four to five minutes.
+
+The rest of round 3:
+
+- **The lightning's hit is the circle drawn** (`GroundPatternDef.round`): the swirl on each cell
+  (1800 at 0.85 of the cell, 1.28 tiles round) is what hurts, touching it with your own 0.35, not
+  the cell's square out to its corners. Before, standing a third of a tile outside the swirl
+  still got you hit. The bolt (1796) lands in the middle of it as before. He's caught by it the
+  same way, his middle in the circle.
+- **The knights' swords fly right across the court** (`boomerang.toEdge`): out to where their
+  line leaves the court, then back, rather than 27 tiles. The red line shows the whole way.
+- **The lunge reaches its end**: it was drawn and hit 7 tiles out but he only went 4.5; now he
+  goes 5.8, his front at the strip's end (`line.dash` is its length less his radius).
+- **No item bar** in a boss fight (1-4 and the touch items): there are no items, only Smite.
+- **Retry** on a boss fight's results, beside Back to the title (solo).
+
+## 7. What it looks like when he hits (impacts)
 
 `BossAttackDef.impact` (an `ImpactDef`) puts the cache's own effects where a blow lands, each
 scaled to fit and played once (`Effect.once`), and can shake the camera and flash the screen
@@ -180,7 +243,7 @@ fading with distance from the player, and off for anyone whose system asks for l
 who turns off Screen shake in the settings. Each effect is a few hundred triangles for a second
 or so; a lightning colour's 40 strikes add nothing to what they were.
 
-## 7. Decisions
+## 8. Decisions
 
 - **Hitpoints phases, not totems.** `BossPhasesDef` without `totems` (section 3). The kneel is a
   breath, not a heal: nothing in his court heals, and the Saradominist heals 10 a minute instead
@@ -202,26 +265,31 @@ or so; a lightning colour's 40 strikes add nothing to what they were.
 - **He keeps fighting while exposed.** A window that stopped him would have slowed him down
   again; it's a second of double damage in the middle of the pressure, not a rest.
 
-## 8. Colour overlays
+## 9. Colour overlays
 
 Real assets first, with these exceptions, all the same red the game's existing boss warnings use:
 the lunge's strip, the ice's square, the wave's and the swords' lines, and the flurry's circle
 (the existing swing warning). The reach ring is a faint white circle. The lightning's warning is
 a yellow strange tile's animated swirl (spotanim 1800) on each cell, and the gaze's safe tiles are
 the blue strange tile's glow (56670). His guard down is his own model tinted gold and glinting
-(the hit flash the game already has), and the impacts' screen flashes are a third as strong as a
-power-up's.
+(the hit flash the game already has), with a gold ring pulsing round his feet and "Guard down!"
+or "Stunned!" in gold in front of him, and the impacts' screen flashes are a third as strong as
+a power-up's.
 
-## 9. Numbers from the bot
+## 10. Numbers from the bot
 
 `FLAT=1 MAP=zachariah DODGE=1 npx tsx scripts/game/simulate-run.ts saradominist 3` is a density
 meter, not a player: it stays in reach, steps off strips, lines and squares, hides from the gaze
 and steps off checker cells, smites whenever his guard's down (`SMITE=0` never does), and still
 takes what it reads late. It prints each phase's time and how much of it the boss was in reach.
-Seeds 1 to 3, on 2026-11-04, after the rework:
+Seeds 1 to 3, on 2026-11-04:
 
-| Party | Lasted (seeds 1, 2, 3)    | Got to         | What hit it (solo)                                                     |
-| ----- | ------------------------- | -------------- | ---------------------------------------------------------------------- |
-| 1     | won 3:14, died 1:45, 1:55 | phases 3, 3, 2 | Gaze 14 / Flurry 9 / Lunges 7; Fire 15 / Gaze 14 / Flurry 9; Flurry 27 |
+| Round | Bot      | Lasted (seeds 1, 2, 3)        | Got to         |
+| ----- | -------- | ----------------------------- | -------------- |
+| 1     | careful  | died 2:38, 1:00, 3:16         | phases 2, 1, 3 |
+| 2     | careful  | won 3:14, died 1:45, 1:55     | phases 3, 3, 2 |
+| 3     | careful  | died 2:12, 0:35, 1:40         | phases 3, 2, 3 |
+| 3     | sloppy   | died 2:58, 2:58, won 3:09     | phases 3, 3, 3 |
 
-Before the rework it died at 2:38, 1:00 and 3:16, in phases 2, 1 and 3, and never won.
+Round 3's careful deaths are mostly the bridge's fire (27 and 30 of them): the bot walks onto
+the bridge backing off. Every run gets through phase 1, in 18 to 25 s.

@@ -566,7 +566,12 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
       does nothing, the stars over it) when its arena's attack with `turns` catches it
       (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`). The view tints a boss whose guard's down gold.
+      (`BossState.dash`, `stepDash`), with `guard.open` shown as it drops. The view tints a boss
+      whose guard's down gold and rings it in gold (`BossFightView.drawGuard`).
+    - A checker's cells can hurt only within the circle drawn on them (`GroundPatternDef.round`),
+      and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
+      (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
+      touch screen have no item bar, and its results a Retry (`GameClient.retry`).
     - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
       through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
       run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. Its damage

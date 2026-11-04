@@ -18,6 +18,11 @@ the version in the corner).
     a heavy blow from right beside him, twice as hard while his guard's down.
   - Dust and flashes where his blows land, and a little camera shake.
 - A Screen shake setting, on unless your system asks for less motion.
+- Retry on a boss fight's results, to go straight into it again.
+
+### Changed
+
+- Boss fights don't show the item bar: there are no items in them.
 
 ## 0.24.1 - 2026-11-04
 
