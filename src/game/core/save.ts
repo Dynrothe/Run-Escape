@@ -5,6 +5,15 @@ import {
     getUpgradedGear,
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
+import {
+    COMBAT_TASKS,
+    COMBAT_TASK_BY_ID,
+    getCombatPoints,
+    getGoalMaps,
+    getTaskTier,
+    getTiersReached,
+    isMultiRunGoal,
+} from "../content/combatTasks";
 import { ENEMY_BY_ID } from "../content/enemies";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
@@ -21,10 +30,11 @@ import {
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import {
     CharacterDef,
     CombatStyle,
+    CombatTaskDef,
     QuestDef,
     Stats,
     UnlockTask,
@@ -44,7 +54,10 @@ import { WEAPONS } from "../content/weapons";
 // 7: evolutions made, for the Collection log
 // 8: trophies found, for the Collection log
 // 9: hard mode's wins and endless records
-export const SAVE_VERSION = 11;
+// 10: Skills by combat style (skillPages), the old shared page becoming Melee's
+// 11: each page can spend the whole budget (the most any page has spent is what's held back)
+// 12: Combat Achievements, done and under way (old saves get the ones they'd done, unpaid)
+export const SAVE_VERSION = 12;
 
 export type SkillPage = {
     upgrades: Record<string, number>;
@@ -109,6 +122,11 @@ export type SaveData = {
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
+    // Ids of the Combat Achievements done (combatTasks.ts), and where the ones that take more
+    // than one solo run have got: task id -> kills so far, or "task id:map id" -> 1 for each
+    // map a beat-them-all task has had beaten
+    combatTasks: string[];
+    combatProgress: Record<string, number>;
 };
 
 // The round reached, and how long the run lasted
@@ -143,6 +161,8 @@ export function createSave(): SaveData {
         questsDone: [],
         evolutionsMade: [],
         trophies: [],
+        combatTasks: [],
+        combatProgress: {},
     };
 }
 
@@ -288,6 +308,28 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (Array.isArray(data.combatTasks)) {
+        for (const id of data.combatTasks) {
+            if (COMBAT_TASK_BY_ID.has(id) && !save.combatTasks.includes(id)) {
+                save.combatTasks.push(id);
+            }
+        }
+    }
+    if (data.combatProgress && typeof data.combatProgress === "object") {
+        for (const [key, value] of Object.entries(data.combatProgress)) {
+            const most = getProgressMax(key);
+            const count = Math.min(Math.max(Math.floor(num(value, 0)), 0), most);
+            if (count > 0 && !save.combatTasks.includes(key.split(":")[0])) {
+                save.combatProgress[key] = count;
+            }
+        }
+    }
+    // Combat Achievements came in with 12: the ones a save's runs had already done count as done,
+    // without their coins
+    if ((data.version ?? 0) < 12) {
+        applyRetroCombatTasks(save);
+    }
+    grantCombatRewards(save);
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
     return save;
@@ -300,6 +342,176 @@ export function getStartingCharacter(save: SaveData): string {
         return favourite;
     }
     return save.unlockedCharacters[0] ?? "warrior";
+}
+
+// The most a combatProgress key can hold, 0 for one that isn't a task's still under way
+function getProgressMax(key: string): number {
+    const [id, mapId] = key.split(":");
+    const goal = COMBAT_TASK_BY_ID.get(id)?.goal;
+    if (goal?.kind === "killCount" && mapId === undefined) {
+        return goal.count;
+    }
+    if (goal?.kind === "beatMap" && goal.all && getGoalMaps(goal.maps).includes(mapId)) {
+        return 1;
+    }
+    return 0;
+}
+
+// The tasks the save's records show done, from before Combat Achievements (kills, wins and
+// endless rounds; nothing done inside a run is on record). Marked done without paying, and the
+// ones under way get the progress they'd made.
+function applyRetroCombatTasks(save: SaveData): void {
+    for (const task of COMBAT_TASKS) {
+        if (save.combatTasks.includes(task.id)) {
+            continue;
+        }
+        const goal = task.goal;
+        switch (goal.kind) {
+            case "beatMap": {
+                const wins = goal.expert
+                    ? save.expertVictories
+                    : goal.hard
+                      ? save.hardVictories
+                      : save.mapVictories;
+                const won = getGoalMaps(goal.maps).filter((id) => (wins[id] ?? 0) > 0);
+                if (goal.all) {
+                    for (const id of won) {
+                        save.combatProgress[`${task.id}:${id}`] = 1;
+                    }
+                } else if (won.length > 0) {
+                    save.combatTasks.push(task.id);
+                }
+                break;
+            }
+            case "killCount": {
+                const kills = goal.enemyIds.reduce(
+                    (sum, id) => sum + (save.enemyKills[id] ?? 0),
+                    0,
+                );
+                if (kills > 0) {
+                    save.combatProgress[task.id] = Math.min(kills, goal.count);
+                }
+                break;
+            }
+            case "endlessRound": {
+                const records = goal.hard ? save.hardEndlessBest : save.endlessBest;
+                if (
+                    Object.entries(records).some(
+                        ([id, record]) => !isFunMap(id) && record.round >= goal.round,
+                    )
+                ) {
+                    save.combatTasks.push(task.id);
+                }
+                break;
+            }
+        }
+    }
+    completeCombatProgress(save);
+}
+
+// How far a task that takes more than one run has got, counting a run not banked yet's kills
+export function getCombatProgress(
+    save: SaveData,
+    task: CombatTaskDef,
+    runKills?: Record<string, number>,
+): QuestProgress | undefined {
+    const goal = task.goal;
+    if (goal.kind === "killCount") {
+        const kills = goal.enemyIds.reduce((sum, id) => sum + (runKills?.[id] ?? 0), 0);
+        const done = (save.combatProgress[task.id] ?? 0) + kills;
+        return { done: Math.min(done, goal.count), of: goal.count };
+    }
+    if (goal.kind === "beatMap" && goal.all) {
+        const maps = getGoalMaps(goal.maps);
+        return {
+            done: maps.filter((id) => save.combatProgress[`${task.id}:${id}`]).length,
+            of: maps.length,
+        };
+    }
+    return undefined;
+}
+
+// The tasks under way that have got there are done. A done task's progress goes.
+function completeCombatProgress(save: SaveData): CombatTaskDef[] {
+    const done: CombatTaskDef[] = [];
+    for (const task of COMBAT_TASKS) {
+        if (!isMultiRunGoal(task.goal) || save.combatTasks.includes(task.id)) {
+            continue;
+        }
+        const progress = getCombatProgress(save, task)!;
+        if (progress.done >= progress.of) {
+            save.combatTasks.push(task.id);
+            done.push(task);
+        }
+    }
+    for (const key of Object.keys(save.combatProgress)) {
+        if (save.combatTasks.includes(key.split(":")[0])) {
+            delete save.combatProgress[key];
+        }
+    }
+    return done;
+}
+
+// The tier rewards the points have earned and the save hasn't got. Returns their trophy ids.
+export function grantCombatRewards(save: SaveData): string[] {
+    const reached = getTiersReached(getCombatPoints(save.combatTasks));
+    const granted: string[] = [];
+    for (const trophy of TROPHIES) {
+        if (
+            trophy.from.kind === "combatTier" &&
+            reached.includes(trophy.from.tier) &&
+            !save.trophies.includes(trophy.id)
+        ) {
+            save.trophies.push(trophy.id);
+            granted.push(trophy.id);
+        }
+    }
+    return granted;
+}
+
+// A solo run's Combat Achievements (RunSummary.combatTasks): the ones it did, and its part of the
+// ones that take more runs. Each new one pays its tier's coins. Returns those.
+function bankCombatTasks(save: SaveData, run: RunSummary): CombatTaskDef[] {
+    if (!run.combatTasks) {
+        return [];
+    }
+    const banked: CombatTaskDef[] = [];
+    for (const task of COMBAT_TASKS) {
+        const goal = task.goal;
+        if (save.combatTasks.includes(task.id)) {
+            continue;
+        }
+        if (goal.kind === "killCount") {
+            const progress = getCombatProgress(save, task, run.enemyKills)!;
+            if (progress.done > 0) {
+                save.combatProgress[task.id] = progress.done;
+            }
+        } else if (
+            goal.kind === "beatMap" &&
+            goal.all &&
+            run.victory &&
+            (!goal.hard || run.hard) &&
+            (!goal.expert || run.expert) &&
+            getGoalMaps(goal.maps).includes(run.mapId)
+        ) {
+            save.combatProgress[`${task.id}:${run.mapId}`] = 1;
+        }
+    }
+    for (const id of run.combatTasks) {
+        const task = COMBAT_TASK_BY_ID.get(id);
+        if (task && !save.combatTasks.includes(id)) {
+            save.combatTasks.push(id);
+            banked.push(task);
+        }
+    }
+    banked.push(...completeCombatProgress(save));
+    for (const task of banked) {
+        const coins = getTaskTier(task).coins;
+        save.coins += coins;
+        save.totalCoins += coins;
+    }
+    grantCombatRewards(save);
+    return banked;
 }
 
 // Gear that can come out of a casket (not one of the Armoury's variants)
@@ -553,6 +765,9 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
+    // A solo run Combat Achievements followed (core/CombatTracker.ts): the ones it did. Left
+    // out of co-op runs and of runs that don't count, which bank none.
+    combatTasks?: string[];
 };
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
@@ -607,6 +822,7 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         save.coins += quest.coins;
         save.totalCoins += quest.coins;
     }
+    bankCombatTasks(save, run);
     applyUnlocks(save, run);
     return quests;
 }

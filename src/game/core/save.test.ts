@@ -1,5 +1,6 @@
 import { ARMOURY_COSTS } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
+import { COMBAT_TASK_BY_ID, getCombatPoints, getTierThresholds } from "../content/combatTasks";
 import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
 import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
@@ -18,6 +19,7 @@ import {
     createSave,
     exportSave,
     getArmouryStep,
+    getCombatProgress,
     getEarnedUnlocks,
     getFinishedQuests,
     getMetaStats,
@@ -1248,6 +1250,157 @@ function stubStorage(): Map<string, string> {
     });
     return stored;
 }
+
+describe("Combat Achievements", () => {
+    // A save from before them, with a few runs' records
+    function version11(): Record<string, unknown> {
+        return {
+            ...createSave(),
+            version: 11,
+            coins: 1000,
+            totalCoins: 1000,
+            mapVictories: { lumbridge: 2, barrows: 1, theatre_of_blood: 1 },
+            hardVictories: { barrows: 1, theatre_of_blood: 1 },
+            expertVictories: { theatre_of_blood: 1 },
+            endlessBest: { lumbridge: { round: 3, seconds: 2000 } },
+            enemyKills: { phosanis_nightmare: 2, goblin: 40 },
+            combatTasks: undefined,
+            combatProgress: undefined,
+        };
+    }
+
+    test("an old save gets the ones its runs had done, without their coins", () => {
+        const save = migrateSave(version11());
+        expect(save.version).toBe(SAVE_VERSION);
+        expect([...save.combatTasks].sort()).toEqual(
+            [
+                "expert_witness",
+                "first_blood",
+                "hardened",
+                "round_two",
+                "third_times_the_charm",
+            ].sort(),
+        );
+        expect(save.coins).toBe(1000);
+        expect(save.totalCoins).toBe(1000);
+        // What's under way keeps how far it got
+        expect(save.combatProgress).toEqual({ recurring_nightmare: 2, "hard_graft:barrows": 1 });
+        const nightmares = getCombatProgress(save, COMBAT_TASK_BY_ID.get("recurring_nightmare")!);
+        expect(nightmares).toEqual({ done: 2, of: 5 });
+        // Its points earned the first tier's hilt
+        expect(getCombatPoints(save.combatTasks)).toBeGreaterThanOrEqual(getTierThresholds().easy);
+        expect(save.trophies).toContain("ghommals_hilt_1");
+        expect(save.trophies).not.toContain("ghommals_hilt_2");
+        // Loading it again changes nothing, and pays nothing
+        expect(migrateSave(save)).toEqual(save);
+        expect(importSave(exportSave(save, GAME), GAME)).toEqual(save);
+    });
+
+    test("only once: a save already on them gets nothing from its records", () => {
+        const save = migrateSave({ ...version11(), version: 12, combatTasks: [] });
+        expect(save.combatTasks).toEqual([]);
+        expect(save.combatProgress).toEqual({});
+    });
+
+    test("ids it doesn't know go, and progress stays in bounds", () => {
+        const save = migrateSave({
+            ...createSave(),
+            combatTasks: ["bite_proof", "bite_proof", "not_a_task", 7],
+            combatProgress: {
+                recurring_nightmare: 3.7,
+                "hard_graft:lumbridge": 5,
+                "hard_graft:grand_exchange": 1,
+                "recurring_nightmare:lumbridge": 1,
+                bite_proof: 2,
+                not_a_task: 1,
+                first_blood: -4,
+            },
+        });
+        expect(save.combatTasks).toEqual(["bite_proof"]);
+        expect(save.combatProgress).toEqual({ recurring_nightmare: 3, "hard_graft:lumbridge": 1 });
+    });
+
+    test("a solo run banks the ones it did once, each paying its tier's coins", () => {
+        const save = createSave();
+        recordRun(save, run("lumbridge", { combatTasks: ["bite_proof", "wise_guy"] }));
+        expect(save.combatTasks).toEqual(["bite_proof", "wise_guy"]);
+        expect(save.coins).toBe(200);
+        recordRun(save, run("lumbridge", { combatTasks: ["bite_proof"] }));
+        expect(save.combatTasks).toEqual(["bite_proof", "wise_guy"]);
+        expect(save.coins).toBe(200);
+        expect(save.totalCoins).toBe(200);
+    });
+
+    test("kill counts and beat-them-all add up over solo runs", () => {
+        const save = createSave();
+        for (let i = 0; i < 4; i++) {
+            recordRun(
+                save,
+                run("phosani", {
+                    victory: true,
+                    enemyKills: { phosanis_nightmare: 1 },
+                    combatTasks: [],
+                }),
+            );
+        }
+        expect(save.combatProgress.recurring_nightmare).toBe(4);
+        const coins = save.coins;
+        const quests = recordRun(
+            save,
+            run("phosani", {
+                victory: true,
+                enemyKills: { phosanis_nightmare: 1 },
+                combatTasks: [],
+            }),
+        );
+        expect(save.combatTasks).toContain("recurring_nightmare");
+        expect(save.combatProgress.recurring_nightmare).toBeUndefined();
+        // Its tier's coins, besides any quest's
+        expect(save.coins - coins - quests.reduce((sum, q) => sum + q.coins, 0)).toBe(250);
+
+        for (const map of CAMPAIGN_MAPS) {
+            expect(save.combatTasks).not.toContain("hard_graft");
+            recordRun(save, run(map.id, { victory: true, hard: true, combatTasks: [] }));
+        }
+        expect(save.combatTasks).toContain("hard_graft");
+    });
+
+    test("a co-op run never counts towards them", () => {
+        // No combatTasks: a run the tracker didn't follow (co-op, or one that doesn't count)
+        const save = createSave();
+        for (const map of CAMPAIGN_MAPS) {
+            recordRun(
+                save,
+                run(map.id, { victory: true, hard: true, enemyKills: { phosanis_nightmare: 9 } }),
+            );
+        }
+        recordRun(save, run("phosani", { victory: true, enemyKills: { phosanis_nightmare: 9 } }));
+        expect(save.combatTasks).toEqual([]);
+        expect(save.combatProgress).toEqual({});
+        expect(save.trophies).toEqual([]);
+        // Nor does it later: a save already on them never looks at its records again
+        expect(migrateSave(save).combatTasks).toEqual([]);
+    });
+
+    test("a tier's hilt comes with its points, and stays", () => {
+        const save = createSave();
+        const easy = [
+            "first_blood",
+            "stand_and_deliver",
+            "bite_proof",
+            "wise_guy",
+            "bad_dream",
+            "court_in_session",
+            "opening_night",
+        ];
+        const needed = getTierThresholds().easy;
+        recordRun(save, run("lumbridge", { combatTasks: easy.slice(0, needed - 1) }));
+        expect(save.trophies).not.toContain("ghommals_hilt_1");
+        recordRun(save, run("lumbridge", { combatTasks: easy }));
+        expect(save.trophies).toContain("ghommals_hilt_1");
+        expect(migrateSave(save).trophies).toContain("ghommals_hilt_1");
+    });
+});
 
 describe("the save in the browser", () => {
     const KEY = "rune-survivors-save";
