@@ -1179,7 +1179,7 @@ export class GameView {
                 kind === "pattern" ||
                 windup.attack.cone !== undefined ||
                 // It hits everywhere it can see: the shadows are what's shown
-                windup.attack.cover !== undefined ||
+                windup.attack.cover ||
                 // Thrown by the arena's statues, not the boss: their lines are shown
                 windup.attack.from !== undefined
             ) {

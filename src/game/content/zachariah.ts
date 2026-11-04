@@ -385,7 +385,7 @@ const ATTACKS: BossAttackDef[] = [
         toMiddle: true,
         // As he raises his sword the court's lit up, and the pillars' shadows are the dark
         // that's safe (BossFightView.drawShadowTiles)
-        cover: {},
+        cover: true,
         message: "Hide from his gaze!",
         shout: "Face judgement!",
         impact: {

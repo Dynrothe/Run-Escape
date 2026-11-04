@@ -727,7 +727,7 @@ describe("the gaze, and hiding from it", () => {
         radius: 40,
         damage: 15,
         windup: 2.5,
-        cover: {},
+        cover: true,
     });
     const PILLARS: ArenaFeatures = {
         pillars: [

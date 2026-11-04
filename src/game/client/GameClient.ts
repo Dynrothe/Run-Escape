@@ -171,6 +171,8 @@ const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
 // How much brighter a gaze lights the arena at its height (getGazeLight)
 const GAZE_LIGHT = 0.6;
+// Ms the light takes to catch up with that, roughly
+const GAZE_LIGHT_EASE = 180;
 // A boss's blow shaking the camera (ImpactDef.shake): how long, how far at its hardest (tiles),
 // and from how many tiles off the player it's felt less, to none at SHAKE_FAR
 const SHAKE_MS = 320;
@@ -343,8 +345,9 @@ export function getGazeLight(sim: Sim): number {
     if (!windup?.attack.cover) {
         return 1;
     }
-    const t = (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick);
-    return 1 + GAZE_LIGHT * Math.min(1, Math.max(0, t));
+    const raw = (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick);
+    const t = Math.min(1, Math.max(0, raw));
+    return 1 + GAZE_LIGHT * t * t * (3 - 2 * t);
 }
 
 // What a fight on its hitpoints shows on its bar: all of them, or with BossPhasesDef.barPerPhase
@@ -447,6 +450,8 @@ export class GameClient implements GameFrameHandler {
     private cameraGround: number | undefined;
     // How far the camera's leaning towards a raid boss (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
+    // How lit a gaze has the arena now (getGazeLight, eased)
+    private gazeLight = 1;
     // The camera's shake: how hard (0 to 1), and since when (ms)
     private shake = { strength: 0, start: 0 };
     private shownDps = 0;
@@ -1970,8 +1975,11 @@ export class GameClient implements GameFrameHandler {
             sim.map.raid && sim.raidStage === "waves"
                 ? sim.map.raid.rooms[sim.raidRoom].hall?.brightness
                 : undefined;
-        // A gaze's light, brought up as it winds up (BossAttackDef.cover)
-        const brightness = (hallBrightness ?? sim.map.brightness ?? 1) * getGazeLight(sim);
+        // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
+        // eased both ways so it never steps
+        const light = getGazeLight(sim);
+        this.gazeLight += (light - this.gazeLight) * (1 - Math.exp(-deltaTimeMs / GAZE_LIGHT_EASE));
+        const brightness = (hallBrightness ?? sim.map.brightness ?? 1) * this.gazeLight;
         if (brightness !== this.shownBrightness) {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);

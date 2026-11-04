@@ -2,7 +2,7 @@ import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/acto
 import { getEnemy } from "../content/enemies";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
-import { cycleStage, shadowedTile, statueMiddle } from "../core/arena";
+import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -58,11 +58,10 @@ const LANE_CHEVRON_GAP = 4;
 const THROW_LINE_ALPHA = 0.3;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
 const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
-// The safe tiles out of a gaze's sight, while it winds up: a strange tile's glow this solid, or
-// darkened from this much to this much more
-const SHADOW_ALPHA = 0.5;
+// A gaze's shadows: this dark, this much darker as it lands, and gone this long after it does
 const SHADOW_DARK = 0.45;
 const SHADOW_DEEPEN = 0.3;
+const GAZE_FADE_MS = 400;
 // And his light over the rest, warm, this solid at its height
 const GAZE_WASH = "255, 238, 190";
 const GAZE_WASH_ALPHA = 0.22;
@@ -96,6 +95,45 @@ function clamp01(t: number): number {
     return Math.min(1, Math.max(0, t));
 }
 
+// Eased in and out (smoothstep), so nothing it drives steps
+function smooth(t: number): number {
+    const c = clamp01(t);
+    return c * c * (3 - 2 * c);
+}
+
+// A convex outline cut to a box (Sutherland-Hodgman), so a shadow stops at the arena's edge
+// rather than running on behind the camera
+function clipToBox(
+    outline: { x: number; y: number }[],
+    box: { minX: number; minY: number; maxX: number; maxY: number },
+): { x: number; y: number }[] {
+    const edges: [(p: { x: number; y: number }) => number][] = [
+        [(p) => p.x - box.minX],
+        [(p) => box.maxX - p.x],
+        [(p) => p.y - box.minY],
+        [(p) => box.maxY - p.y],
+    ];
+    let points = outline;
+    for (const [inside] of edges) {
+        const kept: { x: number; y: number }[] = [];
+        for (let i = 0; i < points.length; i++) {
+            const a = points[i];
+            const b = points[(i + 1) % points.length];
+            const da = inside(a);
+            const db = inside(b);
+            if (da >= 0) {
+                kept.push(a);
+            }
+            if (da >= 0 !== db >= 0) {
+                const t = da / (da - db);
+                kept.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+            }
+        }
+        points = kept;
+    }
+    return points;
+}
+
 export class BossFightView {
     private beams: { x: number; y: number; toX: number; toY: number; start: number }[] = [];
     private readonly a: ScreenPoint = { x: 0, y: 0, visible: false };
@@ -103,8 +141,14 @@ export class BossFightView {
     // Whether the curse was on last frame, and when (ms) it lifted, for its flash
     private curseOn = false;
     private curseEndedAt = -1;
-    // The tiles out of a gaze's sight (BossAttackDef.cover), worked out once a windup
-    private shadows?: { windup: BossWindup; tiles: { x: number; y: number }[] };
+    // The gaze being shown (BossAttackDef.cover): its shadows' outlines, where they're from, and
+    // how strong the light was when it was last drawn and when (ms), to fade out after it lands
+    private gaze?: {
+        windup: BossWindup;
+        outlines: { x: number; y: number }[][];
+        strength: number;
+        at: number;
+    };
     // What each statue the fight draws is playing (Sim's statueSeq), and since
     // which tick, by loc and tile
     private statueSeqs = new Map<string, { seq: number; tick: number }>();
@@ -113,7 +157,7 @@ export class BossFightView {
 
     reset(): void {
         this.beams = [];
-        this.shadows = undefined;
+        this.gaze = undefined;
         this.statueSeqs.clear();
         this.curseOn = false;
         this.curseEndedAt = -1;
@@ -140,7 +184,6 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
-        this.drawShadows(actors, sim);
         this.drawStatues(actors, sim);
         this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
@@ -376,99 +419,6 @@ export class BossFightView {
         }
     }
 
-    // Where its gaze can't see (BossAttackDef.cover) while it winds up: every
-    // tile of the bossArena in its reach that a pillar hides from it, so the
-    // safe ground's there to be read. From where it's cast (BossWindup.at, the
-    // middle it leaps to), tile by tile as the sim's inShadow has them.
-    private shadowTiles(sim: Sim, enemy: Enemy, windup: BossWindup): { x: number; y: number }[] {
-        if (this.shadows?.windup === windup) {
-            return this.shadows.tiles;
-        }
-        const tiles: { x: number; y: number }[] = [];
-        const pillars = sim.map.features?.pillars;
-        const arena = sim.bossArena;
-        const reach = windup.attack.radius ?? 2;
-        const grid = sim.grid;
-        const fromX = windup.at?.x ?? enemy.x;
-        const fromY = windup.at?.y ?? enemy.y;
-        for (let tx = Math.floor(arena.minX); tx < Math.ceil(arena.maxX); tx++) {
-            for (let ty = Math.floor(arena.minY); ty < Math.ceil(arena.maxY); ty++) {
-                const x = tx + 0.5;
-                const y = ty + 0.5;
-                if (
-                    Math.hypot(x - fromX, y - fromY) <= reach &&
-                    grid.contains(tx, ty) &&
-                    !grid.isSolid(tx, ty) &&
-                    shadowedTile(pillars, fromX, fromY, tx, ty)
-                ) {
-                    tiles.push({ x, y });
-                }
-            }
-        }
-        this.shadows = { windup, tiles };
-        return tiles;
-    }
-
-    private drawShadows(actors: ActorRenderer, sim: Sim): void {
-        for (const enemy of sim.enemies) {
-            const windup = enemy.bossState?.windup;
-            const cover = windup?.attack.cover;
-            if (!windup || !cover || enemy.dead) {
-                continue;
-            }
-            const key = cover.locId !== undefined ? "loc:" + cover.locId : "spot:" + cover.spotAnim;
-            const model =
-                cover.locId !== undefined || cover.spotAnim !== undefined
-                    ? this.assets.get(key)
-                    : undefined;
-            if (!model) {
-                continue;
-            }
-            const anim = model.anims[0];
-            const frame = anim.getFrame(sim.tick - windup.startTick);
-            // A tile across, corner to corner
-            const options = {
-                scale: (64 * Math.SQRT2) / Math.max(1, model.radius),
-                alpha: SHADOW_ALPHA,
-            };
-            const player = sim.player;
-            for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
-                if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
-                    continue;
-                }
-                actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, options);
-            }
-        }
-    }
-
-    // A gaze with nothing of its own to show its shadows by (cover with no locId or spotAnim):
-    // the pillars' shadows, the tiles darkened, deepening as it winds up, while the light's
-    // brought up everywhere else (GameClient, getGazeLight). A colour overlay: nothing in the
-    // cache casts a shadow, and it's the one thing on the floor that must be read exactly.
-    private drawShadowTiles(
-        overlay: Overlay,
-        sim: Sim,
-        enemy: Enemy,
-        windup: BossWindup,
-        t: number,
-    ): void {
-        const ctx = overlay.ctx;
-        const player = sim.player;
-        ctx.fillStyle = `rgba(4, 6, 18, ${SHADOW_DARK + SHADOW_DEEPEN * t})`;
-        for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
-            if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
-                continue;
-            }
-            this.traceGround(overlay, sim, [
-                { x: x - 0.5, y: y - 0.5 },
-                { x: x + 0.5, y: y - 0.5 },
-                { x: x + 0.5, y: y + 0.5 },
-                { x: x - 0.5, y: y + 0.5 },
-            ]);
-            ctx.fill();
-        }
-    }
-
     // Her petals drawing in on her before a spiral or a ring
     private drawGathering(actors: ActorRenderer, sim: Sim): void {
         for (const enemy of sim.enemies) {
@@ -568,6 +518,7 @@ export class BossFightView {
 
     drawGround(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawSquareEdge(overlay, sim, scale);
+        this.fadeGaze(overlay, sim, now);
         this.drawReach(overlay, sim, alpha, scale);
         this.flashQuarters(overlay, sim, alpha);
         for (const enemy of sim.enemies) {
@@ -593,16 +544,9 @@ export class BossFightView {
                     }
                 } else if (windup.attack.cone !== undefined) {
                     this.drawCone(overlay, sim, enemy, windup, t, scale);
-                } else if (
-                    windup.attack.cover &&
-                    windup.attack.cover.locId === undefined &&
-                    windup.attack.cover.spotAnim === undefined
-                ) {
+                } else if (windup.attack.cover) {
                     ctx.globalAlpha = 1;
-                    // His light over everything, warm, as his sword's raised; then the shadows
-                    ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * t})`;
-                    ctx.fillRect(0, 0, overlay.width, overlay.height);
-                    this.drawShadowTiles(overlay, sim, enemy, windup, t);
+                    this.drawGaze(overlay, sim, enemy, windup, smooth(t), now);
                     ctx.globalAlpha = WARNING_ALPHA;
                 } else if (windup.attack.pattern) {
                     this.drawAim(overlay, sim, enemy, windup, t, scale);
@@ -757,6 +701,108 @@ export class BossFightView {
             ctx.fill();
         }
         ctx.globalAlpha = WARNING_ALPHA;
+    }
+
+    // A gaze (BossAttackDef.cover) as it winds up: his light warming everything (the renderer's
+    // brought up too, GameClient's getGazeLight), and each pillar's shadow from where it's cast
+    // (BossWindup.at) laid soft on the floor, deepening as it comes. strength: 0 to 1, eased.
+    private drawGaze(
+        overlay: Overlay,
+        sim: Sim,
+        enemy: Enemy,
+        windup: BossWindup,
+        strength: number,
+        now: number,
+    ): void {
+        if (this.gaze?.windup !== windup) {
+            const from = windup.at ?? { x: enemy.x, y: enemy.y };
+            const arena = sim.bossArena;
+            const far = Math.hypot(arena.maxX - arena.minX, arena.maxY - arena.minY);
+            this.gaze = {
+                windup,
+                outlines: (sim.map.features?.pillars ?? []).map((pillar) =>
+                    clipToBox(shadowOutline(pillar, from.x, from.y, far), arena),
+                ),
+                strength,
+                at: now,
+            };
+        }
+        this.gaze.strength = strength;
+        this.gaze.at = now;
+        this.paintGaze(overlay, sim, this.gaze.outlines, strength);
+    }
+
+    // After it lands, its light and shadows fade out rather than go at once
+    private fadeGaze(overlay: Overlay, sim: Sim, now: number): void {
+        const gaze = this.gaze;
+        if (!gaze || sim.shownBoss?.bossState?.windup === gaze.windup) {
+            return;
+        }
+        const fade = 1 - (now - gaze.at) / GAZE_FADE_MS;
+        if (fade <= 0) {
+            this.gaze = undefined;
+            return;
+        }
+        this.paintGaze(overlay, sim, gaze.outlines, gaze.strength * fade);
+    }
+
+    // The warm wash, and the shadows as one shape (so where two meet isn't darker), its edges
+    // blurred over about SHADOW_SOFT tiles either way: drawn off the screen and only its blurred
+    // canvas shadow brought on, so it's soft inside and out. A colour overlay: nothing in the
+    // cache casts a shadow, and it's the one thing on the floor that must be read exactly.
+    private paintGaze(
+        overlay: Overlay,
+        sim: Sim,
+        outlines: { x: number; y: number }[][],
+        strength: number,
+    ): void {
+        const ctx = overlay.ctx;
+        ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * strength})`;
+        ctx.fillRect(0, 0, overlay.width, overlay.height);
+        const player = sim.player;
+        const ground = this.ground(sim, player.x, player.y);
+        const a = overlay.project(player.x, ground, player.y, this.a);
+        const b = overlay.project(player.x + 1, ground, player.y, this.b);
+        const tile = Math.hypot(b.x - a.x, b.y - a.y);
+        const away = overlay.width * 2 + 1000;
+        ctx.save();
+        ctx.translate(-away, 0);
+        ctx.beginPath();
+        for (const outline of outlines) {
+            this.addGroundPath(overlay, sim, outline);
+        }
+        ctx.shadowOffsetX = away;
+        ctx.shadowBlur = SHADOW_SOFT * 2 * tile;
+        ctx.shadowColor = `rgba(4, 6, 18, ${(SHADOW_DARK + SHADOW_DEEPEN * strength) * strength})`;
+        ctx.fillStyle = "#000";
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // An outline on the ground added to the path being built, each edge split to lie on it
+    private addGroundPath(overlay: Overlay, sim: Sim, corners: { x: number; y: number }[]): void {
+        const ctx = overlay.ctx;
+        let first = true;
+        for (let i = 0; i < corners.length; i++) {
+            const from = corners[i];
+            const to = corners[(i + 1) % corners.length];
+            const steps = Math.max(
+                1,
+                Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / GROUND_STEP),
+            );
+            for (let step = 0; step < steps; step++) {
+                const x = lerp(from.x, to.x, step / steps);
+                const y = lerp(from.y, to.y, step / steps);
+                const p = overlay.project(x, this.ground(sim, x, y) - 0.1, y, this.a);
+                if (first) {
+                    ctx.moveTo(p.x, p.y);
+                    first = false;
+                } else {
+                    ctx.lineTo(p.x, p.y);
+                }
+            }
+        }
+        ctx.closePath();
     }
 
     // A fight whose weapon only reaches so far (MapDef.fight.strikeReach): while the

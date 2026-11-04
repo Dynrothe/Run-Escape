@@ -290,20 +290,98 @@ export function boxExit(
     return to > Math.max(from, 0) ? to : 0;
 }
 
-// Out of a gaze's sight from (fromX, fromY) (BossAttackDef.cover), as it's drawn: a tile's
-// shadowed when a pillar's between the gaze and the tile's middle (shadowedTile), and a player's
-// safe when their middle is hidden, or any part of them is on a shadowed tile, whichever spares
-// them. So whoever's seen standing on the shadow is never hit.
-export function shadowedTile(
-    pillars: readonly Pillar[] | undefined,
+// A gaze's shadows (BossAttackDef.cover), as drawn and as hit. Each pillar's is the outline of
+// what it hides from (fromX, fromY): the pillar, and behind it between the two lines from the
+// gaze past its outermost corners, out to far tiles (shadowOutline). It's drawn soft, fading out
+// over SHADOW_SOFT tiles past that edge, and a player is spared when any part of them is within
+// SHADOW_SOFT of a shadow: the faint outer edge of what's drawn counts as shadow, never the
+// reverse (inShadow).
+export const SHADOW_SOFT = 0.35;
+
+// Unit directions round a circle, for inShadow's look round a player (fixed: no trigonometry)
+const ROUND = [
+    [1, 0],
+    [0.92388, 0.38268],
+    [0.70711, 0.70711],
+    [0.38268, 0.92388],
+    [0, 1],
+    [-0.38268, 0.92388],
+    [-0.70711, 0.70711],
+    [-0.92388, 0.38268],
+    [-1, 0],
+    [-0.92388, -0.38268],
+    [-0.70711, -0.70711],
+    [-0.38268, -0.92388],
+    [0, -1],
+    [0.38268, -0.92388],
+    [0.70711, -0.70711],
+    [0.92388, -0.38268],
+];
+
+export function shadowOutline(
+    pillar: Pillar,
     fromX: number,
     fromY: number,
-    tileX: number,
-    tileY: number,
-): boolean {
-    return behindPillar(pillars, fromX, fromY, tileX + 0.5, tileY + 0.5);
+    far: number,
+): { x: number; y: number }[] {
+    const { x, y, size } = pillar;
+    const corners = [
+        { x, y },
+        { x: x + size, y },
+        { x: x + size, y: y + size },
+        { x, y: y + size },
+    ];
+    // The corners outermost either way, as seen from the gaze: every other one's to one side
+    const cross = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+        (a.x - fromX) * (b.y - fromY) - (a.y - fromY) * (b.x - fromX);
+    const outer = (sign: number) =>
+        corners.find((a) => corners.every((b) => cross(a, b) * sign >= 0))!;
+    const points = [...corners];
+    for (const corner of [outer(1), outer(-1)]) {
+        const dx = corner.x - fromX;
+        const dy = corner.y - fromY;
+        const length = Math.max(1e-9, Math.sqrt(dx * dx + dy * dy));
+        points.push({ x: corner.x + (dx / length) * far, y: corner.y + (dy / length) * far });
+    }
+    return convexHull(points);
 }
 
+// The points' outline, anticlockwise (Andrew's monotone chain)
+function convexHull(points: { x: number; y: number }[]): { x: number; y: number }[] {
+    const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+    const turn = (
+        o: { x: number; y: number },
+        a: { x: number; y: number },
+        b: { x: number; y: number },
+    ) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower: { x: number; y: number }[] = [];
+    for (const p of sorted) {
+        while (
+            lower.length >= 2 &&
+            turn(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
+        ) {
+            lower.pop();
+        }
+        lower.push(p);
+    }
+    const upper: { x: number; y: number }[] = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+        const p = sorted[i];
+        while (
+            upper.length >= 2 &&
+            turn(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
+        ) {
+            upper.pop();
+        }
+        upper.push(p);
+    }
+    return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+// Whether a player of radius at (x, y) is out of the gaze's sight: their middle hidden behind a
+// pillar, or a point of them, or of the soft edge round them, out to radius + SHADOW_SOFT, hidden
+// (looked for at their middle and on two rings round it, every sixteenth of a turn: a shadow's
+// straight edge can't fall between those by more than a fiftieth of a tile)
 export function inShadow(
     pillars: readonly Pillar[] | undefined,
     fromX: number,
@@ -315,13 +393,12 @@ export function inShadow(
     if (behindPillar(pillars, fromX, fromY, x, y)) {
         return true;
     }
-    for (let tx = Math.floor(x - radius); tx <= Math.floor(x + radius); tx++) {
-        for (let ty = Math.floor(y - radius); ty <= Math.floor(y + radius); ty++) {
-            if (
-                circleInBox(x, y, radius, tx + 0.5, ty + 0.5, 0.5, 0.5) &&
-                !boxCircle(pillars, tx + 0.5, ty + 0.5, 0) &&
-                shadowedTile(pillars, fromX, fromY, tx, ty)
-            ) {
+    const reach = radius + SHADOW_SOFT;
+    for (const ring of [reach, reach / 2]) {
+        for (const [dx, dy] of ROUND) {
+            const px = x + dx * ring;
+            const py = y + dy * ring;
+            if (!boxCircle(pillars, px, py, 0) && behindPillar(pillars, fromX, fromY, px, py)) {
                 return true;
             }
         }

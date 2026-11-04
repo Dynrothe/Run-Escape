@@ -707,10 +707,10 @@ export type BossAttackDef = {
     // attack (by name) on them, whatever it was winding up (a shock wave that binds,
     // then a flurry)
     onHit?: { pull?: number; pullSeconds?: number; bind?: number; attack?: string };
-    // Swings: whoever's out of its sight behind a pillar of the map's
-    // (ArenaFeatures.pillars) is spared. While it winds up, the tiles that are
-    // in the bossArena are each shown with locId or spotAnim, faintly.
-    cover?: { locId?: number; spotAnim?: number };
+    // Swings: whoever's out of its sight behind a pillar of the map's (ArenaFeatures.pillars)
+    // is spared (inShadow in core/arena.ts). While it winds up, the arena's lit and the
+    // pillars' shadows are drawn on the floor, soft-edged (BossFightView.drawGazeShadows).
+    cover?: boolean;
     // The map's statues it's done with, drawn by the fight (the map leaves their
     // model out): its own (a row attack's rows', the knights that throw) or all
     // of ArenaFeatures.statues' group. windupSeq plays from its beginning till it's

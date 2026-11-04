@@ -21,7 +21,7 @@ import {
 } from "../scaperune/maps/owlsCourt";
 import { BuildContext } from "../scaperune/recipe";
 import { Sim, TICKS_PER_SECOND, yawFromVector } from "./Sim";
-import { behindPillar, inShadow, shadowedTile } from "./arena";
+import { SHADOW_SOFT, behindPillar, inShadow, shadowOutline } from "./arena";
 import { Enemy } from "./entities";
 import { applyAction } from "./lockstep";
 import { createSave } from "./save";
@@ -480,45 +480,59 @@ describe("his attacks, each landing and each dodged", () => {
         }
     });
 
-    test("the gaze spares whoever's on a shadowed tile, any part of them, as the shadows are drawn", () => {
+    test("the gaze spares whoever's in a pillar's shadow as it's drawn, its soft edge too", () => {
         const { sim, boss } = fight();
         place(sim, at(31, 27));
         use(sim, boss, "The Owl's gaze");
         // Cast from the middle he's leaping to, shadows and all, from the start
         const from = boss.bossState!.windup!.at!;
         expect(from).toBeDefined();
-        const pillars = OWLS_COURT_FEATURES.pillars!;
         const r = sim.player.radius;
-        const court = OWLS_COURT.bossArena;
-        let edge: { x: number; y: number } | undefined;
-        for (let tx = O.x + court.x; tx < O.x + court.x + court.size; tx++) {
-            for (let ty = O.y + court.y; ty < O.y + court.y + court.size; ty++) {
-                if (!shadowedTile(pillars, from.x, from.y, tx, ty)) {
+        let edgeSpot: { x: number; y: number } | undefined;
+        for (const pillar of OWLS_COURT_FEATURES.pillars!) {
+            const outline = shadowOutline(pillar, from.x, from.y, 40);
+            const one = [pillar];
+            // Its two long edges, the lines from him past the pillar's outermost corners
+            for (let i = 0; i < outline.length; i++) {
+                const a = outline[i];
+                const b = outline[(i + 1) % outline.length];
+                const length = Math.hypot(b.x - a.x, b.y - a.y);
+                const toward = (p: { x: number; y: number }) =>
+                    Math.hypot(p.x - from.x, p.y - from.y);
+                if (length < 20 || Math.abs(toward(b) - toward(a)) < length * 0.9) {
                     continue;
                 }
-                // Anywhere on a drawn shadow, its middle, edges or corners, is safe
-                for (const [dx, dy] of [
-                    [0.5, 0.5],
-                    [0.02, 0.5],
-                    [0.98, 0.5],
-                    [0.5, 0.02],
-                    [0.5, 0.98],
-                    [0.02, 0.02],
-                    [0.98, 0.98],
-                ]) {
-                    expect(inShadow(pillars, from.x, from.y, tx + dx, ty + dy, r)).toBe(true);
-                }
-                // A spot on it the gaze's straight line to them would still have seen
-                if (!edge && !behindPillar(pillars, from.x, from.y, tx + 0.98, ty + 0.98)) {
-                    edge = { x: tx + 0.98, y: ty + 0.98 };
+                // Outward, the outline going anticlockwise
+                const nx = (b.y - a.y) / length;
+                const ny = -(b.x - a.x) / length;
+                const start = toward(a) < toward(b) ? a : b;
+                const end = start === a ? b : a;
+                for (const along of [1, 3, 6]) {
+                    const px = start.x + ((end.x - start.x) / length) * along;
+                    const py = start.y + ((end.y - start.y) / length) * along;
+                    const off = (d: number) =>
+                        inShadow(one, from.x, from.y, px + nx * d, py + ny * d, r);
+                    // In it, on its edge, and out to the faint outer edge of its softness: spared
+                    expect(off(-0.5)).toBe(true);
+                    expect(off(0)).toBe(true);
+                    expect(off(r + SHADOW_SOFT - 0.05)).toBe(true);
+                    // Clear of all that: seen
+                    expect(off(r + SHADOW_SOFT + 0.1)).toBe(false);
+                    edgeSpot ??= { x: px + nx * (r + 0.2), y: py + ny * (r + 0.2) };
                 }
             }
+            // Right up against the pillar's face towards him: seen
+            const midX = pillar.x + pillar.size / 2;
+            const midY = pillar.y + pillar.size / 2;
+            const d = Math.hypot(midX - from.x, midY - from.y);
+            const reach = pillar.size / 2 + r + 0.05;
+            const faceX = midX - ((midX - from.x) / d) * reach * 1.5;
+            const faceY = midY - ((midY - from.y) / d) * reach * 1.5;
+            expect(inShadow(one, from.x, from.y, faceX, faceY, r)).toBe(false);
         }
-        // And somewhere in the open, nothing shadowed under them, isn't
-        expect(inShadow(pillars, from.x, from.y, at(31, 27).x, at(31, 27).y, r)).toBe(false);
-        // Stood on a shadow's corner the straight line misses: spared
-        expect(edge).toBeDefined();
-        place(sim, edge!);
+        // Stood just outside a shadow's hard edge, on its soft one, as it lands: spared
+        expect(edgeSpot).toBeDefined();
+        place(sim, edgeSpot!);
         const before = hp(sim);
         run(sim, 4.5);
         expect(hp(sim)).toBe(before);
