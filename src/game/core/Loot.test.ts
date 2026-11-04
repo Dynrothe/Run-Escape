@@ -128,6 +128,18 @@ describe("items", () => {
             const offered = { ...worn, stats: { armor: 1, moveSpeed: -0.05 } };
             expect(shouldAutoEquip({ feet: worn.id }, {}, offered, 0)).toBe(false);
         });
+
+        test("takes stats an upgrade's rounding has a hair apart as equal", () => {
+            // A coif upgraded once has 0.15000000000000002 speed
+            const coif = getGear("coif");
+            const worn = { head: coif.id };
+            const upgraded = { head: 1 };
+            expect(getGearStats(coif, 1).speed).not.toBe(0.15);
+            const same = { ...coif, id: "same", stats: { speed: 0.15 } };
+            expect(shouldAutoEquip(worn, upgraded, same, 0)).toBe(false);
+            const better = { ...coif, id: "better", stats: { speed: 0.15, armor: 1 } };
+            expect(shouldAutoEquip(worn, upgraded, better, 0)).toBe(true);
+        });
     });
 
     test("every piece of gear adds something", () => {

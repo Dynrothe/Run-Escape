@@ -17,12 +17,13 @@ import {
     DisplaySettings,
     FrameRate,
     frameCap,
+    getDefaultDisplaySettings,
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
 import { GameClient, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
-import { CoopRun } from "./coop/CoopRun";
+import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { UpMessage } from "./coop/protocol";
 
 function createSim(focus?: number): Sim {
@@ -62,14 +63,11 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
         damageMeter: new DamageMeter(),
         lastHudUpdate: 0,
         display: {
+            ...getDefaultDisplaySettings(),
             menuSpin: false,
-            pauseOnBlur: true,
-            questTracker: true,
-            damagePanel: false,
             autoAlch,
             autoEquip,
             movePrediction: false,
-            coopFlag: true,
         },
         sounds: { onEvents() {}, levelUp() {}, playerDied() {}, chest() {} },
         view: { onEvents() {} },
@@ -365,7 +363,6 @@ describe("auto equip", () => {
     afterEach(() => {
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
-        window.localStorage.clear();
     });
 
     function offer(sim: Sim, itemId: string, upgrades = 0): void {
@@ -374,11 +371,19 @@ describe("auto equip", () => {
     }
 
     test("defaults off for new and existing settings and remembers the toggle", () => {
-        window.localStorage.clear();
+        // A stand-in, as jsdom's own storage isn't there on every Node
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
         expect(loadDisplaySettings().autoEquip).toBe(false);
         const key = "rune-survivors-display";
         for (const data of [{ autoAlch: true }, { autoEquip: "true" }]) {
-            window.localStorage.setItem(key, JSON.stringify(data));
+            stored.set(key, JSON.stringify(data));
             expect(loadDisplaySettings().autoEquip).toBe(false);
         }
         const { client, store } = createClient(createSim(), false);
@@ -509,6 +514,8 @@ describe("auto equip", () => {
         offer(sim, "shark");
         sync();
         expect(store.getSnapshot().overlay).toBe("chest");
+        const sounds = (client as unknown as { sounds: { chest(): void } }).sounds;
+        const chestSound = vi.spyOn(sounds, "chest");
         vi.spyOn(sim, "reroll").mockImplementation(() => {
             sim.chests[0].itemId = "rune_boots";
             return true;
@@ -516,9 +523,25 @@ describe("auto equip", () => {
         expect(client.reroll()).toBe(true);
         expect(sim.gear.feet).toBe("rune_boots");
         expect(store.getSnapshot().overlay).toBe("none");
+        // No casket bursts open again for an item that's taken at once
+        expect(chestSound).not.toHaveBeenCalled();
     });
 
-    test("a co-op guest sends one local choice and waits for the host to apply it", () => {
+    test("says nothing more when the player clicks Equip on a casket that asked", () => {
+        const sim = createSim();
+        sim.equip("rune_boots");
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, "climbing_boots");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("chest");
+        client.resolveChest("take");
+        expect(sim.gear.feet).toBe("climbing_boots");
+        expect(store.getSnapshot().toasts).toEqual([]);
+    });
+
+    // A host and a guest, the guest (hero 1) with a rune boots casket and then
+    // a climbing boots one, and the host wearing dragon boots
+    function coopPair(now: () => number = Date.now) {
         const host = createSim(0);
         const guest = createSim(1);
         for (const sim of [host, guest]) {
@@ -539,6 +562,7 @@ describe("auto equip", () => {
             { sendUp: (message) => messages.push(message), sendDown() {} },
             heroes,
             "host",
+            now,
         );
         const hostRun = new CoopRun(
             host,
@@ -550,6 +574,57 @@ describe("auto equip", () => {
         hostRun.receiveUp("guest", { loaded: true });
         const { client, store, sync } = createClient(guest, false, true);
         Object.assign(client, { coopRun: guestRun });
+        return { host, guest, hostRun, guestRun, messages, client, store, sync };
+    }
+
+    test("a co-op guest's lost answer goes again, with the casket hidden and the menu working", () => {
+        let time = 1000;
+        const { host, guest, hostRun, guestRun, messages, client, store, sync } = coopPair(
+            () => time,
+        );
+        const resend = () =>
+            (
+                client as unknown as { resendAutoChest(sim: Sim, run: CoopRun): void }
+            ).resendAutoChest(guest, guestRun);
+        sync();
+        const take = { action: { kind: "chest", action: "take" } };
+        expect(messages).toEqual([take]);
+        // Lost on the way: nothing goes again until it's had time to arrive
+        resend();
+        time += DECISION_RESEND_MS - 1;
+        resend();
+        expect(messages).toHaveLength(1);
+        client.pause();
+        expect(store.getSnapshot().overlay).toBe("paused");
+        expect(store.getSnapshot().chest).toBeUndefined();
+        client.resume();
+        expect(store.getSnapshot().overlay).toBe("none");
+        time += 1;
+        resend();
+        expect(messages).toEqual([take, take]);
+        resend();
+        expect(messages).toHaveLength(2);
+        hostRun.receiveUp("guest", messages[1]);
+        hostRun.stepFrame();
+        hostRun.flush(true);
+        guestRun.stepFrame();
+        (client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }).handleEvents(
+            guest,
+            guest.takeEvents(),
+        );
+        sync();
+        expect(guest.gear.feet).toBe("rune_boots");
+        expect(syncHash(guest)).toBe(syncHash(host));
+        expect(store.getSnapshot().toasts.map((t) => t.text)).toEqual(["Equipped Rune boots"]);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        expect(store.getSnapshot().overlay).toBe("chest");
+        // The casket that asks isn't answered for the player
+        resend();
+        expect(messages).toHaveLength(2);
+    });
+
+    test("a co-op guest sends one local choice and waits for the host to apply it", () => {
+        const { host, guest, hostRun, guestRun, messages, store, sync } = coopPair();
         store.set({ overlay: "chest" });
         sync();
         sync();

@@ -116,6 +116,11 @@ export function isBetterGear(
     return gearWorth(item, upgrades) > gearWorth(than, thanUpgrades);
 }
 
+// How far apart two stats have to be to count as different: an upgrade's
+// stats are multiplied out (0.1 upgraded once is 0.15000000000000002), so
+// equal pieces can differ in the last digit
+const STAT_TOLERANCE = 1e-9;
+
 // Unlike the rarity-based recommendation, automatic swaps must lose no
 // stats, and even an incomplete worn set stays the player's decision.
 export function shouldAutoEquip(
@@ -141,10 +146,10 @@ export function shouldAutoEquip(
     for (const key of Object.keys({ ...wornStats, ...offeredStats }) as StatKey[]) {
         const offered = offeredStats[key] ?? 0;
         const current = wornStats[key] ?? 0;
-        if (offered < current) {
+        if (offered < current - STAT_TOLERANCE) {
             return false;
         }
-        better ||= offered > current;
+        better ||= offered > current + STAT_TOLERANCE;
     }
     return better;
 }

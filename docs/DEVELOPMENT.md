@@ -811,11 +811,16 @@ host turns away counts as an answer too, so the client checks what the sim would
 sending it (a reroll with none left, during a hilt choice, or an event's option that's sold or too
 dear), or a refused action would hold up the real one.
 
-Auto alch and Auto equip are local `DisplaySettings`, off by default. `GameClient.syncOverlay`
-sends the normal casket action through `act`, so solo and co-op keep the same equip/alch effects;
-never apply a local setting directly in `Sim`. Auto alch takes priority. Auto equip uses
-`Loot.shouldAutoEquip` (actual upgraded stats, no losses and at least one gain), not the
-rarity-based `shouldWear` recommendation, and never replaces any worn set piece without a prompt.
+Auto alch and Auto equip are local `DisplaySettings`, off by default, so never apply them in `Sim`:
+`GameClient.autoAnswerChest` sends the casket's usual action through `act`, as a click would, and
+Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip` (the stats as upgraded, none lower
+and at least one higher, give or take float rounding), not the rarity-based `shouldWear`, and never
+replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
+remembers which casket it was). In co-op the casket stays hidden, though the menu still opens,
+until the host's frame brings the answer back. One that's lost or turned away would leave nothing
+to click, so `resendAutoChest` offers it to `CoopRun.act` each update that brought frames, which
+sends it again once `DECISION_RESEND_MS` is up. Not while no frames come: a reconnecting
+`CoopLobby` holds what's sent, and every answer it held would go to a casket, the next ones too.
 
 Guests predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. The
 `movePrediction` display setting (Settings and the pause menu) is on by default, and

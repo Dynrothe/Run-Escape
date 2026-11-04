@@ -7,7 +7,9 @@ the version in the corner).
 
 ### Added
 
-- Optional Auto equip in Settings and the pause menu equips casket gear into empty slots or when strictly better, always asking before replacing a set piece.
+- Auto equip, by Deivid Smarzaro: an option in Settings and the pause menu that wears casket gear
+  in an empty slot, or gear that beats what's worn without being worse at anything. Anything else
+  still asks, as does replacing a piece of a set. Auto alch comes first if both are on.
 
 ## 0.24.1 - 2026-11-04
 
