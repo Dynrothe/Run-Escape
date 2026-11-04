@@ -58,6 +58,8 @@ const LANE_CHEVRON_GAP = 4;
 // along it and this faint
 const ROW_WARNING_GAP = 2;
 const ROW_WARNING_ALPHA = 0.25;
+// The line a wave or a thrown sword will take, at most this solid as it's let go
+const THROW_LINE_ALPHA = 0.3;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
 const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
 // The safe tiles out of a gaze's sight, while it winds up
@@ -640,6 +642,8 @@ export class BossFightView {
                     ctx.globalAlpha = WARNING_ALPHA;
                 } else if (windup.attack.pattern) {
                     this.drawAim(overlay, sim, enemy, windup, t, scale);
+                } else if (windup.attack.wave || windup.attack.boomerang) {
+                    this.drawThrowLines(overlay, sim, enemy, windup, t);
                 }
             }
             ctx.globalAlpha = 1;
@@ -746,6 +750,49 @@ export class BossFightView {
                 ctx.lineTo(p.x, p.y);
             }
         }
+    }
+
+    // The line a wave or a thrown sword will take (BossAttackDef.wave, boomerang),
+    // as wide as what it hits and as far as it goes: from the boss the way it's
+    // aimed, or from each statue throwing it at where the player stood
+    private drawThrowLines(
+        overlay: Overlay,
+        sim: Sim,
+        enemy: Enemy,
+        windup: BossWindup,
+        t: number,
+    ): void {
+        const attack = windup.attack;
+        const reach = attack.boomerang?.reach ?? attack.wave?.reach ?? attack.range;
+        const half = attack.radius ?? 0.35;
+        const lines: { x: number; y: number; dirX: number; dirY: number }[] = [];
+        if (windup.from) {
+            const target = windup.targets[0];
+            for (const statue of windup.from) {
+                const { x, y } = statueMiddle(statue);
+                const length = Math.max(0.001, Math.hypot(target.x - x, target.y - y));
+                lines.push({ x, y, dirX: (target.x - x) / length, dirY: (target.y - y) / length });
+            }
+        } else {
+            lines.push({ x: enemy.x, y: enemy.y, dirX: windup.dirX, dirY: windup.dirY });
+        }
+        const ctx = overlay.ctx;
+        for (const { x, y, dirX, dirY } of lines) {
+            const sideX = -dirY * half;
+            const sideY = dirX * half;
+            const endX = x + dirX * reach;
+            const endY = y + dirY * reach;
+            this.traceGround(overlay, sim, [
+                { x: x + sideX, y: y + sideY },
+                { x: endX + sideX, y: endY + sideY },
+                { x: endX - sideX, y: endY - sideY },
+                { x: x - sideX, y: y - sideY },
+            ]);
+            ctx.fillStyle = "rgb(255, 60, 40)";
+            ctx.globalAlpha = THROW_LINE_ALPHA * (0.5 + 0.5 * t);
+            ctx.fill();
+        }
+        ctx.globalAlpha = WARNING_ALPHA;
     }
 
     // A fight whose weapon only reaches so far (MapDef.fight.strikeReach): while the
