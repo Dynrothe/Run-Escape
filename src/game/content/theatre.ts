@@ -686,11 +686,13 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         homing: 0.05,
         message: "Verzik throws a ball that won't miss! Get in the glowing circle!",
         ground: {
-            // Away from her, so getting to it means leaving her be
+            // Away from her, so getting to it means leaving her be. Wider than her leap (2.4), so
+            // it can be dodged without leaving, and there as long as the ball can be (range over
+            // speed, about 17s), so it can't outlast it
             spots: [{ shape: "scatter", count: 1, spread: 9, awayFrom: 8 }],
-            radius: 1.6,
+            radius: 2.6,
             safe: true,
-            lingers: { seconds: 10, interval: 60, damage: 0 },
+            lingers: { seconds: 20, interval: 60, damage: 0 },
             spotAnim: 1581,
         },
     },
@@ -1051,8 +1053,8 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 stare: {
                     every: 6,
                     arc: 2.1,
-                    damage: 4,
-                    message: "Xarpus turns to stare! Don't hit him from in front.",
+                    damage: 3,
+                    message: "Xarpus is turning! Don't hit him from in front.",
                 },
                 attacks: oftener(XARPUS_ATTACKS, 2.2, 1.7),
             },
@@ -1091,5 +1093,15 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             false,
             2.9,
         ),
+        // Expert mode's Maiden healers (nylocas_matomenos_healer's expertAs): they feed her more
+        (() => {
+            const healer = byId("nylocas_matomenos_healer");
+            return {
+                ...healer,
+                id: "tob_nylocas_matomenos_feeder",
+                expertAs: undefined,
+                heals: { ...healer.heals!, fraction: 0.035 },
+            };
+        })(),
     ];
 }

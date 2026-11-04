@@ -42,6 +42,12 @@ the version in the corner).
 - The Theatre of Blood's green and blue Nylocas shoot from range, Verzik's too.
 - A Theatre of Blood room's raid points for speed go by how long its boss is meant to take, so a
   later, longer fight is worth as much as a quick early one.
+- Expert mode in the Theatre of Blood:
+  - Weapons don't aim at a Nylocas they can't hurt, and don't poison or burn it either.
+  - The Maiden's Nylocas feed her more.
+  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+    can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
+  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ### Fixed
@@ -57,6 +63,13 @@ the version in the corner).
   buttons did nothing on the menus. Fixed by Okaeri.
 - Exporting your save on an iPhone downloads the file, rather than opening it as a page in
   older versions of Safari. Fixed by Okaeri.
+- Expert mode in the Theatre of Blood:
+  - Xarpus's stare hurts properly. A moment before he turns he faces where he'll stare, and says
+    which side.
+  - Each weapon aims at the Nylocas its own style can hurt, so a melee weapon beside a bow no
+    longer ignores grey ones. Thralls and the cannon go for any Nylocas.
+  - Venom stops when Nylocas Vasilias changes to a colour its weapon can't hurt.
+- Turning hard mode off turns expert off with it.
 
 ## 0.24.1 - 2026-11-04
 

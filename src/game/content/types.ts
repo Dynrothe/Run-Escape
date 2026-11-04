@@ -808,7 +808,16 @@ export type BossDef = {
     // On a raid's expert mode, once enraged, it stares one way every `every` seconds, a quarter
     // turn at a time: a weapon's hit from within arc radians of that way does nothing to it and
     // hurts its wielder for damage instead, a hit every half second at most (Xarpus)
-    stare?: { every: number; arc: number; damage: number; message: string };
+    // warning: seconds it shows where it'll stare before it does (0.75); hitEvery: seconds
+    // between its hits back on one player (1)
+    stare?: {
+        every: number;
+        arc: number;
+        damage: number;
+        message: string;
+        warning?: number;
+        hitEvery?: number;
+    };
     // On a raid's expert mode, it changes into the next of these forms every `every` seconds,
     // keeping its hitpoints (Nylocas Vasilias's colours: each takes one style, EnemyDef.onlyStyle).
     // With offStyle it changes on normal too, where any other style does that share of its damage
