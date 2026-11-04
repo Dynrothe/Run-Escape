@@ -10,7 +10,9 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - **The lobby** (`src/lobby.mjs`) is one Durable Object for the whole relay. Every player connects
   to it first, at `/coop`, for their name, the open rooms list, and making or joining a room. It
   hibernates between messages, so players sitting in menus cost next to nothing, and its pings are
-  answered without waking it.
+  answered without waking it. It sends the open rooms to everyone looking at them when they change,
+  so the game doesn't ask every few seconds, and closes a connection that's only asked for the
+  same page for 10 minutes (an older game's, left open on the list).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
   inputs go through a relay close to the host rather than one fixed place.
@@ -24,9 +26,19 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   address from Cloudflare's `CF-Connecting-IP`, for the limits, and their country from
   `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
   don't host an open room).
-- A room tells the lobby it's there every 30 seconds; one that stops (its object restarted) drops
-  off the list after 90. The rooms list is kept in the lobby's storage, so it survives the lobby
-  hibernating.
+- A room tells the lobby it's there every 60 seconds, and when something the list shows changes
+  (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
+  and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
+  hibernation gives every room that long again, so on a quiet relay a room that died without a word
+  can stay until someone tries to join it, or its own 30-minute idle alarm ends it. A room asked for but never made (a second
+  click of Make) goes 60 seconds after it was asked for, however often the lobby wakes. The rooms
+  list is kept in the lobby's storage, so it survives the lobby hibernating.
+- The lobby stops sending a player the list when they make or join a room, and starts again when
+  they ask for it, which the game does on coming out of one.
+- A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
+  lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
+  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
+check` tests the lobby itself.
 
 ## Setting it up
 
@@ -71,7 +83,7 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 
     ```sh
     curl https://run-escape-coop.<your-subdomain>.workers.dev/coop
-    # {"coop":true,"players":0,"rooms":0,"full":false}
+    # {"coop":true}
     npm run check -- wss://run-escape-coop.<your-subdomain>.workers.dev/coop
     ```
 
@@ -125,9 +137,16 @@ the same numbers as `coop-relay.mjs`.
 ## Cost
 
 Cloudflare bills Durable Objects by requests and by how long they're awake, not by bandwidth.
-Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. A room is
-billed for every second it's open (at 128 MB), whether or not anything's happening, and the lobby
-only for the moments it's handling something.
+Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. Each
+call from a room to the lobby (`redeem`, `roomUpdate`, `roomGone`) and each connection is a whole
+request. The dashboard's Metrics count every message as one, so they show far more than is billed.
+A room is billed for every second it's open (at 128 MB), whether or not anything's happening, and
+the lobby only for the moments it's handling something.
+
+What the lobby gets: about 120 pings an hour from each player connected to it (answered without
+waking it), 60 calls an hour from each room, and a message for each page of rooms someone looks at.
+A game from before the lists were sent asks for its page every 5 seconds, 720 times an hour, until
+it's closed after 10 minutes.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
 frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of

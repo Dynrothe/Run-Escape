@@ -120,8 +120,9 @@ Docker, leave `HOST` alone inside the container and publish the port on the host
 from its private network.
 
 The relay takes 800 connections in all, so give it room with `LimitNOFILE` if you raise that. A
-connection in no room that's done nothing but ping for 10 minutes is closed (browsing the list
-counts as doing something: a player waiting for a room), as is a room left alone for half an hour.
+connection in no room that's done nothing but ping, or ask for the same page of rooms again, for
+10 minutes is closed: a tab left open on the list. The game closes its own after 9 minutes out of
+a room with nothing done (`LOBBY_IDLE_MS`, a minute early so its own message is the one shown), and a room left alone for half an hour is closed too.
 
 Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
 proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)
@@ -1006,8 +1007,13 @@ changes at most once a second. The Node relay sends no token, so with it a dropp
 still ends a guest's run.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
-longest), worked out once after each change rather than for every request; the menu asks for its
-page every 5 seconds, and again when joining fails (a room that filled up or started meanwhile).
+longest), worked out once after each change rather than for every request. Both relays send it
+again to everyone looking at it when it changes (within a second, and only if their page did), and
+say so with `listUpdates` in their welcome; the menu then asks only for another page, and again
+when joining fails. It asks every 5 seconds of a relay without `listUpdates`, so either can be
+deployed first. On Cloudflare every request costs, so think twice before adding a timer that
+sends something: incoming messages and calls between objects are billed (see Cost in
+`server/cloudflare/README.md`), and what the relay sends out is free.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own, on each room member, and on a room in the list for its host. The Cloudflare

@@ -687,7 +687,7 @@ export class GameClient implements GameFrameHandler {
 
     // Another page of the open rooms
     showRoomsPage(page: number): void {
-        this.coop.refresh(page);
+        this.coop.showPage(page);
     }
 
     joinRoom(code: string): void {
