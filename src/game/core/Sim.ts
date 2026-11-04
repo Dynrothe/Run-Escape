@@ -4994,9 +4994,11 @@ export class Sim {
             return false;
         }
         if (this.tick >= end) {
+            // Up, and straight on with the new phase
             phase.pauseEnd = phase.riseTick = undefined;
             boss.anim = "walk";
             boss.animStart = this.tick;
+            boss.attackCooldown = 0;
             return false;
         }
         const rise = boss.def.boss!.phases!.threshold?.riseSeq;
@@ -6820,6 +6822,18 @@ export class Sim {
                 endTick: this.tick + dragTicks,
                 holdEnd: this.tick + dragTicks + bindTicks,
             };
+            // Bound where they're dragged to, for as long as it holds them
+            if (attack.impactSpotAnim !== undefined) {
+                this.addEffect(
+                    attack.impactSpotAnim,
+                    to.x,
+                    to.y,
+                    0,
+                    dragTicks + bindTicks,
+                    0,
+                    true,
+                );
+            }
         }
         player.frozen = Math.max(player.frozen, dragTicks + bindTicks);
         const next = onHit.attack && boss.def.boss!.attacks.find((a) => a.name === onHit.attack);

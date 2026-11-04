@@ -470,6 +470,9 @@ export type GroundPatternDef = {
     locId?: number;
     spotAnim?: number;
     fit?: number;
+    // How solid that's drawn (0.1, faint, when unset): a mark that's the only warning of a big
+    // hit over the whole floor wants to be plainer (the checker's glowing cells)
+    alpha?: number;
     // Drawn in the middle of the spot, faintly, as the warning; and with grab
     // set, played out there in full as the spot lands, for seconds, scaled so
     // it fits the spot's radius times fit (Grasping Claws' hands coming up
@@ -924,7 +927,10 @@ export type BossDef = {
 // Nightmare: each unset is hers. edge: the stroke round the bossArena while it's
 // up, or none (a court whose edges are drops). vignette: the dim round the
 // screen's edges while it's up, or none. dark: its entrance's dark (r, g, b).
+// lean: the camera leans towards it, as in a raid's boss room, so a boss north of
+// the player stays on the screen.
 export type BossLookDef = {
+    lean?: boolean;
     title?: string;
     subtitle?: string;
     edge?: string | null;

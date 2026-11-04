@@ -1892,14 +1892,18 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Towards where a raid room's boss stands, while it's being fought
+    // Towards where a raid room's boss stands, while it's being fought, or a boss that asks for
+    // it (BossLookDef.lean), wherever it is
     private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
         const room = sim.map.raid?.rooms[sim.raidRoom];
-        if (!room || sim.raidStage !== "boss") {
+        const boss = sim.shownBoss;
+        const leaning = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
+        const at = room && sim.raidStage === "boss" ? room.bossAt : leaning;
+        if (!at) {
             return { x: 0, y: 0 };
         }
-        const dx = (room.bossAt.x - px) * BOSS_LEAN;
-        const dy = (room.bossAt.y - py) * BOSS_LEAN;
+        const dx = (at.x - px) * BOSS_LEAN;
+        const dy = (at.y - py) * BOSS_LEAN;
         const length = Math.hypot(dx, dy);
         const scale = length > BOSS_LEAN_MAX ? BOSS_LEAN_MAX / length : 1;
         return { x: dx * scale, y: dy * scale };

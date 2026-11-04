@@ -182,7 +182,7 @@ export class BossFightView {
                 {
                     scale: (fit * hazard.radius * 128) / Math.max(1, model.radius),
                     flash: lit,
-                    alpha: WARNING_ALPHA,
+                    alpha: ground.alpha ?? WARNING_ALPHA,
                 },
             );
         }
@@ -484,7 +484,11 @@ export class BossFightView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(sim.tick - windup.startTick);
-            const options = { scale: 64 / Math.max(1, model.radius), alpha: SHADOW_ALPHA };
+            // A tile across, corner to corner
+            const options = {
+                scale: (64 * Math.SQRT2) / Math.max(1, model.radius),
+                alpha: SHADOW_ALPHA,
+            };
             const player = sim.player;
             for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
                 if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
