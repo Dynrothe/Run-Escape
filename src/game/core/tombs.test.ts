@@ -1099,3 +1099,347 @@ describe("the Het room", () => {
         expect(sim.tombsRoom!.doneTick).toBeDefined();
     });
 });
+
+// Akkha after the Het room, in the open field: his floor's middle where he rises, its quadrants
+// 10 tiles each way, the party let in south of it
+const TEST_AKKHA: MapDef = {
+    ...TEST_HET,
+    id: "test_akkha",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                id: "het",
+                name: "Path of Het",
+                door: { x: 1042.5, y: 1036.5 },
+                room: {
+                    arrive: { x: 1046.5, y: 1040.5 },
+                    puzzle: "het",
+                    entrances: [{ x: 1028.5, y: 1040.5 }],
+                    het: HET_DEF,
+                    boss: {
+                        enemyId: "akkha",
+                        arrive: { x: 1036.5, y: 1024.5 },
+                        at: { x: 1036.5, y: 1040.5 },
+                        line: { y: 1026 },
+                        quadrants: { middle: { x: 1036.5, y: 1040.5 }, half: 10 },
+                    },
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_AKKHA.id, TEST_AKKHA);
+
+describe("Akkha", () => {
+    // A tile into each quadrant, by its number: north-west, north-east, south-east, south-west
+    const IN = [
+        { x: 1031.5, y: 1045.5 },
+        { x: 1041.5, y: 1045.5 },
+        { x: 1041.5, y: 1035.5 },
+        { x: 1031.5, y: 1035.5 },
+    ];
+    const DEF = getEnemy("akkha").boss!.akkha!;
+    function atAkkha(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_AKKHA.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.devSkipToTombsBoss()).toBe(true);
+        sim.weapons = [];
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+        expect(sim.tombsAkkha).toBeDefined();
+        return sim;
+    }
+    const akkha = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsAkkha!.uid)!;
+    const special = (sim: Sim) => {
+        sim.tombsAkkha!.attacks = DEF.specialEvery;
+    };
+    // A tick at a spot, hurt as it comes
+    const tickAt = (sim: Sim, at: { x: number; y: number }) => {
+        sim.player.x = sim.player.prevX = at.x;
+        sim.player.y = sim.player.prevY = at.y;
+        sim.player.invulnerable = 0;
+        sim.step();
+    };
+
+    it("rises when the party walks in, in melee and praying against it", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        expect(boss.def.id).toBe("akkha");
+        expect(boss.def.protects!.styles).toEqual(["melee"]);
+        expect(IN.map((at) => sim.akkhaQuadrant(at.x, at.y))).toEqual([0, 1, 2, 3]);
+    });
+
+    it("counts his attacks to a special, then turns to another style", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        for (let i = 0; i < 240 && boss.def.id === "akkha"; i++) {
+            seconds(sim, 0.5, { x: boss.x, y: boss.y - 3 });
+        }
+        expect(boss.def.id).not.toBe("akkha");
+        expect(boss.def.protects!.styles).not.toEqual(["melee"]);
+        const fight = sim.tombsAkkha!;
+        expect(fight.memory !== undefined || fight.orbsUntil > sim.tick).toBe(true);
+    });
+
+    describe("Memory Blast", () => {
+        function memory(invocations: string[] = [], seed = 3): Sim {
+            for (let tries = 0; tries < 20; tries++) {
+                const sim = atAkkha(invocations, seed + tries);
+                special(sim);
+                seconds(sim, 0.1, IN[2]);
+                if (sim.tombsAkkha!.memory) {
+                    return sim;
+                }
+            }
+            throw new Error("no Memory Blast in 20 seeds");
+        }
+
+        it("lights the symbols in an order, each beside the last, never across", () => {
+            for (let seed = 1; seed <= 4; seed++) {
+                const order = memory([], seed * 7).tombsAkkha!.memory!.order;
+                expect(order).toHaveLength(DEF.memory.steps);
+                for (let i = 1; i < order.length; i++) {
+                    expect([1, 3]).toContain((order[i] - order[i - 1] + 4) % 4);
+                }
+            }
+            // Longer with the path level
+            const longer = memory(["pathfinder"]).tombsAkkha!.memory!.order.length;
+            expect(longer).toBe(DEF.memory.steps + 1);
+        });
+
+        it("shows the order one symbol at a time, and he's gone from the floor meanwhile", () => {
+            const sim = memory();
+            const plan = sim.tombsAkkha!.memory!;
+            const lit: number[] = [];
+            while (sim.tick < plan.showEnd) {
+                const now = sim.akkhaLit;
+                if (now !== undefined && lit[lit.length - 1] !== now) {
+                    lit.push(now);
+                }
+                expect(akkha(sim).shieldEnd).toBeGreaterThan(sim.tick);
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+            }
+            // Each flash is one: two the same can't come in a row, as each is beside the last
+            expect(lit).toEqual(plan.order);
+        });
+
+        it("blasts every quadrant but the next in the order: follow it and nothing hits", () => {
+            const follow = memory();
+            const plan = follow.tombsAkkha!.memory!;
+            const order = [...plan.order];
+            let hurt = 0;
+            for (let step = 0; step < order.length; step++) {
+                const burstTick = plan.showEnd + plan.burst * (step + 1);
+                while (follow.tick <= burstTick) {
+                    const before = follow.player.hp;
+                    tickAt(follow, IN[order[step]]);
+                    hurt += Math.max(0, before - follow.player.hp);
+                }
+            }
+            expect(follow.tombsAkkha!.memory).toBeUndefined();
+            expect(hurt).toBe(0);
+
+            // Stood across from the first, its burst takes nearly half your hitpoints
+            const wrong = memory();
+            const blast = wrong.tombsAkkha!.memory!;
+            const away = IN[(blast.order[0] + 2) % 4];
+            for (
+                let i = 0;
+                i < 30 * TICKS_PER_SECOND && wrong.tombsAkkha!.bursts.length === 0;
+                i++
+            ) {
+                wrong.player.hp = wrong.player.maxHp;
+                tickAt(wrong, away);
+            }
+            expect(wrong.player.maxHp - wrong.player.hp).toBeGreaterThanOrEqual(
+                Math.floor(wrong.player.maxHp * DEF.memory.damage) - 1,
+            );
+            expect(wrong.tombsAkkha!.bursts[0].quadrants).not.toContain(blast.order[0]);
+        });
+
+        it("gives half the time between bursts with Feeling Special", () => {
+            const plain = memory().tombsAkkha!.memory!.burst;
+            const quick = memory(["feeling_special"]).tombsAkkha!.memory!.burst;
+            expect(quick).toBe(Math.round(plain / 2));
+        });
+    });
+
+    describe("trailing orbs", () => {
+        function orbs(invocations: string[] = []): Sim {
+            for (let seed = 3; seed < 23; seed++) {
+                const sim = atAkkha(invocations, seed);
+                special(sim);
+                seconds(sim, 0.1, IN[2]);
+                if (!sim.tombsAkkha!.memory && sim.tombsAkkha!.orbsUntil > sim.tick) {
+                    return sim;
+                }
+            }
+            throw new Error("no trailing orbs in 20 seeds");
+        }
+
+        it("drops an orb on every tile you leave, none while you stand still", () => {
+            const sim = orbs();
+            seconds(sim, 1, IN[2]);
+            expect(sim.tombsAkkha!.orbs).toHaveLength(0);
+            seconds(sim, 0.1, { x: IN[2].x + 1, y: IN[2].y });
+            seconds(sim, 0.1, { x: IN[2].x + 2, y: IN[2].y });
+            expect(sim.tombsAkkha!.orbs.map((orb) => orb.x)).toEqual([IN[2].x, IN[2].x + 1]);
+            // Ice, in the south-east
+            expect(sim.tombsAkkha!.orbs[0].quadrant).toBe(2);
+        });
+
+        it("goes off under whoever steps back on one once it's armed, with its element", () => {
+            const sim = orbs();
+            seconds(sim, 0.1, IN[2]);
+            seconds(sim, 0.1, { x: IN[2].x + 1, y: IN[2].y });
+            seconds(sim, 1, { x: IN[2].x + 3, y: IN[2].y });
+            const before = sim.player.hp;
+            tickAt(sim, IN[2]);
+            expect(sim.player.hp).toBeLessThan(before);
+            expect(sim.debuffs.some((d) => d.id === "akkha_ice")).toBe(true);
+        });
+
+        it("drops one ahead of you too with Feeling Special", () => {
+            const sim = orbs(["feeling_special"]);
+            seconds(sim, 0.1, IN[2]);
+            seconds(sim, 0.1, { x: IN[2].x + 1, y: IN[2].y });
+            expect(sim.tombsAkkha!.orbs.map((orb) => orb.x)).toEqual([IN[2].x, IN[2].x + 3]);
+        });
+    });
+
+    describe("his shadows", () => {
+        function shadows(): Sim {
+            const sim = atAkkha();
+            const boss = akkha(sim);
+            boss.hp = Math.floor(boss.maxHp * 0.79);
+            seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+            return sim;
+        }
+        const shadowOf = (sim: Sim, quadrant: number) => {
+            const uid = sim.tombsAkkha!.shadows.find((s) => s.quadrant === quadrant)!.uid;
+            return sim.enemies.find((e) => e.uid === uid)!;
+        };
+        const placeBoss = (sim: Sim, at: { x: number; y: number }) => {
+            const boss = akkha(sim);
+            boss.x = boss.prevX = at.x;
+            boss.y = boss.prevY = at.y;
+            return boss;
+        };
+
+        it("come in each corner at 80%, and he can't be hurt while they're all up", () => {
+            const sim = shadows();
+            expect(sim.tombsAkkha!.shadows).toHaveLength(4);
+            const boss = akkha(sim);
+            expect(boss.shieldEnd).toBeGreaterThan(sim.tick);
+            const hp = boss.hp;
+            sim.damageEnemy(boss, 500, 0, boss.x, boss.y);
+            expect(boss.hp).toBe(hp);
+        });
+
+        it("lets him be hurt once he's drawn into a quadrant whose shadow is dead", () => {
+            const sim = shadows();
+            const shadow = shadowOf(sim, 3);
+            sim.damageEnemy(shadow, 1e9, 0, shadow.x, shadow.y);
+            // In a quadrant whose shadow's still up
+            for (let i = 0; i < 3; i++) {
+                placeBoss(sim, IN[1]);
+                seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+            }
+            expect(akkha(sim).shieldEnd).toBeGreaterThan(sim.tick);
+            // Lured into the dead one's
+            for (let i = 0; i < 3; i++) {
+                placeBoss(sim, IN[3]);
+                seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+            }
+            const boss = placeBoss(sim, IN[3]);
+            const hp = boss.hp;
+            sim.damageEnemy(boss, 500, 0, boss.x, boss.y);
+            expect(boss.hp).toBeLessThan(hp);
+        });
+
+        it("floods its quadrant if it's left up, and they're done when all four are dead", () => {
+            const sim = shadows();
+            const at = IN[sim.tombsAkkha!.shadows[0].quadrant];
+            const flooded = () => sim.tombsAkkha!.bursts.some((b) => b.kind === "flood");
+            // Kept from his specials, which would hold the shadows' charge
+            for (let i = 0; i < 40 * TICKS_PER_SECOND && !flooded(); i++) {
+                sim.tombsAkkha!.attacks = 0;
+                sim.player.hp = sim.player.maxHp;
+                tickAt(sim, at);
+            }
+            expect(flooded()).toBe(true);
+            expect(sim.player.maxHp - sim.player.hp).toBeGreaterThanOrEqual(
+                Math.floor(sim.player.maxHp * DEF.shadows.damage) - 1,
+            );
+            for (let quadrant = 0; quadrant < 4; quadrant++) {
+                const shadow = shadowOf(sim, quadrant);
+                sim.damageEnemy(shadow, 1e9, 0, shadow.x, shadow.y);
+            }
+            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+            expect(sim.tombsAkkha!.shadows).toHaveLength(0);
+            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+            const boss = akkha(sim);
+            const hp = boss.hp;
+            sim.damageEnemy(boss, 300, 0, boss.x, boss.y);
+            expect(boss.hp).toBeLessThan(hp);
+        });
+        it("floods every quadrant whose shadow is up when the timer runs out, sparing a dead one's", () => {
+            const sim = shadows();
+            const shadow = shadowOf(sim, 2);
+            sim.damageEnemy(shadow, 1e9, 0, shadow.x, shadow.y);
+            const flooded = () => sim.tombsAkkha!.bursts.find((b) => b.kind === "flood");
+            let hurt = 0;
+            for (let i = 0; i < 40 * TICKS_PER_SECOND && !flooded(); i++) {
+                sim.tombsAkkha!.attacks = 0;
+                sim.player.hp = sim.player.maxHp;
+                tickAt(sim, IN[2]);
+                hurt = sim.player.maxHp - sim.player.hp;
+            }
+            expect(flooded()!.quadrants.sort()).toEqual([0, 1, 3]);
+            // Safe in the cleared quarter: nothing like the flood's hit, the tick it came
+            expect(hurt).toBeLessThan(sim.player.maxHp * DEF.shadows.damage * 0.5);
+            expect(sim.akkhaShadows).toEqual({ left: 3, seconds: DEF.shadows.flood });
+        });
+    });
+
+    it("brings his quadrant's element with his magic: ice in the south-east", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        const glowing = getEnemy("akkha_magic").boss!.attacks.find((a) => a.elemental)!;
+        sim.player.x = sim.player.prevX = IN[2].x;
+        sim.player.y = sim.player.prevY = IN[2].y;
+        sim.player.invulnerable = 0;
+        sim["bossHit"](boss.def.id, boss, glowing, 3);
+        expect(sim.debuffs.some((d) => d.id === "akkha_ice")).toBe(true);
+    });
+
+    it("makes his final stand at 0 in a corner, against ranged and magic, sending orbs across", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        // Past his shadows, which would shield him
+        sim.tombsAkkha!.shadowsDone = DEF.shadows.at.length;
+        sim.damageEnemy(boss, 1e9, 0, boss.x, boss.y);
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+        expect(boss.dead).toBe(false);
+        expect(boss.def.id).toBe("akkha_enraged");
+        expect(boss.def.protects!.styles).toEqual(["ranged", "magic"]);
+        expect(Math.abs(boss.x - 1036.5)).toBeCloseTo(DEF.shadows.corner);
+        seconds(sim, 3, { x: 1036.5, y: 1028.5 });
+        expect(sim.bullets.count).toBeGreaterThan(0);
+        const corner = sim.tombsAkkha!.stand!.corner;
+        const stand = getEnemy("akkha_enraged").boss!.akkha!.unstable!;
+        seconds(sim, stand.moveSeconds, { x: 1036.5, y: 1028.5 });
+        expect(sim.tombsAkkha!.stand!.corner).not.toBe(corner);
+    });
+});

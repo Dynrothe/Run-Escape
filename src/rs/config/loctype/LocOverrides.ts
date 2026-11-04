@@ -6,13 +6,32 @@ export type LocOverride = {
     models?: number[];
     // 128 is as the model was made
     size?: number;
-    // Blocks walking, not projectiles, whatever the loc did
+    // Blocks walking, not projectiles, whatever the loc did (false: blocks nothing)
     solid?: boolean;
+    // Keeps the model's own size, rather than 128 (or size) on every axis
+    ownSize?: boolean;
     // Lifts the model this far off the ground, in scene units (128 to a tile), for what floats
+    // (below 0, sinks it)
     height?: number;
 };
 
+// Akkha's arena's floor (the Tombs of Amascut): in the cache its stone pieces stand on the plane
+// under the arena's, up to its floor. With that plane brought down to the ground they're sunk to
+// it, their tops just over it, and block nothing (the floor's own tiles say what's walkable): the
+// platform's pieces (6 tiles tall) and its outer ring's (6.9)
+const AKKHA_FLOOR: [number, LocOverride][] = [
+    ...Array.from({ length: 24 }, (_, i): [number, LocOverride] => [
+        45872 + i,
+        { height: -760, ownSize: true, solid: false },
+    ]),
+    ...Array.from({ length: 142 }, (_, i): [number, LocOverride] => [
+        45896 + i,
+        { height: -876, ownSize: true, solid: false },
+    ]),
+];
+
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
+    ...AKKHA_FLOOR,
     // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5
     // here, for a field that didn't all ripen at once
     [46263, { models: [2591], size: 320, solid: true }],

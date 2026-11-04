@@ -286,3 +286,34 @@ raid's ranges.
       (`BulletPatternDef.look`), the shards, and the boulder that drops into each rockfall and boulder
       circle over its warning (`BossAttackDef.falls`). OSRS's own falling-rock spot animations (1727, 2250) are cave-ins made for its low camera: from ours the rock stays off the top of the
       screen.
+
+- **Akkha** (`content/tombs.ts`, his fight in `Sim.stepAkkha`), the Het path's boss, after its seal
+  breaks. His arena is square 57,84 on plane 1, brought down (`bringDown` in `prefab.ts`) and turned
+  so you walk in from the south. Its floor is stone pieces on the plane under it (45872 to 46037),
+  brought along and sunk to the ground with their blocking off (`LocOverrides.ts`), so the dial and
+  its four symbols are the real thing. The quadrants' elements follow the floor's symbols as they
+  lie once it's turned: darkness north-west, lightning north-east, ice south-east, fire south-west.
+    - **Styles**: a form for each (`akkha`, `akkha_ranged`, `akkha_magic`), each praying against
+      its own. Every seven attacks (six with Stay Vigilant) he does a special and turns to another.
+      Melee swings and stamps out a ring; ranged fires fans and a spiral of sand; magic rings and
+      streams red sand, which brings the element of the quadrant it hits you in.
+    - **Memory Blast**, Simon says: he vanishes to the middle and can't be hurt, the symbols light up
+      one at a time (each beside the last, never across), the quadrant glowing with its element. Then,
+      2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
+      blasted for nearly half your hitpoints and its element. Four steps, one more every two path
+      levels.
+    - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
+      leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
+      Feeling Special drops one three tiles ahead too.
+    - **His shadows**, at 80, 60, 40 and 20%: an Akkha's Shadow in each corner, and he can't be hurt
+      except standing in a quadrant whose shadow is dead, so you kill one and draw him into its
+      quarter. One timer (the HUD counts it down) runs for them all: when it's out, every quadrant
+      whose shadow's still up floods for half your hitpoints and its element, and it starts again.
+      They're done when all four are dead, and back at the next threshold.
+    - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
+      a corner, praying against ranged and magic, and sends Unstable Orbs (11804, their arrows the
+      way they go) straight or slanting across the floor. He moves corner once he's lost a share of
+      his hitpoints there, or after a while.
+    - **Invocations**: Double Trouble (both specials at once), Keep Back (beside him, his ranged and
+      magic bring an unseen melee hit), Stay Vigilant, Feeling Special.
+    - Not in yet: Detonate (a party's crosses), and the balance bot doesn't know his fight.

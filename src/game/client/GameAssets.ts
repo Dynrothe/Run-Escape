@@ -27,6 +27,7 @@ import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import {
+    AKKHA,
     APMEKEN_BARRIER_LOC,
     APMEKEN_SPOTANIMS,
     HET,
@@ -161,6 +162,8 @@ function getSpotAnimIds(): number[] {
     add(SARCOPHAGUS_BLAST.spotAnim);
     // The Het room's beam, along and across, and where it stops
     add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // Akkha's quadrants' elements, which are no attack of his
+    add(...AKKHA.elements.map((element) => element.spotAnim));
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
@@ -592,6 +595,16 @@ export class GameAssets {
             locId: APMEKEN_BARRIER_LOC,
             animated: true,
         });
+
+        // Akkha's symbols, glowing
+        for (const { symbolLoc } of AKKHA.elements) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + symbolLoc,
+                locId: symbolLoc,
+                animated: true,
+            });
+        }
 
         // A raid hall's teleporter, swirling
         requests.push({

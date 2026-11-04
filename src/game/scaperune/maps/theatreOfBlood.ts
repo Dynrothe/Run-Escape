@@ -1,8 +1,8 @@
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
-import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid, createTileGrid } from "../format";
+import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
 import { createRng } from "../noise";
-import { cutPrefab, rotatePrefab } from "../prefab";
+import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
 import { isDoor } from "../prefabs";
 import { BuildContext, MapRecipe } from "../recipe";
 
@@ -203,22 +203,6 @@ export const TOB_ROOM_PLACES = PLACES.map((place) => ({
         maxY: MAP_Y * MAP_SQUARE_SIZE + place.chamber.y1 + 1,
     },
 }));
-
-// A cut of the real world with the plane it's on brought down to the ground floor, as the game
-// only draws one
-function bringDown(grid: TileGrid, plane: number): TileGrid {
-    if (plane === 0) {
-        return grid;
-    }
-    const out = createTileGrid(grid.sizeX, grid.sizeY);
-    for (let level = plane; level < grid.levels.length; level++) {
-        out.levels[level - plane] = grid.levels[level];
-    }
-    out.locs = grid.locs
-        .filter((loc) => loc.level >= plane)
-        .map((loc) => ({ ...loc, level: loc.level - plane }));
-    return out;
-}
 
 function inRect(rect: Rect, x: number, y: number): boolean {
     return x >= rect.x0 && y >= rect.y0 && x <= rect.x1 && y <= rect.y1;

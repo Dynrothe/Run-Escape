@@ -2,7 +2,7 @@ import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
-import { cutPrefab, rotatePrefab } from "../prefab";
+import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
 import { BuildContext, MapRecipe } from "../recipe";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
@@ -168,6 +168,32 @@ const BA_BA_SARCOPHAGI = [17, 22, 27, 32].flatMap((y) => [
 ]);
 const BA_BA_PIT = { x0: 10, x1: 15, y0: 9, y1: FIGHT_LINE + 1.9 };
 
+// Akkha's arena, in square 57,84 on plane 1 (brought down, as only one plane is drawn): the
+// entrance room on the west (local 17 to 19, y 30 to 33) behind its barrier (45335 at x 19), a gap
+// with no floor (x 20 to 22) the game takes you over, and the octagon of floor (x 23 to 42, y 22
+// to 41), the teleport crystal's room past it on the east. Turned three quarters clockwise, as
+// Ba-Ba's, so you walk in from the south: a tile (x, y) of the cut lies at (25 - y, x).
+const AKKHA_ARENA: RoomCut = {
+    x: 3661,
+    y: 5395,
+    sizeX: 40,
+    sizeY: 26,
+    plane: 1,
+    cell: [4, 0],
+    arrive: [12, 5],
+    turns: 3,
+};
+// The entrance's barrier and the invisible wall across the gap (the cut's own tiles), and the
+// gap's tiles, given a floor: the sim holds the line instead
+const AKKHA_BARRIER = 45335;
+// His floor's pieces, on the plane under it: the platform (45872 on) and its outer ring
+const AKKHA_FLOOR = [45872, 46037];
+const AKKHA_GAP = [7, 8, 9].flatMap((x) => [11, 12, 13, 14].map((y) => [x, y]));
+// (turned) The floor's middle and half its width, and the line past which (north) the fight's on
+const AKKHA_MIDDLE = [13, 20];
+const AKKHA_HALF = 10;
+const AKKHA_LINE = 10;
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -184,7 +210,7 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET].map((cut) => {
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA].map((cut) => {
     const at = cellCorner(cut);
     return {
         cut,
@@ -201,6 +227,7 @@ const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET].map((cut) => {
 const APMEKEN_ROOM = ROOMS[1];
 const BA_BA_ROOM = ROOMS[2];
 const HET_ROOM = ROOMS[3];
+const AKKHA_ROOM = ROOMS[4];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -253,6 +280,23 @@ export const TOA_PLACES = {
                 x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x1,
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
             },
+        },
+    },
+    // Akkha's arena: where the party comes in, where he rises (its middle), the line past which
+    // he does, and the floor his four quadrants split
+    akkha: {
+        arrive: worldTile(AKKHA_ROOM.arrive.x, AKKHA_ROOM.arrive.y),
+        at: {
+            x: MAP_X * MAP_SQUARE_SIZE + AKKHA_ROOM.at.x + AKKHA_MIDDLE[0],
+            y: MAP_Y * MAP_SQUARE_SIZE + AKKHA_ROOM.at.y + AKKHA_MIDDLE[1],
+        },
+        line: { y: MAP_Y * MAP_SQUARE_SIZE + AKKHA_ROOM.at.y + AKKHA_LINE },
+        quadrants: {
+            middle: {
+                x: MAP_X * MAP_SQUARE_SIZE + AKKHA_ROOM.at.x + AKKHA_MIDDLE[0],
+                y: MAP_Y * MAP_SQUARE_SIZE + AKKHA_ROOM.at.y + AKKHA_MIDDLE[1],
+            },
+            half: AKKHA_HALF,
         },
     },
     baba: {
@@ -344,12 +388,28 @@ function build(context: BuildContext): TileGrid {
         const { cut } = room;
         // The Apmeken room's east barrier is the sim's (APMEKEN, above)
         const gateX = 59 * MAP_SQUARE_SIZE - APMEKEN.x + APMEKEN_GATE.x;
-        const prefab = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY);
+        const cutOut = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY);
+        const prefab = bringDown(cutOut, cut.plane);
+        // Akkha's floor is stone pieces on the plane below, up to it: brought along, sunk to the
+        // ground (LocOverrides)
+        if (cut === AKKHA_ARENA) {
+            prefab.locs.push(
+                ...cutOut.locs.filter(
+                    (loc) =>
+                        loc.level === 0 && loc.id >= AKKHA_FLOOR[0] && loc.id <= AKKHA_FLOOR[1],
+                ),
+            );
+        }
         // Left out, in the cut's own tiles, before it's turned
         prefab.locs = prefab.locs.filter(
             (loc) =>
                 !(cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX) &&
                 !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
+                !(
+                    cut === AKKHA_ARENA &&
+                    (loc.id === AKKHA_BARRIER ||
+                        (loc.id === 85 && loc.x >= 6 && loc.x <= 9 && loc.y >= 10 && loc.y <= 15))
+                ) &&
                 !(
                     cut === BA_BA_ARENA &&
                     (loc.id === BA_BA_BARRIER ||
@@ -359,6 +419,19 @@ function build(context: BuildContext): TileGrid {
                         (loc.id === 85 && loc.x === 12 && loc.y >= 11 && loc.y <= 13))
                 ),
         );
+        // The gap into Akkha's arena, which OSRS takes you over: floor, as his own
+        if (cut === AKKHA_ARENA) {
+            const floor = prefab.levels[0];
+            const like = 23 - 13 + (31 - 19) * cut.sizeX;
+            for (const [x, y] of AKKHA_GAP) {
+                const i = x + y * cut.sizeX;
+                floor.flags[i] &= ~TILE_BLOCKED;
+                floor.underlays[i] = floor.underlays[like];
+                floor.overlays[i] = floor.overlays[like];
+                floor.shapes[i] = floor.shapes[like];
+                floor.rotations[i] = floor.rotations[like];
+            }
+        }
         // The passage's floor, blocked where its barrier stood: open, as the sim holds the line
         if (cut === BA_BA_ARENA) {
             for (const [x, y] of BA_BA_PASSAGE) {
@@ -479,6 +552,13 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                         gate: TOA_PLACES.het.gate,
                         entrances: TOA_PLACES.het.entrances,
                         het: TOA_PLACES.het.puzzle,
+                        boss: {
+                            enemyId: "akkha",
+                            arrive: TOA_PLACES.akkha.arrive,
+                            at: TOA_PLACES.akkha.at,
+                            line: TOA_PLACES.akkha.line,
+                            quadrants: TOA_PLACES.akkha.quadrants,
+                        },
                     },
                 }),
                 ...(id === "apmeken" && {

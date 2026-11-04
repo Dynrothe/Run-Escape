@@ -168,6 +168,8 @@ export type HudNumbers = {
     // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
     // the party to walk through the barrier, or beaten
     tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
+    // Akkha's shadows: how many are up, and seconds till they flood
+    tombsShadows?: { left: number; seconds: number };
     // Dev server only: god mode's on (GameClient.toggleDevGod)
     devGod?: boolean;
     hp: number;

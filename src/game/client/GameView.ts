@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { HET, JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
+import { AKKHA, HET, JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -159,6 +159,12 @@ const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 // The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
 const TOMBS_GATE_YAW = 512;
 // Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
+// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
+// (they're a tile across)
+const AKKHA_SYMBOL_OUT = 1.5;
+const AKKHA_SYMBOL_SCALE = 2.2;
+// How strongly the quadrant he's showing glows, against a blast's full strength
+const AKKHA_GLOW_ALPHA = 0.45;
 const PEEL_SCALE = 2;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
@@ -554,6 +560,7 @@ export class GameView {
         this.drawTombsPeels(actors, sim);
         this.drawSarcophagi(actors, sim);
         this.drawHet(actors, sim);
+        this.drawAkkha(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -761,6 +768,81 @@ export class GameView {
                     yaw,
                 );
             }
+        }
+    }
+
+    // Akkha's floor: the symbol he's showing lit up (Memory Blast), what's
+    // just gone up over the quadrants it took, and his trailing orbs
+    private drawAkkha(actors: ActorRenderer, sim: Sim): void {
+        const fight = sim.tombsAkkha;
+        const area = sim.tombsPathRoom?.boss?.quadrants;
+        if (!fight || !area) {
+            return;
+        }
+        const lit = sim.akkhaLit;
+        // The floor has its symbols: the one he's showing is drawn over its own, lit up
+        if (lit !== undefined) {
+            const element = AKKHA.elements[lit];
+            const at = sim.akkhaCorner(lit, AKKHA_SYMBOL_OUT);
+            const height = this.ground(sim, at.x, at.y);
+            const model = this.assets.get("loc:" + element.symbolLoc);
+            if (model) {
+                const anim = model.anims[0];
+                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
+                    scale: AKKHA_SYMBOL_SCALE,
+                    flash: 0.7,
+                });
+            }
+            const glow = this.assets.get("spot:" + element.spotAnim);
+            if (glow) {
+                const anim = glow.anims[0];
+                actors.draw(glow, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
+                    scale: 2,
+                });
+            }
+        }
+        // A blast or a flood: its element all over each quadrant it took. The one he's showing
+        // glows with it, fainter, as the room's sections do.
+        const fill = (quadrant: number, age: number, alpha: number) => {
+            const model = this.assets.get("spot:" + AKKHA.elements[quadrant].spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const east = quadrant === 1 || quadrant === 2;
+            const north = quadrant === 0 || quadrant === 1;
+            for (let i = 1; i < area.half; i += 2) {
+                for (let j = 1; j < area.half; j += 2) {
+                    // The floor's round
+                    if (Math.hypot(i, j) > area.half - 0.5) {
+                        continue;
+                    }
+                    const x = area.middle.x + (east ? i : -i);
+                    const y = area.middle.y + (north ? j : -j);
+                    const height = this.ground(sim, x, y);
+                    actors.draw(model, anim, anim.getFrame(age, true), x, height, y, 0, { alpha });
+                }
+            }
+        };
+        for (const burst of fight.bursts) {
+            for (const quadrant of burst.quadrants) {
+                fill(quadrant, sim.tick - burst.tick, 1);
+            }
+        }
+        if (lit !== undefined) {
+            fill(lit, sim.tick, AKKHA_GLOW_ALPHA);
+        }
+        for (const orb of fight.orbs) {
+            const def = getEnemy(AKKHA.elements[orb.quadrant].orb);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.idleSeq);
+            const height = this.ground(sim, orb.x, orb.y);
+            actors.draw(model, anim, anim.getFrame(sim.tick, true), orb.x, height, orb.y, 0, {
+                alpha: sim.tick < orb.armTick ? 0.5 : 1,
+            });
         }
     }
 

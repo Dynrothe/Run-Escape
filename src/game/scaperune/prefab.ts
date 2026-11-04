@@ -94,3 +94,19 @@ export function rotatePrefab(
     });
     return out;
 }
+
+// A cut of the real world with the plane it's on brought down to the ground floor, as the game
+// only draws one
+export function bringDown(grid: TileGrid, plane: number): TileGrid {
+    if (plane === 0) {
+        return grid;
+    }
+    const out = createTileGrid(grid.sizeX, grid.sizeY);
+    for (let level = plane; level < grid.levels.length; level++) {
+        out.levels[level - plane] = grid.levels[level];
+    }
+    out.locs = grid.locs
+        .filter((loc) => loc.level >= plane)
+        .map((loc) => ({ ...loc, level: loc.level - plane }));
+    return out;
+}

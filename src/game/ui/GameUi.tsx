@@ -1972,6 +1972,7 @@ const Hud = memo(function Hud({
                     {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
                     <RaidRoomInfo client={client} />
                     <TombsWaveInfo client={client} />
+                    <TombsShadowsInfo client={client} />
                     <DevGodButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
@@ -2082,6 +2083,19 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
                 </button>
             )}
         </>
+    );
+}
+
+// Akkha's shadows: how many are left, and how long till those still up flood their quarters
+function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const shadows = useHudNumber(client, (n) => n.tombsShadows);
+    if (!shadows) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Shadows {shadows.left} / 4: they flood in {shadows.seconds}s
+        </div>
     );
 }
 

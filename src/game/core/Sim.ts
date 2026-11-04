@@ -101,6 +101,7 @@ import {
 } from "../content/trickOrTreat";
 import { TROPHIES, TrophyDef } from "../content/trophies";
 import {
+    AkkhaDef,
     BoltProcDef,
     BossAttackDef,
     BossDef,
@@ -765,6 +766,36 @@ type HetDef = NonNullable<NonNullable<TombsPathDef["room"]>["het"]>;
 // stops at it) once an Orb of Darkness has crossed it. touching: by hero, so walking into it
 // turns it (or cleans it) once.
 type HetMirror = { x: number; y: number; turn: 0 | 1; dirty: boolean; touching: boolean[] };
+// Akkha's fight (BossDef.akkha), while he's up: his attacks since his last special, Memory
+// Blast's order (its ticks: when it began, each symbol's flash and the gap after, when the order's
+// shown, between bursts) and how far through it is, his trailing orbs, his shadows and when each
+// floods, what's just gone up (to draw), and his final stand's corner
+export type AkkhaFight = {
+    uid: number;
+    attacks: number;
+    memory?: {
+        order: number[];
+        start: number;
+        flash: number;
+        gap: number;
+        showEnd: number;
+        burst: number;
+        step: number;
+    };
+    orbsUntil: number;
+    orbs: { x: number; y: number; quadrant: number; armTick: number }[];
+    lastTiles: (number | undefined)[];
+    shadowsDone: number;
+    shadows: { uid: number; quadrant: number }[];
+    // When the shadows still up flood their quadrants
+    floodTick: number;
+    bursts: { quadrants: number[]; tick: number; kind: "blast" | "flood" }[];
+    stand?: { corner: number; nextTick: number; since: number; hpAt: number };
+};
+
+// Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
+const AKKHA_VANISH_SEQ = 9784;
+
 type HetRoom = {
     mirrors: HetMirror[];
     nextBeamTick: number;
@@ -897,6 +928,8 @@ export class Sim {
     tombsDeaths = 0;
     // Jungle Japes's banana peels, in a path boss's fight
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
+    // Akkha's fight, while he's up
+    tombsAkkha?: AkkhaFight;
     // Rocks Ba-Ba's boulders left, solid, to take cover by (BossAttackDef.leavesCover)
     tombsCover: { x: number; y: number; radius: number; endTick: number; look: string }[] = [];
     // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
@@ -4509,7 +4542,7 @@ export class Sim {
     }
 
     // The path's room, as the map has it
-    private get tombsPathRoom(): TombsPathDef["room"] {
+    get tombsPathRoom(): TombsPathDef["room"] {
         return this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room;
     }
 
@@ -4529,7 +4562,7 @@ export class Sim {
         room.boss = { uid: -1, beatenTick: undefined };
         this.emit({
             type: "notice",
-            message: `${getEnemy(boss.enemyId).name} waits on her throne. Walk in when you're ready.`,
+            message: `${getEnemy(boss.enemyId).name} waits for you. Walk in when you're ready.`,
         });
     }
 
@@ -4542,6 +4575,7 @@ export class Sim {
         }
         if (fight.beatenTick !== undefined) {
             this.tombsPeels = [];
+            this.tombsAkkha = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
@@ -4552,6 +4586,7 @@ export class Sim {
         if (fight.uid === -1) {
             // Not up (yet, or again after a death): nothing of the last fight's left lying about
             this.tombsPeels = [];
+            this.tombsAkkha = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
@@ -4561,6 +4596,19 @@ export class Sim {
                 const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
                 if (enemy) {
                     fight.uid = enemy.uid;
+                    if (enemy.def.boss?.akkha) {
+                        this.tombsAkkha = {
+                            uid: enemy.uid,
+                            attacks: 0,
+                            orbsUntil: 0,
+                            orbs: [],
+                            lastTiles: [],
+                            shadowsDone: 0,
+                            shadows: [],
+                            floodTick: 0,
+                            bursts: [],
+                        };
+                    }
                 }
                 this.tombsSarcophagi = (def.boulders?.sarcophagi ?? []).map((at) => ({
                     ...at,
@@ -4591,6 +4639,7 @@ export class Sim {
             this.emit({ type: "notice", message: "The path is done. Back to the Nexus..." });
             return;
         }
+        this.stepAkkha(boss);
         this.stepTombsCover();
         this.stepTombsPit(boss);
         this.stepTombsPeels();
@@ -4705,6 +4754,460 @@ export class Sim {
             }
         }
         this.use(current);
+    }
+
+    // ---- Akkha (BossDef.akkha) ----
+
+    // The quadrant a point's in: 0 north-west, then round clockwise (1 north-east, 2 south-east,
+    // 3 south-west), so the ones beside each other are a step apart and across are two
+    akkhaQuadrant(x: number, y: number): number {
+        const area = this.tombsPathRoom?.boss?.quadrants;
+        if (!area) {
+            return 0;
+        }
+        const east = x >= area.middle.x;
+        const north = y >= area.middle.y;
+        return north ? (east ? 1 : 0) : east ? 2 : 3;
+    }
+
+    // A quadrant's corner, out from the floor's middle
+    akkhaCorner(quadrant: number, out: number): { x: number; y: number } {
+        const area = this.tombsPathRoom!.boss!.quadrants!;
+        const east = quadrant === 1 || quadrant === 2;
+        const north = quadrant === 0 || quadrant === 1;
+        return {
+            x: area.middle.x + (east ? out : -out),
+            y: area.middle.y + (north ? out : -out),
+        };
+    }
+
+    // What the quadrant the current hero's in does to them, hit there
+    private akkhaElement(def: AkkhaDef, boss: Enemy | undefined): void {
+        const player = this.player;
+        const element = def.elements[this.akkhaQuadrant(player.x, player.y)];
+        this.applyPlayerEffect(element.effect, boss);
+        this.addEffect(element.spotAnim, player.x, player.y, 0, 30);
+    }
+
+    // A hit of Akkha's that isn't an attack (a blast, a flood, an orb): damage, through armour
+    // if it's a share of their hitpoints, and the element where it lands
+    private akkhaHurt(boss: Enemy, def: AkkhaDef, damage: number, share: boolean): void {
+        if (this.reviving || this.runOver || this.hero.down) {
+            return;
+        }
+        const player = this.player;
+        const amount = share ? Math.round(player.maxHp * damage) : damage;
+        this.damagePlayer(amount, boss.def.id, false, undefined, share);
+        if (!this.runOver && !this.reviving) {
+            this.akkhaElement(def, boss);
+        }
+    }
+
+    // Each tick of his fight, once he's up
+    private stepAkkha(boss: Enemy): void {
+        const fight = this.tombsAkkha;
+        const def = boss.def.boss?.akkha;
+        if (!fight || !def || !this.tombsPathRoom?.boss?.quadrants) {
+            return;
+        }
+        const keep = secondsToTicks(1.2);
+        fight.bursts = fight.bursts.filter((burst) => this.tick - burst.tick < keep);
+        if (def.unstable) {
+            this.stepAkkhaStand(boss, fight, def, def.unstable);
+            return;
+        }
+        this.stepAkkhaShadows(boss, fight, def);
+        this.stepAkkhaMemory(boss, fight, def);
+        this.stepAkkhaOrbs(boss, fight, def);
+        // A special once he's made his attacks, when he's not in the middle of anything
+        const every = def.specialEvery - (this.invoked("stay_vigilant") ? 1 : 0);
+        if (
+            fight.attacks >= every &&
+            !boss.bossState!.windup &&
+            !fight.memory &&
+            this.tick >= fight.orbsUntil
+        ) {
+            fight.attacks = 0;
+            this.startAkkhaSpecial(boss, fight, def);
+        }
+    }
+
+    // Memory Blast or his trailing orbs (both with Double Trouble), and another style after
+    private startAkkhaSpecial(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const both = this.invoked("double_trouble");
+        const memory = both || this.rng.int(2) === 0;
+        if (memory) {
+            this.startAkkhaMemory(boss, fight, def);
+        }
+        if (both || !memory) {
+            fight.orbsUntil = this.tick + secondsToTicks(def.orbs.seconds);
+            fight.lastTiles = this.heroes.map((hero) => this.akkhaTile(hero.player));
+            this.emit({ type: "notice", message: def.orbs.message });
+        }
+        const others = def.forms.filter((id) => id !== boss.def.id);
+        this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
+    }
+
+    private akkhaTile(at: { x: number; y: number }): number {
+        return Math.floor(at.x) + Math.floor(at.y) * 4096;
+    }
+
+    // His next style, keeping his hitpoints, and the prayer that goes with it (EnemyDef.protects)
+    private changeAkkhaForm(boss: Enemy, id: string): void {
+        const form = getEnemy(id);
+        boss.def = form;
+        boss.attackSeq = form.attackSeq;
+        boss.anim = "idle";
+        boss.animStart = this.tick;
+        boss.bossState!.cooldowns = form.boss?.attacks.map(() => 0) ?? [];
+        this.appearanceVersion++;
+        const style = form.protects?.styles[0] ?? "melee";
+        const name = style === "ranged" ? "missiles" : style;
+        this.emit({
+            type: "notice",
+            message: `Akkha turns to ${style}, and protects from ${name}!`,
+        });
+    }
+
+    // Simon says: the symbols light up in an order, then he blasts all but the next one in it
+    private startAkkhaMemory(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const memory = def.memory;
+        const steps = Math.min(
+            memory.most,
+            memory.steps + Math.floor(this.tombsPathLevel / memory.perLevels),
+        );
+        // Each next one beside the last, never across
+        const order = [this.rng.int(4)];
+        while (order.length < steps) {
+            const last = order[order.length - 1];
+            order.push((last + (this.rng.int(2) === 0 ? 1 : 3)) % 4);
+        }
+        const flash = secondsToTicks(memory.flash);
+        const gap = secondsToTicks(memory.gap);
+        const showEnd = this.tick + steps * (flash + gap);
+        const burst = secondsToTicks(this.invoked("feeling_special") ? memory.quick : memory.burst);
+        fight.memory = { order, start: this.tick, flash, gap, showEnd, burst, step: 0 };
+        // He's gone from the floor meanwhile: no attacks, nothing to hit
+        const state = boss.bossState!;
+        state.windup = undefined;
+        state.channelEnd = Math.max(state.channelEnd, showEnd + burst * steps);
+        const area = this.tombsPathRoom!.boss!.quadrants!;
+        boss.x = boss.prevX = area.middle.x;
+        boss.y = boss.prevY = area.middle.y;
+        boss.vx = boss.vy = 0;
+        boss.anim = "attack";
+        boss.attackSeq = AKKHA_VANISH_SEQ;
+        boss.animStart = this.tick;
+        this.emit({ type: "notice", message: memory.message });
+    }
+
+    // Akkha's shadows while they're up: how many, and seconds till those still up flood
+    get akkhaShadows(): { left: number; seconds: number } | undefined {
+        const fight = this.tombsAkkha;
+        if (!fight || fight.shadows.length === 0) {
+            return undefined;
+        }
+        const left = fight.shadows.filter((s) =>
+            this.enemies.some((e) => e.uid === s.uid && !e.dead),
+        ).length;
+        return { left, seconds: Math.max(0, (fight.floodTick - this.tick) / TICKS_PER_SECOND) };
+    }
+
+    // The symbol lit now while he shows the order, if any
+    get akkhaLit(): number | undefined {
+        const memory = this.tombsAkkha?.memory;
+        if (!memory || this.tick >= memory.showEnd) {
+            return undefined;
+        }
+        const into = this.tick - memory.start;
+        const each = memory.flash + memory.gap;
+        return into % each < memory.flash ? memory.order[Math.floor(into / each)] : undefined;
+    }
+
+    private stepAkkhaMemory(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const memory = fight.memory;
+        if (!memory) {
+            return;
+        }
+        const area = this.tombsPathRoom!.boss!.quadrants!;
+        boss.x = boss.prevX = area.middle.x;
+        boss.y = boss.prevY = area.middle.y;
+        boss.vx = boss.vy = 0;
+        boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
+        if (this.tick < memory.showEnd + memory.burst * (memory.step + 1)) {
+            return;
+        }
+        // Everywhere but the next in the order goes up
+        const safe = memory.order[memory.step];
+        fight.bursts.push({
+            quadrants: [0, 1, 2, 3].filter((q) => q !== safe),
+            tick: this.tick,
+            kind: "blast",
+        });
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (this.akkhaQuadrant(player.x, player.y) !== safe) {
+                this.akkhaHurt(boss, def, def.memory.damage, true);
+            }
+        });
+        memory.step++;
+        if (memory.step >= memory.order.length) {
+            fight.memory = undefined;
+            boss.anim = "idle";
+            boss.attackSeq = boss.def.attackSeq;
+            boss.animStart = this.tick;
+            this.emit({ type: "notice", message: "Akkha reappears!" });
+        }
+    }
+
+    // His trailing orbs: one on every tile anyone leaves (and one ahead, with Feeling Special),
+    // going off under whoever steps on one once it's armed
+    private stepAkkhaOrbs(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const orbs = def.orbs;
+        if (this.tick < fight.orbsUntil) {
+            const area = this.tombsPathRoom!.boss!.quadrants!;
+            const ahead = this.invoked("feeling_special");
+            this.heroes.forEach((hero, i) => {
+                const player = hero.player;
+                const tile = this.akkhaTile(player);
+                const last = fight.lastTiles[i];
+                fight.lastTiles[i] = tile;
+                if (last === undefined || last === tile || !this.isUp(hero)) {
+                    return;
+                }
+                const from = { x: (last % 4096) + 0.5, y: Math.floor(last / 4096) + 0.5 };
+                const drops = [from];
+                if (ahead) {
+                    const dx = Math.floor(player.x) + 0.5 - from.x;
+                    const dy = Math.floor(player.y) + 0.5 - from.y;
+                    drops.push({ x: from.x + dx * 3, y: from.y + dy * 3 });
+                }
+                for (const at of drops) {
+                    const inside =
+                        Math.abs(at.x - area.middle.x) < area.half &&
+                        Math.abs(at.y - area.middle.y) < area.half;
+                    const taken = fight.orbs.some(
+                        (orb) => Math.abs(orb.x - at.x) < 0.5 && Math.abs(orb.y - at.y) < 0.5,
+                    );
+                    if (inside && !taken) {
+                        fight.orbs.push({
+                            ...at,
+                            quadrant: this.akkhaQuadrant(at.x, at.y),
+                            armTick: this.tick + secondsToTicks(orbs.arm),
+                        });
+                    }
+                }
+            });
+        } else if (this.tick >= fight.orbsUntil + secondsToTicks(orbs.linger)) {
+            fight.orbs = [];
+            return;
+        }
+        const scale = boss.damageScale;
+        fight.orbs = fight.orbs.filter((orb) => {
+            if (this.tick < orb.armTick) {
+                return true;
+            }
+            let hit = false;
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                if (fm.hypot(player.x - orb.x, player.y - orb.y) <= orbs.radius + player.radius) {
+                    hit = true;
+                    this.akkhaHurt(boss, def, Math.round(orbs.damage * scale), false);
+                }
+            });
+            if (hit) {
+                this.addEffect(def.elements[orb.quadrant].spotAnim, orb.x, orb.y, 0, 30);
+            }
+            return !hit;
+        });
+    }
+
+    // His shadows: at each of their shares of his hitpoints, one in each quadrant's corner, and
+    // he can't be hurt but standing in a quadrant whose shadow's dead, till they all are. Each
+    // still up floods its quadrant now and then.
+    private stepAkkhaShadows(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const shadows = def.shadows;
+        if (
+            fight.shadowsDone < shadows.at.length &&
+            boss.hp <= boss.maxHp * shadows.at[fight.shadowsDone]
+        ) {
+            let next = fight.shadowsDone + 1;
+            while (next < shadows.at.length && boss.hp <= boss.maxHp * shadows.at[next]) {
+                next++;
+            }
+            const again = fight.shadowsDone > 0;
+            fight.shadowsDone = next;
+            this.spawnAkkhaShadows(fight, def);
+            this.emit({
+                type: "notice",
+                message: again ? "The shadows in the room are restored!" : shadows.message,
+            });
+        }
+        if (fight.shadows.length === 0) {
+            return;
+        }
+        const alive = (uid: number) =>
+            this.enemies.some((enemy) => enemy.uid === uid && !enemy.dead);
+        if (!fight.shadows.some((shadow) => alive(shadow.uid))) {
+            fight.shadows = [];
+            this.emit({ type: "notice", message: shadows.endMessage });
+            return;
+        }
+        // Drawn into a quadrant whose shadow's dead, he can be hurt
+        const quadrant = this.akkhaQuadrant(boss.x, boss.y);
+        const open = fight.shadows.some((s) => s.quadrant === quadrant && !alive(s.uid));
+        if (!open) {
+            boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
+        }
+        // One timer for them all (the hourglass on the wall), waiting while he shows his order:
+        // when it runs out, every quadrant whose shadow's still up floods, and it starts again
+        if (fight.memory) {
+            fight.floodTick++;
+            return;
+        }
+        if (this.tick === fight.floodTick - secondsToTicks(shadows.warn)) {
+            this.emit({ type: "notice", message: shadows.warnMessage });
+        }
+        if (this.tick < fight.floodTick) {
+            return;
+        }
+        fight.floodTick = this.tick + secondsToTicks(shadows.flood);
+        const flooded = fight.shadows.filter((s) => alive(s.uid)).map((s) => s.quadrant);
+        fight.bursts.push({ quadrants: flooded, tick: this.tick, kind: "flood" });
+        this.emit({ type: "notice", message: shadows.floodMessage });
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (flooded.includes(this.akkhaQuadrant(player.x, player.y))) {
+                this.akkhaHurt(boss, def, shadows.damage, true);
+            }
+        });
+    }
+
+    private spawnAkkhaShadows(fight: AkkhaFight, def: AkkhaDef): void {
+        for (const shadow of fight.shadows) {
+            const enemy = this.enemies.find((e) => e.uid === shadow.uid && !e.dead);
+            if (enemy) {
+                this.vanish(enemy);
+            }
+        }
+        const look = getEnemy(def.shadows.enemyId);
+        fight.floodTick = this.tick + secondsToTicks(def.shadows.flood);
+        fight.shadows = [];
+        for (let quadrant = 0; quadrant < 4; quadrant++) {
+            const at = this.akkhaCorner(quadrant, def.shadows.corner);
+            const enemy = this.spawnEnemy(look, "normal", at);
+            if (enemy) {
+                fight.shadows.push({ uid: enemy.uid, quadrant });
+            }
+        }
+    }
+
+    // His final stand: in a corner, sending Unstable Orbs straight across the floor, and off to
+    // another corner once he's been hurt enough there, or been there long enough
+    private stepAkkhaStand(
+        boss: Enemy,
+        fight: AkkhaFight,
+        def: AkkhaDef,
+        stand: NonNullable<AkkhaDef["unstable"]>,
+    ): void {
+        if (!fight.stand) {
+            for (const shadow of fight.shadows) {
+                const enemy = this.enemies.find((e) => e.uid === shadow.uid && !e.dead);
+                if (enemy) {
+                    this.vanish(enemy);
+                }
+            }
+            fight.shadows = [];
+            fight.memory = undefined;
+            fight.orbs = [];
+            fight.orbsUntil = 0;
+            fight.stand = { corner: -1, nextTick: this.tick, since: this.tick, hpAt: boss.hp };
+            this.moveAkkhaCorner(boss, fight, def);
+        }
+        const at = this.akkhaCorner(fight.stand.corner, def.shadows.corner);
+        boss.x = boss.prevX = at.x;
+        boss.y = boss.prevY = at.y;
+        boss.vx = boss.vy = 0;
+        const party = 1 + 0.5 * Math.max(0, this.heroes.length - 1);
+        if (
+            fight.stand.hpAt - boss.hp >= boss.maxHp * stand.moveAfter * party ||
+            this.tick - fight.stand.since >= secondsToTicks(stand.moveSeconds)
+        ) {
+            this.moveAkkhaCorner(boss, fight, def);
+        }
+        if (this.tick < fight.stand.nextTick) {
+            return;
+        }
+        const every = Math.max(stand.least, stand.every - 0.05 * this.tombsPathLevel);
+        fight.stand.nextTick = this.tick + secondsToTicks(every);
+        this.fireUnstableOrb(boss, stand);
+    }
+
+    private moveAkkhaCorner(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const stand = fight.stand!;
+        const corners = [0, 1, 2, 3].filter((q) => q !== stand.corner);
+        stand.corner = corners[this.rng.int(corners.length)];
+        stand.since = this.tick;
+        stand.hpAt = boss.hp;
+        const at = this.akkhaCorner(stand.corner, def.shadows.corner);
+        boss.x = boss.prevX = at.x;
+        boss.y = boss.prevY = at.y;
+        boss.anim = "attack";
+        boss.attackSeq = AKKHA_VANISH_SEQ;
+        boss.animStart = this.tick;
+    }
+
+    // An Unstable Orb in from a side of the floor, straight across or on a slant, as its arrow says
+    private fireUnstableOrb(boss: Enemy, stand: NonNullable<AkkhaDef["unstable"]>): void {
+        const attack = boss.def.boss!.attacks.find((a) => a.kind === "pattern");
+        const area = this.tombsPathRoom!.boss!.quadrants!;
+        if (!attack) {
+            return;
+        }
+        const side = this.rng.int(4);
+        const along = this.rng.range(-area.half + 2, area.half - 2);
+        const edge = area.half - 0.5;
+        // In from the north, east, south or west, heading across
+        const [x, y, inX, inY] = [
+            [along, edge, 0, -1],
+            [edge, along, -1, 0],
+            [along, -edge, 0, 1],
+            [-edge, along, 1, 0],
+        ][side];
+        const slant = (this.rng.int(3) - 1) * (Math.PI / 4);
+        const angle = fm.atan2(inY, inX) + slant;
+        const speed = stand.speed / TICKS_PER_SECOND;
+        const life = Math.ceil((area.half * 2.4) / speed);
+        this.bullets.add(
+            area.middle.x + x,
+            area.middle.y + y,
+            fm.cos(angle) * speed,
+            fm.sin(angle) * speed,
+            0,
+            attack.pattern!.radius,
+            this.getBossDamage(boss, attack),
+            life,
+            this.bulletSourceFor(boss, attack),
+            this.tick,
+        );
+    }
+
+    // Keep Back: beside him, his ranged and magic come with a melee hit first, unseen
+    private akkhaKeepBack(boss: Enemy): void {
+        if (!this.invoked("keep_back") || boss.def.protects?.styles[0] === "melee") {
+            return;
+        }
+        const melee = getEnemy(boss.def.boss!.akkha!.forms[0]).boss!.attacks[0];
+        const damage = this.getBossDamage(boss, melee);
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                fm.hypot(player.x - boss.x, player.y - boss.y) <=
+                boss.radius + player.radius + 1.2
+            ) {
+                this.bossHit(boss.def.id, boss, melee, damage, false);
+            }
+        });
     }
 
     // Dev only: past a Tombs room to its boss, for testing the boss without the puzzle each time.
@@ -7786,6 +8289,11 @@ export class Sim {
         const attack = this.invokedAttack(given);
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
+        // Akkha's attacks, towards his next special
+        if (def.akkha && !attack.ordeal && this.tombsAkkha?.uid === enemy.uid) {
+            this.tombsAkkha.attacks++;
+            this.akkhaKeepBack(enemy);
+        }
         // Its windup runs from when it's there
         const middle = attack.toMiddle ? this.leapToMiddle(enemy, attack) : undefined;
         // Each phase a gear up: its patterns wound up quicker (the big hits
@@ -8478,6 +8986,10 @@ export class Sim {
         }
         if (attack.effect) {
             this.applyPlayerEffect(attack.effect, enemy);
+        }
+        const akkha = enemy?.def.boss?.akkha;
+        if (attack.elemental && akkha && this.tombsPathRoom?.boss?.quadrants) {
+            this.akkhaElement(akkha, enemy);
         }
         this.recoil(enemy);
     }

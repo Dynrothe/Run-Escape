@@ -14,7 +14,8 @@ export type InvocationGroup =
     | "paths"
     | "prayer"
     | "restoration"
-    | "baba";
+    | "baba"
+    | "akkha";
 
 export type InvocationDef = {
     id: string;
@@ -45,6 +46,7 @@ export const INVOCATION_GROUPS: InvocationGroupDef[] = [
     { id: "prayer", name: "Prayer" },
     { id: "restoration", name: "Restoration" },
     { id: "baba", name: "Ba-Ba" },
+    { id: "akkha", name: "Akkha" },
 ];
 
 const RAID = "the raid's rooms";
@@ -265,6 +267,40 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "baba",
         level: 10,
         description: "Her rolling boulders come twice as fast.",
+    },
+    // Akkha
+    {
+        id: "double_trouble",
+        icon: 4588,
+        name: "Double Trouble",
+        group: "akkha",
+        level: 20,
+        description: "His specials come two at once: Memory Blast with his trailing orbs.",
+    },
+    {
+        id: "keep_back",
+        icon: 4588,
+        name: "Keep Back",
+        group: "akkha",
+        level: 10,
+        description: "Beside him, his ranged and magic come with an unseen melee hit first.",
+    },
+    {
+        id: "stay_vigilant",
+        icon: 4588,
+        name: "Stay Vigilant",
+        group: "akkha",
+        level: 15,
+        description: "His specials come an attack sooner.",
+    },
+    {
+        id: "feeling_special",
+        icon: 4588,
+        name: "Feeling Special?",
+        group: "akkha",
+        level: 20,
+        description:
+            "Memory Blast gives you half the time between bursts, and his orbs land ahead of you too.",
     },
 ];
 

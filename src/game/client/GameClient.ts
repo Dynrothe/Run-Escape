@@ -2372,6 +2372,9 @@ export class GameClient implements GameFrameHandler {
                               done: sim.tombsRoom.doneTick !== undefined,
                           }
                     : undefined,
+            tombsShadows: sim.akkhaShadows
+                ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
+                : undefined,
             devGod: import.meta.env.DEV ? sim.devGod : undefined,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,

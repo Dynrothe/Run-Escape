@@ -504,6 +504,80 @@ export type GroundPatternDef = {
 // A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes,
 // yellows). It picks among them at random, whatever their range, cooldown or enraged, so an
 // attack named here is used as it is (Sotetseg's faster maze, before he's enraged).
+// One of Akkha's four quadrants' elements: what it does to whoever's hit in it (on top of the
+// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn) and its symbol
+export type AkkhaElementDef = {
+    name: string;
+    effect: PlayerEffectDef;
+    spotAnim: number;
+    orb: string;
+    symbolLoc: number;
+};
+
+// Akkha (the Tombs of Amascut). He fights in one style at a time, praying against it (his forms,
+// each an enemy of its own), and every specialEvery attacks does a special instead and changes to
+// another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
+export type AkkhaDef = {
+    forms: string[];
+    specialEvery: number;
+    elements: AkkhaElementDef[];
+    // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
+    // last (never across), flash seconds each and gap between; then, burst seconds apart (quick
+    // with Feeling Special), every quadrant but the next in the order is blasted, for damage (a
+    // share of your hitpoints, through armour) and its element. steps long, one more every
+    // perLevels path levels, up to most.
+    memory: {
+        steps: number;
+        perLevels: number;
+        most: number;
+        flash: number;
+        gap: number;
+        burst: number;
+        quick: number;
+        damage: number;
+        message: string;
+    };
+    // Trailing orbs: for seconds, an orb on every tile anyone leaves, armed after arm seconds, that
+    // goes off (damage, its quadrant's element) under whoever comes within radius; gone linger
+    // seconds after. Feeling Special drops one ahead of you too.
+    orbs: {
+        seconds: number;
+        arm: number;
+        radius: number;
+        damage: number;
+        linger: number;
+        message: string;
+    };
+    // His shadows: at each of these shares of his hitpoints, enemyId comes in each quadrant's
+    // corner (corner tiles out from the middle each way), and he can't be hurt but in a quadrant
+    // whose shadow is dead, until they all are. One timer runs for them all: every flood seconds
+    // (warned warn seconds ahead) each quadrant whose shadow's still up floods, for damage (a
+    // share of your hitpoints) and its element.
+    shadows: {
+        at: number[];
+        enemyId: string;
+        corner: number;
+        flood: number;
+        warn: number;
+        damage: number;
+        message: string;
+        warnMessage: string;
+        floodMessage: string;
+        endMessage: string;
+    };
+    // His final stand (the form he rises as, BossDef.rises): in a corner, out of reach, he sends
+    // Unstable Orbs straight across the floor every `every` seconds (quicker with the path level),
+    // and goes to another corner once he's lost moveAfter of his hitpoints there (more for a party)
+    // or after moveSeconds
+    unstable?: {
+        every: number;
+        least: number;
+        speed: number;
+        moveAfter: number;
+        moveSeconds: number;
+    };
+};
+
 export type BossOrdealDef = {
     at: number[];
     attacks: string[];
@@ -533,6 +607,8 @@ export type QuartersDef = {
 
 export type BossAttackDef = {
     name: string;
+    // Akkha's: its hit brings the element of the quadrant it lands in (AkkhaDef.elements)
+    elemental?: boolean;
     // Only on a raid's expert mode
     expert?: boolean;
     // swing: hits around the boss once the windup is done (step away to dodge);
@@ -897,6 +973,8 @@ export type BossDef = {
     // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
     // throws only these, balls that hit hard unless you're in the pool that comes with each one
     yellows?: BossOrdealDef & { seconds: number };
+    // Akkha's fight (the Tombs of Amascut): his quadrants, his specials and his shadows
+    akkha?: AkkhaDef;
     // Ba-Ba's rolling stones (the Tombs of Amascut): at each of these shares of her hitpoints she
     // can't be hurt for seconds, and does only these: boulders rolling across the arena in rows
     rollingStones?: BossOrdealDef & { seconds: number };
@@ -1355,6 +1433,9 @@ export type TombsPathDef = {
                 // The arena's sarcophagi along its sides, and their locs' rotation as they stand
                 sarcophagi?: { x: number; y: number; rotation: number }[];
             };
+            // Akkha's four quadrants (BossDef.akkha): the floor's middle and half its width, in
+            // world tiles. Quadrant 0 is the north-west and they go round clockwise.
+            quadrants?: { middle: { x: number; y: number }; half: number };
         };
     };
 };
