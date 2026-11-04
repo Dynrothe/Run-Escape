@@ -13,6 +13,8 @@ the version in the corner).
 - Pets, by Okaeri: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow
   you around on your runs. Pick one under the adventurers. They're only for looks, and your party
   sees yours in co-op.
+- A favourite adventurer, by Okaeri: pick Make favourite in an adventurer's details, and the game
+  starts on them every time you open it.
 
 ### Changed
 

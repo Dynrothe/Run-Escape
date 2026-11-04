@@ -23,6 +23,7 @@ import {
     getNextUpgradeCost,
     getQuestProgress,
     getSkillCoins,
+    getStartingCharacter,
     importSave,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -840,6 +841,33 @@ describe("pets", () => {
         expect(migrateSave({ ...save, pet: "lil_maiden" }).pet).toBeUndefined();
         expect(migrateSave({ ...save, pet: "not_a_pet" }).pet).toBeUndefined();
         expect(migrateSave(save).pet).toBeUndefined();
+    });
+});
+
+describe("the favourite adventurer", () => {
+    it("is kept in the save, only as an adventurer this game has", () => {
+        const save = createSave();
+        expect(migrateSave({ ...save, favouriteCharacter: "wizard" }).favouriteCharacter).toBe(
+            "wizard",
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: "nobody" }).favouriteCharacter).toBe(
+            undefined,
+        );
+        // Not a map's own adventurer, who's never picked
+        const only = CHARACTERS.find((c) => c.only)!.id;
+        expect(migrateSave({ ...save, favouriteCharacter: only }).favouriteCharacter).toBe(
+            undefined,
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: 3 }).favouriteCharacter).toBe(undefined);
+    });
+
+    it("is what the game starts on, while it's open", () => {
+        const save = createSave();
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
+        save.favouriteCharacter = save.unlockedCharacters[1];
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[1]);
+        save.favouriteCharacter = CHARACTERS.find((c) => c.unlock)!.id;
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
     });
 });
 

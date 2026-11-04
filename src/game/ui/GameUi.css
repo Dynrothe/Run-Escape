@@ -2255,3 +2255,14 @@
 .ui-pad-control-text {
     color: var(--ui-white);
 }
+
+/* The favourite adventurer, which the game starts on: at the end of the details' head */
+.ui-favourite {
+    margin-left: auto;
+    align-self: flex-start;
+}
+
+.ui-favourite-on {
+    color: var(--ui-yellow);
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}

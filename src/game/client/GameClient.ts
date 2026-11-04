@@ -53,6 +53,7 @@ import {
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
@@ -553,6 +554,16 @@ export class GameClient implements GameFrameHandler {
 
     showScreen(screen: Screen): void {
         this.store.set({ screen });
+    }
+
+    // The adventurer the game starts on (or none, to start on the first again)
+    toggleFavouriteCharacter(characterId: string): void {
+        if (!this.save.unlockedCharacters.includes(characterId)) {
+            return;
+        }
+        this.save.favouriteCharacter =
+            this.save.favouriteCharacter === characterId ? undefined : characterId;
+        this.persist();
     }
 
     selectCharacter(characterId: string): void {
@@ -1059,17 +1070,24 @@ export class GameClient implements GameFrameHandler {
 
     // Swaps in an imported save in place of this one
     replaceSave(save: SaveData): void {
-        this.useSave(save);
+        this.useSave(save, true);
         this.persist();
     }
 
-    // Plays on with this save
-    private useSave(save: SaveData): void {
+    // Plays on with this save. toFavourite: go to its favourite, as it would
+    // start on, if it has one that's open (an import; a save given back by
+    // another tab leaves the pick alone)
+    private useSave(save: SaveData, toFavourite = false): void {
         this.save = save;
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
-        if (!save.unlockedCharacters.includes(characterId)) {
-            this.selectCharacter(save.unlockedCharacters[0]);
+        const starting = getStartingCharacter(save);
+        const favourite = toFavourite && starting === save.favouriteCharacter;
+        if (
+            characterId !== starting &&
+            (favourite || !save.unlockedCharacters.includes(characterId))
+        ) {
+            this.selectCharacter(starting);
         }
         if (!isMapUnlocked(save, mapId)) {
             this.store.set({ mapId: MAPS[0].id });
