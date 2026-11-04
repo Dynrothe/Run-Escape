@@ -5042,6 +5042,7 @@ export class Sim {
             if (threshold.shout) {
                 this.emit({ type: "bossShout", enemyUid: boss.uid, text: threshold.shout });
             }
+            this.showImpact(threshold.impact, boss.x, boss.y);
         }
         this.pushStage(boss, phase, next.message ?? next.status ?? "");
         return true;
@@ -5056,6 +5057,7 @@ export class Sim {
         if (this.tick >= end) {
             // Up, and straight on with the new phase
             phase.pauseEnd = phase.riseTick = undefined;
+            this.showImpact(boss.def.boss!.phases!.threshold?.riseImpact, boss.x, boss.y);
             boss.anim = "walk";
             boss.animStart = this.tick;
             boss.attackCooldown = 0;

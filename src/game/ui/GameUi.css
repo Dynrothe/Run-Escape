@@ -1699,6 +1699,23 @@
     color: #ff9ae6;
 }
 
+/* A new phase: its number pulses a moment (keyed on the phase, so it plays once each) */
+.ui-boss-phase-new {
+    display: inline-block;
+    animation: ui-boss-phase-pulse 0.5s ease-in-out 4 alternate;
+}
+
+@keyframes ui-boss-phase-pulse {
+    from {
+        transform: scale(1);
+        text-shadow: none;
+    }
+    to {
+        transform: scale(1.25);
+        text-shadow: 0 0 8px #fff3c4;
+    }
+}
+
 .ui-boss-fill-shield {
     background: linear-gradient(#8fe8ff, #2a9fd6);
 }

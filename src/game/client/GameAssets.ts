@@ -186,6 +186,8 @@ function getSpotAnimIds(): number[] {
         addImpact(guard?.stuck);
         addImpact(enemy.boss?.leash?.jump?.land);
         addImpact(enemy.boss?.intro?.land);
+        addImpact(enemy.boss?.phases?.threshold?.impact);
+        addImpact(enemy.boss?.phases?.threshold?.riseImpact);
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
         add(enemy.boss?.phases?.totems?.blastSpotAnim, enemy.boss?.phases?.threshold?.spotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);

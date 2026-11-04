@@ -685,7 +685,7 @@ describe("fighting back", () => {
         );
     });
 
-    test("his court turns on him: a knight's sword thrown through him stuns him", () => {
+    test("a knight's sword thrown through him passes him by: no stun, no damage", () => {
         const { sim, boss } = fight();
         place(sim, at(31, 21.5));
         use(sim, boss, "Knight's sword");
@@ -697,12 +697,30 @@ describe("fighting back", () => {
         });
         const before = boss.hp;
         let stunned = false;
-        for (let i = 0; i < 3 * TICKS_PER_SECOND && !stunned; i++) {
+        for (let i = 0; i < 7 * TICKS_PER_SECOND; i++) {
             run(sim, 0.02);
-            stunned = sim.isStunned(boss);
+            stunned ||= sim.isStunned(boss);
         }
-        expect(stunned).toBe(true);
-        expect(before - boss.hp).toBeGreaterThan(0);
+        expect(stunned).toBe(false);
+        expect(boss.hp).toBe(before);
+        expect(attackNamed("Knight's sword").turns).toBeUndefined();
+    });
+
+    test("a phase change is plain to see: a burst as he kneels, and the floor ringing as he rises", () => {
+        const { sim, boss } = fight();
+        const threshold = zachariah().boss!.phases!.threshold!;
+        const impacts = () => sim.takeEvents().filter((e) => e.type === "bossImpact").length;
+        sim.takeEvents();
+        boss.hp = Math.round(boss.maxHp * zachariah().boss!.phases!.phases[0].until!) + 1;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        expect(impacts()).toBe(1);
+        expect(sim.effects.some((e) => e.spotAnim === threshold.impact!.spots![0].spotAnim)).toBe(
+            true,
+        );
+        run(sim, threshold.seconds - 0.1);
+        sim.takeEvents();
+        run(sim, 0.2);
+        expect(impacts()).toBe(1);
     });
 
     test("Smite: from right beside him, doubled with his guard down, and nothing out of reach", () => {

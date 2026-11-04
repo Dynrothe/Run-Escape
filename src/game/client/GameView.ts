@@ -730,7 +730,7 @@ export class GameView {
             x,
             this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
             y,
-            projectile.yaw,
+            (projectile.yaw + (attack.spotYaw ?? 0)) & 2047,
             { scale },
         );
     }

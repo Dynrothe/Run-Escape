@@ -225,8 +225,9 @@ const ICE: BossAttackDef = {
 };
 
 // The knights' swords: thrown from a statue's middle at where the player stood, across the court
-// and back the same way, hitting each way. Its hit's the spinning sword's width. Through him, it
-// stuns him.
+// and back the same way, hitting each way. Its hit's the spinning sword's width. It's thrown at
+// the player with him chasing them, so it'd pass through him nearly every time: it doesn't touch
+// him (round 5).
 const SWORD: BossAttackDef = {
     name: "Knight's sword",
     kind: "projectile",
@@ -246,7 +247,6 @@ const SWORD: BossAttackDef = {
     // Right across the court to its far side, however near they stood
     boomerang: { reach: 27, toEdge: true, catchSeq: 8668, catchSound: 4442 },
     statues: { locId: KNIGHT, windupSeq: 8667 },
-    turns: { damage: 30, stun: true },
 };
 
 // The lightning: every cell of one colour of the court's floor, then the other's. From a struck
@@ -304,6 +304,8 @@ const ATTACKS: BossAttackDef[] = [
         strikeAt: RAISE_AT,
         windupSound: 3883,
         spotAnim: 1515,
+        // The crescent's tips pointing the way it goes, at whoever it's cast at, not back at him
+        spotYaw: 1024,
         speed: 6.5,
         radius: 0.75,
         // The justiciars' blue impact, on whoever it binds for as long as it does
@@ -557,6 +559,24 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                     riseSeconds: 1.2,
                     shout: "You will be judged!",
                     sound: 3856,
+                    // His blue light bursting round him as he goes down, and the court's whole
+                    // floor ringing as he rises into the next phase
+                    impact: {
+                        spots: [
+                            { spotAnim: BLUE_IMPACT, fit: 2.5 },
+                            { spotAnim: STOMP, fit: 3 },
+                        ],
+                        shake: 0.4,
+                        flash: "#dfe8ff",
+                    },
+                    riseImpact: {
+                        spots: [
+                            { spotAnim: STOMP, fit: 7 },
+                            { spotAnim: BLOWN_DUST, fit: 3 },
+                        ],
+                        shake: 0.6,
+                        flash: "#fff3c4",
+                    },
                 },
                 // The court's edges are drops: the bridge and the terrace are the player's to use
                 confine: false,

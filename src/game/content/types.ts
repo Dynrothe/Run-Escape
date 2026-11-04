@@ -692,6 +692,9 @@ export type BossAttackDef = {
     // toEdge: out to where its line leaves the bossArena instead (a knight's sword thrown right
     // across the court, to its far side), never less than reach
     boomerang?: { reach: number; toEdge?: boolean; catchSeq?: number; catchSound?: number };
+    // Its spotAnim turned this much more (RS yaw units) than the way it's going: a model that
+    // faces back along its way (his shock wave's)
+    spotYaw?: number;
     // Projectiles: thrown from count of the map's knight statues (ArenaFeatures.knights),
     // picked at random as it begins, at where the player was then, not from the boss
     from?: "knights";
@@ -890,6 +893,7 @@ export type BossPhasesDef = {
     // Without totems, at each phase's hitpoints: for seconds it can't be hurt and
     // does nothing of its own but seq (it kneels), riseSeq for its last
     // riseSeconds (it gets up), with shout over it, sound and spotAnim on it
+    // impact as it goes down, riseImpact as it's up and into the next phase (ImpactDef)
     threshold?: {
         seconds: number;
         seq?: number;
@@ -898,6 +902,8 @@ export type BossPhasesDef = {
         shout?: string;
         sound?: number;
         spotAnim?: number;
+        impact?: ImpactDef;
+        riseImpact?: ImpactDef;
     };
     // The player kept in the map's bossArena while it's up (the Nightmare's
     // square); false lets them out of it, onto the rest of an arena its collision
