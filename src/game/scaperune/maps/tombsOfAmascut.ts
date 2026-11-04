@@ -123,22 +123,22 @@ export const TOA_PLACES = {
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
         spots: [
-            // The four roof supports (45494, 3 by 3) and the six vents (45024, holes in the walls),
-            // in square 59,82's tiles: their middles, and how close counts as at one
+            // The four roof supports (45494, 3 by 3, in the alcoves), in square 59,82's tiles: their
+            // middles, and how close counts as at one
             ...[
                 [27, 21],
                 [35, 21],
                 [27, 41],
                 [35, 41],
             ].map(([x, y]) => apmekenSpot("pillar", x + 1.5, y + 1.5, 2.7)),
+            // The four vents: the grates in the main floor's corners (ground decoration 5982 at
+            // 24,37 25,28 39,36 40,37 40,27 41,28, a few pieces each), by their middles
             ...[
-                [24, 23],
-                [32, 23],
-                [40, 23],
-                [24, 41],
-                [32, 41],
-                [40, 41],
-            ].map(([x, y]) => apmekenSpot("vent", x + 0.5, y + 0.5, 1.7)),
+                [24.5, 37.5],
+                [25.5, 28.5],
+                [40, 37],
+                [41, 28],
+            ].map(([x, y]) => apmekenSpot("vent", x, y, 2.2)),
         ],
     },
 };

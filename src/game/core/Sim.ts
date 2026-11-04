@@ -284,6 +284,9 @@ const RAID_CLEARED_SECONDS = 2;
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
+// Tiles from the player enemies turn up at in a Tombs room, which is too small for the usual
+const TOMBS_SPAWN_MIN_DISTANCE = 5;
+const TOMBS_SPAWN_MAX_DISTANCE = 14;
 // The Tombs' invocations: what armour stops with Quiet Prayers, and what a hit within a second of
 // the last does with Deadly Prayers
 const QUIET_PRAYERS = 0.9;
@@ -2846,6 +2849,9 @@ export class Sim {
         let pos = at;
         if (!pos && def.spawnAt) {
             pos = this.pickSpawnSpot(def);
+        } else if (!pos && this.tombsPath !== undefined && !boss) {
+            // A Tombs room's too small for the usual ring off the screen: in it, closer
+            pos = this.findSpawnPoint(def, TOMBS_SPAWN_MIN_DISTANCE, TOMBS_SPAWN_MAX_DISTANCE);
         } else if (!pos) {
             pos = boss
                 ? this.findSpawnPoint(def, BOSS_SPAWN_MIN_DISTANCE, BOSS_SPAWN_MAX_DISTANCE)
@@ -2890,6 +2896,12 @@ export class Sim {
         if (encounter) {
             hp /= encounter.copies;
             xp /= encounter.copies;
+        }
+        // A Tombs room's: tougher with each of its waves, and with its path level
+        if (this.apmeken && !boss) {
+            const room = this.tombsRoomScale();
+            hp *= room.hp;
+            hitScale *= room.damage;
         }
         const enemy: Enemy = {
             uid: this.nextUid++,
@@ -4266,6 +4278,17 @@ export class Sim {
         return level + this.tombsPathsDone.length * (this.invoked("walk_the_path") ? 2 : 1);
     }
 
+    // What a Tombs room's enemies are multiplied by: more with each of its waves (so it ends far
+    // harder than it starts, as a run levels up in it) and with each path level
+    private tombsRoomScale(): { hp: number; damage: number } {
+        const wave = Math.max(0, this.apmeken?.wave ?? 0);
+        const level = this.tombsPathLevel;
+        return {
+            hp: 1 + APMEKEN.waveHp * wave + APMEKEN.levelHp * level,
+            damage: 1 + APMEKEN.waveDamage * wave + APMEKEN.levelDamage * level,
+        };
+    }
+
     private apmekenIssueEvery(): number {
         return Math.max(4, APMEKEN.issueEvery - this.tombsPathLevel);
     }
@@ -4402,7 +4425,8 @@ export class Sim {
             APMEKEN.damage *
             (1 + APMEKEN.worse * room.missed) *
             this.map.difficulty.damage *
-            this.hardScale.damage;
+            this.hardScale.damage *
+            this.tombsRoomScale().damage;
         room.missed++;
         this.addEffect(
             at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillarFalls : APMEKEN_SPOTANIMS.ventBursts,

@@ -79,8 +79,9 @@ The waves no longer run on a clock, but they're still where experience and caske
   49,31) and the exit on the west (15,30), each behind a barrier (45135, x 20 and 44, y 31 to 33)
   that holds until the room's done. Apmeken's statue (45496) stands in the middle.
 - **Pillars**: the four roof supports (45494, 3 by 3, local 27,21 35,21 27,41 35,41), whose own
-  animation (9503) is a pillar giving way. **Vents**: the six holes in the walls (45024, local
-  24,23 32,23 40,23 24,41 32,41 40,41). The crates of hammers (45497) and potions (45498) are
+  animation (9503) is a pillar giving way. **Vents**: the four red grates in the main floor's
+  corners (ground decoration 5982, about local 24,37 25,28 40,37 41,28). The six holes in the walls
+  (45024) are where OSRS's baboons crawl in. The crates of hammers (45497) and potions (45498) are
   scenery: here the fix is standing at it.
 - **The loop**: "You sense an issue" every so often, and a pillar or a vent shows it. Standing at it
   for about two seconds fixes it; one left too long hurts everyone, more for each left. Each fix is a
