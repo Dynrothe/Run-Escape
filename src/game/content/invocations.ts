@@ -18,6 +18,8 @@ export type InvocationGroup =
 
 export type InvocationDef = {
     id: string;
+    // Its icon on the board, lit (an interface sprite); OFF_SPRITE later is the same, dark
+    icon: number;
     name: string;
     group: InvocationGroup;
     // What it adds to the raid level
@@ -52,6 +54,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Attempts: how many times the party can go down and be brought back
     {
         id: "try_again",
+        icon: 4592,
         name: "Try Again",
         group: "attempts",
         level: 5,
@@ -60,6 +63,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "persistence",
+        icon: 4592,
         name: "Persistence",
         group: "attempts",
         level: 10,
@@ -68,6 +72,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "softcore_run",
+        icon: 4592,
         name: "Softcore Run",
         group: "attempts",
         level: 15,
@@ -76,6 +81,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "hardcore_run",
+        icon: 4592,
         name: "Hardcore Run",
         group: "attempts",
         level: 25,
@@ -85,6 +91,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Time limit: a clock for the whole raid. Running out lowers the loot; it doesn't end the run
     {
         id: "walk_for_it",
+        icon: 4593,
         name: "Walk for It",
         group: "time",
         level: 10,
@@ -93,6 +100,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "jog_for_it",
+        icon: 4593,
         name: "Jog for It",
         group: "time",
         level: 15,
@@ -101,6 +109,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "run_for_it",
+        icon: 4593,
         name: "Run for It",
         group: "time",
         level: 20,
@@ -109,6 +118,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "sprint_for_it",
+        icon: 4593,
         name: "Sprint for It",
         group: "time",
         level: 25,
@@ -118,6 +128,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // The Helpful Spirit's supplies in the Nexus, after two paths and after all four
     {
         id: "need_some_help",
+        icon: 4594,
         name: "Need Some Help?",
         group: "helpfulSpirit",
         level: 15,
@@ -126,6 +137,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "need_less_help",
+        icon: 4594,
         name: "Need Less Help?",
         group: "helpfulSpirit",
         level: 25,
@@ -134,6 +146,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "no_help_needed",
+        icon: 4594,
         name: "No Help Needed",
         group: "helpfulSpirit",
         level: 40,
@@ -143,6 +156,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Path levels: every room harder, with more to its puzzle and faster, denser bullets
     {
         id: "pathseeker",
+        icon: 4599,
         name: "Pathseeker",
         group: "pathLevel",
         level: 15,
@@ -151,6 +165,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "pathfinder",
+        icon: 4600,
         name: "Pathfinder",
         group: "pathLevel",
         level: 40,
@@ -159,6 +174,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "pathmaster",
+        icon: 4601,
         name: "Pathmaster",
         group: "pathLevel",
         level: 50,
@@ -167,6 +183,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "walk_the_path",
+        icon: 4598,
         name: "Walk the Path",
         group: "paths",
         level: 50,
@@ -176,6 +193,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Prayer: the bosses' protection, and what a hit costs
     {
         id: "quiet_prayers",
+        icon: 4584,
         name: "Quiet Prayers",
         group: "prayer",
         level: 20,
@@ -184,6 +202,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "deadly_prayers",
+        icon: 4605,
         name: "Deadly Prayers",
         group: "prayer",
         level: 20,
@@ -193,6 +212,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Restoration
     {
         id: "on_a_diet",
+        icon: 4603,
         name: "On a Diet",
         group: "restoration",
         level: 15,
@@ -201,6 +221,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "dehydration",
+        icon: 4597,
         name: "Dehydration",
         group: "restoration",
         level: 30,
@@ -209,6 +230,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "overly_draining",
+        icon: 4596,
         name: "Overly Draining",
         group: "restoration",
         level: 15,
@@ -218,6 +240,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Ba-Ba
     {
         id: "mind_the_gap",
+        icon: 4588,
         name: "Mind the Gap!",
         group: "baba",
         level: 10,
@@ -226,6 +249,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "gotta_have_faith",
+        icon: 4588,
         name: "Gotta Have Faith",
         group: "baba",
         level: 10,
@@ -234,6 +258,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "jungle_japes",
+        icon: 4588,
         name: "Jungle Japes",
         group: "baba",
         level: 5,
@@ -242,6 +267,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "shaking_things_up",
+        icon: 4588,
         name: "Shaking Things Up",
         group: "baba",
         level: 10,
@@ -250,6 +276,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "boulderdash",
+        icon: 4588,
         name: "Boulderdash",
         group: "baba",
         level: 10,
@@ -257,6 +284,36 @@ export const INVOCATIONS: InvocationDef[] = [
         comes: "Ba-Ba",
     },
 ];
+
+// The invocation board's icons: each lit one's dark version is this many sprites on
+// (scripts/cache/sprite-sheet.ts 4580 4630)
+export const OFF_SPRITE = 24;
+
+// Amascut's face on the board, by the raid level's band
+export const RAID_BAND_SPRITES: Record<RaidBand, number> = {
+    Entry: 4660,
+    Normal: 4661,
+    Expert: 4662,
+};
+
+// What the raid's chest can hold, shown on the board: its purples, the pet, and the jewels
+export const TOMBS_UNIQUES: { name: string; objId: number }[] = [
+    { name: "Osmumten's fang", objId: 26219 },
+    { name: "Lightbearer", objId: 25975 },
+    { name: "Elidinis' ward", objId: 25985 },
+    { name: "Masori mask", objId: 27226 },
+    { name: "Masori body", objId: 27229 },
+    { name: "Masori chaps", objId: 27232 },
+    { name: "Tumeken's shadow (uncharged)", objId: 27277 },
+    { name: "Tumeken's guardian", objId: 27352 },
+    { name: "Thread of Elidinis", objId: 27279 },
+    { name: "Breach of the Scarab", objId: 27283 },
+    { name: "Eye of the Corruptor", objId: 27285 },
+    { name: "Jewel of the Sun", objId: 27289 },
+];
+
+// The highest raid level the board's reward bar goes to
+export const MAX_RAID_LEVEL = 600;
 
 export const INVOCATION_BY_ID: Map<string, InvocationDef> = new Map(
     INVOCATIONS.map((invocation) => [invocation.id, invocation]),

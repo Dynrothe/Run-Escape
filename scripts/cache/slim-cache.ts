@@ -32,6 +32,7 @@ import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
 import { FLAG_SPRITE } from "../../src/game/content/flags";
+import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../../src/game/content/invocations";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
@@ -280,6 +281,9 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
+        // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
+        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        ...Object.values(RAID_BAND_SPRITES),
     ];
     await load(new SpriteDataLoader(), { spriteIds });
     await load(new ItemIconLoader(), {

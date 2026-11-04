@@ -32,7 +32,12 @@ import { formatTime } from "../client/GameView";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import {
     INVOCATIONS,
+    INVOCATION_BY_ID,
     INVOCATION_GROUPS,
+    MAX_RAID_LEVEL,
+    OFF_SPRITE,
+    RAID_BAND_SPRITES,
+    TOMBS_UNIQUES,
     getRaidBand,
     getRaidLevel,
     getRaidLevelScale,
@@ -873,8 +878,10 @@ function InvocationsButton({ ui, onOpen }: { ui: UiSnapshot; onOpen: () => void 
     );
 }
 
-// Every invocation, by group: on or off, what each adds to the raid level and what it does. One
-// of a group that allows only one takes the last off.
+// The invocation board, as OSRS's: every invocation's icon in a grid, lit while it's on, and beside
+// it the reward potential (the raid level, its band's Amascut and what the chest can hold). Pointing
+// at an icon says what it is below; clicking turns it on or off, and one of a group that allows only
+// one takes the last off.
 function InvocationBoard({
     ui,
     client,
@@ -882,62 +889,106 @@ function InvocationBoard({
 }: ScreenProps & { onClose: () => void }): JSX.Element {
     const on = ui.save.invocations ?? [];
     const level = getRaidLevel(on);
+    const band = getRaidBand(level);
     const scale = getRaidLevelScale(level);
+    const [shown, setShown] = useState<string>();
+    const pointed = shown === undefined ? undefined : INVOCATION_BY_ID.get(shown);
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-invocations">
-                <h2>Invocations</h2>
-                <p className="ui-subtle">
-                    Raid level {level} ({getRaidBand(level)}): enemies have{" "}
-                    {Math.round((scale.hp - 1) * 100)}% more hitpoints and hit{" "}
-                    {Math.round((scale.damage - 1) * 100)}% harder.
-                </p>
-                <div className="ui-invocations-groups">
-                    {INVOCATION_GROUPS.map((group) => (
-                        <div key={group.id} className="ui-invocations-group">
-                            <div className="ui-style-name">
-                                {group.name}
-                                {group.one && <span className="ui-style-treasure">pick one</span>}
-                            </div>
-                            {INVOCATIONS.filter((invocation) => invocation.group === group.id).map(
-                                (invocation) => {
-                                    const picked = on.includes(invocation.id);
-                                    return (
-                                        <button
-                                            key={invocation.id}
-                                            className={
-                                                "ui-card ui-invocation" +
-                                                (picked ? " ui-card-selected" : "")
-                                            }
-                                            aria-pressed={picked}
-                                            onClick={() => client.toggleInvocation(invocation.id)}
-                                        >
-                                            <span className="ui-invocation-head">
-                                                <span className="ui-card-title">
-                                                    {invocation.name}
-                                                </span>
-                                                <span className="ui-invocation-level">
-                                                    +{invocation.level}
-                                                </span>
-                                            </span>
-                                            <span className="ui-card-text">
-                                                {invocation.description}
-                                            </span>
-                                            {invocation.comes && (
-                                                <span className="ui-invocation-soon">
-                                                    Not in yet: comes with {invocation.comes}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                },
-                            )}
+                <h2 className="ui-invocations-title">Invocations</h2>
+                <div className="ui-invocations-body">
+                    <div className="ui-invocations-grid" onMouseLeave={() => setShown(undefined)}>
+                        {INVOCATIONS.map((invocation) => {
+                            const picked = on.includes(invocation.id);
+                            return (
+                                <button
+                                    key={invocation.id}
+                                    className={
+                                        "ui-invocation" + (picked ? " ui-invocation-on" : "")
+                                    }
+                                    aria-label={invocation.name}
+                                    aria-pressed={picked}
+                                    title={invocation.name}
+                                    onMouseEnter={() => setShown(invocation.id)}
+                                    onFocus={() => setShown(invocation.id)}
+                                    onClick={() => {
+                                        setShown(invocation.id);
+                                        client.toggleInvocation(invocation.id);
+                                    }}
+                                >
+                                    <ItemIcon
+                                        objId={-1}
+                                        spriteId={
+                                            picked ? invocation.icon : invocation.icon + OFF_SPRITE
+                                        }
+                                        size={36}
+                                    />
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="ui-invocations-reward">
+                        <div className="ui-invocations-reward-title">Reward Potential</div>
+                        <div className="ui-invocations-level-row">
+                            <span className="ui-invocations-number">{level}</span>
+                            <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={40} />
+                            <span className="ui-invocations-band">{band}</span>
                         </div>
-                    ))}
+                        <div className="ui-invocations-bar" aria-hidden>
+                            <div
+                                className="ui-invocations-bar-fill"
+                                style={{
+                                    width: `${Math.min(100, (level / MAX_RAID_LEVEL) * 100)}%`,
+                                }}
+                            />
+                        </div>
+                        <div className="ui-invocations-scale">
+                            Enemies +{Math.round((scale.hp - 1) * 100)}% hitpoints, +
+                            {Math.round((scale.damage - 1) * 100)}% damage
+                        </div>
+                        <div className="ui-invocations-uniques">
+                            {TOMBS_UNIQUES.map((unique) => (
+                                <span
+                                    key={unique.objId}
+                                    className="ui-invocations-unique"
+                                    title={unique.name}
+                                >
+                                    <ItemIcon objId={unique.objId} size={32} />
+                                </span>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-                <div className="ui-invocations-bar">
+                <div className="ui-invocations-detail">
+                    {pointed ? (
+                        <>
+                            <span className="ui-invocations-detail-name">
+                                {pointed.name}{" "}
+                                <span className="ui-invocations-detail-level">
+                                    +{pointed.level}
+                                </span>
+                            </span>
+                            <span>
+                                {pointed.description}
+                                {INVOCATION_GROUPS.find((g) => g.id === pointed.group)?.one &&
+                                    " Only one of its kind can be on."}
+                            </span>
+                            {pointed.comes && (
+                                <span className="ui-invocation-soon">
+                                    Not in yet: comes with {pointed.comes}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="ui-subtle">
+                            Point at an invocation to see what it does.
+                        </span>
+                    )}
+                </div>
+                <div className="ui-invocations-buttons">
                     <button className="ui-button" onClick={() => client.clearInvocations()}>
-                        Clear
+                        Reset All
                     </button>
                     <button className="ui-button ui-button-go" onClick={onClose}>
                         Done
