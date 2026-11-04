@@ -24,6 +24,7 @@ go stale. Add anything that cost you time to work out.
 | The app's main process and update code                 | `desktop/`                                                             |
 | The release workflow                                   | `.github/workflows/release.yml`                                        |
 | The checks on a pull request                           | `.github/workflows/check.yml`                                          |
+| What review looks for, before you open a pull request  | `docs/PR-REVIEW.md`                                                    |
 | What's in the game, map by map                         | `docs/GAMEPLAY.md`                                                     |
 | Getting it running, controls, cache version            | `README.md`                                                            |
 | What changed in each version                           | `CHANGELOG.md`                                                         |

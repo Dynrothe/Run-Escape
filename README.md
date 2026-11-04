@@ -139,13 +139,17 @@ and Export and Import in Settings carry one across.
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome. Before you open a pull request, go through
+[docs/PR-REVIEW.md](docs/PR-REVIEW.md), which lists what review looks for, and give it to your agent
+if you work with one.
 
-- Format with Prettier (`npm run lint`), and keep `npm test` and the type check passing.
+- Base your branch on the current `release-<version>` branch (or `main` if there isn't one), and
+  point the pull request at it.
+- Format what you changed with Prettier (`npx prettier --write <files>`), and keep `npm test` and
+  the type check passing.
 - Content is plain data in `src/game/content/`, with real cache ids; the tools in `scripts/cache/`
-  find them. After changing content, `npm run slim-cache` checks that everything it needs is in the
-  cache.
-- Note what you change under a version in [CHANGELOG.md](CHANGELOG.md). It's written for players,
+  find them. Say in the pull request if it uses anything new from the cache.
+- Note what you change under Unreleased in [CHANGELOG.md](CHANGELOG.md). It's written for players,
   and the game shows it on its title screen.
 
 ## Credits
