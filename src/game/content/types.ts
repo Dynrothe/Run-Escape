@@ -813,7 +813,7 @@ export type BossDef = {
     // keeping its hitpoints (Nylocas Vasilias's colours: each takes one style, EnemyDef.onlyStyle).
     // With offStyle it changes on normal too, where any other style does that share of its damage
     // (none on expert), on top of its prayer (EnemyDef.protects); its own style gets through its
-    // prayer for ownStyle instead (1 unless set).
+    // prayer for ownStyle instead (1 unless set), off expert: there its own style does it all.
     colours?: { every: number; forms: string[]; offStyle?: number; ownStyle?: number };
     // Sotetseg's shadow realm: at each of these shares of his hitpoints he drags you into it for
     // seconds, where he can't be hurt and does only these attacks (by name), interval apart
