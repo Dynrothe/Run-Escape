@@ -1038,7 +1038,9 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   worker, so it still needs a connection. The icons in `public/icons/` are whole multiples of
   `favicon.png`, to keep its pixels square.
 - `client/saveFile.ts` exports a save. Installed on iOS it uses the share sheet, since a download
-  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download.
+  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download,
+  of a file typed `application/octet-stream` (still named `.json`): typed as JSON, older iOS Safari
+  opens it as a page, with no way to save it.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
