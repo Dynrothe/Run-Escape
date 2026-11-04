@@ -5,7 +5,7 @@ and the order it's built in. Written 2026-11-04, on the `feat/toa-base` branch. 
 its section here becomes the record of it, the way `phosanis-nightmare.md` is for her fight.
 
 The research behind it is OSRS's own (the OSRS Wiki's Tombs of Amascut, Invocations and boss pages,
-and the runescapeguides.com Wardens and Kephri guides), and what the game's cache has (section 9).
+and the runescapeguides.com Wardens and Kephri guides), and what the game's cache has (section 10).
 OSRS changed almost nothing in the raid after September 2025, so the cache (2026-09-30) is
 missing none of it.
 
@@ -21,7 +21,7 @@ the map screen's Dev tab, dev server only), and each piece goes in as a pull req
 
 ## 2. Principles
 
-- **Real assets, real mechanics.** Every boss, room and effect is the cache's own (section 9), and
+- **Real assets, real mechanics.** Every boss, room and effect is the cache's own (section 10), and
   every mechanic OSRS has is kept, as bullets to dodge where a survivor game needs it. Zebak's
   thrown rocks are bullets; Ba-Ba's big boulder bursts into bullets.
 - **Played by moving.** Weapons fire on their own, so every puzzle is solved by where you stand
@@ -120,7 +120,36 @@ The raid level's scaling works now, for every invocation (the sim's `hardScale` 
 level's there). What else each does comes with its part of the raid (`comes` on each, shown on the
 board as "Not in yet"). The other bosses' invocations go in with their bosses.
 
-## 8. The order it's built in
+## 8. Loot
+
+What the chest's uniques do, decided 2026-11-04. The chest goes by the raid level (section 7), as
+the Theatre of Blood's goes by raid points. As the Theatre's rapier and scythe do, a unique
+unlocks something in the game.
+
+- **Osmumten's fang, Tumeken's shadow, Lightbearer**: in the game now without the raid (the two
+  weapons from the start, the ring from caskets). The chest's unlocks them. Anyone who already has
+  them, or played before the change, keeps them.
+- **Masori mask, body and chaps, Elidinis' ward**: the last Armoury step of the Armadyl pieces and
+  the Arcane spirit shield needs the chest's piece before it can be bought. Upgrades already bought
+  stay.
+- **Tumeken's guardian**: a pet (`content/pets.ts`, once pets are in).
+- **The jewels: the keris partisans**, a new melee family (all in the cache: 25979, 25981, 27287,
+  27291, and of Amascut 30891). Kalphites and scarabs are in the game already (the desert, the
+  Kalphite Queen, Kephri's scarabs), so their bonus has something to hit.
+    - **Keris partisan**: killing the Kalphite Queen in the Kharidian Desert (OSRS gives it for
+      Beneath Cursed Sands, a desert quest). Fast stabs, a third more against kalphites and scarabs.
+    - **Of breaching** (Breach of the Scarab): now and then a gap in the shell for triple damage,
+      far more often against kalphites and scarabs.
+    - **Of corruption** (Eye of the Corruptor): every so often Wrath of Amascut, a big stab whose
+      target takes 25% more from everything for 6 seconds.
+    - **Of the sun** (Jewel of the Sun): heals on every kill and hits harder below 25% health;
+      Tumeken's Light, on a long cooldown, heals in full and cures poison.
+- **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the
+  divine pouch, four runes instead of three. Here it's a passive, offered to every style: one more
+  weapon slot. Rarer than a purple's other rolls, since it's strong for any build. (A fixed pair of
+  spells was the other idea; a slot was picked as it helps every build, not only one.)
+
+## 9. The order it's built in
 
 Each a pull request, merged with the raid still a dev map:
 
@@ -130,9 +159,9 @@ Each a pull request, merged with the raid still a dev map:
 3. Ba-Ba.
 4. Het and Akkha, Scabaras and Kephri, Crondis and Zebak, a room then its boss each time.
 5. The Wardens.
-6. The Helpful Spirit, the chest, its loot, and moving it to the Raids tab.
+6. The Helpful Spirit, the chest and its loot (section 8), and moving it to the Raids tab.
 
-## 9. What the cache has
+## 10. What the cache has
 
 Cache `osrs-241_2026-09-30`. Ids from `scripts/cache/find-npcs.ts`, `find-locs.ts` and
 `dump-square.ts`; the spot animations from a lister of those whose model or animation is in the
@@ -164,7 +193,7 @@ raid's ranges.
   rooms' spot animations if one fits. Many of the rooms' props have no name, and `find-locs.ts`
   can't list them: `dump-square.ts` with `WHERE=` can.
 
-## 10. The base, as built
+## 11. The base, as built
 
 - **The map**: `scaperune/maps/tombsOfAmascut.ts`, at map squares 86 to 93 by 66 to 69: a grid of
   one-square cells, six by two, one for each room, with only the Nexus filled so far. The Nexus is
