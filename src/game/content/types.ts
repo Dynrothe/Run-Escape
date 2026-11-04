@@ -470,9 +470,11 @@ export type GroundPatternDef = {
 
 // A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes,
 // yellows). It picks among them at random, whatever their range, cooldown or enraged, so an
-// attack named here is used as it is (Sotetseg's faster maze, before he's enraged).
+// attack named here is used as it is (Sotetseg's faster maze, before he's enraged). It lasts
+// seconds at the most.
 export type BossOrdealDef = {
     at: number[];
+    seconds: number;
     attacks: string[];
     interval: number;
     message: string;
@@ -826,16 +828,16 @@ export type BossDef = {
     colours?: { every: number; forms: string[]; offStyle?: number; ownStyle?: number };
     // Sotetseg's shadow realm: at each of these shares of his hitpoints he drags you into it for
     // seconds, where he can't be hurt and does only these attacks (by name), interval apart
-    shadowRealm?: BossOrdealDef & { seconds: number };
-    // Xarpus's exhumeds: at each of these shares of his hitpoints (1: as he turns up) he sinks into
-    // his pool, can't be hurt, and does only these attacks, one of them raising the exhumeds (a
-    // ground attack with GroundPatternDef.smother), until count of them have been smothered, or
-    // seconds have gone, when he rises healed leftHeal of his hitpoints for each one still to go
-    // (on top of what each exhumed that went unsmothered healed him)
-    exhumes?: BossOrdealDef & { count: number; seconds: number; leftHeal: number };
+    shadowRealm?: BossOrdealDef;
+    // Xarpus's exhumeds: at each of these shares of his hitpoints he sinks into his pool, can't be
+    // hurt, and does only these attacks, one of them raising the exhumeds (a ground attack with
+    // GroundPatternDef.smother), until count of them have been smothered, or seconds have gone,
+    // when he rises healed leftHeal of his hitpoints for each one still to go (on top of what each
+    // exhumed that went unsmothered healed him)
+    exhumes?: BossOrdealDef & { count: number; leftHeal: number };
     // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
     // throws only these, balls that hit hard unless you're in the pool that comes with each one
-    yellows?: BossOrdealDef & { seconds: number };
+    yellows?: BossOrdealDef;
     // Walks with its guard up, taking awakeDamage of every hit, and every `every` seconds goes
     // down for `seconds`, standing still and taking all of it, then gets up with its `wake` attack
     // (the Pestilent Bloat). seq: its animation while it's down.

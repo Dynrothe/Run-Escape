@@ -23,35 +23,36 @@ the version in the corner).
 - The co-op rooms list, by trippy22: it updates by itself when rooms open, fill or start, rather
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
-- The Theatre of Blood's bosses are much tougher: two and a half to six times their hitpoints,
-  harder hits, and their bullets can hit twice as often.
-- The Theatre of Blood's bosses take less from missiles and magic: 15% of their damage, from 30%.
-- Armour takes off at most half of a Theatre of Blood boss's hit, so Protect from Melee no longer
-  turns them all to 1s.
-- The Theatre of Blood's hard and expert modes fire half as many bullets again, with the space
-  between them as wide: spreads fan out wider, and rings with no way through stay as they are.
-- Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
-  has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
-  new one marked on the ground first.
-- Keeping away from a Theatre of Blood boss isn't safe either: the Pestilent Bloat's flies and
-  Verzik's power blasts close in round you, and Verzik's spider leaps on you. The Bloat naps for
-  less of the fight.
-- Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
-  her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-  Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-- The Theatre of Blood's green and blue Nylocas shoot from range, Verzik's too.
-- A Theatre of Blood room's raid points for speed go by how long its boss is meant to take, so a
-  later, longer fight is worth as much as a quick early one.
-- Expert mode in the Theatre of Blood:
-  - Weapons don't aim at a Nylocas they can't hurt, and don't poison or burn it either.
+- The Theatre of Blood's bosses, by Okaeri: each one a real fight, with a mechanic of its own.
+  - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
+    Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+    Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+  - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
+    bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
+  - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
+    to 1s.
+  - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
+    attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
+    one marked on the ground first.
+  - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
+    round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
+  - Hard and expert mode fire half as many bullets again, with the space between them as wide:
+    spreads fan out wider, and rings with no way through stay as they are.
+  - The raid's green and blue Nylocas shoot from range, Verzik's too.
+  - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
+    fight is worth as much as a quick early one.
+  - The Theatre is brighter, the woods outside Canifis most of all.
+- Expert mode in the Theatre of Blood, by Okaeri:
+  - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
+    Vasilias turns to a colour its weapon can't hurt.
   - The Maiden's Nylocas feed her more.
   - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
     can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
   - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
-- The Theatre of Blood is brighter, the woods outside Canifis most of all.
-- The Theatre of Blood's weapons come from its chest: a Ghrazi rapier in the chest unlocks the
-  rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which unlocks the
-  Holy Scythe. Weapons already unlocked stay unlocked.
+- The Theatre of Blood's weapons come from its chest, by Okaeri: a Ghrazi rapier in the chest
+  unlocks the rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which
+  unlocks the Holy Scythe. Beating the raid no longer unlocks them. Weapons already unlocked stay
+  unlocked.
 
 ### Fixed
 
@@ -66,15 +67,11 @@ the version in the corner).
   buttons did nothing on the menus. Fixed by Okaeri.
 - Exporting your save on an iPhone downloads the file, rather than opening it as a page in
   older versions of Safari. Fixed by Okaeri.
-- Expert mode in the Theatre of Blood:
-  - Xarpus's stare hurts properly. A moment before he turns he faces where he'll stare, and says
-    which side.
-  - Each weapon aims at the Nylocas its own style can hurt, so a melee weapon beside a bow no
-    longer ignores grey ones. Thralls and the cannon go for any Nylocas.
-  - Venom stops when Nylocas Vasilias changes to a colour its weapon can't hurt.
-- Turning hard mode off turns expert off with it.
+- On the Theatre of Blood's expert mode, Xarpus's stare hurts properly. A moment before he turns
+  he faces where he'll stare, and says which side. Fixed by Okaeri.
+- Turning hard mode off turns expert off with it. Fixed by Okaeri.
 - The Theatre of Blood: a room's waves always last five minutes. Killing a boss quickly, or taking
-  a portal, used to make the next room's waves longer by the time saved.
+  a portal, used to make the next room's waves longer by the time saved. Fixed by Okaeri.
 
 ## 0.24.1 - 2026-11-04
 

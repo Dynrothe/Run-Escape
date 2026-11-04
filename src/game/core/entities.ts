@@ -145,6 +145,8 @@ export type BossState = {
     // endTick or, for exhumes, its exhumeds are all smothered (left, -1 for the others)
     ordealsDone?: number;
     ordeal?: { endTick: number; left: number; during: { attacks: string[]; interval: number } };
+    // One's due but waiting for expert's projectile to land: no more of expert's own meanwhile
+    ordealHeld?: boolean;
 };
 
 // A boss's big entrance (BossDef.intro)

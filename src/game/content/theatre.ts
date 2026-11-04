@@ -4,11 +4,11 @@ import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./t
 // built round what its real fight is known for: the Maiden's blood closing in, the Bloat's flies,
 // Sotetseg's maze as a wall with a way through, Xarpus's acid filling the floor, Verzik's three
 // forms. Two of the shapes are the Theatre's own (BulletPatternDef wall and closing), and more of
-// everything comes once a boss is enraged. Their own spot animations throughout: the Maiden's blood (1578, pools
-// 1579), the Bloat's flies (1568) and flesh (1570, 1571), Xarpus's poison (1555, splash 1654),
-// Sotetseg's orbs (1606) and ball of death (1604), and Verzik's power blast (1580), lightning (1585)
-// green ball (1598) and yellows (1595). The Bloat's flesh (1570, 1571) falls from above, so the Maiden's blood pool
-// (1579) marks where it'll land.
+// everything comes once a boss is enraged. Their own spot animations throughout: the Maiden's
+// blood (1578, pools 1579), the Bloat's flies (1568) and flesh (1570, 1571), Xarpus's poison
+// (1555, splash 1654), Sotetseg's orbs (1606) and ball of death (1604), and Verzik's power blast
+// (1580), lightning (1585), green ball (1598) and yellows (1595). The Bloat's flesh (1570, 1571)
+// falls from above, so the Maiden's blood pool (1579) marks where it'll land.
 //
 // The Pestilent Bloat, Sotetseg and Verzik Vitur also turn up on Morytania, tuned for there; the
 // raid's are copies of them with these fights, so Morytania plays as it did. Damage is about half

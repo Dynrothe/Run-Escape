@@ -1198,6 +1198,32 @@ describe("expert mode", () => {
         expect(boss.bossState!.ordeal).toBeDefined();
     });
 
+    it("has Verzik throw no more doom balls while her yellows wait for one", () => {
+        const doomBalls = (hpShare: number) => {
+            const sim = raid(true);
+            const def = getEnemy("tob_verzik_vitur_spider");
+            const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+            const ball = def.boss!.attacks.find((a) => a.expert)!;
+            boss.hp = Math.floor(boss.maxHp * hpShare);
+            sim.enemyProjectiles.push({ enemyUid: boss.uid, attack: ball } as never);
+            const picked = () => boss.bossState!.windup?.attack;
+            let thrown = 0;
+            for (let i = 0; i < 300; i++) {
+                boss.bossState!.windup = undefined;
+                boss.bossState!.cooldowns.fill(0);
+                boss.attackCooldown = 0;
+                sim.tick++;
+                sim["stepBoss"](boss, 10);
+                thrown += picked() === ball ? 1 : 0;
+            }
+            expect(boss.bossState!.ordeal).toBeUndefined();
+            return thrown;
+        };
+        // With no yellows due she throws them as ever, so the count below can fail
+        expect(doomBalls(0.9)).toBeGreaterThan(10);
+        expect(doomBalls(getEnemy("tob_verzik_vitur_spider").boss!.yellows!.at[0])).toBe(0);
+    });
+
     it("has Verzik's green ball spare only whoever's in its circle", () => {
         const sim = raid(true);
         const spider = getEnemy("tob_verzik_vitur_spider");

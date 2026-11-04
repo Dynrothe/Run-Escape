@@ -157,12 +157,12 @@ version and how to run it.
       the bigger the target. The **Nightmare staff**, Phosani's own, has her grasping claws come
       up out of the ground under enemies around you every few seconds, hands and all, with bosses
       and elites grabbed twice more.
-- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, killing one
-  of its mid-run bosses, or finding something in a raid's chest, brings a weapon, a passive or a
-  piece of gear into the game for every run after (a toast and the results screen say so). Until then it's never offered or
-  dropped. Each map's card shows what it holds, faded until it's earned, and says on hover what
-  to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there from the
-  start.
+- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, killing one of
+  its mid-run bosses, or finding something in a raid's chest, brings a weapon, a passive or a piece
+  of gear into the game for every run after (a toast and the results screen say so). Until then it's
+  never offered or dropped. Each map's card shows what it holds, faded until it's earned, and says
+  on hover what to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there
+  from the start.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |

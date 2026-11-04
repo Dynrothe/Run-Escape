@@ -209,18 +209,7 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
-// A staring boss's timings, unless its BossDef.stare says (warning, hitEvery): seconds between
-// saying it'll turn and turning, and between a stare's hits back (weapons fire on their own, so
-// where you stand is all there is to stop them, and it shouldn't be the whole fight)
-const STARE_WARNING_SECONDS = 0.75;
-const STARE_EVERY = 1;
 const PLAYER_RADIUS = 0.35;
-
-// A quarter turn's side of the arena (x east, y north), for a notice
-function compassSide(angle: number): string {
-    const quarter = (((Math.round(angle / (Math.PI / 2)) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
-    return ["east", "north", "west", "south"][quarter];
-}
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
 const PARTY_SPREAD = 1.5;
@@ -291,6 +280,18 @@ const RAID_CLEARED_SECONDS = 2;
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
+// A staring boss's timings, unless its BossDef.stare says (warning, hitEvery): seconds between
+// saying it'll turn and turning, and between a stare's hits back (weapons fire on their own, so
+// where you stand is all there is to stop them, and it shouldn't be the whole fight)
+const STARE_WARNING_SECONDS = 0.75;
+const STARE_EVERY = 1;
+
+// A quarter turn's side of the arena (x east, y north), for a notice
+function compassSide(angle: number): string {
+    const quarter = (((Math.round(angle / (Math.PI / 2)) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+    return ["east", "north", "west", "south"][quarter];
+}
+
 const FLOW_FIELD_SIZE = 96;
 const FLOW_FIELD_INTERVAL = 8;
 // A ditch jump, in ticks from its start: the leap is from JUMP_LEAVE to
@@ -2476,14 +2477,14 @@ export class Sim {
             : this.mapSeconds;
     }
 
-    // What enemies' hitpoints and damage, and caskets, go by: the run's clock, or in a raid where
-    // its room would be with no boss time before it, so a long fight with an earlier boss doesn't
-    // make a later room's waves tougher than its `at` says
     // A casket's tier goes by the run's time, or a raid's pace (paceSeconds)
     private get casketSeconds(): number {
         return this.raidRoomDef ? this.paceSeconds : this.seconds;
     }
 
+    // What enemies' hitpoints and damage, and caskets, go by: the run's clock, or in a raid where
+    // its room would be with no boss time before it, so a long fight with an earlier boss doesn't
+    // make a later room's waves tougher than its `at` says
     private get paceSeconds(): number {
         const room = this.raidRoomDef;
         if (!room) {
@@ -5176,6 +5177,13 @@ export class Sim {
                             const distance = this.rng.range(1, spots.spread);
                             x = player.x + fm.cos(angle) * distance;
                             y = player.y + fm.sin(angle) * distance;
+                            const clear = placed.every((p) => fm.hypot(p.x - x, p.y - y) >= apart);
+                            if (!spots.awayFrom) {
+                                if (clear) {
+                                    break;
+                                }
+                                continue;
+                            }
                             const walkable =
                                 this.grid.contains(Math.floor(x), Math.floor(y)) &&
                                 this.isWalkableTile(Math.floor(x), Math.floor(y));
@@ -5183,10 +5191,7 @@ export class Sim {
                             if (walkable && (!fallback || away > fallback.away)) {
                                 fallback = { x, y, away };
                             }
-                            if (
-                                placed.every((p) => fm.hypot(p.x - x, p.y - y) >= apart) &&
-                                (!spots.awayFrom || (away >= spots.awayFrom && walkable))
-                            ) {
+                            if (clear && away >= spots.awayFrom && walkable) {
                                 found = true;
                                 break;
                             }
@@ -6177,7 +6182,9 @@ export class Sim {
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
                 !(attack.parasite && this.parasite) &&
                 // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
-                !attack.ordeal
+                !attack.ordeal &&
+                // No more of expert's own while an ordeal waits for one to land (stepOrdeal)
+                !(attack.expert && state.ordealHeld)
             ) {
                 usable.push(i);
             }
@@ -6204,6 +6211,7 @@ export class Sim {
         if (!of) {
             return;
         }
+        state.ordealHeld = undefined;
         const ordeal = state.ordeal;
         if (ordeal) {
             if (this.tick < ordeal.endTick && ordeal.left !== 0) {
@@ -6212,7 +6220,10 @@ export class Sim {
                 return;
             }
             state.ordeal = undefined;
-            enemy.shieldEnd = 0;
+            // Its own shield drops, not one that outlasts it (a jump's)
+            if (enemy.shieldEnd <= ordeal.endTick) {
+                enemy.shieldEnd = 0;
+            }
             // Out of time with exhumeds still up: he rises the better for each
             if (exhumes && ordeal.left > 0) {
                 const heal = Math.round(enemy.maxHp * exhumes.leftHeal * ordeal.left);
@@ -6231,9 +6242,11 @@ export class Sim {
         }
         // Not with expert's doom ball still coming: it and a yellow's pool at once is too much.
         // She can't be hurt meanwhile, so the wait can't take her past the next phase too and
-        // skip it (kept a tick ahead, so the shield never lapses and drops with a notice)
+        // skip it (kept a tick ahead, so the shield never lapses and drops with a notice). She
+        // throws no more meanwhile (ordealHeld), or one ball after another could hold it off.
         if (this.enemyProjectiles.some((p) => p.enemyUid === enemy.uid && p.attack?.expert)) {
             enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+            state.ordealHeld = true;
             return;
         }
         // One at a time, however far a hit took it past them
@@ -6243,7 +6256,7 @@ export class Sim {
         }
         state.ordealsDone = next;
         state.ordeal = {
-            endTick: this.tick + secondsToTicks((realm ?? exhumes!).seconds),
+            endTick: this.tick + secondsToTicks(of.seconds),
             left: exhumes ? exhumes.count : -1,
             during: { attacks: of.attacks, interval: of.interval },
         };
@@ -6705,6 +6718,7 @@ export class Sim {
             // Its new form's own shadow realm, exhumes or yellows, from the top
             state.ordealsDone = 0;
             state.ordeal = undefined;
+            state.ordealHeld = undefined;
         }
         this.emit({
             type: "bossRose",
