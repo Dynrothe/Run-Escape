@@ -418,6 +418,10 @@ export type BulletPatternDef = {
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss
     origin?: "target";
+    // Walls: straight down the arena (south), whoever's where (Ba-Ba's boulders, from her altar)
+    heading?: "south";
+    // Tiles a hit knocks the player on, the way the bullet's going
+    knockback?: number;
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:
     // a pocket by the boss the volley never crosses, for whoever fights up close
     from?: number;
@@ -641,7 +645,15 @@ export type BossAttackDef = {
     invoked?: { id: string; speed?: number; radius?: number; damage?: number };
     // Blasts: each one breaks up where it lands into count shards flying out all round (drawn as
     // the attack's spotAnim), each doing damage (Ba-Ba's rockfall)
-    shards?: { count: number; speed: number; range: number; radius: number; damage: number };
+    // (scale: drawn that much bigger than they hit, to be seen)
+    shards?: {
+        count: number;
+        speed: number;
+        range: number;
+        radius: number;
+        damage: number;
+        scale?: number;
+    };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat
@@ -1285,6 +1297,14 @@ export type TombsPathDef = {
             arrive: { x: number; y: number };
             at: { x: number; y: number };
             line: { y: number };
+            // Her rolling stones (BossDef.rollingStones): she goes up to her altar and the party's
+            // put at the arena's foot, and they're over once someone gets back up to her. With Mind
+            // the Gap, the arena's middle (pit, world tiles) is a drop that kills, meanwhile.
+            boulders?: {
+                altar: { x: number; y: number };
+                start: { x: number; y: number };
+                pit: { x0: number; x1: number; y0: number; y1: number };
+            };
         };
     };
 };

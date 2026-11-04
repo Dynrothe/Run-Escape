@@ -79,7 +79,13 @@ import {
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SOUNDS } from "../content/sounds";
-import { APMEKEN, APMEKEN_SPOTANIMS, APMEKEN_WAVES, getApmekenTrickle } from "../content/tombs";
+import {
+    APMEKEN,
+    APMEKEN_SPOTANIMS,
+    APMEKEN_WAVES,
+    TOMBS_BOSSES,
+    getApmekenTrickle,
+} from "../content/tombs";
 import {
     PUMPKIN_CHANCE,
     PUMPKIN_ID,
@@ -744,6 +750,11 @@ type ApmekenRoom = {
     // and when it fell
     boss?: { uid: number; beatenTick?: number };
 };
+
+// Dev only: what Sim.devSkipToTombsBoss hands over, to do some damage with
+const DEV_BOSS_WEAPON = "corrupted_twisted_bow";
+// Tiles past its line someone has to be for a Tombs boss to rise: clear of the gap at its foot
+const TOMBS_BOSS_RISE = 1.5;
 
 export class Sim {
     readonly grid: ArenaGrid;
@@ -2949,6 +2960,13 @@ export class Sim {
                 xp = 0;
             }
         }
+        // A Tombs path's boss: tougher with its path level, for a party that's been round more
+        // of the raid first (TOMBS_BOSSES)
+        if (this.apmeken && boss) {
+            const level = this.tombsPathLevel;
+            hp *= 1 + TOMBS_BOSSES.levelHp * level;
+            hitScale *= 1 + TOMBS_BOSSES.levelDamage * level;
+        }
         const enemy: Enemy = {
             uid: this.nextUid++,
             def,
@@ -4472,10 +4490,19 @@ export class Sim {
             return;
         }
         if (fight.uid === -1) {
-            if (this.heroes.some((hero) => this.isUp(hero) && hero.player.y > def.line.y)) {
+            // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
+            // behind the party, not under them
+            const rise = def.line.y + TOMBS_BOSS_RISE;
+            if (this.heroes.some((hero) => this.isUp(hero) && hero.player.y > rise)) {
                 const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
                 if (enemy) {
                     fight.uid = enemy.uid;
+                }
+                // Whoever's still behind (in the safe room, on the gap) is brought in with them
+                for (const hero of this.heroes) {
+                    if (this.isUp(hero) && hero.player.y < rise) {
+                        hero.player.y = hero.player.prevY = rise;
+                    }
                 }
             }
             return;
@@ -4493,7 +4520,45 @@ export class Sim {
         if (!boss || boss.dead) {
             fight.beatenTick = this.tick;
             this.emit({ type: "notice", message: "The path is done. Back to the Nexus..." });
+            return;
         }
+        this.stepTombsPit(boss);
+    }
+
+    // Mind the Gap: whoever's in the gap at the arena's foot falls (knocked there by her boulders,
+    // or walking into it)
+    private stepTombsPit(boss: Enemy): void {
+        const pit = this.tombsPit;
+        if (!pit) {
+            return;
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            if (
+                !this.isUp(hero) ||
+                player.x < pit.x0 ||
+                player.x > pit.x1 ||
+                player.y < pit.y0 ||
+                player.y > pit.y1
+            ) {
+                continue;
+            }
+            this.use(hero);
+            this.emit({ type: "notice", message: "You fall into the gap!" }, true);
+            // Out of reach of a fall (god mode on the dev server, just revived): back to the foot
+            if (this.damagePlayer(player.maxHp * 100, boss.def.id, false, undefined, true) === 0) {
+                const start = this.tombsPathRoom?.boss?.boulders?.start;
+                if (start) {
+                    player.x = player.prevX = start.x;
+                    player.y = player.prevY = start.y;
+                }
+            }
+            if (this.runOver) {
+                break;
+            }
+        }
+        this.use(current);
     }
 
     // Dev only: past a Tombs room to its boss, for testing the boss without the puzzle each time.
@@ -4508,6 +4573,18 @@ export class Sim {
         room.issue = undefined;
         room.doneTick = this.tick;
         this.enterTombsBoss(room, boss);
+        // Something to do some damage with, weapon slots or not
+        if (!this.weapons.some((w) => w.def.id === DEV_BOSS_WEAPON)) {
+            this.weapons.push({
+                def: getWeapon(DEV_BOSS_WEAPON),
+                level: 1,
+                cooldown: TICKS_PER_SECOND,
+                bonus: 0,
+                uses: 0,
+            });
+            this.weaponSince[DEV_BOSS_WEAPON] ??= this.tick;
+            this.appearanceVersion++;
+        }
         return true;
     }
 
@@ -5963,7 +6040,8 @@ export class Sim {
             }
             this.bulletSources[source] = { attack, enemy };
         }
-        const aim = fm.atan2(windup.dirY, windup.dirX);
+        // Straight down the arena (BulletPatternDef.heading), or at the player
+        const aim = pattern.heading === "south" ? -Math.PI / 2 : fm.atan2(windup.dirY, windup.dirX);
         // A spread's or a wall's aimed; a ring's gap is centred on the side asked
         // for, or the ring lands at whatever angle it falls
         let angle = aim;
@@ -6360,6 +6438,21 @@ export class Sim {
             this.bulletGraceEnd =
                 this.tick + secondsToTicks(enemy.def.boss?.bulletGrace ?? BULLET_GRACE);
             this.bossHit(enemy.def.id, enemy, attack, bullets.damage[hit]);
+            // Knocked on the way it was going (BulletPatternDef.knockback)
+            const knock = attack.pattern?.knockback;
+            if (knock && !this.runOver && this.isUp(this.hero)) {
+                const vx = bullets.vx[hit];
+                const vy = bullets.vy[hit];
+                const length = Math.max(0.0001, fm.hypot(vx, vy));
+                const player = this.player;
+                moveCircle(
+                    this.grid,
+                    player,
+                    (vx / length) * knock,
+                    (vy / length) * knock,
+                    player.radius,
+                );
+            }
         });
         this.use(current);
     }
@@ -6841,7 +6934,9 @@ export class Sim {
         }
         const ordeal = state.ordeal;
         if (ordeal) {
-            if (this.tick < ordeal.endTick && ordeal.left !== 0) {
+            // Ba-Ba's boulders: over once someone's got back up to her, and the pit's open meanwhile
+            const reached = def.rollingStones !== undefined && this.stepRollingStones(enemy);
+            if (this.tick < ordeal.endTick && ordeal.left !== 0 && !reached) {
                 // Held to its end, however a tick goes (a boss can skip stepBoss on a jump)
                 enemy.shieldEnd = Math.max(enemy.shieldEnd, ordeal.endTick);
                 return;
@@ -6876,7 +6971,54 @@ export class Sim {
             during: { attacks: of.attacks, interval: of.interval },
         };
         enemy.shieldEnd = Math.max(enemy.shieldEnd, state.ordeal.endTick);
+        if (def.rollingStones) {
+            this.startRollingStones(enemy);
+        }
         this.emit({ type: "notice", message: of.message });
+    }
+
+    // Ba-Ba's rolling stones begin: up to her altar, the party down at the arena's foot
+    private startRollingStones(enemy: Enemy): void {
+        const at = this.tombsPathRoom?.boss?.boulders;
+        if (!at) {
+            return;
+        }
+        enemy.x = enemy.prevX = at.altar.x;
+        enemy.y = enemy.prevY = at.altar.y;
+        enemy.vx = enemy.vy = 0;
+        enemy.bossState!.windup = undefined;
+        const current = this.hero;
+        this.heroes.forEach((hero, i) => {
+            const player = hero.player;
+            player.x = player.prevX = at.start.x + (i - (this.heroes.length - 1) / 2) * 1.5;
+            player.y = player.prevY = at.start.y;
+            this.use(hero);
+            this.updateFlowField();
+        });
+        this.use(current);
+    }
+
+    // Each tick of her rolling stones: true once someone's back up to her
+    private stepRollingStones(enemy: Enemy): boolean {
+        const reached = this.heroes.some((hero) => {
+            const player = hero.player;
+            const reach = enemy.radius + player.radius + 1;
+            return this.isUp(hero) && fm.hypot(player.x - enemy.x, player.y - enemy.y) <= reach;
+        });
+        if (reached) {
+            this.emit({ type: "notice", message: "You reach Ba-Ba! Her boulders stop." });
+        }
+        return reached;
+    }
+
+    // Mind the Gap's gap at the foot of Ba-Ba's arena, open while she's up
+    get tombsPit(): { x0: number; x1: number; y0: number; y1: number } | undefined {
+        const fight = this.apmeken?.boss;
+        const pit = this.tombsPathRoom?.boss?.boulders?.pit;
+        if (!fight || fight.uid === -1 || fight.beatenTick !== undefined || !pit) {
+            return undefined;
+        }
+        return this.invoked("mind_the_gap") ? pit : undefined;
     }
 
     // An exhumed (GroundPatternDef.smother): stood in long enough, by anyone, it's smothered and

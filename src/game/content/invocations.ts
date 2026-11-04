@@ -232,8 +232,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Mind the Gap!",
         group: "baba",
         level: 10,
-        description: "Her boulders knock you into the pit at 66% and 33%.",
-        comes: "Ba-Ba",
+        description: "The gap at the foot of her arena is open. Get knocked into it and you die.",
     },
     {
         id: "gotta_have_faith",

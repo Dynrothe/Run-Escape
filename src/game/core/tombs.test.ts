@@ -12,7 +12,7 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
-import { APMEKEN, APMEKEN_WAVES } from "../content/tombs";
+import { APMEKEN, APMEKEN_WAVES, TOMBS_BOSSES } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { createSave, migrateSave } from "./save";
@@ -54,6 +54,11 @@ const TEST_TOMBS: MapDef = {
                         arrive: { x: 1036.5, y: 1020.5 },
                         at: { x: 1036.5, y: 1040.5 },
                         line: { y: 1026 },
+                        boulders: {
+                            altar: { x: 1036.5, y: 1046.5 },
+                            start: { x: 1031.5, y: 1028.5 },
+                            pit: { x0: 1035, x1: 1038, y0: 1020, y1: 1026.9 },
+                        },
                     },
                 },
             },
@@ -613,5 +618,97 @@ describe("Ba-Ba", () => {
         const hp = sim.player.hp;
         expect(sim["damagePlayer"](50, "test", false)).toBe(0);
         expect(sim.player.hp).toBe(hp);
+    });
+
+    it("hands over a corrupted twisted bow from the dev skip, to do some damage with", () => {
+        const sim = atBaba();
+        expect(sim.weapons.some((w) => w.def.id === "corrupted_twisted_bow")).toBe(true);
+    });
+
+    // Down to her first boulders' share, and a couple of ticks for them to start
+    function rolling(invocations: string[] = []): { sim: Sim; boss: ReturnType<typeof baba> } {
+        const sim = atBaba(invocations);
+        const boss = baba(sim);
+        boss.hp = Math.floor(boss.maxHp * 0.66) - 1;
+        sim.step();
+        sim.step();
+        expect(boss.bossState!.ordeal).toBeDefined();
+        return { sim, boss };
+    }
+
+    it("goes up to her altar for her boulders, the party put at the arena's foot", () => {
+        const { sim, boss } = rolling();
+        expect(boss.x).toBeCloseTo(1036.5);
+        expect(boss.y).toBeCloseTo(1046.5);
+        expect(sim.player.x).toBeCloseTo(1031.5);
+        expect(sim.player.y).toBeCloseTo(1028.5);
+        // and stays there
+        for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.step();
+        }
+        expect(boss.y).toBeCloseTo(1046.5);
+    });
+
+    it("rolls her boulders straight down the arena, knocking whoever they hit back", () => {
+        const { sim } = rolling();
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && sim.bullets.count === 0; i++) {
+            sim.step();
+        }
+        const bullets = sim.bullets;
+        expect(bullets.count).toBeGreaterThan(0);
+        const slot = bullets.order[0];
+        expect(bullets.vy[slot]).toBeLessThan(0);
+        expect(Math.abs(bullets.vx[slot])).toBeLessThan(1e-6);
+        // In its way
+        sim.player.invulnerable = 0;
+        sim.player.hp = sim.player.maxHp;
+        sim.player.x = sim.player.prevX = bullets.x[slot];
+        sim.player.y = sim.player.prevY = bullets.y[slot] - 0.5;
+        const before = sim.player.y;
+        sim.step();
+        expect(sim.player.y).toBeLessThan(before - 3);
+    });
+
+    it("stops her boulders once someone gets back up to her", () => {
+        const { sim, boss } = rolling();
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1046.5 - 2.5;
+        sim.step();
+        sim.step();
+        expect(boss.bossState!.ordeal).toBeUndefined();
+    });
+
+    it("opens the gap at the arena's foot with Mind the Gap, which kills", () => {
+        expect(atBaba().tombsPit).toBeUndefined();
+        const sim = atBaba(["mind_the_gap"]);
+        expect(sim.tombsPit).toBeDefined();
+        // Walking in over it, before she's up, is fine
+        expect(sim.tombsDeaths).toBe(0);
+        const deaths = sim.tombsDeaths;
+        sim.player.invulnerable = 0;
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1026.4;
+        sim.step();
+        expect(sim.tombsDeaths).toBe(deaths + 1);
+    });
+
+    it("puts the player back at the foot from the gap in god mode", () => {
+        const sim = atBaba(["mind_the_gap"]);
+        sim.devGod = true;
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1026.4;
+        sim.step();
+        expect(sim.player.x).toBeCloseTo(1031.5, 0);
+        expect(sim.player.y).toBeCloseTo(1028.5, 0);
+    });
+
+    it("is tougher with each path level", () => {
+        const first = baba(atBaba()).maxHp;
+        // (and its raid level, which scales it too)
+        expect(baba(atBaba(["pathfinder"])).maxHp).toBeGreaterThanOrEqual(
+            Math.floor(first * (1 + 2 * TOMBS_BOSSES.levelHp)),
+        );
     });
 });

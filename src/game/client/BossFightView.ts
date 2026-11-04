@@ -200,7 +200,7 @@ export class BossFightView {
             // Never smaller than what it hits, however it's scaled to be seen:
             // what looks like a miss has to be one
             options.scale = Math.max(
-                pattern?.scale ?? 1,
+                pattern?.scale ?? attack.shards?.scale ?? 1,
                 (radius[slot] * 128) / Math.max(1, model.radius),
             );
             options.flash = pattern?.bright ?? 0;

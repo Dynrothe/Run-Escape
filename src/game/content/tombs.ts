@@ -169,7 +169,7 @@ export const BA_BA: EnemyDef = {
     walkSeq: 9737,
     attackSeq: 9745,
     deathSeq: DEATH,
-    hp: 2000,
+    hp: 6000,
     damage: 0,
     speed: 1.3,
     radius: 1.2,
@@ -185,10 +185,11 @@ export const BA_BA: EnemyDef = {
         stomp: { radius: 1.6, interval: 0.6, damage: 2, max: 8, sound: 5971 },
         rollingStones: {
             at: [0.66, 0.33],
-            seconds: 12,
+            // Over sooner if someone gets back up to her (TombsPathDef boss.boulders)
+            seconds: 20,
             attacks: ["Rolling boulders"],
             interval: 1.6,
-            message: "Ba-Ba screams, and boulders come rolling! Find the gaps!",
+            message: "Ba-Ba flees to her altar and boulders come rolling! Get back up to her!",
             endMessage: "The boulders stop rolling. Ba-Ba can be hurt again!",
         },
         attacks: [
@@ -218,7 +219,7 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Breaking up where it lands, into shards flying out
                 spotAnim: ROCK,
-                shards: { count: 8, speed: 5, range: 6, radius: 0.35, damage: 2 },
+                shards: { count: 12, speed: 5, range: 6, radius: 0.35, damage: 2, scale: 1.4 },
                 seq: 9743,
                 sound: 5962,
                 message: "Rocks fall from above! Move off the shadow!",
@@ -235,8 +236,9 @@ export const BA_BA: EnemyDef = {
                 weight: 4,
                 radius: 2.2,
                 impactSpotAnim: ROCK_IMPACT,
-                spotAnim: ROCK,
-                shards: { count: 10, speed: 4, range: 9, radius: 0.4, damage: 3 },
+                // Her dark boulder, not the pale rock, so its shards stand out on the floor
+                spotAnim: BOULDER,
+                shards: { count: 16, speed: 4, range: 9, radius: 0.45, damage: 3, scale: 1.4 },
                 seq: 9748,
                 sound: 5962,
                 message: "Ba-Ba hurls a boulder! Get out of the circle, then between the shards!",
@@ -277,6 +279,8 @@ export const BA_BA: EnemyDef = {
                     gap: 3,
                     spacing: 1.6,
                     scale: 2,
+                    heading: "south",
+                    knockback: 4,
                 },
             },
         ],
@@ -284,6 +288,11 @@ export const BA_BA: EnemyDef = {
 };
 
 TOMBS_ENEMIES.push(BA_BA);
+
+// A path's boss, by its path level (Sim.tombsPathLevel: paths done, and Pathseeker and on): its
+// hitpoints and damage go up by these shares a level, so one left till last holds up to a party
+// that's levelled through the rest of the raid
+export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
 
 // ---- The Apmeken room ----
 

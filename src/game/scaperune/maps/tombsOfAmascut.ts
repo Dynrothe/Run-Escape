@@ -116,6 +116,14 @@ const BA_BA_PASSAGE = [9, 10, 11].flatMap((x) => [11, 12, 13].map((y) => [x, y])
 // Where she rises (turned), and the row past which (north) the fight's on: the passage's far end
 const BA_BA_AT = [12, 31];
 const FIGHT_LINE = 12;
+// Her rolling stones (turned): her altar before her throne, and where the party's put, the foot
+// of the arena on its west side. Mind the Gap's gap is the arena's own, where its barrier stood:
+// the floor that isn't drawn (overlay 42) at x 10 to 14 (y 10 to 14 in the cut's own tiles),
+// rubble either side, out to the first row past the line the fight holds (FIGHT_LINE), so the
+// middle of the foot is a drop and her boulders' knockback can put you in it.
+const BA_BA_ALTAR = [12, 33];
+const BA_BA_FOOT = [7, 14];
+const BA_BA_PIT = { x0: 10, x1: 15, y0: 9, y1: FIGHT_LINE + 1.9 };
 
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
@@ -175,6 +183,16 @@ export const TOA_PLACES = {
         arrive: worldTile(BA_BA_ROOM.arrive.x, BA_BA_ROOM.arrive.y),
         at: worldTile(BA_BA_ROOM.at.x + BA_BA_AT[0], BA_BA_ROOM.at.y + BA_BA_AT[1]),
         line: { y: MAP_Y * MAP_SQUARE_SIZE + BA_BA_ROOM.at.y + FIGHT_LINE + 1 },
+        boulders: {
+            altar: worldTile(BA_BA_ROOM.at.x + BA_BA_ALTAR[0], BA_BA_ROOM.at.y + BA_BA_ALTAR[1]),
+            start: worldTile(BA_BA_ROOM.at.x + BA_BA_FOOT[0], BA_BA_ROOM.at.y + BA_BA_FOOT[1]),
+            pit: {
+                x0: MAP_X * MAP_SQUARE_SIZE + BA_BA_ROOM.at.x + BA_BA_PIT.x0,
+                x1: MAP_X * MAP_SQUARE_SIZE + BA_BA_ROOM.at.x + BA_BA_PIT.x1,
+                y0: MAP_Y * MAP_SQUARE_SIZE + BA_BA_ROOM.at.y + BA_BA_PIT.y0,
+                y1: MAP_Y * MAP_SQUARE_SIZE + BA_BA_ROOM.at.y + BA_BA_PIT.y1,
+            },
+        },
     },
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
@@ -372,6 +390,7 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                             arrive: TOA_PLACES.baba.arrive,
                             at: TOA_PLACES.baba.at,
                             line: TOA_PLACES.baba.line,
+                            boulders: TOA_PLACES.baba.boulders,
                         },
                     },
                 }),

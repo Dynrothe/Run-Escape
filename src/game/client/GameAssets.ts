@@ -569,6 +569,7 @@ export class GameAssets {
             locId: APMEKEN_BARRIER_LOC,
             animated: true,
         });
+
         // A raid hall's teleporter, swirling
         requests.push({
             kind: "loc",
