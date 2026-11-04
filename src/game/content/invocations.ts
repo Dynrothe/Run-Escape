@@ -296,20 +296,23 @@ export const RAID_BAND_SPRITES: Record<RaidBand, number> = {
     Expert: 4662,
 };
 
-// What the raid's chest can hold, shown on the board: its purples, the pet, and the jewels
-export const TOMBS_UNIQUES: { name: string; objId: number }[] = [
-    { name: "Osmumten's fang", objId: 26219 },
-    { name: "Lightbearer", objId: 25975 },
-    { name: "Elidinis' ward", objId: 25985 },
-    { name: "Masori mask", objId: 27226 },
-    { name: "Masori body", objId: 27229 },
-    { name: "Masori chaps", objId: 27232 },
-    { name: "Tumeken's shadow (uncharged)", objId: 27277 },
-    { name: "Tumeken's guardian", objId: 27352 },
-    { name: "Thread of Elidinis", objId: 27279 },
-    { name: "Breach of the Scarab", objId: 27283 },
-    { name: "Eye of the Corruptor", objId: 27285 },
-    { name: "Jewel of the Sun", objId: 27289 },
+// What the raid's chest can hold, shown on the board: its purples, the pet, and the jewels. Below
+// a unique's minLevel it's greyed out there, as OSRS's are: it only comes with an extra 1 in 50 roll
+// (fang and Lightbearer from raid level 50, the ward, Masori and the shadow from 150; the pet, the
+// thread and the jewels at any level, more often the more raids you've done)
+export const TOMBS_UNIQUES: { name: string; objId: number; minLevel: number }[] = [
+    { name: "Osmumten's fang", objId: 26219, minLevel: 50 },
+    { name: "Lightbearer", objId: 25975, minLevel: 50 },
+    { name: "Elidinis' ward", objId: 25985, minLevel: 150 },
+    { name: "Masori mask", objId: 27226, minLevel: 150 },
+    { name: "Masori body", objId: 27229, minLevel: 150 },
+    { name: "Masori chaps", objId: 27232, minLevel: 150 },
+    { name: "Tumeken's shadow (uncharged)", objId: 27277, minLevel: 150 },
+    { name: "Tumeken's guardian", objId: 27352, minLevel: 0 },
+    { name: "Thread of Elidinis", objId: 27279, minLevel: 0 },
+    { name: "Breach of the Scarab", objId: 27283, minLevel: 0 },
+    { name: "Eye of the Corruptor", objId: 27285, minLevel: 0 },
+    { name: "Jewel of the Sun", objId: 27289, minLevel: 0 },
 ];
 
 // The highest raid level the board's reward bar goes to

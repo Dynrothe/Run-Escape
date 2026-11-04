@@ -4,6 +4,7 @@ import { getEnemy } from "../content/enemies";
 import {
     INVOCATIONS,
     INVOCATION_GROUPS,
+    TOMBS_UNIQUES,
     cleanInvocations,
     getRaidBand,
     getRaidLevel,
@@ -96,6 +97,16 @@ describe("invocations", () => {
         expect(getRaidLevelScale(150).hp).toBeCloseTo(1.6);
         expect(getRaidLevelScale(500).hp).toBeCloseTo(3);
         expect(getRaidLevelScale(500).damage).toBeCloseTo(2.5);
+    });
+
+    it("show each unique from its raid level, as OSRS's chest has them", () => {
+        const at = (level: number) =>
+            TOMBS_UNIQUES.filter((unique) => level >= unique.minLevel).map((unique) => unique.name);
+        expect(at(0)).not.toContain("Osmumten's fang");
+        expect(at(0)).toContain("Tumeken's guardian");
+        expect(at(50)).toEqual(expect.arrayContaining(["Osmumten's fang", "Lightbearer"]));
+        expect(at(149)).not.toContain("Tumeken's shadow (uncharged)");
+        expect(at(150)).toHaveLength(TOMBS_UNIQUES.length);
     });
 
     it("are kept in the save, as only what this game knows", () => {

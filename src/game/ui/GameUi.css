@@ -2341,6 +2341,15 @@
     background: rgba(0, 0, 0, 0.3);
 }
 
+/* Below its raid level, as OSRS shows it: greyed out */
+.ui-invocations-unique-out {
+    border-color: #4a4336;
+}
+
+.ui-invocations-unique-out > * {
+    filter: grayscale(1) brightness(0.45);
+}
+
 .ui-invocations-detail {
     display: flex;
     flex-direction: column;

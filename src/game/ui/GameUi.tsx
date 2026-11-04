@@ -948,15 +948,25 @@ function InvocationBoard({
                             {Math.round((scale.damage - 1) * 100)}% damage
                         </div>
                         <div className="ui-invocations-uniques">
-                            {TOMBS_UNIQUES.map((unique) => (
-                                <span
-                                    key={unique.objId}
-                                    className="ui-invocations-unique"
-                                    title={unique.name}
-                                >
-                                    <ItemIcon objId={unique.objId} size={32} />
-                                </span>
-                            ))}
+                            {TOMBS_UNIQUES.map((unique) => {
+                                const out = level < unique.minLevel;
+                                return (
+                                    <span
+                                        key={unique.objId}
+                                        className={
+                                            "ui-invocations-unique" +
+                                            (out ? " ui-invocations-unique-out" : "")
+                                        }
+                                        title={
+                                            out
+                                                ? `${unique.name}: from raid level ${unique.minLevel}`
+                                                : unique.name
+                                        }
+                                    >
+                                        <ItemIcon objId={unique.objId} size={32} />
+                                    </span>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
