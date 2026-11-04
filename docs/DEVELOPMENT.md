@@ -561,6 +561,22 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
     - `BossDef.look` gives the shared fight screen its own colours (`edge` and `vignette` can be
       `null`), and `lean` has the camera lean towards the boss. `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
+    - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
+      it misses everyone (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
+      `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
+      does nothing, the stars over it) when its arena's attack with `turns` catches it
+      (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
+      (`BossState.dash`, `stepDash`). The view tints a boss whose guard's down gold.
+    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
+      through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
+      run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. Its damage
+      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`.
+    - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
+      `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and
+      each played out once (`Effect.once`; a trail's laid along its way, turned with
+      `Effect.yaw`), and a `bossImpact` event that `GameClient` shakes the camera by (off with
+      the Screen shake setting, `DisplaySettings.screenShake`, and by default for reduced
+      motion) and `GameView` flashes the screen by, faintly.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before

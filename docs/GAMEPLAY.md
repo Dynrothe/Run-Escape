@@ -110,7 +110,7 @@ version and how to run it.
     | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                | Killing the Flag carrier in Castle Wars              |
     | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
     | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
-    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 6 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
 
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
@@ -485,9 +485,10 @@ version and how to run it.
     - **Justiciar Zachariah**: the Justiciar of the Owl, whose court is his weapon. Only
       Saradomin Strike hurts him, and only from close by: out of its reach the boss bar says so,
       and a faint ring shows how far it reaches. Three phases on his hitpoints, no shield and no
-      totems: at 70% and 35% he kneels a moment, untouchable, and rises into the next, and the
+      totems: at 78% and 40% he kneels a moment, untouchable, and rises into the next, and the
       court wakes a little more. His own: a **Lunge**, a strip two wide and seven long the way he
-      faced (step off it; behind and beside him are safe); his **Shock wave**, a blue wave along
+      faced, which carries him down it (step off it; behind and beside him are safe), twice in a
+      row from the second phase; his **Shock wave**, a blue wave along
       the ground at where you stood, which drags whoever it reaches to his feet, binds them and
       takes three slashes (sidestep it); and **Ice barrage**, a three-by-three square on your tile
       that freezes you (move). The court's: the **crossbowmen** draw and fire bolts straight down
@@ -499,8 +500,14 @@ version and how to run it.
       for **the Owl's gaze**: everything in his sight takes over half its hitpoints, and the tiles
       hidden behind a pillar glow blue while he winds up. Then he combines: the ice and then a
       lunge at where you're stuck, lightning round you with a sword through it, both knights at
-      once. Nothing in his court heals, but the Saradominist heals a little over the fight. A big
-      hit takes about half of your hitpoints; a bolt or the fire a tenth.
+      once. Nothing in his court heals, but the Saradominist heals a little over the fight. His
+      hits are small and come quickly; the gaze takes about half your hitpoints.
+      **Fighting back**: a lunge or a shock wave of his that misses leaves his guard down for a
+      second (he glows gold and takes double damage); his court's bolts, lightning and swords
+      hurt him too, and lightning, a sword or a lunge into a pillar stuns him (the stars round
+      his head) for longer. **Smite**, the fight's own button (Space, a controller's A, or the
+      round button on a touch screen), calls a heavy blow down on him from right beside him, every
+      five seconds, and it's doubled while his guard's down.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

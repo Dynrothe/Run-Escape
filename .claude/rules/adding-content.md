@@ -149,7 +149,10 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
   (`until`, `threshold`, Justiciar Zachariah's). Attacks that read the arena (`MapDef.features`:
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
-  under Arena fights there. Boss fights as data in `docs/DEVELOPMENT.md` has the lot.
+  under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
+  (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
+  and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
+  `docs/DEVELOPMENT.md` has the lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
