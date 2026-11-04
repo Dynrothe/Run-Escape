@@ -1,4 +1,5 @@
 import {
+    ArenaStatue,
     BossAttackDef,
     CasketTier,
     EnemyDef,
@@ -48,8 +49,10 @@ export type BossWindup = {
     startTick: number;
     landTick: number;
     // Where a blast lands: where the player was when it started, and for a
-    // blast of several, spots scattered around it
+    // blast of several, spots scattered around it. Thrown from statues
+    // (BossAttackDef.from): where the player was, and from: the statues.
     targets: { x: number; y: number }[];
+    from?: ArenaStatue[];
     // The way the boss faced as it began (a cone swing's wedge)
     dirX: number;
     dirY: number;
@@ -81,16 +84,25 @@ export type BossSurge = {
 export type BossPhase = {
     // Counts from 0
     index: number;
-    // finale: after the last blast, its last stand (BossPhasesDef.finale)
-    stage: "shield" | "totems" | "finale";
+    // finale: after the last blast, its last stand (BossPhasesDef.finale); hp:
+    // a fight with no totems, on its hitpoints
+    stage: "shield" | "totems" | "finale" | "hp";
     shield: number;
     shieldMax: number;
     // Its four totems
     totems: Enemy[];
     // The attack it's to open this phase with, until it has
     opener?: BossAttackDef;
-    // When its ambient pattern begins again (BossPhasesDef ambient)
+    // When its ambient pattern begins again (BossPhasesDef ambient), and each
+    // of its ambients
     ambientNext: number;
+    ambientsNext?: number[];
+    // The tick the phase began
+    startTick?: number;
+    // A phase's threshold (BossPhasesDef.threshold): kneeling until riseTick,
+    // up again at pauseEnd
+    riseTick?: number;
+    pauseEnd?: number;
     // When the finale's over and it falls
     finaleEnd?: number;
 };
@@ -139,6 +151,18 @@ export type BossState = {
     // BossDef.stomp: hits since the player stepped under it, and the next one
     stomps?: number;
     nextStomp?: number;
+    // How many times each row attack's been used (BulletPatternDef.rows), by name
+    rowSets?: Record<string, number>;
+    // The rhythms going (BossAttackDef.cycle)
+    cycles?: BossCycle[];
+};
+
+// A rhythm of a boss's (BossAttackDef.cycle) since startTick: when each player
+// (by index) can be hurt by it again
+export type BossCycle = {
+    attack: BossAttackDef;
+    startTick: number;
+    nextHit: number[];
 };
 
 // A boss's big entrance (BossDef.intro)
@@ -186,6 +210,9 @@ export type GroundHazard = {
     // and when it next hurts whoever's in it
     lingerEnd: number;
     nextHurt: number;
+    // A square this far either way of x, y rather than the circle radius (a
+    // checker's cell); unset for a circle
+    half?: number;
 };
 
 // A boss's corpse flowers (BossAttackDef quarters), crossing at (x, y). The
@@ -224,6 +251,9 @@ export type BulletEmitter = {
     damage: number;
     // A phase's own pattern (BossPhasesDef ambient), not an attack
     ambient?: boolean;
+    // A row attack's rows (BulletPatternDef.rows), by index, and when it began
+    rows?: number[];
+    startTick?: number;
 };
 
 // The player's controls shuffled (PlayerEffectDef curse): x and y of what's
@@ -485,6 +515,17 @@ export type EnemyProjectile = {
     // A normal enemy's shot rather than a boss attack: it only lands when a
     // crowd's hit could (not just after the player was hit)
     crowd?: boolean;
+    // A wave's or a boomerang's (BossAttackDef.wave, boomerang): who it's hit (by
+    // hero index), and a boomerang's who it's hit on the way back
+    hit?: number[];
+    // A boomerang: thrown from here (by this statue), turning back at turnTick
+    boomerang?: {
+        fromX: number;
+        fromY: number;
+        turnTick: number;
+        hitBack: number[];
+        statue?: ArenaStatue;
+    };
 };
 
 export type PickupKind = "bones" | "coins" | "food" | "casket" | "powerUp";

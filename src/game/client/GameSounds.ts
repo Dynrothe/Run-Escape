@@ -42,7 +42,8 @@ export function getGameSoundIds(): number[] {
         }
         const boss = enemy.boss;
         ids.push(boss?.intro?.darkSound ?? -1, boss?.intro?.sound ?? -1);
-        ids.push(boss?.phases?.totems.blastSound ?? -1, boss?.phases?.totems.chargedSound ?? -1);
+        ids.push(boss?.phases?.totems?.blastSound ?? -1, boss?.phases?.totems?.chargedSound ?? -1);
+        ids.push(boss?.phases?.threshold?.sound ?? -1);
         ids.push(enemy.shot?.sound ?? -1, enemy.shot?.hitSound ?? -1);
     }
     for (const weapon of WEAPONS) {

@@ -87,7 +87,9 @@ import {
 } from "../content/trickOrTreat";
 import { TROPHIES, TrophyDef } from "../content/trophies";
 import {
+    ArenaStatue,
     BoltProcDef,
+    BossAmbientDef,
     BossAttackDef,
     BossDef,
     BossPhasesDef,
@@ -144,6 +146,16 @@ import {
     overlevelBonus,
     rollChoices,
 } from "./Upgrades";
+import {
+    behindPillar,
+    checkerCellAt,
+    checkerCells,
+    circleInBox,
+    cycleStage,
+    inStrip,
+    pillarHit,
+    statueMiddle,
+} from "./arena";
 import {
     ActivePowerUp,
     BossIntro,
@@ -346,6 +358,8 @@ const CURSE_SHUFFLES = [
 
 const CANNON_SPOTANIM = 53;
 const LEVEL_UP_SPOTANIM = 199;
+// Tiles from the player a strike (WeaponDef kind strike) finds its targets within
+const STRIKE_REACH = 12;
 // Ice Barrage's freeze, on a player frozen by a boss
 export const FREEZE_SPOTANIM = 369;
 const ENEMY_PROJECTILE_RADIUS = 0.35;
@@ -2370,8 +2384,7 @@ export class Sim {
             frozen: frozen || this.introHolds,
             held,
             curse: this.curse,
-            arena:
-                this.map.bossArena && this.shownBoss?.def.boss?.phases ? this.bossArena : undefined,
+            arena: this.confinedToArena ? this.bossArena : undefined,
         });
         if (moving !== player.moving) {
             player.moving = moving;
@@ -4636,6 +4649,13 @@ export class Sim {
         }
     }
 
+    // Whether the players are kept in the map's bossArena: while a boss fought
+    // in phases is up, unless it lets them out (BossPhasesDef.confine)
+    get confinedToArena(): boolean {
+        const phases = this.shownBoss?.def.boss?.phases;
+        return this.map.bossArena !== undefined && phases !== undefined && phases.confine !== false;
+    }
+
     // Whether an entrance has the players standing still to watch it
     // (BossIntroDef.holds): the movement rules take it like a hold
     get introHolds(): boolean {
@@ -4709,14 +4729,29 @@ export class Sim {
         });
     }
 
-    // Its first shield, and its totems standing idle in the corners
+    // Its first shield, and its totems standing idle in the corners; or with no
+    // totems, its hitpoints to get through, a phase at a time
     private startPhases(boss: Enemy, phases: BossPhasesDef): void {
-        const shieldMax = Math.round(boss.maxHp * phases.phases[0].shield);
+        const totemsDef = phases.totems;
+        if (!totemsDef) {
+            boss.speed *= phases.phases[0].speed ?? 1;
+            boss.bossState!.phase = {
+                index: 0,
+                stage: "hp",
+                shield: 0,
+                shieldMax: 0,
+                totems: [],
+                ambientNext: 0,
+                startTick: this.tick,
+            };
+            return;
+        }
+        const shieldMax = Math.round(boss.maxHp * (phases.phases[0].shield ?? 0));
         const totems: Enemy[] = [];
         const arena = this.bossArena;
-        const margin = phases.totems.margin;
-        const idle = getEnemy(phases.totems.idleId);
-        const charge = Math.max(1, Math.round(boss.maxHp * phases.totems.charge));
+        const margin = totemsDef.margin;
+        const idle = getEnemy(totemsDef.idleId);
+        const charge = Math.max(1, Math.round(boss.maxHp * totemsDef.charge));
         for (const x of [arena.minX + margin, arena.maxX - margin]) {
             for (const y of [arena.minY + margin, arena.maxY - margin]) {
                 // Where the player can get to, whatever's in that corner
@@ -4731,7 +4766,7 @@ export class Sim {
                             (arena.minX + arena.maxX) / 2 - spot.x,
                             (arena.minY + arena.maxY) / 2 - spot.y,
                         ) +
-                            (phases.totems.yawOffset ?? 0)) &
+                            (totemsDef.yawOffset ?? 0)) &
                         2047;
                     totem.totemOf = boss;
                     totem.hp = totem.maxHp = charge;
@@ -4765,7 +4800,7 @@ export class Sim {
                 projectile.targetUid = 0;
             }
         }
-        const charging = getEnemy(phases.totems.chargingId);
+        const charging = getEnemy(phases.totems!.chargingId);
         for (const totem of phase.totems) {
             totem.def = charging;
             totem.hp = totem.maxHp;
@@ -4781,12 +4816,12 @@ export class Sim {
             return;
         }
         totem.hp = 0;
-        totem.def = getEnemy(phases.totems.chargedId);
+        totem.def = getEnemy(phases.totems!.chargedId);
         totem.shieldEnd = Infinity;
         this.emit({
             type: "bossAttack",
             enemyId: boss.def.id,
-            sound: phases.totems.chargedSound ?? -1,
+            sound: phases.totems!.chargedSound ?? -1,
             x: totem.x,
             y: totem.y,
         });
@@ -4798,7 +4833,7 @@ export class Sim {
     // All four charged: they take a share of its hitpoints, the last of it
     // with the last blast, and otherwise it's on to the next phase
     private totemsBlast(boss: Enemy, phase: BossPhase, phases: BossPhasesDef): void {
-        const totemsDef = phases.totems;
+        const totemsDef = phases.totems!;
         for (const totem of phase.totems) {
             this.emit({
                 type: "totemBlast",
@@ -4845,7 +4880,9 @@ export class Sim {
         phase.stage = "shield";
         // The new phase's dream from its first tick (the old one's bullets fly on)
         phase.ambientNext = this.tick;
-        phase.shieldMax = phase.shield = Math.round(boss.maxHp * next.shield);
+        phase.ambientsNext = undefined;
+        phase.startTick = this.tick;
+        phase.shieldMax = phase.shield = Math.round(boss.maxHp * (next.shield ?? 0));
         phase.opener = next.opener
             ? boss.def.boss!.attacks.find((a) => a.name === next.opener)
             : undefined;
@@ -4858,6 +4895,89 @@ export class Sim {
         }
         this.quarters = undefined;
         this.pushStage(boss, phase, phases.blastMessage);
+    }
+
+    // A fight on its hitpoints (BossPhasesDef with no totems): at each phase's
+    // share of them it's on to the next, kneeling a moment first (threshold),
+    // untouchable and doing nothing of its own. What a hit took past the
+    // threshold is lost, so no phase is skipped.
+    private passThreshold(boss: Enemy, phase: BossPhase): boolean {
+        const phases = boss.def.boss!.phases!;
+        const count = phases.phases.length;
+        const index = phase.index;
+        if (index >= count - 1) {
+            return false;
+        }
+        const until = phases.phases[index].until ?? (count - 1 - index) / count;
+        const at = Math.max(1, Math.round(boss.maxHp * until));
+        if (boss.hp > at) {
+            return false;
+        }
+        boss.hp = at;
+        const next = phases.phases[index + 1];
+        boss.speed *= (next.speed ?? 1) / (phases.phases[index].speed ?? 1);
+        phase.index++;
+        phase.startTick = this.tick;
+        phase.ambientNext = this.tick;
+        phase.ambientsNext = undefined;
+        phase.opener = next.opener
+            ? boss.def.boss!.attacks.find((a) => a.name === next.opener)
+            : undefined;
+        const threshold = phases.threshold;
+        if (threshold) {
+            const state = boss.bossState!;
+            const end = this.tick + secondsToTicks(threshold.seconds);
+            phase.pauseEnd = end;
+            phase.riseTick = end - secondsToTicks(threshold.riseSeconds ?? 0);
+            phase.ambientNext = end;
+            state.windup = undefined;
+            state.chain = undefined;
+            state.follow = undefined;
+            state.channelEnd = Math.max(state.channelEnd, end);
+            boss.shieldEnd = end;
+            boss.vx = boss.vy = 0;
+            boss.anim = "attack";
+            boss.attackSeq = threshold.seq ?? boss.def.idleSeq;
+            boss.animStart = this.tick;
+            if (threshold.spotAnim !== undefined) {
+                this.addEffect(threshold.spotAnim, boss.x, boss.y, 0, end - this.tick, boss.uid);
+            }
+            if (threshold.sound !== undefined) {
+                this.emit({
+                    type: "bossAttack",
+                    enemyId: boss.def.id,
+                    sound: threshold.sound,
+                    x: boss.x,
+                    y: boss.y,
+                });
+            }
+            if (threshold.shout) {
+                this.emit({ type: "bossShout", enemyUid: boss.uid, text: threshold.shout });
+            }
+        }
+        this.pushStage(boss, phase, next.message ?? next.status ?? "");
+        return true;
+    }
+
+    // Kneeling at a threshold: up it gets for the last of it (riseSeq)
+    private stepThreshold(boss: Enemy, phase: BossPhase): boolean {
+        const end = phase.pauseEnd;
+        if (end === undefined) {
+            return false;
+        }
+        if (this.tick >= end) {
+            phase.pauseEnd = phase.riseTick = undefined;
+            boss.anim = "walk";
+            boss.animStart = this.tick;
+            return false;
+        }
+        const rise = boss.def.boss!.phases!.threshold?.riseSeq;
+        if (this.tick === phase.riseTick && rise !== undefined) {
+            boss.anim = "attack";
+            boss.attackSeq = rise;
+            boss.animStart = this.tick;
+        }
+        return true;
     }
 
     private pushStage(boss: Enemy, phase: BossPhase, message: string): void {
@@ -5292,6 +5412,10 @@ export class Sim {
             this.killEnemy(boss);
             return;
         }
+        const ambients = phase.stage === "finale" ? undefined : phases.phases[phase.index].ambients;
+        if (ambients && !this.intro && !state.leap) {
+            this.stepAmbients(boss, phase, ambients);
+        }
         const ambient =
             phase.stage === "finale" ? phases.finale?.ambient : phases.phases[phase.index].ambient;
         if (!ambient || this.intro || state.leap) {
@@ -5332,6 +5456,128 @@ export class Sim {
             },
             false,
         );
+    }
+
+    // A phase's other ambients (BossPhasesDef ambients), each on its own timer:
+    // patterns and ground marks (cycles go by themselves, stepCycles)
+    private stepAmbients(boss: Enemy, phase: BossPhase, ambients: BossAmbientDef[]): void {
+        const next = (phase.ambientsNext ??= ambients.map(
+            (ambient) => this.tick + secondsToTicks(ambient.delay ?? 0),
+        ));
+        ambients.forEach((ambient, i) => {
+            if (this.tick < next[i]) {
+                return;
+            }
+            const attack = boss.def.boss!.attacks.find((a) => a.name === ambient.attack);
+            if (!attack || attack.cycle) {
+                next[i] = Infinity;
+                return;
+            }
+            next[i] = this.tick + secondsToTicks(ambient.interval);
+            const target = this.nearestHero(boss.x, boss.y).player;
+            const toPlayer = Math.max(0.001, fm.hypot(target.x - boss.x, target.y - boss.y));
+            if (attack.pattern) {
+                this.startPattern(
+                    boss,
+                    attack,
+                    {
+                        attack,
+                        startTick: this.tick,
+                        landTick: this.tick,
+                        targets: [],
+                        dirX: (target.x - boss.x) / toPlayer,
+                        dirY: (target.y - boss.y) / toPlayer,
+                    },
+                    false,
+                );
+            } else if (attack.ground) {
+                this.markGround(boss, attack, this.tick + secondsToTicks(attack.windup));
+            }
+            if (attack.windupSound !== undefined) {
+                this.emit({
+                    type: "bossAttack",
+                    enemyId: boss.def.id,
+                    sound: attack.windupSound,
+                    x: boss.x,
+                    y: boss.y,
+                });
+            }
+        });
+    }
+
+    // The rhythms of the phase (BossAttackDef.cycle, among its ambients): each
+    // keeps its time from the phase it began in until a phase leaves it out,
+    // and burns whoever's on a row that's burning, once every interval
+    private stepCycles(boss: Enemy, phase: BossPhase): void {
+        const state = boss.bossState!;
+        const phases = boss.def.boss!.phases!;
+        const ambients =
+            phase.stage === "finale" ? undefined : phases.phases[phase.index]?.ambients;
+        if (!state.cycles && !ambients?.length) {
+            return;
+        }
+        const on: BossAttackDef[] = [];
+        for (const ambient of ambients ?? []) {
+            const attack = boss.def.boss!.attacks.find((a) => a.name === ambient.attack);
+            if (attack?.cycle) {
+                on.push(attack);
+            }
+        }
+        const cycles = (state.cycles ?? []).filter((cycle) => on.includes(cycle.attack));
+        if (this.intro) {
+            return;
+        }
+        for (const attack of on) {
+            if (!cycles.some((cycle) => cycle.attack === attack)) {
+                cycles.push({ attack, startTick: this.tick, nextHit: [] });
+            }
+        }
+        state.cycles = cycles.length > 0 ? cycles : undefined;
+        const rows = this.map.features?.fires;
+        if (!rows) {
+            return;
+        }
+        for (const cycle of cycles) {
+            const def = cycle.attack.cycle!;
+            const damage = this.getBossDamage(boss, cycle.attack);
+            rows.forEach((row, i) => {
+                const { stage, since } = cycleStage(
+                    def,
+                    cycle.startTick,
+                    i,
+                    this.tick,
+                    TICKS_PER_SECOND,
+                );
+                if (stage !== "burn") {
+                    return;
+                }
+                const halfX = (row.x1 - row.x0 + 1) / 2;
+                const cx = row.x0 + halfX;
+                const cy = row.y + 0.5;
+                if (since === 0 && cycle.attack.sound !== undefined) {
+                    this.emit({
+                        type: "bossAttack",
+                        enemyId: boss.def.id,
+                        sound: cycle.attack.sound,
+                        x: cx,
+                        y: cy,
+                    });
+                }
+                this.forEachHeroInReach(() => {
+                    const player = this.player;
+                    const index = this.hero.index;
+                    if (
+                        this.runOver ||
+                        this.tick < (cycle.nextHit[index] ?? 0) ||
+                        !circleInBox(player.x, player.y, player.radius, cx, cy, halfX, 0.5)
+                    ) {
+                        return;
+                    }
+                    cycle.nextHit[index] = this.tick + secondsToTicks(def.interval);
+                    this.bossHit(boss.def.id, boss, cycle.attack, damage);
+                });
+            });
+        }
     }
 
     // The tempo of the phase a boss is in (BossPhasesDef tempo): what its
@@ -5939,6 +6185,15 @@ export class Sim {
         }
         const phase = state.phase;
         if (phase) {
+            // The arena's rhythms keep going whatever it's doing
+            this.stepCycles(enemy, phase);
+            if (this.runOver) {
+                return;
+            }
+            // Kneeling at a threshold, it does nothing at all
+            if (this.stepThreshold(enemy, phase)) {
+                return;
+            }
             this.stepPhase(enemy, phase);
             if (enemy.dead) {
                 return;
@@ -6958,8 +7213,9 @@ export class Sim {
             ),
         );
         const phase = enemy.bossState?.phase;
-        if (phase) {
-            // All a hit can get at is its shield
+        // All a hit can get at is its shield, in a fight with totems
+        const shielded = phase !== undefined && phase.stage !== "hp";
+        if (shielded) {
             phase.shield -= damage;
         } else {
             enemy.hp -= damage;
@@ -6989,7 +7245,7 @@ export class Sim {
                 enemy.vy += (dy / len) * k;
             }
         }
-        if (phase) {
+        if (shielded) {
             if (phase.shield <= 0) {
                 this.breakShield(enemy, phase);
             }
@@ -6997,6 +7253,8 @@ export class Sim {
             if (enemy.hp <= 0) {
                 this.totemCharged(enemy, enemy.totemOf);
             }
+        } else if (phase && this.passThreshold(enemy, phase)) {
+            // On to its next phase, whatever the hit would have taken
         } else if (enemy.hp <= 0 && !this.riseAgain(enemy)) {
             this.killEnemy(enemy);
         }
@@ -8417,7 +8675,9 @@ export class Sim {
 
     private fireStrikes(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
         const player = this.player;
-        const candidates = this.nearestEnemies(player.x, player.y, 12, 60);
+        // A fight can keep them close (MapDef.fight.strikeReach)
+        const reach = this.map.fight?.strikeReach ?? STRIKE_REACH;
+        const candidates = this.nearestEnemies(player.x, player.y, reach, 60);
         if (candidates.length === 0) {
             return false;
         }
@@ -10242,7 +10502,7 @@ function hasTag(enemy: Enemy, tags: readonly EnemyTag[]): boolean {
 // and with that down there's nothing to give back
 function hurtFraction(enemy: Enemy): number {
     const phase = enemy.bossState?.phase;
-    if (phase) {
+    if (phase && phase.stage !== "hp") {
         return phase.stage === "shield" ? phase.shield / phase.shieldMax : 1;
     }
     return enemy.hp / enemy.maxHp;
