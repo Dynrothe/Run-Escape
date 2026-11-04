@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 
-// The launcher, with the relay's address built in, as the game's is (VITE_COOP_URL)
+// Build the launcher with the same relay and analytics addresses as the game.
 await build({
     entryPoints: ["desktop/main.ts"],
     bundle: true,
@@ -10,5 +10,8 @@ await build({
     external: ["electron"],
     outfile: "desktop/out/main.cjs",
     logLevel: "warning",
-    define: { __COOP_URL__: JSON.stringify(process.env.VITE_COOP_URL ?? "") },
+    define: {
+        __COOP_URL__: JSON.stringify(process.env.VITE_COOP_URL ?? ""),
+        __RUN_ANALYTICS_URL__: JSON.stringify(process.env.VITE_RUN_ANALYTICS_URL ?? ""),
+    },
 });

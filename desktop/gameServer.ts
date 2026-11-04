@@ -33,12 +33,12 @@ const MIME_TYPES: Record<string, string> = {
     ".wasm": "application/wasm",
 };
 
-// Where the page may connect: the app, and the relay if it has one. protocol.handle in main.ts
+// Where the page may connect: the app, its relay and its run collector. protocol.handle in main.ts
 // already answers every https request itself, but WebSockets don't go through it, so this is what
 // keeps those in. Workers get their own copy, from their script's answer.
-export function contentSecurityPolicy(relayOrigin: string | undefined): string {
+export function contentSecurityPolicy(relayOrigin: string | undefined, analytics?: string): string {
     const relay = relayOrigin ? ` ${relayOrigin} ${relayOrigin.replace(/^https:/, "wss:")}` : "";
-    return `connect-src 'self'${relay}`;
+    return `connect-src 'self'${relay}${analytics ? ` ${analytics}` : ""}`;
 }
 
 function status(code: number, headers: Record<string, string> = {}): Response {
@@ -99,14 +99,14 @@ export function getRelayOrigin(coopUrl: string): string | undefined {
     }
 }
 
-// Answers a request for the game like the static server it's written for. relayOrigin is the one
-// address apart from the app's own that the page may connect to (see getRelayOrigin).
+// Answers a request for the game locally with its configured external connection policy.
 export async function serveGame(
     root: string,
     request: Request,
     relayOrigin?: string,
+    analytics?: string,
 ): Promise<Response> {
-    const csp = { "Content-Security-Policy": contentSecurityPolicy(relayOrigin) };
+    const csp = { "Content-Security-Policy": contentSecurityPolicy(relayOrigin, analytics) };
     const url = new URL(request.url);
     if (url.origin !== GAME_ORIGIN) {
         return status(403, csp);

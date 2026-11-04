@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 
+import { runAnalyticsUrl } from "../src/util/runAnalyticsUrl";
 import { GameFolder, pickGameFolder } from "./gameFiles";
 import { GAME_ORIGIN, getRelayOrigin, serveGame } from "./gameServer";
 import { checkForUpdate, installUpdate, readInstalledGames, removeOldGames } from "./gameUpdate";
@@ -36,6 +37,7 @@ const log = (message: string) =>
 
 // The relay, from the build (see build-main.ts). Empty for a build with none.
 declare const __COOP_URL__: string;
+declare const __RUN_ANALYTICS_URL__: string;
 
 function openExternally(url: string): void {
     if (/^https?:\/\//.test(url)) {
@@ -167,13 +169,22 @@ function openGame(): BrowserWindow {
 async function start(): Promise<void> {
     Menu.setApplicationMenu(null);
     const gameSession = session.fromPartition(GAME_PARTITION);
-    // Everything's the game's own but the relay, the one thing that's let out
+    // Only the configured relay and the exact anonymous run collector may leave the app.
     const relayOrigin = getRelayOrigin(__COOP_URL__);
-    gameSession.protocol.handle("https", (request) =>
-        new URL(request.url).origin === relayOrigin
-            ? gameSession.fetch(request, { bypassCustomProtocolHandlers: true })
-            : serveGame(gameRoot, request, relayOrigin),
-    );
+    const analytics = runAnalyticsUrl(__RUN_ANALYTICS_URL__);
+    gameSession.protocol.handle("https", (request) => {
+        if (request.url === analytics && ["POST", "OPTIONS"].includes(request.method)) {
+            return gameSession.fetch(request, {
+                bypassCustomProtocolHandlers: true,
+                redirect: "error",
+                credentials: "omit",
+            });
+        }
+        if (new URL(request.url).origin === relayOrigin) {
+            return gameSession.fetch(request, { bypassCustomProtocolHandlers: true });
+        }
+        return serveGame(gameRoot, request, relayOrigin, analytics);
+    });
     // The game only ever asks for these two
     gameSession.setPermissionRequestHandler((_contents, permission, callback) => {
         callback(permission === "fullscreen" || permission === "pointerLock");

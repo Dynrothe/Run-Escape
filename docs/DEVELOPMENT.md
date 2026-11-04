@@ -224,8 +224,6 @@ The metrics are:
   into `coop_rooms_public` and `coop_rooms_private`. Public rooms include full and started rooms.
 - Counters since startup: `coop_connections_total` (accepted connections), `coop_rooms_created_total`
   and `coop_runs_started_total`.
-- Run outcome counter: `coop_runs_finished_total`, with `map`, `party_size` (`2`, `3`, `4`),
-  `difficulty` (`normal`, `hard`) and `outcome` (`completed`, `failed`) labels. See below.
 - Peak gauges since startup: `coop_players_connected_peak` and `coop_rooms_peak`.
 - Uptime gauge: `coop_uptime_seconds`.
 - Configured limit gauges: `coop_connections_limit` and `coop_rooms_limit`.
@@ -250,12 +248,12 @@ scrape_configs:
           - targets: ["127.0.0.1:8788"]
 ```
 
-Adjust the target port or metrics path if you changed the settings above. Only run outcomes have
-labels; Prometheus supplies scrape timestamps.
+Adjust the target port or metrics path if you changed the settings above. Samples have no labels
+or explicit timestamps; Prometheus supplies scrape timestamps.
 
 Counts are in memory and reset on restart. Each GET reads the existing rooms once; totals and peaks
-update only on connections, room creation, run starts and terminal outcomes. There is no background
-sampling, extra package or disk write. Responses aren't cached. Refresh the URL for a live snapshot;
+update only on connections, room creation and run starts. There is no background sampling, extra
+package, disk write or per-message tracking. Responses aren't cached. Refresh the URL for a live snapshot;
 if using a monitor, polling every 15–30 seconds is plenty for these counts.
 
 The public game/relay port always returns 404 for `/coop/metrics`, even for requests coming through
@@ -265,47 +263,17 @@ only controls the game/relay listener and cannot make metrics listen publicly.
 Metrics contain aggregate numbers only, with no player names, addresses or room codes. The public
 `/coop` availability response contains only `{"coop":true}`, so it doesn't expose aggregate counts.
 
-**Run outcomes.** Each non-endless run with 2–4 starting players can contribute one result, reported
-by the host in its existing final frames. `completed` means the simulation reached victory;
-`failed` means every starting hero died (the party's “Oh dear, you are dead” result). One player
-dying while teammates are still up isn't a failure. A living player leaving can also end the
-simulation, so that does **not** count as a full-party death. Give-ups, disconnects and abandoned
-runs have no outcome of their own yet. A party that continues after someone leaves can still win;
-its result keeps the **starting** party size. A same-tick final-boss kill and party death is a win.
-
-Map and difficulty also come from the start. All campaign, seasonal, standalone boss and raid map
-IDs are separate labels; unrecognized IDs share `unknown` to bound the number of series. Add new
-non-endless maps to `server/run-metrics.mjs` (a test checks the list). Endless runs, including fun
-maps, and solo rooms are excluded. Old clients don't report outcomes. The relay trusts the host's
-result, just as it trusts its game frames; these are gameplay analytics, not verified scores.
-
-Both outcome series start at zero when a map/party/difficulty combination first starts a qualifying
-run, so a scraper can observe its first result. For example:
-
-```text
-coop_runs_finished_total{map="barrows",party_size="3",difficulty="hard",outcome="completed"} 7
-coop_runs_finished_total{map="barrows",party_size="3",difficulty="hard",outcome="failed"} 4
-```
-
-In Prometheus/Grafana, counts over the last day, grouped by map, starting party size and outcome
-(summing both difficulties):
-
-```promql
-sum by (map, party_size, outcome) (increase(coop_runs_finished_total[24h]))
-```
-
-Add `difficulty` to the grouping to compare normal and hard separately. These are outcomes among
-reported finished runs, not a completion rate across all starts. Prometheus needs to scrape and
-retain the counters to track them across Node restarts. Cloudflare's equivalent uses optional
-[Analytics Engine collection](../server/cloudflare/README.md#run-outcome-metrics).
+**Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
+end-of-run stats to a Cloudflare D1 collector, regardless of relay. See the
+[collector setup, daily analytics and leaderboard](../server/analytics/README.md).
 
 ## Desktop
 
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`, and the app lets only that address out: `protocol.handle` in `main.ts` answers
-every other https request itself, and WebSockets, which don't go through it, are kept to the relay
+has to be `wss://`. The app allows that relay and the optional `RUN_ANALYTICS_URL` POST endpoint.
+`protocol.handle` in `main.ts` answers other https requests itself, and WebSockets are kept to the relay
 by the `Content-Security-Policy` header `gameServer.ts` sends (`connect-src`). Without it there's
 no Multiplayer.
 

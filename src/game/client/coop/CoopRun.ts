@@ -447,16 +447,6 @@ export class CoopRun {
             events: this.outgoing,
             ...(this.outgoingHash && { hash: this.outgoingHash }),
         };
-        // Check after the whole frame: killing the final boss on the same
-        // tick as the party falls is still a victory. A leave can also make
-        // the sim dead, so only actual deaths qualify as a party wipe.
-        if (!this.sim.endless && this.sim.heroes.length >= 2) {
-            if (this.sim.state === "victory") {
-                message.result = "completed";
-            } else if (this.sim.state === "dead" && this.sim.heroes.every((hero) => hero.down)) {
-                message.result = "failed";
-            }
-        }
         this.link.sendDown(message);
         this.sent.push(message);
         while (this.sent.length > 0 && this.upTo - this.sent[0].upTo > RESEND_FRAMES) {
