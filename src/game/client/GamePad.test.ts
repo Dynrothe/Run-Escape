@@ -203,6 +203,45 @@ describe("GamePads", () => {
         expect(keys).toContain("+KeyP");
     });
 
+    // DS4Windows: the PlayStation pad and the Xbox one it makes, pressing together
+    test("keeps to one of two pads that press together, so presses count", () => {
+        const playstation = (down: number[] = []) =>
+            ({
+                ...fakePad(down),
+                index: 1,
+                id: "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)",
+            }) as Gamepad;
+        let both = [fakePad(), playstation()];
+        Object.defineProperty(navigator, "getGamepads", { value: () => both, configurable: true });
+        const p = new GamePads();
+        const keys: string[] = [];
+        p.onKeyDown = (code) => keys.push("+" + code);
+        p.onKeyUp = (code) => keys.push("-" + code);
+        const connected = vi.fn();
+        p.onConnect = connected;
+        for (let i = 0; i < 3; i++) {
+            both = [fakePad([PAD.leftBumper]), playstation([PAD.leftBumper])];
+            p.poll(i * 32, "run");
+            both = [fakePad(), playstation()];
+            p.poll(i * 32 + 16, "run");
+        }
+        expect(connected).toHaveBeenCalledTimes(1);
+        expect(keys).toEqual(["+Digit1", "-Digit1", "+Digit1", "-Digit1", "+Digit1", "-Digit1"]);
+    });
+
+    test("hands over to another pad once the one in use is let go", () => {
+        const other = (down: number[] = []) => ({ ...fakePad(down), index: 1 }) as Gamepad;
+        let both = [fakePad([PAD.leftBumper]), other()];
+        Object.defineProperty(navigator, "getGamepads", { value: () => both, configurable: true });
+        const p = new GamePads();
+        const connected = vi.fn();
+        p.onConnect = connected;
+        p.poll(0, "run");
+        both = [fakePad(), other([PAD.leftBumper])];
+        p.poll(16, "run");
+        expect(connected).toHaveBeenCalledTimes(2);
+    });
+
     test("a pad off the standard layout only moves", () => {
         const { p, keys } = pads();
         pad = fakePad([PAD.leftBumper], [1, 0], "");

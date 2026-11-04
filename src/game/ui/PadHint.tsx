@@ -34,9 +34,24 @@ export function KeyHint({
     );
 }
 
-// Kenney's Input Prompts (CC0, public/input-prompts), named by our buttons,
-// and "move" for the left stick. A pad of another make has Xbox's, as it has
-// Xbox's labels.
+// Kenney's Input Prompts (CC0, ./input-prompts), named by our buttons, and
+// "move" for the left stick. A pad of another make has Xbox's, as it has
+// Xbox's labels. They're in the bundle as data URLs rather than files beside
+// it: the desktop app's launcher 1.0.0 serves .svg files with no image type, so
+// an <img> of one draws nothing there, and players keep their launcher.
+export const PAD_ICONS: Record<string, string> = Object.fromEntries(
+    Object.entries(
+        import.meta.glob<string>("./input-prompts/*/*.svg", {
+            query: "?raw",
+            import: "default",
+            eager: true,
+        }),
+    ).map(([file, svg]) => [
+        file.replace("./input-prompts/", "").replace(".svg", ""),
+        "data:image/svg+xml," + encodeURIComponent(svg),
+    ]),
+);
+
 export function PadIcon({
     kind,
     icon,
@@ -50,7 +65,7 @@ export function PadIcon({
     return (
         <img
             className="ui-pad-icon"
-            src={`input-prompts/${folder}/${icon}.svg`}
+            src={PAD_ICONS[`${folder}/${icon}`]}
             alt={label}
             title={label}
             draggable={false}

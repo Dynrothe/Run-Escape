@@ -323,8 +323,11 @@ export class GamePads {
                 ? navigator.getGamepads()
                 : [];
         let pad = this.index !== undefined ? pads[this.index] : null;
-        // Take up whichever pad has something pressed
-        for (const other of pads) {
+        // Take up whichever pad has something pressed, once the one in use is let go. One
+        // controller can show as two that press together (DS4Windows' Xbox pad beside the
+        // PlayStation one), and taking the other up each frame would lose every press.
+        const idle = !pad || !pad.connected || !this.touched(pad);
+        for (const other of idle ? pads : []) {
             if (other && other.index !== this.index && other.connected && this.touched(other)) {
                 this.use(other);
                 pad = other;

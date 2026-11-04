@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Controller button icons showed as broken images in the Windows app.
+- A PlayStation controller through DS4Windows showed as two controllers taking turns, and its
+  buttons did nothing on the menus.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

@@ -27,6 +27,7 @@ const MIME_TYPES: Record<string, string> = {
     ".md": "text/markdown; charset=utf-8",
     ".ogg": "audio/ogg",
     ".png": "image/png",
+    ".svg": "image/svg+xml",
     ".ttf": "font/ttf",
     ".txt": "text/plain; charset=utf-8",
     ".wasm": "application/wasm",
