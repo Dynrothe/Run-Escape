@@ -7,7 +7,7 @@ import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./t
 // everything comes once a boss is enraged. Their own spot animations throughout: the Maiden's blood (1578, pools
 // 1579), the Bloat's flies (1568) and flesh (1570, 1571), Xarpus's poison (1555, splash 1654),
 // Sotetseg's orbs (1606) and ball of death (1604), and Verzik's power blast (1580), lightning (1585)
-// and green ball (1598). The Bloat's flesh (1570, 1571) falls from above, so the Maiden's blood pool
+// green ball (1598) and yellows (1595). The Bloat's flesh (1570, 1571) falls from above, so the Maiden's blood pool
 // (1579) marks where it'll land.
 //
 // The Pestilent Bloat, Sotetseg and Verzik Vitur also turn up on Morytania, tuned for there; the
@@ -635,7 +635,9 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         name: "Yellows",
         kind: "projectile",
         ordeal: true,
-        spotAnim: 1598,
+        // A yellow orb (one of her own, 1595), not her Green ball's (1598): one needs standing
+        // still in a pool, the other outrunning
+        spotAnim: 1595,
         sound: 879,
         damage: 12,
         windup: 1.2,
@@ -809,6 +811,7 @@ function raidVersion(
 ): EnemyDef {
     const all = replace ? attacks : [...base.boss!.attacks, ...attacks];
     const interval = extra.attackInterval ?? tunedAt;
+    const summonsAt = extra.summonsAt ?? base.boss!.summonsAt;
     return {
         ...base,
         id,
@@ -816,9 +819,25 @@ function raidVersion(
         boss: {
             ...base.boss!,
             ...extra,
-            attacks: oftener(all, tunedAt, interval),
+            // What it calls in is the raid's: its green and blue Nylocas shoot (RAID_NYLOCAS)
+            attacks: oftener(all, tunedAt, interval).map((attack) =>
+                attack.summon
+                    ? {
+                          ...attack,
+                          summon: { ...attack.summon, enemyId: raidId(attack.summon.enemyId) },
+                      }
+                    : attack,
+            ),
+            ...(summonsAt && {
+                summonsAt: summonsAt.map((s) => ({ ...s, enemyId: raidId(s.enemyId) })),
+            }),
         },
     };
+}
+
+// The raid's copy of an enemy, if it has one (RAID_NYLOCAS), or the enemy as it is
+function raidId(enemyId: string): string {
+    return RAID_NYLOCAS.some(([id]) => id === enemyId) ? "tob_" + enemyId : enemyId;
 }
 
 // Bigger than Morytania has them, as the raid's rooms are bigger. Drawn only: what can be hit
@@ -1016,7 +1035,9 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 // He comes up out of his pool, and goes back down at half: he can't be hurt until
                 // his exhumeds are smothered, and those left heal him
                 exhumes: {
-                    at: [1, 0.5],
+                    // Not at full hitpoints: each exhumed missed heals him, which at full does
+                    // nothing
+                    at: [0.8, 0.4],
                     count: 8,
                     // Not forever, for whoever doesn't know to: he rises the better for each left
                     seconds: 30,

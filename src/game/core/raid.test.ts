@@ -40,6 +40,7 @@ const lumbridge = getMap("lumbridge");
 function room(x: number, boss: string, at: number): RaidRoomDef {
     return {
         name: boss,
+        par: 40,
         start: { x: x + 0.5, y: 1010.5 },
         arrive: { x: x + 0.5, y: 1050.5 },
         bossAt: { x: x + 4.5, y: 1056.5 },
@@ -243,11 +244,35 @@ describe("raids", () => {
         expect(earned(save)).toContain("holy_scythe_of_vitur");
     });
 
+    it("has every raid boss call in the raid's Nylocas, which shoot", () => {
+        const tob = MAP_BY_ID.get("theatre_of_blood")!;
+        const bosses = new Set(tob.raid!.rooms.map((r) => r.boss));
+        for (const id of [...bosses]) {
+            const rises = getEnemy(id).boss?.rises?.into;
+            if (rises) {
+                bosses.add(rises);
+            }
+        }
+        for (const id of bosses) {
+            const boss = getEnemy(id).boss!;
+            const called = [
+                ...(boss.summonsAt ?? []).map((s) => s.enemyId),
+                ...boss.attacks.flatMap((a) => (a.summon ? [a.summon.enemyId] : [])),
+            ];
+            for (const enemyId of called.filter((e) => /toxobolos|hagios/.test(e))) {
+                expect(getEnemy(enemyId).shot, `${id}: ${enemyId}`).toBeDefined();
+            }
+        }
+    });
+
     it("scores a room on how fast its boss went down and how little you were hurt", () => {
-        expect(getRoomPoints(10, 0, 100)).toBe(200);
-        expect(getRoomPoints(120, 100, 100)).toBe(50);
-        expect(getRoomPoints(70, 50, 100)).toBe(125);
-        expect(getRoomPoints(300, 500, 100)).toBe(50);
+        expect(getRoomPoints(10, 0, 100, 40)).toBe(200);
+        expect(getRoomPoints(120, 100, 100, 40)).toBe(50);
+        expect(getRoomPoints(70, 50, 100, 40)).toBe(125);
+        expect(getRoomPoints(300, 500, 100, 40)).toBe(50);
+        // A room's par is what it takes for all the speed points: a longer fight's par is longer
+        expect(getRoomPoints(150, 0, 100, 150)).toBe(200);
+        expect(getRoomPoints(150, 0, 100, 40)).toBe(100);
     });
 
     it("opens the supply chest once a room's cleared, paid for in raid points", () => {
@@ -430,12 +455,17 @@ describe("the Theatre's bullet shapes", () => {
 
     it("hard mode fires half as many bullets again, with as wide a way through", () => {
         expect(getMap("theatre_of_blood").hard?.bullets).toBe(1.5);
-        // A ring: its gap is an angle
-        const ring = volley("Blood throw", "maiden_of_sugadinti");
-        const hardRing = volley("Blood throw", "maiden_of_sugadinti", 1.5);
-        const more = hardRing.shot.length / ring.shot.length;
+        // A spread: more bullets, fanned out wider, as far apart
+        const fan = volley("Blood throw", "maiden_of_sugadinti");
+        const hardFan = volley("Blood throw", "maiden_of_sugadinti", 1.5);
+        const more = hardFan.shot.length / fan.shot.length;
         expect(more).toBeGreaterThan(1.4);
         expect(more).toBeLessThan(1.7);
+        const apart = (shot: { vx: number; vy: number }[]) => {
+            const angles = shot.map((b) => Math.atan2(b.vy, b.vx)).sort((a, b) => a - b);
+            return Math.min(...angles.slice(1).map((a, i) => a - angles[i]));
+        };
+        expect(apart(hardFan.shot)).toBeCloseTo(apart(fan.shot), 3);
         // A wall: as long, closer together, and its gap as many tiles across
         const wall = volley("The maze", "tob_sotetseg");
         const hardWall = volley("The maze", "tob_sotetseg", 1.5);
@@ -556,6 +586,75 @@ describe("the Theatre's bosses", () => {
         expect(sim.visitor).toBeUndefined();
     });
 
+    it("caps what armour takes off a raid boss's hits however they land, its boss gone or not", () => {
+        const sim = raid();
+        const def = getEnemy("xarpus");
+        const cap = def.boss!.armorCap!;
+        // Enough to take every hit here and stand
+        sim.player.maxHp = sim.player.hp = 1000;
+        sim.stats.armor = 1000;
+        // Straight to the player, as a stomp or a stare's are
+        sim.player.invulnerable = 0;
+        expect(sim["damagePlayer"](40, def.id, false)).toBeGreaterThanOrEqual(
+            Math.round(40 * (1 - cap)),
+        );
+        // A pool whose boss is gone: as much as it does with no armour, less the cap at most
+        const attack = def.boss!.attacks.find((a) => a.name === "Acid")!;
+        const pool = (armor: number) => {
+            // A tick on, past the last hit's grace
+            sim.tick += 40;
+            sim.stats.armor = armor;
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.hazards = [
+                {
+                    uid: 998,
+                    enemyUid: -1,
+                    enemyId: def.id,
+                    attack,
+                    x: sim.player.x,
+                    y: sim.player.y,
+                    radius: attack.ground!.radius,
+                    damage: 40,
+                    startTick: sim.tick,
+                    landTick: sim.tick,
+                    endTick: sim.tick,
+                    armed: false,
+                    fuseTick: -1,
+                    grabEnd: 0,
+                    hit: [],
+                    lingerEnd: -1,
+                    nextHurt: -1,
+                },
+            ];
+            sim["stepHazards"]();
+            return sim.player.maxHp - sim.player.hp;
+        };
+        const bare = pool(0);
+        expect(bare).toBeGreaterThan(1);
+        expect(pool(1000)).toBeGreaterThanOrEqual(Math.floor(bare * (1 - cap)));
+    });
+
+    it("brings all the Maiden's healers on, however close to a wall she stands", () => {
+        const sim = raid();
+        const def = getEnemy("maiden_of_sugadinti");
+        const summon = def.boss!.summonsAt!.find((s) => s.enemyId === "nylocas_matomenos_healer")!;
+        // In a corner of the room: most of the ring her healers come on in is in its walls
+        const boss = sim.spawnEnemy(def, "boss", { x: 1069.5, y: 1069.5 })!;
+        sim.player.x = sim.player.prevX = 1064.5;
+        sim.player.y = sim.player.prevY = 1064.5;
+        sim.step();
+        boss.hp = Math.floor(boss.maxHp * summon.hp);
+        const before = sim.enemies.filter((e) => e.def.id === summon.enemyId && !e.dead).length;
+        sim["callSummons"](boss, false);
+        const healers = sim.enemies.filter((e) => e.def.id === summon.enemyId && !e.dead);
+        expect(healers.length - before).toBe(summon.count);
+        for (const healer of healers) {
+            expect(healer.x).toBeLessThan(1071);
+            expect(healer.y).toBeLessThan(1071);
+        }
+    });
+
     it("leave blood and acid on the floor that hurts for as long as you stand in it", () => {
         const sim = raid();
         const def = getEnemy("xarpus");
@@ -568,6 +667,7 @@ describe("the Theatre's bosses", () => {
         sim.hazards.push({
             uid: 999,
             enemyUid: boss.uid,
+            enemyId: boss.def.id,
             attack,
             x,
             y,
@@ -747,7 +847,8 @@ describe("expert mode", () => {
         const smother = attack.ground!.smother!;
         const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
         sim["damageSource"] = "weapon:scythe_of_vitur";
-        // He comes up in his pool, out of reach
+        // Down to his first exhumes: he sinks into his pool, out of reach
+        boss.hp = Math.floor(boss.maxHp * exhumes.at[0]);
         sim["stepOrdeal"](boss);
         expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBe(0);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
@@ -755,6 +856,7 @@ describe("expert mode", () => {
             const hazard = {
                 uid: 900 + sim.hazards.length,
                 enemyUid: boss.uid,
+                enemyId: boss.def.id,
                 attack,
                 x,
                 y,
@@ -804,6 +906,7 @@ describe("expert mode", () => {
         const def = getEnemy("xarpus");
         const exhumes = def.boss!.exhumes!;
         const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        boss.hp = Math.floor(boss.maxHp * exhumes.at[0]);
         sim["stepOrdeal"](boss);
         boss.hp = boss.maxHp / 2;
         sim.tick += Math.round(exhumes.seconds * TICKS_PER_SECOND);

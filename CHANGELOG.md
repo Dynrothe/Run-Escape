@@ -12,8 +12,8 @@ the version in the corner).
 - The Theatre of Blood's bosses take less from missiles and magic: 15% of their damage, from 30%.
 - Armour takes off at most half of a Theatre of Blood boss's hit, so Protect from Melee no longer
   turns them all to 1s.
-- The Theatre of Blood's hard and expert modes fire half as many bullets again in every pattern,
-  with the gaps through them as wide.
+- The Theatre of Blood's hard and expert modes fire half as many bullets again, with the space
+  between them as wide: spreads fan out wider, and rings with no way through stay as they are.
 - Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
   has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
   new one marked on the ground first.
@@ -23,7 +23,9 @@ the version in the corner).
 - Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
   her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
   Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-- The Theatre of Blood's green and blue Nylocas shoot from range.
+- The Theatre of Blood's green and blue Nylocas shoot from range, Verzik's too.
+- A Theatre of Blood room's raid points for speed go by how long its boss is meant to take, so a
+  later, longer fight is worth as much as a quick early one.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04

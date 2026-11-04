@@ -172,6 +172,9 @@ export type EnemyLeaving = {
 export type GroundHazard = {
     uid: number;
     enemyUid: number;
+    // Its boss's EnemyDef id, kept for once the boss is gone (what its hits are said to be from,
+    // and its armour cap)
+    enemyId: string;
     attack: BossAttackDef;
     x: number;
     y: number;
