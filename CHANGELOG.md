@@ -23,6 +23,8 @@ the version in the corner).
 - Refunding a skill also gives back what it added to the price of every skill bought after it. Some
   class pages from older saves need Refund all once before single ranks can be refunded again.
   Fixed by Deivid Smarzaro.
+- On a phone held sideways, the Multiplayer screen fits, so its Back button is always in reach,
+  even with an error showing. Fixed by trippy22.
 
 ## 0.24.1 - 2026-11-04
 
