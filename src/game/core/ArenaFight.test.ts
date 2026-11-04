@@ -610,3 +610,111 @@ describe("rows of bolts, stopped by pillars", () => {
         }
     });
 });
+
+describe("the checker floor", () => {
+    const lightning = attack({
+        name: "Lightning",
+        kind: "ground",
+        damage: 6,
+        windup: 1.6,
+        impactSpotAnim: 1796,
+        ground: { spots: [{ shape: "checker", then: 1.6 }], radius: 1.5 },
+    });
+    const CHECKER: ArenaFeatures = {
+        checker: { x0: BASE + 20, y0: BASE + 20, cell: 3, cols: 4, rows: 4 },
+    };
+
+    function fight(cross?: number): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        sim.map.features = CHECKER;
+        const ground = {
+            ...lightning.ground!,
+            spots: [{ shape: "checker" as const, then: 1.6, cross }],
+        };
+        const boss = startFight(sim, bossDef({ attacks: [{ ...lightning, ground }] }));
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = BASE + 50;
+        sim.hazards = [];
+        return { sim, boss };
+    }
+
+    // The middle of the cell cx, cy
+    const cell = (cx: number, cy: number) => ({
+        x: BASE + 20 + cx * 3 + 1.5,
+        y: BASE + 20 + cy * 3 + 1.5,
+    });
+
+    test("one colour's cells first, each a square of its own, then the other's", () => {
+        const { sim, boss } = fight();
+        place(sim, cell(1, 1).x, cell(1, 1).y);
+        use(sim, boss, "Lightning");
+        expect(sim.hazards).toHaveLength(16);
+        const now = sim.hazards.filter((h) => h.startTick === sim.tick);
+        const later = sim.hazards.filter((h) => h.startTick !== sim.tick);
+        expect(now).toHaveLength(8);
+        expect(later).toHaveLength(8);
+        for (const h of sim.hazards) {
+            expect(h.half).toBe(1.5);
+        }
+        // The colours alternate, as a checker's do
+        const colour = (h: { x: number; y: number }) =>
+            (Math.floor((h.x - BASE - 20) / 3) + Math.floor((h.y - BASE - 20) / 3)) % 2;
+        expect(new Set(now.map(colour)).size).toBe(1);
+        expect(new Set(later.map(colour)).size).toBe(1);
+        expect(colour(now[0])).not.toBe(colour(later[0]));
+        expect(later[0].startTick).toBe(now[0].landTick);
+        expect(later[0].landTick - now[0].landTick).toBe(1.6 * TICKS_PER_SECOND);
+    });
+
+    test("stand on the other colour, then cross back once the first has struck", () => {
+        const { sim, boss } = fight();
+        place(sim, cell(1, 1).x, cell(1, 1).y);
+        use(sim, boss, "Lightning");
+        const first = sim.hazards.find((h) => h.startTick === sim.tick)!;
+        const second = sim.hazards.find((h) => h.startTick !== sim.tick)!;
+        // On the second colour, near the edge of its cell, but in it
+        place(sim, second.x + 1.4 - sim.player.radius, second.y);
+        const hp = hpOf(sim);
+        run(sim, 1.65);
+        expect(hpOf(sim)).toBe(hp);
+        // Over to the first colour's cell, struck already
+        place(sim, first.x, first.y);
+        run(sim, 1.7);
+        expect(hpOf(sim)).toBe(hp);
+        expect(sim.hazards).toEqual([]);
+    });
+
+    test("whoever stays put on a cell when it strikes is hit, at its corner too", () => {
+        const { sim, boss } = fight();
+        place(sim, cell(1, 1).x, cell(1, 1).y);
+        use(sim, boss, "Lightning");
+        const first = sim.hazards.find((h) => h.startTick === sim.tick)!;
+        place(sim, first.x + 1.45, first.y + 1.45);
+        const hp = hpOf(sim);
+        run(sim, 1.65);
+        expect(hpOf(sim)).toBeLessThan(hp);
+    });
+
+    test("the cross: only the cells along their row and column, cross cells out", () => {
+        const { sim, boss } = fight(1);
+        place(sim, cell(1, 2).x, cell(1, 2).y);
+        use(sim, boss, "Lightning");
+        const cells = sim.hazards.map((h) => [(h.x - BASE - 21.5) / 3, (h.y - BASE - 21.5) / 3]);
+        expect(cells.sort()).toEqual(
+            [
+                [0, 2],
+                [1, 1],
+                [1, 2],
+                [1, 3],
+                [2, 2],
+            ].sort(),
+        );
+    });
+
+    test("with no checker on the map it marks nothing", () => {
+        const { sim, boss } = fight();
+        sim.map.features = undefined;
+        use(sim, boss, "Lightning");
+        expect(sim.hazards).toEqual([]);
+    });
+});

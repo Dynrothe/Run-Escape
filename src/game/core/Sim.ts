@@ -5149,24 +5149,31 @@ export class Sim {
         const player = this.player;
         const damage = attack.damage > 0 && !ground.safe ? this.getBossDamage(enemy, attack) : 0;
         const armed = ground.armed !== undefined;
-        const add = (x: number, y: number) => {
+        // square: a cell's, half its size either way, shown from start and landing at land
+        const add = (
+            x: number,
+            y: number,
+            square?: { half: number; start: number; land: number },
+        ) => {
+            const land = square?.land ?? landTick;
             this.hazards.push({
                 uid: this.nextUid++,
                 enemyUid: enemy.uid,
                 attack,
                 x,
                 y,
-                radius: ground.radius,
+                radius: square?.half ?? ground.radius,
                 damage,
-                startTick: this.tick,
-                landTick,
-                endTick: armed ? landTick + secondsToTicks(ground.armed!) : landTick,
+                startTick: square?.start ?? this.tick,
+                landTick: land,
+                endTick: armed ? land + secondsToTicks(ground.armed!) : land,
                 armed,
                 fuseTick: -1,
-                grabEnd: ground.grab ? landTick + secondsToTicks(ground.grab.up.to) : 0,
+                grabEnd: ground.grab ? land + secondsToTicks(ground.grab.up.to) : 0,
                 hit: [],
                 lingerEnd: -1,
                 nextHurt: -1,
+                ...(square && { half: square.half }),
             });
         };
         for (const spots of ground.spots) {
@@ -5227,6 +5234,35 @@ export class Sim {
                         }
                         placed.push({ x, y });
                         add(x, y);
+                    }
+                    break;
+                }
+                case "checker": {
+                    // One colour's cells, then the other's: there's always a cell
+                    // of the other colour a step away
+                    const checker = this.map.features?.checker;
+                    if (!checker) {
+                        break;
+                    }
+                    const first = this.rng.int(2);
+                    const half = checker.cell / 2;
+                    const then = landTick + secondsToTicks(spots.then);
+                    const at = checkerCellAt(checker, player.x, player.y);
+                    const cross = spots.cross;
+                    for (const cell of checkerCells(checker)) {
+                        if (
+                            cross !== undefined &&
+                            !(cell.cx === at.cx && Math.abs(cell.cy - at.cy) <= cross) &&
+                            !(cell.cy === at.cy && Math.abs(cell.cx - at.cx) <= cross)
+                        ) {
+                            continue;
+                        }
+                        const now = cell.colour === first;
+                        add(cell.x, cell.y, {
+                            half,
+                            start: now ? this.tick : landTick,
+                            land: now ? landTick : then,
+                        });
                     }
                     break;
                 }
@@ -6069,9 +6105,12 @@ export class Sim {
         this.forEachHeroInReach(() => {
             const player = this.player;
             const index = this.hero.index;
+            const half = hazard.half;
             if (
                 this.runOver ||
-                fm.hypot(player.x - x, player.y - y) > radius + player.radius ||
+                (half
+                    ? !circleInBox(player.x, player.y, player.radius, x, y, half, half)
+                    : fm.hypot(player.x - x, player.y - y) > radius + player.radius) ||
                 landed[index] ||
                 hazard.hit.includes(index)
             ) {

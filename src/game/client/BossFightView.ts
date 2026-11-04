@@ -124,6 +124,10 @@ export class BossFightView {
     // Her real portals and spores, at the size of what they do: nothing else marks
     // them, and a real portal's fill is its countdown
     private drawHazard(actors: ActorRenderer, sim: Sim, hazard: GroundHazard): void {
+        // A checker's second colour isn't shown till the first lands
+        if (sim.tick < hazard.startTick) {
+            return;
+        }
         const ground = hazard.attack.ground!;
         // A mark with a grab is its hands alone: faint until it lands
         const model = ground.grab
