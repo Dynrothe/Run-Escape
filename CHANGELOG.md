@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Auto equip, by Deivid Smarzaro: an option in Settings and the pause menu that wears casket gear
+  in an empty slot, or gear that beats what's worn without being worse at anything. Anything else
+  still asks, as does replacing a piece of a set. Auto alch comes first if both are on.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

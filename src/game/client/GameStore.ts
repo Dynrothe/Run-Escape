@@ -4,7 +4,7 @@ import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave } from "../core/save";
-import { DisplaySettings } from "./DisplaySettings";
+import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
@@ -433,16 +433,7 @@ export class GameStore {
             toasts: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
-            display: {
-                menuSpin: true,
-                pauseOnBlur: true,
-                questTracker: true,
-                damagePanel: false,
-                autoAlch: false,
-                movePrediction: true,
-                coopFlag: true,
-                frameRate: "auto",
-            },
+            display: getDefaultDisplaySettings(),
         };
     }
 

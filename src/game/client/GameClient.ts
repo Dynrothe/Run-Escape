@@ -34,7 +34,7 @@ import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
-import { ChestAction } from "../core/Loot";
+import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
@@ -419,9 +419,10 @@ export class GameClient implements GameFrameHandler {
     private appearanceVersions: number[] = [];
     // Each hero's level-up choices their look was last baked for
     private lookChoices: (UpgradeChoice[] | undefined)[] = [];
-    // The casket Auto alch last sent off (a co-op one takes a frame to come
-    // back, and shouldn't go twice)
-    private autoAlchedUid = -1;
+    // The casket Auto alch or Auto equip answered, until that's done (co-op's
+    // comes back with a frame: it shouldn't go twice, or show the casket
+    // meanwhile)
+    private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
@@ -886,6 +887,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ autoAlch: !this.display.autoAlch });
     }
 
+    toggleAutoEquip(): void {
+        this.setDisplay({ autoEquip: !this.display.autoEquip });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -1291,7 +1296,7 @@ export class GameClient implements GameFrameHandler {
         this.appearanceVersions = [];
         this.lookChoices = [];
         this.decisionKey = "";
-        this.autoAlchedUid = -1;
+        this.autoChest = undefined;
         this.coopStopped = false;
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
@@ -1473,7 +1478,10 @@ export class GameClient implements GameFrameHandler {
     }
 
     private afterReroll(sim: Sim): void {
-        if (sim.state === "chest") {
+        if (sim.state === "chest" && this.autoChestAction(sim)) {
+            // Auto equip takes the new item, with no casket to burst open
+            this.syncOverlay();
+        } else if (sim.state === "chest") {
             const chest = getChestView(sim);
             // The UI bursts the casket open again for the new item
             if (chest) {
@@ -1972,6 +1980,21 @@ export class GameClient implements GameFrameHandler {
             this.decisionKey = key;
             this.syncOverlay();
         }
+        // Only while frames are coming: a reconnecting lobby holds what's
+        // sent, and a pile of answers would go on to the next caskets
+        if (steps > 0) {
+            this.resendAutoChest(sim, run);
+        }
+    }
+
+    // An automatic casket answer still waiting for its frame: CoopRun.act
+    // drops it until it's waited long enough to be lost or turned away, then
+    // sends it again. The casket's hidden, so there's nothing to click.
+    private resendAutoChest(sim: Sim, run: CoopRun): void {
+        const answer = this.autoChest;
+        if (answer && sim.state === "chest" && sim.chest?.uid === answer.uid) {
+            run.act({ kind: "chest", action: answer.action });
+        }
     }
 
     // What's come for a co-op run before its copy's made (toCoopRun), and
@@ -2152,11 +2175,21 @@ export class GameClient implements GameFrameHandler {
                         this.store.toast(event.message);
                     }
                     break;
+                // An automatic answer had no casket screen to show what it was
                 case "alch":
-                    // There was no casket screen to show what it was
-                    if (this.display.autoAlch) {
+                    if (this.autoChestDone(sim)) {
                         this.store.toast(
                             `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                        );
+                    }
+                    break;
+                case "equip":
+                    if (this.autoChestDone(sim)) {
+                        this.store.toast(
+                            `Equipped ${getItem(event.itemId).name}` +
+                                (event.replacedId
+                                    ? `; high alched ${getItem(event.replacedId).name} for ${event.coins.toLocaleString()} coins`
+                                    : ""),
                         );
                     }
                     break;
@@ -2196,6 +2229,62 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // What Auto alch or Auto equip would do with the open casket's item, if
+    // either takes it (Auto alch first)
+    private autoChestAction(sim: Sim): ChestAction | undefined {
+        const chest = sim.state === "chest" ? sim.chest : undefined;
+        if (!chest) {
+            return undefined;
+        }
+        if (this.display.autoAlch) {
+            return "alch";
+        }
+        const item = getItem(chest.itemId);
+        return this.display.autoEquip &&
+            shouldAutoEquip(sim.gear, sim.gearUpgrades, item, chest.upgrades)
+            ? "take"
+            : undefined;
+    }
+
+    // Answers the open casket for Auto alch or Auto equip, as its button
+    // would, with no casket screen (co-op's answer takes a frame or more to
+    // come back, and the menu can still open meanwhile). False when the
+    // casket's the player's to answer.
+    private autoAnswerChest(sim: Sim, waitingOn: string[]): boolean {
+        const chest = sim.chest;
+        if (!chest) {
+            return false;
+        }
+        const answered = this.autoChest?.uid === chest.uid;
+        const action = answered ? undefined : this.autoChestAction(sim);
+        if (!answered && !action) {
+            return false;
+        }
+        const overlay = this.paused ? "paused" : "none";
+        this.store.set({ overlay, chest: undefined, choices: [], waitingOn });
+        if (!action) {
+            // Sent already (resendAutoChest sends a lost one again)
+            return true;
+        }
+        this.autoChest = { uid: chest.uid, action };
+        if (this.act({ kind: "chest", action })) {
+            return true;
+        }
+        this.autoChest = undefined;
+        return false;
+    }
+
+    // Whether an alch or equip just done was the automatic answer's (which is
+    // then over), rather than the player's own click
+    private autoChestDone(sim: Sim): boolean {
+        const answer = this.autoChest;
+        if (!answer || sim.chests.some((chest) => chest.uid === answer.uid)) {
+            return false;
+        }
+        this.autoChest = undefined;
+        return true;
+    }
+
     // Shows whichever modal the run's state calls for
     private syncOverlay(): void {
         const sim = this.sim;
@@ -2213,15 +2302,12 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
-        } else if (sim.state === "chest" && sim.chest && this.display.autoAlch) {
-            // As if the High alch button had been clicked; this comes back here
-            // for whatever's next. Co-op's comes back a frame later, so once
-            // for each casket.
-            if (sim.chest.uid !== this.autoAlchedUid) {
-                this.autoAlchedUid = sim.chest.uid;
-                this.resolveChest("alch");
-            }
         } else if (sim.state === "chest" && sim.chest) {
+            if (this.autoAnswerChest(sim, waitingOn)) {
+                return;
+            }
+            // Any earlier automatic answer is done, as this one's first in line
+            this.autoChest = undefined;
             const chest = getChestView(sim);
             const shown = this.store.getSnapshot();
             // Co-op: the same casket again keeps its animation where it is
