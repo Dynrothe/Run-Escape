@@ -287,6 +287,13 @@ const TELEPORTER_REACH = 2.2;
 // Tiles from the player enemies turn up at in a Tombs room, which is too small for the usual
 const TOMBS_SPAWN_MIN_DISTANCE = 5;
 const TOMBS_SPAWN_MAX_DISTANCE = 14;
+// The Tombs' Attempts invocations: how many times the party can die before the raid's over
+const TOMBS_ATTEMPTS: [id: string, deaths: number][] = [
+    ["hardcore_run", 0],
+    ["softcore_run", 3],
+    ["persistence", 5],
+    ["try_again", 10],
+];
 // The Tombs' invocations: what armour stops with Quiet Prayers, and what a hit within a second of
 // the last does with Deadly Prayers
 const QUIET_PRAYERS = 0.9;
@@ -716,7 +723,7 @@ export type HeroOptions = {
 
 // The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
 // issue that's up (which spot, since when, and how long it's been stood at), when the next is due,
-// how many have gone this wave, and when the room was beaten
+// how many have gone this wave, when the room was beaten, and the waves beaten before a death
 type ApmekenRoom = {
     wave: number;
     group: number[];
@@ -725,6 +732,8 @@ type ApmekenRoom = {
     nextIssueTick: number;
     missed: number;
     doneTick?: number;
+    // The last wave beaten before a death (-1 for none): up to it, the room gives nothing again
+    beaten: number;
 };
 
 export class Sim {
@@ -833,6 +842,8 @@ export class Sim {
     tombsPathsDone: string[] = [];
     // Ticks spent in the Nexus, which the run's clock leaves out
     nexusTicks = 0;
+    // Times the party's died in the Tombs (each a room started over)
+    tombsDeaths = 0;
     // The Apmeken room while the party's in it
     apmeken: ApmekenRoom | undefined;
     raidStageTick = 0;
@@ -2905,11 +2916,15 @@ export class Sim {
             hp /= encounter.copies;
             xp /= encounter.copies;
         }
-        // A Tombs room's: tougher with each of its waves, and with its path level
+        // A Tombs room's: tougher with each of its waves, and with its path level. Tried again,
+        // the waves already beaten give no experience.
         if (this.apmeken && !boss) {
             const room = this.tombsRoomScale();
             hp *= room.hp;
             hitScale *= room.damage;
+            if (this.tombsReplaying) {
+                xp = 0;
+            }
         }
         const enemy: Enemy = {
             uid: this.nextUid++,
@@ -4262,6 +4277,7 @@ export class Sim {
                 waveTick: this.tick,
                 nextIssueTick: this.tick + secondsToTicks(this.apmekenIssueEvery()),
                 missed: 0,
+                beaten: -1,
             };
             this.nextApmekenWave();
         }
@@ -4368,7 +4384,7 @@ export class Sim {
         }
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
         const beaten = room.group.every((uid) => !alive.has(uid));
-        if (beaten) {
+        if (beaten && !this.tombsReplaying) {
             const player = this.hero.player;
             this.dropCasket(player.x + 0.8, player.y, false);
         }
@@ -4476,6 +4492,67 @@ export class Sim {
         }
         const at = spots[issue.spot];
         return { x: at.x, y: at.y, kind: at.kind };
+    }
+
+    // How many times the party can die in the Tombs before the raid's over: as many as they like,
+    // unless an Attempts invocation says (each death costs raid points, once the chest's in)
+    get tombsDeathsAllowed(): number {
+        const attempts = TOMBS_ATTEMPTS.find(([id]) => this.invoked(id));
+        return attempts ? attempts[1] : Infinity;
+    }
+
+    // Whether the room's on a wave it had beaten before a death: those give nothing again
+    get tombsReplaying(): boolean {
+        const room = this.apmeken;
+        return room !== undefined && room.wave <= room.beaten;
+    }
+
+    // Everyone down in a Tombs room: it starts over, everyone up at its start on full hitpoints.
+    // What they've got they keep (their levels, weapons, gear); what they used is gone. The waves
+    // they'd beaten come again for nothing.
+    private failTombsRoom(): void {
+        const path = this.map.tombs!.paths.find((p) => p.id === this.tombsPath)!;
+        this.tombsDeaths++;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        this.clearBossAttacks();
+        this.enemyProjectiles = [];
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            this.use(hero);
+            const player = this.player;
+            hero.down = false;
+            hero.revive = undefined;
+            player.hp = player.maxHp;
+            player.deathTick = -1;
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+            player.invulnerable = 3 * TICKS_PER_SECOND;
+            this.debuffs = [];
+        }
+        this.use(current);
+        this.rescaleParty();
+        this.moveParty(path.room!.arrive);
+        const room = this.apmeken;
+        if (room) {
+            room.beaten = Math.max(room.beaten, room.wave - 1);
+            room.wave = -1;
+            room.group = [];
+            room.issue = undefined;
+            room.missed = 0;
+            room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
+            this.nextApmekenWave();
+        }
+        const left = this.tombsDeathsAllowed - this.tombsDeaths;
+        this.emit({
+            type: "notice",
+            message:
+                `You've died, and the room starts over. The waves you'd beaten give nothing this time.` +
+                (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
+        });
     }
 
     // Done with a path: back to the Nexus, with what's on the floor
@@ -7310,6 +7387,10 @@ export class Sim {
         this.hero.down = true;
         this.hero.outTick = this.tick;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
+            if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
+                this.failTombsRoom();
+                return;
+            }
             this.endRun("dead");
             return;
         }
@@ -7729,6 +7810,10 @@ export class Sim {
     private dropLoot(enemy: Enemy): void {
         // A raid boss's adds drop nothing: the room's the boss's
         if (this.map.raid && this.raidStage !== "waves" && !enemy.boss) {
+            return;
+        }
+        // A Tombs room tried again: the waves already beaten give nothing
+        if (this.tombsReplaying) {
             return;
         }
         // Co-op: one of a boss's copies, whose loot comes with the last to fall

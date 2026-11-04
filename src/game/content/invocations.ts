@@ -58,8 +58,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Try Again",
         group: "attempts",
         level: 5,
-        description: "10 revives for the whole raid.",
-        comes: RAID,
+        description: "Die 10 times and the raid's over (otherwise there's no limit).",
     },
     {
         id: "persistence",
@@ -67,8 +66,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Persistence",
         group: "attempts",
         level: 10,
-        description: "5 revives for the whole raid.",
-        comes: RAID,
+        description: "Die 5 times and the raid's over.",
     },
     {
         id: "softcore_run",
@@ -76,8 +74,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Softcore Run",
         group: "attempts",
         level: 15,
-        description: "3 revives for the whole raid.",
-        comes: RAID,
+        description: "Die 3 times and the raid's over.",
     },
     {
         id: "hardcore_run",
@@ -85,8 +82,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Hardcore Run",
         group: "attempts",
         level: 25,
-        description: "No revives: go down and the raid's over.",
-        comes: RAID,
+        description: "Die once and the raid's over.",
     },
     // Time limit: a clock for the whole raid. Running out lowers the loot; it doesn't end the run
     {

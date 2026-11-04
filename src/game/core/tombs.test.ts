@@ -359,3 +359,62 @@ describe("the Tombs' invocations", () => {
         expect(hit(["deadly_prayers"], true)).toBe(16 + Math.round(20 * 1.2 - 4));
     });
 });
+
+describe("a death in the Tombs", () => {
+    function die(sim: Sim): void {
+        sim.revivesLeft = 0;
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](1e6, "test", false, undefined, true);
+    }
+
+    it("starts the room over instead of ending the run, everyone up on full hitpoints", () => {
+        const sim = apmeken();
+        killGroup(sim);
+        sim.step();
+        killGroup(sim);
+        sim.step();
+        expect(sim.apmeken!.wave).toBe(2);
+        die(sim);
+        expect(sim.runOver).toBe(false);
+        expect(sim.tombsDeaths).toBe(1);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        expect(sim.player.y).toBeCloseTo(1060.5);
+        expect(sim.apmeken!.wave).toBe(0);
+        expect(sim.apmeken!.beaten).toBe(1);
+    });
+
+    it("gives nothing for the waves beaten before, then as usual past them", () => {
+        const sim = apmeken();
+        killGroup(sim);
+        sim.step();
+        die(sim);
+        expect(sim.tombsReplaying).toBe(true);
+        const group = sim.enemies.filter((e) => sim.apmeken!.group.includes(e.uid));
+        expect(group.every((e) => e.xp === 0)).toBe(true);
+        const caskets = () => sim.pickups.filter((p) => p.kind === "casket").length;
+        const before = caskets();
+        killGroup(sim);
+        sim.step();
+        // Wave 1 again: no casket
+        expect(caskets()).toBe(before);
+        expect(sim.tombsReplaying).toBe(false);
+        killGroup(sim);
+        sim.step();
+        expect(caskets()).toBe(before + 1);
+    });
+
+    it("has no limit, unless an Attempts invocation sets one", () => {
+        expect(apmeken().tombsDeathsAllowed).toBe(Infinity);
+        expect(apmeken(["try_again"]).tombsDeathsAllowed).toBe(10);
+        const hardcore = apmeken(["hardcore_run"]);
+        die(hardcore);
+        expect(hardcore.runOver).toBe(true);
+        const softcore = apmeken(["softcore_run"]);
+        for (let i = 0; i < 3; i++) {
+            die(softcore);
+            expect(softcore.runOver).toBe(false);
+        }
+        die(softcore);
+        expect(softcore.runOver).toBe(true);
+    });
+});
