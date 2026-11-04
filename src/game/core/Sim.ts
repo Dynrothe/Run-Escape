@@ -4697,8 +4697,10 @@ export class Sim {
         this.useSpawnHero();
         const player = this.player;
         const arena = this.bossArena;
-        const middleX = (arena.minX + arena.maxX) / 2;
-        const middleY = (arena.minY + arena.maxY) / 2;
+        // Where the map says it rises (ArenaFeatures.rise), or the middle of its square
+        const spot = this.map.features?.rise;
+        const middleX = spot?.x ?? (arena.minX + arena.maxX) / 2;
+        const middleY = spot?.y ?? (arena.minY + arena.maxY) / 2;
         const atMiddle = rise.atMiddle === true && this.map.bossArena !== undefined;
         // A fight in a set square starts in the middle of it, under the dark,
         // a party side by side north to south; or, with the boss rising at the

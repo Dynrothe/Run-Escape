@@ -10,6 +10,7 @@ import {
 } from "../content/types";
 import { SANCTUARY_BOSS_ARENA } from "../scaperune/maps/sisterhoodSanctuary";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { behindPillar, moveFeatures, pillarHit } from "./arena";
 import { Enemy } from "./entities";
 import { makeGrid } from "./world/testGrid";
 
@@ -899,5 +900,55 @@ describe("a strike's reach in a fight", () => {
     test("anywhere else it's the usual twelve tiles", () => {
         expect(fight(undefined, 9.5)).toBeGreaterThan(0);
         expect(fight(undefined, 12.5)).toBe(0);
+    });
+});
+
+describe("the arena's features", () => {
+    test("a boss rising atMiddle rises at the map's rise point, the party south of it", () => {
+        const sim = createSim();
+        sim.map.bossArena = { baseX: BASE, baseY: BASE, size: SIZE };
+        sim.map.features = { rise: { x: BASE + 30.5, y: BASE + 20.5 } };
+        const def = bossDef({ phases: THREE_PHASES });
+        sim["eventIndex"] = 1;
+        sim.startIntro(def, "finalBoss", 1000);
+        run(sim, def.boss!.intro!.riseAt + 0.1);
+        const boss = sim.enemies.find((e) => e.finalBoss)!;
+        expect([boss.x, boss.y]).toEqual([BASE + 30.5, BASE + 20.5]);
+        expect(sim.player.x).toBeCloseTo(BASE + 30.5);
+        expect(sim.player.y).toBeCloseTo(BASE + 20.5 - def.boss!.intro!.distance);
+    });
+
+    test("move from a recipe's tiles to the world's, all of them", () => {
+        const local: ArenaFeatures = {
+            checker: { x0: 20, y0: 22, cell: 3, cols: 8, rows: 8 },
+            pillars: [{ x: 25, y: 27, size: 2 }],
+            bolts: [{ y: 30, fromX: 19, toX: 44, dir: 1, statues: [{ x: 18, y: 30 }] }],
+            knights: [{ x: 18, y: 20, size: 3 }],
+            fires: [{ y: 12, x0: 30, x1: 32 }],
+            dais: { x: 28, y: 46, w: 8, h: 4 },
+            rise: { x: 32, y: 30 },
+            statues: { priests: [{ x: 27, y: 47 }] },
+        };
+        const world = moveFeatures(local, 100, 200);
+        expect(world).toEqual({
+            checker: { x0: 120, y0: 222, cell: 3, cols: 8, rows: 8 },
+            pillars: [{ x: 125, y: 227, size: 2 }],
+            bolts: [{ y: 230, fromX: 119, toX: 144, dir: 1, statues: [{ x: 118, y: 230 }] }],
+            knights: [{ x: 118, y: 220, size: 3 }],
+            fires: [{ y: 212, x0: 130, x1: 132 }],
+            dais: { x: 128, y: 246, w: 8, h: 4 },
+            rise: { x: 132, y: 230 },
+            statues: { priests: [{ x: 127, y: 247 }] },
+        });
+    });
+
+    test("pillar geometry: what a line goes through, not what it grazes", () => {
+        const pillars = [{ x: 10, y: 10, size: 2 }];
+        expect(behindPillar(pillars, 0, 11, 20, 11)).toBe(true);
+        expect(behindPillar(pillars, 0, 12, 20, 12)).toBe(false); // along its edge
+        expect(behindPillar(pillars, 9, 9, 13, 9)).toBe(false);
+        expect(pillarHit(pillars, 0, 11, 1, 0, 50)).toBe(10);
+        expect(pillarHit(pillars, 0, 11, -1, 0, 50)).toBe(Infinity);
+        expect(pillarHit(pillars, 0, 11, 1, 0, 5)).toBe(Infinity);
     });
 });

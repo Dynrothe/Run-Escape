@@ -68,7 +68,8 @@ function boxSpan(
     for (const [p, d, lo] of axes) {
         const hi = lo + pillar.size;
         if (Math.abs(d) < 1e-12) {
-            if (p < lo || p > hi) {
+            // Along an edge isn't through it
+            if (p <= lo || p >= hi) {
                 return undefined;
             }
             continue;
@@ -228,6 +229,9 @@ export function moveFeatures(features: ArenaFeatures, dx: number, dy: number): A
             x0: row.x0 + dx,
             x1: row.x1 + dx,
         }));
+    }
+    if (features.rise) {
+        moved.rise = { x: features.rise.x + dx, y: features.rise.y + dy };
     }
     if (features.dais) {
         moved.dais = { ...features.dais, x: features.dais.x + dx, y: features.dais.y + dy };

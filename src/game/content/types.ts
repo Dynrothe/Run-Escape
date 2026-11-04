@@ -955,6 +955,9 @@ export type ArenaFeatures = {
     fires?: { y: number; x0: number; x1: number; yaw?: number }[];
     // Scenery hazards shouldn't land on
     dais?: { x: number; y: number; w: number; h: number };
+    // Where a boss rising atMiddle (BossIntroDef) rises instead of the bossArena's
+    // middle, the party distance tiles south of it (tile middles: x + 0.5)
+    rise?: { x: number; y: number };
     // Other statues an attack animates, by group (BossAttackDef.statues group)
     statues?: Record<string, ArenaStatue[]>;
 };
