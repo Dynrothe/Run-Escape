@@ -855,8 +855,7 @@
     }
 }
 
-/* Co-op's lobby: the party tighter, and one empty place showing rather than
-   all of them, so the host's map list has room below */
+/* Co-op's room browser and lobby */
 @media (pointer: coarse) and (max-height: 520px) {
     /* The room browser as tall as the screen, its list of rooms giving up
        height first, and the panel scrolling past that (a page row and an
@@ -874,6 +873,8 @@
         min-height: 44px;
     }
 
+    /* The lobby: the party tighter, and one empty place showing rather than
+       all of them, so the host's map list has room below */
     .ui-coop-member {
         min-height: 30px;
         padding: 1px 6px;

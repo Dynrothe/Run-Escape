@@ -1048,8 +1048,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
   A panel whose contents can grow (an error line, a row of pages) has to fit or scroll there: the
-  desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the safe
-  area, and `overflow-y: auto`, as the other full-height panels and the co-op room browser have.
+  desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
+  safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
+  scroll a part inside, so their buttons stay in view. The co-op room browser scrolls as a whole
+  (`overflow-y: auto`), since only its worst case doesn't fit.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),
