@@ -933,8 +933,8 @@ export type BossLookDef = {
 };
 
 // A statue a fight draws, and animates (BossAttackDef.statues), in world tiles:
-// its south-west tile, how many tiles across, and how it's turned (2048ths).
-export type ArenaStatue = { x: number; y: number; size?: number; yaw?: number };
+// its south-west tile, how many tiles across, and how the map turns it (rotation, 0 to 3).
+export type ArenaStatue = { x: number; y: number; size?: number; rotation?: number };
 
 // What a boss's attacks read from the arena (MapDef.features), in world tiles: a
 // ScapeRune recipe exports it map-local, and the MapDef moves it to the world
@@ -951,8 +951,8 @@ export type ArenaFeatures = {
     // The knight statues (BossAttackDef.from): thrown from their middles
     knights?: ArenaStatue[];
     // Rows of fire jets (BossAttackDef.cycle): tile row y, tiles x0 to x1, the
-    // jet's loc drawn at the middle turned yaw
-    fires?: { y: number; x0: number; x1: number; yaw?: number }[];
+    // jet's loc drawn at the middle turned as the map turns locs (rotation)
+    fires?: { y: number; x0: number; x1: number; rotation?: number }[];
     // Scenery hazards shouldn't land on
     dais?: { x: number; y: number; w: number; h: number };
     // Where a boss rising atMiddle (BossIntroDef) rises instead of the bossArena's

@@ -76,6 +76,11 @@ const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
 
+// A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
+function locYaw(rotation = 0): number {
+    return (rotation & 3) * 512;
+}
+
 // A fight-drawn statue, by its loc and south-west tile
 function statueKey(locId: number, at: { x: number; y: number }): string {
     return `${locId}:${at.x}:${at.y}`;
@@ -375,7 +380,15 @@ export class BossFightView {
                     const anim = model.getAnim(playing?.seq ?? -1);
                     const frame = playing ? anim.getFrame(sim.tick - playing.tick, false) : 0;
                     const { x, y } = statueMiddle(statue);
-                    actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, statue.yaw ?? 0);
+                    actors.draw(
+                        model,
+                        anim,
+                        frame,
+                        x,
+                        this.ground(sim, x, y),
+                        y,
+                        locYaw(statue.rotation),
+                    );
                 }
             }
         }
@@ -417,7 +430,7 @@ export class BossFightView {
                         x,
                         this.ground(sim, x, y),
                         y,
-                        row.yaw ?? 0,
+                        locYaw(row.rotation),
                     );
                 });
             }

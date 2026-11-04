@@ -1,4 +1,4 @@
-import { Ground } from "../Ground";
+import { Ground, markWhole } from "../Ground";
 import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
 import type { GeneratedMap } from "../generator";
@@ -124,16 +124,18 @@ export const OWLS_COURT = {
             fromX: dir === 1 ? COURT.x0 : COURT.x1,
             toX: dir === 1 ? COURT.x1 : COURT.x0,
             dir,
-            statues: [0, 1, 2].map((i) => ({ x, y: cellY0(row) + i })),
+            // Turned to face across the court: 3 faces east, 1 west
+            statues: [0, 1, 2].map((i) => ({ x, y: cellY0(row) + i, rotation: dir === 1 ? 3 : 1 })),
         })),
     // The knight statues, 3 by 3 from x, y at the court's south corners: a sword's thrown from
     // the middle (x + 1, y + 1)
     knights: [
-        { x: WEST_RIM.x0, y: COURT.y0, size: 3 },
-        { x: EAST_RIM.x0, y: COURT.y0, size: 3 },
+        { x: WEST_RIM.x0, y: COURT.y0, size: 3, rotation: 3 },
+        { x: EAST_RIM.x0, y: COURT.y0, size: 3, rotation: 1 },
     ],
-    // The bridge's fire rows, south to north: one jet a row across the lane, from x0 to x1
-    fires: [16, 17, 18, 19].map((y) => ({ y, x0: LANE.x0, x1: LANE.x1 })),
+    // The bridge's fire rows, south to north: one jet a row across the lane, from x0 to x1, laid
+    // across it one way and the next the other
+    fires: [16, 17, 18, 19].map((y) => ({ y, x0: LANE.x0, x1: LANE.x1, rotation: y & 1 ? 3 : 1 })),
     // The dais behind the court's north edge: the Owl Justiciar, the star and their dressing
     dais: { x: DAIS.x0, y: DAIS.y0, w: DAIS.x1 - DAIS.x0 + 1, h: DAIS.y1 - DAIS.y0 + 1 },
 };
@@ -280,7 +282,35 @@ class Court {
     dress(id: number, x: number, y: number, kind?: string): boolean {
         return this.placer.dress(id, A + x, A + y, { type: LOC_NORMAL, kind });
     }
+
+    // Something the fight draws and animates in its place (BossAttackDef.statues): its tiles are
+    // taken and blocked as though it stood there, but its model's left out of the map, so the
+    // fight's is the only one. It must be on open walkway.
+    forFight([id, sizeX, sizeY]: Solid, x: number, y: number, rotation: number): void {
+        const [across, deep] = rotation & 1 ? [sizeY, sizeX] : [sizeX, sizeY];
+        const { ground } = this;
+        for (let ty = y; ty < y + deep; ty++) {
+            for (let tx = x; tx < x + across; tx++) {
+                const tile = this.at(tx, ty);
+                if (this.kindAt(tx, ty) !== WALKWAY || ground.reserved[tile]) {
+                    throw new Error(`Owl's Court: no room for the fight's ${id} at ${tx},${ty}`);
+                }
+                ground.reserved[tile] = 1;
+                ground.occupied[tile] = 1;
+                if (!WALK_THROUGH.includes(id)) {
+                    ground.level0.flags[tile] |= TILE_BLOCKED;
+                }
+            }
+        }
+        this.drawn.push({ id, x, y, rotation });
+    }
+
+    // What forFight left out
+    readonly drawn: FightDrawn[] = [];
 }
+
+// A loc the fight draws in the map's place (Court.forFight), in arena tiles
+export type FightDrawn = { id: number; x: number; y: number; rotation: number };
 
 // Which tiles are walkways, and the heights: each level dead flat, with the void a tile round
 // each walkway flat at its height too, so its lips stand level, and the drop between them in the
@@ -437,8 +467,9 @@ function placeCourt(court: Court): void {
     }
     for (const bolt of OWLS_COURT.bolts) {
         for (const statue of bolt.statues) {
-            // Facing across the court: rotation 3 faces east, 1 west
-            court.solid(CROSSBOWMAN, statue.x, statue.y, bolt.dir === 1 ? 3 : 1, "crossbowmen");
+            // Facing across the court: rotation 3 faces east, 1 west. The fight draws them, as
+            // they aim and fire.
+            court.forFight(CROSSBOWMAN, statue.x, statue.y, statue.rotation);
         }
         // A torch behind each lane's middle statue, on the rim's outer side
         court.solid(TORCH, bolt.dir === 1 ? WEST_RIM.x0 : EAST_RIM.x1, bolt.y, 0, "rim torches");
@@ -455,9 +486,10 @@ function placeCourt(court: Court): void {
     // The great owls at the rims' north ends, under the dais
     court.solid(GREAT_OWL, WEST_RIM.x0 + 1, COURT.y1 - 1, OWL_SOUTH, "great owls");
     court.solid(GREAT_OWL, EAST_RIM.x0, COURT.y1 - 1, OWL_SOUTH, "great owls");
-    const [west, east] = OWLS_COURT.knights;
-    court.solid(KNIGHT, west.x, west.y, 3, "knights");
-    court.solid(KNIGHT, east.x, east.y, 1, "knights");
+    // The fight draws them too, as they throw their swords
+    for (const knight of OWLS_COURT.knights) {
+        court.forFight(KNIGHT, knight.x, knight.y, knight.rotation);
+    }
 }
 
 // The bridge: a gilded wizard statue pair, two deep, either side of the lane, and a fire jet laid
@@ -468,8 +500,14 @@ function placeBridge(court: Court): void {
         court.solid(pick(rng, WIZARD_STATUES), BRIDGE.x0, y, 3, "wizard statues");
         court.solid(pick(rng, WIZARD_STATUES), LANE.x1 + 1, y, 1, "wizard statues");
     }
+    // Their fire's the fight's to draw, on its rhythm: the statues have their set when it's played
+    for (const loc of court.ground.grid.locs) {
+        if (WIZARD_STATUES.some(([id]) => id === loc.id)) {
+            markWhole(loc);
+        }
+    }
     for (const fire of OWLS_COURT.fires) {
-        court.solid(FIRE, fire.x0, fire.y, fire.y & 1 ? 3 : 1, "fire jets");
+        court.forFight(FIRE, fire.x0, fire.y, fire.rotation);
     }
 }
 
@@ -675,7 +713,11 @@ function finish(court: Court): void {
 }
 
 // The Placer's count of what went down, for the test
-export function buildOwlsCourt(context: BuildContext): { map: GeneratedMap; placer: Placer } {
+export function buildOwlsCourt(context: BuildContext): {
+    map: GeneratedMap;
+    placer: Placer;
+    drawn: FightDrawn[];
+} {
     const court = new Court(context);
     shapeGround(court);
     placeEdges(court);
@@ -701,7 +743,7 @@ export function buildOwlsCourt(context: BuildContext): { map: GeneratedMap; plac
         falls: [],
         waterfalls: [],
     };
-    return { map, placer: court.placer };
+    return { map, placer: court.placer, drawn: court.drawn };
 }
 
 export const OWLS_COURT_RECIPE: MapRecipe = {

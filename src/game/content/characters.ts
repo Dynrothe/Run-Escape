@@ -563,6 +563,27 @@ export const CHARACTERS: CharacterDef[] = [
         // Hers alone: never in the roster, and no reward for beating her
         only: "phosani",
     },
+    {
+        id: "saradominist",
+        name: "Saradominist",
+        description:
+            "Made for Justiciar Zachariah, and everyone plays them there, and nowhere else: " +
+            "starts with Saradomin Strike, moves 20% faster and has 20% more hitpoints.",
+        style: "magic",
+        startingWeapon: "saradomin_strike",
+        // Saradomin's vestments: the mitre, robes, cloak and stole
+        equipment: {
+            [EquipSlot.HEAD]: 10452,
+            [EquipSlot.TORSO]: 10458,
+            [EquipSlot.LEGS]: 10464,
+            [EquipSlot.CAPE]: 10446,
+            [EquipSlot.AMULET]: 10470,
+        },
+        // As the Inquisitor's: feet, and hitpoints to learn him on. The damage is the strike's
+        // alone, at the level the map says, and only from near him.
+        bonus: { moveSpeed: 0.2, maxHp: 0.2 },
+        only: "zachariah",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));

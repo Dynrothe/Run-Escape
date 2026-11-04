@@ -1,5 +1,6 @@
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
+import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
@@ -36,6 +37,12 @@ import {
     WILDERNESS_EVENTS,
     WILDERNESS_WAVES,
 } from "./waves";
+import {
+    OWLS_COURT_FEATURES,
+    ZACHARIAH_HITPOINTS,
+    ZACHARIAH_STRIKE_LEVEL,
+    ZACHARIAH_STRIKE_REACH,
+} from "./zachariah";
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
 // are whole map squares (64 tiles), in world tiles. Seasonal maps go last: they're
@@ -363,6 +370,45 @@ export const MAPS: MapDef[] = [
         brightness: 0.75,
         // Her own track; the recording goes in src/media/music (see GameClient)
         music: "The Bane of Ashihama",
+    },
+    {
+        id: "zachariah",
+        name: "Justiciar Zachariah",
+        description:
+            "The Justiciar of the Owl puts you on trial in his court, hung in the Hallowed " +
+            "Sepulchre's dark. No waves, no picks and no items: Saradomin Strike, which reaches " +
+            "him only from close by, and him. His court is his weapon: read its statues, its " +
+            "floor and its fire, and stay near enough to strike.",
+        // The Justiciar's hand, his own drop
+        iconObjId: 21797,
+        arena: getRecipeArena(OWLS_COURT_RECIPE),
+        // The terrace, at the foot of the bridge: he comes down at its head
+        spawn: {
+            x: OWLS_COURT.origin.x + OWLS_COURT.start.x + 0.5,
+            y: OWLS_COURT.origin.y + OWLS_COURT.start.y + 0.5,
+        },
+        // His hitpoints come from the event, and his hits are tuned to the Saradominist's
+        // hitpoints: a big one takes about half
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            { at: 0, kind: "finalBoss", enemyId: "justiciar_zachariah", hp: ZACHARIAH_HITPOINTS },
+        ],
+        finalBossWarning: "",
+        victoryText: "The Owl's judgement is passed: Justiciar Zachariah yields!",
+        // The court: the bridge and the terrace off it are the player's too (confine: false)
+        bossArena: OWLS_COURT_BOSS_ARENA,
+        features: OWLS_COURT_FEATURES,
+        scaperune: true,
+        // After the Wolf's trial, the Owl's: both are Justiciars of the Sepulchre
+        fight: {
+            requires: "phosani",
+            character: "saradominist",
+            weaponLevel: ZACHARIAH_STRIKE_LEVEL,
+            strikeReach: ZACHARIAH_STRIKE_REACH,
+        },
+        music: "Blade of Forgotten Justice",
     },
 ];
 

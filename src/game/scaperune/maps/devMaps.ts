@@ -8,7 +8,6 @@ import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { CLIFF_GALLERY } from "./cliffGallery";
 import { KALUAS_WAKE } from "./kaluasWake";
-import { OWLS_COURT_RECIPE } from "./owlsCourt";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
 import { SHATTERED_REALM } from "./shatteredRealm";
@@ -135,12 +134,4 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     VARDHELM,
     KALUAS_WAKE,
     SHATTERED_REALM,
-    // Justiciar Zachariah's arena (a shipped recipe) to walk round, with no enemies, on the dev
-    // server, until its fight's map is in MAPS
-    {
-        ...OWLS_COURT_RECIPE,
-        id: "zachariah_preview",
-        play: { waveSet: "lumbridge", enemyDensity: 0, brightness: 0.75 },
-        mapDef: { name: "The Owl's Court (preview)" },
-    },
 ];

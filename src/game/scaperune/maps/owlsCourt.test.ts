@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { GAME_CACHE_NAME } from "../../cache";
 import { SOLID_FLAGS } from "../../core/world/ArenaGrid";
+import { isStamped } from "../Ground";
 import { findLoneKitPieces } from "../catalogue";
 import { findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, createTileGrid, writeLocs, writeTerrain } from "../format";
@@ -43,7 +44,7 @@ const context: BuildContext = {
 const RUG = new Set([38244, 38245, 38246, 38247, 38251]);
 
 describe("the Owl's Court", () => {
-    const { map, placer } = buildOwlsCourt(context);
+    const { map, placer, drawn } = buildOwlsCourt(context);
     const { grid } = map;
     const size = OWLS_COURT_RECIPE.squaresX * MAP_SQUARE_SIZE;
     const base = OWLS_COURT_RECIPE.margin * MAP_SQUARE_SIZE;
@@ -132,7 +133,10 @@ describe("the Owl's Court", () => {
             for (const statue of bolt.statues) {
                 // Beside the court, on the side it fires from, and solid
                 expect(statue.x).toBe(bolt.fromX - bolt.dir);
-                expect(locsAt(statue.x, statue.y).some((l) => l.id === 38445)).toBe(true);
+                // Drawn by the fight, which plays their aim and fire: not in the map
+                expect(locsAt(statue.x, statue.y).some((l) => l.id === 38445)).toBe(false);
+                expect(drawn).toContainEqual({ id: 38445, ...statue });
+                expect(statue.rotation).toBe(bolt.dir === 1 ? 3 : 1);
                 expect(solid(statue.x, statue.y)).toBe(true);
                 rows.add(statue.y);
                 for (let x = bolt.fromX; x !== bolt.toX + bolt.dir; x += bolt.dir) {
@@ -149,7 +153,14 @@ describe("the Owl's Court", () => {
         for (const knight of knights) {
             expect(knight.y).toBe(bossArena.y);
             expect(inArena(knight.x + 1, knight.y + 1)).toBe(false);
-            expect(locsAt(knight.x, knight.y).some((l) => l.id === 38432)).toBe(true);
+            expect(locsAt(knight.x, knight.y).some((l) => l.id === 38432)).toBe(false);
+            const { size: _size, ...at } = knight;
+            expect(drawn).toContainEqual({ id: 38432, ...at });
+            for (let y = knight.y; y < knight.y + 3; y++) {
+                for (let x = knight.x; x < knight.x + 3; x++) {
+                    expect(solid(x, y)).toBe(true);
+                }
+            }
         }
         expect(dais.y).toBe(bossArena.y + bossArena.size);
         const onDais = (id: number) =>
@@ -172,7 +183,14 @@ describe("the Owl's Court", () => {
             expect(fire.x1 - fire.x0).toBe(2);
             expect(fire.y).toBeLessThan(bossArena.y);
             expect(fire.y).toBeGreaterThan(start.y);
-            expect(locsAt(fire.x0, fire.y).some((l) => l.id === 38427)).toBe(true);
+            // The fight draws it, on its rhythm
+            expect(locsAt(fire.x0, fire.y).some((l) => l.id === 38427)).toBe(false);
+            expect(drawn).toContainEqual({
+                id: 38427,
+                x: fire.x0,
+                y: fire.y,
+                rotation: fire.rotation,
+            });
             for (let x = fire.x0; x <= fire.x1; x++) {
                 expect(reachable(x, fire.y), `${x},${fire.y}`).toBe(true);
             }
@@ -209,7 +227,11 @@ describe("the Owl's Court", () => {
 
     it("puts down everything it asks for, each kit piece with its set, the same every time", () => {
         expect(placer.describeShortfalls()).toEqual([]);
-        expect(findLoneKitPieces(grid)).toEqual([]);
+        // The wizard statues' fire is the fight's, so they're taken as whole
+        expect(findLoneKitPieces(grid, isStamped)).toEqual([]);
+        expect(
+            findLoneKitPieces(grid).every((piece) => [38416, 38417, 38418].includes(piece.loc.id)),
+        ).toBe(true);
         const again = OWLS_COURT_RECIPE.build(context);
         expect(writeLocs(again, 0, 0)).toEqual(writeLocs(grid, 0, 0));
         expect(writeTerrain(again, 0, 0)).toEqual(writeTerrain(grid, 0, 0));

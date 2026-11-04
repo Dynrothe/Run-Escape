@@ -57,6 +57,12 @@ export function isStamped(loc: PlacedLoc): boolean {
     return STAMPED.has(loc);
 }
 
+// A loc whose set is there when it's played, though not in the map: a boss fight draws the rest
+// (the Owl's Court's fire jets, between its wizard statues). Taken as whole, as stamped ones are.
+export function markWhole(loc: PlacedLoc): void {
+    STAMPED.add(loc);
+}
+
 // A map being built: our own ground, in plain tile terms, with prefabs stamped
 // on it.
 export class Ground {

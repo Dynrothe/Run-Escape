@@ -5795,6 +5795,18 @@ export class Sim {
             this.rowStatues(emitter.rows),
             emitter.attack.statues?.seq,
         );
+        // Its sound, once a volley, from the first of its rows
+        const first = rows[emitter.rows[0]];
+        const sound = emitter.attack.sound;
+        if (sound !== undefined && first) {
+            this.emit({
+                type: "bossAttack",
+                enemyId: this.bulletSources[emitter.source]?.enemy.def.id ?? "",
+                sound,
+                x: first.fromX + 0.5,
+                y: first.y + 0.5,
+            });
+        }
     }
 
     // A straight bullet's ticks in the air, cut short where it meets one of the
