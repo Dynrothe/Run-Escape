@@ -659,7 +659,18 @@ export type BossAttackDef = {
     blockable?: boolean;
     // Swings: a straight strip from the boss, width tiles across and length long,
     // the way it faced as it began, rather than round it (a lunge)
-    line?: { width: number; length: number };
+    // dash: the boss goes that far along it as it lands, stopping short at anything in its
+    // way, and stunned if that's one of the map's pillars (BossDef.guard)
+    line?: { width: number; length: number; dash?: number };
+    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard)
+    opens?: number;
+    // Its arena's attack that hurts the boss too, if it's caught in it: a bolt that
+    // reaches it (and stops there), a cell struck under its middle, a thrown sword through
+    // it (once each way), for damage, stunning it (BossDef.guard) with stun
+    turns?: { damage: number; stun?: boolean };
+    // What it throws up as it lands (ImpactDef): round the boss, or a lunge's at the end of
+    // its strip, with its trail along it; a ground attack's at each mark, a blast's on each spot
+    impact?: ImpactDef;
     // Blasts: a square this many tiles across on each spot (on the middle of its
     // tile for an odd size), rather than radius round it; impactSpotAnim on every
     // tile of it
@@ -711,6 +722,55 @@ export type BossAttackDef = {
     };
 };
 
+// A fight's own button (MapDef.fight.ability): Space, a pad's bottom face button or the
+// touch screen's, once every cooldown seconds. It hits the boss for damage, with impact on it,
+// as long as the boss's middle is within reach tiles of the player's; out of reach it does
+// nothing and costs nothing. The player plays playerSeq (one of their weapons' own, so it's
+// baked) as it goes, with sound; iconObjId is its button.
+export type FightAbilityDef = {
+    id: string;
+    name: string;
+    damage: number;
+    reach: number;
+    cooldown: number;
+    iconObjId: number;
+    impact?: ImpactDef;
+    sound?: number;
+    playerSeq?: number;
+};
+
+// A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
+export type ImpactSpotDef = { spotAnim: number; fit?: number };
+
+// What a hit throws up, for show: spots where it lands (each played out once), trail laid
+// along the way it went every TRAIL_GAP tiles and turned along it (a lunge's strip), and the
+// camera's shake, from 0 to 1 (a player who's asked for less motion gets none). flash: the
+// screen flashes this colour, faintly.
+export type ImpactDef = {
+    spots?: ImpactSpotDef[];
+    trail?: ImpactSpotDef;
+    shake?: number;
+    flash?: string;
+};
+
+// A boss whose guard drops (Justiciar Zachariah's). An attack with `opens` that misses everyone
+// leaves it exposed for that many seconds: it fights on, but takes `damage` times every hit. Its
+// arena's own attacks that catch it (an attack's `turns`) and a lunge that ends in a pillar
+// (BossAttackDef line.dash) stun it for stun seconds: exposed, and doing nothing at all, with
+// stunSpotAnim over its head (stunHeight tiles up). A strike that only reaches so far
+// (MapDef.fight.strikeReach) fires at once as its guard drops, for whoever's in reach.
+export type BossGuardDef = {
+    damage: number;
+    stun: number;
+    stunSpotAnim?: number;
+    stunHeight?: number;
+    // Played as it's stunned, and as it's exposed
+    stunSound?: number;
+    exposeSound?: number;
+    // A lunge stuck in a pillar: what's thrown up where it's struck
+    stuck?: ImpactDef;
+};
+
 // A big entrance: the player can't be hit, the screen goes dark, and everything
 // else stops attacking and runs for the nearest edge of the map and is gone.
 // The boss rises partway through, and the fight starts when it's over.
@@ -740,6 +800,9 @@ export type BossIntroDef = {
     // The camera's on it as it rises, and from seconds into the intro takes
     // over seconds to come back to the player
     pan?: { from: number; over: number };
+    // What's thrown up as it lands, landAt seconds after it rises (ImpactDef)
+    land?: ImpactDef;
+    landAt?: number;
 };
 
 // A pattern a boss keeps up by itself (BossPhasesDef ambient): the attack,
@@ -917,13 +980,22 @@ export type BossDef = {
         distance: number;
         keep: number;
         spotAnim?: number;
-        jump?: { downSeq: number; upSeq: number; seconds: number };
+        // land: what's thrown up as it comes down, landAt seconds after it's up there
+        jump?: {
+            downSeq: number;
+            upSeq: number;
+            seconds: number;
+            land?: ImpactDef;
+            landAt?: number;
+        };
     };
     // Its animation as it charges (BossAttackDef surge), and as it stands
     // winding one up
     surgeSeq?: number;
     // How its fight looks, where it isn't the Nightmare's (BossLookDef)
     look?: BossLookDef;
+    // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
+    guard?: BossGuardDef;
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -1336,7 +1408,14 @@ export type MapDef = {
     // weaponLevel: that's the whole kit, and the fight's balanced to it.
     // strikeReach: tiles a strike (WeaponDef kind strike) finds its targets
     // within, when it isn't the usual 12 (the boss has to be close to be hit)
-    fight?: { requires: string; character: string; weaponLevel: number; strikeReach?: number };
+    // ability: the fight's own button (FightAbilityDef).
+    fight?: {
+        requires: string;
+        character: string;
+        weaponLevel: number;
+        strikeReach?: number;
+        ability?: FightAbilityDef;
+    };
     // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and

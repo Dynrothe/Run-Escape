@@ -155,6 +155,22 @@ export type BossState = {
     rowSets?: Record<string, number>;
     // The rhythms going (BossAttackDef.cycle)
     cycles?: BossCycle[];
+    // BossDef.guard: its guard's down until exposedEnd, and it's stunned (doing nothing)
+    // until stunEnd
+    exposedEnd?: number;
+    stunEnd?: number;
+    // A lunge's dash (BossAttackDef line.dash): from (fromX, fromY) to (toX, toY) over these
+    // ticks, stunned at the end if it's run into a pillar (stuck)
+    dash?: {
+        attack: BossAttackDef;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        startTick: number;
+        endTick: number;
+        stuck: boolean;
+    };
 };
 
 // A rhythm of a boss's (BossAttackDef.cycle) since startTick: when each player
@@ -526,6 +542,9 @@ export type EnemyProjectile = {
         hitBack: number[];
         statue?: ArenaStatue;
     };
+    // An attack that turns on its boss (BossAttackDef.turns): it's caught it on the way out
+    // (1) and back (2)
+    hitBoss?: number;
 };
 
 export type PickupKind = "bones" | "coins" | "food" | "casket" | "powerUp";
@@ -604,6 +623,10 @@ export type Effect = {
     // Scaled so the model's radius is this many tiles (a claw's hands, as
     // wide as the spot they come up in), rather than drawn as it is
     fitRadius?: number;
+    // Turned this way (a lunge's trail along its strip), rather than as it is
+    yaw?: number;
+    // Gone once its animation's played, however long it's kept (an impact's dust)
+    once?: boolean;
 };
 
 // A multicannon set up by a power-up
@@ -754,6 +777,9 @@ export type DamageSource =
     | `weapon:${string}`
     | `item:${string}`
     | `powerUp:${string}`
+    // A fight's button (MapDef.fight.ability), and its arena's attacks that turned on the boss
+    | `ability:${string}`
+    | "court"
     | "recoil"
     | "other";
 
@@ -874,6 +900,21 @@ type SimEventBody =
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
     | { type: "bossSwing"; x: number; y: number; radius: number }
+    // Something of a fight's landed hard at (x, y): the camera shakes (0 to 1) and the screen
+    // can flash (ImpactDef)
+    | { type: "bossImpact"; x: number; y: number; shake: number; flash?: string }
+    // A boss's guard is down (BossDef.guard): exposed, or stunned, and by what (the attack's
+    // name: its own that missed, or its arena's that caught it, or "Pillar")
+    | {
+          type: "bossGuard";
+          enemyId: string;
+          stunned: boolean;
+          cause: string;
+          x: number;
+          y: number;
+      }
+    // The fight's button was used (MapDef.fight.ability), and on the boss it hit
+    | { type: "ability"; abilityId: string; enemyId: string; sound: number; x: number; y: number }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }

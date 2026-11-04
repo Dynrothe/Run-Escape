@@ -40,6 +40,7 @@ import {
 import {
     OWLS_COURT_FEATURES,
     ZACHARIAH_HITPOINTS,
+    ZACHARIAH_SMITE,
     ZACHARIAH_STRIKE_LEVEL,
     ZACHARIAH_STRIKE_REACH,
 } from "./zachariah";
@@ -407,6 +408,7 @@ export const MAPS: MapDef[] = [
             character: "saradominist",
             weaponLevel: ZACHARIAH_STRIKE_LEVEL,
             strikeReach: ZACHARIAH_STRIKE_REACH,
+            ability: ZACHARIAH_SMITE,
         },
         music: "Blade of Forgotten Justice",
     },

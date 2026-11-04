@@ -243,3 +243,19 @@ export function moveFeatures(features: ArenaFeatures, dx: number, dy: number): A
     }
     return moved;
 }
+
+// The first of the pillars a circle overlaps, or undefined
+export function boxCircle(
+    pillars: readonly Pillar[] | undefined,
+    x: number,
+    y: number,
+    radius: number,
+): Pillar | undefined {
+    for (const pillar of pillars ?? []) {
+        const half = pillar.size / 2;
+        if (circleInBox(x, y, radius, pillar.x + half, pillar.y + half, half, half)) {
+            return pillar;
+        }
+    }
+    return undefined;
+}

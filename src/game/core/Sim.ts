@@ -103,7 +103,10 @@ import {
     EnemyShotDef,
     EnemySpawnsDef,
     EnemyTag,
+    FightAbilityDef,
     GearSlot,
+    ImpactDef,
+    ImpactSpotDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -148,6 +151,7 @@ import {
 } from "./Upgrades";
 import {
     behindPillar,
+    boxCircle,
     checkerCellAt,
     checkerCells,
     circleInBox,
@@ -339,6 +343,16 @@ const STRIKE_FIT_TICKS = 120;
 // Seconds after a boss's bullet hits before another can, unless the boss says
 // otherwise (BossDef.bulletGrace)
 const BULLET_GRACE = 1;
+// A lunge's dash (BossAttackDef line.dash): tiles a second, and how finely it's checked for
+// what's in its way
+const DASH_SPEED = 18;
+const DASH_STEP = 0.1;
+// Stunned (BossDef.guard), a boss gets this long to gather itself after, before it attacks
+const STUN_RECOVER_SECONDS = 0.4;
+// Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
+const IMPACT_TICKS = 90;
+// Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
+const TRAIL_GAP = 1.5;
 // Tiles from the player that what holds them turns up
 const SUMMON_BESIDE = 1.8;
 // Tiles from a boss that what's walking to it is absorbed
@@ -484,6 +498,7 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
     "heroRevived",
     "extraRevive",
     "playerCursed",
+    "ability",
 ]);
 
 // levelUp and chest wait for the player to choose
@@ -710,6 +725,8 @@ export type Hero = {
     // Co-op: just brought back, so nothing hurts them and enemies leave them
     // be until this tick
     immuneEndTick: number;
+    // The fight's button (MapDef.fight.ability) can be used again from this tick
+    abilityReadyTick: number;
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -773,6 +790,8 @@ export class Sim {
     // a long endless run doesn't keep every boss it's had
     readonly bulletSources: ({ attack: BossAttackDef; enemy: Enemy } | undefined)[] = [];
     private emitters: BulletEmitter[] = [];
+    // The tick an impact last shook the camera (ImpactDef), so marks landing together shake it once
+    private impactTick = -1;
     // What the screen draws of them (a row attack's warning)
     get bulletEmitters(): readonly BulletEmitter[] {
         return this.emitters;
@@ -1280,6 +1299,7 @@ export class Sim {
             revived: 0,
             extraRevives: 0,
             immuneEndTick: 0,
+            abilityReadyTick: 0,
         };
     }
 
@@ -3162,6 +3182,8 @@ export class Sim {
                         bossState.surge ||
                         bossState.walkers ||
                         bossState.leap ||
+                        bossState.dash ||
+                        this.isStunned(enemy) ||
                         this.isNapping(enemy) ||
                         // and hauling someone in (BossAttackDef.onHit)
                         this.heroes.some((hero) => hero.drag !== undefined)
@@ -3296,6 +3318,12 @@ export class Sim {
                     enemy.yaw = yawFromVector(lane.toX - lane.fromX, lane.toY - lane.fromY);
                 } else if (fighting) {
                     enemy.yaw = yawFromVector(fighting.x - enemy.x, fighting.y - enemy.y);
+                } else if (bossState?.dash) {
+                    // Along its lunge, and stood as it was while it's stunned
+                    const dash = bossState.dash;
+                    enemy.yaw = yawFromVector(dash.toX - dash.fromX, dash.toY - dash.fromY);
+                } else if (this.isStunned(enemy)) {
+                    // As it was
                 } else if ((dirX !== 0 || dirY !== 0 || bossState) && !enemy.totemOf) {
                     enemy.yaw = yawFromVector(dx, dy);
                 }
@@ -4670,6 +4698,16 @@ export class Sim {
         if (this.tick >= intro.riseTick && !intro.boss) {
             this.riseBoss(intro);
         }
+        // Down on the ground (BossIntroDef.land)
+        const land = intro.def.boss?.intro?.land;
+        const boss = intro.boss;
+        if (
+            land &&
+            boss &&
+            this.tick === intro.riseTick + secondsToTicks(intro.def.boss!.intro!.landAt ?? 0)
+        ) {
+            this.showImpact(land, boss.x, boss.y);
+        }
         if (this.tick >= intro.endTick) {
             this.intro = undefined;
         }
@@ -5101,6 +5139,10 @@ export class Sim {
             enemy.anim = "attack";
             enemy.attackSeq = jump.upSeq;
             enemy.animStart = this.tick;
+        }
+        // Down on the ground again
+        if (jump.land && this.tick === leap.switchTick + secondsToTicks(jump.landAt ?? 0)) {
+            this.showImpact(jump.land, enemy.x, enemy.y);
         }
         if (this.tick >= leap.endTick) {
             const state = enemy.bossState!;
@@ -5983,6 +6025,7 @@ export class Sim {
             target.spare = this.tick < this.bulletGraceEnd || this.reviving;
         });
         bullets.step(targets);
+        this.boltsOnBosses();
         const current = this.hero;
         bullets.hits.forEach((hit, i) => {
             if (hit === -1 || this.runOver) {
@@ -5996,6 +6039,34 @@ export class Sim {
             this.bossHit(enemy.def.id, enemy, attack, bullets.damage[hit]);
         });
         this.use(current);
+    }
+
+    // Bolts that turn on their own boss (BossAttackDef.turns), stopping where they reach it
+    private boltsOnBosses(): void {
+        const bullets = this.bullets;
+        const sources = this.bulletSources;
+        let turning = false;
+        for (const source of sources) {
+            turning ||= source?.attack.turns !== undefined;
+        }
+        if (!turning) {
+            return;
+        }
+        for (let i = bullets.count - 1; i >= 0; i--) {
+            const slot = bullets.order[i];
+            const source = sources[bullets.source[slot]];
+            const boss = source?.enemy;
+            if (!source?.attack.turns || !boss || boss.dead) {
+                continue;
+            }
+            const dx = boss.x - bullets.x[slot];
+            const dy = boss.y - bullets.y[slot];
+            const reach = bullets.radius[slot] + boss.radius;
+            if (dx * dx + dy * dy <= reach * reach) {
+                bullets.remove(i);
+                this.turnOnBoss(boss, source.attack);
+            }
+        }
     }
 
     private stepHazards(): void {
@@ -6096,6 +6167,26 @@ export class Sim {
     ): void {
         const { attack, x, y, radius } = hazard;
         const grab = attack.ground?.grab;
+        if (show && attack.impact) {
+            // Its spot animations at every mark, and one shake and flash for all that land at once
+            const first = this.impactTick !== this.tick;
+            this.impactTick = this.tick;
+            this.showImpact(first ? attack.impact : { spots: attack.impact.spots }, x, y);
+        }
+        // Struck under its own boss's middle (BossAttackDef.turns)
+        if (show && hit && attack.turns) {
+            const boss = this.enemies.find((e) => e.uid === hazard.enemyUid);
+            const half = hazard.half;
+            if (
+                boss &&
+                !boss.dead &&
+                (half
+                    ? Math.abs(boss.x - x) <= half && Math.abs(boss.y - y) <= half
+                    : fm.hypot(boss.x - x, boss.y - y) <= radius)
+            ) {
+                this.turnOnBoss(boss, attack);
+            }
+        }
         if (!show) {
             // Nothing to show again
         } else if (attack.impactSpotAnim !== undefined) {
@@ -6355,6 +6446,14 @@ export class Sim {
                 return;
             }
         }
+        // Carried on by its lunge, and then stunned, it does nothing else (BossDef.guard)
+        if (state.dash) {
+            this.stepDash(enemy, state.dash);
+            return;
+        }
+        if (this.isStunned(enemy)) {
+            return;
+        }
         if (state.surge) {
             this.stepSurge(enemy, state.surge);
             return;
@@ -6584,6 +6683,289 @@ export class Sim {
         }
     }
 
+    // ---- A boss's guard (BossDef.guard), its lunge's dash, and the fight's button ----
+
+    isExposed(enemy: Enemy): boolean {
+        return this.tick < (enemy.bossState?.exposedEnd ?? 0);
+    }
+
+    isStunned(enemy: Enemy): boolean {
+        return this.tick < (enemy.bossState?.stunEnd ?? 0);
+    }
+
+    // Its guard's down for seconds: exposed after a miss of its own, or stunned too (its
+    // arena's attack caught it, its lunge stuck in a pillar), doing nothing at all. cause: what
+    // did it, for the event. Nothing gets through while it kneels at a threshold.
+    private dropGuard(boss: Enemy, seconds: number, stunned: boolean, cause: string): void {
+        const guard = boss.def.boss?.guard;
+        const state = boss.bossState;
+        if (!guard || !state || boss.dead || this.runOver || state.phase?.pauseEnd !== undefined) {
+            return;
+        }
+        const end = this.tick + secondsToTicks(seconds);
+        const wasOpen = this.isExposed(boss);
+        state.exposedEnd = Math.max(state.exposedEnd ?? 0, end);
+        if (stunned) {
+            const wasStunned = this.isStunned(boss);
+            state.stunEnd = Math.max(state.stunEnd ?? 0, end);
+            // Whatever it was winding up is lost, and it gets its breath back after
+            state.windup = undefined;
+            state.chain = undefined;
+            state.follow = undefined;
+            boss.attackCooldown = Math.max(
+                boss.attackCooldown,
+                end - this.tick + secondsToTicks(STUN_RECOVER_SECONDS),
+            );
+            boss.vx = boss.vy = 0;
+            boss.anim = "walk";
+            boss.animStart = this.tick;
+            if (guard.stunSpotAnim !== undefined && !wasStunned) {
+                this.addEffect(
+                    guard.stunSpotAnim,
+                    boss.x,
+                    boss.y,
+                    guard.stunHeight ?? 0,
+                    end - this.tick,
+                    boss.uid,
+                );
+            }
+        }
+        const sound = stunned ? guard.stunSound : guard.exposeSound;
+        if (sound !== undefined) {
+            this.emit({ type: "bossAttack", enemyId: boss.def.id, sound, x: boss.x, y: boss.y });
+        }
+        this.emit({
+            type: "bossGuard",
+            enemyId: boss.def.id,
+            stunned,
+            cause,
+            x: boss.x,
+            y: boss.y,
+        });
+        if (!wasOpen) {
+            this.strikeNow(boss);
+        }
+    }
+
+    // A strike that only reaches so far (MapDef.fight.strikeReach) goes off at once for each
+    // hero in reach of the boss, its guard just down
+    private strikeNow(boss: Enemy): void {
+        const reach = this.map.fight?.strikeReach;
+        if (reach === undefined) {
+            return;
+        }
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            if (!this.isUp(hero) || fm.hypot(player.x - boss.x, player.y - boss.y) > reach) {
+                continue;
+            }
+            for (const weapon of hero.weapons) {
+                if (weapon.def.kind === "strike") {
+                    weapon.cooldown = 0;
+                }
+            }
+        }
+    }
+
+    // A lunge's dash (BossAttackDef line.dash): as far along its strip as it goes before
+    // anything's in the way (a wall, a pillar, a player), and whether that's a pillar
+    private dashEnd(
+        enemy: Enemy,
+        dirX: number,
+        dirY: number,
+        length: number,
+    ): { x: number; y: number; stuck: boolean } {
+        const pillars = this.map.features?.pillars;
+        let x = enemy.x;
+        let y = enemy.y;
+        for (let along = DASH_STEP; along <= length + 1e-9; along += DASH_STEP) {
+            const nx = enemy.x + dirX * along;
+            const ny = enemy.y + dirY * along;
+            if (boxCircle(pillars, nx, ny, enemy.radius)) {
+                return { x, y, stuck: true };
+            }
+            const inTheWay = this.heroes.some(
+                (hero) =>
+                    this.isUp(hero) &&
+                    fm.hypot(hero.player.x - nx, hero.player.y - ny) <
+                        enemy.radius + hero.player.radius,
+            );
+            if (inTheWay || !isCircleFree(this.grid, nx, ny, enemy.radius)) {
+                break;
+            }
+            x = nx;
+            y = ny;
+        }
+        return { x, y, stuck: false };
+    }
+
+    private startDash(enemy: Enemy, attack: BossAttackDef, windup: BossWindup): void {
+        const dash = attack.line?.dash;
+        if (!dash) {
+            return;
+        }
+        const end = this.dashEnd(enemy, windup.dirX, windup.dirY, dash);
+        const length = fm.hypot(end.x - enemy.x, end.y - enemy.y);
+        enemy.bossState!.dash = {
+            attack,
+            fromX: enemy.x,
+            fromY: enemy.y,
+            toX: end.x,
+            toY: end.y,
+            startTick: this.tick,
+            endTick: this.tick + Math.max(1, Math.round((length / DASH_SPEED) * TICKS_PER_SECOND)),
+            stuck: end.stuck,
+        };
+    }
+
+    private stepDash(enemy: Enemy, dash: NonNullable<BossState["dash"]>): void {
+        const span = Math.max(1, dash.endTick - dash.startTick);
+        const f = Math.min(1, (this.tick - dash.startTick) / span);
+        enemy.x = dash.fromX + (dash.toX - dash.fromX) * f;
+        enemy.y = dash.fromY + (dash.toY - dash.fromY) * f;
+        if (f < 1) {
+            return;
+        }
+        enemy.bossState!.dash = undefined;
+        // What it throws up where it stops, and its sword stuck in the stone
+        this.showImpact(dash.attack.impact, enemy.x, enemy.y);
+        const guard = enemy.def.boss?.guard;
+        if (dash.stuck && guard) {
+            const dx = dash.toX - dash.fromX;
+            const dy = dash.toY - dash.fromY;
+            const length = Math.max(0.001, fm.hypot(dx, dy));
+            // At the pillar's face, where the sword's gone in
+            this.showImpact(
+                guard.stuck,
+                enemy.x + (dx / length) * enemy.radius,
+                enemy.y + (dy / length) * enemy.radius,
+            );
+            this.dropGuard(enemy, guard.stun, true, "Pillar");
+        }
+    }
+
+    // What a hit throws up (ImpactDef): its spots at (x, y), its trail laid along a way it
+    // went (from x, y, length tiles along dirX, dirY), and the camera's shake and the screen's
+    // flash for the view
+    private showImpact(
+        impact: ImpactDef | undefined,
+        x: number,
+        y: number,
+        along?: { dirX: number; dirY: number; length: number },
+    ): void {
+        if (!impact) {
+            return;
+        }
+        for (const spot of impact.spots ?? []) {
+            this.addImpactSpot(spot, x, y);
+        }
+        const trail = impact.trail;
+        if (trail && along) {
+            const yaw = yawFromVector(along.dirX, along.dirY);
+            for (let at = TRAIL_GAP / 2; at < along.length; at += TRAIL_GAP) {
+                const effect = this.addImpactSpot(trail, x + along.dirX * at, y + along.dirY * at);
+                if (effect) {
+                    effect.yaw = yaw;
+                }
+            }
+        }
+        if (impact.shake !== undefined || impact.flash !== undefined) {
+            this.emit({
+                type: "bossImpact",
+                x,
+                y,
+                shake: impact.shake ?? 0,
+                ...(impact.flash !== undefined && { flash: impact.flash }),
+            });
+        }
+    }
+
+    // One of an impact's spot animations, played once, scaled to its fit
+    private addImpactSpot(spot: ImpactSpotDef, x: number, y: number): Effect | undefined {
+        const effect = this.addEffect(spot.spotAnim, x, y, 0, IMPACT_TICKS);
+        if (effect) {
+            effect.once = true;
+            if (spot.fit !== undefined) {
+                effect.fitRadius = spot.fit;
+            }
+        }
+        return effect;
+    }
+
+    // An arena's attack that's caught its own boss (BossAttackDef.turns): hurt, and stunned
+    private turnOnBoss(boss: Enemy, attack: BossAttackDef): void {
+        const turns = attack.turns;
+        if (!turns || boss.dead || !boss.bossState) {
+            return;
+        }
+        const current = this.hero;
+        // Whoever led it there, as near as anyone can say
+        this.use(this.nearestHero(boss.x, boss.y));
+        this.damageSource = "court";
+        this.damageEnemy(boss, turns.damage, 0, boss.x, boss.y, 0);
+        this.use(current);
+        const guard = boss.def.boss?.guard;
+        if (turns.stun && guard && !boss.dead) {
+            this.dropGuard(boss, guard.stun, true, attack.name);
+        }
+    }
+
+    // The fight's button (MapDef.fight.ability), for the current hero: whether it went off
+    useAbility(): boolean {
+        const ability = this.map.fight?.ability;
+        const hero = this.hero;
+        if (
+            !ability ||
+            this.state !== "playing" ||
+            !this.isUp(hero) ||
+            this.tick < hero.abilityReadyTick
+        ) {
+            return false;
+        }
+        const boss = this.abilityTarget(ability);
+        if (!boss) {
+            return false;
+        }
+        hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
+        const player = this.player;
+        if (ability.playerSeq !== undefined) {
+            player.attackSeq = ability.playerSeq;
+            player.attackStart = this.tick;
+        }
+        this.showImpact(ability.impact, boss.x, boss.y);
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: boss.def.id,
+            sound: ability.sound ?? -1,
+            x: boss.x,
+            y: boss.y,
+        });
+        this.damageSource = `ability:${ability.id}`;
+        this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+        return true;
+    }
+
+    // What the fight's button would land on now: the boss, up, in reach of the current hero
+    abilityTarget(ability = this.map.fight?.ability): Enemy | undefined {
+        const boss = this.shownBoss;
+        const state = boss?.bossState;
+        if (!ability || !boss || !state || boss.dead || this.intro || state.leap) {
+            return undefined;
+        }
+        // Kneeling at a threshold, nothing gets through
+        if (boss.shieldEnd > this.tick) {
+            return undefined;
+        }
+        const player = this.player;
+        return fm.hypot(boss.x - player.x, boss.y - player.y) <= ability.reach ? boss : undefined;
+    }
+
+    // Seconds until a hero's button can be used again
+    abilitySecondsLeft(hero: Hero = this.hero): number {
+        return Math.max(0, hero.abilityReadyTick - this.tick) / TICKS_PER_SECOND;
+    }
+
     // Below half its hitpoints a boss attacks and moves faster, and uses its
     // enraged attacks too
     private enrage(enemy: Enemy): void {
@@ -6687,6 +7069,7 @@ export class Sim {
                 }
             }
             // Co-op: on anyone it lands on
+            let landed = false;
             this.forEachHeroInReach(() => {
                 const player = this.player;
                 let hit = line
@@ -6726,11 +7109,41 @@ export class Sim {
                     this.glyphBlocked(enemy, attack);
                 }
                 if (hit && !this.runOver) {
+                    landed = true;
                     // A blast's impact is already showing where it landed
                     const damage = this.getBossDamage(enemy, attack);
                     this.bossHit(enemy.def.id, enemy, attack, damage, attack.kind !== "blast");
                 }
             });
+            if (this.runOver) {
+                return;
+            }
+            // What it throws up: a lunge's trail along its strip, and the rest where it stops
+            // (once it's got there, if it dashes); a blast's on each spot, a swing's round it
+            if (line) {
+                this.showImpact(attack.impact && { trail: attack.impact.trail }, enemy.x, enemy.y, {
+                    dirX: windup.dirX,
+                    dirY: windup.dirY,
+                    length: line.length,
+                });
+                if (line.dash) {
+                    this.startDash(enemy, attack, windup);
+                } else {
+                    this.showImpact(
+                        attack.impact && { ...attack.impact, trail: undefined },
+                        enemy.x + windup.dirX * line.length,
+                        enemy.y + windup.dirY * line.length,
+                    );
+                }
+            } else {
+                for (const { x, y } of spots) {
+                    this.showImpact(attack.impact, x, y);
+                }
+            }
+            // Missed everyone: its guard's down (BossDef.guard)
+            if (!landed && attack.opens !== undefined) {
+                this.dropGuard(enemy, attack.opens, false, attack.name);
+            }
             return;
         }
         if (attack.kind === "teleport") {
@@ -6759,6 +7172,10 @@ export class Sim {
         if (attack.kind === "pattern") {
             this.startPattern(enemy, attack, windup);
             return;
+        }
+        // A wave's slam, round the boss as it's let go
+        if (!windup.from) {
+            this.showImpact(attack.impact, enemy.x, enemy.y);
         }
         this.launchProjectiles(enemy, attack, this.getBossDamage(enemy, attack), false, windup);
     }
@@ -6981,6 +7398,19 @@ export class Sim {
         const back = boomerang !== undefined && this.tick >= boomerang.turnTick;
         const hits = back ? boomerang.hitBack : hit;
         const enemy = this.enemies.find((e) => e.uid === projectile.enemyUid);
+        // Thrown through its own boss, once each way (BossAttackDef.turns)
+        const way = back ? 2 : 1;
+        if (
+            projectile.attack.turns &&
+            enemy &&
+            !enemy.dead &&
+            !((projectile.hitBoss ?? 0) & way) &&
+            fm.hypot(enemy.x - projectile.x, enemy.y - projectile.y) <=
+                projectile.radius + enemy.radius
+        ) {
+            projectile.hitBoss = (projectile.hitBoss ?? 0) | way;
+            this.turnOnBoss(enemy, projectile.attack);
+        }
         this.forEachHeroInReach(() => {
             const player = this.player;
             const index = this.hero.index;
@@ -6998,6 +7428,17 @@ export class Sim {
                 this.bindToBoss(enemy, projectile.attack);
             }
         });
+        // A wave that's gone its way without reaching anyone: its guard's down
+        const opens = projectile.attack.opens;
+        if (
+            !boomerang &&
+            projectile.life <= 0 &&
+            opens !== undefined &&
+            enemy &&
+            hit.length === 0
+        ) {
+            this.dropGuard(enemy, opens, false, projectile.attack.name);
+        }
         if (boomerang && projectile.life <= 0) {
             // Caught by the statue that threw it
             const attack = projectile.attack;
@@ -7633,7 +8074,9 @@ export class Sim {
         }
         const naps = enemy.def.boss?.naps;
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
-        const prayed = this.prayedAgainst(enemy) * guard;
+        // Its guard down after a miss, or stunned (BossDef.guard)
+        const opened = this.isExposed(enemy) ? enemy.def.boss!.guard!.damage : 1;
+        const prayed = this.prayedAgainst(enemy) * guard * opened;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;

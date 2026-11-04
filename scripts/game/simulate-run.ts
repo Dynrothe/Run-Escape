@@ -19,6 +19,8 @@
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
+//   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
+//                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -68,6 +70,7 @@ const ARENA = map.arena;
 const finalBoss = process.env.FINAL_BOSS;
 const fresh = process.env.FRESH === "1";
 const dodges = process.env.DODGE === "1";
+const smites = process.env.SMITE !== "0";
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
@@ -413,6 +416,17 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             }
         }
     }
+    // In to use the fight's button while the boss's guard is down (BossDef.guard), if it's ready
+    const ability = sim.map.fight?.ability;
+    if (
+        smites &&
+        ability &&
+        sim.isExposed(boss) &&
+        sim.abilitySecondsLeft() === 0 &&
+        Math.hypot(boss.x - player.x, boss.y - player.y) > ability.reach - 0.5
+    ) {
+        return towards(boss.x, boss.y);
+    }
     // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him
     const reach = sim.map.fight?.strikeReach;
     if (reach !== undefined && Math.hypot(boss.x - player.x, boss.y - player.y) > reach - 1.5) {
@@ -442,6 +456,14 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         return nearest < 2 ? { x: 0, y: 0 } : towards(target.x, target.y);
     }
     return undefined;
+}
+
+// A fight's button (MapDef.fight.ability), pressed while the boss's guard is down and it'd land
+function useAbility(sim: Sim): void {
+    const boss = sim.shownBoss;
+    if (smites && boss && sim.map.fight?.ability && sim.isExposed(boss) && sim.abilityTarget()) {
+        sim.useAbility();
+    }
 }
 
 // Works out what to press for a shuffled direction, as a person soon does
@@ -528,6 +550,10 @@ function runOnce(characterId: string, seed: number) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
     }
     let fightTicks = 0;
+    // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
+    // weapon's reach (MapDef.fight.strikeReach)
+    const phaseTicks: number[] = [];
+    const reachTicks: number[] = [];
     while (sim.tick < maxTicks && !sim.runOver) {
         if (sim.state === "levelUp") {
             const ranked = sim.choices
@@ -602,10 +628,22 @@ function runOnce(characterId: string, seed: number) {
             // Untouchable, as a late endless round's hits are bigger than any health bar
             sim.player.invulnerable = 1e9;
         }
+        useAbility(sim);
         const pressed = uncursed(sim, move);
         sim.step(pressed.x, pressed.y);
-        if (sim.shownBoss?.bossState?.phase) {
+        const fighting = sim.shownBoss?.bossState?.phase;
+        if (fighting) {
             fightTicks++;
+            const at = fighting.index;
+            phaseTicks[at] = (phaseTicks[at] ?? 0) + 1;
+            const boss = sim.shownBoss!;
+            const reach = sim.map.fight?.strikeReach;
+            if (
+                reach !== undefined &&
+                Math.hypot(boss.x - sim.player.x, boss.y - sim.player.y) <= reach
+            ) {
+                reachTicks[at] = (reachTicks[at] ?? 0) + 1;
+            }
         }
         for (const event of sim.takeEvents()) {
             if (event.type === "playerHit") {
@@ -662,6 +700,20 @@ function runOnce(characterId: string, seed: number) {
                 `maxHp ${sim.player.maxHp}, armour ${sim.stats.armor}, ` +
                 `taken ${sim.damageTaken}, dps ${Math.round(sim.dps)}`,
         );
+        if (phaseTicks.length > 1 || sim.map.fight?.strikeReach !== undefined) {
+            console.log(
+                "  phases: " +
+                    phaseTicks
+                        .map(
+                            (ticks, i) =>
+                                `${i + 1} ${(ticks / TICKS_PER_SECOND).toFixed(0)}s` +
+                                (sim.map.fight?.strikeReach !== undefined
+                                    ? ` (${Math.round((100 * (reachTicks[i] ?? 0)) / ticks)}% in reach)`
+                                    : ""),
+                        )
+                        .join(", "),
+            );
+        }
         // Which of the boss's attacks did it, over the whole fight
         const byAttack = Object.entries(sim.damageByAttack).sort((a, b) => b[1] - a[1]);
         if (byAttack.length > 0) {
@@ -753,6 +805,7 @@ function runParty(characterId: string, seed: number) {
                 if (sim.tick % 5 === 0) {
                     moves[hero.index] = fightMove(sim) ?? botMove(sim);
                 }
+                useAbility(sim);
                 const pressed = uncursed(sim, moves[hero.index]);
                 sim.setInput(hero.index, pressed.x, pressed.y);
             });

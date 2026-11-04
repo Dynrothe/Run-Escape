@@ -1,6 +1,6 @@
 import { moveFeatures } from "../core/arena";
 import { OWLS_COURT } from "../scaperune/maps/owlsCourt";
-import { ArenaFeatures, BossAttackDef, EnemyDef } from "./types";
+import { ArenaFeatures, BossAttackDef, EnemyDef, FightAbilityDef, ImpactDef } from "./types";
 
 // Justiciar Zachariah, the Justiciar of the Owl, fought on his own in the Owl's Court
 // (maps.ts, scaperune/maps/owlsCourt.ts): Phosani's Nightmare's way of a run that's one fight,
@@ -10,6 +10,10 @@ import { ArenaFeatures, BossAttackDef, EnemyDef } from "./types";
 // hitpoints are the bar, a phase at each threshold (no totems). Only Saradomin Strike hurts him,
 // as in OSRS, and only from close by (MapDef.fight.strikeReach), so the player has to stay near
 // him while they read the room. Everything's warned on the ground or by a statue first.
+// The player fights back three ways (BossDef.guard): a lunge or a wave of his that misses leaves
+// his guard down, doubling what he takes; his court's bolts, lightning and swords hurt him too,
+// and lightning, a sword or a lunge into a pillar stuns him; and Smite (MapDef.fight.ability),
+// the fight's button, hits hard from right beside him.
 // The design and its numbers: docs/design/justiciar-zachariah.md.
 
 // His animations, all on his own skeleton (1756), as the cache has them for npc 7858
@@ -24,6 +28,26 @@ const DESCEND_SEQ = 7964;
 // His guard up: down on one knee at a threshold, and before a leap
 const BLOCK_SEQ = 7965;
 const DEATH_SEQ = 7854;
+
+// What his blows throw up (ImpactDef), all the cache's own, scaled to fit: the Corporeal Beast's
+// stomp, a white ring that runs out along the floor (318), grey dust blown along the ground
+// (2184, 2699), his own blue impact (1458) and blue wave (1515, laid along a lunge as its
+// trail), Saradomin's light (1221) and the stars of a stunned head (80)
+const STOMP = 318;
+const BLOWN_DUST = 2184;
+const DUST = 2699;
+const BLUE_IMPACT = 1458;
+const SWORD_TRAIL = 1515;
+const SARADOMIN_LIGHT = 1221;
+const STARS = 80;
+// Landing from a leap, and from his descent
+const LANDING: ImpactDef = {
+    spots: [
+        { spotAnim: STOMP, fit: 2.5 },
+        { spotAnim: BLOWN_DUST, fit: 2.5 },
+    ],
+    shake: 0.45,
+};
 
 // The Sepulchre's statues the fight draws and animates (the map leaves their models out)
 const CROSSBOWMAN = 38445;
@@ -59,17 +83,46 @@ const lane = (i: number) => [i * 3, i * 3 + 1, i * 3 + 2];
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Saradominist's Saradomin Strike's level,
 // and how near him they have to be for it to reach him, in tiles from his middle
-export const ZACHARIAH_HITPOINTS = 2000;
+export const ZACHARIAH_HITPOINTS = 5600;
 export const ZACHARIAH_STRIKE_LEVEL = 7;
 export const ZACHARIAH_STRIKE_REACH = 8.5;
+
+// Smite, the fight's button (MapDef.fight.ability): Saradomin's light called down on him, with
+// a ring running out under him, from no more than three and a half tiles off his middle, in his
+// reach as much as he's in theirs. Doubled with his guard down, as everything is, which is when
+// it's worth stepping in.
+export const ZACHARIAH_SMITE: FightAbilityDef = {
+    id: "smite",
+    name: "Smite",
+    damage: 40,
+    reach: 3.5,
+    cooldown: 5,
+    // Saradomin's light
+    iconObjId: 13256,
+    impact: {
+        spots: [
+            { spotAnim: SARADOMIN_LIGHT, fit: 3 },
+            { spotAnim: STOMP, fit: 2 },
+        ],
+        shake: 0.25,
+    },
+    // The god spell's cast, as the strike's, and the Saradomin magic impact
+    playerSeq: 811,
+    sound: 3887,
+};
 
 // Tiles south of him the player stands as he comes down, as the map starts them
 export const ZACHARIAH_START_DISTANCE = OWLS_COURT.rise.y - OWLS_COURT.start.y;
 
 // What the player has: the Saradominist's 30 hitpoints, at 4 tiles a second. His big hits take
 // about half; a bolt or the fire a tenth, so standing in a lane or the fire is what costs.
-const BOLT = 3;
-const FIRE = 4;
+const BOLT = 2;
+// How long his guard's down when a lunge or a wave of his misses, and how long he's stunned
+// (BossDef.guard), and what that does to what he takes
+const OPENS = 1;
+const STUN = 2.5;
+const OPENED_DAMAGE = 2;
+const FIRE = 3;
 // How far off the player can be for his own attacks; further than that he walks after them, and
 // from well off (the terrace) he leaps to them
 const REACH = 16;
@@ -77,7 +130,8 @@ const REACH = 16;
 // A bolt: hit no wider than the arrow's drawn, at about twice the player's speed. Three volleys
 // half a second apart down each row of two lanes (one from each side), the next two lanes the next
 // time: from the middle of a lane it's two and a bit tiles to be clear of it, half a second's walk,
-// against the second and more the statues take to draw.
+// against the 1.2 seconds the statues take to aim (8682), which is the whole warning. A bolt
+// that reaches him stops there and hurts him.
 const BOLT_HIT = 0.3;
 const BOLT_SPEED = 9.5;
 
@@ -94,6 +148,7 @@ const CROSSBOW_ROWS: BossAttackDef = {
     lookId: "zachariah_bolt",
     sound: 4346,
     statues: { locId: CROSSBOWMAN, windupSeq: 8682, seq: 8684 },
+    turns: { damage: 8 },
     pattern: {
         shape: "rows",
         count: 1,
@@ -114,19 +169,28 @@ const CROSSBOW_ROWS: BossAttackDef = {
     },
 };
 
-// His lunge: a strip two wide and seven long the way he faced as it began. A step of a tile and a
-// third (a third of a second) takes the player off it; behind or beside him is safe.
+// His lunge: a strip two wide and seven long the way he faced as it began, and he goes four and
+// a half tiles down it, stopping at whoever it's hit or anything in the way. A step of a tile and
+// a third (a third of a second) takes the player off it, against 0.85 s; behind or beside him is
+// safe. Missed, it leaves him past them with his guard down, and run into a pillar it sticks
+// there, stunned.
 const LUNGE: BossAttackDef = {
     name: "Lunge",
     kind: "swing",
-    damage: 13,
-    windup: 1.1,
-    cooldown: 2,
+    damage: 7,
+    windup: 0.85,
+    cooldown: 1,
     range: 6.5,
     weight: 4,
     seq: SLASH_SEQ,
     sound: 3876,
-    line: { width: 2, length: 7 },
+    line: { width: 2, length: 7, dash: 4.5 },
+    opens: OPENS,
+    impact: {
+        trail: { spotAnim: SWORD_TRAIL, fit: 1 },
+        spots: [{ spotAnim: BLOWN_DUST, fit: 2 }],
+        shake: 0.3,
+    },
 };
 
 // The ice: a 3 by 3 square on the tile they stood on, small damage and frozen for a second and a
@@ -134,9 +198,9 @@ const LUNGE: BossAttackDef = {
 const ICE: BossAttackDef = {
     name: "Ice barrage",
     kind: "blast",
-    damage: 4,
-    windup: 1.3,
-    cooldown: 5,
+    damage: 3,
+    windup: 1.1,
+    cooldown: 4,
     range: 14,
     weight: 3,
     phases: [1, 2],
@@ -146,16 +210,18 @@ const ICE: BossAttackDef = {
     impactSpotAnim: 369,
     square: 3,
     effect: { kind: "freeze", seconds: 1.5 },
+    impact: { shake: 0.15 },
 };
 
 // The knights' swords: thrown from a statue's middle at where the player stood, across the court
-// and back the same way, hitting each way. Its hit's the spinning sword's width.
+// and back the same way, hitting each way. Its hit's the spinning sword's width. Through him, it
+// stuns him.
 const SWORD: BossAttackDef = {
     name: "Knight's sword",
     kind: "projectile",
-    damage: 8,
-    windup: 1.3,
-    cooldown: 9,
+    damage: 6,
+    windup: 1.2,
+    cooldown: 7,
     range: 999,
     weight: 2,
     phases: [2],
@@ -168,16 +234,18 @@ const SWORD: BossAttackDef = {
     lookId: "zachariah_sword",
     boomerang: { reach: 27, catchSeq: 8668, catchSound: 4442 },
     statues: { locId: KNIGHT, windupSeq: 8667 },
+    turns: { damage: 30, stun: true },
 };
 
 // The lightning: every cell of one colour of the court's floor, then the other's. From a struck
-// cell's middle it's 1.85 tiles into the other colour's, under half a second, against 1.6.
+// cell's middle it's 1.85 tiles into the other colour's, under half a second, against 1.4. A cell
+// struck under him stuns him: he follows them, so they can lead him onto it.
 const LIGHTNING: BossAttackDef = {
     name: "Lightning",
     kind: "ground",
-    damage: 9,
-    windup: 1.6,
-    cooldown: 8,
+    damage: 7,
+    windup: 1.4,
+    cooldown: 6,
     range: 999,
     weight: 3,
     phases: [2],
@@ -187,8 +255,10 @@ const LIGHTNING: BossAttackDef = {
     impactSpotAnim: 1796,
     // The cells about to be struck swirl gold, as a yellow strange tile does when it's stepped on
     // (1800, animated)
+    turns: { damage: 40, stun: true },
+    impact: { shake: 0.3, flash: "#dfe8ff" },
     ground: {
-        spots: [{ shape: "checker", then: 1.6 }],
+        spots: [{ shape: "checker", then: 1.4 }],
         radius: 1.5,
         spotAnim: 1800,
         // Inside the cell, and plain to see: it's the warning of a big hit everywhere
@@ -203,12 +273,14 @@ const ATTACKS: BossAttackDef[] = [
     // (a quarter of a second) clears it; it's seen for over a second first. Whoever it reaches is
     // dragged to his feet and bound, then he slashes three times (half their hitpoints in all, the
     // wave's share with it).
+    // Twice in a row, the second aimed afresh and quicker (0.65 s, a step's twice that)
+    { ...LUNGE, name: "Lunges", weight: 2, phases: [2, 3], chain: { times: 1, windup: 0.65 } },
     {
         name: "Shock wave",
         kind: "projectile",
-        damage: 3,
-        windup: 1.2,
-        cooldown: 7,
+        damage: 2,
+        windup: 1.0,
+        cooldown: 5,
         range: 11,
         minRange: 2.5,
         weight: 3,
@@ -222,11 +294,21 @@ const ATTACKS: BossAttackDef[] = [
         wave: { reach: 12 },
         onHit: { pull: 2.4, pullSeconds: 0.3, bind: 1.7, attack: "Flurry" },
         shout: "Kneel!",
+        // The floor cracks under his slam, and a wave that reaches no one leaves him open
+        impact: {
+            spots: [
+                { spotAnim: STOMP, fit: 3 },
+                { spotAnim: BLUE_IMPACT, fit: 2 },
+                { spotAnim: BLOWN_DUST, fit: 2.5 },
+            ],
+            shake: 0.45,
+        },
+        opens: OPENS,
     },
     {
         name: "Flurry",
         kind: "swing",
-        damage: 4,
+        damage: 3,
         windup: 0.35,
         cooldown: 0,
         range: 999,
@@ -235,6 +317,7 @@ const ATTACKS: BossAttackDef[] = [
         seq: SLASH_SEQ,
         radius: 3.2,
         chain: { times: 2, windup: 0.4 },
+        impact: { spots: [{ spotAnim: DUST, fit: 1.5 }], shake: 0.15 },
     },
     ICE,
     // In the verdict the ice is quicker to let go, and the lunge follows it at where they're
@@ -253,8 +336,8 @@ const ATTACKS: BossAttackDef[] = [
         ...LIGHTNING,
         name: "Lightning round you",
         phases: [3],
-        windup: 1.3,
-        ground: { ...LIGHTNING.ground!, spots: [{ shape: "checker", then: 1.3, cross: 1 }] },
+        windup: 1.2,
+        ground: { ...LIGHTNING.ground!, spots: [{ shape: "checker", then: 1.2, cross: 1 }] },
         follow: { attack: "Knight's sword (following)", delay: 0.3 },
     },
     SWORD,
@@ -266,9 +349,9 @@ const ATTACKS: BossAttackDef[] = [
     {
         name: "The Owl's gaze",
         kind: "swing",
-        damage: 16,
-        windup: 2.6,
-        cooldown: 14,
+        damage: 14,
+        windup: 2.4,
+        cooldown: 12,
         range: 999,
         weight: 2,
         phases: [3],
@@ -282,13 +365,16 @@ const ATTACKS: BossAttackDef[] = [
         cover: { locId: 56670 },
         message: "Hide from his gaze!",
         shout: "Face judgement!",
+        impact: {
+            spots: [
+                { spotAnim: STOMP, fit: 6 },
+                { spotAnim: BLOWN_DUST, fit: 3 },
+            ],
+            shake: 0.6,
+            flash: "#fff3c4",
+        },
     },
     CROSSBOW_ROWS,
-    {
-        ...CROSSBOW_ROWS,
-        name: "Crossbow rows (verdict)",
-        pattern: { ...CROSSBOW_ROWS.pattern!, delay: 1 },
-    },
     // The bridge's fire, from the second phase on, as the real Sepulchre's: each row lights a half
     // second behind the last, and they're all out together for 1.8 seconds a cycle, time to walk
     // the bridge's four rows
@@ -348,7 +434,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
         sounds: { attack: -1, hit: -1, death: -1 },
         spawnMessage: "Justiciar Zachariah descends!",
         boss: {
-            attackInterval: 2.4,
+            attackInterval: 1.5,
             keepDistance: 2.5,
             enrage: { message: "" },
             bulletGrace: 0.6,
@@ -356,7 +442,13 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
             leash: {
                 distance: REACH,
                 keep: 5,
-                jump: { downSeq: BLOCK_SEQ, upSeq: DESCEND_SEQ, seconds: 0.7 },
+                jump: {
+                    downSeq: BLOCK_SEQ,
+                    upSeq: DESCEND_SEQ,
+                    seconds: 0.7,
+                    land: LANDING,
+                    landAt: 0.55,
+                },
             },
             attacks: ATTACKS,
             // His death (7854) is a second and a half
@@ -384,23 +476,39 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 atMiddle: true,
                 holds: true,
                 pan: { from: 2.6, over: 1.6 },
+                land: LANDING,
+                landAt: 1.1,
+            },
+            // Doubled while his guard's down; stunned, he stands with the stars round his head
+            guard: {
+                damage: OPENED_DAMAGE,
+                stun: STUN,
+                stunSpotAnim: STARS,
+                stunHeight: 2.4,
+                stuck: {
+                    spots: [
+                        { spotAnim: STOMP, fit: 2 },
+                        { spotAnim: DUST, fit: 2 },
+                    ],
+                    shake: 0.6,
+                },
             },
             phases: {
                 phases: [
                     {
-                        until: 0.7,
+                        until: 0.78,
                         status: "The trial begins",
-                        ambients: [{ attack: "Crossbow rows", interval: 5, delay: 1.5 }],
+                        ambients: [{ attack: "Crossbow rows", interval: 4, delay: 1.5 }],
                     },
                     {
-                        until: 0.35,
+                        until: 0.4,
                         status: "The Sepulchre wakes",
                         message: "The Sepulchre wakes!",
                         opener: "Lightning",
-                        tempo: 0.85,
+                        tempo: 0.9,
                         speed: 1.1,
                         ambients: [
-                            { attack: "Crossbow rows", interval: 4.5, delay: 2 },
+                            { attack: "Crossbow rows", interval: 3.6, delay: 2 },
                             { attack: "Bridge fire", interval: 0 },
                         ],
                     },
@@ -408,10 +516,10 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                         status: "The verdict",
                         message: "The verdict!",
                         opener: "The Owl's gaze",
-                        tempo: 0.7,
+                        tempo: 0.8,
                         speed: 1.2,
                         ambients: [
-                            { attack: "Crossbow rows (verdict)", interval: 4, delay: 4 },
+                            { attack: "Crossbow rows", interval: 3.2, delay: 4 },
                             { attack: "Bridge fire", interval: 0 },
                         ],
                     },

@@ -5,6 +5,7 @@ import { BossAttackDef, emptyStats } from "../content/types";
 import {
     OWLS_COURT_FEATURES,
     ZACHARIAH_HITPOINTS,
+    ZACHARIAH_SMITE,
     ZACHARIAH_START_DISTANCE,
     ZACHARIAH_STRIKE_LEVEL,
     ZACHARIAH_STRIKE_REACH,
@@ -22,6 +23,7 @@ import { BuildContext } from "../scaperune/recipe";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { behindPillar } from "./arena";
 import { Enemy } from "./entities";
+import { applyAction } from "./lockstep";
 import { createSave } from "./save";
 import { SOLID_FLAGS } from "./world/ArenaGrid";
 import { makeGrid } from "./world/testGrid";
@@ -164,6 +166,7 @@ describe("the map", () => {
             character: "saradominist",
             weaponLevel: ZACHARIAH_STRIKE_LEVEL,
             strikeReach: ZACHARIAH_STRIKE_REACH,
+            ability: ZACHARIAH_SMITE,
         });
         expect(map.waves).toEqual([]);
         expect(map.events).toEqual([
@@ -316,7 +319,7 @@ describe("his attacks, each landing and each dodged", () => {
         }
     });
 
-    test("the shock wave: dragged in, bound, the flurry, half their hitpoints in all", () => {
+    test("the shock wave: dragged in, bound, the flurry, a third of their hitpoints in all", () => {
         const { sim, boss } = fight();
         place(sim, at(31, 25));
         use(sim, boss, "Shock wave");
@@ -330,8 +333,8 @@ describe("his attacks, each landing and each dodged", () => {
         expect(sim.player.frozen).toBeGreaterThan(0);
         run(sim, 1.6);
         const taken = before - hp(sim);
-        expect(taken).toBeGreaterThanOrEqual(12);
-        expect(taken).toBeLessThanOrEqual(17);
+        expect(taken).toBeGreaterThanOrEqual(9);
+        expect(taken).toBeLessThanOrEqual(13);
         expect(sim.damageByAttack["Flurry"]).toBeGreaterThan(0);
     });
 
@@ -482,7 +485,221 @@ describe("his attacks, each landing and each dodged", () => {
     });
 });
 
+describe("fighting back", () => {
+    function fight(spot = { x: 31, y: 33 }): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        const boss = startFight(sim);
+        boss.speed = 0;
+        placeBoss(boss, at(spot.x, spot.y));
+        return { sim, boss };
+    }
+    const guard = () => zachariah().boss!.guard!;
+    // What a hit of 100 does to him, as damageEnemy has it (its roll is 0.85 to 1.15)
+    const hit100 = (sim: Sim, boss: Enemy) => sim.damageEnemy(boss, 100, 0, boss.x, boss.y, 0);
+
+    test("a lunge he misses carries him past them with his guard down: twice the damage", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 29));
+        expect(hit100(sim, boss)).toBeLessThanOrEqual(115);
+        use(sim, boss, "Lunge");
+        place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+        const events: string[] = [];
+        for (let i = 0; i < 1.2 * TICKS_PER_SECOND; i++) {
+            run(sim, 0.02);
+            for (const event of sim.takeEvents()) {
+                if (event.type === "bossGuard") {
+                    events.push(`${event.cause} ${event.stunned}`);
+                }
+            }
+        }
+        expect(hp(sim)).toBe(sim.player.maxHp);
+        expect(events).toEqual(["Lunge false"]);
+        // Down his strip, past where they were
+        expect(boss.y).toBeLessThan(sim.player.y + 0.5);
+        expect(sim.isExposed(boss)).toBe(true);
+        expect(sim.isStunned(boss)).toBe(false);
+        expect(hit100(sim, boss)).toBeGreaterThanOrEqual(170);
+        run(sim, guard().stun);
+        expect(sim.isExposed(boss)).toBe(false);
+    });
+
+    test("a lunge that lands stops at them, and his guard stays up", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 29));
+        use(sim, boss, "Lunge");
+        run(sim, 1.3);
+        expect(hp(sim)).toBeLessThan(sim.player.maxHp);
+        expect(sim.isExposed(boss)).toBe(false);
+        // Short of them, not through them
+        const gap = Math.hypot(boss.x - sim.player.x, boss.y - sim.player.y);
+        expect(gap).toBeGreaterThanOrEqual(boss.radius + sim.player.radius - 0.05);
+        expect(gap).toBeLessThan(boss.radius + sim.player.radius + 0.3);
+    });
+
+    test("stepped off with a pillar behind them, his lunge sticks in it: stunned, doing nothing", () => {
+        const { sim, boss } = fight({ x: 26, y: 31 });
+        place(sim, at(26, 28));
+        use(sim, boss, "Lunge");
+        place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+        run(sim, 1.2);
+        expect(sim.isStunned(boss)).toBe(true);
+        expect(sim.effects.some((e) => e.spotAnim === guard().stunSpotAnim)).toBe(true);
+        expect(hit100(sim, boss)).toBeGreaterThanOrEqual(170);
+        // Nothing while he's stunned, ready as he may be, and back at it after
+        boss.attackCooldown = 0;
+        let attacked = false;
+        for (let i = 0; i < (guard().stun - 0.8) * TICKS_PER_SECOND; i++) {
+            run(sim, 0.02);
+            attacked ||= boss.bossState!.windup !== undefined;
+        }
+        expect(attacked).toBe(false);
+        run(sim, 1.5);
+        expect(sim.isStunned(boss)).toBe(false);
+    });
+
+    test("a shock wave that reaches no one leaves his guard down", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 25));
+        use(sim, boss, "Shock wave");
+        run(sim, 0.5);
+        run(sim, 0.4, 1, 0);
+        let opened = false;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && !opened; i++) {
+            run(sim, 0.02);
+            opened = sim.isExposed(boss);
+        }
+        expect(opened).toBe(true);
+        expect(sim.isStunned(boss)).toBe(false);
+    });
+
+    test("his guard down, the strike goes off at once from in reach", () => {
+        const sim = createSim();
+        run(sim, zachariah().boss!.intro!.seconds + 0.1);
+        const boss = sim.enemies.find((e) => e.finalBoss)!;
+        quiet(sim, boss);
+        boss.speed = 0;
+        placeBoss(boss, at(31, 33));
+        place(sim, at(31, 29));
+        use(sim, boss, "Lunge");
+        place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+        sim.weapons[0].cooldown = 1000;
+        run(sim, 1);
+        expect(sim.isExposed(boss)).toBe(true);
+        expect(sim.weapons[0].cooldown).toBeLessThan(1000);
+    });
+
+    test("his court turns on him: a bolt that reaches him stops there and hurts him", () => {
+        // Lane 0's west statues' first row, in the open: the next two are cut short by a pillar
+        const { sim, boss } = fight({ x: 31, y: 23 });
+        place(sim, at(31, 27));
+        const before = boss.hp;
+        const rows = attackNamed("Crossbow rows");
+        sim["startPattern"](
+            boss,
+            rows,
+            {
+                attack: rows,
+                startTick: sim.tick,
+                landTick: sim.tick,
+                targets: [],
+                dirX: 0,
+                dirY: -1,
+            },
+            false,
+        );
+        run(sim, 4);
+        const taken = before - boss.hp;
+        const bolt = rows.turns!.damage;
+        // Three volleys down the one row
+        expect(taken).toBeGreaterThanOrEqual(Math.floor(bolt * 0.85) * 3);
+        expect(taken).toBeLessThanOrEqual(Math.ceil(bolt * 1.15) * 3);
+        expect(sim.damageBySource.court).toBe(taken);
+        expect(sim.isStunned(boss)).toBe(false);
+    });
+
+    test("his court turns on him: lightning struck under him stuns him", () => {
+        const { sim, boss } = fight();
+        place(sim, at(22.5, 22.5));
+        use(sim, boss, "Lightning");
+        const first = sim.hazards.filter((h) => h.startTick === sim.tick);
+        const cell = first.find((h) => Math.abs(h.x - sim.player.x) > 6)!;
+        placeBoss(boss, { x: cell.x, y: cell.y });
+        const before = boss.hp;
+        run(sim, attackNamed("Lightning").windup + 0.1);
+        expect(sim.isStunned(boss)).toBe(true);
+        expect(before - boss.hp).toBeGreaterThanOrEqual(
+            attackNamed("Lightning").turns!.damage * 0.85,
+        );
+    });
+
+    test("his court turns on him: a knight's sword thrown through him stuns him", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 21.5));
+        use(sim, boss, "Knight's sword");
+        const knight = boss.bossState!.windup!.from![0];
+        const middle = { x: knight.x + 1.5, y: knight.y + 1.5 };
+        placeBoss(boss, {
+            x: (middle.x + sim.player.x) / 2,
+            y: (middle.y + sim.player.y) / 2,
+        });
+        const before = boss.hp;
+        let stunned = false;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && !stunned; i++) {
+            run(sim, 0.02);
+            stunned = sim.isStunned(boss);
+        }
+        expect(stunned).toBe(true);
+        expect(before - boss.hp).toBeGreaterThan(0);
+    });
+
+    test("Smite: from right beside him, doubled with his guard down, and nothing out of reach", () => {
+        const { sim, boss } = fight();
+        const smite = ZACHARIAH_SMITE;
+        place(sim, { x: boss.x, y: boss.y - smite.reach - 1 });
+        expect(sim.useAbility()).toBe(false);
+        expect(sim.abilitySecondsLeft()).toBe(0);
+        place(sim, { x: boss.x, y: boss.y - smite.reach + 0.5 });
+        let before = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        expect(before - boss.hp).toBeGreaterThanOrEqual(Math.floor(smite.damage * 0.85));
+        expect(before - boss.hp).toBeLessThanOrEqual(Math.ceil(smite.damage * 1.15));
+        expect(sim.damageBySource["ability:smite"]).toBe(before - boss.hp);
+        expect(sim.abilitySecondsLeft()).toBeCloseTo(smite.cooldown);
+        expect(sim.useAbility()).toBe(false);
+        run(sim, smite.cooldown);
+        boss.bossState!.exposedEnd = sim.tick + TICKS_PER_SECOND;
+        before = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        expect(before - boss.hp).toBeGreaterThanOrEqual(Math.floor(smite.damage * 2 * 0.85));
+    });
+
+    test("nothing gets through while he kneels at a threshold, his guard or Smite", () => {
+        const { sim, boss } = fight();
+        boss.hp = Math.round(boss.maxHp * zachariah().boss!.phases!.phases[0].until!) + 1;
+        sim.damageEnemy(boss, 5, 0, boss.x, boss.y, 0);
+        expect(boss.bossState!.phase!.index).toBe(1);
+        place(sim, { x: boss.x, y: boss.y - 2 });
+        expect(sim.useAbility()).toBe(false);
+        sim["dropGuard"](boss, 2, true, "Pillar");
+        expect(sim.isStunned(boss)).toBe(false);
+    });
+});
+
 describe("in co-op", () => {
+    test("each player has their own Smite, sent as an action", () => {
+        const sim = createSim(1, 2);
+        const boss = startFight(sim, true);
+        boss.speed = 0;
+        placeBoss(boss, at(31, 33));
+        place(sim, at(31, 25), 0);
+        place(sim, at(31, 31), 1);
+        expect(sim.as(0, () => applyAction(sim, { kind: "ability" }))).toBe(false);
+        expect(sim.as(1, () => applyAction(sim, { kind: "ability" }))).toBe(true);
+        expect(sim.heroes[0].abilityReadyTick).toBe(0);
+        expect(sim.heroes[1].abilityReadyTick).toBeGreaterThan(sim.tick);
+        expect(sim.heroes[1].damageBySource["ability:smite"]).toBeGreaterThan(0);
+    });
+
     test("the wave drags only whoever it reaches, and the gaze spares whoever hides", () => {
         const sim = createSim(1, 2);
         const boss = startFight(sim, true);
