@@ -123,6 +123,10 @@ export type UpMessage =
 // The host to everyone: the frames up to `upTo` are out, with what happened
 // at them, and now and then a check that everyone's run still agrees
 export type DownMessage = {
+    // The host's terminal result, repeated with final frames so a reconnect
+    // can still report it. Relays count it once; older relays ignore it.
+    // Failed means every starting hero died, not that someone left alive.
+    result?: "completed" | "failed";
     // The frames before were in the message before this one, so a guest can
     // tell when one's gone missing
     from?: number;

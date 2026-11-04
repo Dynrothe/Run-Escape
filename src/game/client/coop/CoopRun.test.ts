@@ -1,3 +1,4 @@
+import { getEnemy } from "../../content/enemies";
 import { getRandomEvent } from "../../content/randomEvents";
 import { emptyStats } from "../../content/types";
 import { Sim, TICKS_PER_SECOND } from "../../core/Sim";
@@ -280,6 +281,67 @@ describe("co-op lockstep", () => {
         run.receiveUp("guest2", { loaded: true });
         return { run, sent };
     }
+
+    it("reports a failure only after every hero dies, and repeats it on later frames", () => {
+        const { run, sent } = hostRun({ now: 0 });
+        const sim = run.sim;
+        for (const hero of sim.heroes) {
+            hero.revivesLeft = 0;
+            sim.as(hero.index, () => sim["damagePlayer"](99999, "goblin", false));
+            run.stepFrame();
+            run.flush(true);
+        }
+        expect(sent.map((m) => m.result)).toEqual([undefined, undefined, "failed"]);
+        run.stepFrame();
+        run.flush(true);
+        expect(sent.at(-1)?.result).toBe("failed");
+    });
+
+    it("doesn't report a wipe when the last live hero gives up", () => {
+        const { run, sent } = hostRun({ now: 0 });
+        const sim = run.sim;
+        for (const hero of sim.heroes.slice(0, 2)) {
+            hero.revivesLeft = 0;
+            sim.as(hero.index, () => sim["damagePlayer"](99999, "goblin", false));
+        }
+        run.playerLeft("guest2");
+        run.stepFrame();
+        run.flush(true);
+        expect(sim.state).toBe("dead");
+        expect(sent.at(-1)?.result).toBeUndefined();
+    });
+
+    it("reports the victory when the last boss and party die in the same tick", () => {
+        const { run, sent } = hostRun({ now: 0 });
+        const sim = run.sim;
+        const boss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: 1040.5,
+            y: 1036.5,
+        })!;
+        for (const hero of sim.heroes) {
+            hero.revivesLeft = 0;
+            sim.as(hero.index, () => sim["damagePlayer"](99999, "goblin", false));
+        }
+        expect(sim.state).toBe("dead");
+        sim.damageEnemy(boss, 1e9, 0, boss.x, boss.y);
+        run.stepFrame();
+        run.flush(true);
+        expect(sent.at(-1)?.result).toBe("completed");
+    });
+
+    it("never reports an endless run's outcome", () => {
+        const { run, sent } = hostRun({ now: 0 });
+        const sim = run.sim;
+        Object.defineProperty(sim, "endless", { value: true });
+        for (const hero of sim.heroes) {
+            hero.revivesLeft = 0;
+            sim.as(hero.index, () => sim["damagePlayer"](99999, "goblin", false));
+        }
+        run.stepFrame();
+        run.flush(true);
+        expect(sim.state).toBe("dead");
+        expect(sent.at(-1)?.result).toBeUndefined();
+    });
 
     it("turns away a guest's input that isn't what the game sends", () => {
         const { run } = hostRun({ now: 0 });

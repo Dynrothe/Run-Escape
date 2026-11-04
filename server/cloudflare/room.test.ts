@@ -7,6 +7,7 @@ let writes: number;
 // What the room's told the lobby, newest last
 let listings: any[];
 let gone: string[];
+let results: any[];
 
 class Socket {
     sent: any[] = [];
@@ -23,6 +24,7 @@ class Socket {
 
 const env = {
     MULTIPLAYER_ANY_MAP: "on",
+    RUN_METRICS: { writeDataPoint: (point: any) => results.push(point) },
     LOBBY: {
         idFromName: (name: string) => name,
         get: () => ({
@@ -88,8 +90,97 @@ describe("Cloudflare co-op room", () => {
         writes = 0;
         listings = [];
         gone = [];
+        results = [];
     });
     afterEach(() => vi.useRealTimers());
+
+    it.each([2, 3, 4])("records a party of %i once, including after a restart", async (size) => {
+        const { room, host, guest } = await party();
+        for (let i = 2; i < size; i++) {
+            say(room, enter(room, `guest${i}`, "join"), { t: "join", me });
+        }
+        const game = { mapId: "theatre_of_blood", endless: false, hard: true };
+        const down = { t: "down", d: { upTo: 10, events: [], result: "completed" } };
+        say(room, host, down);
+        say(room, host, { t: "settings", ...game });
+        say(room, host, { t: "start", game });
+        say(room, guest, down);
+        expect(results).toEqual([]);
+        // Starting dimensions survive a restart before the run ends, too.
+        const resumed = await loadRoom();
+        const resumedHost = resumed.room.members[0];
+        resumed.attach(resumedHost, new Socket("host"));
+        say(resumed, resumed.room.members[1], { t: "leave" });
+        say(resumed, resumedHost, down);
+        say(resumed, resumedHost, down);
+        expect(results).toEqual([
+            {
+                indexes: [`theatre_of_blood:${size}:hard:completed`],
+                blobs: ["theatre_of_blood", String(size), "hard", "completed"],
+                doubles: [1],
+            },
+        ]);
+        expect(saved.runMetrics.outcome).toBe("completed");
+        const restarted = await loadRoom();
+        const restartedHost = restarted.room.members[0];
+        restarted.attach(restartedHost, new Socket("host"));
+        say(restarted, restartedHost, down);
+        expect(results).toHaveLength(1);
+        say(restarted, restartedHost, { t: "end" });
+        say(restarted, restartedHost, { t: "start", game });
+        say(restarted, restartedHost, { t: "down", d: { ...down.d, result: "failed" } });
+        expect(results).toHaveLength(size > 2 ? 2 : 1);
+        if (size > 2) {
+            expect(results[1].blobs).toEqual([
+                "theatre_of_blood",
+                String(size - 1),
+                "hard",
+                "failed",
+            ]);
+        }
+    });
+
+    it.each(["endless", "give up", "old client"])("doesn't record %s", async (kind) => {
+        const { room, host } = await party();
+        const game = { mapId: "lumbridge", endless: kind === "endless", hard: false };
+        say(room, host, { t: "settings", ...game });
+        say(room, host, { t: "start", game });
+        if (kind === "give up") {
+            say(room, host, { t: "leave" });
+        } else {
+            say(room, host, {
+                t: "down",
+                d: { upTo: 10, events: [], ...(kind !== "old client" && { result: "failed" }) },
+            });
+            say(room, host, { t: "end" });
+        }
+        expect(results).toEqual([]);
+    });
+
+    it.each(["missing", "throws"])("keeps relaying when analytics %s", async (kind) => {
+        const { room, host, guest } = await party();
+        const original = env.RUN_METRICS;
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            (env as any).RUN_METRICS =
+                kind === "missing"
+                    ? undefined
+                    : {
+                          writeDataPoint() {
+                              throw new Error("offline");
+                          },
+                      };
+            const game = { mapId: "lumbridge", endless: false, hard: false };
+            say(room, host, { t: "start", game });
+            const down = { t: "down", d: { upTo: 10, events: [], result: "failed" } };
+            say(room, host, down);
+            expect(guest.socket.sent.at(-1)).toEqual(down);
+            expect(room.room.started).toBe(true);
+        } finally {
+            env.RUN_METRICS = original;
+            warn.mockRestore();
+        }
+    });
 
     it("saves someone joining at once, even straight after another save", async () => {
         const { room } = await party();

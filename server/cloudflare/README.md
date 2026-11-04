@@ -139,6 +139,61 @@ the same numbers as `coop-relay.mjs`.
 
 **Taking it down**: `npx wrangler delete run-escape-coop`.
 
+## Run outcome metrics
+
+Optionally collect the same non-endless multiplayer outcomes as the Node relay. Uncomment the
+`analytics_engine_datasets` block in `wrangler.toml` and deploy:
+
+```toml
+[[analytics_engine_datasets]]
+binding = "RUN_METRICS"
+dataset = "run_escape_coop_runs"
+```
+
+Enable Workers Analytics Engine for the Cloudflare account first if needed. Without the binding,
+the relay works as before and sends no analytics. This uses Cloudflare's authenticated Analytics
+Engine query API, without adding a public metrics endpoint or requests to the lobby.
+
+One data point represents one host-reported terminal result. The dimensions are:
+
+| Field     | Meaning      | Values                                       |
+| --------- | ------------ | -------------------------------------------- |
+| `blob1`   | `map`        | Map ID, or `unknown` for an unrecognized map |
+| `blob2`   | `party_size` | Starting party size: `2`, `3`, `4`           |
+| `blob3`   | `difficulty` | `normal`, `hard`                             |
+| `blob4`   | `outcome`    | `completed`, `failed`                        |
+| `double1` | Runs         | `1`                                          |
+| `index1`  | Sampling key | The four dimensions joined with `:`          |
+
+`completed` is victory; `failed` is every starting hero dying. A teammate dying, giving up, leaving
+or disconnecting does not by itself count as a failure. Endless runs and solo rooms are excluded.
+Settings and party size are captured at start, so a later departure doesn't change the labels.
+All non-endless maps are covered, including seasonal maps, standalone boss fights and raids.
+See [the shared outcome definitions](../../docs/DEVELOPMENT.md#optional-multiplayer-metrics).
+
+For counts by map, party size, difficulty and outcome over the last day, submit this query to
+the [Analytics Engine SQL API](https://developers.cloudflare.com/analytics/analytics-engine/sql-api/):
+
+```sql
+SELECT blob1 AS map, blob2 AS party_size, blob3 AS difficulty, blob4 AS outcome,
+       SUM(_sample_interval * double1) AS runs
+FROM run_escape_coop_runs
+WHERE timestamp > NOW() - INTERVAL '1' DAY
+GROUP BY map, party_size, difficulty, outcome
+ORDER BY map, party_size, difficulty, outcome
+```
+
+Unlike the Node counters, these events remain in Analytics Engine across relay deployments,
+subject to its retention. The sample weight is included because Analytics Engine may sample data.
+Missing combinations have no rows. No player names, addresses, room codes or run IDs are sent.
+
+Results ride on the existing host frames. The room saves the consumed result so repeated frames
+and ordinary reconnects/restarts don't count it again; another run in the same room starts fresh.
+Analytics writes are best-effort and aren't transactional with room storage, so an abrupt failure
+at that boundary may lose or duplicate an event. Analytics errors never stop game frames. Older
+clients send no results, and a host that vanishes before reporting cannot be classified. These
+are host-reported analytics, not independently verified scores.
+
 ## Cost
 
 Cloudflare bills Durable Objects by requests and by how long they're awake, not by bandwidth.

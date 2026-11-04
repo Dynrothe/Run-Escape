@@ -25,6 +25,7 @@ import {
     watchCloudflareRanges,
 } from "./client-ip.mjs";
 import { playerName, roomName } from "./name-gen.mjs";
+import { runResultLabels, runResultsText, startRunMetrics, takeRunResult } from "./run-metrics.mjs";
 
 export const RELAY_PATH = "/coop";
 
@@ -637,7 +638,7 @@ export function createRelay(limits = {}) {
     let warnedProxy = false;
     const rooms = new Map();
     const clients = new Set();
-    // For the metrics: only connections, rooms being made and runs starting
+    // For the metrics: only connections, rooms being made and run starts/results
     // update these (counted whether or not they're served). Live counts come
     // from the rooms when asked, never from game traffic.
     const counters = {
@@ -648,6 +649,7 @@ export function createRelay(limits = {}) {
         peakPlayers: 0,
         peakRooms: 0,
     };
+    const runResults = new Map();
     let metricsServer;
     let stopMetrics = () => {};
     // Every connected player's name, so no two have the same
@@ -744,6 +746,7 @@ export function createRelay(limits = {}) {
                 maxConnections,
             ),
             metric("coop_rooms_limit", "Maximum simultaneous rooms allowed.", maxRooms),
+            runResultsText(runResults),
         ].join("");
     }
 
@@ -1401,6 +1404,17 @@ export function createRelay(limits = {}) {
                         return;
                     }
                     room.started = true;
+                    room.runMetrics = startRunMetrics(room, message.game);
+                    if (room.runMetrics) {
+                        // Start both series at zero before the result, so a
+                        // scraper can observe the first increment as well.
+                        for (const outcome of ["completed", "failed"]) {
+                            const labels = runResultLabels({ ...room.runMetrics, outcome });
+                            if (!runResults.has(labels)) {
+                                runResults.set(labels, 0);
+                            }
+                        }
+                    }
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),
@@ -1436,6 +1450,11 @@ export function createRelay(limits = {}) {
                     if (!hostCanSend(room, payload.length)) {
                         client.connection.close(1008);
                         return;
+                    }
+                    const result = takeRunResult(room, message.d?.result);
+                    if (result) {
+                        const labels = runResultLabels(result);
+                        runResults.set(labels, (runResults.get(labels) ?? 0) + 1);
                     }
                     const frame = encodeFrame(0x1, payload);
                     for (const member of room.members) {

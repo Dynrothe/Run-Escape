@@ -7,6 +7,11 @@ compatibility_flags = ["nodejs_compat"]
 # "on": rooms take players whatever maps they've unlocked (MULTIPLAYER_ANY_MAP)
 MULTIPLAYER_ANY_MAP = "off"
 
+# Optional run outcomes (see README.md). Uncomment to collect them in Analytics Engine.
+# [[analytics_engine_datasets]]
+# binding = "RUN_METRICS"
+# dataset = "run_escape_coop_runs"
+
 [[durable_objects.bindings]]
 name = "LOBBY"
 class_name = "Lobby"

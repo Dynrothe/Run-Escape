@@ -16,6 +16,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { playerName } from "../../name-gen.mjs";
+import { startRunMetrics, takeRunResult } from "../../run-metrics.mjs";
 import {
     IDLE_MS,
     MAX_LOADOUT_BYTES,
@@ -653,6 +654,7 @@ export class Room extends DurableObject {
                         return;
                     }
                     room.started = true;
+                    room.runMetrics = startRunMetrics(room, message.game);
                     for (const member of room.members) {
                         member.ready = false;
                     }
@@ -686,6 +688,29 @@ export class Room extends DurableObject {
                 return;
             case "down":
                 if (isHost && room.started) {
+                    const result = takeRunResult(room, message.d?.result);
+                    if (result) {
+                        // The consumed result is part of the saved room, so
+                        // final frames after reconnect/restart don't count twice.
+                        this.persist(true);
+                        try {
+                            this.env.RUN_METRICS?.writeDataPoint({
+                                indexes: [
+                                    `${result.map}:${result.partySize}:${result.difficulty}:${result.outcome}`,
+                                ],
+                                blobs: [
+                                    result.map,
+                                    String(result.partySize),
+                                    result.difficulty,
+                                    result.outcome,
+                                ],
+                                doubles: [1],
+                            });
+                        } catch (e) {
+                            // Optional telemetry must never interrupt a run.
+                            console.warn("Co-op room: couldn't record the run result:", e);
+                        }
+                    }
                     for (const member of room.members) {
                         if (member !== client) {
                             this.sendText(member, text);

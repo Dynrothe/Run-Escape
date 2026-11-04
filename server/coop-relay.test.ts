@@ -506,7 +506,7 @@ describe("co-op relay", () => {
                 if (line.startsWith("#")) {
                     continue;
                 }
-                const sample = /^(coop_[a-z_]+) (\d+)$/.exec(line);
+                const sample = /^(coop_[a-z_]+(?:\{[^}]+\})?) (\d+)$/.exec(line);
                 expect(sample, `invalid metric sample: ${line}`).not.toBeNull();
                 const [, name, value] = sample!;
                 expect(values).not.toHaveProperty(name);
@@ -515,6 +515,105 @@ describe("co-op relay", () => {
             return values;
         };
         const snapshot = async () => parseMetrics(await (await fetch(metricsUrl())).text());
+
+        const finished = async () =>
+            Object.fromEntries(
+                Object.entries(await snapshot()).filter(([name]) =>
+                    name.startsWith("coop_runs_finished_total{"),
+                ),
+            );
+
+        it.each([2, 3, 4])(
+            "counts one host result per run for a starting party of %i",
+            async (size) => {
+                await restart({ metrics: true });
+                const { host, guests } = await party(size - 1);
+                const game = { mapId: "theatre_of_blood", endless: false, hard: true };
+                const down = (result: string) => ({
+                    t: "down",
+                    d: { upTo: 10, events: [], result },
+                });
+                const labels = (outcome: string) =>
+                    `coop_runs_finished_total{map="theatre_of_blood",party_size="${size}",difficulty="hard",outcome="${outcome}"}`;
+                host.send(down("completed")); // No run yet.
+                host.send({ t: "settings", ...game });
+                host.send({ t: "start", game });
+                await guests[0].next("start");
+                guests[0].send(down("failed")); // A guest cannot report the result.
+                guests[0].send({ t: "ping" });
+                await guests[0].next("pong");
+                expect(await finished()).toEqual({
+                    [labels("completed")]: 0,
+                    [labels("failed")]: 0,
+                });
+                // A departure doesn't turn the original party size into a smaller one.
+                guests.at(-1)!.send({ t: "leave" });
+                await host.next("left");
+                host.send(down("completed"));
+                host.send(down("completed"));
+                host.send(down("failed"));
+                host.send({ t: "ping" });
+                await host.next("pong");
+                expect(await finished()).toEqual({
+                    [labels("completed")]: 1,
+                    [labels("failed")]: 0,
+                });
+
+                host.send({ t: "end" });
+                await host.roomWhere((room) => !room.started);
+                host.send(down("failed")); // Late final frames cannot add a result.
+                // Start another run in the same room, with the remaining party.
+                if (size > 2) {
+                    host.send({ t: "start", game });
+                    host.send(down("failed"));
+                }
+                host.send({ t: "ping" });
+                await host.next("pong");
+                const counts = await finished();
+                expect(counts[labels("completed")]).toBe(1);
+                if (size > 2) {
+                    expect(
+                        counts[
+                            labels("failed").replace(
+                                `party_size="${size}"`,
+                                `party_size="${size - 1}"`,
+                            )
+                        ],
+                    ).toBe(1);
+                }
+            },
+        );
+
+        it.each(["solo", "endless", "give up", "disconnect", "old client"])(
+            "excludes %s from run outcomes",
+            async (kind) => {
+                await restart({ metrics: true });
+                const { host, guests } = await party(kind === "solo" ? 0 : 1);
+                const game = { mapId: "lumbridge", endless: kind === "endless", hard: false };
+                host.send({ t: "settings", ...game });
+                host.send({ t: "start", game });
+                await host.next("start");
+                if (kind === "give up") {
+                    host.send({ t: "leave" });
+                    await guests[0].next("gone");
+                } else if (kind === "disconnect") {
+                    host.socket.close();
+                    await guests[0].next("gone");
+                } else {
+                    host.send({
+                        t: "down",
+                        d: {
+                            upTo: 10,
+                            events: [],
+                            ...(kind !== "old client" && { result: "failed" }),
+                        },
+                    });
+                    host.send({ t: "end" });
+                    await host.roomWhere((room) => !room.started);
+                }
+                expect(Object.values(await finished()).every((count) => count === 0)).toBe(true);
+            },
+        );
 
         it("uses the environment toggle and keeps disabled metrics unavailable", async () => {
             vi.stubEnv("MULTIPLAYER_METRICS", "false");
@@ -628,7 +727,8 @@ describe("co-op relay", () => {
             expect(body).not.toContain("\r");
             const lines = body.trimEnd().split("\n");
             // HELP, TYPE and the sample for each
-            expect(lines).toHaveLength(Object.keys(values).length * 3);
+            expect(lines).toHaveLength(Object.keys(values).length * 3 + 2);
+            expect(body).toContain("# TYPE coop_runs_finished_total counter\n");
             for (const name of Object.keys(values)) {
                 const type = [
                     "coop_connections_total",
