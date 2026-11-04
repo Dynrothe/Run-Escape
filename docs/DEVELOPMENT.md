@@ -1100,8 +1100,14 @@ To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, an
 `GameClient.update`). It's a web standard, so the desktop app (Electron) gets it too, with nothing
 of its own.
 
-- **Which pad.** One at a time: whichever was pressed last. A pad's only noticed once something on it
-  is pressed (browsers hide pads until then), so "connected" shows on the first press.
+- **Which pad.** One at a time: whichever was pressed last, once the one in use has been let go for
+  `HAND_OVER_MS`. A pad's only noticed once something on it is pressed (browsers hide pads until
+  then), so "connected" shows on the first press, and that press counts; the press that takes a
+  second pad over doesn't. One controller can show as two: DS4Windows adds an Xbox pad beside the
+  PlayStation one, unless it's set to hide it. The two change a frame or so apart, either one
+  first, so taking up the one ahead at once would lose the press and swap them back and forth. A
+  pad held the same way for `RESTING_MS` (a stuck button, a throttle resting at its end, something
+  on the stick) neither keeps another from taking over nor takes over itself.
 - **Its buttons** are only trusted when the browser reports `mapping: "standard"`, where button 0 is
   the bottom face button whoever made it. Any other pad gets the left stick and nothing else, rather
   than buttons that might be anything. `identifyPad` reads the maker from the id (Chrome's
@@ -1120,8 +1126,11 @@ of its own.
 - **Hints.** `ui/PadHint.tsx`'s `KeyHint` shows a key, or the pad's button while one's in use. The
   numbered choices have none (the d-pad picks them). `:root[data-input="pad"]` shows the highlight.
   The icons are Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) (CC0, its licence
-  alongside), in `public/input-prompts/<make>/<button>.svg`, named by `PadButton`. Only the buttons
-  for the three makes are copied in, not the whole pack.
+  alongside), in `ui/input-prompts/<make>/<button>.svg`, named by `PadButton`. Only the buttons
+  for the three makes are copied in, not the whole pack. They're in the bundle as data URLs
+  (`PAD_ICONS`, from Vite's `?inline`), not files served beside it: the desktop app's launcher 1.0.0
+  serves `.svg` with no image type, which an `<img>` won't draw, and players keep the launcher they
+  have.
 - **What each button does** is listed by `PadControls` (`ui/PadHint.tsx`) in the pause menu and
   Settings while a pad's in use, and the title's hint shows its buttons. Change it with `RUN_KEYS`
   or `MENU_KEYS`.
