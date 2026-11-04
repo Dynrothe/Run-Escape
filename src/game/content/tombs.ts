@@ -79,7 +79,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         shot: BABOON_SPELL,
         sounds: { attack: 5952, hit: 5998, death: 5971 },
     }),
-    // Calls in thralls until it's dead: kill it first, as in OSRS
+    // Calls in thralls until it's dead: kill it first, as in OSRS. It casts too, slower than a mage
     baboon({
         id: "baboon_shaman",
         name: "Baboon Shaman",
@@ -89,6 +89,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         damage: 2,
         speed: 1.9,
         xp: 18,
+        shot: { ...BABOON_SPELL, interval: 4.5 },
         spawns: {
             enemies: [{ id: "baboon_thrall", weight: 1 }],
             interval: 5,

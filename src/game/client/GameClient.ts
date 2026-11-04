@@ -1367,6 +1367,11 @@ export class GameClient implements GameFrameHandler {
             case "choose":
                 this.syncOverlay();
                 break;
+            // The Tombs: the room's started over, so the popup goes
+            case "respawn":
+                this.handleEvents(sim, sim.takeEvents());
+                this.syncOverlay();
+                break;
             case "chest":
                 this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
