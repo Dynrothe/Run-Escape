@@ -195,14 +195,15 @@ export class BossFightView {
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
             const anim = model.anims[0];
-            const pattern = attack.pattern!;
+            // A blast's shards (BossAttackDef.shards) are bullets with no pattern
+            const pattern = attack.pattern;
             // Never smaller than what it hits, however it's scaled to be seen:
             // what looks like a miss has to be one
             options.scale = Math.max(
-                pattern.scale ?? 1,
+                pattern?.scale ?? 1,
                 (radius[slot] * 128) / Math.max(1, model.radius),
             );
-            options.flash = pattern.bright ?? 0;
+            options.flash = pattern?.bright ?? 0;
             actors.draw(
                 model,
                 anim,
