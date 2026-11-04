@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- On a phone held sideways, the Multiplayer screen fits, so its Back button is always in reach,
+  even with an error showing.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed
