@@ -1,4 +1,4 @@
-import { EnemyDef, EnemyShotDef, WaveDef } from "./types";
+import { BossAttackDef, EnemyDef, EnemyShotDef, WaveDef } from "./types";
 
 // The Tombs of Amascut (in development: docs/design/tombs-of-amascut.md): its enemies, and what
 // each path's room does. The map, with where things stand, is the dev map's
@@ -44,6 +44,26 @@ function baboon(def: Omit<EnemyDef, "idleSeq" | "walkSeq" | "deathSeq" | "radius
 }
 
 export const TOMBS_ENEMIES: EnemyDef[] = [
+    // One in each row of Ba-Ba's rolling boulders (BulletPatternDef.cracked): break it to get
+    // through. It rolls on its own (Enemy.rolls), so its speed and touch are the row's.
+    {
+        id: "cracked_boulder",
+        name: "Cracked boulder",
+        npcId: 11783,
+        idleSeq: 9518,
+        walkSeq: 9518,
+        attackSeq: 9518,
+        deathSeq: 9518,
+        hp: 15,
+        damage: 0,
+        speed: 0,
+        radius: 1.3,
+        // As big as the rest of its row
+        scale: 1.15,
+        xp: 0,
+        knockbackResist: 1,
+        sounds: { attack: -1, hit: 5998, death: 5962 },
+    },
     baboon({
         id: "baboon_brawler",
         name: "Baboon Brawler",
@@ -270,8 +290,9 @@ export const BA_BA: EnemyDef = {
                 weight: 2,
                 seq: 9751,
                 sound: 5989,
-                summon: { enemyId: "baboon_thrower", count: 2, distance: 4 },
-                message: "Ba-Ba calls her baboons!",
+                // They make for her sarcophagi: kill them before they open one
+                summon: { enemyId: "baboon_thrower", count: 2, distance: 4, sarcophagi: true },
+                message: "Ba-Ba calls her baboons! Stop them reaching the sarcophagi!",
             },
             {
                 name: "Rolling boulders",
@@ -287,19 +308,20 @@ export const BA_BA: EnemyDef = {
                 invoked: { id: "boulderdash", speed: 2 },
                 pattern: {
                     shape: "wall",
-                    // Six lanes across her arena's floor (15 tiles): five boulders and a way
-                    // through, at most two lanes from the last row's, as in OSRS
-                    count: 6,
+                    // Five lanes across her arena's floor (15 tiles): four boulders and a cracked
+                    // one to break, at most two lanes from the last row's, as in OSRS
+                    count: 5,
                     volleys: 1,
                     interval: 1,
                     speed: 3.2,
                     // From her altar to the arena's foot, and no further: not into the safe room
                     range: 19,
-                    radius: 1.1,
+                    radius: 1.3,
                     gap: 1,
                     gapStep: 2,
-                    spacing: 2.5,
-                    scale: 2.6,
+                    cracked: "cracked_boulder",
+                    spacing: 3,
+                    scale: 3,
                     heading: "south",
                     knockback: 4,
                 },
@@ -317,6 +339,35 @@ export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
 
 // Jungle Japes: each of Ba-Ba's baboons drops a banana peel as it dies, there for `seconds`.
 // Stepping within `radius` of one roots you for `stun` seconds. Drawn as the Banana (1963).
+// Ba-Ba's sarcophagi: a baboon that reaches one (within reach tiles) spends `prying` seconds
+// opening it, time to kill it in. Then it's open for seconds, the Open
+// Sarcophagus drawn over it, firing a fan of count blasts arc radians wide across the arena every
+// so many seconds. Gotta Have Faith makes them hit harder.
+export const SARCOPHAGI = {
+    seconds: 10,
+    every: 1.2,
+    count: 5,
+    arc: 0.9,
+    speed: 4,
+    range: 16,
+    radius: 0.4,
+    reach: 2.2,
+    prying: 3,
+    loc: 45753,
+};
+export const SARCOPHAGUS_BLAST: BossAttackDef = {
+    name: "Sarcophagus blast",
+    kind: "blast",
+    damage: 3,
+    windup: 0,
+    cooldown: 0,
+    range: 0,
+    weight: 0,
+    // Red bolts with trails, as OSRS's
+    spotAnim: 2246,
+    invoked: { id: "gotta_have_faith", damage: 1.5 },
+};
+
 export const JUNGLE_JAPES = { seconds: 20, radius: 0.5, stun: 1.5, objId: 1963 };
 
 // ---- The Apmeken room ----

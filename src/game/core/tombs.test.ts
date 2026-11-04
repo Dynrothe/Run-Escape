@@ -58,6 +58,10 @@ const TEST_TOMBS: MapDef = {
                             altar: { x: 1036.5, y: 1046.5 },
                             start: { x: 1031.5, y: 1028.5 },
                             pit: { x0: 1035, x1: 1038, y0: 1020, y1: 1026.9 },
+                            sarcophagi: [
+                                { x: 1029.5, y: 1036.5, rotation: 0 },
+                                { x: 1043.5, y: 1036.5, rotation: 2 },
+                            ],
                         },
                     },
                 },
@@ -671,14 +675,22 @@ describe("Ba-Ba", () => {
         expect(sim.player.y).toBeLessThan(before - 3);
     });
 
-    it("rolls five boulders a row, the way through at most two lanes from the last", () => {
+    it("rolls five boulders a row, one cracked, at most two lanes from the last", () => {
         const { sim, boss } = rolling();
         const rows: { added: number; gap: number }[] = [];
         const fire = sim["fireGappedVolley"].bind(sim);
         sim["fireGappedVolley"] = (...args: Parameters<typeof fire>) => {
             const before = sim.bullets.count;
+            const cracked = sim.enemies.filter((e) => e.rolls).length;
             fire(...args);
-            rows.push({ added: sim.bullets.count - before, gap: boss.bossState!.wallGap! });
+            rows.push({
+                added:
+                    sim.bullets.count -
+                    before +
+                    sim.enemies.filter((e) => e.rolls).length -
+                    cracked,
+                gap: boss.bossState!.wallGap!,
+            });
         };
         // At the foot, out of their way, so nothing ends it early
         for (let i = 0; i < 15 * TICKS_PER_SECOND; i++) {
@@ -697,6 +709,100 @@ describe("Ba-Ba", () => {
         });
         // and it goes everywhere, ends included, over a phase
         expect(new Set(rows.map((r) => r.gap)).size).toBeGreaterThan(2);
+    });
+
+    it("rolls a cracked boulder in each row, which breaks, and knocks back like the rest", () => {
+        const { sim } = rolling();
+        let cracked: ReturnType<typeof baba> | undefined;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && !cracked; i++) {
+            sim.player.x = sim.player.prevX = 1031.5;
+            sim.player.y = sim.player.prevY = 1028.5;
+            sim.step();
+            cracked = sim.enemies.find((e) => e.rolls && !e.dead);
+        }
+        expect(cracked).toBeDefined();
+        expect(cracked!.def.id).toBe("cracked_boulder");
+        // In its way: hit and knocked on down the arena
+        const y = cracked!.y - cracked!.radius - 0.3;
+        sim.player.x = sim.player.prevX = cracked!.x;
+        sim.player.y = sim.player.prevY = y;
+        sim.player.invulnerable = 0;
+        sim["bulletGraceEnd"] = 0;
+        sim.step();
+        expect(sim.player.y).toBeLessThan(y - 2);
+        // Broken
+        sim["killEnemy"](cracked!);
+        expect(cracked!.dead).toBe(true);
+        expect(sim.tombsPeels).toHaveLength(0);
+    });
+
+    it("sends her baboons for the sarcophagi, which open and fire across the arena", () => {
+        const sim = atBaba(["gotta_have_faith"]);
+        // Nothing to shoot them on the way with (the dev skip's bow)
+        sim.weapons = [];
+        const boss = baba(sim);
+        expect(sim.tombsSarcophagi).toHaveLength(2);
+        const call = boss.def.boss!.attacks.find((a) => a.name === "Call baboons")!;
+        sim["summonAround"](boss, call);
+        const seekers = sim.enemies.filter((e) => e.seeks !== undefined && !e.dead);
+        expect(seekers.length).toBeGreaterThan(0);
+        for (
+            let i = 0;
+            i < 20 * TICKS_PER_SECOND && sim.tombsSarcophagi.every((s) => sim.tick >= s.openUntil);
+            i++
+        ) {
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.x = sim.player.prevX = 1036.5;
+            sim.player.y = sim.player.prevY = 1028.5;
+            boss.bossState!.windup = undefined;
+            sim.step();
+        }
+        const open = sim.tombsSarcophagi.find((s) => sim.tick < s.openUntil);
+        expect(open).toBeDefined();
+        // after prying at it a while
+        expect(sim.tick).toBeGreaterThan(3 * TICKS_PER_SECOND);
+        const before = sim.bullets.count;
+        sim.step();
+        sim.step();
+        expect(sim.bullets.count).toBeGreaterThan(before);
+    });
+
+    it("opens no sarcophagus if the baboon prying at it is killed", () => {
+        const sim = atBaba();
+        const boss = baba(sim);
+        const call = boss.def.boss!.attacks.find((a) => a.name === "Call baboons")!;
+        sim["summonAround"](boss, call);
+        for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.x = sim.player.prevX = 1036.5;
+            sim.player.y = sim.player.prevY = 1028.5;
+            boss.bossState!.windup = undefined;
+            for (const one of sim.enemies) {
+                if (one.pryEnd !== undefined && !one.dead) {
+                    sim["killEnemy"](one);
+                }
+            }
+            sim.step();
+        }
+        expect(sim.tombsSarcophagi.some((s) => sim.tick < s.openUntil)).toBe(false);
+    });
+
+    it("makes the sarcophagi's blasts hit harder with Gotta Have Faith", () => {
+        const blast = (invocations: string[]) => {
+            const sim = atBaba(invocations);
+            const at = sim.tombsSarcophagi[0];
+            at.openUntil = sim.tick + 100;
+            at.nextTick = sim.tick;
+            const before = sim.bullets.count;
+            sim.player.x = sim.player.prevX = 1036.5;
+            sim.player.y = sim.player.prevY = 1028.5;
+            sim.step();
+            expect(sim.bullets.count).toBeGreaterThan(before);
+            return sim.bullets.damage[sim.bullets.order[sim.bullets.count - 1]];
+        };
+        expect(blast(["gotta_have_faith"])).toBeGreaterThan(blast([]) * 1.3);
     });
 
     it("stops her boulders once someone gets back up to her", () => {

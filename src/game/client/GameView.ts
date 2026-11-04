@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { JUNGLE_JAPES } from "../content/tombs";
+import { JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -552,6 +552,7 @@ export class GameView {
         }
         this.drawTombsGate(actors, sim);
         this.drawTombsPeels(actors, sim);
+        this.drawSarcophagi(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -680,6 +681,24 @@ export class GameView {
                 tile.y,
                 TOMBS_GATE_YAW,
             );
+        }
+    }
+
+    // Ba-Ba's open sarcophagi, over the closed ones in the map
+    private drawSarcophagi(actors: ActorRenderer, sim: Sim): void {
+        const model = sim.tombsSarcophagi.length > 0 && this.assets.get("loc:" + SARCOPHAGI.loc);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const frame = anim.getFrame(0);
+        for (const at of sim.tombsSarcophagi) {
+            if (sim.tick < at.openUntil) {
+                const height = this.ground(sim, at.x, at.y);
+                actors.draw(model, anim, frame, at.x, height, at.y, at.rotation * 512, {
+                    scale: 1.02,
+                });
+            }
         }
     }
 

@@ -84,6 +84,8 @@ import {
     APMEKEN_SPOTANIMS,
     APMEKEN_WAVES,
     JUNGLE_JAPES,
+    SARCOPHAGI,
+    SARCOPHAGUS_BLAST,
     TOMBS_BOSSES,
     getApmekenTrickle,
 } from "../content/tombs";
@@ -871,6 +873,14 @@ export class Sim {
     tombsDeaths = 0;
     // Jungle Japes's banana peels, in a path boss's fight
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
+    // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
+    tombsSarcophagi: {
+        x: number;
+        y: number;
+        rotation: number;
+        openUntil: number;
+        nextTick: number;
+    }[] = [];
     // The Apmeken room while the party's in it
     apmeken: ApmekenRoom | undefined;
     raidStageTick = 0;
@@ -3151,6 +3161,14 @@ export class Sim {
                 this.stepWalker(enemy, enemy.walksTo);
                 continue;
             }
+            if (enemy.rolls) {
+                this.stepRoller(enemy, enemy.rolls);
+                continue;
+            }
+            if (enemy.seeks !== undefined) {
+                this.stepSeeker(enemy, enemy.seeks);
+                continue;
+            }
             if (enemy.hatchTick !== 0 && this.tick >= enemy.hatchTick) {
                 this.hatch(enemy);
                 continue;
@@ -4490,6 +4508,7 @@ export class Sim {
         }
         if (fight.beatenTick !== undefined) {
             this.tombsPeels = [];
+            this.tombsSarcophagi = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
                 this.leaveTombsPath();
             }
@@ -4498,6 +4517,7 @@ export class Sim {
         if (fight.uid === -1) {
             // Not up (yet, or again after a death): nothing of the last fight's left lying about
             this.tombsPeels = [];
+            this.tombsSarcophagi = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
             // behind the party, not under them
             const rise = def.line.y + TOMBS_BOSS_RISE;
@@ -4506,6 +4526,11 @@ export class Sim {
                 if (enemy) {
                     fight.uid = enemy.uid;
                 }
+                this.tombsSarcophagi = (def.boulders?.sarcophagi ?? []).map((at) => ({
+                    ...at,
+                    openUntil: -1,
+                    nextTick: 0,
+                }));
                 // Whoever's still behind (in the safe room, on the gap) is brought in with them
                 for (const hero of this.heroes) {
                     if (this.isUp(hero) && hero.player.y < rise) {
@@ -4532,6 +4557,7 @@ export class Sim {
         }
         this.stepTombsPit(boss);
         this.stepTombsPeels();
+        this.stepSarcophagi(boss);
     }
 
     // Jungle Japes: a baboon killed in a path boss's fight leaves a banana peel where it fell
@@ -6196,14 +6222,8 @@ export class Sim {
 
     // Frees the slots of dead bosses, once no bullet or volley of theirs is
     // left to point at them, for the next pattern to take
-    // A blast breaking up where it lands (BossAttackDef.shards): bullets out all round from there
-    private fireShards(
-        enemy: Enemy,
-        attack: BossAttackDef,
-        shards: NonNullable<BossAttackDef["shards"]>,
-        x: number,
-        y: number,
-    ): void {
+    // The slot for bullets of this boss's attack, made if there isn't one
+    private bulletSourceFor(enemy: Enemy, attack: BossAttackDef): number {
         let source = this.bulletSources.findIndex(
             (s) => s !== undefined && s.attack === attack && s.enemy === enemy,
         );
@@ -6215,6 +6235,18 @@ export class Sim {
             }
             this.bulletSources[source] = { attack, enemy };
         }
+        return source;
+    }
+
+    // A blast breaking up where it lands (BossAttackDef.shards): bullets out all round from there
+    private fireShards(
+        enemy: Enemy,
+        attack: BossAttackDef,
+        shards: NonNullable<BossAttackDef["shards"]>,
+        x: number,
+        y: number,
+    ): void {
+        const source = this.bulletSourceFor(enemy, attack);
         const speed = shards.speed / TICKS_PER_SECOND;
         const life = Math.ceil(shards.range / speed);
         const damage =
@@ -6389,6 +6421,27 @@ export class Sim {
                     emitter.angle,
                     life,
                 );
+            }
+            // The way through, to be broken (BulletPatternDef.cracked)
+            if (lanes && pattern.cracked) {
+                const offset = (gapStart + (gap - 1) / 2 - (count - 1) / 2) * spacing;
+                const cracked = this.spawnEnemy(getEnemy(pattern.cracked), "normal", {
+                    x: startX + fm.cos(across) * offset,
+                    y: startY + fm.sin(across) * offset,
+                });
+                if (cracked) {
+                    cracked.noDrops = true;
+                    cracked.yaw = yawFromVector(fm.cos(emitter.angle), fm.sin(emitter.angle));
+                    cracked.rolls = {
+                        vx: fm.cos(emitter.angle) * speed,
+                        vy: fm.sin(emitter.angle) * speed,
+                        endTick: this.tick + life,
+                        damage: emitter.damage,
+                        knockback: pattern.knockback ?? 0,
+                        attack: emitter.attack,
+                        bossUid: boss.uid,
+                    };
+                }
             }
             return;
         }
@@ -6791,6 +6844,131 @@ export class Sim {
         enemy.x += (dx / distance) * enemy.speed;
         enemy.y += (dy / distance) * enemy.speed;
         enemy.yaw = yawFromVector(dx, dy);
+    }
+
+    // Ba-Ba's cracked boulder, rolling on with its row: whoever it runs into is hurt and knocked
+    // back, as by the rest of the row
+    private stepRoller(enemy: Enemy, rolls: NonNullable<Enemy["rolls"]>): void {
+        if (this.tick >= rolls.endTick) {
+            this.vanish(enemy);
+            return;
+        }
+        enemy.x += rolls.vx;
+        enemy.y += rolls.vy;
+        const boss = this.enemies.find((e) => e.uid === rolls.bossUid);
+        if (!boss || this.tick < this.bulletGraceEnd) {
+            return;
+        }
+        const length = Math.max(0.0001, fm.hypot(rolls.vx, rolls.vy));
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                this.runOver ||
+                fm.hypot(player.x - enemy.x, player.y - enemy.y) > enemy.radius + player.radius
+            ) {
+                return;
+            }
+            this.bulletGraceEnd =
+                this.tick + secondsToTicks(boss.def.boss?.bulletGrace ?? BULLET_GRACE);
+            this.bossHit(boss.def.id, boss, rolls.attack, rolls.damage);
+            if (rolls.knockback > 0 && !this.runOver && this.isUp(this.hero)) {
+                const knock = rolls.knockback / length;
+                moveCircle(this.grid, player, rolls.vx * knock, rolls.vy * knock, player.radius);
+            }
+        });
+    }
+
+    // One of Ba-Ba's baboons making for a sarcophagus: there, it opens it and is gone
+    private stepSeeker(enemy: Enemy, index: number): void {
+        const at = this.tombsSarcophagi[index];
+        if (!at) {
+            enemy.seeks = undefined;
+            return;
+        }
+        if (enemy.frozen > 0) {
+            enemy.frozen--;
+            return;
+        }
+        const dx = at.x - enemy.x;
+        const dy = at.y - enemy.y;
+        const distance = fm.hypot(dx, dy);
+        if (distance <= SARCOPHAGI.reach + enemy.radius) {
+            // Prying it open, a while to kill it in
+            if (enemy.pryEnd === undefined) {
+                enemy.pryEnd = this.tick + secondsToTicks(SARCOPHAGI.prying);
+                enemy.anim = "attack";
+                enemy.animStart = this.tick;
+                enemy.yaw = yawFromVector(dx, dy);
+                this.emit({ type: "notice", message: "A baboon is prying open a sarcophagus!" });
+            }
+            if (this.tick < enemy.pryEnd) {
+                return;
+            }
+            if (this.tick >= at.openUntil) {
+                at.nextTick = this.tick;
+            }
+            at.openUntil = this.tick + secondsToTicks(SARCOPHAGI.seconds);
+            this.emit({ type: "notice", message: "A baboon opens a sarcophagus!" });
+            this.vanish(enemy);
+            return;
+        }
+        moveCircle(
+            this.grid,
+            enemy,
+            (dx / distance) * enemy.speed,
+            (dy / distance) * enemy.speed,
+            enemy.radius,
+        );
+        enemy.yaw = yawFromVector(dx, dy);
+    }
+
+    // The nearest of the arena's sarcophagi, a closed one if there's one left: where a baboon
+    // Ba-Ba calls makes for
+    private nearestSarcophagus(x: number, y: number): number {
+        let best = -1;
+        let bestScore = Infinity;
+        this.tombsSarcophagi.forEach((at, i) => {
+            const open = this.tick < at.openUntil ? 1000 : 0;
+            const score = fm.hypot(at.x - x, at.y - y) + open;
+            if (score < bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    }
+
+    // Open sarcophagi fire across the arena, a fan of blasts every so often
+    private stepSarcophagi(boss: Enemy): void {
+        const middle = this.tombsPathRoom?.boss?.boulders?.altar.x ?? boss.x;
+        let attack: BossAttackDef | undefined;
+        for (const at of this.tombsSarcophagi) {
+            if (this.tick >= at.openUntil || this.tick < at.nextTick) {
+                continue;
+            }
+            at.nextTick = this.tick + secondsToTicks(SARCOPHAGI.every);
+            attack ??= this.invokedAttack(SARCOPHAGUS_BLAST);
+            const source = this.bulletSourceFor(boss, attack);
+            const damage = this.getBossDamage(boss, attack);
+            const speed = SARCOPHAGI.speed / TICKS_PER_SECOND;
+            const life = Math.ceil(SARCOPHAGI.range / speed);
+            const aim = middle > at.x ? 0 : Math.PI;
+            for (let i = 0; i < SARCOPHAGI.count; i++) {
+                const angle = aim + (i / (SARCOPHAGI.count - 1) - 0.5) * SARCOPHAGI.arc;
+                this.bullets.add(
+                    at.x + fm.cos(angle) * 0.8,
+                    at.y + fm.sin(angle) * 0.8,
+                    fm.cos(angle) * speed,
+                    fm.sin(angle) * speed,
+                    0,
+                    SARCOPHAGI.radius,
+                    damage,
+                    life,
+                    source,
+                    this.tick,
+                );
+            }
+        }
     }
 
     // True while there's still some on their way. With the last of them gone
@@ -7471,6 +7649,14 @@ export class Sim {
         }
         if (summon.holds !== undefined) {
             this.hold = { enemies: spawned, endTick: this.tick + secondsToTicks(summon.holds) };
+        }
+        if (summon.sarcophagi) {
+            for (const one of spawned) {
+                const at = this.nearestSarcophagus(one.x, one.y);
+                if (at !== -1) {
+                    one.seeks = at;
+                }
+            }
         }
         if (summon.walkTo) {
             for (const one of spawned) {
@@ -8161,7 +8347,7 @@ export class Sim {
         if (!byEnemy && !enemy.noDrops) {
             this.dropLoot(enemy);
         }
-        if (!enemy.boss) {
+        if (!enemy.boss && !enemy.rolls) {
             this.dropTombsPeel(enemy);
         }
         if (enemy.boss) {

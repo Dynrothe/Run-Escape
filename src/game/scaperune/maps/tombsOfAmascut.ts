@@ -124,6 +124,12 @@ const FIGHT_LINE = 12;
 // (row 33 and up is her throne's, solid: the floor's top row is 32)
 const BA_BA_ALTAR = [12, 31];
 const BA_BA_FOOT = [7, 14];
+// Her sarcophagi (45752, in square 59,84 at 27/32/37/42 by 24 and 40), turned: four down each
+// side of the floor, the west ones at rotation 0 and the east ones at 2 once turned
+const BA_BA_SARCOPHAGI = [17, 22, 27, 32].flatMap((y) => [
+    { x: 4, y, rotation: 0 },
+    { x: 20, y, rotation: 2 },
+]);
 const BA_BA_PIT = { x0: 10, x1: 15, y0: 9, y1: FIGHT_LINE + 1.9 };
 
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
@@ -185,6 +191,10 @@ export const TOA_PLACES = {
         at: worldTile(BA_BA_ROOM.at.x + BA_BA_AT[0], BA_BA_ROOM.at.y + BA_BA_AT[1]),
         line: { y: MAP_Y * MAP_SQUARE_SIZE + BA_BA_ROOM.at.y + FIGHT_LINE + 1 },
         boulders: {
+            sarcophagi: BA_BA_SARCOPHAGI.map(({ x, y, rotation }) => ({
+                ...worldTile(BA_BA_ROOM.at.x + x, BA_BA_ROOM.at.y + y),
+                rotation,
+            })),
             altar: worldTile(BA_BA_ROOM.at.x + BA_BA_ALTAR[0], BA_BA_ROOM.at.y + BA_BA_ALTAR[1]),
             start: worldTile(BA_BA_ROOM.at.x + BA_BA_FOOT[0], BA_BA_ROOM.at.y + BA_BA_FOOT[1]),
             pit: {

@@ -424,6 +424,9 @@ export type BulletPatternDef = {
     // the last volley's, so the next way through can always be reached (Ba-Ba's boulders: five
     // and a gap, as in OSRS). The lanes stay as they are on hard.
     gapStep?: number;
+    // Walls with gapStep: the way through is this enemy instead, rolling with the rest (Ba-Ba's
+    // cracked boulder), to be broken to get through. It hurts and knocks back as they do.
+    cracked?: string;
     // Tiles a hit knocks the player on, the way the bullet's going
     knockback?: number;
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:
@@ -605,6 +608,9 @@ export type BossAttackDef = {
         thrown?: { seconds: number };
         holds?: number;
         walkTo?: { distance: number; perAbsorbed: number };
+        // Each makes for the nearest closed sarcophagus of the Tombs boss's arena, and opens it
+        // if it gets there (Ba-Ba's baboons: Sim.stepSeeker)
+        sarcophagi?: boolean;
     };
     // A mark on the player, bursting after seconds for damage (and the attack's
     // hit damage does nothing), leaving enemyId behind. An antidote keeping
@@ -1312,6 +1318,8 @@ export type TombsPathDef = {
                 altar: { x: number; y: number };
                 start: { x: number; y: number };
                 pit: { x0: number; x1: number; y0: number; y1: number };
+                // The arena's sarcophagi along its sides, and their locs' rotation as they stand
+                sarcophagi?: { x: number; y: number; rotation: number }[];
             };
         };
     };

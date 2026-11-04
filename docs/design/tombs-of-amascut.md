@@ -262,3 +262,19 @@ raid's ranges.
 - **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
   What's picked is kept in the save (`SaveData.invocations`) and goes to the run as
   `SimOptions.invocations`.
+- **Ba-Ba** (`content/tombs.ts`, her fight in `Sim.stepTombsBoss`): her arena's cut turned so her
+  throne's north, and she rises once the party's a step past the gap at its foot. Her attacks:
+  the shockwave round her (a ground mark), rockfall and her boulder (blasts that break into shards,
+  her dark boulder spot animation 2245), and calling baboons.
+    - **Rolling boulders**, at 66% and 33%: she goes up to her altar and the party's put at the
+      foot. Rows of five boulders roll down five lanes (`BulletPatternDef.gapStep`), one of them the
+      cracked boulder (NPC 11783, `cracked`), an enemy that rolls with its row (`Enemy.rolls`) to be
+      broken, at most two lanes from the last row's. A hit knocks you back. Getting back up to her
+      altar's rows, anywhere across, ends them.
+    - **Sarcophagi**: the eight along the floor's sides (45752). Her baboons make for the nearest
+      closed one (`summon.sarcophagi`, `Enemy.seeks`) and pry at it for a few seconds; one that
+      gets it open (45753 drawn over it) has it fire fans of red bolts (2246) across the arena.
+    - **Invocations**: Mind the Gap (the gap at the foot, where her barrier stood, kills),
+      Boulderdash, Shaking Things Up, Jungle Japes (banana peels root you, drawn as the Banana) and
+      Gotta Have Faith (the sarcophagi's bolts hit harder: there's no prayer here to scale by).
+    - Her hitpoints go up with the path level (`TOMBS_BOSSES`), as does each path's boss's.

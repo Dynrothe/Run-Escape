@@ -355,6 +355,22 @@ export type Enemy = {
     totemOf?: Enemy;
     // Walking to this boss to be absorbed (BossAttackDef summon.walkTo)
     walksTo?: Enemy;
+    // Rolling straight on, so far a tick, till endTick (Ba-Ba's cracked boulder:
+    // BulletPatternDef.cracked), hurting and knocking back whoever it runs into as its
+    // boss's attack would
+    rolls?: {
+        vx: number;
+        vy: number;
+        endTick: number;
+        damage: number;
+        knockback: number;
+        attack: BossAttackDef;
+        bossUid: number;
+    };
+    // Making for one of the arena's sarcophagi (Sim.tombsSarcophagi), to open it
+    seeks?: number;
+    // There, prying it open: it's open at this tick, if it's still alive
+    pryEnd?: number;
     // The last tick a blocked hit showed on it, so they don't pile up
     blockedTick: number;
     // The enemy that called it in (EnemyDef.spawns), 0 for none

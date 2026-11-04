@@ -241,7 +241,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "baba",
         level: 10,
         description: "The sarcophagi's blasts hit harder.",
-        comes: "Ba-Ba",
     },
     {
         id: "jungle_japes",
