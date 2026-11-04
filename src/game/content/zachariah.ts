@@ -19,10 +19,12 @@ import { ArenaFeatures, BossAttackDef, EnemyDef, FightAbilityDef, ImpactDef } fr
 // His animations, all on his own skeleton (1756), as the cache has them for npc 7858
 const IDLE_SEQ = 7851;
 const WALK_SEQ = 7852;
-// A wide sword slash, and the same again
+// A wide sword slash, and the same again; it sweeps across about 0.4 s in
 const SLASH_SEQ = 7853;
-// His sword raised overhead and brought down: his shock wave, and his casts
+const SLASH_AT = 0.4;
+// His sword raised overhead and brought down, about 0.6 s in: his shock wave, and his casts
 const RAISE_SEQ = 7962;
+const RAISE_AT = 0.6;
 // Coming down from above (it starts two and a half times his height up)
 const DESCEND_SEQ = 7964;
 // His guard up: down on one knee at a threshold, and before a leap
@@ -40,8 +42,6 @@ const BLUE_IMPACT = 1458;
 const SWORD_TRAIL = 1515;
 const SARADOMIN_LIGHT = 1221;
 const STARS = 80;
-// The gold sparkles of a premier club emote, round him as his guard drops
-const GOLD_SPARKLES = 1414;
 // Landing from a leap, and from his descent
 const LANDING: ImpactDef = {
     spots: [
@@ -189,7 +189,9 @@ const LUNGE: BossAttackDef = {
     cooldown: 1,
     range: 6.5,
     weight: 4,
+    // Drawn back, held, and swept as he goes: the slash is the lunge
     seq: SLASH_SEQ,
+    strikeAt: SLASH_AT,
     sound: 3876,
     line: { width: 2, length: LUNGE_LENGTH, dash: LUNGE_LENGTH - RADIUS },
     opens: OPENS,
@@ -206,12 +208,14 @@ const ICE: BossAttackDef = {
     name: "Ice barrage",
     kind: "blast",
     damage: 3,
-    windup: 1.1,
+    // Quick, as his lunge is: from the square's middle it's under half a second out
+    windup: 0.85,
     cooldown: 4,
     range: 14,
     weight: 3,
     phases: [1, 2],
     seq: RAISE_SEQ,
+    strikeAt: RAISE_AT,
     windupSound: 3856,
     sound: 168,
     impactSpotAnim: 369,
@@ -258,6 +262,7 @@ const LIGHTNING: BossAttackDef = {
     weight: 3,
     phases: [2],
     seq: RAISE_SEQ,
+    strikeAt: RAISE_AT,
     windupSound: 4364,
     sound: 4428,
     impactSpotAnim: 1796,
@@ -294,7 +299,9 @@ const ATTACKS: BossAttackDef[] = [
         range: 11,
         minRange: 2.5,
         weight: 3,
+        // Raised, held, and brought down onto the floor as the wave goes
         seq: RAISE_SEQ,
+        strikeAt: RAISE_AT,
         windupSound: 3883,
         spotAnim: 1515,
         speed: 6.5,
@@ -325,6 +332,7 @@ const ATTACKS: BossAttackDef[] = [
         weight: 0,
         phases: [],
         seq: SLASH_SEQ,
+        strikeAt: SLASH_AT,
         radius: 3.2,
         chain: { times: 2, windup: 0.4 },
         impact: { spots: [{ spotAnim: DUST, fit: 1.5 }], shake: 0.15 },
@@ -366,6 +374,7 @@ const ATTACKS: BossAttackDef[] = [
         weight: 2,
         phases: [3],
         seq: RAISE_SEQ,
+        strikeAt: RAISE_AT,
         windupSound: 3883,
         sound: 3887,
         impactSpotAnim: 1458,
@@ -485,6 +494,8 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 // edge, and the camera comes back to them once he's down (7964 is 1.3 s)
                 atMiddle: true,
                 holds: true,
+                // Turned to watch him, whatever's pressed
+                faces: true,
                 pan: { from: 2.6, over: 1.6 },
                 land: LANDING,
                 landAt: 1.1,
@@ -495,11 +506,10 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 stun: STUN,
                 stunSpotAnim: STARS,
                 stunHeight: 2.4,
-                // Gold sparkles rising round him and a holy chime (prayer_boost) as his guard
-                // drops: the moment to step in and smite, on a phone too
-                open: { spots: [{ spotAnim: GOLD_SPARKLES, fit: 1.8 }] },
-                exposeSound: 2671,
-                stunSound: 2671,
+                // His sword knocked aside (swordclash5) as his guard drops, and a metal clang
+                // (clang2) as he's stunned: among his own blows' sounds, but their own
+                exposeSound: 1971,
+                stunSound: 1141,
                 stuck: {
                     spots: [
                         { spotAnim: STOMP, fit: 2 },

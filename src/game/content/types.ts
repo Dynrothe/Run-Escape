@@ -604,6 +604,10 @@ export type BossAttackDef = {
     quarters?: QuartersDef;
     // Boss animation while winding it up (the boss's attackSeq when unset)
     seq?: number;
+    // Seconds into seq that its blow falls: seq's timed to land as the attack does, held on its
+    // first frame (the blow drawn back) until then, so what it's seen to do is what hits (his
+    // lunge's slash, his slam)
+    strikeAt?: number;
     // Cache sound effects as it starts winding up, when it's used and when it
     // hits
     windupSound?: number;
@@ -774,8 +778,6 @@ export type BossGuardDef = {
     exposeSound?: number;
     // A lunge stuck in a pillar: what's thrown up where it's struck
     stuck?: ImpactDef;
-    // Shown round it as its guard drops (exposed, or stunned)
-    open?: ImpactDef;
 };
 
 // A big entrance: the player can't be hit, the screen goes dark, and everything
@@ -802,8 +804,10 @@ export type BossIntroDef = {
     // to distance tiles south of it (a party side by side), rather than beside
     // wherever they are (Phosani's Nightmare, in her square)
     atMiddle?: boolean;
-    // The player can't move until it's over: they stand and watch it rise
+    // The player can't move until it's over: they stand and watch it rise, and with faces,
+    // turned to it whatever they press (else they can turn)
     holds?: boolean;
+    faces?: boolean;
     // The camera's on it as it rises, and from seconds into the intro takes
     // over seconds to come back to the player
     pan?: { from: number; over: number };

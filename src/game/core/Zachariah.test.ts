@@ -20,7 +20,7 @@ import {
     buildOwlsCourt,
 } from "../scaperune/maps/owlsCourt";
 import { BuildContext } from "../scaperune/recipe";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { Sim, TICKS_PER_SECOND, yawFromVector } from "./Sim";
 import { behindPillar } from "./arena";
 import { Enemy } from "./entities";
 import { applyAction } from "./lockstep";
@@ -217,8 +217,10 @@ describe("his fight", () => {
         expect(sim.player.x).toBeCloseTo(boss.x);
         expect(boss.y - sim.player.y).toBeCloseTo(ZACHARIAH_START_DISTANCE);
         const { x, y } = sim.player;
-        run(sim, 1, 0, 1);
+        run(sim, 1, 1, 0);
         expect([sim.player.x, sim.player.y]).toEqual([x, y]);
+        // Turned to watch him, whatever they press
+        expect(sim.player.yaw).toBe(yawFromVector(boss.x - x, boss.y - y));
         // His look is his own: gold and blue, no edge round the court and no dim
         expect(zachariah().boss!.look).toMatchObject({ edge: null, vignette: null });
     });
@@ -549,11 +551,14 @@ describe("fighting back", () => {
         use(sim, boss, "Lunge");
         place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
         const events: string[] = [];
+        const sounds: number[] = [];
         for (let i = 0; i < 1.4 * TICKS_PER_SECOND; i++) {
             run(sim, 0.02);
             for (const event of sim.takeEvents()) {
                 if (event.type === "bossGuard") {
                     events.push(`${event.cause} ${event.stunned}`);
+                } else if (event.type === "bossAttack") {
+                    sounds.push(event.sound);
                 }
             }
         }
@@ -562,8 +567,8 @@ describe("fighting back", () => {
         // Down his strip to its end, his front where it's drawn to and hits to
         const line = attackNamed("Lunge").line!;
         expect(at(31, 33).y - boss.y).toBeCloseTo(line.length - boss.radius, 1);
-        // Gold rising round him as it drops, with its chime
-        expect(sim.effects.some((e) => e.spotAnim === guard().open!.spots![0].spotAnim)).toBe(true);
+        // His sword knocked aside, to be heard among his blows
+        expect(sounds).toContain(guard().exposeSound);
         expect(sim.isExposed(boss)).toBe(true);
         expect(sim.isStunned(boss)).toBe(false);
         expect(hit100(sim, boss)).toBeGreaterThanOrEqual(170);

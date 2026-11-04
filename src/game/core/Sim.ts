@@ -2430,6 +2430,7 @@ export class Sim {
             held,
             curse: this.curse,
             arena: this.confinedToArena ? this.bossArena : undefined,
+            faces: this.introFacing,
         });
         if (moving !== player.moving) {
             player.moving = moving;
@@ -3389,6 +3390,7 @@ export class Sim {
                 this.tick - enemy.animStart > 30 &&
                 !enemy.bossState?.windup &&
                 !enemy.bossState?.surge &&
+                !enemy.bossState?.dash &&
                 !enemy.bossState?.leap &&
                 (enemy.abilities?.blinkLand ?? -1) === -1
             ) {
@@ -4721,6 +4723,25 @@ export class Sim {
         return this.map.bossArena !== undefined && phases !== undefined && phases.confine !== false;
     }
 
+    // Where players held to watch an entrance look (BossIntroDef.holds, faces): at the boss once
+    // it's up, and where it'll rise until then
+    get introFacing(): { x: number; y: number } | undefined {
+        if (!this.introHolds || !this.intro?.def.boss?.intro?.faces) {
+            return undefined;
+        }
+        const boss = this.intro?.boss;
+        if (boss) {
+            return { x: boss.x, y: boss.y };
+        }
+        const arena = this.bossArena;
+        return (
+            this.map.features?.rise ?? {
+                x: (arena.minX + arena.maxX) / 2,
+                y: (arena.minY + arena.maxY) / 2,
+            }
+        );
+    }
+
     // Whether an entrance has the players standing still to watch it
     // (BossIntroDef.holds): the movement rules take it like a hold
     get introHolds(): boolean {
@@ -5153,7 +5174,7 @@ export class Sim {
             enemy.anim = windup ? "attack" : "walk";
             enemy.animStart = this.tick;
             if (windup) {
-                enemy.attackSeq = windup.attack.seq ?? enemy.def.attackSeq;
+                this.playWindup(enemy, windup);
             }
         }
     }
@@ -6655,11 +6676,13 @@ export class Sim {
             (this.hard ? HARD_BOSS_INTERVAL : 1) *
             drowsy;
         enemy.attackCooldown = Math.round((interval ?? usual) * TICKS_PER_SECOND);
+        // Timed to strike as it lands (BossAttackDef.strikeAt), what it does first before that
+        if (attack.strikeAt !== undefined) {
+            windup.seqTick = landTick - secondsToTicks(attack.strikeAt);
+        }
         // Its windup's animation, once it's there (stepLeap plays it after a jump)
         if (!state.leap) {
-            enemy.anim = "attack";
-            enemy.animStart = this.tick;
-            enemy.attackSeq = attack.seq ?? enemy.def.attackSeq;
+            this.playWindup(enemy, windup);
         }
         if (attack.windupSound !== undefined) {
             this.emit({
@@ -6734,10 +6757,6 @@ export class Sim {
                     boss.uid,
                 );
             }
-        }
-        if (!wasOpen || stunned) {
-            // Round it, wherever its lunge carries it
-            this.showImpact(guard.open, boss.x, boss.y, undefined, boss.uid);
         }
         const sound = stunned ? guard.stunSound : guard.exposeSound;
         if (sound !== undefined) {
@@ -6980,6 +6999,14 @@ export class Sim {
     // Seconds until a hero's button can be used again
     abilitySecondsLeft(hero: Hero = this.hero): number {
         return Math.max(0, hero.abilityReadyTick - this.tick) / TICKS_PER_SECOND;
+    }
+
+    // A windup's animation, from now, or timed to strike as it lands (BossWindup.seqTick):
+    // till then it holds the first frame, the blow drawn back (a frame before 0 is the first)
+    private playWindup(enemy: Enemy, windup: BossWindup): void {
+        enemy.anim = "attack";
+        enemy.attackSeq = windup.attack.seq ?? enemy.def.attackSeq;
+        enemy.animStart = windup.seqTick ?? this.tick;
     }
 
     // Below half its hitpoints a boss attacks and moves faster, and uses its

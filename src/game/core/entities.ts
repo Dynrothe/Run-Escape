@@ -58,6 +58,8 @@ export type BossWindup = {
     dirY: number;
     // A surge's lane, there on the ground the whole time it winds up
     lane?: SurgeLane;
+    // When its seq plays from, timed so its blow falls as it lands (BossAttackDef.strikeAt)
+    seqTick?: number;
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within

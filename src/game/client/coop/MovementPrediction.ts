@@ -242,6 +242,7 @@ export class MovementPrediction {
             held: !!hero.hold || sim.introHolds,
             curse: hero.curse,
             arena: sim.confinedToArena ? sim.bossArena : undefined,
+            faces: sim.introFacing,
         };
         // Keep the newest input when a lead exceeds the replay budget: starts,
         // stops and turns mustn't get stranded beyond the end of an old window.
