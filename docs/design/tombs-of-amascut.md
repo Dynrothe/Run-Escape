@@ -175,6 +175,20 @@ unlocks something in the game.
   Blood's expert mode asks for (its Nylocas take nothing from the wrong one), and a magic build
   gets one more spell. (It was magic adventurers only at first; that did nothing for expert.)
 
+### Combat Achievements
+
+Combat Achievements are PR 110 (`content/combatTasks.ts`, `core/CombatTracker.ts`), which already has
+the Theatre of Blood's tasks. Once it's merged and the raid's done, the Tombs get tasks matched to
+OSRS's own ToA ones, mostly on its goal kinds (`kill` with `within` or `without: ["hits"]`, `win`
+with rules, `beatMap`):
+
+- **Each path**: its boss with no deaths, within a time, and its mechanic done right (Ba-Ba with no
+  boulder hits; the Apmeken room with no pillar or vent left to go).
+- **Raid level**: beat at Entry, Normal (150), Expert (300) and up to 500, a raid level on
+  `beatMap`.
+- **Invocations**: a Hardcore Run, and Insanity once the Wardens are in.
+- **The whole raid**: no deaths, and a speed run.
+
 ## 9. The order it's built in
 
 Each a pull request, merged with the raid still a dev map:
