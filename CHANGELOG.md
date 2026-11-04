@@ -23,6 +23,26 @@ the version in the corner).
 - The co-op rooms list, by trippy22: it updates by itself when rooms open, fill or start, rather
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
+- The Theatre of Blood's bosses are much tougher: two and a half to six times their hitpoints,
+  harder hits, and their bullets can hit twice as often.
+- The Theatre of Blood's bosses take less from missiles and magic: 15% of their damage, from 30%.
+- Armour takes off at most half of a Theatre of Blood boss's hit, so Protect from Melee no longer
+  turns them all to 1s.
+- The Theatre of Blood's hard and expert modes fire half as many bullets again, with the space
+  between them as wide: spreads fan out wider, and rings with no way through stay as they are.
+- Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
+  has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
+  new one marked on the ground first.
+- Keeping away from a Theatre of Blood boss isn't safe either: the Pestilent Bloat's flies and
+  Verzik's power blasts close in round you, and Verzik's spider leaps on you. The Bloat naps for
+  less of the fight.
+- Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
+  her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+  Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+- The Theatre of Blood's green and blue Nylocas shoot from range, Verzik's too.
+- A Theatre of Blood room's raid points for speed go by how long its boss is meant to take, so a
+  later, longer fight is worth as much as a quick early one.
+- The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ### Fixed
 

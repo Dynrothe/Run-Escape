@@ -28,7 +28,7 @@ import {
     roundCrowd,
     roundScale,
 } from "../content/endless";
-import { getEnemy } from "../content/enemies";
+import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
     HARD_BOSS_INTERVAL,
     HARD_COINS,
@@ -102,6 +102,7 @@ import {
     EnemySpawnsDef,
     EnemyTag,
     GearSlot,
+    GroundPatternDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -809,6 +810,8 @@ export class Sim {
     private partyScale: PartyScale;
     // What hard mode multiplies enemies' hitpoints and damage by (1 outside it)
     private readonly hardScale: { hp: number; damage: number };
+    // A boss pattern's bullets a volley on hard mode, times its own (MapDef.hard bullets)
+    private readonly bulletScale: number;
     // What each bone's worth for the party: its scale's experience, made up
     // for when the crowd's cap leaves no room for all of the party's extra
     private partyXp = 1;
@@ -1101,6 +1104,7 @@ export class Sim {
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
         this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
+        this.bulletScale = this.hard ? (this.map.hard?.bullets ?? 1) : 1;
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -3500,7 +3504,8 @@ export class Sim {
         this.launchProjectiles(enemy, shotAttack(shot), enemy.damage, true);
     }
 
-    // A hit on the player; armour takes some off (unless it hits through it).
+    // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
+    // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare.
     // Returns what it took.
     private damagePlayer(
         damage: number,
@@ -3509,13 +3514,18 @@ export class Sim {
         sound?: number,
         ignoreArmor = false,
     ): number {
+        const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
         // Once the run's over nothing more lands, so a win can't turn into a
         // death (or spend a revive) later in the tick it's won
         if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
             return 0;
         }
-        const armor = ignoreArmor ? 0 : this.stats.armor;
+        const armor = ignoreArmor
+            ? 0
+            : armorCap === undefined
+              ? this.stats.armor
+              : Math.min(this.stats.armor, damage * armorCap);
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
         this.damageTaken += amount;
@@ -4318,20 +4328,47 @@ export class Sim {
         return off <= stare.arc / 2;
     }
 
+    // The style of the weapon a hit's from (damageSource), or none for anything else: worked out
+    // once for each source, as every hit on a raid boss asks it up to three times
+    private get sourceStyle(): CombatStyle | undefined {
+        const source = this.damageSource;
+        if (source !== this.styledSource) {
+            this.styledSource = source;
+            this.styleOfSource = source.startsWith("weapon:")
+                ? getWeaponStyle(getWeapon(source.slice("weapon:".length)))
+                : undefined;
+        }
+        return this.styleOfSource;
+    }
+    private styledSource = "";
+    private styleOfSource: CombatStyle | undefined;
+
+    // Normal mode: the share a colour takes from another style's weapon (BossDef.colours.offStyle)
+    private offColour(enemy: Enemy): number {
+        const share = enemy.def.boss?.colours?.offStyle;
+        const only = enemy.def.onlyStyle;
+        const style = this.sourceStyle;
+        if (this.expert || share === undefined || !only || style === undefined) {
+            return 1;
+        }
+        return style === only ? 1 : share;
+    }
+
     // A weapon's hit an expert raid's Nylocas won't take (EnemyDef.onlyStyle)
     private wrongStyle(enemy: Enemy): boolean {
         const only = enemy.def.onlyStyle;
-        const source = this.damageSource;
-        if (!this.expert || !only || !source.startsWith("weapon:")) {
+        const style = this.sourceStyle;
+        if (!this.expert || !only || style === undefined) {
             return false;
         }
-        return getWeaponStyle(getWeapon(source.slice("weapon:".length))) !== only;
+        return style !== only;
     }
 
-    // Expert mode: the next of BossDef.colours' forms, keeping its hitpoints, every so often
+    // Expert mode (and normal, with offStyle): the next of BossDef.colours' forms, keeping its
+    // hitpoints, every so often
     private stepColours(enemy: Enemy): void {
         const colours = enemy.def.boss?.colours;
-        if (!this.expert || !colours) {
+        if (!colours || (!this.expert && colours.offStyle === undefined)) {
             return;
         }
         const state = enemy.bossState!;
@@ -4350,7 +4387,7 @@ export class Sim {
         const style = form.onlyStyle;
         this.emit({
             type: "notice",
-            message: `${form.name} turns ${style === "melee" ? "grey" : style === "ranged" ? "green" : "blue"}! Only ${style} hurts it.`,
+            message: `${form.name} turns ${style === "melee" ? "grey" : style === "ranged" ? "green" : "blue"}! ${this.expert ? "Only" : "Mostly"} ${style} hurts it.`,
         });
     }
 
@@ -4361,11 +4398,15 @@ export class Sim {
         if (this.expert && enemy.def.onlyStyle) {
             return 1;
         }
-        const source = this.damageSource;
-        if (!protects || !source.startsWith("weapon:")) {
+        const style = this.sourceStyle;
+        if (!protects || style === undefined) {
             return 1;
         }
-        const style = getWeaponStyle(getWeapon(source.slice("weapon:".length)));
+        // On normal, a colour prays less against its own style (BossDef.colours.ownStyle)
+        const colours = enemy.def.boss?.colours;
+        if (colours?.offStyle !== undefined && style === enemy.def.onlyStyle) {
+            return protects.styles.includes(style) ? (colours.ownStyle ?? 1) : 1;
+        }
         return protects.styles.includes(style) ? protects.damage : 1;
     }
 
@@ -4381,6 +4422,7 @@ export class Sim {
                 bossSeconds,
                 hero.damageTaken - hero.raidDamageAtStart,
                 hero.player.maxHp,
+                this.raidRoomDef!.par,
             ),
         );
         // The party's coins, on its average
@@ -5006,6 +5048,7 @@ export class Sim {
             this.hazards.push({
                 uid: this.nextUid++,
                 enemyUid: enemy.uid,
+                enemyId: enemy.def.id,
                 attack,
                 x,
                 y,
@@ -5374,12 +5417,22 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        const count = pattern.count;
+        // More bullets on hard (bulletScale), the space between them as wide: a ring's gap is an
+        // angle, so it stays as wide; a spread fans out wider to keep its bullets as far apart; a
+        // ring or spiral with no gap has nothing to keep open, so it stays as it is (more would
+        // only close it up)
+        const closed =
+            (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
+        const count = closed ? pattern.count : Math.round(pattern.count * this.bulletScale);
         if (pattern.shape === "wall" || pattern.shape === "closing") {
-            this.fireGappedVolley(emitter, boss, speed, life, turn);
+            this.fireGappedVolley(emitter, boss, speed, life, turn, count);
             return;
         }
         const spread = pattern.shape === "spread";
+        const arc = Math.min(
+            Math.PI * 2,
+            ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
+        );
         // Whoever's nearest now: a tracking spread's aim, a closing ring's middle
         const target = this.nearestHero(boss.x, boss.y).player;
         if (spread && pattern.track) {
@@ -5412,8 +5465,8 @@ export class Sim {
                 this.tick,
             );
         };
-        const step = spread ? (pattern.arc ?? 1) / Math.max(1, count - 1) : (Math.PI * 2) / count;
-        const first = spread ? emitter.angle - (pattern.arc ?? 1) / 2 : emitter.angle;
+        const step = spread ? arc / Math.max(1, count - 1) : (Math.PI * 2) / count;
+        const first = spread ? emitter.angle - arc / 2 : emitter.angle;
         for (let i = 0; i < count; i++) {
             // The way through a ring, at its own angle
             if (!spread && pattern.gap !== undefined && i * step < pattern.gap) {
@@ -5438,10 +5491,14 @@ export class Sim {
         speed: number,
         life: number,
         turn: number,
+        // More bullets on hard (bulletScale, from fireVolley), closer together, with as wide a
+        // way through
+        count: number,
     ): void {
         const pattern = emitter.attack.pattern!;
-        const count = pattern.count;
-        const gap = Math.min(pattern.gap ?? 2, count - 1);
+        // The gap's width is its bullets plus one spacing: as many again, so at least as wide
+        const gapWidth = ((pattern.gap ?? 2) + 1) * this.bulletScale;
+        const gap = Math.min(Math.round(gapWidth - 1), count - 1);
         // Anywhere round a ring; never at a wall's ends, which can be in a room's walls
         const gapStart =
             pattern.shape === "closing"
@@ -5462,7 +5519,7 @@ export class Sim {
                 this.tick,
             );
         if (pattern.shape === "wall") {
-            const spacing = pattern.spacing ?? pattern.radius * 2.5;
+            const spacing = (pattern.spacing ?? pattern.radius * 2.5) / this.bulletScale;
             const across = emitter.angle + Math.PI / 2;
             const from = pattern.from ?? 0;
             const startX = boss.x + fm.cos(emitter.angle) * from;
@@ -5610,6 +5667,12 @@ export class Sim {
         const landed: boolean[] = [];
         for (const hazard of hazards) {
             if (hazard.lingerEnd !== -1) {
+                // An exhumed: smothered, or healing its boss as it goes
+                const smother = hazard.attack.ground?.smother;
+                if (smother) {
+                    spent = this.stepExhumed(hazard, smother) || spent;
+                    continue;
+                }
                 // On the ground, hurting whoever stands in it now and then
                 if (tick >= hazard.lingerEnd) {
                     hazard.endTick = -1;
@@ -5741,7 +5804,7 @@ export class Sim {
                 // A full share (every map but the raid's) passes the damage through as it was
                 const damage =
                     share === 1 ? hazard.damage : Math.max(1, Math.round(hazard.damage * share));
-                this.bossHit(enemy?.def.id ?? "", enemy, attack, damage, false);
+                this.bossHit(hazard.enemyId, enemy, attack, damage, false);
             } else if (attack.effect && !this.reviving) {
                 this.applyPlayerEffect(attack.effect, enemy);
             }
@@ -5931,6 +5994,7 @@ export class Sim {
             this.enrage(enemy);
         }
         this.callSummons(enemy, false);
+        this.stepOrdeal(enemy);
         this.stepStomp(enemy);
         for (let i = 0; i < state.cooldowns.length; i++) {
             if (state.cooldowns[i] > 0) {
@@ -6037,7 +6101,9 @@ export class Sim {
                 (!attack.enraged || state.enraged) &&
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
-                !(attack.parasite && this.parasite)
+                !(attack.parasite && this.parasite) &&
+                // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
+                !attack.ordeal
             ) {
                 usable.push(i);
             }
@@ -6052,9 +6118,104 @@ export class Sim {
         this.startBossAttack(enemy, attack);
     }
 
+    // Sotetseg's shadow realm, Xarpus's exhumes and Verzik's yellows (BossDef.shadowRealm, exhumes,
+    // yellows): past each of their shares of its hitpoints, it can't be hurt for a while, doing
+    // only what they call for
+    private stepOrdeal(enemy: Enemy): void {
+        const state = enemy.bossState!;
+        const def = enemy.def.boss!;
+        const realm = def.shadowRealm ?? def.yellows;
+        const exhumes = def.exhumes;
+        const of = realm ?? exhumes;
+        if (!of) {
+            return;
+        }
+        const ordeal = state.ordeal;
+        if (ordeal) {
+            if (this.tick < ordeal.endTick && ordeal.left !== 0) {
+                // Held to its end, however a tick goes (a boss can skip stepBoss on a jump)
+                enemy.shieldEnd = Math.max(enemy.shieldEnd, ordeal.endTick);
+                return;
+            }
+            state.ordeal = undefined;
+            enemy.shieldEnd = 0;
+            // Out of time with exhumeds still up: he rises the better for each
+            if (exhumes && ordeal.left > 0) {
+                const heal = Math.round(enemy.maxHp * exhumes.leftHeal * ordeal.left);
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + heal);
+            }
+            // What's left of its exhumeds sinks with it
+            this.hazards = this.hazards.filter(
+                (hazard) => hazard.enemyUid !== enemy.uid || !hazard.attack.ground?.smother,
+            );
+            this.emit({ type: "notice", message: of.endMessage });
+            return;
+        }
+        const done = state.ordealsDone ?? 0;
+        if (done >= of.at.length || enemy.hp > enemy.maxHp * of.at[done]) {
+            return;
+        }
+        // One at a time, however far a hit took it past them
+        let next = done + 1;
+        while (next < of.at.length && enemy.hp <= enemy.maxHp * of.at[next]) {
+            next++;
+        }
+        state.ordealsDone = next;
+        state.ordeal = {
+            endTick: this.tick + secondsToTicks((realm ?? exhumes!).seconds),
+            left: exhumes ? exhumes.count : -1,
+            during: { attacks: of.attacks, interval: of.interval },
+        };
+        enemy.shieldEnd = Math.max(enemy.shieldEnd, state.ordeal.endTick);
+        this.emit({ type: "notice", message: of.message });
+    }
+
+    // An exhumed (GroundPatternDef.smother): stood in long enough, by anyone, it's smothered and
+    // counts towards its boss's exhumes; left until it goes, it heals the boss. True once it's gone.
+    private stepExhumed(
+        hazard: GroundHazard,
+        smother: NonNullable<GroundPatternDef["smother"]>,
+    ): boolean {
+        let on = false;
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            on ||=
+                fm.hypot(player.x - hazard.x, player.y - hazard.y) <= hazard.radius + player.radius;
+        });
+        if (on) {
+            hazard.stood = (hazard.stood ?? 0) + 1;
+        }
+        const smothered = (hazard.stood ?? 0) >= secondsToTicks(smother.seconds);
+        if (!smothered && this.tick < hazard.lingerEnd) {
+            return false;
+        }
+        hazard.endTick = -1;
+        const boss = this.enemies.find((e) => e.uid === hazard.enemyUid);
+        if (smothered) {
+            if (smother.smotheredSpotAnim !== undefined) {
+                this.addEffect(smother.smotheredSpotAnim, hazard.x, hazard.y, 0, 40);
+            }
+            const ordeal = boss?.bossState?.ordeal;
+            if (ordeal && ordeal.left > 0) {
+                ordeal.left--;
+            }
+        } else if (boss && !boss.dead) {
+            boss.hp = Math.min(boss.maxHp, boss.hp + Math.round(boss.maxHp * smother.heal));
+            if (smother.healSpotAnim !== undefined) {
+                this.addEffect(smother.healSpotAnim, hazard.x, hazard.y, 0, 40);
+            }
+        }
+        return true;
+    }
+
     // What a boss keeps to, standing where it is: the attacks the flowers it's
     // among call for, or its finale's
     private keepsTo(enemy: Enemy): QuartersDef["during"] | undefined {
+        // In Sotetseg's shadow realm, or Xarpus's pool (BossDef.shadowRealm, exhumes)
+        const ordeal = enemy.bossState?.ordeal;
+        if (ordeal) {
+            return ordeal.during;
+        }
         const phase = enemy.bossState?.phase;
         if (phase?.stage === "finale") {
             return enemy.def.boss?.phases?.finale;
@@ -6460,6 +6621,9 @@ export class Sim {
             state.cooldowns = form.boss?.attacks.map(() => 0) ?? [];
             state.enraged = false;
             state.summonsDone = 0;
+            // Its new form's own shadow realm, exhumes or yellows, from the top
+            state.ordealsDone = 0;
+            state.ordeal = undefined;
         }
         this.emit({
             type: "bossRose",
@@ -6486,7 +6650,16 @@ export class Sim {
             const summoned = getEnemy(summon.enemyId);
             let spawned = 0;
             for (let i = 0; i < summon.count; i++) {
-                if (this.spawnNear(enemy, summoned, 2, i, summon.count, all ? 8 : 3)) {
+                const distance = summon.distance ?? 2;
+                const attempts = all ? 8 : 3;
+                // Against a wall, where it says may be in it or past it: then nearer the boss,
+                // so they all come (the Maiden's healers, 9 tiles out, by her room's wall)
+                if (
+                    this.spawnNear(enemy, summoned, distance, i, summon.count, attempts) ||
+                    (distance > 2 &&
+                        (this.spawnNear(enemy, summoned, (distance * 2) / 3, i, summon.count, 6) ||
+                            this.spawnNear(enemy, summoned, distance / 3, i, summon.count, 6)))
+                ) {
                     spawned++;
                 }
             }
@@ -6928,6 +7101,8 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
+        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle)
+        const offColour = poison ? 1 : this.offColour(enemy);
         // And a staring boss turns a hit from in front back on whoever made it
         if (!poison && this.staredAt(enemy)) {
             this.showBlocked(enemy);
@@ -6941,7 +7116,7 @@ export class Sim {
         }
         const naps = enemy.def.boss?.naps;
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
-        const prayed = this.prayedAgainst(enemy) * guard;
+        const prayed = this.prayedAgainst(enemy) * guard * offColour;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;

@@ -334,17 +334,27 @@ version and how to run it.
   little damage), coins for them, and a supply chest between rooms that sells food and potions
   for points. The last boss's chest rolls for a purple,
   more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'
-  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, and what
-  they fire from themselves starts a couple of tiles out, so there's a pocket up close that only
-  melee gets to stand in. A line at the top of the screen says what the hall wants of you, and
+  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, but there's
+  nowhere safe by them: what they fire from themselves starts from their middle, and up close
+  about half of what each boss does is a stomp, bite, claws or burst all round it, the bursts
+  marked on the ground first. A line at the top of the screen says what the hall wants of you, and
   whatever bones and coins are still on its floor when the boss comes go with you.
+    - **Each boss has its own mechanic**, from the real raid: the Maiden's Nylocas crawl to her
+      and feed her unless you kill them on the way; the Bloat only really takes damage while he's
+      down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
+      drags you into his shadow realm, where he can't be hurt and there's only his maze to get
+      through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
+      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      throws her yellows, which only miss you in the glowing pool that comes with each. The
+      raid's green and blue Nylocas shoot from range.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
-    - **Beaten once**: the Ghrazi rapier and hard mode.
+    - **Beaten once**: the Ghrazi rapier and hard mode, whose bosses fire half as many bullets
+      again in every pattern (and so on expert too).
     - **Beaten on hard**: the Holy Scythe of Vitur, and **expert mode**: hard mode with more of the
       real raid. The Nylocas only take their own style (grey melee, green ranged, blue magic),
-      Nylocas Vasilias changes colour, the Maiden's Matomenos crawl to her and heal her, Xarpus
+      Nylocas Vasilias's colours too, the hall's Matomenos crawl to the Maiden and heal her, Xarpus
       stares one way and hurts whoever hits him from in front, and Verzik's spider throws a ball
       that kills anyone outside its glowing circle. Twice the coins, and one of Lil' Zik's looks
       each clear.

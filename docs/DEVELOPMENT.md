@@ -590,15 +590,36 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due (`RaidRoomDef.at`,
 a run second, as a campaign boss's), then the party's moved into its boss room (`startRaidBoss`,
 `moveParty`), and once the boss is down the room's scored (`scoreRaidRoom`), each player gets the
-supply chest (`openNextRaidShop`, an event offer paid in raid points) and the next room starts.
-The last room's boss is the final boss, and its chest (`openRaidChest`) goes on the result.
-Raid wins are kept by the save like a campaign map's; hard opens after one, endless never does, and
-expert mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's teleporter
-(`stepTeleporter`) asks before skipping to its boss, `SimOptions.raidTeleports` times a raid, in
-the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of,
-in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses'
-rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
-hits are lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`).
+supply chest (`openNextRaidShop`, an event offer paid in raid points) and the next room starts. The
+last room's boss is the final boss, and its chest (`openRaidChest`) goes on the result. Raid wins
+are kept by the save like a campaign map's; hard opens after one, endless never does, and expert
+mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's teleporter
+(`stepTeleporter`) asks before skipping to its boss, `SimOptions.raidTeleports` times a raid, in the
+halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of, in
+any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses' hits
+are lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in
+`theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second. Every one
+has an attack for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a ground mark under
+it), and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatternDef.from`, so
+there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the
+slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
+something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
+them. Each boss has a mechanic of its own that makes the fight longer by making it harder, not by
+more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
+the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
+Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
+exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`,
+`tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
+calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
+healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
+of them within it, none by `SLOW_PAR` times it). Armour takes at most `ARMOR_CAP` of their hits
+(`BossDef.armorCap`, looked up in `damagePlayer`, so it holds for a stomp, a pool or a stare too; a
+ground mark keeps its boss's id for once it's gone). On hard and expert, patterns fire
+`MapDef.hard.bullets` times their bullets (`Sim.bulletScale`) with the space between them as wide: a
+ring's gap is an angle and keeps its width, a wall's or closing ring's gap grows with the count, a
+spread fans out wider, and a ring or spiral with no gap keeps its count. Their hitpoints (each
+room's `bossHp`) are tuned to players' clears, not the bot's: it dies to the Maiden.
 
 `?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
 its max; `?raidtest=short` does only the first.

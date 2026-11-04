@@ -8,13 +8,12 @@ import { LUMBRIDGE_WAVES } from "./waves";
 // campaign's chain.
 
 // Raid points, per player, for each room cleared: some for clearing it, more for killing its boss
-// fast (all of SPEED_POINTS within FAST_SECONDS of it turning up, none by SLOW_SECONDS) and for
-// taking little damage in the room (all of SAFE_POINTS with none taken, none at a whole
-// hitpoints bar's worth)
+// fast (all of SPEED_POINTS within its room's par, RaidRoomDef.par, of it turning up, none by
+// SLOW_PAR times that) and for taking little damage in the room (all of SAFE_POINTS with none
+// taken, none at a whole hitpoints bar's worth)
 export const CLEAR_POINTS = 50;
 export const SPEED_POINTS = 100;
-export const FAST_SECONDS = 20;
-export const SLOW_SECONDS = 120;
+export const SLOW_PAR = 2.5;
 export const SAFE_POINTS = 50;
 
 // Coins for each raid point a room's cleared with (the party's average), and on hard mode this
@@ -31,8 +30,13 @@ export const PURPLE_POINTS = 2500;
 export const PURPLE_CHANCE: [min: number, max: number] = [0.05, 0.65];
 export const HARD_UNIQUE_CHANCE = 0.25;
 
-export function getRoomPoints(bossSeconds: number, damageTaken: number, maxHp: number): number {
-    const speed = 1 - (bossSeconds - FAST_SECONDS) / (SLOW_SECONDS - FAST_SECONDS);
+export function getRoomPoints(
+    bossSeconds: number,
+    damageTaken: number,
+    maxHp: number,
+    par: number,
+): number {
+    const speed = 1 - (bossSeconds - par) / (par * SLOW_PAR - par);
     const safe = 1 - damageTaken / Math.max(1, maxHp);
     return Math.round(
         CLEAR_POINTS +
@@ -168,9 +172,10 @@ function tobRoom(id: TobRoomId, room: TobRoom, index: number): RaidRoomDef {
     };
 }
 
-// The Theatre's rooms in its own order. A raid's meant to be as hard as the Inferno: bosses' hitpoints
-// are set so each lasts a minute or more against a build with everything bought (simulate-run's
-// bot), lower on the Bloat, who walks his loop, and Sotetseg, whose maze is the danger.
+// The Theatre's rooms in its own order. Its bosses' hitpoints are set from players' clears, not the
+// bot's (it kills them at under half a player's pace): the first clears had each down in 12 to 45
+// seconds, and these are meant to give a fight of a couple of minutes, more so later on, as a
+// player's build grows through the raid. Lower on the Bloat, who walks his loop.
 const TOB_ROOMS: RaidRoomDef[] = [
     tobRoom(
         "maiden",
@@ -189,11 +194,13 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
             ]),
             events: roomEvents("nylocas_matomenos", "blood_spawn", 24),
-            // Canifis's woods by night, where the vampyres hunt: darker and redder than the
-            // village itself, so it doesn't read as a stroll past Canifis
-            hall: { brightness: 0.75, wash: "#e09090" },
+            // Canifis's woods by night, where the vampyres hunt: redder than the village itself,
+            // so it doesn't read as a stroll past Canifis, but lit enough to see its enemies by
+            hall: { brightness: 1.15, wash: "#f4c4c4" },
             boss: "maiden_of_sugadinti",
-            bossHp: 12000,
+            // Seconds for all its speed points (early: fast is fine)
+            par: 30,
+            bossHp: 30000,
         },
         0,
     ),
@@ -217,7 +224,9 @@ const TOB_ROOMS: RaidRoomDef[] = [
             ]),
             events: roomEvents("feral_vampyre", "ghast", 30),
             boss: "tob_pestilent_bloat",
-            bossHp: 8000,
+            // Seconds for all its speed points (early)
+            par: 60,
+            bossHp: 20000,
         },
         1,
     ),
@@ -228,24 +237,26 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(2, [
                 [
                     { id: "nylocas_ischyros", weight: 3 },
-                    { id: "nylocas_toxobolos", weight: 1 },
+                    { id: "tob_nylocas_toxobolos", weight: 1 },
                 ],
                 [
                     { id: "nylocas_ischyros", weight: 2 },
-                    { id: "nylocas_toxobolos", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_toxobolos", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
                 [
                     { id: "big_nylocas_ischyros", weight: 1 },
-                    { id: "nylocas_toxobolos", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_toxobolos", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
             ]),
             events: roomEvents("big_nylocas_ischyros", "nylocas_ischyros", 40),
             // Meiyerditch is dark stone: brighter than the rest, or its alleys are lost
             hall: { brightness: 1.1 },
             boss: "nylocas_vasilias",
-            bossHp: 20000,
+            // Seconds for all its speed points (mid)
+            par: 90,
+            bossHp: 60000,
         },
         2,
     ),
@@ -265,12 +276,14 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 [
                     { id: "mutated_bloodveld", weight: 2 },
                     { id: "vampyre_juvinate", weight: 2 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
                 ],
             ]),
             events: roomEvents("mutated_bloodveld", "vampyre_juvinate", 36),
             boss: "tob_sotetseg",
-            bossHp: 8000,
+            // Seconds for all its speed points (mid)
+            par: 90,
+            bossHp: 48000,
         },
         3,
     ),
@@ -281,11 +294,11 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(4, [
                 [
                     { id: "vyrewatch", weight: 2 },
-                    { id: "nylocas_hagios", weight: 2 },
+                    { id: "tob_nylocas_hagios", weight: 2 },
                 ],
                 [
                     { id: "vyrewatch", weight: 2 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                     { id: "mutated_bloodveld", weight: 1 },
                 ],
                 [
@@ -293,9 +306,11 @@ const TOB_ROOMS: RaidRoomDef[] = [
                     { id: "vyrewatch", weight: 2 },
                 ],
             ]),
-            events: roomEvents("vyrewatch_sentinel", "nylocas_hagios", 50),
+            events: roomEvents("vyrewatch_sentinel", "tob_nylocas_hagios", 50),
             boss: "xarpus",
-            bossHp: 24000,
+            // Seconds for all its speed points (late)
+            par: 150,
+            bossHp: 120000,
         },
         4,
     ),
@@ -310,21 +325,23 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                     { id: "vyrewatch", weight: 1 },
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
                     { id: "big_nylocas_ischyros", weight: 1 },
-                    { id: "big_nylocas_toxobolos", weight: 1 },
-                    { id: "big_nylocas_hagios", weight: 1 },
+                    { id: "tob_big_nylocas_toxobolos", weight: 1 },
+                    { id: "tob_big_nylocas_hagios", weight: 1 },
                 ],
             ]),
             events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),
             boss: "tob_verzik_vitur",
+            // Seconds for all its speed points (late, her three forms)
+            par: 150,
             // Each of her three forms has this many hitpoints
-            bossHp: 16000,
+            bossHp: 48000,
         },
         5,
     ),
@@ -354,8 +371,8 @@ export const RAID_MAPS: MapDef[] = [
             "**A melee raid in six rooms.** Survive each room's waves on the way through " +
             "Morytania, then kill its boss to move on: the Maiden, the Bloat, Nylocas Vasilias, " +
             "Sotetseg, Xarpus, then Verzik in Vampyrium.\n\n" +
-            "**Bosses pray against missiles and magic**, which do only 30% of their damage to them, " +
-            "and their bullets leave a gap up close.\n\n" +
+            "**Bosses pray against missiles and magic**, which do only 15% of their damage to them, " +
+            "and there's nowhere safe by them: up close they stomp, bite and burst.\n\n" +
             "**Raid points** come from fast, clean rooms. They pay coins, buy supplies between " +
             "rooms, and raise your chance of a purple at the end.\n\n" +
             "**Portals:** once you've killed a room's boss, its hall has a portal straight to it " +
@@ -371,13 +388,14 @@ export const RAID_MAPS: MapDef[] = [
         spawn: TOB_ROOMS[0].start,
         // As hard as the Inferno, the campaign's hardest map
         difficulty: { hp: 3.75, damage: 2.7 },
-        hard: { hp: 1.4, damage: 1.2 },
+        // Hard mode, and expert with it: half as many bullets again in every pattern
+        hard: { hp: 1.4, damage: 1.2, bullets: 1.5 },
         ...allOf(TOB_ROOMS),
         raid: { rooms: TOB_ROOMS },
         finalBossWarning: "The Theatre's curtain rises... Verzik Vitur awaits!",
         victoryText: "The Theatre of Blood is complete!",
         music: "Massacre",
         scaperune: true,
-        brightness: 0.85,
+        brightness: 1,
     },
 ];
