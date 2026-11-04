@@ -831,6 +831,8 @@ export class Sim {
     tombsPath: string | undefined;
     // The paths done, in the order they were
     tombsPathsDone: string[] = [];
+    // Ticks spent in the Nexus, which the run's clock leaves out
+    nexusTicks = 0;
     // The Apmeken room while the party's in it
     apmeken: ApmekenRoom | undefined;
     raidStageTick = 0;
@@ -1500,8 +1502,11 @@ export class Sim {
     }
 
     // Run time; stops when the run ends, though ticks carry on for animations
+    // The run's time: in the Tombs, not counting what's spent in the Nexus, where the clock stops
     get seconds(): number {
-        return (this.endTick >= 0 ? this.endTick : this.tick) / TICKS_PER_SECOND;
+        return (
+            ((this.endTick >= 0 ? this.endTick : this.tick) - this.nexusTicks) / TICKS_PER_SECOND
+        );
     }
 
     // Where the run is in the map's waves and events: the whole run outside
@@ -2311,6 +2316,9 @@ export class Sim {
             return;
         }
         this.tick++;
+        if (this.map.tombs && this.tombsPath === undefined) {
+            this.nexusTicks++;
+        }
         // The final boss has fallen (BossDef.fallSeconds): its death plays out,
         // and then the run's won, from when it fell
         if (this.victoryAt >= 0 && this.tick >= this.victoryAt) {

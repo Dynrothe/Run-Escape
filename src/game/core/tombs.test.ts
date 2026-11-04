@@ -164,6 +164,18 @@ describe("the Tombs of Amascut", () => {
         expect(sim.raidLevel).toBe(0);
     });
 
+    it("stop the run's clock in the Nexus, and start it again in a path's room", () => {
+        const sim = tombs([]);
+        sim.weapons = [];
+        seconds(sim, 3);
+        expect(sim.seconds).toBe(0);
+        sim.player.x = sim.player.prevX = 1031;
+        sim.step();
+        expect(sim.tombsPath).toBe("apmeken");
+        seconds(sim, 2, { x: 1036.5, y: 1060.5 });
+        expect(sim.seconds).toBeCloseTo(2, 1);
+    });
+
     it("take the party into a path's room through its door", () => {
         const sim = tombs([]);
         sim.weapons = [];
