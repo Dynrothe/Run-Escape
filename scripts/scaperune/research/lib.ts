@@ -133,6 +133,55 @@ export function cropGrid(
     return out;
 }
 
+// What a loc's model is like as one loc type: how far it sinks below its origin and stands
+// above it, how far it reaches past its tiles (all in tiles), and its triangles
+export type Shape = { sink: number; top: number; reach: number; tris: number };
+
+// A loc's models as one loc type, the model ids. A type with no model of its own draws nothing.
+export function getModelIds(type: { models?: number[][]; types?: number[] }, locType: number) {
+    const sets = type.models ?? [];
+    if (type.types && sets.length > 0) {
+        const at = type.types.indexOf(locType);
+        return at >= 0 ? sets[at] : [];
+    }
+    return sets.flat();
+}
+
+// Shapes by loc id and type, kept as they're asked for: trap-scan.ts and view-weight.ts share it
+export function createShapes(w: World): (id: number, locType: number) => Shape {
+    const models = w.factory.getModelLoader();
+    const shapes = new Map<string, Shape>();
+    return (id, locType) => {
+        const key = `${id}:${locType}`;
+        let shape = shapes.get(key);
+        if (shape) return shape;
+        const type = w.locTypes.load(id);
+        shape = { sink: 0, top: 0, reach: 0, tris: 0 };
+        const scaleX = type.modelSizeX / 128;
+        const scaleY = type.modelSizeHeight / 128;
+        const scaleZ = type.modelSizeY / 128;
+        const halfX = (type.sizeX * 128) / 2;
+        const halfZ = (type.sizeY * 128) / 2;
+        for (const modelId of getModelIds(type, locType)) {
+            const model = models.getModel(modelId);
+            if (!model) continue;
+            shape.tris += model.faceCount;
+            for (let v = 0; v < model.verticesCount; v++) {
+                const up = -model.verticesY[v] * scaleY;
+                shape.top = Math.max(shape.top, up / 128);
+                shape.sink = Math.max(shape.sink, -up / 128);
+                shape.reach = Math.max(
+                    shape.reach,
+                    (Math.abs(model.verticesX[v] * scaleX) - halfX) / 128,
+                    (Math.abs(model.verticesZ[v] * scaleZ) - halfZ) / 128,
+                );
+            }
+        }
+        shapes.set(key, shape);
+        return shape;
+    };
+}
+
 // A name fit for tables: names are often null, so say which it was
 export function locLabel(meta: LocMeta): string {
     return meta.name && meta.name !== "null" ? meta.name : `#${meta.id}`;

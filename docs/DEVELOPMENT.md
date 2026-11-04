@@ -786,6 +786,7 @@ scripts/scaperune/check-maps.ts          generated maps: every open tile reaches
                                          town's walls, gates, roads and fences, and how a map looks against the real
                                          world's numbers (ONLY=regex for some of them)
 scripts/scaperune/grid-hash.ts halloween a hash of what a recipe writes, to prove a shipped map hasn't moved
+                                         (CHECK=1 holds every shipped map to its pinned hash)
 scripts/scaperune/research/              measures real places and made maps the same way
 scripts/scaperune/check-prefabs.ts       every prefab, in every rotation: its whole floor, a way out
 scripts/scaperune/check-palette.ts       the palette map reads all that generated maps read
