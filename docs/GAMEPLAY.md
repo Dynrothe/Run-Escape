@@ -343,9 +343,10 @@ version and how to run it.
       again in every pattern (and so on expert too).
     - **Beaten on hard**: the Holy Scythe of Vitur, and **expert mode**: hard mode with more of the
       real raid. The Nylocas only take their own style (grey melee, green ranged, blue magic),
-      Nylocas Vasilias's colours too, the hall's Matomenos crawl to the Maiden and heal her, Xarpus
-      stares one way and hurts whoever hits him from in front, and Verzik's spider throws a ball
-      that kills anyone outside its glowing circle. Twice the coins, and one of Lil' Zik's looks
+      Nylocas Vasilias's colours too (weapons don't aim at one they can't hurt, and Verzik's
+      Nylocas take any style), the Maiden's Nylocas feed her more, Xarpus stares one way, saying
+      so a moment before he turns, and hurts whoever hits him from in front, and Verzik's spider
+      throws a ball that kills anyone outside its glowing circle. Twice the coins, and one of Lil' Zik's looks
       each clear.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle

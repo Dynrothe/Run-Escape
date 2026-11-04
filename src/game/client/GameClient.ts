@@ -613,7 +613,8 @@ export class GameClient implements GameFrameHandler {
         }
         const { mapId, hard } = this.store.getSnapshot();
         if (hard || isHardUnlocked(this.save, mapId)) {
-            this.store.set({ hard: !hard });
+            // Expert is hard mode too: off with it
+            this.store.set(hard ? { hard: false, expert: false } : { hard: true });
         }
     }
 

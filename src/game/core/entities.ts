@@ -136,6 +136,8 @@ export type BossState = {
     // BossDef.stare: the way it's staring (radians, none until it does), and when it next turns
     stareAngle?: number;
     nextStare?: number;
+    // Where it'll stare once it turns at nextStare, picked and said a moment before
+    stareNext?: number;
     // BossDef.stomp: hits since the player stepped under it, and the next one
     stomps?: number;
     nextStomp?: number;

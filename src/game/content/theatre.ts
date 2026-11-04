@@ -684,11 +684,13 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         homing: 0.05,
         message: "Verzik throws a ball that won't miss! Get in the glowing circle!",
         ground: {
-            // Away from her, so getting to it means leaving her be
+            // Away from her, so getting to it means leaving her be. Wider than her leap (2.4), so
+            // it can be dodged without leaving, and there as long as the ball can be (range over
+            // speed, about 17s), so it can't outlast it
             spots: [{ shape: "scatter", count: 1, spread: 9, awayFrom: 8 }],
-            radius: 1.6,
+            radius: 2.6,
             safe: true,
-            lingers: { seconds: 10, interval: 60, damage: 0 },
+            lingers: { seconds: 20, interval: 60, damage: 0 },
             spotAnim: 1581,
         },
     },
@@ -1046,29 +1048,88 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
         ),
         withScale(
             1.3,
-            raidVersion(verzikTwo, "tob_verzik_vitur_risen", VERZIK_TWO_ATTACKS, {
-                attackInterval: 2,
-                rises: { ...verzikTwo.boss!.rises!, into: "tob_verzik_vitur_spider" },
-            }),
+            withVerzikNylocas(
+                raidVersion(verzikTwo, "tob_verzik_vitur_risen", VERZIK_TWO_ATTACKS, {
+                    attackInterval: 2,
+                    rises: { ...verzikTwo.boss!.rises!, into: "tob_verzik_vitur_spider" },
+                }),
+            ),
         ),
         // Her room's small for all she throws: she throws it a little slower than her other forms
-        raidVersion(
-            byId("verzik_vitur_spider"),
-            "tob_verzik_vitur_spider",
-            VERZIK_THREE_ATTACKS,
-            {
-                attackInterval: 2.6,
-                yellows: {
-                    at: [0.66, 0.33],
-                    seconds: 12,
-                    attacks: ["Yellows", "Yellows", "Webs"],
-                    interval: 1.4,
-                    message: "Verzik throws her yellows! Get into a glowing pool as each lands!",
-                    endMessage: "Verzik's yellows are spent. She can be hurt again!",
+        withVerzikNylocas(
+            raidVersion(
+                byId("verzik_vitur_spider"),
+                "tob_verzik_vitur_spider",
+                VERZIK_THREE_ATTACKS,
+                {
+                    attackInterval: 2.6,
+                    yellows: {
+                        at: [0.66, 0.33],
+                        seconds: 12,
+                        attacks: ["Yellows", "Yellows", "Webs"],
+                        interval: 1.4,
+                        message:
+                            "Verzik throws her yellows! Get into a glowing pool as each lands!",
+                        endMessage: "Verzik's yellows are spent. She can be hurt again!",
+                    },
                 },
-            },
-            false,
-            2.9,
+                false,
+                2.9,
+            ),
         ),
+        // Expert mode's Maiden healers (nylocas_matomenos_healer's expertAs): they feed her more
+        (() => {
+            const healer = byId("nylocas_matomenos_healer");
+            return {
+                ...healer,
+                id: "tob_nylocas_matomenos_feeder",
+                expertAs: undefined,
+                heals: { ...healer.heals!, fraction: 0.035 },
+            };
+        })(),
+        // Verzik's Nylocas, any style hurting them (VERZIK_NYLOCAS)
+        ...VERZIK_NYLOCAS.map((id): EnemyDef => {
+            const base = byId(id);
+            const splits = base.splits && {
+                ...base.splits,
+                into: "tob_verzik_" + base.splits.into,
+            };
+            return {
+                ...base,
+                id: "tob_verzik_" + id,
+                onlyStyle: undefined,
+                ...(splits && { splits }),
+            };
+        }),
     ];
+}
+
+// The Nylocas Verzik calls in. On expert, Morytania's take only their own style, and with a whole
+// fight's worth coming a one-style build couldn't win, so the raid's Verzik calls in copies that
+// any style hurts (tob_verzik_ ids): the colours are Nylocas Vasilias's fight, not hers.
+const VERZIK_NYLOCAS = [
+    "nylocas_ischyros",
+    "nylocas_toxobolos",
+    "nylocas_hagios",
+    "big_nylocas_ischyros",
+];
+
+function withVerzikNylocas(enemy: EnemyDef): EnemyDef {
+    const boss = enemy.boss!;
+    const swap = (id: string) => (VERZIK_NYLOCAS.includes(id) ? "tob_verzik_" + id : id);
+    return {
+        ...enemy,
+        boss: {
+            ...boss,
+            summonsAt: boss.summonsAt?.map((s) => ({ ...s, enemyId: swap(s.enemyId) })),
+            attacks: boss.attacks.map((attack) =>
+                attack.summon
+                    ? {
+                          ...attack,
+                          summon: { ...attack.summon, enemyId: swap(attack.summon.enemyId) },
+                      }
+                    : attack,
+            ),
+        },
+    };
 }

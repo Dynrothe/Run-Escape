@@ -609,7 +609,11 @@ fight longer by making it harder, not by more hitpoints: the Maiden's healers (`
 (`colours.offStyle`: the other styles do that share, with the prayer on top for missiles and
 magic; its own gets through the prayer for `ownStyle`), Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by
 `stepOrdeal`, an exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that
-shoot (`RAID_NYLOCAS`, `tob_` ids), so Morytania's play as they did.
+shoot (`RAID_NYLOCAS`, `tob_` ids), so Morytania's play as they did. On expert, weapons skip
+an enemy `wrongStyle` says they can't hurt (`nearestEnemies`) and don't envenom it; the raid's
+Verzik calls in `tob_verzik_` Nylocas with no `onlyStyle`; a ground spot with `awayFrom` falls
+back to the walkable try furthest from the boss, never off the map; an ordeal waits while its
+boss's expert projectile is in the air; and a stare is said `STARE_WARNING` before it turns.
 Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`). On hard and expert, every
 pattern fires `MapDef.hard.bullets` times its bullets (`Sim.bulletScale`): a ring's gap is an
 angle and keeps its width, and a wall's or closing ring's gap grows with the count. Their

@@ -209,6 +209,8 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
+// Ticks between a staring boss saying it'll turn and turning (BossDef.stare)
+const STARE_WARNING = Math.round(0.75 * TICKS_PER_SECOND);
 const PLAYER_RADIUS = 0.35;
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
@@ -4299,14 +4301,23 @@ export class Sim {
         if (!this.expert || !stare || !state.enraged) {
             return;
         }
-        if (state.stareAngle === undefined || this.tick >= (state.nextStare ?? 0)) {
+        // Where it'll stare next is picked, and said, STARE_WARNING before it turns, so the
+        // hits that would land in front can stop in time
+        if (state.stareNext === undefined && this.tick >= (state.nextStare ?? 0) - STARE_WARNING) {
             const turns = 1 + this.rng.int(3);
-            state.stareAngle =
+            state.stareNext =
                 (state.stareAngle ?? this.rng.int(4) * (Math.PI / 2)) + turns * (Math.PI / 2);
-            state.nextStare = this.tick + secondsToTicks(stare.every);
+            state.nextStare = Math.max(state.nextStare ?? 0, this.tick + STARE_WARNING);
             this.emit({ type: "notice", message: stare.message });
         }
-        enemy.yaw = yawFromVector(fm.cos(state.stareAngle), fm.sin(state.stareAngle));
+        if (state.stareNext !== undefined && this.tick >= (state.nextStare ?? 0)) {
+            state.stareAngle = state.stareNext;
+            state.stareNext = undefined;
+            state.nextStare = this.tick + secondsToTicks(stare.every);
+        }
+        if (state.stareAngle !== undefined) {
+            enemy.yaw = yawFromVector(fm.cos(state.stareAngle), fm.sin(state.stareAngle));
+        }
     }
 
     // Whether the player's in front of a staring boss (BossDef.stare), and so hurt by hitting it
@@ -4378,9 +4389,16 @@ export class Sim {
     // The share of a weapon's hit an enemy takes, praying against its style (EnemyDef.protects)
     private prayedAgainst(enemy: Enemy): number {
         const protects = enemy.def.protects;
-        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle)
+        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle), but a boss's
+        // colour still only through its prayer's ownStyle (BossDef.colours), as on normal
         if (this.expert && enemy.def.onlyStyle) {
-            return 1;
+            const ownStyle = enemy.def.boss?.colours?.ownStyle;
+            const source = this.damageSource;
+            if (ownStyle === undefined || !protects || !source.startsWith("weapon:")) {
+                return 1;
+            }
+            const style = getWeaponStyle(getWeapon(source.slice("weapon:".length)));
+            return protects.styles.includes(style) ? ownStyle : 1;
         }
         const source = this.damageSource;
         if (!protects || !source.startsWith("weapon:")) {
@@ -5087,22 +5105,36 @@ export class Sim {
                     for (let i = 0; i < spots.count; i++) {
                         let x = player.x;
                         let y = player.y;
+                        // With awayFrom, the walkable try furthest from the boss if none will do:
+                        // never off the map or in a wall, where it couldn't be got to (a doom
+                        // ball's circle there killed for certain)
+                        let fallback: { x: number; y: number; away: number } | undefined;
+                        let found = false;
                         // Clear of the others; and with awayFrom, far enough from the boss, on
-                        // ground that can be walked to (so many tries, then the last one stands)
+                        // ground that can be walked to
                         for (let attempt = 0; attempt < SCATTER_ATTEMPTS; attempt++) {
                             const angle = this.rng.range(0, Math.PI * 2);
                             const distance = this.rng.range(1, spots.spread);
                             x = player.x + fm.cos(angle) * distance;
                             y = player.y + fm.sin(angle) * distance;
+                            const walkable =
+                                this.grid.contains(Math.floor(x), Math.floor(y)) &&
+                                this.isWalkableTile(Math.floor(x), Math.floor(y));
+                            const away = fm.hypot(x - enemy.x, y - enemy.y);
+                            if (walkable && (!fallback || away > fallback.away)) {
+                                fallback = { x, y, away };
+                            }
                             if (
                                 placed.every((p) => fm.hypot(p.x - x, p.y - y) >= apart) &&
-                                (!spots.awayFrom ||
-                                    (fm.hypot(x - enemy.x, y - enemy.y) >= spots.awayFrom &&
-                                        this.grid.contains(Math.floor(x), Math.floor(y)) &&
-                                        this.isWalkableTile(Math.floor(x), Math.floor(y))))
+                                (!spots.awayFrom || (away >= spots.awayFrom && walkable))
                             ) {
+                                found = true;
                                 break;
                             }
+                        }
+                        if (!found && spots.awayFrom) {
+                            x = fallback?.x ?? player.x;
+                            y = fallback?.y ?? player.y;
                         }
                         placed.push({ x, y });
                         add(x, y);
@@ -6129,6 +6161,10 @@ export class Sim {
         if (done >= of.at.length || enemy.hp > enemy.maxHp * of.at[done]) {
             return;
         }
+        // Not with expert's doom ball still coming: it and a yellow's pool at once is too much
+        if (this.enemyProjectiles.some((p) => p.enemyUid === enemy.uid && p.attack?.expert)) {
+            return;
+        }
         // One at a time, however far a hit took it past them
         let next = done + 1;
         while (next < of.at.length && enemy.hp <= enemy.maxHp * of.at[next]) {
@@ -7074,8 +7110,16 @@ export class Sim {
             const hero = this.hero;
             if (this.tick >= (hero.staredUntil ?? 0)) {
                 hero.staredUntil = this.tick + secondsToTicks(0.5);
-                const stare = enemy.def.boss!.stare!;
-                this.damagePlayer(stare.damage * this.map.difficulty.damage, enemy.def.id, false);
+                // As its own hits do: hard's share, and armour taking at most its cap
+                const boss = enemy.def.boss!;
+                this.damagePlayer(
+                    boss.stare!.damage * enemy.damageScale,
+                    enemy.def.id,
+                    false,
+                    undefined,
+                    false,
+                    boss.armorCap,
+                );
             }
             return 0;
         }
@@ -7940,6 +7984,10 @@ export class Sim {
     // Venom damage every second for this many ticks. Topped up rather than
     // started again, so its next hit still comes on time.
     private envenom(enemy: Enemy, venom: number, ticks: number): void {
+        // A hit an expert Nylocas won't take doesn't poison or burn it either (EnemyDef.onlyStyle)
+        if (this.wrongStyle(enemy)) {
+            return;
+        }
         if (enemy.venomEnd < this.tick) {
             enemy.venomNext = this.tick + TICKS_PER_SECOND;
             enemy.venom = 0;
@@ -8009,7 +8057,8 @@ export class Sim {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
         for (const enemy of this.enemies) {
-            if (enemy.dead || enemy.shieldEnd > this.tick) {
+            // Not one the weapon can't hurt: an expert Nylocas of another style
+            if (enemy.dead || enemy.shieldEnd > this.tick || this.wrongStyle(enemy)) {
                 continue;
             }
             const dx = enemy.x - x;

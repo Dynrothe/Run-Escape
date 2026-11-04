@@ -5164,7 +5164,9 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.5,
-        // Crawls to the Maiden and feeds her, as in OSRS: kill it on the way
+        // Crawls to the Maiden and feeds her, as in OSRS: kill it on the way. On a raid's
+        // expert mode, it feeds her more (theatre.ts)
+        expertAs: "tob_nylocas_matomenos_feeder",
         heals: {
             fraction: 0.02,
             interval: 1.5,

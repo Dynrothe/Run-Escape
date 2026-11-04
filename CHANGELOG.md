@@ -24,6 +24,15 @@ the version in the corner).
   her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
   Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
 - The Theatre of Blood's green and blue Nylocas shoot from range.
+- Expert mode in the Theatre of Blood:
+  - Xarpus's stare hurts properly, and he says he's turning a moment before he does.
+  - Weapons don't aim at a Nylocas they can't hurt, and don't poison or burn it either.
+  - Verzik's Nylocas take any style, so a one-style build can beat her.
+  - The Maiden's Nylocas feed her more.
+  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+    can reach. Her yellows wait until it's landed.
+  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
+- Turning hard mode off turns expert off with it.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04

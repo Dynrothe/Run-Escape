@@ -903,6 +903,112 @@ describe("expert mode", () => {
         expect(sim.damageEnemy(xarpus, 100, 0, sim.player.x, sim.player.y)).toBeGreaterThan(0);
     });
 
+    it("has Xarpus's stare hurt as his hits do, armour and all, and say so before he turns", () => {
+        const sim = raid(true);
+        const xarpus = sim.spawnEnemy(getEnemy("xarpus"), "boss", { x: 1030.5, y: 1030.5 })!;
+        const state = xarpus.bossState!;
+        state.enraged = true;
+        sim["stepStare"](xarpus);
+        // Said, but not turned yet
+        expect(state.stareNext).toBeDefined();
+        expect(state.stareAngle).toBeUndefined();
+        sim.tick = state.nextStare!;
+        sim["stepStare"](xarpus);
+        expect(state.stareAngle).toBeDefined();
+        expect(state.stareNext).toBeUndefined();
+        // Hitting it from in front with lots of armour still hurts: armour takes at most half
+        const angle = state.stareAngle!;
+        sim.player.x = sim.player.prevX = xarpus.x + Math.cos(angle) * 3;
+        sim.player.y = sim.player.prevY = xarpus.y + Math.sin(angle) * 3;
+        sim.stats.armor = 1000;
+        sim.player.invulnerable = 0;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        const hp = sim.player.hp;
+        expect(sim.damageEnemy(xarpus, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        const stare = getEnemy("xarpus").boss!.stare!;
+        expect(hp - sim.player.hp).toBeGreaterThanOrEqual(
+            Math.floor(stare.damage * xarpus.damageScale * 0.5),
+        );
+    });
+
+    it("leaves a Nylocas a weapon can't hurt alone: no aiming at it, and no venom", () => {
+        const sim = raid(true);
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        sim["damageSource"] = "weapon:toxic_blowpipe";
+        expect(sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5)).not.toContain(grey);
+        sim["envenom"](grey, 50, 100);
+        expect(grey.venom).toBe(0);
+        // Its own style aims at it as ever
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5)).toContain(grey);
+    });
+
+    it("has the raid's Verzik call in Nylocas any style hurts, Morytania's as they were", () => {
+        for (const id of ["tob_verzik_vitur_risen", "tob_verzik_vitur_spider"]) {
+            const boss = getEnemy(id).boss!;
+            const called = [
+                ...(boss.summonsAt ?? []).map((s) => s.enemyId),
+                ...boss.attacks.flatMap((a) => (a.summon ? [a.summon.enemyId] : [])),
+            ];
+            expect(called.length, id).toBeGreaterThan(0);
+            for (const enemyId of called) {
+                expect(getEnemy(enemyId).onlyStyle, `${id}: ${enemyId}`).toBeUndefined();
+            }
+        }
+        expect(getEnemy("verzik_vitur_risen").boss!.summonsAt![0].enemyId).toBe("nylocas_ischyros");
+        expect(hits(raid(true), "tob_verzik_nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
+    });
+
+    it("has Nylocas Vasilias's colour still pray for its own style's share on expert", () => {
+        const sim = raid(true);
+        const own = getEnemy("nylocas_vasilias").boss!.colours!.ownStyle!;
+        // Big hits, so rounding to whole numbers doesn't hide the share
+        const dealt = (id: string, weaponId: string) => {
+            const enemy = sim.spawnEnemy(getEnemy(id), "boss", { x: 1030.5, y: 1030.5 })!;
+            sim["damageSource"] = `weapon:${weaponId}`;
+            let total = 0;
+            for (let i = 0; i < 40; i++) {
+                total += sim.damageEnemy(enemy, 100, 0, sim.player.x, sim.player.y);
+            }
+            enemy.dead = true;
+            return total;
+        };
+        const ranged = dealt("nylocas_vasilias_ranged", "twisted_bow");
+        const melee = dealt("nylocas_vasilias", "scythe_of_vitur");
+        expect(ranged / melee).toBeCloseTo(own, 1);
+        expect(hits(sim, "nylocas_vasilias_ranged", "scythe_of_vitur")).toBe(0);
+    });
+
+    it("feeds the Maiden more on expert", () => {
+        const normal = raid(false).spawnEnemy(getEnemy("nylocas_matomenos_healer"), "normal", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        const expert = raid(true).spawnEnemy(getEnemy("nylocas_matomenos_healer"), "normal", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        expect(expert.def.heals!.fraction).toBeGreaterThan(normal.def.heals!.fraction);
+        expect(expert.def.heals!.targets).toEqual(normal.def.heals!.targets);
+    });
+
+    it("holds Verzik's yellows until her doom ball's landed", () => {
+        const sim = raid(true);
+        const def = getEnemy("tob_verzik_vitur_spider");
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        const ball = def.boss!.attacks.find((a) => a.expert)!;
+        boss.hp = Math.floor(boss.maxHp * def.boss!.yellows!.at[0]);
+        sim.enemyProjectiles.push({ enemyUid: boss.uid, attack: ball } as never);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        sim.enemyProjectiles = [];
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeDefined();
+    });
+
     it("has Verzik's green ball spare only whoever's in its circle", () => {
         const sim = raid(true);
         const spider = getEnemy("tob_verzik_vitur_spider");
