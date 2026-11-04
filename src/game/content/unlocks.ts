@@ -13,6 +13,8 @@ export type LockableItem = {
     name: string;
     kind: "weapon" | "passive" | "item";
     iconObjId: number;
+    // A passive's interface sprite, shown instead of the item (PassiveDef.iconSpriteId)
+    iconSpriteId?: number;
     unlock: UnlockTask;
 };
 
@@ -30,6 +32,7 @@ export const LOCKABLE_ITEMS: LockableItem[] = [
                       name: p.name,
                       kind: "passive",
                       iconObjId: p.iconObjId,
+                      iconSpriteId: p.iconSpriteId,
                       unlock: p.unlock,
                   },
               ]
@@ -85,6 +88,7 @@ export type MapReward = {
     id: string;
     name: string;
     iconObjId: number;
+    iconSpriteId?: number;
     unlock: UnlockTask;
 };
 

@@ -11,6 +11,10 @@ the version in the corner).
   in an empty slot, or gear that beats what's worn without being worse at anything. Anything else
   still asks, as does replacing a piece of a set. Auto alch comes first if both are on.
 
+### Fixed
+
+- Augury and Rigour show their prayer icons instead of prayer scrolls. Fixed by Deivid Smarzaro.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

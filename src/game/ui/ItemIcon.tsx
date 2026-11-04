@@ -65,6 +65,7 @@ export class IconCache {
         return this.urls.get(IconCache.key(objId, count));
     }
 
+    // "" for a sprite the cache hasn't got
     getSprite(spriteId: number): string | undefined {
         return this.urls.get(IconCache.spriteKey(spriteId));
     }
@@ -220,9 +221,12 @@ function toDataUrl(argb: Int32Array, width = ICON_WIDTH, height = ICON_HEIGHT): 
     return canvas.toDataURL();
 }
 
-// An interface sprite in the middle of an item icon sized canvas (a missing
-// sprite comes out blank)
+// An interface sprite in the middle of an item icon sized canvas, or "" for one
+// the cache hasn't got, so that the item's shown instead
 function spriteToDataUrl(sprite: SpriteImage): string {
+    if (sprite.width <= 0 || sprite.height <= 0) {
+        return "";
+    }
     const argb = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
     const offsetX = Math.floor((ICON_WIDTH - sprite.width) / 2);
     const offsetY = Math.floor((ICON_HEIGHT - sprite.height) / 2);
@@ -260,7 +264,8 @@ function coinStackCount(count: number): number {
 
 type Props = {
     objId: number;
-    // An interface sprite to show instead of the item (Piety's prayer icon)
+    // An interface sprite to show instead of the item (Piety's prayer icon),
+    // unless the cache hasn't got it
     spriteId?: number;
     // Display height in pixels (icons are 36x32)
     size?: number;
@@ -269,10 +274,11 @@ type Props = {
 
 export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.Element {
     const stack = objId === 995 ? coinStackCount(count) : 1;
-    const key =
-        spriteId !== undefined ? IconCache.spriteKey(spriteId) : IconCache.key(objId, stack);
+    const sprite =
+        spriteId !== undefined && iconCache.getSprite(spriteId) !== "" ? spriteId : undefined;
+    const key = sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId, stack);
     const cached = (): string | undefined =>
-        spriteId !== undefined ? iconCache.getSprite(spriteId) : iconCache.get(objId, stack);
+        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId, stack);
     const [loaded, setLoaded] = useState(() => ({ key, url: cached() }));
     // When the item changes (a reroll), never the last item's icon while the
     // new one is drawn
@@ -286,15 +292,15 @@ export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.
                 setLoaded({ key, url });
             }
         };
-        if (spriteId !== undefined) {
-            iconCache.requestSprite(spriteId, callback);
+        if (sprite !== undefined) {
+            iconCache.requestSprite(sprite, callback);
         } else {
             iconCache.request(objId, stack, callback);
         }
         return () => {
             cancelled = true;
         };
-    }, [key, objId, stack, spriteId]);
+    }, [key, objId, stack, sprite]);
     const width = Math.round((size * ICON_WIDTH) / ICON_HEIGHT);
     // Nearest neighbour keeps the client's crisp pixels when scaling up, but
     // scaling down that way drops whole rows and columns (and with them bits of

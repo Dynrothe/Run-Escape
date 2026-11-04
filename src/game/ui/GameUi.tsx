@@ -1405,7 +1405,11 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
                             key={reward.kind + reward.id}
                             className={"ui-reward" + (earned(reward) ? "" : " ui-reward-locked")}
                         >
-                            <ItemIcon objId={reward.iconObjId} size={20} />
+                            <ItemIcon
+                                objId={reward.iconObjId}
+                                spriteId={reward.iconSpriteId}
+                                size={20}
+                            />
                             {reward.name}
                         </span>
                     ))}
