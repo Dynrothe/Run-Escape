@@ -263,15 +263,15 @@ function seconds(sim: Sim, count: number, at?: { x: number; y: number }): void {
 
 // Out of the walls one at a time: on until the whole wave's out
 function allOut(sim: Sim): void {
-    for (let i = 0; i < 40 && sim.apmeken!.pending.length > 0; i++) {
+    for (let i = 0; i < 40 && sim.tombsRoom!.pending.length > 0; i++) {
         seconds(sim, APMEKEN.stagger, { x: sim.player.x, y: sim.player.y });
     }
-    expect(sim.apmeken!.pending).toHaveLength(0);
+    expect(sim.tombsRoom!.pending).toHaveLength(0);
 }
 
 function killGroup(sim: Sim): void {
     allOut(sim);
-    const group = new Set(sim.apmeken!.group);
+    const group = new Set(sim.tombsRoom!.group);
     for (const enemy of sim.enemies) {
         if (group.has(enemy.uid) && !enemy.dead) {
             sim.damageEnemy(enemy, 1e9, 0, enemy.x, enemy.y);
@@ -282,11 +282,11 @@ function killGroup(sim: Sim): void {
 describe("the Apmeken room", () => {
     it("sends its first wave as the party comes in, out of the walls one at a time", () => {
         const sim = apmeken();
-        expect(sim.apmeken!.wave).toBe(0);
-        expect(sim.apmeken!.group).toHaveLength(1);
-        expect(sim.apmeken!.pending).toHaveLength(APMEKEN_WAVES[0].length - 1);
+        expect(sim.tombsRoom!.wave).toBe(0);
+        expect(sim.tombsRoom!.group).toHaveLength(1);
+        expect(sim.tombsRoom!.pending).toHaveLength(APMEKEN_WAVES[0].length - 1);
         allOut(sim);
-        const group = sim.enemies.filter((e) => sim.apmeken!.group.includes(e.uid));
+        const group = sim.enemies.filter((e) => sim.tombsRoom!.group.includes(e.uid));
         expect(group.map((e) => e.def.id).sort()).toEqual([...APMEKEN_WAVES[0]].sort());
     });
 
@@ -294,14 +294,14 @@ describe("the Apmeken room", () => {
         const sim = apmeken();
         killGroup(sim);
         sim.step();
-        expect(sim.apmeken!.wave).toBe(1);
+        expect(sim.tombsRoom!.wave).toBe(1);
         expect(sim.pickups.some((p) => p.kind === "casket")).toBe(true);
     });
 
     it("sends the next anyway once a wave's been about too long", () => {
         const sim = apmeken();
         seconds(sim, APMEKEN.waveSeconds + 1, { x: 1036.5, y: 1060.5 });
-        expect(sim.apmeken!.wave).toBeGreaterThanOrEqual(1);
+        expect(sim.tombsRoom!.wave).toBeGreaterThanOrEqual(1);
     });
 
     it("has an issue come up, fixed by standing at it", () => {
@@ -311,7 +311,7 @@ describe("the Apmeken room", () => {
         expect(issue).toBeDefined();
         seconds(sim, APMEKEN.fixSeconds[issue.kind] + 0.2, { x: issue.x, y: issue.y - 1 });
         expect(sim.tombsIssue).toBeUndefined();
-        expect(sim.apmeken!.missed).toBe(0);
+        expect(sim.tombsRoom!.missed).toBe(0);
     });
 
     it("hurts everyone for an issue left too long, and more for the next", () => {
@@ -321,7 +321,7 @@ describe("the Apmeken room", () => {
         const taken = sim.damageTaken;
         seconds(sim, APMEKEN.deadline + 0.5, { x: 1036.5, y: 1060.5 });
         expect(sim.tombsIssue).toBeUndefined();
-        expect(sim.apmeken!.missed).toBe(1);
+        expect(sim.tombsRoom!.missed).toBe(1);
         expect(sim.damageTaken).toBeGreaterThan(taken);
     });
 
@@ -331,10 +331,10 @@ describe("the Apmeken room", () => {
             killGroup(sim);
             sim.step();
         }
-        expect(sim.apmeken!.doneTick).toBeDefined();
+        expect(sim.tombsRoom!.doneTick).toBeDefined();
         // On to Ba-Ba: she rises once someone's walked in, and the path's done once she's dead
         seconds(sim, 3.5, { x: 1036.5, y: 1020.5 });
-        expect(sim.apmeken!.boss).toEqual({ uid: -1, beatenTick: undefined });
+        expect(sim.tombsRoom!.boss).toEqual({ uid: -1, beatenTick: undefined });
         seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         const baba = sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
         expect(baba).toBeDefined();
@@ -368,7 +368,7 @@ describe("the Apmeken room", () => {
         expect(apmeken().tombsPathLevel).toBe(0);
         const master = apmeken(["pathmaster"]);
         expect(master.tombsPathLevel).toBe(3);
-        const room = master.apmeken!;
+        const room = master.tombsRoom!;
         expect(room.group.length + room.pending.length).toBe(APMEKEN_WAVES[0].length + 3);
     });
 });
@@ -414,7 +414,7 @@ describe("a death in the Tombs", () => {
         sim.player.invulnerable = 0;
         sim["damagePlayer"](1e6, "test", false, undefined, true);
         if (!sim.runOver) {
-            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.tombsRoom!.started).toBe(false);
             sim.step();
         }
     }
@@ -424,14 +424,14 @@ describe("a death in the Tombs", () => {
         room.gate = { x: 1030, locId: 45135, tiles: [] };
         try {
             const sim = apmeken();
-            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.tombsRoom!.started).toBe(false);
             seconds(sim, 3, { x: 1036.5, y: 1060.5 });
-            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.tombsRoom!.started).toBe(false);
             expect(sim.enemies.filter((e) => !e.dead)).toHaveLength(0);
             expect(sim.tombsGateShut).toBe(false);
             seconds(sim, 0.2, { x: 1028.5, y: 1060.5 });
-            expect(sim.apmeken!.started).toBe(true);
-            expect(sim.apmeken!.wave).toBe(0);
+            expect(sim.tombsRoom!.started).toBe(true);
+            expect(sim.tombsRoom!.wave).toBe(0);
             expect(sim.tombsGateShut).toBe(true);
             // Shut: back east is a wall
             sim.player.x = sim.player.prevX = 1035;
@@ -442,7 +442,7 @@ describe("a death in the Tombs", () => {
             sim.player.invulnerable = 0;
             sim["damagePlayer"](1e6, "test", false, undefined, true);
             expect(sim.runOver).toBe(false);
-            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.tombsRoom!.started).toBe(false);
             expect(sim.tombsGateShut).toBe(false);
             expect(sim.player.x).toBeCloseTo(1036.5);
             expect(sim.player.hp).toBe(sim.player.maxHp);
@@ -497,14 +497,14 @@ describe("a death in the Tombs", () => {
         sim.step();
         killGroup(sim);
         sim.step();
-        expect(sim.apmeken!.wave).toBe(2);
+        expect(sim.tombsRoom!.wave).toBe(2);
         die(sim);
         expect(sim.runOver).toBe(false);
         expect(sim.tombsDeaths).toBe(1);
         expect(sim.player.hp).toBe(sim.player.maxHp);
         expect(sim.player.y).toBeCloseTo(1060.5);
-        expect(sim.apmeken!.wave).toBe(0);
-        expect(sim.apmeken!.beaten).toBe(1);
+        expect(sim.tombsRoom!.wave).toBe(0);
+        expect(sim.tombsRoom!.beaten).toBe(1);
     });
 
     it("gives nothing for the waves beaten before, then as usual past them", () => {
@@ -513,7 +513,7 @@ describe("a death in the Tombs", () => {
         sim.step();
         die(sim);
         expect(sim.tombsReplaying).toBe(true);
-        const group = sim.enemies.filter((e) => sim.apmeken!.group.includes(e.uid));
+        const group = sim.enemies.filter((e) => sim.tombsRoom!.group.includes(e.uid));
         expect(group.every((e) => e.xp === 0)).toBe(true);
         const caskets = () => sim.pickups.filter((p) => p.kind === "casket").length;
         const before = caskets();
@@ -573,7 +573,7 @@ describe("Ba-Ba", () => {
         sim["damagePlayer"](1e6, "test", false, undefined, true);
         expect(sim.runOver).toBe(false);
         expect(sim.player.y).toBeCloseTo(1020.5);
-        expect(sim.apmeken!.boss!.uid).toBe(-1);
+        expect(sim.tombsRoom!.boss!.uid).toBe(-1);
         seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         const again = baba(sim);
         expect(again.hp).toBe(again.maxHp);

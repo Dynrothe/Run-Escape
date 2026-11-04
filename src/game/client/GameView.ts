@@ -662,7 +662,7 @@ export class GameView {
     // the room's done, as the loc stands there turned a quarter
     private drawTombsGate(actors: ActorRenderer, sim: Sim): void {
         const gate = sim.tombsGate;
-        if (!gate || !sim.apmeken || sim.apmeken.doneTick !== undefined || sim.apmeken.boss) {
+        if (!gate || !sim.tombsRoom || sim.tombsRoom.doneTick !== undefined || sim.tombsRoom.boss) {
             return;
         }
         const model = this.assets.get("loc:" + gate.locId);

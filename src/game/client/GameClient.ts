@@ -2355,12 +2355,12 @@ export class GameClient implements GameFrameHandler {
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
             tombsWave:
-                sim.apmeken && !sim.apmeken.boss
+                sim.tombsRoom && !sim.tombsRoom.boss
                     ? {
-                          wave: Math.max(0, sim.apmeken.wave) + 1,
+                          wave: Math.max(0, sim.tombsRoom.wave) + 1,
                           of: APMEKEN_WAVES.length,
-                          waiting: !sim.apmeken.started,
-                          done: sim.apmeken.doneTick !== undefined,
+                          waiting: !sim.tombsRoom.started,
+                          done: sim.tombsRoom.doneTick !== undefined,
                       }
                     : undefined,
             devGod: import.meta.env.DEV ? sim.devGod : undefined,

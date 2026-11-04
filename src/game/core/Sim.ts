@@ -734,7 +734,7 @@ export type HeroOptions = {
 // The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
 // issue that's up (which spot, since when, and how long it's been stood at), when the next is due,
 // how many have gone this wave, when the room was beaten, and the waves beaten before a death
-type ApmekenRoom = {
+type TombsRoom = {
     wave: number;
     group: number[];
     waveTick: number;
@@ -884,7 +884,7 @@ export class Sim {
         nextTick: number;
     }[] = [];
     // The Apmeken room while the party's in it
-    apmeken: ApmekenRoom | undefined;
+    tombsRoom: TombsRoom | undefined;
     raidStageTick = 0;
     // Who's still to have their turn at a cleared room's supply chest
     private raidShopQueue: number[] = [];
@@ -2969,7 +2969,7 @@ export class Sim {
         }
         // A Tombs room's: tougher with each of its waves, and with its path level. Tried again,
         // the waves already beaten give no experience.
-        if (this.apmeken && !boss) {
+        if (this.tombsRoom && !boss) {
             const room = this.tombsRoomScale();
             hp *= room.hp;
             hitScale *= room.damage;
@@ -2979,7 +2979,7 @@ export class Sim {
         }
         // A Tombs path's boss: tougher with its path level, for a party that's been round more
         // of the raid first (TOMBS_BOSSES)
-        if (this.apmeken && boss) {
+        if (this.tombsRoom && boss) {
             const level = this.tombsPathLevel;
             hp *= 1 + TOMBS_BOSSES.levelHp * level;
             hitScale *= 1 + TOMBS_BOSSES.levelDamage * level;
@@ -4343,7 +4343,7 @@ export class Sim {
         this.moveParty(arrive);
         this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
         if (path.room?.puzzle === "apmeken") {
-            this.apmeken = {
+            this.tombsRoom = {
                 wave: -1,
                 group: [],
                 waveTick: this.tick,
@@ -4414,7 +4414,7 @@ export class Sim {
     // What a Tombs room's enemies are multiplied by: more with each of its waves (so it ends far
     // harder than it starts, as a run levels up in it) and with each path level
     private tombsRoomScale(): { hp: number; damage: number } {
-        const wave = Math.max(0, this.apmeken?.wave ?? 0);
+        const wave = Math.max(0, this.tombsRoom?.wave ?? 0);
         const level = this.tombsPathLevel;
         return {
             hp: 1 + APMEKEN.waveHp * wave + APMEKEN.levelHp * level,
@@ -4430,7 +4430,7 @@ export class Sim {
     // the map's
     private get activeWaves(): WaveDef[] {
         if (this.map.tombs) {
-            const room = this.apmeken;
+            const room = this.tombsRoom;
             return room && room.started && room.doneTick === undefined
                 ? [this.apmekenTrickle(room.wave)]
                 : [];
@@ -4446,7 +4446,7 @@ export class Sim {
 
     // The next of the Apmeken room's eight waves, or once they're all done, the room's done
     private nextApmekenWave(): void {
-        const room = this.apmeken!;
+        const room = this.tombsRoom!;
         room.wave++;
         room.waveTick = this.tick;
         room.missed = 0;
@@ -4483,7 +4483,7 @@ export class Sim {
 
     // Into the path's boss's arena, its room beaten: the boss rises once someone walks in
     private enterTombsBoss(
-        room: ApmekenRoom,
+        room: TombsRoom,
         boss: NonNullable<NonNullable<TombsPathDef["room"]>["boss"]>,
     ): void {
         for (const enemy of this.enemies) {
@@ -4502,7 +4502,7 @@ export class Sim {
     }
 
     // The boss's fight: it rises once someone's past the line, and once it's dead the path's done
-    private stepTombsBoss(room: ApmekenRoom): void {
+    private stepTombsBoss(room: TombsRoom): void {
         const def = this.tombsPathRoom?.boss;
         const fight = room.boss!;
         if (!def) {
@@ -4595,7 +4595,7 @@ export class Sim {
 
     // Jungle Japes: a baboon killed in a path boss's fight leaves a banana peel where it fell
     private dropTombsPeel(enemy: Enemy): void {
-        const fight = this.apmeken?.boss;
+        const fight = this.tombsRoom?.boss;
         if (
             !fight ||
             fight.uid === -1 ||
@@ -4678,7 +4678,7 @@ export class Sim {
     // Dev only: past a Tombs room to its boss, for testing the boss without the puzzle each time.
     // The room counts as done, with nothing for it.
     devSkipToTombsBoss(): boolean {
-        const room = this.apmeken;
+        const room = this.tombsRoom;
         const boss = this.tombsPathRoom?.boss;
         if (!room || room.boss || !boss) {
             return false;
@@ -4703,7 +4703,7 @@ export class Sim {
     }
 
     // The next of a wave's baboons out of the walls, once it's time
-    private stepApmekenGroup(room: ApmekenRoom): void {
+    private stepApmekenGroup(room: TombsRoom): void {
         if (room.pending.length === 0 || this.tick < room.nextOutTick) {
             return;
         }
@@ -4724,7 +4724,7 @@ export class Sim {
     // The Apmeken room: its waves, one when the last is beaten (with a casket for it) or has been
     // about too long, and the issues that come on a timer, fixed by standing at them
     private stepApmeken(): void {
-        const room = this.apmeken;
+        const room = this.tombsRoom;
         const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
         if (!room || !spots || this.runOver || this.state !== "playing") {
             return;
@@ -4774,7 +4774,7 @@ export class Sim {
         this.stepApmekenIssue(room, spots);
     }
 
-    private stepApmekenIssue(room: ApmekenRoom, spots: TombsSpotDef[]): void {
+    private stepApmekenIssue(room: TombsRoom, spots: TombsSpotDef[]): void {
         const issue = room.issue;
         if (!issue) {
             if (this.tick >= room.nextIssueTick) {
@@ -4867,7 +4867,7 @@ export class Sim {
 
     // Whether its barrier's shut: the room's begun and isn't done, so nobody goes back
     get tombsGateShut(): boolean {
-        const room = this.apmeken;
+        const room = this.tombsRoom;
         return room !== undefined && room.started && room.doneTick === undefined && !room.boss;
     }
 
@@ -4894,7 +4894,7 @@ export class Sim {
 
     // Where the issue is, for the game's hint arrow over it
     get tombsIssue(): { x: number; y: number; kind: "pillar" | "vent" } | undefined {
-        const issue = this.apmeken?.issue;
+        const issue = this.tombsRoom?.issue;
         const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
         if (!issue || !spots) {
             return undefined;
@@ -4912,7 +4912,7 @@ export class Sim {
 
     // Whether the room's on a wave it had beaten before a death: those give nothing again
     get tombsReplaying(): boolean {
-        const room = this.apmeken;
+        const room = this.tombsRoom;
         return room !== undefined && room.wave <= room.beaten;
     }
 
@@ -4945,7 +4945,7 @@ export class Sim {
         }
         this.use(current);
         this.rescaleParty();
-        const room = this.apmeken;
+        const room = this.tombsRoom;
         const bossDef = path.room?.boss;
         if (room?.boss && bossDef) {
             this.moveParty(bossDef.arrive);
@@ -4996,7 +4996,7 @@ export class Sim {
             this.tombsPathsDone.push(this.tombsPath);
         }
         this.tombsPath = undefined;
-        this.apmeken = undefined;
+        this.tombsRoom = undefined;
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
                 this.vanish(enemy);
@@ -7315,7 +7315,7 @@ export class Sim {
 
     // Mind the Gap's gap at the foot of Ba-Ba's arena, open while she's up
     get tombsPit(): { x0: number; x1: number; y0: number; y1: number } | undefined {
-        const fight = this.apmeken?.boss;
+        const fight = this.tombsRoom?.boss;
         const pit = this.tombsPathRoom?.boss?.boulders?.pit;
         if (!fight || fight.uid === -1 || fight.beatenTick !== undefined || !pit) {
             return undefined;

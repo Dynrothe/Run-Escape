@@ -88,6 +88,23 @@ const APMEKEN: RoomCut = {
     arrive: [33, 13],
 };
 
+// The Het room, in square 57,82: Apmeken's room's twin, the entry on the west (local 11,30) and the
+// exit on the east (51,30), each behind a barrier (45135 at x 21 and 43, y 31 to 33). Turned half
+// round, as it's cut, so it's entered from the east as Apmeken's is: the entry's barrier is the
+// sim's line. In the cut's own tiles a tile (x, y) lies at (36 - x, 27 - y) once turned.
+const HET: RoomCut = {
+    x: 3662,
+    y: 5267,
+    sizeX: 37,
+    sizeY: 28,
+    plane: 0,
+    cell: [3, 0],
+    arrive: [32, 14],
+    turns: 2,
+};
+// Its entry barrier, in the cut's own tiles (local x 21 in square 57,82)
+const HET_GATE = { x: 7, y: [12, 13, 14] };
+
 // Ba-Ba's arena, in square 59,84: the entrance room on the west, with the teleport crystal
 // (local 18,32), the safe area as in OSRS, through a passage (its barrier, wall loc 45860 at x 20
 // and 21, comes out of the map: the sim holds the line instead) to the arena, her throne on the
@@ -148,7 +165,7 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA].map((cut) => {
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET].map((cut) => {
     const at = cellCorner(cut);
     return {
         cut,
@@ -164,6 +181,7 @@ const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA].map((cut) => {
 });
 const APMEKEN_ROOM = ROOMS[1];
 const BA_BA_ROOM = ROOMS[2];
+const HET_ROOM = ROOMS[3];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -280,6 +298,7 @@ function build(context: BuildContext): TileGrid {
         prefab.locs = prefab.locs.filter(
             (loc) =>
                 !(cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX) &&
+                !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
                 !(
                     cut === BA_BA_ARENA &&
                     (loc.id === BA_BA_BARRIER ||
