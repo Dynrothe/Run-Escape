@@ -184,7 +184,6 @@ function getSpotAnimIds(): number[] {
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
-        addImpact(guard?.open);
         addImpact(enemy.boss?.leash?.jump?.land);
         addImpact(enemy.boss?.intro?.land);
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
@@ -883,10 +882,13 @@ export class GameAssets {
         const player = this.getPlayerBake(slot);
         const appearanceKey = getAppearanceKey(appearance);
         const wanted = [...attackSeqs, ...offeredSeqs];
-        if (
-            lookHas(player.key, appearanceKey, wanted) ||
-            lookHas(player.pendingKey, appearanceKey, wanted)
-        ) {
+        if (lookHas(player.key, appearanceKey, wanted)) {
+            // What's drawn already is what's wanted, so another look on its way is out of date
+            // (the menus' look asked for as a run ends, and a Retry straight back into one)
+            player.pendingKey = undefined;
+            return;
+        }
+        if (lookHas(player.pendingKey, appearanceKey, wanted)) {
             return;
         }
         const seqs = wanted.filter((seq, i) => wanted.indexOf(seq) === i);

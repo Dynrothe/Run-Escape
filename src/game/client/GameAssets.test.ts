@@ -19,6 +19,7 @@ import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
     GameAssets,
+    getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
     getLookKey,
@@ -235,6 +236,35 @@ describe("player bakes", () => {
             special.special!.playerSeq,
         ]);
         expect(getRunAttackSeqs(sim)).not.toContain(REVIVE_SEQ);
+    });
+
+    test("a look asked for again while another bakes keeps it, not the other (Retry)", async () => {
+        // The bake itself, faked: each look's model, once it's let go
+        const waiting = new Map<string, () => void>();
+        const assets: GameAssets = Object.create(GameAssets.prototype);
+        Object.assign(assets, {
+            players: [],
+            actors: { removePage() {} },
+            bakeLook: (key: string) =>
+                new Promise((resolve) =>
+                    waiting.set(key, () =>
+                        resolve({ models: new Map([["player", { page: key }]]), stance: {} }),
+                    ),
+                ),
+        });
+        const fight = getCharacterAppearance("saradominist");
+        const menus = getCharacterAppearance(CHARACTERS[0].id);
+        const first = assets.setPlayerAppearance(fight);
+        [...waiting.values()][0]();
+        await first;
+        const page = () => (assets.getPlayer() as unknown as { page: string }).page;
+        const saradominist = page();
+        // The run ends: the menus' look starts baking. Retry: the fight's look again.
+        const back = assets.setPlayerAppearance(menus);
+        await assets.setPlayerAppearance(fight);
+        [...waiting.values()][1]();
+        await back;
+        expect(page()).toBe(saradominist);
     });
 
     test("on the menus have what a solo run starts with, so it needn't bake again", () => {
