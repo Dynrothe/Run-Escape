@@ -27,7 +27,6 @@ the version in the corner).
 - Expert mode in the Theatre of Blood:
   - Xarpus's stare hurts properly, and he says he's turning a moment before he does.
   - Weapons don't aim at a Nylocas they can't hurt, and don't poison or burn it either.
-  - Verzik's Nylocas take any style, so a one-style build can beat her.
   - The Maiden's Nylocas feed her more.
   - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
     can reach. Her yellows wait until it's landed.

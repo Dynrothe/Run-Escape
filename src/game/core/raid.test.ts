@@ -946,7 +946,7 @@ describe("expert mode", () => {
         expect(sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5)).toContain(grey);
     });
 
-    it("has the raid's Verzik call in Nylocas any style hurts, Morytania's as they were", () => {
+    it("keeps Verzik's Nylocas to their own style on expert: a party needs all three", () => {
         for (const id of ["tob_verzik_vitur_risen", "tob_verzik_vitur_spider"]) {
             const boss = getEnemy(id).boss!;
             const called = [
@@ -955,11 +955,9 @@ describe("expert mode", () => {
             ];
             expect(called.length, id).toBeGreaterThan(0);
             for (const enemyId of called) {
-                expect(getEnemy(enemyId).onlyStyle, `${id}: ${enemyId}`).toBeUndefined();
+                expect(getEnemy(enemyId).onlyStyle, `${id}: ${enemyId}`).toBeDefined();
             }
         }
-        expect(getEnemy("verzik_vitur_risen").boss!.summonsAt![0].enemyId).toBe("nylocas_ischyros");
-        expect(hits(raid(true), "tob_verzik_nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
     it("has Nylocas Vasilias's colour still pray for its own style's share on expert", () => {
