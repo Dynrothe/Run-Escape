@@ -26,6 +26,7 @@ import {
     MAX_ROOMS_PER_ADDRESS,
     MAX_WRONG_CODES_PER_MINUTE,
     RateLimit,
+    answerClose,
     clampInt,
     cleanId,
     cleanUnlocks,
@@ -279,11 +280,7 @@ export class Lobby extends DurableObject {
     }
 
     async webSocketClose(ws, code) {
-        try {
-            ws.close(code === 1005 ? 1000 : code);
-        } catch {
-            // Already closed
-        }
+        answerClose(ws, code);
     }
 
     // ---- What the rooms call ----

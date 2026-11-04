@@ -26,6 +26,7 @@ import {
     MEMBER_UPDATE_MS,
     OTHER_BUILD_TEXT,
     RateLimit,
+    answerClose,
     cleanId,
     cleanUnlocks,
     countryCode,
@@ -133,7 +134,10 @@ export class Room extends DurableObject {
                 this.receive(member, event.data);
             }
         });
-        socket.addEventListener("close", () => this.lost(member, socket));
+        socket.addEventListener("close", (event) => {
+            answerClose(socket, event.code);
+            this.lost(member, socket);
+        });
         socket.addEventListener("error", () => this.lost(member, socket));
     }
 

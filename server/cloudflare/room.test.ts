@@ -10,15 +10,26 @@ let gone: string[];
 
 class Socket {
     sent: any[] = [];
+    // The codes the room's closed it with
+    closes: number[] = [];
+    private listeners = new Map<string, (event: any) => void>();
     constructor(private readonly who: string) {}
     accept() {}
-    addEventListener() {}
+    addEventListener(type: string, listener: (event: any) => void) {
+        this.listeners.set(type, listener);
+    }
     send(text: string) {
         const message = JSON.parse(text);
         this.sent.push(message);
         log.push(`${this.who} ${message.t}`);
     }
-    close() {}
+    close(code: number) {
+        this.closes.push(code);
+    }
+    // The player's game closing it
+    closedByPlayer(code: number) {
+        this.listeners.get("close")?.({ code });
+    }
 }
 
 const env = {
@@ -188,5 +199,18 @@ describe("Cloudflare co-op room", () => {
         say(room, host, { t: "settings", open: false });
         vi.advanceTimersByTime(2000);
         expect(shown()).toEqual([undefined, undefined]);
+    });
+
+    it("answers a player's game closing its connection", async () => {
+        const { room, host, guest } = await party();
+        const guestSocket = guest.socket;
+        guestSocket.closedByPlayer(1001);
+        expect(guestSocket.closes).toEqual([1001]);
+        // Still held for their game to come back
+        expect(room.room.members).toContain(guest);
+        // No code given, which can't be sent back
+        const hostSocket = host.socket;
+        hostSocket.closedByPlayer(1005);
+        expect(hostSocket.closes).toEqual([1000]);
     });
 });

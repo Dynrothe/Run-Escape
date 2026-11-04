@@ -198,6 +198,18 @@ export function parseMessage(data) {
     return message;
 }
 
+// Answers a player's close. At this compatibility date Cloudflare leaves that
+// to us, and an unanswered one keeps the player's browser waiting until it
+// gives up and drops the connection, so it ends abnormally rather than cleanly.
+// 1005 (no code given) can't be sent back; a socket that's already gone throws.
+export function answerClose(socket, code) {
+    try {
+        socket.close(code === 1005 ? 1000 : code);
+    } catch {
+        // Already closed
+    }
+}
+
 // Counts a connection's messages and bytes each second; false once it's over
 export class RateLimit {
     second = 0;
