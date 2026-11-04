@@ -786,11 +786,10 @@ export class Sim {
     // Raids (MapDef.raid): the room the party's in, and where it's at: its waves, its boss's
     // fight, or cleared and about to move on (since raidStageTick)
     raidRoom = 0;
-    // The room's own clocks, apart from the run's: ticks since it began (what its waves and
-    // events go by), and the ticks until its boss comes, undefined once the portal's been taken
-    // or the boss has come
-    raidRoomTicks = 0;
-    raidBossTicks: number | undefined;
+    // The tick the room began (its waves and events go by its own clock, from then), and the
+    // tick its boss comes: when its waves are done, or now if the portal's taken
+    raidRoomStartTick = 0;
+    raidBossDueTick = 0;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
     raidStageTick = 0;
@@ -1105,7 +1104,7 @@ export class Sim {
         this.raidTeleportsLeft = this.raidTeleports;
         this.raidPortals = options.raidPortals ?? [];
         if (this.map.raid) {
-            this.raidBossTicks = this.raidWaveLength(0) * TICKS_PER_SECOND;
+            this.raidBossDueTick = this.raidWaveLength(0) * TICKS_PER_SECOND;
         }
         this.hardScale = this.hard ? getHardScale(this.map) : { hp: 1, damage: 1 };
         const party: HeroOptions[] = options.party ?? [
@@ -2457,7 +2456,25 @@ export class Sim {
     }
 
     private get directorSeconds(): number {
-        return this.map.raid ? this.raidRoomTicks / TICKS_PER_SECOND : this.mapSeconds;
+        return this.map.raid
+            ? (this.tick - this.raidRoomStartTick) / TICKS_PER_SECOND
+            : this.mapSeconds;
+    }
+
+    // What enemies' hitpoints and damage, and caskets, go by: the run's clock, or in a raid where
+    // its room would be with no boss time before it, so a long fight with an earlier boss doesn't
+    // make a later room's waves tougher than its `at` says
+    // A casket's tier goes by the run's time, or a raid's pace (paceSeconds)
+    private get casketSeconds(): number {
+        return this.raidRoomDef ? this.paceSeconds : this.seconds;
+    }
+
+    private get paceSeconds(): number {
+        const room = this.raidRoomDef;
+        if (!room) {
+            return this.mapSeconds;
+        }
+        return room.at - this.raidWaveLength(this.raidRoom) + this.directorSeconds;
     }
 
     private currentWave() {
@@ -2812,7 +2829,7 @@ export class Sim {
             return undefined;
         }
         // Enemies start hitting harder after 5 minutes (of the round)
-        const minutes = this.mapSeconds / 60;
+        const minutes = this.paceSeconds / 60;
         const hpScale = this.enemyHpScale();
         const damageScale = 1 + Math.max(0, minutes - 5) * 0.03;
         // Bosses are tuned as they are (or for the map they're on); later maps
@@ -2961,7 +2978,7 @@ export class Sim {
     // Enemies get tougher faster as the run (or round) goes on: gently for the
     // first few minutes, then 1.9x hitpoints at 10 minutes and 2.65x at 15
     private enemyHpScale(): number {
-        const minutes = this.mapSeconds / 60;
+        const minutes = this.paceSeconds / 60;
         return 1 + minutes * 0.05 + minutes * minutes * 0.004;
     }
 
@@ -4091,14 +4108,10 @@ export class Sim {
         }
         const room = raid.rooms[this.raidRoom];
         const last = this.raidRoom === raid.rooms.length - 1;
-        this.raidRoomTicks++;
         if (this.raidStage === "waves") {
-            if (this.raidBossTicks !== undefined) {
-                this.raidBossTicks--;
-            }
-            // Its timer's run out (or the portal cancelled it, and the boss couldn't come yet)
-            if (this.raidBossTicks === undefined || this.raidBossTicks <= 0) {
-                this.raidBossTicks = undefined;
+            // Its time's up, or the portal brought it on (and if the boss couldn't come yet, it
+            // tries again next tick)
+            if (this.tick >= this.raidBossDueTick) {
                 this.startRaidBoss(room, last);
             } else {
                 this.stepTeleporter(room);
@@ -4137,8 +4150,8 @@ export class Sim {
         const next = raid.rooms[index];
         this.raidStage = "waves";
         this.raidStageTick = this.tick;
-        this.raidRoomTicks = 0;
-        this.raidBossTicks = this.raidWaveLength(index) * TICKS_PER_SECOND;
+        this.raidRoomStartTick = this.tick;
+        this.raidBossDueTick = this.tick + this.raidWaveLength(index) * TICKS_PER_SECOND;
         this.raidShopQueue = [];
         this.eventIndex = 0;
         this.spawnAccumulator = 0;
@@ -9084,7 +9097,11 @@ export class Sim {
     // ---- Pickups ----
 
     dropCasket(x: number, y: number, elite: boolean): void {
-        this.dropCasketOfTier(rollCasketTier(this.rng, this.seconds, elite, this.stats.luck), x, y);
+        this.dropCasketOfTier(
+            rollCasketTier(this.rng, this.casketSeconds, elite, this.stats.luck),
+            x,
+            y,
+        );
     }
 
     // guaranteed: past the chance of a late endless casket, though not its limit
@@ -9911,7 +9928,7 @@ export class Sim {
                 this.heal(this.player.maxHp * effect.fraction);
                 break;
             case "casket": {
-                const tier = rollCasketTier(this.rng, this.seconds, true, this.stats.luck);
+                const tier = rollCasketTier(this.rng, this.casketSeconds, true, this.stats.luck);
                 this.dropCasketOfTier(tier, visitor.x, visitor.y, true);
                 break;
             }
@@ -10042,7 +10059,7 @@ export class Sim {
             const room = raid.rooms[this.raidRoom];
             this.raidTeleportsLeft--;
             // The portal cancels the room's boss timer: its boss comes now
-            this.raidBossTicks = undefined;
+            this.raidBossDueTick = this.tick;
             this.leaveEvent();
             this.emit({
                 type: "notice",
@@ -10230,8 +10247,8 @@ export class Sim {
     get timeLeftForBoss(): number {
         const room = this.raidRoomDef;
         if (room) {
-            return this.raidStage === "waves" && this.raidBossTicks !== undefined
-                ? Math.max(0, this.raidBossTicks / TICKS_PER_SECOND)
+            return this.raidStage === "waves"
+                ? Math.max(0, (this.raidBossDueTick - this.tick) / TICKS_PER_SECOND)
                 : 0;
         }
         return Math.max(0, RUN_LENGTH - this.mapSeconds);

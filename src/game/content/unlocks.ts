@@ -77,9 +77,11 @@ export function describeUnlockTask(task: UnlockTask, withMap = true): string {
         case "survive":
             return `Survive ${describeSurvival(task.seconds)}${where}`;
         case "raidChest": {
-            const from = TROPHY_BY_ID.get(task.trophyId)?.from;
-            const hard = from?.kind === "raid" && from.hard;
-            return `A chance from the ${map} chest${hard ? " on hard or expert" : ""}`;
+            // A thing to do, as the rest are: callers build sentences on it ("... to unlock")
+            const trophy = TROPHY_BY_ID.get(task.trophyId)!;
+            const hard = trophy.from.kind === "raid" && trophy.from.hard;
+            const chest = withMap ? `the ${map} chest` : "its chest";
+            return `Find a ${trophy.name} in ${chest}${hard ? " on hard or expert" : ""}`;
         }
     }
 }

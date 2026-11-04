@@ -156,9 +156,9 @@ version and how to run it.
       the bigger the target. The **Nightmare staff**, Phosani's own, has her grasping claws come
       up out of the ground under enemies around you every few seconds, hands and all, with bosses
       and elites grabbed twice more.
-- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, or killing
-  one of its mid-run bosses, brings a weapon, a passive or a piece of gear into the game for
-  every run after (a toast and the results screen say so). Until then it's never offered or
+- **Unlocks**: from the Desert on, every map holds new things to find. Beating it, killing one
+  of its mid-run bosses, or finding something in a raid's chest, brings a weapon, a passive or a
+  piece of gear into the game for every run after (a toast and the results screen say so). Until then it's never offered or
   dropped. Each map's card shows what it holds, faded until it's earned, and says on hover what
   to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there from the
   start.
@@ -176,7 +176,6 @@ version and how to run it.
     | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
     | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
     | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
-    | ToB (raid)     |                                                  | Ghrazi rapier (its chest), Holy Scythe of Vitur (its chest, on hard or expert)                       |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -317,18 +316,18 @@ version and how to run it.
       once it's beaten.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
-  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the
-  room (however quickly the last boss went down) the party's taken into the boss's real room from
-  OSRS, cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and taking
-  little damage), coins for them, and a supply chest between rooms that sells food and potions
-  for points. The last boss's chest rolls for a purple,
-  more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'
-  Zik now and then. The Ghrazi rapier from the chest unlocks it as a weapon, and on hard or expert
-  the chest has a roll of its own that can hold the Holy Scythe of Vitur (uncharged), which unlocks
-  the Holy Scythe. The bosses pray against missiles and magic, so melee hits hardest, and what
-  they fire from themselves starts a couple of tiles out, so there's a pocket up close that only
-  melee gets to stand in. A line at the top of the screen says what the hall wants of you, and
-  whatever bones and coins are still on its floor when the boss comes go with you.
+  Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
+  (however quickly the last boss went down) the party's taken into the boss's real room from OSRS,
+  cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and
+  taking little damage), coins for them, and a supply chest between rooms that sells food and
+  potions for points. The last boss's chest rolls for a purple, more likely the more points you
+  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
+  from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
+  can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
+  against missiles and magic, so melee hits hardest, and what they fire from themselves starts a
+  couple of tiles out, so there's a pocket up close that only melee gets to stand in. A line at the
+  top of the screen says what the hall wants of you, and whatever bones and coins are still on its
+  floor when the boss comes go with you.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.

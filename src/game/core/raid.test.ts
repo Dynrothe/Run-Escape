@@ -87,7 +87,7 @@ function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
 
 // On to a second of the room, through what that second brings
 function toRoomSecond(sim: Sim, seconds: number): void {
-    const target = sim.tick - sim.raidRoomTicks + Math.round(seconds * TICKS_PER_SECOND);
+    const target = sim.raidRoomStartTick + Math.round(seconds * TICKS_PER_SECOND);
     // Level ups, caskets and random events pause the run: they're skipped here
     for (let steps = 0; sim.tick < target && !sim.runOver; steps++) {
         expect(steps).toBeLessThan(100_000);
@@ -255,10 +255,10 @@ describe("raids", () => {
         expect(rapier.kind === "raid" && !rapier.hard && !rapier.expert).toBe(true);
         expect(scythe.kind === "raid" && scythe.hard && !scythe.expert).toBe(true);
         expect(describeUnlockTask(getWeapon("ghrazi_rapier").unlock!)).toBe(
-            "A chance from the Theatre of Blood chest",
+            "Find a Ghrazi rapier in the Theatre of Blood chest",
         );
         expect(describeUnlockTask(getWeapon("holy_scythe_of_vitur").unlock!)).toBe(
-            "A chance from the Theatre of Blood chest on hard or expert",
+            "Find a Holy Scythe of Vitur (uncharged) in the Theatre of Blood chest on hard or expert",
         );
     });
 
@@ -698,6 +698,26 @@ describe("expert mode", () => {
     });
 });
 
+describe("a raid room's pace", () => {
+    it("scales its enemies and caskets by where it'd be with no boss time before it", () => {
+        const rooms = TEST_RAID.raid!.rooms;
+        const fresh = raid();
+        fresh["beginRaidRoom"](1);
+        const late = raid();
+        // As if the bosses before it took five minutes
+        late.tick += 300 * TICKS_PER_SECOND;
+        late["beginRaidRoom"](1);
+        const expected = rooms[1].at - late["raidWaveLength"](1);
+        expect(late["paceSeconds"]).toBeCloseTo(expected);
+        expect(late["paceSeconds"]).toBeCloseTo(fresh["paceSeconds"]);
+        expect(late["enemyHpScale"]()).toBeCloseTo(fresh["enemyHpScale"]());
+        expect(late["casketSeconds"]).toBeCloseTo(fresh["casketSeconds"]);
+        // and runs on with the room's own clock
+        late.tick += 10 * TICKS_PER_SECOND;
+        expect(late["paceSeconds"]).toBeCloseTo(expected + 10);
+    });
+});
+
 describe("raid teleporters", () => {
     const room = () => TEST_RAID.raid!.rooms[0];
     function walkUp(sim: Sim): void {
@@ -716,7 +736,7 @@ describe("raid teleporters", () => {
         expect(sim.raidStage).toBe("boss");
         expect(sim.raidTeleportsLeft).toBe(1);
         // The room's boss timer is cancelled
-        expect(sim.raidBossTicks).toBeUndefined();
+        expect(sim.raidBossDueTick).toBeLessThanOrEqual(sim.tick);
         expect(sim.timeLeftForBoss).toBe(0);
     });
 

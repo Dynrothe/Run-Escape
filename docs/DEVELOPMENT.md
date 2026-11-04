@@ -586,23 +586,26 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 ### Raids
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
-where things are. `Sim.stepRaid` runs them: a room's waves until its boss timer runs out, then the
-party's moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is down the room's scored (`scoreRaidRoom`), each player gets the
-supply chest (`openNextRaidShop`, an event offer paid in raid points) and the next room starts.
-The last room's boss is the final boss, and its chest (`openRaidChest`) goes on the result.
-Raid wins are kept by the save like a campaign map's; hard opens after one, endless never does, and
-expert mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's teleporter
-(`stepTeleporter`) asks before skipping to its boss, `SimOptions.raidTeleports` times a raid, in
-the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of,
-in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. A room runs
-on clocks of its own, never the run's: `raidRoomTicks` (what its waves and events go by) and
-`raidBossTicks`, the countdown to its boss (the gap between its `RaidRoomDef.at` and the last
-room's), which the portal cancels. So a quick kill or a portal never lengthens the next room.
-Raid bosses' rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
-hits are lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`).
+where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due, then the party's
+moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is down the room's scored
+(`scoreRaidRoom`), each player gets the supply chest (`openNextRaidShop`, an event offer paid in
+raid points) and the next room starts. The last room's boss is the final boss, and its chest
+(`openRaidChest`) goes on the result. Raid wins are kept by the save like a campaign map's; hard
+opens after one, endless never does, and expert mode (`SimOptions.expert`, solo only for now) after
+a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
+`SimOptions.raidTeleports` times a raid, in the halls `SimOptions.raidPortals` says
+(`getRaidPortals`: rooms whose boss the save has a kill of, in any form). The game draws the portal
+(`raidTeleporter`), as it isn't in the map. A room runs on a clock of its own, from
+`raidRoomStartTick` (what its waves and events go by), and its boss comes at `raidBossDueTick`: the
+gap between its `RaidRoomDef.at` and the last room's later, or at once when the portal's taken. So a
+quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
+hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
+boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' rings,
+spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their hits are
+lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`).
 
-`?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
-its max; `?raidtest=short` does only the first.
+`?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
+up's pick at its max; `?raidtest=short` does only the first.
 
 ### What gets drawn
 

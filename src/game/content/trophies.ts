@@ -1,5 +1,6 @@
-// Trophies: rare finds that do nothing in a run. They're kept in the Collection
-// log, and in the save once they're found.
+// Trophies: rare finds, kept in the Collection log, and in the save once they're
+// found. They do nothing in a run, but a few bring a weapon into the game (the
+// Theatre of Blood's rapier and Holy Scythe: UnlockTask "raidChest").
 export type TrophySource =
     // This chance on each kill of the boss on the map
     | { kind: "boss"; enemyId: string; mapId: string; chance: number }
