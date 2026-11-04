@@ -250,6 +250,40 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
+    // A relay that sends the list as it changes stops on a create or join,
+    // until it's asked again
+    const lists = (relay: FakeSocket) => relay.sent.filter((m) => m.t === "list").length;
+
+    it("asks for the open rooms again when it can't get into a room", async () => {
+        const { lobby, relay } = await connected();
+        lobby.join("ABCDEFGH");
+        relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
+        const before = lists(relay);
+        // Turned away without a word (a used ticket, or too slow to get in)
+        FakeSocket.all[1].close();
+        expect(lobby.room).toBeUndefined();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
+    it("asks for the open rooms again, once, on leaving a room", async () => {
+        const { lobby, relay, room } = await inRoom();
+        const before = lists(relay);
+        lobby.leave();
+        room.receive({ t: "gone", reason: "left" });
+        room.close();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
+    it("asks for the open rooms again on leaving a room it was coming back to", async () => {
+        const { lobby, relay, room } = await inRoom();
+        room.close();
+        const before = lists(relay);
+        // The room never hears, so never says "gone"
+        lobby.leave();
+        expect(lobby.room).toBeUndefined();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
     it("ignores a goto it didn't ask for", async () => {
         const { relay } = await connected();
         relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });

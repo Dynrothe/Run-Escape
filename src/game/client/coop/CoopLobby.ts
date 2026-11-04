@@ -342,6 +342,7 @@ export class CoopLobby {
             socket = new WebSocket(getRoomUrl(code, ticket));
         } catch {
             this.update({ error: "Couldn't reach that room." });
+            this.outOfRoom();
             return;
         }
         this.enteringSocket = socket;
@@ -373,6 +374,7 @@ export class CoopLobby {
             if (socket === this.enteringSocket) {
                 this.enteringSocket = undefined;
                 this.update({ error: "Couldn't reach that room." });
+                this.outOfRoom();
             }
         };
     }
@@ -502,16 +504,23 @@ export class CoopLobby {
         this.stopResuming();
         this.resume = undefined;
         this.update({ room: undefined, error });
-        this.refresh();
         this.onClosed?.();
         this.outOfRoom();
     }
 
-    // Out of a room: the lobby's connection again, if it dropped meanwhile
+    // Out of a room, or not into one: back to the open rooms, which a relay
+    // that sends them as they change (listUpdates) stops sending on a create
+    // or join, until it's asked again. Every way out comes through here. The
+    // lobby's connection again, if it dropped meanwhile (its welcome asks).
     private outOfRoom(): void {
+        if (this.view.room) {
+            return;
+        }
         if (this.lobbyLost) {
             this.lobbyLost = false;
             void this.connect();
+        } else {
+            this.refresh();
         }
     }
 
@@ -574,7 +583,11 @@ export class CoopLobby {
             case "gone":
                 this.resume = undefined;
                 this.update({ room: undefined, error: GONE_TEXT[message.reason] || undefined });
-                this.refresh();
+                // A room on its own connection closes it next, which asks
+                // (outOfRoom)
+                if (!this.roomSocket) {
+                    this.refresh();
+                }
                 this.onGone?.(message.reason);
                 break;
             case "error":
