@@ -29,4 +29,8 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     [37735, { height: 170 }],
     [37736, { height: 220 }],
     [37737, { height: 190 }],
+    // The Hallowed Sepulchre's tall wall (Floor 3's), which the cache stands on a level under each
+    // walkway, rising 4 tiles to its edge. A map draws one level, so here it hangs the 4 tiles
+    // down from the walkway's edge instead (maps/owlsCourt.ts). The cache places it only there.
+    [38924, { height: -512 }],
 ]);
