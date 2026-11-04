@@ -1,48 +1,20 @@
-// Keep the public collector's dimensions bounded. Tests compare these with the game's maps.
-export const MAPS = new Set([
-    "lumbridge",
-    "barrows",
-    "wilderness",
-    "desert",
-    "fremennik",
-    "karamja",
-    "kourend",
-    "varlamore",
-    "morytania",
-    "god_wars",
-    "prifddinas",
-    "inferno",
-    "halloween",
-    "phosani",
-    "theatre_of_blood",
-    "grand_exchange",
-    "east_varrock",
-    "falador",
-    "last_man_standing",
-    "castle_wars",
-    "pest_control",
-]);
-export const MODES = new Set(["normal", "hard", "expert", "default"]);
+// What the collector accepts. It checks shape and range only: which maps are endless, where
+// expert exists and so on are the game's rules, so new content reaches the collector without a
+// deploy. Ids are bounded by their format, and MAX_RUNS_PER_DAY bounds what anyone can add.
+export const ID = /^[a-z0-9_]{1,40}$/;
 export const PLAY_TYPES = new Set(["singleplayer", "multiplayer"]);
 export const OUTCOMES = new Set(["completed", "failed", "abandoned", "disconnected"]);
-const RELAYS = new Set(["none", "node", "cloudflare"]);
-const ENDLESS_ONLY = new Set([
-    "grand_exchange",
-    "east_varrock",
-    "falador",
-    "last_man_standing",
-    "castle_wars",
-    "pest_control",
-]);
+export const RELAYS = new Set(["none", "node", "cloudflare"]);
 export const DAY_MS = 86_400_000;
 export const utcDay = (time) => new Date(time).toISOString().slice(0, 10);
-export const validVersion = (v) =>
-    typeof v === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[a-zA-Z0-9.-]{1,24})?$/.test(v);
+export const isId = (v) => typeof v === "string" && ID.test(v);
+export const validVersion = (v) => typeof v === "string" && /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v);
 export const validDay = (v) =>
     typeof v === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(v) &&
     Number.isFinite(Date.parse(v)) &&
     utcDay(Date.parse(v)) === v;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function number(value, max, integer = false) {
     return (
@@ -54,21 +26,17 @@ function number(value, max, integer = false) {
     );
 }
 
-// Only these fields enter the database. Names, addresses, room codes and arbitrary JSON don't.
-export function validateRun(value, now = Date.now()) {
+// schemaVersion 1, as RunAnalytics.ts sends it. Only these fields enter the database: names,
+// addresses, room codes and arbitrary JSON don't.
+function readV1(value, now) {
     if (
-        !value ||
-        typeof value !== "object" ||
-        value.schemaVersion !== 1 ||
         typeof value.runId !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-            value.runId,
-        ) ||
+        !UUID.test(value.runId) ||
         !validVersion(value.version) ||
         typeof value.build !== "string" ||
         !/^[a-zA-Z0-9._-]{1,80}$/.test(value.build) ||
-        !MAPS.has(value.mapId) ||
-        !MODES.has(value.mode ?? "default") ||
+        !isId(value.mapId) ||
+        !isId(value.mode) ||
         !PLAY_TYPES.has(value.playType) ||
         !OUTCOMES.has(value.outcome) ||
         !RELAYS.has(value.relay) ||
@@ -77,9 +45,12 @@ export function validateRun(value, now = Date.now()) {
         !number(value.partySize, 4, true) ||
         value.partySize < 1 ||
         (value.playType === "singleplayer" && value.partySize !== 1) ||
+        !Array.isArray(value.characters) ||
+        value.characters.length !== value.partySize ||
+        !value.characters.every(isId) ||
+        // Old enough to be a replay, or a clock that's a day out
         !Number.isSafeInteger(value.endedAt) ||
-        value.endedAt < now - DAY_MS ||
-        value.endedAt > now + 300_000 ||
+        Math.abs(value.endedAt - now) > DAY_MS ||
         !number(value.durationSeconds, 7 * 86400) ||
         (value.durationSeconds > 0 && value.durationSeconds < 0.02) ||
         !number(value.round, 100_000, true) ||
@@ -92,12 +63,7 @@ export function validateRun(value, now = Date.now()) {
         !number(value.healed, 1e15) ||
         !number(value.highestHit, 1e15) ||
         !number(value.caskets, 1_000_000_000, true) ||
-        !number(value.playersLeft, value.partySize, true) ||
-        (value.endless && value.outcome === "completed") ||
-        (!value.endless && (ENDLESS_ONLY.has(value.mapId) || value.round !== 1)) ||
-        (value.endless && ["theatre_of_blood", "phosani"].includes(value.mapId)) ||
-        (value.mode === "expert" &&
-            (value.mapId !== "theatre_of_blood" || value.playType !== "singleplayer"))
+        !number(value.playersLeft, value.partySize, true)
     ) {
         return undefined;
     }
@@ -109,7 +75,8 @@ export function validateRun(value, now = Date.now()) {
             : value.outcome === "completed");
     return {
         run_id: value.runId.toLowerCase(),
-        day: utcDay(value.endedAt),
+        // The collector's day, so a client's clock can't pick its leaderboard
+        day: utcDay(now),
         ended_at: value.endedAt,
         received_at: now,
         version: value.version,
@@ -117,8 +84,9 @@ export function validateRun(value, now = Date.now()) {
         play_type: value.playType,
         relay: value.relay,
         map_id: value.mapId,
-        mode: value.mode ?? "default",
+        mode: value.mode,
         party_size: value.partySize,
+        characters: [...value.characters].sort().join(","),
         endless: Number(value.endless),
         outcome: value.outcome,
         duration_seconds: value.durationSeconds,
@@ -138,6 +106,18 @@ export function validateRun(value, now = Date.now()) {
     };
 }
 
+// Each report shape the collector still reads, by schemaVersion. When the game sends a new one,
+// add its reader here and keep the old one while older games are still played: each maps its
+// report onto the same columns.
+const READERS = new Map([[1, readV1]]);
+
+export function validateRun(value, now = Date.now()) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+    return READERS.get(value.schemaVersion)?.(value, now);
+}
+
 export function leaderboardQuery(params, now = Date.now()) {
     if (
         !knownFilters(params, [
@@ -150,8 +130,9 @@ export function leaderboardQuery(params, now = Date.now()) {
             "version",
             "limit",
         ])
-    )
+    ) {
         return undefined;
+    }
     const day = params.get("day") ?? utcDay(now);
     const map = params.get("map");
     const play = params.get("play") ?? "singleplayer";
@@ -162,9 +143,9 @@ export function leaderboardQuery(params, now = Date.now()) {
     const limit = Number(params.get("limit") ?? 20);
     if (
         !validDay(day) ||
-        !MAPS.has(map) ||
+        !isId(map) ||
         !PLAY_TYPES.has(play) ||
-        !MODES.has(mode) ||
+        !isId(mode) ||
         !number(party, 4, true) ||
         party < 1 ||
         (play === "singleplayer" && party !== 1) ||
@@ -177,8 +158,8 @@ export function leaderboardQuery(params, now = Date.now()) {
     }
     return {
         sql: `SELECT run_id, day, ended_at, version, build, play_type, relay, map_id, mode, party_size,
-            endless, outcome, duration_seconds, round, level, kills, coins, damage_dealt, dps,
-            damage_taken, healed, highest_hit, caskets FROM runs
+            characters, endless, outcome, duration_seconds, round, level, kills, coins, damage_dealt,
+            dps, damage_taken, healed, highest_hit, caskets FROM runs
             WHERE eligible = 1 AND day = ? AND map_id = ? AND play_type = ? AND mode = ?
                 AND party_size = ? AND endless = ? AND version = ?
             ORDER BY leaderboard_score DESC, run_id LIMIT ?`,
@@ -200,8 +181,9 @@ export function dailyQuery(params, now = Date.now()) {
             "endless",
             "version",
         ])
-    )
+    ) {
         return undefined;
+    }
     const from = params.get("from") ?? utcDay(now);
     const to = params.get("to") ?? from;
     if (
@@ -215,24 +197,30 @@ export function dailyQuery(params, now = Date.now()) {
     const where = ["day >= ?", "day <= ?"];
     const values = [from, to];
     for (const [parameter, column, allowed] of [
-        ["map", "map_id", MAPS],
-        ["play", "play_type", PLAY_TYPES],
-        ["relay", "relay", RELAYS],
-        ["mode", "mode", MODES],
-        ["outcome", "outcome", OUTCOMES],
-        ["party_size", "party_size", new Set(["1", "2", "3", "4"])],
-        ["endless", "endless", new Set(["true", "false"])],
+        ["map", "map_id", isId],
+        ["play", "play_type", (v) => PLAY_TYPES.has(v)],
+        ["relay", "relay", (v) => RELAYS.has(v)],
+        ["mode", "mode", isId],
+        ["outcome", "outcome", (v) => OUTCOMES.has(v)],
+        ["party_size", "party_size", (v) => ["1", "2", "3", "4"].includes(v)],
+        ["endless", "endless", (v) => v === "true" || v === "false"],
+        ["version", "version", validVersion],
     ]) {
         const value = params.get(parameter);
-        if (value === null) continue;
-        if (!allowed.has(value)) return undefined;
+        if (value === null) {
+            continue;
+        }
+        if (!allowed(value)) {
+            return undefined;
+        }
         where.push(`${column} = ?`);
-        values.push(parameter === "endless" ? Number(value === "true") : value);
-    }
-    if (params.has("version")) {
-        if (!validVersion(params.get("version"))) return undefined;
-        where.push("version = ?");
-        values.push(params.get("version"));
+        values.push(
+            parameter === "endless"
+                ? Number(value === "true")
+                : parameter === "party_size"
+                  ? Number(value)
+                  : value,
+        );
     }
     return {
         sql: `SELECT *, duration_seconds / runs AS average_duration_seconds,

@@ -82,9 +82,37 @@ it.each(["node", "cloudflare"] as const)(
             damageDealt: 300,
             durationSeconds: 20,
             playersLeft: 0,
+            characters: ["warrior", "warrior", "warrior"],
         });
     },
 );
+
+it("counts a party that fell as failed even after someone left, and keeps who started", async () => {
+    const send = mockFetch();
+    const sim = makeSim(3, {
+        party: ["wizard", "warrior", "ranger"].map((characterId, i) => ({
+            name: `Private name ${i}`,
+            characterId,
+            metaStats: emptyStats(),
+        })),
+    });
+    const finish = startRunAnalytics(sim, { isHost: true, relay: "cloudflare" }, endpoint)!;
+    // A guest drops early, as when the host loses the relay and plays on
+    sim.leave(2);
+    expect(sim.state).not.toBe("dead");
+    for (const hero of sim.heroes.slice(0, 2)) {
+        hero.revivesLeft = 0;
+        sim.as(hero.index, () => sim["damagePlayer"](99999, "goblin", false));
+    }
+    expect(sim.state).toBe("dead");
+    await finish("abandoned");
+    expect(JSON.parse(send.mock.calls[0][1]!.body as string)).toMatchObject({
+        outcome: "failed",
+        partySize: 3,
+        playersLeft: 1,
+        characters: ["ranger", "warrior", "wizard"],
+    });
+});
 
 it("separates voluntary exits and departures from actual deaths and keeps the starting size", async () => {
     const send = mockFetch();
@@ -143,6 +171,16 @@ it("records a final boss victory, and singleplayer endless and expert stats", as
         mode: "expert",
         mapId: "theatre_of_blood",
     });
+});
+
+it("sends nothing for a player who has turned it off by the end of the run", async () => {
+    const send = mockFetch();
+    let allowed = true;
+    const finish = startRunAnalytics(makeSim(), undefined, endpoint, () => allowed)!;
+    allowed = false;
+    await finish("abandoned");
+    await finish("abandoned");
+    expect(send).not.toHaveBeenCalled();
 });
 
 it("retries a transient failure with the identical body and UUID", async () => {

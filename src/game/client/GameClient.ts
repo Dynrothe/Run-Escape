@@ -109,7 +109,7 @@ import {
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
-import { startRunAnalytics } from "./RunAnalytics";
+import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
@@ -920,6 +920,11 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ autoEquip: !this.display.autoEquip });
     }
 
+    // Takes hold for the run being played too: its report is only sent at the end
+    toggleRunStats(): void {
+        this.setDisplay({ runStats: !this.display.runStats });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -1341,6 +1346,8 @@ export class GameClient implements GameFrameHandler {
             : startRunAnalytics(
                   sim,
                   this.coopRun && { isHost: this.coopRun.isHost, relay: this.coop.relayKind },
+                  RUN_ANALYTICS_URL,
+                  () => this.display.runStats,
               );
         this.tasksAnnounced.clear();
         this.accumulator = 0;

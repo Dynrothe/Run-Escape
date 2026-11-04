@@ -1,6 +1,9 @@
 -- One anonymous row per solo/party run. UUID retries don't fire the insert trigger again.
+-- WITHOUT ROWID: D1 bills every index entry written, and a rowid table keeps its primary key
+-- as a second index.
 CREATE TABLE runs (
     run_id TEXT PRIMARY KEY,
+    -- UTC day the collector received it, not the client's clock
     day TEXT NOT NULL,
     ended_at INTEGER NOT NULL,
     received_at INTEGER NOT NULL,
@@ -9,8 +12,10 @@ CREATE TABLE runs (
     play_type TEXT NOT NULL CHECK (play_type IN ('singleplayer', 'multiplayer')),
     relay TEXT NOT NULL CHECK (relay IN ('none', 'node', 'cloudflare')),
     map_id TEXT NOT NULL,
-    mode TEXT NOT NULL CHECK (mode IN ('normal', 'hard', 'expert', 'default')),
+    mode TEXT NOT NULL,
     party_size INTEGER NOT NULL CHECK (party_size BETWEEN 1 AND 4),
+    -- The starting party's adventurer ids, sorted and comma-separated
+    characters TEXT NOT NULL,
     endless INTEGER NOT NULL CHECK (endless IN (0, 1)),
     outcome TEXT NOT NULL CHECK (outcome IN ('completed', 'failed', 'abandoned', 'disconnected')),
     duration_seconds REAL NOT NULL,
@@ -27,7 +32,7 @@ CREATE TABLE runs (
     players_left INTEGER NOT NULL,
     eligible INTEGER NOT NULL CHECK (eligible IN (0, 1)),
     leaderboard_score REAL NOT NULL
-);
+) WITHOUT ROWID;
 
 CREATE INDEX runs_day ON runs(day);
 -- Every leading field is required by the leaderboard API. LIMIT reads only the top N,
@@ -37,6 +42,8 @@ CREATE INDEX runs_leaderboard ON runs(
     leaderboard_score DESC, run_id
 ) WHERE eligible = 1;
 
+-- Raw rows expire (RAW_RETENTION_DAYS); these totals stay (DAILY_RETENTION_DAYS). A new
+-- dimension here means a new table, so party composition stays in the raw rows.
 CREATE TABLE daily_stats (
     day TEXT NOT NULL,
     play_type TEXT NOT NULL,
@@ -57,7 +64,13 @@ CREATE TABLE daily_stats (
     highest_hit REAL NOT NULL,
     caskets INTEGER NOT NULL,
     PRIMARY KEY (day, play_type, relay, map_id, mode, party_size, endless, version, outcome)
-);
+) WITHOUT ROWID;
+
+-- Runs accepted each day, so the collector can stop at MAX_RUNS_PER_DAY with one row read
+CREATE TABLE daily_intake (
+    day TEXT PRIMARY KEY,
+    runs INTEGER NOT NULL
+) WITHOUT ROWID;
 
 -- Atomic with the run insert. A retry, concurrent duplicate, or failed transaction cannot
 -- increment the daily totals without inserting exactly one new run.
@@ -78,4 +91,6 @@ CREATE TRIGGER runs_daily_insert AFTER INSERT ON runs BEGIN
         healed = daily_stats.healed + excluded.healed,
         highest_hit = MAX(daily_stats.highest_hit, excluded.highest_hit),
         caskets = daily_stats.caskets + excluded.caskets;
+    INSERT INTO daily_intake (day, runs) VALUES (NEW.day, 1)
+        ON CONFLICT (day) DO UPDATE SET runs = daily_intake.runs + 1;
 END;

@@ -4,18 +4,21 @@ compatibility_date = "2025-09-01"
 
 [vars]
 PUBLIC_LEADERBOARD = "false"
-# Comma-separated game origins; add your web game's origin before deploying.
+# Comma-separated game origins. The desktop app's is already here; add the web game's.
 ALLOWED_ORIGINS = "https://run-escape.invalid"
 RAW_RETENTION_DAYS = "30"
 DAILY_RETENTION_DAYS = "365"
+# Runs stored a day at most, to stay inside D1 Free's daily writes (README, Free-tier budget)
+MAX_RUNS_PER_DAY = "10000"
 
+# No database_id: the first `wrangler deploy` creates the database by this name, and the d1
+# commands find it by name.
 [[d1_databases]]
 binding = "DB"
 database_name = "run-escape-analytics"
-# Replace with the id printed by `wrangler d1 create run-escape-analytics`.
-database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
+# Rate limit namespaces are per account: change these if another Worker of yours uses them
 [[ratelimits]]
 name = "INGEST_LIMITER"
 namespace_id = "11501"

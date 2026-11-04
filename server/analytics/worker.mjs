@@ -2,6 +2,14 @@ import { DAY_MS, dailyQuery, leaderboardQuery, utcDay, validateRun } from "./sch
 
 const MAX_BODY_BYTES = 4096;
 const isOn = (value) => value === true || value === "true";
+// An environment variable that's a whole number in range, or the fallback
+const setting = (value, fallback, min, max) => {
+    const n = Number(value ?? fallback);
+    return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+};
+// Runs stored a day at most, whoever sends them: a flood can't run through D1's daily write
+// allowance (see README, Free-tier budget)
+const DEFAULT_MAX_RUNS_PER_DAY = 10_000;
 
 function allowedOrigin(request, env) {
     const origin = request.headers.get("Origin");
@@ -68,7 +76,7 @@ async function readBody(request) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-export async function collect(request, env) {
+export async function collect(request, env, now = Date.now()) {
     const url = new URL(request.url);
     const ingest = url.pathname === "/v1/runs";
     const leaderboard = url.pathname === "/v1/leaderboard";
@@ -119,14 +127,18 @@ export async function collect(request, env) {
                 error.message === "large" ? 413 : 400,
             );
         }
-        const run = validateRun(value);
+        const run = validateRun(value, now);
         if (!run) return respond({ error: "Invalid run" }, 400);
         const fields = Object.keys(run);
+        const cap = setting(env.MAX_RUNS_PER_DAY, DEFAULT_MAX_RUNS_PER_DAY, 1, 100_000_000);
+        // One statement: the day's count is read in the same transaction as the insert. A run
+        // past the cap is dropped like a duplicate, so the game doesn't send it again.
         await env.DB.prepare(
-            `INSERT INTO runs (${fields.join(",")}) VALUES (${fields.map(() => "?").join(",")})
+            `INSERT INTO runs (${fields.join(",")}) SELECT ${fields.map(() => "?").join(",")}
+            WHERE COALESCE((SELECT runs FROM daily_intake WHERE day = ?), 0) < ?
             ON CONFLICT(run_id) DO NOTHING`,
         )
-            .bind(...Object.values(run))
+            .bind(...Object.values(run), run.day, cap)
             .run();
         return respond({ accepted: true });
     }
@@ -143,24 +155,42 @@ export async function collect(request, env) {
     });
 }
 
-const retentionDays = (value, fallback) => {
-    const n = Number(value ?? fallback);
-    return Number.isInteger(n) && n >= 2 && n <= 3650 ? n : fallback;
-};
+// Each statement stays short, and an hour's run deletes up to PRUNE_BATCH * PRUNE_BATCHES raw
+// rows: well past MAX_RUNS_PER_DAY, so a backlog clears instead of growing.
+const PRUNE_BATCH = 1000;
+const PRUNE_BATCHES = 50;
+
+// Runs a delete until it has nothing left to do, or PRUNE_BATCHES times
+async function drain(statement, done) {
+    for (let i = 0; i < PRUNE_BATCHES; i++) {
+        const { meta } = await statement.run();
+        if (done(meta?.changes ?? 0)) {
+            return;
+        }
+    }
+}
 
 export async function prune(env, now = Date.now()) {
-    if (!env.DB) return;
-    // Bounded hourly work; retaining summaries doesn't require retaining raw runs.
-    const raw = utcDay(now - retentionDays(env.RAW_RETENTION_DAYS, 30) * DAY_MS);
-    const daily = utcDay(now - retentionDays(env.DAILY_RETENTION_DAYS, 365) * DAY_MS);
-    await env.DB.batch([
+    if (!env.DB) {
+        return;
+    }
+    // Retention is at least 2 days: run_id dedupe has to outlast the day a report may arrive late
+    const raw = utcDay(now - setting(env.RAW_RETENTION_DAYS, 30, 2, 3650) * DAY_MS);
+    const daily = utcDay(now - setting(env.DAILY_RETENTION_DAYS, 365, 2, 3650) * DAY_MS);
+    await drain(
         env.DB.prepare(
-            "DELETE FROM runs WHERE run_id IN (SELECT run_id FROM runs WHERE day < ? ORDER BY day LIMIT 1000)",
+            `DELETE FROM runs WHERE run_id IN (SELECT run_id FROM runs WHERE day < ? LIMIT ${PRUNE_BATCH})`,
         ).bind(raw),
+        (changes) => changes < PRUNE_BATCH,
+    );
+    // A day of totals at a time; MAX_RUNS_PER_DAY bounds how many rows a day has
+    await drain(
         env.DB.prepare(
-            "DELETE FROM daily_stats WHERE rowid IN (SELECT rowid FROM daily_stats WHERE day < ? ORDER BY day LIMIT 1000)",
+            "DELETE FROM daily_stats WHERE day = (SELECT MIN(day) FROM daily_stats WHERE day < ?)",
         ).bind(daily),
-    ]);
+        (changes) => changes === 0,
+    );
+    await env.DB.prepare("DELETE FROM daily_intake WHERE day < ?").bind(daily).run();
 }
 
 export default {

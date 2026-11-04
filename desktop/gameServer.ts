@@ -99,7 +99,9 @@ export function getRelayOrigin(coopUrl: string): string | undefined {
     }
 }
 
-// Answers a request for the game locally with its configured external connection policy.
+// Answers a request for the game like the static server it's written for. relayOrigin and
+// analytics are the only addresses apart from the app's own that the page may connect to (see
+// getRelayOrigin and runAnalyticsUrl).
 export async function serveGame(
     root: string,
     request: Request,

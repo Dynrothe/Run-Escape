@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 
+import { CHARACTERS } from "../../src/game/content/characters";
 import { ALL_MAPS } from "../../src/game/content/maps";
-import { DAY_MS, MAPS, dailyQuery, leaderboardQuery, utcDay, validateRun } from "./schema.mjs";
-import worker, { prune } from "./worker.mjs";
+import { DAY_MS, ID, dailyQuery, leaderboardQuery, utcDay, validateRun } from "./schema.mjs";
+import worker, { collect, prune } from "./worker.mjs";
 
 const origin = "https://game.example";
 const token = "a-private-read-token-only-for-these-tests";
@@ -20,6 +21,7 @@ const payload = (changes = {}) => ({
     mapId: "lumbridge",
     mode: "normal",
     partySize: 1,
+    characters: ["warrior"],
     endless: false,
     outcome: "completed",
     durationSeconds: 600,
@@ -45,38 +47,74 @@ const read = (path: string, headers = {}) =>
     new Request(`https://collector.example/v1/${path}`, { headers });
 const board = `leaderboard?day=${day}&map=lumbridge&version=0.25.0`;
 
-it("recognizes every shipped map including endless-only maps", () => {
-    expect([...MAPS].sort()).toEqual(
-        ALL_MAPS.filter((map) => !map.dev)
-            .map((map) => map.id)
-            .sort(),
-    );
+// The collector has no list of maps or adventurers, so content added later reaches it without a
+// deploy. What it does need is that every id the game sends fits its format.
+it("accepts every map, mode and adventurer the game has, and maps it doesn't know yet", () => {
+    for (const map of ALL_MAPS) {
+        expect(map.id).toMatch(ID);
+    }
+    for (const character of CHARACTERS) {
+        expect(character.id).toMatch(ID);
+    }
     expect(
         validateRun(payload({ mapId: "falador", endless: true, outcome: "failed", round: 3 }), now),
     ).toBeDefined();
     expect(validateRun(payload({ mapId: "theatre_of_blood", mode: "expert" }), now)?.mode).toBe(
         "expert",
     );
-    expect(validateRun(payload({ mode: undefined }), now)?.mode).toBe("default");
+    // A raid added after this collector was deployed, with expert in co-op
+    const later = validateRun(
+        payload({
+            mapId: "chambers_of_xeric",
+            mode: "expert",
+            playType: "multiplayer",
+            relay: "cloudflare",
+            partySize: 2,
+            characters: ["wizard", "ranger"],
+        }),
+        now,
+    );
+    expect(later).toMatchObject({ map_id: "chambers_of_xeric", characters: "ranger,wizard" });
 });
 
-it("rejects invalid dimensions, impossible modes, numbers and old replays", () => {
+it("files a report under the day it arrived, whatever the game's clock says", () => {
+    const late = now - 1000 * 60 * 60 * 20;
+    expect(validateRun(payload({ endedAt: late }), now)).toMatchObject({
+        day: utcDay(now),
+        ended_at: late,
+    });
+    expect(validateRun(payload({ endedAt: now + 1000 * 60 * 60 }), now)).toBeDefined();
+});
+
+it("reads only the report versions it knows", () => {
+    for (const schemaVersion of [undefined, 0, 2, "1", "constructor", "__proto__"]) {
+        expect(validateRun(payload({ schemaVersion }), now), String(schemaVersion)).toBeUndefined();
+    }
+    expect(validateRun([payload()], now)).toBeUndefined();
+});
+
+it("rejects invalid dimensions, numbers and old replays", () => {
     for (const change of [
         { mapId: "arbitrary-label" },
+        { mapId: "x".repeat(41) },
+        { mode: undefined },
+        { mode: "Hard Mode" },
         { runId: "not-a-uuid" },
         { kills: -1 },
         { damageDealt: NaN },
         { durationSeconds: 1e-300 },
         { partySize: 3 },
+        { characters: [] },
+        { characters: ["warrior", "wizard"] },
+        { characters: ["<b>"] },
+        { characters: "warrior" },
         { relay: "cloudflare" },
-        { mode: "expert" },
-        { endless: true },
-        { mapId: "falador" },
-        { round: 2 },
+        { round: 0 },
         { playersLeft: 3 },
         { endedAt: now - DAY_MS - 1 },
-        { endedAt: now + DAY_MS },
+        { endedAt: now + DAY_MS + 1 },
         { version: "unbounded version" },
+        { version: "0.25.0-anything" },
     ]) {
         expect(validateRun(payload(change), now), JSON.stringify(change)).toBeUndefined();
     }
@@ -105,7 +143,7 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
                     return {
                         bind: (...args: any[]) => ({
                             all: () => ({ results: stmt.all(...args) }),
-                            run: () => stmt.run(...args),
+                            run: () => ({ meta: { changes: stmt.run(...args).changes } }),
                         }),
                     };
                 },
@@ -114,17 +152,18 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
         };
     });
     afterEach(() => db.close());
-    const send = (value: any) => worker.fetch(post(value), env);
+    const send = (value: any, at = now) => collect(post(value), env, at);
+    const count = (table: string) =>
+        db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()!.n as number;
     const rows = async (path: string) =>
         (await (await worker.fetch(read(path, access), env)).json()).rows;
 
-    it("deduplicates concurrent retries, uses the UTC end day and keeps separate party totals", async () => {
-        const yesterday = new Date(now - 1000 * 60 * 60 * 23);
+    it("deduplicates concurrent retries and keeps separate party totals", async () => {
         const run = payload({
-            endedAt: +yesterday,
             playType: "multiplayer",
             relay: "node",
             partySize: 4,
+            characters: ["warrior", "wizard", "warrior", "ranger"],
             outcome: "failed",
         });
         const responses = await Promise.all([send(run), send(run), send({ ...run, coins: 999 })]);
@@ -132,20 +171,24 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
         await send({ ...run, runId: crypto.randomUUID(), relay: "cloudflare" });
         await send({ ...run, runId: crypto.randomUUID(), outcome: "abandoned" });
         const result = await rows(
-            `daily?from=${utcDay(+yesterday)}&play=multiplayer&relay=node&party_size=4&outcome=failed`,
+            `daily?from=${day}&play=multiplayer&relay=node&party_size=4&outcome=failed`,
         );
         expect(result).toHaveLength(1);
         expect(result[0]).toMatchObject({
-            day: utcDay(+yesterday),
+            day,
             runs: 1,
             damage_dealt: 12000,
             coins: 25,
             dps: 20,
         });
         await send({ ...run, runId: crypto.randomUUID(), damageDealt: 18000, highestHit: 200 });
-        expect(
-            (await rows(`daily?from=${utcDay(+yesterday)}&relay=node&outcome=failed`))[0],
-        ).toMatchObject({ runs: 2, damage_dealt: 30000, coins: 50, highest_hit: 200, dps: 25 });
+        expect((await rows(`daily?from=${day}&relay=node&outcome=failed`))[0]).toMatchObject({
+            runs: 2,
+            damage_dealt: 30000,
+            coins: 50,
+            highest_hit: 200,
+            dps: 25,
+        });
     });
 
     it("rolls back the raw row if its daily update fails", async () => {
@@ -153,7 +196,8 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
             "CREATE TRIGGER fail_test BEFORE INSERT ON daily_stats BEGIN SELECT RAISE(ABORT, 'full'); END",
         );
         const run = payload();
-        expect((await send(run)).status).toBe(503);
+        // The Worker's own catch, as Cloudflare would answer
+        expect((await worker.fetch(post(run), env)).status).toBe(503);
         expect(db.prepare("SELECT COUNT(*) AS n FROM runs").get()!.n).toBe(0);
         db.exec("DROP TRIGGER fail_test");
         expect((await send(run)).status).toBe(200);
@@ -175,6 +219,7 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
                 playType: "multiplayer",
                 relay: "node",
                 partySize: 3,
+                characters: ["warrior", "warrior", "wizard"],
                 playersLeft: 1,
             },
         ]) {
@@ -195,7 +240,7 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
                 .map((r) => r.detail)
                 .join("\n");
             expect(plan).toMatch(
-                /SEARCH (runs USING INDEX runs_leaderboard|daily_stats USING INDEX)/,
+                /SEARCH (runs USING INDEX runs_leaderboard|daily_stats USING PRIMARY KEY)/,
             );
             expect(plan).not.toMatch(/SCAN |TEMP B-TREE/);
         }
@@ -244,6 +289,35 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
         const answer = await worker.fetch(preflight, env);
         expect(answer.status).toBe(204);
         expect(answer.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+    });
+
+    it("stops storing runs at the day's cap, and starts again the next day", async () => {
+        env.MAX_RUNS_PER_DAY = "2";
+        for (let i = 0; i < 3; i++) {
+            expect((await send(payload())).status).toBe(200);
+        }
+        expect(count("runs")).toBe(2);
+        expect((await rows(`daily?from=${day}`))[0].runs).toBe(2);
+        const tomorrow = now + DAY_MS;
+        expect((await send(payload({ endedAt: tomorrow }), tomorrow)).status).toBe(200);
+        expect(count("runs")).toBe(3);
+    });
+
+    it("clears a backlog bigger than one delete in a single prune", async () => {
+        const old = now - 40 * DAY_MS;
+        await send(payload({ endedAt: old }), old);
+        const columns = db
+            .prepare("SELECT name FROM pragma_table_info('runs') WHERE name != 'run_id'")
+            .all()
+            .map((row) => row.name)
+            .join(", ");
+        db.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2500)
+            INSERT INTO runs (run_id, ${columns})
+            SELECT printf('%08x-0000-4000-8000-000000000000', i), ${columns} FROM n, runs`);
+        expect(count("runs")).toBe(2501);
+        await prune(env, now);
+        expect(count("runs")).toBe(0);
+        expect(count("daily_stats")).toBe(1);
     });
 
     it("expires raw rows and rankings while retaining daily summaries independently", async () => {

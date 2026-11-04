@@ -790,6 +790,9 @@ export class Sim {
     coins = 0;
     // Party income before purchases or theft. Returning stolen coins isn't new income.
     coinsGained = 0;
+    // Co-op: the run ended because its last hero standing left rather than fell. A party that
+    // lost someone earlier and then fell still ended in a death.
+    endedByLeaving = false;
     casketsOpened = 0;
     readonly bossKills: { enemyId: string; seconds: number }[] = [];
     // What's dealing damage now, for damageBySource: set before each source
@@ -2261,6 +2264,7 @@ export class Sim {
         }
         this.rescaleParty();
         if (!this.heroes.some((other) => this.isUp(other))) {
+            this.endedByLeaving = true;
             this.endRun("dead");
         } else if (theirTurn && this.raidShopQueue.length > 0) {
             // The supply chest goes on to whoever's next

@@ -29,6 +29,7 @@ import {
     UiSnapshot,
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
+import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import {
     CAMPAIGN_MAPS,
@@ -341,6 +342,25 @@ function CoopFlagSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// Only in a build that has a collector to send to
+function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
+    if (!RUN_ANALYTICS_URL) {
+        return null;
+    }
+    return (
+        <Setting
+            name="Share run stats"
+            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game"
+        >
+            <Toggle
+                on={ui.display.runStats}
+                label="Share run stats"
+                onToggle={() => client.toggleRunStats()}
+            />
+        </Setting>
+    );
+}
+
 function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting
@@ -575,6 +595,7 @@ function SettingsPanel({
                     <AutoEquipSetting ui={ui} client={client} />
                     <MovePredictionSetting ui={ui} client={client} />
                     <CoopFlagSetting ui={ui} client={client} />
+                    <RunStatsSetting ui={ui} client={client} />
                     <FrameRateSetting ui={ui} client={client} />
                 </section>
                 {padKind && (

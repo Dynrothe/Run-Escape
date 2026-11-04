@@ -169,7 +169,8 @@ function openGame(): BrowserWindow {
 async function start(): Promise<void> {
     Menu.setApplicationMenu(null);
     const gameSession = session.fromPartition(GAME_PARTITION);
-    // Only the configured relay and the exact anonymous run collector may leave the app.
+    // Everything's the game's own but the relay and the run collector, the only things let out.
+    // The collector only by POST (and its preflight) to its one URL, without cookies or redirects.
     const relayOrigin = getRelayOrigin(__COOP_URL__);
     const analytics = runAnalyticsUrl(__RUN_ANALYTICS_URL__);
     gameSession.protocol.handle("https", (request) => {
