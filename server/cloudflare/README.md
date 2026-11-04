@@ -133,6 +133,13 @@ what it had in memory, often more than once an hour. So:
 Node, with `test/durable-object.mjs` in place of `cloudflare:workers` (see `vite.config.ts`). To see a restart for yourself under `wrangler dev`, save any
 file in `src/` during a run: wrangler reloads, which drops everything as Cloudflare does.
 
+**Closing connections.** When a player's game closes a connection (leaving for another room,
+closing the co-op menu, closing the tab), the room or lobby has to answer it: at `wrangler.toml`'s
+compatibility date Cloudflare doesn't do that by itself. Both call `answerClose` in
+`src/shared.mjs`. A close that isn't answered leaves the player's browser waiting until it gives up
+and drops the connection, so it ends abnormally instead of cleanly. A connection that's cut (a
+phone locking, a lost signal) has no close to answer, and still ends abnormally.
+
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
 the same numbers as `coop-relay.mjs`.
