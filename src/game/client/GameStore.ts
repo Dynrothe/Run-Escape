@@ -15,6 +15,7 @@ export type Screen =
     | "shop"
     | "armoury"
     | "quests"
+    | "combatAchievements"
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
@@ -414,6 +415,8 @@ export type UiSnapshot = {
         // The names of the trophies it found for the first time
         newTrophies: string[];
         quests: { name: string; coins: number }[];
+        // The Combat Achievements it banked: name, tier and coins
+        combatTasks: { name: string; tier: string; coins: number }[];
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;

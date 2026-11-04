@@ -6,6 +6,7 @@ import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { COMBAT_TASK_BY_ID, getTaskTier } from "../content/combatTasks";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
@@ -35,6 +36,7 @@ import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
+import { CombatTracker } from "../core/CombatTracker";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
@@ -477,6 +479,8 @@ export class GameClient implements GameFrameHandler {
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
+    // A solo run's Combat Achievements, followed from outside the sim (none in co-op)
+    private combat?: CombatTracker;
     private attractTick = 0;
     private attractYaw = 0;
     private display = loadDisplaySettings();
@@ -1398,6 +1402,8 @@ export class GameClient implements GameFrameHandler {
                   () => this.display.runStats,
               );
         this.tasksAnnounced.clear();
+        // Solo runs only: co-op never counts towards them
+        this.combat = this.coopRun ? undefined : CombatTracker.forRun(sim, this.save);
         this.accumulator = 0;
         this.shownDps = 0;
         this.shownDpsTick = 0;
@@ -1464,7 +1470,7 @@ export class GameClient implements GameFrameHandler {
                 this.syncOverlay();
                 break;
             case "chest":
-                this.handleEvents(sim, sim.takeEvents());
+                this.drainEvents(sim);
                 this.syncOverlay();
                 break;
             case "reroll":
@@ -1486,7 +1492,7 @@ export class GameClient implements GameFrameHandler {
             // A banished item is alched, which is the casket done
             case "banishChest":
                 if (done) {
-                    this.handleEvents(sim, sim.takeEvents());
+                    this.drainEvents(sim);
                     this.syncOverlay();
                 } else {
                     this.sounds.denied();
@@ -1502,7 +1508,7 @@ export class GameClient implements GameFrameHandler {
                 break;
             case "item":
                 if (done) {
-                    this.handleEvents(sim, sim.takeEvents());
+                    this.drainEvents(sim);
                     if (sim.state !== "playing") {
                         // A lamp's level up, or a blast that killed the boss
                         this.syncOverlay();
@@ -1514,11 +1520,11 @@ export class GameClient implements GameFrameHandler {
                     this.sounds.denied();
                     return;
                 }
-                this.handleEvents(sim, sim.takeEvents());
+                this.drainEvents(sim);
                 this.syncOverlay();
                 break;
             case "leaveEvent":
-                this.handleEvents(sim, sim.takeEvents());
+                this.drainEvents(sim);
                 this.syncOverlay();
                 break;
             case "ability":
@@ -1739,6 +1745,7 @@ export class GameClient implements GameFrameHandler {
             this.coop.end();
         }
         this.coopRun = undefined;
+        this.combat = undefined;
         this.stopBackgroundTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
@@ -1802,10 +1809,22 @@ export class GameClient implements GameFrameHandler {
         const newTrophies = isDevMap(sim.map.id)
             ? []
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
+        const trophiesBefore = this.save.trophies.length;
+        const combatBefore = this.save.combatTasks.length;
+        const combatTasks = this.combat ? [...this.combat.done] : undefined;
         // A co-op run's numbers can come from another player's modified game,
         // and a NaN in a solo one's would come back from the save as 0 coins
-        const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
+        const quests = hasBadNumber(result) ? [] : recordRun(this.save, { ...result, combatTasks });
         this.persist();
+        // Combat Achievements banked, and the tier rewards they brought
+        const combatDone = this.save.combatTasks
+            .slice(combatBefore)
+            .map((id) => COMBAT_TASK_BY_ID.get(id)!);
+        for (const id of this.save.trophies.slice(trophiesBefore)) {
+            if (!newTrophies.includes(id)) {
+                newTrophies.push(id);
+            }
+        }
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -1830,6 +1849,11 @@ export class GameClient implements GameFrameHandler {
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                combatTasks: combatDone.map((task) => ({
+                    name: task.name,
+                    tier: getTaskTier(task).name,
+                    coins: getTaskTier(task).coins,
+                })),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
@@ -1838,6 +1862,25 @@ export class GameClient implements GameFrameHandler {
         });
         // The room sees this player's new unlocks and upgrades next run
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
+    }
+
+    // Hands a step's events to the Combat Achievements tracker, which only reads them and the
+    // sim, and then to the screen and sounds
+    private drainEvents(sim: Sim): void {
+        const events = sim.takeEvents();
+        if (this.combat) {
+            for (const task of this.combat.observe(sim, events)) {
+                const tier = getTaskTier(task);
+                this.sounds.taskDone();
+                this.store.toast(
+                    `Combat task complete: ${task.name} (${tier.name}, ` +
+                        `${tier.points} point${tier.points === 1 ? "" : "s"})! ` +
+                        `${tier.coins.toLocaleString()} coins are yours after this run.`,
+                    6000,
+                );
+            }
+        }
+        this.handleEvents(sim, events);
     }
 
     // A task or quest done mid-run: the adventurer or item joins, and the
@@ -1980,7 +2023,7 @@ export class GameClient implements GameFrameHandler {
                 this.accumulator -= TICK_MS;
                 const move = this.input.getMoveVector(this.move);
                 sim.step(move.x, move.y);
-                this.handleEvents(sim, sim.takeEvents());
+                this.drainEvents(sim);
             }
             if (sim.state !== "playing" && !wasOver) {
                 this.syncOverlay();
@@ -2187,7 +2230,7 @@ export class GameClient implements GameFrameHandler {
             }
             steps++;
             const events = run.stepFrame();
-            this.handleEvents(sim, sim.takeEvents());
+            this.drainEvents(sim);
             for (const event of events) {
                 if (event.action && event.hero === sim.focus) {
                     this.afterCoopAction(sim, event.action);
