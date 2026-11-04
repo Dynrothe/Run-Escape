@@ -43,7 +43,7 @@ export const COMBAT_SPEED_SECONDS = {
     dagannothKings: 60,
     tripleJads: 10,
     phosani: 270,
-    zachariah: 210,
+    zachariah: 180,
 };
 
 const NEX = ["nex", "nex_shadow", "nex_blood", "nex_ice"];
