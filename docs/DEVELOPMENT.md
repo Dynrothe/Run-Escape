@@ -1126,31 +1126,35 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades`, `upgradesSpent`, optional `upgradeRefunds` lists of rank prices and optional
-`upgradeOrder` purchase histories (one skill id per rank). Each page can
-allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
+`upgrades`, `upgradesSpent` and an optional `upgradeOrder`: the skill id each rank was bought for,
+oldest first. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
 outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
 change another class's ranks or remaining budget. Armoury purchases still spend unreserved coins.
 Save format 11 converts the former sum of page investments into a maximum reservation, restoring
-the difference to `coins` once. Export/import retains this budget and every page's paid rank prices.
+the difference to `coins` once. Export/import retains this budget and every page's purchase order.
 Save format 10 moves the old shared allocation and its investment into Melee without duplicating either;
-Ranged and Magic start empty. Export and import preserve all three pages and their refund records.
+Ranged and Magic start empty. Export and import preserve all three pages and their purchase orders.
 Solo and co-op loadouts use the actual adventurer's style, including maps with a forced adventurer;
 changing a co-op adventurer or room map refreshes the transmitted loadout.
 The arrow button on bought cards (the client's back-arrow sprite,
-`REFUND_SPRITE`) removes the most recently bought rank of that skill and replays the remaining
-purchase order at the lower rates. The refund includes the removed rank and every later rank's
-surcharge reduction, through
-`GameClient.persist()`. It is separate from the purchase button and has a larger hit area on coarse
-pointers. Desktop right-clicking does the same; coarse-pointer context menus never refund.
-Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover, without
-blocking the desktop right-click shortcut or the refund button.
-Allocations without purchase order must use Refund all once before single-rank refunds are enabled.
-Purchases on these pages preserve their existing investment but cannot recover the missing order.
-Migration validates purchase order against ranks and replayed spending; invalid histories also
-require Refund all. No estimated chronology or automatic repricing is applied to old saves.
-Refund all clears only the selected class's ranks, price records and purchase order.
+`REFUND_SPRITE`) takes the most recently bought rank of that skill out of the order, through
+`GameClient.persist()`. It gives back what that saves at today's prices: the rank's own price and
+what it added to every rank bought after it. It never gives back more than the page's
+`upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
+cost even when prices have changed since. A saved order is kept whatever the prices, so changing a
+skill's cost needs no migration. The button is separate from the purchase button and has a larger
+hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointer context menus
+never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
+without blocking the desktop right-click shortcut or the refund button.
+A page with ranks but no order can't refund single ranks: its arrow buttons are disabled and
+greyed, and the Skills screen says to use Refund all, which starts a new order. Pages saved before
+the order was kept have the price paid for each rank instead (`upgradeRefunds`, which only migration
+reads). A price says how many ranks were bought before it, so migration rebuilds the order when the
+prices make one unbroken run that replays to exactly the same prices. A page that refunded single
+ranks the old way leaves gaps and gets none. Never guess an order.
+Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
+the page has ranks, even with no spending recorded.
 
 ### Notice
 

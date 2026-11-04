@@ -79,8 +79,8 @@ starting weapon).
 Add it to `SHOP_UPGRADES` in `shop.ts`, themed as an OSRS skill, with its `stat`. Costs and
 refunds come from `getUpgradeCost` and the save code, independently for each combat style's
 `skillPages` allocation. New ones don't need a save migration.
-Partial refunds replay the page's saved purchase order, including later ranks' price reductions.
-Pages without purchase order require Refund all before partial refunds are enabled.
+A single rank's refund reprices the page's later ranks from its saved purchase order, at today's
+prices, and never gives back more than the page spent, so changing a cost needs no migration either.
 
 ## Gear and utility items
 

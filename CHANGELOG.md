@@ -14,6 +14,9 @@ the version in the corner).
 ### Fixed
 
 - Augury and Rigour show their prayer icons instead of prayer scrolls. Fixed by Deivid Smarzaro.
+- Refunding a skill also gives back what it added to the price of every skill bought after it. Some
+  class pages from older saves need Refund all once before single ranks can be refunded again.
+  Fixed by Deivid Smarzaro.
 
 ## 0.24.1 - 2026-11-04
 

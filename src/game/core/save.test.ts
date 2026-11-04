@@ -55,16 +55,24 @@ describe("save", () => {
         expect.hasAssertions();
         const save = createSave();
         save.coins = 9400;
+        const page = {
+            upgrades: { strength: 1 },
+            upgradesSpent: 200,
+            upgradeRefunds: { strength: [200] },
+        };
+        const loaded = migrateSave({
+            ...save,
+            version: 10,
+            skillPages: { melee: page, ranged: page, magic: page },
+        });
+        expect(loaded.coins).toBe(9800);
         for (const style of ["melee", "ranged", "magic"] as const) {
-            save.skillPages[style] = {
+            expect(loaded.skillPages[style]).toEqual({
                 upgrades: { strength: 1 },
                 upgradesSpent: 200,
-                upgradeRefunds: { strength: [200] },
-            };
+                upgradeOrder: ["strength"],
+            });
         }
-        const loaded = migrateSave({ ...save, version: 10 });
-        expect(loaded.coins).toBe(9800);
-        expect(loaded.skillPages).toEqual(save.skillPages);
         expect(migrateSave(loaded)).toEqual(loaded);
         expect(importSave(exportSave(loaded, GAME), GAME)).toEqual(loaded);
         for (const style of ["melee", "ranged", "magic"] as const) {
@@ -360,11 +368,87 @@ describe("save", () => {
         expect(loaded.coins).toBe(49580);
         expect(loaded.skillPages.melee.upgradesSpent).toBe(420);
         expect(loaded.skillPages.melee.upgrades).toEqual({ strength: 1, hitpoints: 1 });
-        expect(loaded.skillPages.melee.upgradeRefunds).toEqual({
-            strength: [200],
-            hitpoints: [220],
-        });
         expect(loaded.skillPages.melee.upgradeOrder).toEqual(["strength", "hitpoints"]);
+    });
+
+    test("an older page's order is recovered from the prices it paid", () => {
+        expect.hasAssertions();
+        // Strength, then Ring of life, then Strength's second rank
+        const save = migrateSave({
+            ...createSave(),
+            coins: 38320,
+            skillPages: {
+                melee: {
+                    upgrades: { strength: 2, ring_of_life: 1 },
+                    upgradesSpent: 11680,
+                    upgradeRefunds: { strength: [200, 480], ring_of_life: [11000] },
+                },
+            },
+        });
+        expect(save.skillPages.melee).toEqual({
+            upgrades: { strength: 2, ring_of_life: 1 },
+            upgradesSpent: 11680,
+            upgradeOrder: ["strength", "ring_of_life", "strength"],
+        });
+        expect(refundUpgrade(save, "ring_of_life")).toBe(true);
+        expect(save.coins).toBe(49360);
+        expect(save.skillPages.melee.upgradesSpent).toBe(640);
+    });
+
+    test.each([
+        // Strength refunded the old way, which left Ring of life's price as it was
+        [{ ring_of_life: 1 }, 11000, { ring_of_life: [11000] }],
+        // Then Hitpoints bought at the same count as Strength had been
+        [{ strength: 1, hitpoints: 1 }, 440, { strength: [220], hitpoints: [220] }],
+    ])("an older page whose prices leave gaps has no order: %o", (upgrades, spent, refunds) => {
+        expect.hasAssertions();
+        const save = migrateSave({
+            ...createSave(),
+            coins: 50000 - spent,
+            skillPages: {
+                melee: { upgrades, upgradesSpent: spent, upgradeRefunds: refunds },
+            },
+        });
+        expect(save.skillPages.melee.upgradeOrder).toBeUndefined();
+        expect(refundUpgrade(save, Object.keys(upgrades)[0])).toBe(false);
+        refundUpgrades(save);
+        expect(save.coins).toBe(50000);
+    });
+
+    test.each([
+        ["fell", 9000],
+        ["rose", 500],
+    ])("an order kept since prices %s gives back exactly what was paid", (_, paid) => {
+        expect.hasAssertions();
+        const save = migrateSave({
+            ...createSave(),
+            coins: 50000 - paid,
+            skillPages: {
+                melee: {
+                    upgrades: { strength: 1, smithing: 1 },
+                    upgradesSpent: paid,
+                    upgradeOrder: ["strength", "smithing"],
+                },
+            },
+        });
+        expect(save.skillPages.melee.upgradeOrder).toEqual(["strength", "smithing"]);
+        expect(refundUpgrade(save, "strength")).toBe(true);
+        // Today's prices: 200 for Strength, and 1,000 it added to Smithing
+        expect(save.skillPages.melee.upgradesSpent).toBe(Math.max(paid - 1200, 0));
+        expect(refundUpgrade(save, "smithing")).toBe(true);
+        expect(save.coins).toBe(50000);
+        expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
+    });
+
+    test("a rank missing from the page's order refunds nothing", () => {
+        expect.hasAssertions();
+        const save = createSave();
+        save.coins = 50000;
+        buyUpgrade(save, "smithing");
+        save.skillPages.melee.upgrades.strength = 1;
+        const before = structuredClone(save);
+        expect(refundUpgrade(save, "strength")).toBe(false);
+        expect(save).toEqual(before);
     });
 
     test("legacy saves require a full refund before tracking purchase order", () => {
@@ -385,7 +469,7 @@ describe("save", () => {
         refundUpgrades(save);
         expect(save.coins).toBe(50000);
         expect(save.skillPages.melee.upgradesSpent).toBe(0);
-        expect(save.skillPages.melee.upgradeRefunds).toBeUndefined();
+        expect(save.skillPages.melee.upgradeOrder).toBeUndefined();
         expect(buyUpgrade(save, "strength")).toBe(true);
         expect(refundUpgrade(save, "strength")).toBe(true);
         expect(save.coins).toBe(50000);
@@ -397,7 +481,7 @@ describe("save", () => {
         { strength: [200, 300] },
         { strength: [10000] },
         {},
-    ])("invalid refund records preserve the legacy full-refund balance: %o", (upgradeRefunds) => {
+    ])("refund records that don't replay exactly keep only Refund all: %o", (upgradeRefunds) => {
         expect.hasAssertions();
         const save = migrateSave({
             ...createSave(),
@@ -482,7 +566,7 @@ describe("save", () => {
         refundUpgrades(save);
         expect(save.coins).toBe(50000);
         expect(save.skillPages.melee.upgradesSpent).toBe(0);
-        expect(save.skillPages.melee.upgradeRefunds).toBeUndefined();
+        expect(save.skillPages.melee.upgradeOrder).toBeUndefined();
     });
 
     test("repricing across the maximum reservation releases only unneeded coins", () => {

@@ -1003,7 +1003,7 @@
     height: 100%;
 }
 
-.ui-shop-refund:hover .ui-shop-refund-icon {
+.ui-shop-refund:hover:not(:disabled) .ui-shop-refund-icon {
     filter: brightness(1.2);
 }
 
@@ -1012,8 +1012,17 @@
     outline-offset: 2px;
 }
 
-.ui-shop-refund:active {
+.ui-shop-refund:active:not(:disabled) {
     transform: scale(0.96);
+}
+
+/* Greyed like a locked card's icon, until Refund all starts the page's order */
+.ui-shop-refund:disabled {
+    cursor: default;
+}
+
+.ui-shop-refund:disabled .ui-shop-refund-icon {
+    filter: grayscale(1) brightness(0.6);
 }
 
 @media (pointer: coarse) {

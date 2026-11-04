@@ -26,7 +26,7 @@ function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "
     save.coins = 1000000;
     for (const [id, ranks] of Object.entries(upgrades)) {
         for (let rank = 0; rank < ranks; rank++) {
-            buyUpgrade(save, id);
+            expect(buyUpgrade(save, id)).toBe(true);
         }
     }
     save.coins = coins;
@@ -192,16 +192,29 @@ test("legacy pages explain why partial refunds need a full reset", () => {
     delete actions.save.skillPages.melee.upgradeOrder;
     fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
     fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
-    expect(screen.getByText(/This class has no purchase order saved/)).toBeVisible();
+    expect(screen.getByText(/purchase order wasn't saved/)).toBeVisible();
     const refund = screen.getByRole("button", { name: "Refund one Strength rank" });
     expect(refund).toBeDisabled();
     fireEvent.click(refund);
     fireEvent.contextMenu(screen.getByRole("button", { name: /^Strength\b/ }));
     expect(actions.refundUpgrade).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
-    expect(screen.queryByText(/This class has no purchase order saved/)).toBeNull();
+    expect(screen.queryByText(/purchase order wasn't saved/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     expect(screen.getByRole("button", { name: "Refund one Strength rank" })).toBeEnabled();
+});
+
+test("Refund all clears ranks that have no spending recorded", () => {
+    expect.hasAssertions();
+    const actions = renderShop({ strength: 2 });
+    actions.save.skillPages.melee.upgradesSpent = 0;
+    delete actions.save.skillPages.melee.upgradeOrder;
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    expect(actions.refundUpgrades).toHaveBeenCalledExactlyOnceWith("melee");
+    expect(actions.save.skillPages.melee.upgrades).toEqual({});
+    expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
 });
 
 test("touch long presses do not refund, but the refund button still works", () => {
