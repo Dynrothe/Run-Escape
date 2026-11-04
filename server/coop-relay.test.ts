@@ -319,8 +319,12 @@ describe("co-op relay", () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         browser.messages.length = 0;
         await party(0, false);
+        open.guests[0].send({ t: "me", ready: true });
         await new Promise((resolve) => setTimeout(resolve, 100));
         expect(browser.messages.filter((m) => m.t === "rooms")).toEqual([]);
+        // A change the list shows is sent
+        open.host.send({ t: "settings", mapId: "draynor" });
+        expect((await browser.next("rooms")).rooms[0].mapId).toBe("draynor");
         // Not to those in a room, who aren't looking
         expect(open.host.messages.filter((m) => m.t === "rooms")).toEqual([]);
     });

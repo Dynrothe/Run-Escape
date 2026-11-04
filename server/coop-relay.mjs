@@ -837,10 +837,8 @@ export function createRelay(limits = {}) {
         return client.hideCountry && !openHost ? undefined : client.country;
     }
 
-    // The view's encoded once, for everyone. The open rooms list catches up
-    // then too, so changing a room fast can't make it be worked out each time.
+    // The view's encoded once, for everyone
     function broadcastRoom(room) {
-        listChanged();
         const view = JSON.stringify(roomView(room));
         for (const member of room.members) {
             const message = `{"t":"room","room":${view},"you":${JSON.stringify(member.id)}}`;
@@ -851,8 +849,11 @@ export function createRelay(limits = {}) {
     // Tells everyone in a room how it is now, if it's been a while, and
     // otherwise once when it has, with the latest (see ROOM_UPDATE_MS)
     function roomChanged(room) {
-        // The list's stale as soon as the room is, sent round now or later
-        listChanged();
+        // The list's stale as soon as the room shows differently on it, sent
+        // round now or later. Players' loadouts and ready don't show.
+        if (listingChanged(room)) {
+            listChanged();
+        }
         if (room.updateTimer) {
             room.updateWaiting = true;
             return;
@@ -889,6 +890,20 @@ export function createRelay(limits = {}) {
             endless: room.endless,
             hard: room.hard,
         };
+    }
+
+    // Whether the open rooms list shows this room differently now, or shows
+    // it or not where it didn't. A new room counts, as it can fill the relay.
+    function listingChanged(room) {
+        const shown =
+            room.open && !room.started && room.members.length < MAX_PARTY
+                ? JSON.stringify(listing(room))
+                : "";
+        if (shown === room.shown) {
+            return false;
+        }
+        room.shown = shown;
+        return true;
     }
 
     // Rooms anyone can join: open, not under way and not full. The fullest
@@ -1214,6 +1229,8 @@ export function createRelay(limits = {}) {
                     started: false,
                     members: [client],
                     order: nextRoomOrder++,
+                    // How the open rooms list shows it (see listingChanged)
+                    shown: undefined,
                     lastActive: Date.now(),
                     // The addresses (an IPv6 one by its /64) of players the
                     // host's kicked: not their whole /48, which other homes
