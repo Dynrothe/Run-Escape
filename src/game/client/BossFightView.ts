@@ -803,6 +803,21 @@ export class BossFightView {
             ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h - bob), w, h);
             ctx.imageSmoothingEnabled = true;
         }
+        // The Tombs' Apmeken room: over the pillar or vent that needs fixing
+        const issue = sim.tombsIssue;
+        if (issue) {
+            const top = this.ground(sim, issue.x, issue.y) - (issue.kind === "pillar" ? 3.2 : 1.6);
+            const p = overlay.project(issue.x, top, issue.y, this.a);
+            if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
+                this.drawEdgeArrow(overlay, sim, issue.x, issue.y, TOTEM_ARROW * scale, 40 * scale);
+            } else if (sprite) {
+                const w = sprite.width * HINT_ARROW_SCALE * scale;
+                const h = sprite.height * HINT_ARROW_SCALE * scale;
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h - bob), w, h);
+                ctx.imageSmoothingEnabled = true;
+            }
+        }
     }
 
     // The dark coming down, a light left on her as she rises, and her name

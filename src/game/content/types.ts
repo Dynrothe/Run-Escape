@@ -173,7 +173,17 @@ export type EnemyDef = {
     // Blows up when it dies, hurting the player if they're close (Pest
     // Control's splatters). damage is like EnemyDef.damage (the map's
     // difficulty and the run's time scale it the same way).
-    explodes?: { damage: number; radius: number; spotAnim?: number; sound?: number };
+    // pack: what it does to the other enemies in reach too (the Tombs' volatile baboons, which take
+    // their own pack with them), before the hit's scaling
+    explodes?: {
+        damage: number;
+        radius: number;
+        spotAnim?: number;
+        sound?: number;
+        pack?: number;
+    };
+    // What its hit does to the player besides its damage (the Tombs' cursed baboons weaken them)
+    touches?: PlayerEffectDef;
     // Drawn as this item's model, never animated, instead of as the NPC
     // (Phosani's eggs are the Parasitic egg): npcId goes unused
     objId?: number;
@@ -1243,8 +1253,16 @@ export type TombsPathDef = {
     id: string;
     name: string;
     door: { x: number; y: number };
-    room?: { arrive: { x: number; y: number } };
+    room?: {
+        arrive: { x: number; y: number };
+        // What it's played as (content/tombs.ts), and the spots its issues come at (Apmeken's
+        // pillars and vents: their middles in world tiles, and how close counts as at one)
+        puzzle?: "apmeken";
+        spots?: TombsSpotDef[];
+    };
 };
+
+export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reach: number };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into
 // its boss's room, which nobody leaves while the boss is up. Killing it takes them on to the next

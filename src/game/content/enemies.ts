@@ -3,6 +3,7 @@ import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
 import { getTheatreBosses } from "./theatre";
+import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8341,6 +8342,9 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
 ];
+
+// The Tombs of Amascut's (in development)
+ENEMIES.push(...TOMBS_ENEMIES);
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above
 ENEMIES.push(

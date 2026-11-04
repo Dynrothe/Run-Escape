@@ -161,7 +161,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "pathLevel",
         level: 15,
         description: "Every path starts a level up: more puzzle, faster hazards, more bullets.",
-        comes: RAID,
     },
     {
         id: "pathfinder",
@@ -170,7 +169,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "pathLevel",
         level: 40,
         description: "Every path starts two levels up.",
-        comes: RAID,
     },
     {
         id: "pathmaster",
@@ -179,7 +177,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "pathLevel",
         level: 50,
         description: "Every path starts three levels up.",
-        comes: RAID,
     },
     {
         id: "walk_the_path",
@@ -187,8 +184,7 @@ export const INVOCATIONS: InvocationDef[] = [
         name: "Walk the Path",
         group: "paths",
         level: 50,
-        description: "Finishing a path levels up others: four level-ups over the raid.",
-        comes: RAID,
+        description: "Finishing a path levels up the rest twice as much.",
     },
     // Prayer: the bosses' protection, and what a hit costs
     {
@@ -198,7 +194,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "prayer",
         level: 20,
         description: "Your armour stops 10% less of every hit.",
-        comes: RAID,
     },
     {
         id: "deadly_prayers",
@@ -207,7 +202,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "prayer",
         level: 20,
         description: "A hit leaves you open: the next within a second does 20% more.",
-        comes: RAID,
     },
     // Restoration
     {
@@ -217,7 +211,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "restoration",
         level: 15,
         description: "No food drops.",
-        comes: RAID,
     },
     {
         id: "dehydration",
@@ -226,7 +219,7 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "restoration",
         level: 30,
         description: "No regeneration, and no healing supplies.",
-        comes: RAID,
+        comes: "the Helpful Spirit (its healing supplies)",
     },
     {
         id: "overly_draining",
@@ -235,7 +228,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "restoration",
         level: 15,
         description: "Weapons' special attacks come half as often.",
-        comes: RAID,
     },
     // Ba-Ba
     {

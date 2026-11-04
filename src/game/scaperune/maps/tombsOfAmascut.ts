@@ -122,8 +122,40 @@ export const TOA_PLACES = {
     },
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
+        spots: [
+            // The four roof supports (45494, 3 by 3) and the six vents (45024, holes in the walls),
+            // in square 59,82's tiles: their middles, and how close counts as at one
+            ...[
+                [27, 21],
+                [35, 21],
+                [27, 41],
+                [35, 41],
+            ].map(([x, y]) => apmekenSpot("pillar", x + 1.5, y + 1.5, 2.7)),
+            ...[
+                [24, 23],
+                [32, 23],
+                [40, 23],
+                [24, 41],
+                [32, 41],
+                [40, 41],
+            ].map(([x, y]) => apmekenSpot("vent", x + 0.5, y + 0.5, 1.7)),
+        ],
     },
 };
+
+// A spot in the Apmeken room from its tile in square 59,82, in world tiles
+function apmekenSpot(kind: "pillar" | "vent", x: number, y: number, reach: number) {
+    const local = {
+        x: 59 * MAP_SQUARE_SIZE - APMEKEN.x + x,
+        y: 82 * MAP_SQUARE_SIZE - APMEKEN.y + y,
+    };
+    return {
+        kind,
+        x: MAP_X * MAP_SQUARE_SIZE + APMEKEN_ROOM.at.x + local.x,
+        y: MAP_Y * MAP_SQUARE_SIZE + APMEKEN_ROOM.at.y + local.y,
+        reach,
+    };
+}
 
 function build(context: BuildContext): TileGrid {
     const ground = new Ground(SIZE_X, SIZE_Y);
@@ -214,6 +246,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             "invocations' raid level in place of hard mode.",
         // Osmumten's fang
         iconObjId: 26219,
+        // As the Theatre of Blood's, before the raid level's on top
+        difficulty: { hp: 3.75, damage: 2.7 },
         waves: [],
         events: [],
         finalBossWarning: "",
@@ -226,7 +260,13 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                 id,
                 name: PATH_NAMES[id],
                 door: TOA_PLACES.nexus.doors[id],
-                ...(id === "apmeken" && { room: { arrive: TOA_PLACES.apmeken.arrive } }),
+                ...(id === "apmeken" && {
+                    room: {
+                        arrive: TOA_PLACES.apmeken.arrive,
+                        puzzle: "apmeken" as const,
+                        spots: TOA_PLACES.apmeken.spots,
+                    },
+                }),
             })),
         },
     },

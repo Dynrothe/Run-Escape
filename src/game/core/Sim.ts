@@ -79,6 +79,7 @@ import {
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SOUNDS } from "../content/sounds";
+import { APMEKEN, APMEKEN_SPOTANIMS, APMEKEN_WAVES, getApmekenTrickle } from "../content/tombs";
 import {
     PUMPKIN_CHANCE,
     PUMPKIN_ID,
@@ -114,7 +115,9 @@ import {
     RandomEventEffect,
     SpecialAttackDef,
     Stats,
+    TombsSpotDef,
     UtilityDef,
+    WaveDef,
     WeaponDef,
     emptyStats,
 } from "../content/types";
@@ -281,6 +284,10 @@ const RAID_CLEARED_SECONDS = 2;
 const RAID_MIN_WAVE_SECONDS = 60;
 // How close to a raid hall's teleporter asks to use it (tiles from its middle; it's 2 by 2 and solid)
 const TELEPORTER_REACH = 2.2;
+// The Tombs' invocations: what armour stops with Quiet Prayers, and what a hit within a second of
+// the last does with Deadly Prayers
+const QUIET_PRAYERS = 0.9;
+const DEADLY_PRAYERS = 1.2;
 // How close to a door in the Tombs' Nexus counts as at it (tiles from its middle; doors are 3 by 3
 // at most, and solid)
 const TOMBS_DOOR_REACH = 2.8;
@@ -704,6 +711,19 @@ export type HeroOptions = {
     armoury?: ArmouryUpgrades;
 };
 
+// The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
+// issue that's up (which spot, since when, and how long it's been stood at), when the next is due,
+// how many have gone this wave, and when the room was beaten
+type ApmekenRoom = {
+    wave: number;
+    group: number[];
+    waveTick: number;
+    issue?: { spot: number; startTick: number; fixTicks: number };
+    nextIssueTick: number;
+    missed: number;
+    doneTick?: number;
+};
+
 export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
@@ -803,7 +823,13 @@ export class Sim {
     // The Tombs' Nexus: the door each hero's at, if any (stepTombs), and the path the party's on,
     // undefined in the Nexus
     private readonly tombsDoors = new Map<number, string | undefined>();
+    // Deadly Prayers: until when each hero's open to a harder hit
+    private readonly tombsOpenUntil = new Map<number, number>();
     tombsPath: string | undefined;
+    // The paths done, in the order they were
+    tombsPathsDone: string[] = [];
+    // The Apmeken room while the party's in it
+    apmeken: ApmekenRoom | undefined;
     raidStageTick = 0;
     // Who's still to have their turn at a cleared room's supply chest
     private raidShopQueue: number[] = [];
@@ -2323,6 +2349,7 @@ export class Sim {
         }
         this.stepRaid();
         this.stepTombs();
+        this.stepApmeken();
         this.stepIntro();
         this.stepDirector();
         this.stepChat();
@@ -2418,7 +2445,7 @@ export class Sim {
         if (player.flash > 0) {
             player.flash--;
         }
-        if (this.stats.regen > 0 && player.hp < player.maxHp) {
+        if (this.stats.regen > 0 && player.hp < player.maxHp && !this.invoked("dehydration")) {
             // Regen is hitpoints a minute
             this.regenAccumulator += this.stats.regen / (60 * TICKS_PER_SECOND);
             if (this.regenAccumulator >= 1) {
@@ -2483,7 +2510,7 @@ export class Sim {
 
     private currentWave() {
         const seconds = this.directorSeconds;
-        const waves = this.raidRoomDef?.waves ?? this.map.waves;
+        const waves = this.activeWaves;
         let wave = waves[0];
         for (const w of waves) {
             if (w.start <= seconds) {
@@ -2546,8 +2573,8 @@ export class Sim {
             }
         }
 
-        // A map that's one boss fight has no waves
-        if (this.map.waves.length === 0) {
+        // A map that's one boss fight has no waves (nor the Tombs' Nexus)
+        if (this.activeWaves.length === 0) {
             return;
         }
         const wave = this.currentWave();
@@ -3488,6 +3515,9 @@ export class Sim {
             return;
         }
         this.damagePlayer(enemy.damage, enemy.def.id, enemy.elite);
+        if (enemy.def.touches) {
+            this.applyPlayerEffect(enemy.def.touches, enemy);
+        }
         this.recoil(enemy);
     }
 
@@ -3542,12 +3572,21 @@ export class Sim {
         if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
             return 0;
         }
+        // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
+        // next within a second does more.
+        const stops = this.stats.armor * (this.invoked("quiet_prayers") ? QUIET_PRAYERS : 1);
         const armor = ignoreArmor
             ? 0
             : armorCap === undefined
-              ? this.stats.armor
-              : Math.min(this.stats.armor, damage * armorCap);
-        const amount = Math.max(1, Math.round(damage - armor));
+              ? stops
+              : Math.min(stops, damage * armorCap);
+        const openUntil = this.tombsOpenUntil.get(this.hero.index) ?? -1;
+        const opened =
+            this.invoked("deadly_prayers") && this.tick <= openUntil ? DEADLY_PRAYERS : 1;
+        const amount = Math.max(1, Math.round(damage * opened - armor));
+        if (this.invoked("deadly_prayers")) {
+            this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
+        }
         player.hp -= amount;
         this.damageTaken += amount;
         player.flash = 6;
@@ -4171,6 +4210,11 @@ export class Sim {
                 continue;
             }
             this.tombsDoors.set(hero.index, at?.id);
+            if (at && this.tombsPathsDone.includes(at.id)) {
+                this.use(hero);
+                this.emit({ type: "notice", message: `${at.name}: done.` }, true);
+                continue;
+            }
             if (at?.room) {
                 this.enterTombsPath(at.id, at.room.arrive);
                 return;
@@ -4191,6 +4235,234 @@ export class Sim {
         this.gatherHall();
         this.moveParty(arrive);
         this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
+        if (path.room?.puzzle === "apmeken") {
+            this.apmeken = {
+                wave: -1,
+                group: [],
+                waveTick: this.tick,
+                nextIssueTick: this.tick + secondsToTicks(this.apmekenIssueEvery()),
+                missed: 0,
+            };
+            this.nextApmekenWave();
+        }
+    }
+
+    // Whether an invocation's on (only ever in the Tombs)
+    private invoked(id: string): boolean {
+        return this.invocations.includes(id);
+    }
+
+    // The Tombs' path levels, from the invocations (Pathseeker 1 to Pathmaster 3), with each path
+    // the raid's done before this one adding one, so the rooms grow with the raid
+    get tombsPathLevel(): number {
+        const level = this.invocations.includes("pathmaster")
+            ? 3
+            : this.invocations.includes("pathfinder")
+              ? 2
+              : this.invocations.includes("pathseeker")
+                ? 1
+                : 0;
+        // Walk the Path: finishing a path levels the rest up twice as much
+        return level + this.tombsPathsDone.length * (this.invoked("walk_the_path") ? 2 : 1);
+    }
+
+    private apmekenIssueEvery(): number {
+        return Math.max(4, APMEKEN.issueEvery - this.tombsPathLevel);
+    }
+
+    // The waves the director spawns by: the Apmeken room's stream while it's on, a raid room's, or
+    // the map's
+    private get activeWaves(): WaveDef[] {
+        if (this.map.tombs) {
+            const room = this.apmeken;
+            return room && room.doneTick === undefined ? [this.apmekenTrickle(room.wave)] : [];
+        }
+        return this.raidRoomDef?.waves ?? this.map.waves;
+    }
+
+    private apmekenTrickle(wave: number): WaveDef {
+        const trickle = getApmekenTrickle(wave);
+        const quicker = 1 + 0.15 * this.tombsPathLevel;
+        return { ...trickle, spawnRate: trickle.spawnRate * quicker };
+    }
+
+    // The next of the Apmeken room's eight waves, or once they're all done, the room's done
+    private nextApmekenWave(): void {
+        const room = this.apmeken!;
+        room.wave++;
+        room.waveTick = this.tick;
+        room.missed = 0;
+        if (room.wave >= APMEKEN_WAVES.length) {
+            room.wave = APMEKEN_WAVES.length - 1;
+            room.doneTick = this.tick;
+            room.issue = undefined;
+            this.emit({
+                type: "notice",
+                message: "The baboons are beaten, and the way west opens. Ba-Ba isn't in yet.",
+            });
+            return;
+        }
+        const ids = [...APMEKEN_WAVES[room.wave]];
+        // One more of its first for each path level
+        for (let i = 0; i < this.tombsPathLevel; i++) {
+            ids.push(ids[0]);
+        }
+        const current = this.hero;
+        this.useSpawnHero();
+        room.group = ids.flatMap((id) => {
+            const enemy = this.spawnEnemy(getEnemy(id), "normal");
+            return enemy ? [enemy.uid] : [];
+        });
+        this.use(current);
+        this.emit({
+            type: "notice",
+            message: `Wave ${room.wave + 1} of ${APMEKEN_WAVES.length}`,
+        });
+    }
+
+    // The Apmeken room: its waves, one when the last is beaten (with a casket for it) or has been
+    // about too long, and the issues that come on a timer, fixed by standing at them
+    private stepApmeken(): void {
+        const room = this.apmeken;
+        const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
+        if (!room || !spots || this.runOver || this.state !== "playing") {
+            return;
+        }
+        if (room.doneTick !== undefined) {
+            // Back to the Nexus, a moment after: Ba-Ba isn't built yet
+            if (this.tick - room.doneTick >= secondsToTicks(4)) {
+                this.leaveTombsPath();
+            }
+            return;
+        }
+        const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
+        const beaten = room.group.every((uid) => !alive.has(uid));
+        if (beaten) {
+            const player = this.hero.player;
+            this.dropCasket(player.x + 0.8, player.y, false);
+        }
+        if (beaten || this.tick - room.waveTick >= secondsToTicks(APMEKEN.waveSeconds)) {
+            this.nextApmekenWave();
+            if (room.doneTick !== undefined) {
+                return;
+            }
+        }
+        this.stepApmekenIssue(room, spots);
+    }
+
+    private stepApmekenIssue(room: ApmekenRoom, spots: TombsSpotDef[]): void {
+        const issue = room.issue;
+        if (!issue) {
+            if (this.tick >= room.nextIssueTick) {
+                const spot = this.rng.int(spots.length);
+                room.issue = { spot, startTick: this.tick, fixTicks: 0 };
+                const at = spots[spot];
+                this.emit({
+                    type: "notice",
+                    message:
+                        at.kind === "pillar"
+                            ? `You sense an issue: a pillar to the ${this.tombsCompass(at)} is giving way!`
+                            : `You sense an issue: a vent to the ${this.tombsCompass(at)} is building up!`,
+                });
+            }
+            return;
+        }
+        const at = spots[issue.spot];
+        if ((this.tick - issue.startTick) % secondsToTicks(1.2) === 0) {
+            this.addEffect(
+                at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillar : APMEKEN_SPOTANIMS.vent,
+                at.x,
+                at.y,
+                0,
+                40,
+            );
+        }
+        const fixing = this.heroes.some(
+            (hero) =>
+                this.isUp(hero) && fm.hypot(hero.player.x - at.x, hero.player.y - at.y) <= at.reach,
+        );
+        issue.fixTicks = fixing ? issue.fixTicks + 1 : 0;
+        if (issue.fixTicks >= secondsToTicks(APMEKEN.fixSeconds)) {
+            room.issue = undefined;
+            room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
+            this.emit({
+                type: "notice",
+                message: at.kind === "pillar" ? "The pillar holds." : "The vent clears.",
+            });
+            return;
+        }
+        const deadline = Math.max(5, APMEKEN.deadline - 1.5 * this.tombsPathLevel);
+        if (this.tick - issue.startTick < secondsToTicks(deadline)) {
+            return;
+        }
+        // Left too long: it hurts everyone, more for each that's gone this wave
+        room.issue = undefined;
+        room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
+        const damage =
+            APMEKEN.damage *
+            (1 + APMEKEN.worse * room.missed) *
+            this.map.difficulty.damage *
+            this.hardScale.damage;
+        room.missed++;
+        this.addEffect(
+            at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillarFalls : APMEKEN_SPOTANIMS.ventBursts,
+            at.x,
+            at.y,
+            0,
+            60,
+        );
+        this.emit({
+            type: "notice",
+            message:
+                at.kind === "pillar"
+                    ? "The pillar gives way, and the roof comes down on you!"
+                    : "The vent bursts, filling the room!",
+        });
+        this.forEachHeroInReach(() => {
+            if (!this.runOver && this.isUp(this.hero) && !this.reviving) {
+                this.damagePlayer(damage, "apmeken_room", false);
+            }
+        });
+    }
+
+    // Which way a spot is from the middle of the room's spots, as a compass point
+    private tombsCompass(at: { x: number; y: number }): string {
+        const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots ?? [];
+        const mx = spots.reduce((sum, spot) => sum + spot.x, 0) / Math.max(1, spots.length);
+        const my = spots.reduce((sum, spot) => sum + spot.y, 0) / Math.max(1, spots.length);
+        const ns = at.y > my + 1 ? "north" : at.y < my - 1 ? "south" : "";
+        const ew = at.x > mx + 1 ? "east" : at.x < mx - 1 ? "west" : "";
+        return ns && ew ? `${ns}-${ew}` : ns || ew || "middle";
+    }
+
+    // Where the issue is, for the game's hint arrow over it
+    get tombsIssue(): { x: number; y: number; kind: "pillar" | "vent" } | undefined {
+        const issue = this.apmeken?.issue;
+        const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
+        if (!issue || !spots) {
+            return undefined;
+        }
+        const at = spots[issue.spot];
+        return { x: at.x, y: at.y, kind: at.kind };
+    }
+
+    // Done with a path: back to the Nexus, with what's on the floor
+    private leaveTombsPath(): void {
+        const tombs = this.map.tombs!;
+        if (this.tombsPath && !this.tombsPathsDone.includes(this.tombsPath)) {
+            this.tombsPathsDone.push(this.tombsPath);
+        }
+        this.tombsPath = undefined;
+        this.apmeken = undefined;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        this.enemyProjectiles = [];
+        this.gatherHall();
+        this.moveParty(tombs.nexus);
+        this.emit({ type: "notice", message: "Back in the Nexus." });
     }
 
     // A room's waves, from the top, in its hall
@@ -7397,6 +7669,28 @@ export class Sim {
                 this.damagePlayer(explodes.damage * enemy.damageScale, enemy.def.id, enemy.elite);
             }
         });
+        // Its own pack too, scaled as their hitpoints were, so it's the same share of them anywhere
+        if (explodes.pack) {
+            const source = this.damageSource;
+            this.damageSource = "other";
+            for (const other of this.enemies) {
+                if (
+                    other !== enemy &&
+                    !other.dead &&
+                    !other.boss &&
+                    fm.hypot(other.x - enemy.x, other.y - enemy.y) <= explodes.radius + other.radius
+                ) {
+                    this.damageEnemy(
+                        other,
+                        explodes.pack * (other.maxHp / Math.max(1, other.def.hp)),
+                        0.3,
+                        enemy.x,
+                        enemy.y,
+                    );
+                }
+            }
+            this.damageSource = source;
+        }
     }
 
     // Bones, and now and then a casket, coins, food or a power-up
@@ -7449,7 +7743,7 @@ export class Sim {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
-        } else if (this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+        } else if (!this.invoked("on_a_diet") && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
             this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
         if (!enemy.boss) {
@@ -7610,7 +7904,8 @@ export class Sim {
         if (!special) {
             return undefined;
         }
-        if (weapon.uses % special.every !== special.every - 1) {
+        const every = special.every * (this.invoked("overly_draining") ? 2 : 1);
+        if (weapon.uses % every !== every - 1) {
             weapon.uses++;
             return undefined;
         }
