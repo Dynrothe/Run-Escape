@@ -71,6 +71,7 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
+import { InventoryItem } from "./InventoryItem";
 import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
@@ -1717,8 +1718,6 @@ const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): J
 });
 
 // Utility items, used with 1-4 (a controller's shoulder buttons) or a click
-const ITEM_BUTTONS = ["leftBumper", "rightBumper", "leftTrigger", "rightTrigger"] as const;
-
 const Inventory = memo(function Inventory({
     inventory,
     client,
@@ -1729,25 +1728,7 @@ const Inventory = memo(function Inventory({
     return (
         <div className="ui-inventory">
             {inventory.map((slot, i) => (
-                <button
-                    key={i}
-                    data-silent
-                    className="ui-inv-slot"
-                    style={slot ? { borderColor: slot.item.rarity.color } : undefined}
-                    disabled={!slot}
-                    title={slot ? `${slot.item.name}: ${slot.item.lines.join(" ")}` : ""}
-                    // Keep focus on the game, so Space doesn't press it again
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => client.useItem(i)}
-                >
-                    <KeyHint
-                        keyLabel={String(i + 1)}
-                        pad={ITEM_BUTTONS[i]}
-                        className="ui-inv-key"
-                    />
-                    {slot && <ItemIcon objId={slot.item.objId} size={30} />}
-                    {slot && slot.count > 1 && <span className="ui-inv-count">{slot.count}</span>}
-                </button>
+                <InventoryItem key={i} slot={slot} index={i} onUse={() => client.useItem(i)} />
             ))}
         </div>
     );

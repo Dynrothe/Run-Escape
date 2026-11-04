@@ -83,8 +83,11 @@ pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** paus
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
 the mouse wheel zooms.
 
+Hover over an item in your bag to read the description shown when you found it.
+
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
-use your items, and everything else is a tap. To open it full screen from its own icon, pick Add to
+use your items: tap an item to use it, or hold it to read its description without using it.
+Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
 A controller works too, in the browser and the desktop app. The left stick or d-pad moves, the

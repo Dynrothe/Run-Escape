@@ -1563,6 +1563,26 @@
     text-shadow: 1px 1px 0 #000;
 }
 
+.ui-inv-tip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 260px;
+    max-width: calc(100vw / var(--ui-scale) - 24px);
+    padding: 8px 10px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    font-weight: normal;
+    color: var(--ui-white);
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+}
+
 .ui-hp {
     position: relative;
     width: min(280px, calc(60vw / var(--ui-scale)));

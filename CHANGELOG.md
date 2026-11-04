@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Hover over bag items, or hold them on mobile, to read their descriptions without using them.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed
