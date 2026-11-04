@@ -23,6 +23,7 @@ import {
 } from "../core/Sim";
 import {
     Enemy,
+    EnemyProjectile,
     FairyRing,
     FallingRock,
     Glyph,
@@ -432,6 +433,10 @@ export class GameView {
         }
 
         for (const projectile of sim.enemyProjectiles) {
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                this.drawSweeping(actors, sim, projectile, alpha, tick);
+                continue;
+            }
             const spotAnim = projectile.attack.spotAnim;
             const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
             if (!model || !hasGeometry(model)) {
@@ -675,6 +680,42 @@ export class GameView {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
         });
+    }
+
+    // A wave along the ground, or what's thrown drawn as an NPC (a knight's spinning
+    // sword, BossAttackDef.lookId), never smaller than what it hits
+    private drawSweeping(
+        actors: ActorRenderer,
+        sim: Sim,
+        projectile: EnemyProjectile,
+        alpha: number,
+        tick: number,
+    ): void {
+        const attack = projectile.attack;
+        const look = attack.lookId !== undefined ? getEnemy(attack.lookId) : undefined;
+        const model = look
+            ? this.assets.get(getEnemyModelKey(look, 0))
+            : this.assets.get("spot:" + attack.spotAnim);
+        if (!model) {
+            return;
+        }
+        const anim = look ? model.getAnim(look.idleSeq) : model.anims[0];
+        const x = lerp(projectile.prevX, projectile.x, alpha);
+        const y = lerp(projectile.prevY, projectile.y, alpha);
+        const scale = Math.max(
+            look?.scale ?? 1,
+            (projectile.radius * 128) / Math.max(1, model.radius),
+        );
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(tick - projectile.startTick),
+            x,
+            this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
+            y,
+            projectile.yaw,
+            { scale },
+        );
     }
 
     // A boss's glyph, idling as it slides, facing the boss
@@ -1256,6 +1297,10 @@ export class GameView {
     ): void {
         const ctx = overlay.ctx;
         for (const projectile of sim.enemyProjectiles) {
+            // Big enough to see as they are
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                continue;
+            }
             const x = lerp(projectile.prevX, projectile.x, alpha);
             const y = lerp(projectile.prevY, projectile.y, alpha);
             const p = overlay.project(

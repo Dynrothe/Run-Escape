@@ -662,7 +662,8 @@ export type BossAttackDef = {
     // tile of it
     square?: number;
     // Projectiles: a wave along the ground rather than a shot: it goes on through
-    // whoever it hits (each once) for reach tiles
+    // whoever it hits (each once) for reach tiles, along where they were as it
+    // began (as a boomerang does), not where they are as it's fired
     wave?: { reach: number };
     // Projectiles: out reach tiles the way they're thrown, then back the way they
     // came to where they were thrown from, hitting each player once each way; at
@@ -674,7 +675,8 @@ export type BossAttackDef = {
     // Projectiles and bullets: drawn as this enemy (its NPC, playing its idleSeq),
     // never spawned, rather than as spotAnim (the knights' spinning sword)
     lookId?: string;
-    // Whoever it hits: dragged to pull tiles from the boss over pullSeconds (0.25
+    // Whoever it hits: dragged to pull tiles from the boss (just clear of it at the
+    // nearest) over pullSeconds (0.25
     // when unset), held there for bind seconds, and the boss straight on with
     // attack (by name) on them, whatever it was winding up (a shock wave that binds,
     // then a flurry)

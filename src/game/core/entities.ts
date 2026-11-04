@@ -887,6 +887,9 @@ type SimEventBody =
           x: number;
           y: number;
       }
+    // A statue the fight draws (BossAttackDef.statues) starts this animation:
+    // the one of locId whose south-west tile is x, y
+    | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it

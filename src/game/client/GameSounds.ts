@@ -39,6 +39,7 @@ export function getGameSoundIds(): number[] {
         ids.push(enemy.spawnSound ?? -1, enemy.explodes?.sound ?? -1, enemy.blinks?.sound ?? -1);
         for (const attack of enemy.boss?.attacks ?? []) {
             ids.push(attack.windupSound ?? -1, attack.sound ?? -1, attack.hitSound ?? -1);
+            ids.push(attack.boomerang?.catchSound ?? -1);
         }
         const boss = enemy.boss;
         ids.push(boss?.intro?.darkSound ?? -1, boss?.intro?.sound ?? -1);

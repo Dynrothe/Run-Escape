@@ -670,7 +670,18 @@ export type Hero = {
     // While the sled lasts: how much faster they go, and until when
     sledEndTick: number;
     sledSpeed: number;
-    // What a boss has done to them
+    // What a boss has done to them: dragged across to it (BossAttackDef.onHit),
+    // from where they were to where they're going over these ticks
+    // (and held there until holdEnd, the boss standing over them)
+    drag?: {
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        startTick: number;
+        endTick: number;
+        holdEnd: number;
+    };
     curse?: PlayerCurse;
     parasite?: PlayerParasite;
     hold?: PlayerHold;
@@ -2372,6 +2383,15 @@ export class Sim {
         if (frozen) {
             player.frozen--;
         }
+        // Dragged across to a boss (BossAttackDef.onHit), and frozen as it goes
+        const drag = this.hero.drag;
+        if (drag && this.tick < drag.endTick) {
+            const t = (this.tick + 1 - drag.startTick) / Math.max(1, drag.endTick - drag.startTick);
+            player.x = drag.fromX + (drag.toX - drag.fromX) * t;
+            player.y = drag.fromY + (drag.toY - drag.fromY) * t;
+        } else if (drag && this.tick >= drag.holdEnd) {
+            this.hero.drag = undefined;
+        }
         // Watching a boss rise: rooted like a hold, and turning like one
         const held = !!this.hold || this.introHolds;
         const moving = movePlayer(this.grid, player, moveX, moveY, {
@@ -3138,7 +3158,9 @@ export class Sim {
                         bossState.surge ||
                         bossState.walkers ||
                         bossState.leap ||
-                        this.isNapping(enemy)
+                        this.isNapping(enemy) ||
+                        // and hauling someone in (BossAttackDef.onHit)
+                        this.heroes.some((hero) => hero.drag !== undefined)
                     ) {
                         // Stands still winding up, so a swing can be stepped away from
                         dirX = dirY = 0;
@@ -5017,6 +5039,7 @@ export class Sim {
             this.use(hero);
             this.parasite = undefined;
             this.hold = undefined;
+            hero.drag = undefined;
             if (this.curse) {
                 this.curse = undefined;
                 this.emit({ type: "playerCursed", cursed: false });
@@ -6360,7 +6383,13 @@ export class Sim {
             dirX: (player.x - enemy.x) / toPlayer,
             dirY: (player.y - enemy.y) / toPlayer,
         };
+        // Thrown from statues of the map's (BossAttackDef.from), there from the start
+        if (attack.from === "knights") {
+            windup.from = this.pickKnights(attack);
+            windup.targets = [{ x: player.x, y: player.y }];
+        }
         state.windup = windup;
+        this.animateStatues(attack, windup.from, attack.statues?.windupSeq);
         // Somewhere safe from it, there from the start (GroundPatternDef.safe)
         if (attack.ground?.safe) {
             this.markGround(enemy, attack, this.tick);
@@ -6497,6 +6526,10 @@ export class Sim {
         });
         this.landBlastExtras(enemy, windup);
         this.queueFollow(enemy, attack);
+        // Not a row attack's: its statues fire with its volleys (fireRows)
+        if (!attack.pattern?.rows) {
+            this.animateStatues(attack, windup.from, attack.statues?.seq);
+        }
         if (attack.kind === "swing" || attack.kind === "blast") {
             // A swing hits around the boss, a blast where the player was (and
             // around there); the player is hit once however many land on them
@@ -6586,7 +6619,77 @@ export class Sim {
             this.startPattern(enemy, attack, windup);
             return;
         }
-        this.launchProjectiles(enemy, attack, this.getBossDamage(enemy, attack), false);
+        this.launchProjectiles(enemy, attack, this.getBossDamage(enemy, attack), false, windup);
+    }
+
+    // Some of the map's knights (ArenaFeatures.knights), count of them (one when
+    // unset), at random
+    private pickKnights(attack: BossAttackDef): ArenaStatue[] {
+        const knights = [...(this.map.features?.knights ?? [])];
+        const picked: ArenaStatue[] = [];
+        for (let i = 0; i < (attack.count ?? 1) && knights.length > 0; i++) {
+            picked.push(knights.splice(this.rng.int(knights.length), 1)[0]);
+        }
+        return picked;
+    }
+
+    // The statues an attack's done with (BossAttackDef.statues): these (its own,
+    // a throw's knights, a volley's rows), or its group's, start seq
+    private animateStatues(
+        attack: BossAttackDef,
+        own: readonly ArenaStatue[] | undefined,
+        seq: number | undefined,
+    ): void {
+        const statues = attack.statues;
+        if (!statues || seq === undefined) {
+            return;
+        }
+        const list = statues.group ? this.map.features?.statues?.[statues.group] : own;
+        for (const statue of list ?? []) {
+            this.emit({ type: "statueSeq", locId: statues.locId, x: statue.x, y: statue.y, seq });
+        }
+    }
+
+    // Whoever a wave's hit (BossAttackDef.onHit): dragged in to the boss's feet,
+    // held there, and the boss straight on with what follows, whatever it was
+    // winding up
+    private bindToBoss(boss: Enemy, attack: BossAttackDef): void {
+        const onHit = attack.onHit!;
+        const player = this.player;
+        let dragTicks = 0;
+        const bindTicks = secondsToTicks(onHit.bind ?? 0);
+        if (onHit.pull !== undefined) {
+            dragTicks = Math.max(1, secondsToTicks(onHit.pullSeconds ?? 0.25));
+            const dx = player.x - boss.x;
+            const dy = player.y - boss.y;
+            const distance = Math.max(0.001, fm.hypot(dx, dy));
+            // No nearer than just clear of it
+            const pull = Math.max(onHit.pull, boss.radius + player.radius);
+            const to = findFreeSpot(
+                this.grid,
+                boss.x + (dx / distance) * pull,
+                boss.y + (dy / distance) * pull,
+                player.radius,
+                (tileX, tileY) => this.isWalkableTile(tileX, tileY),
+            );
+            this.hero.drag = {
+                fromX: player.x,
+                fromY: player.y,
+                toX: to.x,
+                toY: to.y,
+                startTick: this.tick,
+                endTick: this.tick + dragTicks,
+                holdEnd: this.tick + dragTicks + bindTicks,
+            };
+        }
+        player.frozen = Math.max(player.frozen, dragTicks + bindTicks);
+        const next = onHit.attack && boss.def.boss!.attacks.find((a) => a.name === onHit.attack);
+        if (next && !boss.dead) {
+            const state = boss.bossState!;
+            state.windup = undefined;
+            state.chain = undefined;
+            state.follow = { attack: next, atTick: this.tick + dragTicks };
+        }
     }
 
     // What's to follow an attack, from when it's fired (BossAttackDef.follow)
@@ -6610,11 +6713,39 @@ export class Sim {
         attack: BossAttackDef,
         damage: number,
         crowd: boolean,
+        windup?: BossWindup,
     ): void {
         const player = this.player;
+        const speed = (attack.speed ?? 10) / TICKS_PER_SECOND;
+        // Thrown from statues, each at where the player was as it began
+        if (windup?.from) {
+            const target = windup.targets[0] ?? player;
+            for (const statue of windup.from) {
+                const { x, y } = statueMiddle(statue);
+                this.throwProjectile(
+                    enemy,
+                    attack,
+                    damage,
+                    x,
+                    y,
+                    fm.atan2(target.y - y, target.x - x),
+                    speed,
+                    statue,
+                );
+            }
+            return;
+        }
         const base = fm.atan2(player.y - enemy.y, player.x - enemy.x);
         const count = attack.count ?? 1;
-        const speed = (attack.speed ?? 10) / TICKS_PER_SECOND;
+        if (attack.wave || attack.boomerang) {
+            // Along the line it was aimed as it began, there to be stepped off
+            const aim = windup ? fm.atan2(windup.dirY, windup.dirX) : base;
+            for (let i = 0; i < count; i++) {
+                const angle = aim + (i - (count - 1) / 2) * (attack.spread ?? 0);
+                this.throwProjectile(enemy, attack, damage, enemy.x, enemy.y, angle, speed);
+            }
+            return;
+        }
         for (let i = 0; i < count; i++) {
             const angle = base + (i - (count - 1) / 2) * (attack.spread ?? 0);
             const vx = fm.cos(angle) * speed;
@@ -6639,6 +6770,97 @@ export class Sim {
                 startTick: this.tick,
                 crowd,
             });
+        }
+    }
+
+    // A wave or a boomerang (BossAttackDef.wave, boomerang): through whoever it
+    // hits, for its reach (and back again)
+    private throwProjectile(
+        enemy: Enemy,
+        attack: BossAttackDef,
+        damage: number,
+        x: number,
+        y: number,
+        angle: number,
+        speed: number,
+        statue?: ArenaStatue,
+    ): void {
+        const vx = fm.cos(angle) * speed;
+        const vy = fm.sin(angle) * speed;
+        const reach = attack.boomerang?.reach ?? attack.wave?.reach ?? attack.range;
+        const out = Math.max(1, Math.ceil(reach / speed));
+        this.enemyProjectiles.push({
+            uid: this.nextUid++,
+            enemyUid: enemy.uid,
+            enemyId: enemy.def.id,
+            attack,
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            vx,
+            vy,
+            speed,
+            homing: 0,
+            life: attack.boomerang ? out * 2 : out,
+            radius: attack.radius ?? ENEMY_PROJECTILE_RADIUS,
+            damage,
+            yaw: yawFromVector(vx, vy),
+            startTick: this.tick,
+            hit: [],
+            ...(attack.boomerang && {
+                boomerang: { fromX: x, fromY: y, turnTick: this.tick + out, hitBack: [], statue },
+            }),
+        });
+    }
+
+    // A wave's or a boomerang's tick: on through everyone it reaches, each hit
+    // once (a boomerang once each way), turning back at its reach
+    private stepThrough(projectile: EnemyProjectile, hit: number[]): void {
+        const boomerang = projectile.boomerang;
+        if (boomerang && this.tick === boomerang.turnTick) {
+            projectile.vx = -projectile.vx;
+            projectile.vy = -projectile.vy;
+            projectile.yaw = yawFromVector(projectile.vx, projectile.vy);
+        }
+        projectile.x += projectile.vx;
+        projectile.y += projectile.vy;
+        const back = boomerang !== undefined && this.tick >= boomerang.turnTick;
+        const hits = back ? boomerang.hitBack : hit;
+        const enemy = this.enemies.find((e) => e.uid === projectile.enemyUid);
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const index = this.hero.index;
+            if (
+                this.runOver ||
+                hits.includes(index) ||
+                fm.hypot(player.x - projectile.x, player.y - projectile.y) >
+                    projectile.radius + player.radius
+            ) {
+                return;
+            }
+            hits.push(index);
+            this.bossHit(projectile.enemyId, enemy, projectile.attack, projectile.damage);
+            if (projectile.attack.onHit && enemy && !this.runOver && !this.reviving) {
+                this.bindToBoss(enemy, projectile.attack);
+            }
+        });
+        if (boomerang && projectile.life <= 0) {
+            // Caught by the statue that threw it
+            const attack = projectile.attack;
+            const sound = attack.boomerang!.catchSound;
+            if (sound !== undefined) {
+                this.emit({
+                    type: "bossAttack",
+                    enemyId: projectile.enemyId,
+                    sound,
+                    x: projectile.x,
+                    y: projectile.y,
+                });
+            }
+            if (boomerang.statue) {
+                this.animateStatues(attack, [boomerang.statue], attack.boomerang!.catchSeq);
+            }
         }
     }
 
@@ -6891,6 +7113,14 @@ export class Sim {
             projectile.prevX = projectile.x;
             projectile.prevY = projectile.y;
             projectile.life--;
+            // A wave or a boomerang goes through everyone
+            if (projectile.hit) {
+                this.stepThrough(projectile, projectile.hit);
+                if (this.runOver) {
+                    return;
+                }
+                continue;
+            }
             // At whoever's nearest
             this.use(this.nearestHero(projectile.x, projectile.y));
             const player = this.player;

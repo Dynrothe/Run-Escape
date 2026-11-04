@@ -338,3 +338,169 @@ describe("a lunge's strip and a square blast", () => {
         expect(sim.player.frozen).toBe(0);
     });
 });
+
+describe("a shock wave that drags and binds", () => {
+    const flurry = attack({
+        name: "Flurry",
+        kind: "swing",
+        radius: 2.5,
+        damage: 4,
+        windup: 0.3,
+        chain: { times: 2, windup: 0.3 },
+    });
+    const wave = attack({
+        name: "Shock wave",
+        kind: "projectile",
+        speed: 6.5,
+        radius: 0.75,
+        damage: 3,
+        windup: 0.5,
+        wave: { reach: 12 },
+        onHit: { pull: 1.5, pullSeconds: 0.3, bind: 1.5, attack: "Flurry" },
+    });
+
+    function fight(party?: number): { sim: Sim; boss: Enemy } {
+        const sim = createSim(1, grid(), party);
+        const boss = startFight(sim, bossDef({ attacks: [wave, flurry] }));
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = MIDDLE;
+        return { sim, boss };
+    }
+
+    test("it runs along the ground through everyone in its line, each once, as far as its reach", () => {
+        const { sim, boss } = fight(3);
+        place(sim, MIDDLE, MIDDLE + 4, 0);
+        place(sim, MIDDLE, MIDDLE + 8, 1);
+        place(sim, MIDDLE, MIDDLE + 14, 2);
+        sim["use"](sim.heroes[0]);
+        use(sim, boss, "Shock wave");
+        // Bound where they're hit, so nobody wanders into it twice
+        const hp = sim.heroes.map((h) => h.player.hp);
+        run(sim, wave.windup + 0.05);
+        expect(sim.enemyProjectiles[0].hit).toEqual([]);
+        run(sim, 2);
+        expect(sim.heroes[0].player.hp).toBeLessThan(hp[0]);
+        expect(sim.heroes[1].player.hp).toBeLessThan(hp[1]);
+        expect(sim.heroes[2].player.hp).toBe(hp[2]);
+        expect(sim.enemyProjectiles).toEqual([]);
+    });
+
+    test("a step to the side is clear of it", () => {
+        const { sim, boss } = fight();
+        place(sim, MIDDLE, MIDDLE + 6);
+        use(sim, boss, "Shock wave");
+        place(sim, MIDDLE + 1.5, MIDDLE + 6);
+        const hp = hpOf(sim);
+        run(sim, 2.5);
+        expect(hpOf(sim)).toBe(hp);
+        expect(sim.player.frozen).toBe(0);
+    });
+
+    test("whoever it hits is dragged to its feet, held, and given the flurry", () => {
+        const { sim, boss } = fight();
+        place(sim, MIDDLE, MIDDLE + 6);
+        use(sim, boss, "Shock wave");
+        run(sim, wave.windup + 0.05);
+        const hp = hpOf(sim);
+        // Until it reaches them
+        while (hpOf(sim) === hp) {
+            run(sim, 0.02);
+        }
+        const hit = sim.tick;
+        expect(sim.heroes[0].drag).toBeDefined();
+        run(sim, 0.32, 1, 0);
+        // At its feet, wherever it's walked to meanwhile
+        const pull = Math.max(1.5, boss.radius + sim.player.radius);
+        expect(Math.hypot(sim.player.x - boss.x, sim.player.y - boss.y)).toBeCloseTo(pull, 1);
+        expect(boss.bossState!.windup?.attack.name).toBe("Flurry");
+        // Held there: the stick does nothing
+        const at = sim.player.x;
+        run(sim, 1, 1, 0);
+        expect(sim.player.x).toBeCloseTo(at, 5);
+        // Three hits of the flurry while they're held, then they're free
+        const flurry = sim.damageByAttack["Flurry"] ?? 0;
+        expect(flurry).toBeGreaterThan(0);
+        expect(flurry % 3).toBe(0);
+        expect(boss.bossState!.chain).toBeUndefined();
+        run(sim, 1.5 - (sim.tick - hit) / TICKS_PER_SECOND + 0.6);
+        expect(sim.player.frozen).toBe(0);
+        expect(sim.heroes[0].drag).toBeUndefined();
+        run(sim, 0.5, 1, 0);
+        expect(sim.player.x).toBeGreaterThan(at + 0.5);
+    });
+});
+
+describe("the knights' sword: out and back", () => {
+    const sword = attack({
+        name: "Knight's sword",
+        kind: "projectile",
+        speed: 10,
+        radius: 1.5,
+        damage: 5,
+        windup: 1,
+        from: "knights",
+        boomerang: { reach: 30, catchSeq: 8668, catchSound: 4442 },
+        statues: { locId: 38432, windupSeq: 8667 },
+    });
+    const KNIGHTS: ArenaFeatures = {
+        knights: [
+            { x: BASE + 10, y: BASE + 10, size: 3 },
+            { x: BASE + 51, y: BASE + 10, size: 3 },
+        ],
+    };
+
+    function fight(count = 1): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        sim.map.features = KNIGHTS;
+        const boss = startFight(sim, bossDef({ attacks: [{ ...sword, count }] }));
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = BASE + 50;
+        return { sim, boss };
+    }
+
+    test("a knight throws it at where they stood, out its reach and back, hitting each way", () => {
+        const { sim, boss } = fight();
+        // Level with both knights' middles, so it's the same line either way
+        place(sim, MIDDLE, BASE + 11.5);
+        sim.takeEvents();
+        use(sim, boss, "Knight's sword");
+        const windup = boss.bossState!.windup!;
+        expect(windup.from).toHaveLength(1);
+        const knight = windup.from![0];
+        expect(sim.takeEvents()).toContainEqual({
+            type: "statueSeq",
+            locId: 38432,
+            x: knight.x,
+            y: knight.y,
+            seq: 8667,
+        });
+        run(sim, sword.windup + 0.05);
+        const thrown = sim.enemyProjectiles[0];
+        expect(thrown.boomerang?.fromX).toBe(knight.x + 1.5);
+        expect(thrown.boomerang?.fromY).toBe(knight.y + 1.5);
+        const hp = hpOf(sim);
+        run(sim, 2.1);
+        const once = hpOf(sim);
+        expect(once).toBeLessThan(hp);
+        // Its reach, then back the way it came, through them again
+        run(sim, 2.2);
+        expect(hpOf(sim)).toBeLessThan(once);
+        expect(sim.enemyProjectiles).toHaveLength(1);
+        run(sim, 2);
+        expect(sim.enemyProjectiles).toEqual([]);
+        const events = sim.takeEvents();
+        expect(events).toContainEqual(expect.objectContaining({ type: "statueSeq", seq: 8668 }));
+        expect(events).toContainEqual(expect.objectContaining({ type: "bossAttack", sound: 4442 }));
+        expect(sim.damageByAttack["Knight's sword"]).toBe(hp - hpOf(sim));
+    });
+
+    test("count of them throw, each its own knight", () => {
+        const { sim, boss } = fight(2);
+        place(sim, MIDDLE, BASE + 30);
+        use(sim, boss, "Knight's sword");
+        const from = boss.bossState!.windup!.from!;
+        expect(new Set(from.map((k) => k.x))).toEqual(new Set([BASE + 10, BASE + 51]));
+        run(sim, sword.windup + 0.05);
+        expect(sim.enemyProjectiles).toHaveLength(2);
+    });
+});
