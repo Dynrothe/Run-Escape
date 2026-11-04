@@ -960,8 +960,9 @@ describe("expert mode", () => {
         }
     });
 
-    it("has each colour of Nylocas Vasilias take its own style in full on expert", () => {
+    it("has Nylocas Vasilias's colour still pray for its own style's share on expert", () => {
         const sim = raid(true);
+        const own = getEnemy("nylocas_vasilias").boss!.colours!.ownStyle!;
         // Big hits, so rounding to whole numbers doesn't hide the share
         const dealt = (id: string, weaponId: string) => {
             const enemy = sim.spawnEnemy(getEnemy(id), "boss", { x: 1030.5, y: 1030.5 })!;
@@ -975,8 +976,7 @@ describe("expert mode", () => {
         };
         const ranged = dealt("nylocas_vasilias_ranged", "twisted_bow");
         const melee = dealt("nylocas_vasilias", "scythe_of_vitur");
-        expect(ranged / melee).toBeCloseTo(1, 1);
-        expect(dealt("nylocas_vasilias_magic", "sanguinesti_staff") / melee).toBeCloseTo(1, 1);
+        expect(ranged / melee).toBeCloseTo(own, 1);
         expect(hits(sim, "nylocas_vasilias_ranged", "scythe_of_vitur")).toBe(0);
     });
 

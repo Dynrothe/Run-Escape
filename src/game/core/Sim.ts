@@ -4392,11 +4392,16 @@ export class Sim {
     // The share of a weapon's hit an enemy takes, praying against its style (EnemyDef.protects)
     private prayedAgainst(enemy: Enemy): number {
         const protects = enemy.def.protects;
-        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle), Nylocas
-        // Vasilias's colours too: whichever style's its colour, a build with all three always
-        // has something hitting it in full, and that's what expert asks for
+        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle), but a boss's
+        // colour still only through its prayer's ownStyle (BossDef.colours), as on normal
         if (this.expert && enemy.def.onlyStyle) {
-            return 1;
+            const ownStyle = enemy.def.boss?.colours?.ownStyle;
+            const source = this.damageSource;
+            if (ownStyle === undefined || !protects || !source.startsWith("weapon:")) {
+                return 1;
+            }
+            const style = getWeaponStyle(getWeapon(source.slice("weapon:".length)));
+            return protects.styles.includes(style) ? ownStyle : 1;
         }
         const source = this.damageSource;
         if (!protects || !source.startsWith("weapon:")) {

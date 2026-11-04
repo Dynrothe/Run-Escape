@@ -30,6 +30,7 @@ the version in the corner).
   - The Maiden's Nylocas feed her more.
   - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
     can reach. Her yellows wait until it's landed.
+  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - Turning hard mode off turns expert off with it.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
