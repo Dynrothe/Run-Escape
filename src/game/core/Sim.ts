@@ -7166,15 +7166,11 @@ export class Sim {
             if (this.tick >= (hero.staredUntil ?? 0)) {
                 hero.staredUntil =
                     this.tick + secondsToTicks(enemy.def.boss!.stare!.hitEvery ?? STARE_EVERY);
-                // As its own hits do: hard's share, and armour taking at most its cap
-                const boss = enemy.def.boss!;
+                // As its own hits do: hard's share, and armour taking at most its cap (damagePlayer)
                 this.damagePlayer(
-                    boss.stare!.damage * enemy.damageScale,
+                    enemy.def.boss!.stare!.damage * enemy.damageScale,
                     enemy.def.id,
                     false,
-                    undefined,
-                    false,
-                    boss.armorCap,
                 );
             }
             return 0;
