@@ -264,8 +264,12 @@ raid's ranges.
   `SimOptions.invocations`.
 - **Ba-Ba** (`content/tombs.ts`, her fight in `Sim.stepTombsBoss`): her arena's cut turned so her
   throne's north, and she rises once the party's a step past the gap at its foot. Her attacks:
-  the shockwave round her (a ground mark), rockfall and her boulder (blasts that break into shards,
-  her dark boulder spot animation 2245), and calling baboons.
+  the shockwave round her (a ground mark); rockfall, shadows in a cross on your tile (a `cross` of
+  ground marks, `shadow`) with a rock coming down into each; her boulder, which comes down beside you
+  (never on you: `beside`) under its shadow and OSRS's falling debris (1727), breaks into shards and
+  stays as a Rubble rock (11784 to 11787, solid: `leavesCover`); the avalanche that follows it, most
+  of your hitpoints unless you're beside a rock (`takeCover`, the safe ground ringed in green); and
+  calling baboons. The shadows are drawn on the overlay: no spot animation in her range is one.
     - **Rolling boulders**, at 66% and 33%: she goes up to her altar and the party's put at the
       foot. Rows of five boulders roll down five lanes (`BulletPatternDef.gapStep`), one of them the
       cracked boulder (NPC 11783, `cracked`), an enemy that rolls with its row (`Enemy.rolls`) to be

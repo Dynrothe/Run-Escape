@@ -604,15 +604,79 @@ describe("Ba-Ba", () => {
         expect(attack(dash, "Rolling boulders")).toBe(attack(dash, "Rolling boulders"));
     });
 
-    it("breaks her boulder into shards where it lands", () => {
+    it("drops her boulder beside the player, never on them, breaking into shards and staying", () => {
         const sim = atBaba();
+        sim.weapons = [];
         const boss = baba(sim);
         const boulder = boss.def.boss!.attacks.find((a) => a.name === "Boulder")!;
         const at = { x: sim.player.x, y: sim.player.y };
         sim["startBossAttack"](boss, boulder);
+        const target = boss.bossState!.windup!.targets[0];
+        const away = Math.hypot(target.x - at.x, target.y - at.y);
+        expect(away).toBeGreaterThanOrEqual(boulder.beside!.min - 0.01);
+        expect(away).toBeLessThanOrEqual(boulder.beside!.max + 0.01);
         const before = sim.bullets.count;
-        seconds(sim, boulder.windup + 0.1, { x: at.x - 4, y: at.y });
+        // Well out of the way of its shards
+        seconds(sim, boulder.windup + 0.1, { x: at.x - 12, y: at.y });
         expect(sim.bullets.count).toBeGreaterThanOrEqual(before + boulder.shards!.count);
+        expect(sim.tombsCover).toHaveLength(1);
+        expect(sim.tombsCover[0].x).toBeCloseTo(target.x);
+    });
+
+    it("hits everyone not beside a boulder with her avalanche, which follows it", () => {
+        const sim = atBaba();
+        sim.weapons = [];
+        const boss = baba(sim);
+        const boulder = boss.def.boss!.attacks.find((a) => a.name === "Boulder")!;
+        sim["startBossAttack"](boss, boulder);
+        seconds(sim, boulder.windup + 0.1, { x: 1024.5, y: 1030.5 });
+        const rock = sim.tombsCover[0];
+        expect(rock).toBeDefined();
+        // It follows: by the time it lands, beside the rock is safe and away from it isn't
+        const avalanche = boss.def.boss!.attacks.find((a) => a.name === "Avalanche")!;
+        const hit = (x: number, y: number) => {
+            sim.player.x = sim.player.prevX = x;
+            sim.player.y = sim.player.prevY = y;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.invulnerable = 0;
+            sim["landAvalanche"](boss, avalanche, avalanche.takeCover!);
+            return sim.player.maxHp - sim.player.hp;
+        };
+        expect(hit(rock.x + rock.radius + 0.8, rock.y)).toBe(0);
+        expect(hit(rock.x + 9, rock.y)).toBeGreaterThan(sim.player.maxHp * 0.5);
+        expect(boss.bossState!.follow?.attack.name ?? boss.bossState!.windup?.attack.name).toBe(
+            "Avalanche",
+        );
+    });
+
+    it("keeps the party out of her boulders' rocks", () => {
+        const sim = atBaba();
+        sim.tombsCover.push({
+            x: 1036.5,
+            y: 1034.5,
+            radius: 1.4,
+            endTick: sim.tick + 100,
+            look: "ba_ba_rubble_0",
+        });
+        sim.player.x = sim.player.prevX = 1036.6;
+        sim.player.y = sim.player.prevY = 1034.5;
+        sim.step();
+        expect(Math.hypot(sim.player.x - 1036.5, sim.player.y - 1034.5)).toBeGreaterThanOrEqual(
+            1.4,
+        );
+    });
+
+    it("drops her rockfall in a cross of shadows on the player's tile", () => {
+        const sim = atBaba();
+        const boss = baba(sim);
+        const rockfall = boss.def.boss!.attacks.find((a) => a.name === "Rockfall")!;
+        const before = sim.hazards.length;
+        sim["startBossAttack"](boss, rockfall);
+        const marks = sim.hazards.slice(before);
+        expect(marks).toHaveLength(13);
+        const x = Math.floor(sim.player.x) + 0.5;
+        const y = Math.floor(sim.player.y) + 0.5;
+        expect(marks.every((m) => m.x === x || m.y === y)).toBe(true);
     });
 
     it("can't hurt the player in god mode, on the dev server", () => {

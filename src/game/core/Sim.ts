@@ -873,6 +873,8 @@ export class Sim {
     tombsDeaths = 0;
     // Jungle Japes's banana peels, in a path boss's fight
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
+    // Rocks Ba-Ba's boulders left, solid, to take cover by (BossAttackDef.leavesCover)
+    tombsCover: { x: number; y: number; radius: number; endTick: number; look: string }[] = [];
     // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
     tombsSarcophagi: {
         x: number;
@@ -4508,6 +4510,7 @@ export class Sim {
         }
         if (fight.beatenTick !== undefined) {
             this.tombsPeels = [];
+            this.tombsCover = [];
             this.tombsSarcophagi = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
                 this.leaveTombsPath();
@@ -4517,6 +4520,7 @@ export class Sim {
         if (fight.uid === -1) {
             // Not up (yet, or again after a death): nothing of the last fight's left lying about
             this.tombsPeels = [];
+            this.tombsCover = [];
             this.tombsSarcophagi = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
             // behind the party, not under them
@@ -4555,9 +4559,38 @@ export class Sim {
             this.emit({ type: "notice", message: "The path is done. Back to the Nexus..." });
             return;
         }
+        this.stepTombsCover();
         this.stepTombsPit(boss);
         this.stepTombsPeels();
         this.stepSarcophagi(boss);
+    }
+
+    // Her boulders' rocks: gone in time, and solid meanwhile, the party pushed out of them
+    private stepTombsCover(): void {
+        if (this.tombsCover.length === 0) {
+            return;
+        }
+        this.tombsCover = this.tombsCover.filter((rock) => this.tick < rock.endTick);
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            for (const rock of this.tombsCover) {
+                const dx = player.x - rock.x;
+                const dy = player.y - rock.y;
+                const distance = fm.hypot(dx, dy);
+                const edge = rock.radius + player.radius;
+                if (distance < edge) {
+                    const nx = distance > 0.001 ? dx / distance : 0;
+                    const ny = distance > 0.001 ? dy / distance : -1;
+                    moveCircle(
+                        this.grid,
+                        player,
+                        nx * (edge - distance),
+                        ny * (edge - distance),
+                        player.radius,
+                    );
+                }
+            }
+        }
     }
 
     // Jungle Japes: a baboon killed in a path boss's fight leaves a banana peel where it fell
@@ -5923,6 +5956,19 @@ export class Sim {
                                 player.y + (j - half) * spots.spacing,
                             );
                         }
+                    }
+                    break;
+                }
+                case "cross": {
+                    // On the player's tile, and a tile apart out from it each way
+                    const x = Math.floor(player.x) + 0.5;
+                    const y = Math.floor(player.y) + 0.5;
+                    add(x, y);
+                    for (let d = 1; d <= spots.reach; d++) {
+                        add(x + d, y);
+                        add(x - d, y);
+                        add(x, y + d);
+                        add(x, y - d);
                     }
                     break;
                 }
@@ -7376,6 +7422,13 @@ export class Sim {
             dirY: (player.y - enemy.y) / toPlayer,
         };
         state.windup = windup;
+        // The debris coming down ahead of what lands (BossAttackDef.shadow)
+        const debris = attack.shadow?.debrisSpotAnim;
+        if (debris !== undefined) {
+            for (const { x, y } of windup.targets) {
+                this.addEffect(debris, x, y, 0, landTick - startTick);
+            }
+        }
         // Somewhere safe from it, there from the start (GroundPatternDef.safe)
         if (attack.ground?.safe) {
             this.markGround(enemy, attack, this.tick);
@@ -7460,6 +7513,28 @@ export class Sim {
     // On the player, and the rest of a blast of several scattered around them
     private pickBlastTargets(attack: BossAttackDef): { x: number; y: number }[] {
         const player = this.player;
+        // Near the player, never on them, somewhere they can get to (BossAttackDef.beside)
+        const beside = attack.beside;
+        if (beside) {
+            let x = player.x;
+            let y = player.y;
+            for (let attempt = 0; attempt < SCATTER_ATTEMPTS; attempt++) {
+                const angle = this.rng.range(0, Math.PI * 2);
+                const distance = this.rng.range(beside.min, beside.max);
+                x = player.x + fm.cos(angle) * distance;
+                y = player.y + fm.sin(angle) * distance;
+                const tileX = Math.floor(x);
+                const tileY = Math.floor(y);
+                if (
+                    this.grid.contains(tileX, tileY) &&
+                    !this.grid.isSolid(tileX, tileY) &&
+                    this.isWalkableTile(tileX, tileY)
+                ) {
+                    break;
+                }
+            }
+            return [{ x, y }];
+        }
         const targets = [{ x: player.x, y: player.y }];
         for (let i = 1; i < (attack.count ?? 1); i++) {
             const angle = this.rng.range(0, Math.PI * 2);
@@ -7489,6 +7564,10 @@ export class Sim {
         });
         this.landBlastExtras(enemy, windup);
         this.queueFollow(enemy, attack);
+        if (attack.takeCover) {
+            this.landAvalanche(enemy, attack, attack.takeCover);
+            return;
+        }
         if (attack.kind === "swing" || attack.kind === "blast") {
             // A swing hits around the boss, a blast where the player was (and
             // around there); the player is hit once however many land on them
@@ -7504,6 +7583,17 @@ export class Sim {
                 }
                 if (attack.kind === "blast" && attack.shards) {
                     this.fireShards(enemy, attack, attack.shards, x, y);
+                }
+                // A rock left to take cover by (BossAttackDef.leavesCover)
+                const cover = attack.kind === "blast" ? attack.leavesCover : undefined;
+                if (cover) {
+                    this.tombsCover.push({
+                        x,
+                        y,
+                        radius: cover.radius,
+                        endTick: this.tick + secondsToTicks(cover.seconds),
+                        look: cover.looks[this.rng.int(cover.looks.length)],
+                    });
                 }
             }
             // Co-op: on anyone it lands on
@@ -7559,6 +7649,26 @@ export class Sim {
     }
 
     // What's to follow an attack, from when it's fired (BossAttackDef.follow)
+    // Ba-Ba's avalanche (BossAttackDef.takeCover): everyone not beside one of her boulders' rocks
+    private landAvalanche(
+        enemy: Enemy,
+        attack: BossAttackDef,
+        cover: NonNullable<BossAttackDef["takeCover"]>,
+    ): void {
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const safe = this.tombsCover.some(
+                (rock) =>
+                    fm.hypot(player.x - rock.x, player.y - rock.y) <=
+                    rock.radius + cover.reach + player.radius,
+            );
+            if (safe) {
+                return;
+            }
+            this.bossHit(enemy.def.id, enemy, attack, player.maxHp * cover.share);
+        });
+    }
+
     private queueFollow(enemy: Enemy, attack: BossAttackDef): void {
         const follow = attack.follow;
         if (!follow) {

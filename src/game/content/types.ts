@@ -461,7 +461,13 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // A plus of spots a tile apart on the player's tile, reach tiles each way (Ba-Ba's
+        // rockfall)
+        | { shape: "cross"; reach: number }
     )[];
+    // Marked by a shadow on the floor, darkening as what falls comes down (BossAttackDef.falls),
+    // rather than by its spot animation
+    shadow?: boolean;
     radius: number;
     // Set: it stays armed this many seconds after the windup, going off under
     // whoever comes within radius rather than landing all at once (spores)
@@ -676,6 +682,17 @@ export type BossAttackDef = {
     // Blasts: what lands, drawn falling into each circle from height tiles up over the windup,
     // as this enemy's model playing its walk (Ba-Ba's boulder, spinning), scale times its size
     falls?: { look: string; height: number; scale: number };
+    // Blasts: marked by a shadow on the floor rather than a red circle, with this spot animation
+    // played at each spot over the windup (the debris coming down ahead of Ba-Ba's boulder)
+    shadow?: { debrisSpotAnim?: number };
+    // Blasts: landing this many tiles from the player, never on them, on ground they can get to
+    beside?: { min: number; max: number };
+    // Blasts: each leaves a rock where it landed, radius tiles across and solid, for seconds,
+    // drawn as one of these enemies' models (Ba-Ba's boulder: what to take cover by)
+    leavesCover?: { seconds: number; radius: number; looks: string[] };
+    // Lands on everyone not within reach of a rock left by leavesCover, for this share of their
+    // most hitpoints, armour or not (Ba-Ba's avalanche, after her boulder)
+    takeCover?: { reach: number; share: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat

@@ -61,6 +61,25 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         xp: 0,
         sounds: { attack: -1, hit: -1, death: -1 },
     },
+    // Never spawned: the rock Ba-Ba's boulder leaves to take cover by (BossAttackDef.leavesCover),
+    // the four Rubble NPCs
+    ...[11784, 11785, 11786, 11787].map(
+        (npcId, i): EnemyDef => ({
+            id: "ba_ba_rubble_" + i,
+            name: "Rubble",
+            npcId,
+            idleSeq: -1,
+            walkSeq: -1,
+            attackSeq: -1,
+            deathSeq: -1,
+            hp: 1,
+            damage: 0,
+            speed: 0,
+            radius: 1.4,
+            xp: 0,
+            sounds: { attack: -1, hit: -1, death: -1 },
+        }),
+    ),
     // One in each row of Ba-Ba's rolling boulders (BulletPatternDef.cracked): break it to get
     // through. It rolls on its own (Enemy.rolls), so its speed and touch are the row's.
     {
@@ -194,7 +213,6 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
 
 // A rolling boulder (model 46414, the rolling boulders' own), and a thrown rock
 const BOULDER = 2245;
-const ROCK = 1727;
 // Where a rock lands (a Rockfall's, as the game's others use)
 const ROCK_IMPACT = 451;
 
@@ -246,44 +264,41 @@ export const BA_BA: EnemyDef = {
                 invoked: { id: "shaking_things_up", radius: 1.4 },
             },
             {
+                // Shadows on the floor in a cross on you, a rock coming down into each, as OSRS's
                 name: "Rockfall",
-                kind: "blast",
+                kind: "ground",
                 damage: 5,
-                windup: 1.6,
+                windup: 1.8,
                 cooldown: 4,
                 range: 30,
                 weight: 5,
-                radius: 1.4,
                 impactSpotAnim: ROCK_IMPACT,
-                // Breaking up where it lands, into shards flying out
-                spotAnim: ROCK,
-                // A boulder dropping into the circle, then breaking into shards: her dark
-                // boulder, few and slow enough to see the way between
-                falls: { look: "rolling_boulder", height: 12, scale: 0.6 },
-                shards: {
-                    count: 8,
-                    speed: 3.5,
-                    range: 6,
-                    radius: 0.45,
-                    damage: 2,
-                    scale: 1.4,
-                    look: "rolling_boulder",
-                },
+                falls: { look: "rolling_boulder", height: 12, scale: 0.35 },
+                ground: { spots: [{ shape: "cross", reach: 3 }], radius: 0.5, shadow: true },
                 seq: 9743,
                 sound: 5962,
-                message: "Rocks fall from above! Move off the shadow!",
+                message: "Rocks fall from above! Move off the shadows!",
             },
             {
-                // A big circle where it'll land, then it breaks into a ring of shards flying out:
-                // out of the circle, and between the shards as they spread
+                // Comes down near you (never on you) under its shadow and the debris falling
+                // ahead of it, breaks into shards, and stays: the rock to take cover by from the
+                // avalanche that follows
                 name: "Boulder",
                 kind: "blast",
                 damage: 6,
-                windup: 1.8,
-                cooldown: 6,
+                windup: 2,
+                cooldown: 12,
                 range: 30,
                 weight: 4,
-                radius: 2.2,
+                radius: 1.5,
+                beside: { min: 2.5, max: 4.5 },
+                shadow: { debrisSpotAnim: 1727 },
+                leavesCover: {
+                    seconds: 25,
+                    radius: 1.4,
+                    looks: ["ba_ba_rubble_0", "ba_ba_rubble_1", "ba_ba_rubble_2", "ba_ba_rubble_3"],
+                },
+                follow: { attack: "Avalanche", delay: 0.6 },
                 impactSpotAnim: ROCK_IMPACT,
                 // Her dark boulder, not the pale rock, so its shards stand out on the floor
                 spotAnim: BOULDER,
@@ -299,7 +314,24 @@ export const BA_BA: EnemyDef = {
                 },
                 seq: 9748,
                 sound: 5962,
-                message: "Ba-Ba hurls a boulder! Get out of the circle, then between the shards!",
+                message: "Ba-Ba hurls a boulder! Mind its shards, then get beside it!",
+            },
+            {
+                // Only after her boulder (its follow): rocks everywhere but beside a boulder,
+                // nearly all your hitpoints
+                name: "Avalanche",
+                kind: "swing",
+                damage: 0,
+                windup: 2.4,
+                cooldown: 0,
+                range: 60,
+                weight: 0,
+                takeCover: { reach: 1.6, share: 0.8 },
+                ignoreArmor: true,
+                impactSpotAnim: ROCK_IMPACT,
+                seq: 9743,
+                sound: 5962,
+                message: "Ba-Ba shakes the ceiling loose! Take cover beside a boulder!",
             },
             {
                 name: "Call baboons",

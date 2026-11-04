@@ -23,6 +23,8 @@ const VIEW_REACH = 44;
 // A long edge is split into pieces this long, to lie on the ground
 const GROUND_STEP = 3;
 const BULLET_HEIGHT = 0.9;
+// Ba-Ba's boulders' rocks, drawn this much past the size they block, as their edges are rough
+const ROCK_FIT = 1.25;
 // Her flowers are all that says which quarter's safe, so they stand out
 const FLOWER_SCALE = 1.7;
 // Tiles from her that petals start gathering, and end up; radians a tick they turn
@@ -183,6 +185,57 @@ export class BossFightView {
     // What a blast drops (BossAttackDef.falls), falling faster and faster into each of its
     // circles, to land as the blast does
     private drawFalling(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        // Into each of a ground attack's marks (Ba-Ba's rockfall)
+        for (const hazard of sim.hazards) {
+            const falls = hazard.attack.falls;
+            if (!falls || sim.tick >= hazard.landTick) {
+                continue;
+            }
+            const def = getEnemy(falls.look);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.walkSeq);
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - hazard.startTick) /
+                        Math.max(1, hazard.landTick - hazard.startTick),
+                ),
+            );
+            const drop = falls.height * (1 - t * t);
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick - hazard.startTick, true),
+                hazard.x,
+                this.ground(sim, hazard.x, hazard.y) - drop,
+                hazard.y,
+                (hazard.uid * 331) & 2047,
+                { scale: falls.scale },
+            );
+        }
+        // Ba-Ba's boulders' rocks, to take cover by
+        sim.tombsCover.forEach((rock) => {
+            const def = getEnemy(rock.look);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (model) {
+                const anim = model.anims[0];
+                actors.draw(
+                    model,
+                    anim,
+                    0,
+                    rock.x,
+                    this.ground(sim, rock.x, rock.y),
+                    rock.y,
+                    (Math.floor(rock.x * 7 + rock.y * 13) * 331) & 2047,
+                    // As big as it stands in the way
+                    { scale: (rock.radius * 128 * ROCK_FIT) / Math.max(1, model.radius) },
+                );
+            }
+        });
         for (const enemy of sim.enemies) {
             const windup = enemy.bossState?.windup;
             const falls = windup?.attack.falls;

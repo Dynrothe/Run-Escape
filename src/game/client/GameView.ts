@@ -1158,6 +1158,21 @@ export class GameView {
     // blast will hit, or a ring closing in at its feet before anything else
     private drawBossWindups(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
+        // Shadows on the floor where something's coming down (GroundPatternDef.shadow)
+        for (const hazard of sim.hazards) {
+            if (!hazard.attack.ground?.shadow || sim.tick >= hazard.landTick) {
+                continue;
+            }
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - hazard.startTick) /
+                        Math.max(1, hazard.landTick - hazard.startTick),
+                ),
+            );
+            this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+        }
         for (const enemy of sim.enemies) {
             const windup = enemy.bossState?.windup;
             if (!windup || enemy.dead) {
@@ -1180,6 +1195,26 @@ export class GameView {
                 kind === "pattern" ||
                 windup.attack.cone !== undefined
             ) {
+                continue;
+            }
+            // Ba-Ba's avalanche: where it doesn't land, beside her boulders' rocks
+            const cover = windup.attack.takeCover;
+            if (cover) {
+                for (const rock of sim.tombsCover) {
+                    this.traceGroundCircle(overlay, sim, rock.x, rock.y, rock.radius + cover.reach);
+                    ctx.fillStyle = `rgba(40, 200, 60, ${0.12 + 0.15 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = `rgba(80, 255, 100, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                }
+                continue;
+            }
+            // Coming down under its shadow, not a red circle (BossAttackDef.shadow)
+            if (kind === "blast" && windup.attack.shadow) {
+                for (const { x, y } of windup.targets) {
+                    this.drawShadow(overlay, sim, x, y, windup.attack.radius ?? 2, t);
+                }
                 continue;
             }
             if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
@@ -1218,6 +1253,21 @@ export class GameView {
                 ctx.stroke();
             }
         }
+    }
+
+    // A shadow on the floor under something coming down: growing and darkening as it nears
+    private drawShadow(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        radius: number,
+        t: number,
+    ): void {
+        const ctx = overlay.ctx;
+        this.traceGroundCircle(overlay, sim, x, y, radius * (0.55 + 0.45 * t));
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.2 + 0.45 * t})`;
+        ctx.fill();
     }
 
     // The ground the boss's glyph shelters from a blockable attack: from the
