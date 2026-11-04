@@ -612,17 +612,20 @@ exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that sho
 `tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
 calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
 healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
-of them within it, none by `SLOW_PAR` times it). On expert, weapons skip an enemy `wrongStyle` says
-they can't hurt (`nearestEnemies`) and don't envenom it (needing all three styles is the design, as
-in OSRS); a ground spot with `awayFrom` falls back to the walkable try furthest from the boss, never
-off the map; an ordeal waits while its boss's expert projectile is in the air; and a stare is said
-`STARE_WARNING` before it turns. Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`,
-looked up in `damagePlayer`, so it holds for a stomp, a pool or a stare too; a ground mark keeps its
-boss's id for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` times their
-bullets (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps
-its width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring
-or spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it dies to the Maiden.
+of them within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of
+another style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass
+none and go for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias
+turns (needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back
+to the walkable try furthest from the boss, never off the map; an ordeal waits while its boss's
+expert projectile is in the air, the boss shielded meanwhile so the wait can't take it past a phase;
+and a stare is shown `BossDef.stare.warning` before it turns (0.75s unless set): the boss faces
+where it'll stare, and the notice names the side. Armour takes at most `ARMOR_CAP` of their hits
+(`BossDef.armorCap`, looked up in `damagePlayer`, so it holds for a stomp, a pool or a stare too; a
+ground mark keeps its boss's id for once it's gone). On hard and expert, patterns fire
+`MapDef.hard.bullets` times their bullets (`Sim.bulletScale`) with the space between them as wide: a
+ring's gap is an angle and keeps its width, a wall's or closing ring's gap grows with the count, a
+spread fans out wider, and a ring or spiral with no gap keeps its count. Their hitpoints (each
+room's `bossHp`) are tuned to players' clears, not the bot's: it dies to the Maiden.
 
 `?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
 its max; `?raidtest=short` does only the first.

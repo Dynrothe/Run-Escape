@@ -209,12 +209,18 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 
 // OSRS run speed: 2 tiles per 600ms tick
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
-// Ticks between a staring boss saying it'll turn and turning (BossDef.stare)
-const STARE_WARNING = Math.round(0.75 * TICKS_PER_SECOND);
-// Seconds between a stare's hits back: weapons fire on their own, so where you stand is all
-// there is to stop them, and it shouldn't be the whole fight
+// A staring boss's timings, unless its BossDef.stare says (warning, hitEvery): seconds between
+// saying it'll turn and turning, and between a stare's hits back (weapons fire on their own, so
+// where you stand is all there is to stop them, and it shouldn't be the whole fight)
+const STARE_WARNING_SECONDS = 0.75;
 const STARE_EVERY = 1;
 const PLAYER_RADIUS = 0.35;
+
+// A quarter turn's side of the arena (x east, y north), for a notice
+function compassSide(angle: number): string {
+    const quarter = (((Math.round(angle / (Math.PI / 2)) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+    return ["east", "north", "west", "south"][quarter];
+}
 const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
 const PARTY_SPREAD = 1.5;
@@ -3037,7 +3043,13 @@ export class Sim {
                 enemy.venomNext += TICKS_PER_SECOND;
                 this.useHeroAt(enemy.venomHero);
                 this.damageSource = enemy.venomSource ?? "other";
-                this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
+                // Expert: a weapon's venom stops once the enemy's colour is one it can't hurt
+                // (Nylocas Vasilias turning)
+                if (this.wrongStyle(enemy)) {
+                    enemy.venomEnd = -1;
+                } else {
+                    this.damageEnemy(enemy, enemy.venom, 0, enemy.x, enemy.y, 1, true);
+                }
                 if (enemy.dead) {
                     continue;
                 }
@@ -4305,22 +4317,29 @@ export class Sim {
         if (!this.expert || !stare || !state.enraged) {
             return;
         }
-        // Where it'll stare next is picked, and said, STARE_WARNING before it turns, so the
-        // hits that would land in front can stop in time
-        if (state.stareNext === undefined && this.tick >= (state.nextStare ?? 0) - STARE_WARNING) {
+        // Where it'll stare next is picked, and shown (it turns to face it, and the notice says
+        // which way) a warning's time before the stare goes there, so a player can get out of
+        // the way: their weapons fire on their own
+        const warning = secondsToTicks(stare.warning ?? STARE_WARNING_SECONDS);
+        if (state.stareNext === undefined && this.tick >= (state.nextStare ?? 0) - warning) {
             const turns = 1 + this.rng.int(3);
             state.stareNext =
                 (state.stareAngle ?? this.rng.int(4) * (Math.PI / 2)) + turns * (Math.PI / 2);
-            state.nextStare = Math.max(state.nextStare ?? 0, this.tick + STARE_WARNING);
-            this.emit({ type: "notice", message: stare.message });
+            state.nextStare = Math.max(state.nextStare ?? 0, this.tick + warning);
+            this.emit({
+                type: "notice",
+                message: `${stare.message} He'll face ${compassSide(state.stareNext)}!`,
+            });
         }
         if (state.stareNext !== undefined && this.tick >= (state.nextStare ?? 0)) {
             state.stareAngle = state.stareNext;
             state.stareNext = undefined;
             state.nextStare = this.tick + secondsToTicks(stare.every);
         }
-        if (state.stareAngle !== undefined) {
-            enemy.yaw = yawFromVector(fm.cos(state.stareAngle), fm.sin(state.stareAngle));
+        // Facing where it'll stare as it warns, then where it does
+        const facing = state.stareNext ?? state.stareAngle;
+        if (facing !== undefined) {
+            enemy.yaw = yawFromVector(fm.cos(facing), fm.sin(facing));
         }
     }
 
@@ -4408,16 +4427,11 @@ export class Sim {
     // The share of a weapon's hit an enemy takes, praying against its style (EnemyDef.protects)
     private prayedAgainst(enemy: Enemy): number {
         const protects = enemy.def.protects;
-        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle), but a boss's
-        // colour still only through its prayer's ownStyle (BossDef.colours), as on normal
-        if (this.expert && enemy.def.onlyStyle) {
-            const ownStyle = enemy.def.boss?.colours?.ownStyle;
-            const source = this.damageSource;
-            if (ownStyle === undefined || !protects || !source.startsWith("weapon:")) {
-                return 1;
-            }
-            const style = getWeaponStyle(getWeapon(source.slice("weapon:".length)));
-            return protects.styles.includes(style) ? ownStyle : 1;
+        // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle). A boss's colour
+        // (BossDef.colours) goes on to the rule below as on normal: its own style through its
+        // prayer's ownStyle, and expert never lets another style this far (wrongStyle)
+        if (this.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
+            return 1;
         }
         const style = this.sourceStyle;
         if (!protects || style === undefined) {
@@ -6190,8 +6204,11 @@ export class Sim {
         if (done >= of.at.length || enemy.hp > enemy.maxHp * of.at[done]) {
             return;
         }
-        // Not with expert's doom ball still coming: it and a yellow's pool at once is too much
+        // Not with expert's doom ball still coming: it and a yellow's pool at once is too much.
+        // She can't be hurt meanwhile, so the wait can't take her past the next phase too and
+        // skip it (kept a tick ahead, so the shield never lapses and drops with a notice)
         if (this.enemyProjectiles.some((p) => p.enemyUid === enemy.uid && p.attack?.expert)) {
+            enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
             return;
         }
         // One at a time, however far a hit took it past them
@@ -7147,7 +7164,8 @@ export class Sim {
             this.showBlocked(enemy);
             const hero = this.hero;
             if (this.tick >= (hero.staredUntil ?? 0)) {
-                hero.staredUntil = this.tick + secondsToTicks(STARE_EVERY);
+                hero.staredUntil =
+                    this.tick + secondsToTicks(enemy.def.boss!.stare!.hitEvery ?? STARE_EVERY);
                 // As its own hits do: hard's share, and armour taking at most its cap
                 const boss = enemy.def.boss!;
                 this.damagePlayer(
@@ -7588,7 +7606,7 @@ export class Sim {
             // waits for a target, rather than spending its cooldown on air
             if (
                 (weapon.def.kind === "slash" || weapon.def.kind === "sweep") &&
-                !this.meleeInReach(level)
+                !this.meleeInReach(level, weapon.def)
             ) {
                 weapon.cooldown = 10;
                 continue;
@@ -7631,7 +7649,7 @@ export class Sim {
             weapon.uses++;
             return undefined;
         }
-        if (!this.meleeInReach(level)) {
+        if (!this.meleeInReach(level, weapon.def)) {
             return undefined;
         }
         weapon.uses++;
@@ -7639,10 +7657,12 @@ export class Sim {
     }
 
     // Something a melee weapon at this level would hit
-    private meleeInReach(level: WeaponDef["levels"][number]): boolean {
+    private meleeInReach(level: WeaponDef["levels"][number], def: WeaponDef): boolean {
         const reach = level.area * (1 + this.stats.area);
         const player = this.player;
-        return this.nearestEnemies(player.x, player.y, reach + 0.5, 1).length > 0;
+        return (
+            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def)).length > 0
+        );
     }
 
     private fireWeapon(
@@ -7677,9 +7697,15 @@ export class Sim {
 
     // Where a melee attack aims: at the nearest enemy in reach, otherwise the
     // way the player faces (kiting means facing away from what's chasing you)
-    private aimMelee(reach: number): { x: number; y: number } {
+    private aimMelee(reach: number, def: WeaponDef): { x: number; y: number } {
         const player = this.player;
-        const nearest = this.nearestEnemies(player.x, player.y, reach + 1.5, 1)[0];
+        const nearest = this.nearestEnemies(
+            player.x,
+            player.y,
+            reach + 1.5,
+            1,
+            getWeaponStyle(def),
+        )[0];
         if (nearest) {
             const dx = nearest.x - player.x;
             const dy = nearest.y - player.y;
@@ -7704,7 +7730,7 @@ export class Sim {
         const reach = level.area * (1 + this.stats.area);
         const width = SLASH_WIDTH * (1 + this.stats.area);
         const sides = Math.min(level.amount, 2);
-        const aim = this.aimMelee(reach);
+        const aim = this.aimMelee(reach, def);
         // Each side hits what's in it, so something right on top of the
         // player can be hit by both
         const hit: Enemy[] = [];
@@ -7755,7 +7781,7 @@ export class Sim {
         const reach = level.area * (1 + this.stats.area);
         const arc = level.arc ?? SLASH_ARC;
         const sides = Math.min(level.amount, 2);
-        const aim = this.aimMelee(reach);
+        const aim = this.aimMelee(reach, def);
         const hit = new Set<Enemy>();
         for (let side = 0; side < sides; side++) {
             const dirX = side === 0 ? aim.x : -aim.x;
@@ -8091,12 +8117,24 @@ export class Sim {
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
-    private nearestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
+    // style: a weapon's, which leaves out what it can't hurt (an expert Nylocas of another
+    // style). What isn't a weapon (thralls, the cannon, power-ups) hurts any, and passes none.
+    private nearestEnemies(
+        x: number,
+        y: number,
+        range: number,
+        count: number,
+        style?: CombatStyle,
+    ): Enemy[] {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
+        const styled = style !== undefined && this.expert;
         for (const enemy of this.enemies) {
-            // Not one the weapon can't hurt: an expert Nylocas of another style
-            if (enemy.dead || enemy.shieldEnd > this.tick || this.wrongStyle(enemy)) {
+            if (
+                enemy.dead ||
+                enemy.shieldEnd > this.tick ||
+                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
+            ) {
                 continue;
             }
             const dx = enemy.x - x;
@@ -8112,16 +8150,28 @@ export class Sim {
 
     // The enemies in range with the most hitpoints (the nearest of them on a
     // tie), for the Twisted bow
-    private toughestEnemies(x: number, y: number, range: number, count: number): Enemy[] {
-        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
+    private toughestEnemies(
+        x: number,
+        y: number,
+        range: number,
+        count: number,
+        style: CombatStyle,
+    ): Enemy[] {
+        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES, style);
         // Sorting is stable, so equally tough ones stay nearest first
         return near.sort((a, b) => b.maxHp - a.maxHp).slice(0, count);
     }
 
     // The nearest enemies in range, those without venom first, so venom
     // spreads through a crowd (the Toxic blowpipe)
-    private unvenomedEnemies(x: number, y: number, range: number, count: number): Enemy[] {
-        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES);
+    private unvenomedEnemies(
+        x: number,
+        y: number,
+        range: number,
+        count: number,
+        style: CombatStyle,
+    ): Enemy[] {
+        const near = this.nearestEnemies(x, y, range, MAX_ENEMIES, style);
         const later = (enemy: Enemy) =>
             enemy.venomEnd >= this.tick || fm.hypot(enemy.x - x, enemy.y - y) > VENOM_SPREAD_RANGE;
         // Sorting is stable, so each half stays nearest first
@@ -8133,10 +8183,10 @@ export class Sim {
         const player = this.player;
         const amount = level.amount + this.stats.amount;
         const targets = def.toughTargets
-            ? this.toughestEnemies(player.x, player.y, 14, amount)
+            ? this.toughestEnemies(player.x, player.y, 14, amount, getWeaponStyle(def))
             : level.venom
-              ? this.unvenomedEnemies(player.x, player.y, 14, amount)
-              : this.nearestEnemies(player.x, player.y, 14, amount);
+              ? this.unvenomedEnemies(player.x, player.y, 14, amount, getWeaponStyle(def))
+              : this.nearestEnemies(player.x, player.y, 14, amount, getWeaponStyle(def));
         if (targets.length === 0) {
             return false;
         }
@@ -8160,7 +8210,7 @@ export class Sim {
         const player = this.player;
         const amount = level.amount + this.stats.amount;
         // At the nearest enemy close by, otherwise the way the player faces
-        const nearest = this.nearestEnemies(player.x, player.y, 9, 1)[0];
+        const nearest = this.nearestEnemies(player.x, player.y, 9, 1, getWeaponStyle(def))[0];
         const base = nearest
             ? fm.atan2(nearest.y - player.y, nearest.x - player.x)
             : fm.atan2(player.facingY, player.facingX);
@@ -8175,7 +8225,13 @@ export class Sim {
     private fireAxes(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
         const player = this.player;
         const amount = level.amount + this.stats.amount;
-        const targets = this.nearestEnemies(player.x, player.y, AXE_RANGE, amount);
+        const targets = this.nearestEnemies(
+            player.x,
+            player.y,
+            AXE_RANGE,
+            amount,
+            getWeaponStyle(def),
+        );
         if (targets.length === 0) {
             return false;
         }
@@ -8644,7 +8700,7 @@ export class Sim {
 
     private fireStrikes(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
         const player = this.player;
-        const candidates = this.nearestEnemies(player.x, player.y, 12, 60);
+        const candidates = this.nearestEnemies(player.x, player.y, 12, 60, getWeaponStyle(def));
         if (candidates.length === 0) {
             return false;
         }
@@ -8895,9 +8951,14 @@ export class Sim {
         from: Enemy,
     ): void {
         projectile.split = undefined;
-        const targets = this.nearestEnemies(from.x, from.y, SPLIT_RANGE, split.count + 1).filter(
-            (e) => e !== from,
-        );
+        const style = projectile.weapon && getWeaponStyle(projectile.weapon);
+        const targets = this.nearestEnemies(
+            from.x,
+            from.y,
+            SPLIT_RANGE,
+            split.count + 1,
+            style,
+        ).filter((e) => e !== from);
         const ahead = fm.atan2(projectile.vy, projectile.vx);
         for (let i = 0; i < split.count; i++) {
             const target = targets[i];

@@ -752,3 +752,14 @@ describe("loadoutStats", () => {
         expect(stats.regen).toBe(0);
     });
 });
+
+describe("raid modes", () => {
+    test("turning hard mode off turns expert off with it, as expert is hard mode too", () => {
+        const { client, store } = createClient(createSim(), false);
+        Object.assign(client, { coop: { isHost: false } });
+        store.set({ mapId: "theatre_of_blood", hard: true, expert: true });
+        client.toggleHard();
+        expect(store.getSnapshot().hard).toBe(false);
+        expect(store.getSnapshot().expert).toBe(false);
+    });
+});

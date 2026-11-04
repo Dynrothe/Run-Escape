@@ -5,7 +5,9 @@ import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
 import { TROPHIES } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
+import { yawFromVector } from "./PlayerMovement";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { fm } from "./fmath";
 import {
     createSave,
     getEarnedUnlocks,
@@ -1012,9 +1014,17 @@ describe("expert mode", () => {
         const state = xarpus.bossState!;
         state.enraged = true;
         sim["stepStare"](xarpus);
-        // Said, but not turned yet
+        // Said, but not turned yet: he faces where he'll stare, and the notice names the side
         expect(state.stareNext).toBeDefined();
         expect(state.stareAngle).toBeUndefined();
+        const next = state.stareNext!;
+        const side = ["east", "north", "west", "south"][
+            ((Math.round(next / (Math.PI / 2)) % 4) + 4) % 4
+        ];
+        expect(sim.takeEvents().some((e) => e.type === "notice" && e.message.includes(side))).toBe(
+            true,
+        );
+        expect(xarpus.yaw).toBe(yawFromVector(fm.cos(next), fm.sin(next)));
         sim.tick = state.nextStare!;
         sim["stepStare"](xarpus);
         expect(state.stareAngle).toBeDefined();
@@ -1041,12 +1051,62 @@ describe("expert mode", () => {
             y: sim.player.y,
         })!;
         sim["damageSource"] = "weapon:toxic_blowpipe";
-        expect(sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5)).not.toContain(grey);
+        const near = (style?: string) =>
+            sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5, style as never);
+        expect(near("ranged")).not.toContain(grey);
         sim["envenom"](grey, 50, 100);
         expect(grey.venom).toBe(0);
         // Its own style aims at it as ever
-        sim["damageSource"] = "weapon:scythe_of_vitur";
-        expect(sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5)).toContain(grey);
+        expect(near("melee")).toContain(grey);
+        // and what isn't a weapon (thralls, the cannon, power-ups) hurts any, so aims at any,
+        // whatever weapon fired last
+        expect(near()).toContain(grey);
+    });
+
+    it("aims each weapon by its own style, not whichever fired last", () => {
+        const sim = raid(true);
+        sim.weapons = [];
+        sim.addWeapon("twisted_bow");
+        sim.addWeapon("scythe_of_vitur");
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 1,
+            y: sim.player.y,
+        })!;
+        // A tick for it to be where weapons look, with them held back meanwhile
+        for (const weapon of sim.weapons) {
+            weapon.cooldown = 1000;
+        }
+        sim.step();
+        for (const weapon of sim.weapons) {
+            weapon.cooldown = 0;
+        }
+        // The bow's left as the source, as it would be after it fires
+        sim["damageSource"] = "weapon:twisted_bow";
+        const hp = grey.hp;
+        sim["stepWeapons"]();
+        // The scythe swung (rather than waiting, with nothing it thought it could reach), and hit
+        const scythe = sim.weapons.find((w) => w.def.id === "scythe_of_vitur")!;
+        expect(scythe.cooldown).toBeGreaterThan(10);
+        expect(grey.hp).toBeLessThan(hp);
+    });
+
+    it("stops a weapon's venom once the enemy's colour is one it can't hurt", () => {
+        const sim = raid(true);
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 6,
+            y: sim.player.y,
+        })!;
+        // Put on while it could be hurt (as on green Vasilias, before it turned)
+        Object.assign(grey, {
+            venom: 5,
+            venomEnd: sim.tick + 100,
+            venomNext: sim.tick,
+            venomSource: "weapon:toxic_blowpipe",
+        });
+        const hp = grey.hp;
+        sim.step();
+        expect(grey.hp).toBe(hp);
+        expect(grey.venomEnd).toBeLessThan(sim.tick);
     });
 
     it("keeps Verzik's Nylocas to their own style on expert: a party needs all three", () => {
@@ -1069,6 +1129,8 @@ describe("expert mode", () => {
         // Big hits, so rounding to whole numbers doesn't hide the share
         const dealt = (id: string, weaponId: string) => {
             const enemy = sim.spawnEnemy(getEnemy(id), "boss", { x: 1030.5, y: 1030.5 })!;
+            // Never down, so every hit counts in full
+            enemy.hp = enemy.maxHp = 1e9;
             sim["damageSource"] = `weapon:${weaponId}`;
             let total = 0;
             for (let i = 0; i < 40; i++) {
@@ -1077,9 +1139,11 @@ describe("expert mode", () => {
             enemy.dead = true;
             return total;
         };
-        const ranged = dealt("nylocas_vasilias_ranged", "twisted_bow");
-        const melee = dealt("nylocas_vasilias", "scythe_of_vitur");
-        expect(ranged / melee).toBeCloseTo(own, 1);
+        // One weapon on its colour and on a Nylocas of the same style with no prayer, so neither
+        // weapon's balance comes into it
+        const prayed = dealt("nylocas_vasilias_ranged", "twisted_bow");
+        const unprayed = dealt("tob_nylocas_toxobolos", "twisted_bow");
+        expect(prayed / unprayed).toBeCloseTo(own, 1);
         expect(hits(sim, "nylocas_vasilias_ranged", "scythe_of_vitur")).toBe(0);
     });
 
@@ -1105,6 +1169,11 @@ describe("expert mode", () => {
         sim.enemyProjectiles.push({ enemyUid: boss.uid, attack: ball } as never);
         sim["stepOrdeal"](boss);
         expect(boss.bossState!.ordeal).toBeUndefined();
+        // and she can't be hurt meanwhile, so the wait can't take her past the next one too
+        const hp = boss.hp;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(boss, boss.maxHp, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(boss.hp).toBe(hp);
         sim.enemyProjectiles = [];
         sim["stepOrdeal"](boss);
         expect(boss.bossState!.ordeal).toBeDefined();

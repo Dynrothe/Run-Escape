@@ -1054,7 +1054,7 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                     every: 6,
                     arc: 2.1,
                     damage: 3,
-                    message: "Xarpus turns to stare! Don't hit him from in front.",
+                    message: "Xarpus is turning! Don't hit him from in front.",
                 },
                 attacks: oftener(XARPUS_ATTACKS, 2.2, 1.7),
             },
