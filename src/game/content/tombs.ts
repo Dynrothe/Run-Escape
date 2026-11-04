@@ -8,7 +8,9 @@ import { EnemyDef, EnemyShotDef, WaveDef } from "./types";
 //
 // All on the baboon skeleton (2063): idle 9741, walk 9739, flinch 9746, death 9744 (1.8s, ending
 // in the thud 5971). Attacks by kind: a swipe 9742, a throw 9743, a cast 9748, the shaman's call
-// 9751. Their sounds are their animations' own (scripts/cache/sounds.ts seqs).
+// 9751. Their sounds are their animations' own (scripts/cache/sounds.ts seqs). All are slower than
+// a player (3.3 tiles a second), about as the Theatre's halls' are: the room's small, so a fresh run
+// needs to be able to get away.
 
 const IDLE = 9741;
 const WALK = 9739;
@@ -48,7 +50,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9742,
         hp: 12,
         damage: 2,
-        speed: 2.7,
+        speed: 2.3,
         xp: 10,
         sounds: { attack: 5984, hit: 5998, death: 5971 },
     }),
@@ -59,7 +61,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9743,
         hp: 9,
         damage: 2,
-        speed: 2.4,
+        speed: 2.0,
         xp: 10,
         shot: THROWN_ROCK,
         sounds: { attack: 5962, hit: 5998, death: 5971 },
@@ -71,7 +73,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9748,
         hp: 9,
         damage: 2,
-        speed: 2.4,
+        speed: 2.0,
         xp: 10,
         shot: BABOON_SPELL,
         sounds: { attack: 5952, hit: 5998, death: 5971 },
@@ -84,7 +86,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9751,
         hp: 20,
         damage: 2,
-        speed: 2.2,
+        speed: 1.9,
         xp: 18,
         spawns: {
             enemies: [{ id: "baboon_thrall", weight: 1 }],
@@ -100,9 +102,9 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         name: "Baboon Thrall",
         npcId: 11718,
         attackSeq: 9742,
-        hp: 10,
-        damage: 3,
-        speed: 3.1,
+        hp: 6,
+        damage: 1,
+        speed: 2.4,
         xp: 4,
         sounds: { attack: 5984, hit: 5998, death: 5971 },
     }),
@@ -114,7 +116,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9742,
         hp: 10,
         damage: 2,
-        speed: 3,
+        speed: 2.5,
         xp: 12,
         explodes: { damage: 6, radius: 2.5, spotAnim: 157, sound: 2500, pack: 30 },
         sounds: { attack: 5984, hit: 5998, death: 5971 },
@@ -127,7 +129,7 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         attackSeq: 9742,
         hp: 16,
         damage: 2,
-        speed: 2.6,
+        speed: 2.2,
         xp: 14,
         touches: {
             kind: "debuff",
