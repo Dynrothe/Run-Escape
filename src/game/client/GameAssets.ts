@@ -21,12 +21,13 @@ import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { MAPS } from "../content/maps";
 import { getPassive } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { EnemyDef, EnemyOutfit, GearSlot, WeaponDef } from "../content/types";
+import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
@@ -126,6 +127,22 @@ function getSpotAnimIds(): number[] {
         BLOOD_FURY_SPOTANIM,
         VISITOR_SPOTANIM,
         REVIVE_SPOTANIM,
+        // GALLERY-TEMP
+        318,
+        713,
+        2699,
+        451,
+        157,
+        3049,
+        347,
+        1745,
+        1207,
+        1221,
+        2315,
+        3406,
+        3588,
+        2056,
+        1356,
     ]);
     const add = (...spotAnims: (number | undefined)[]) => {
         for (const id of spotAnims) {
@@ -148,6 +165,12 @@ function getSpotAnimIds(): number[] {
     for (const { effect } of POWER_UPS) {
         add("spotAnim" in effect ? effect.spotAnim : undefined);
     }
+    const addImpact = (impact: ImpactDef | undefined) => {
+        add(...(impact?.spots ?? []).map((spot) => spot.spotAnim), impact?.trail?.spotAnim);
+    };
+    for (const map of MAPS) {
+        addImpact(map.fight?.ability?.impact);
+    }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
@@ -156,7 +179,13 @@ function getSpotAnimIds(): number[] {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
             add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim, attack.cover?.spotAnim);
             add(...(attack.impactSpotAnims ?? []));
+            addImpact(attack.impact);
         }
+        const guard = enemy.boss?.guard;
+        add(guard?.stunSpotAnim);
+        addImpact(guard?.stuck);
+        addImpact(enemy.boss?.leash?.jump?.land);
+        addImpact(enemy.boss?.intro?.land);
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
         add(enemy.boss?.phases?.totems?.blastSpotAnim, enemy.boss?.phases?.threshold?.spotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);

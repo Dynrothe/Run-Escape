@@ -62,6 +62,7 @@ import {
     isMapUnlocked,
 } from "../core/save";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
+import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -550,6 +551,13 @@ function SettingsPanel({
                             on={ui.display.menuSpin}
                             label="Camera spin"
                             onToggle={() => client.toggleMenuSpin()}
+                        />
+                    </Setting>
+                    <Setting name="Screen shake" text="The camera shakes when a boss's blow lands">
+                        <Toggle
+                            on={ui.display.screenShake}
+                            label="Screen shake"
+                            onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
@@ -1810,7 +1818,10 @@ const Hud = memo(function Hud({
             <BossBar mapId={hud.mapId} client={client} />
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
-                <Inventory inventory={hud.inventory} client={client} />
+                <div className="ui-hud-actions">
+                    <Inventory inventory={hud.inventory} client={client} />
+                    <AbilityButton client={client} />
+                </div>
                 <HpBar client={client} />
             </div>
         </>
@@ -1956,12 +1967,16 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 <div className="ui-boss-status">
                     {boss.fight.outOfReach
                         ? "Out of reach!"
-                        : (boss.fight.status ??
-                          (boss.fight.stage === "totems"
-                              ? "Charge the totems!"
-                              : boss.fight.stage === "finale"
-                                ? "Stay on your feet!"
-                                : "Break her shield!"))}
+                        : boss.fight.guard === "stunned"
+                          ? "Stunned!"
+                          : boss.fight.guard === "exposed"
+                            ? "Guard down!"
+                            : (boss.fight.status ??
+                              (boss.fight.stage === "totems"
+                                  ? "Charge the totems!"
+                                  : boss.fight.stage === "finale"
+                                    ? "Stay on your feet!"
+                                    : "Break her shield!"))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
                     )}

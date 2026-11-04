@@ -51,8 +51,21 @@
     }
 
     /* The stick and buttons do what the HUD's would */
-    .ui-inventory {
+    .ui-inventory,
+    .ui-hud-actions .ui-ability {
         display: none;
+    }
+
+    /* A fight's own button, big, above the items' corner (a fight has no items) */
+    .ui-touch-ability {
+        position: absolute;
+        display: flex;
+        right: calc(var(--safe-right) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px);
+        width: 76px;
+        height: 76px;
+        border-radius: 50%;
+        touch-action: none;
     }
 
     .ui-slot {

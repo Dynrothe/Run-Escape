@@ -57,6 +57,10 @@ export const TEAMMATE_COLOR = "#00ff80";
 const TEAMMATE_DOWN_COLOR = "#9a9a9a";
 // Shielded enemies (that can't be hurt yet) are washed in lilac
 const SHIELDED_TINT = 0xd0b8ff;
+// A boss with its guard down (BossDef.guard): warmed gold, and glinting as it pulses
+const EXPOSED_TINT = 0xffc860;
+const EXPOSED_FLASH = 0.3;
+const EXPOSED_PULSE = 12;
 // A blockable attack winding up shows the shelter behind the glyph out this
 // far from the boss, in tiles
 const SHELTER_LENGTH = 30;
@@ -140,6 +144,8 @@ const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
+// Of a full flash, a boss's impact's (ImpactDef.flash)
+const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
@@ -193,7 +199,8 @@ type Shout = { enemyUid: number; text: string; start: number };
 const VISITOR_SHOUT = -1000;
 // Random events' visitors stand out from the crowd
 const VISITOR_SCALE = 1.5;
-type FlashFx = { color: string; start: number };
+// strength: of the full flash (a power-up's), a boss's impact's being fainter
+type FlashFx = { color: string; start: number; strength: number };
 
 // Adds an effect, dropping the oldest past MAX_EFFECTS
 function pushCapped<T>(list: T[], item: T): void {
@@ -293,6 +300,12 @@ export class GameView {
                     });
                     break;
                 }
+                case "bossImpact":
+                    // Faint: a lightning strike's or his gaze's light, not a power-up's
+                    if (event.flash) {
+                        this.flash = { color: event.flash, start: now, strength: IMPACT_FLASH };
+                    }
+                    break;
                 case "bossSwing":
                     pushCapped(this.swings, {
                         x: event.x,
@@ -348,12 +361,12 @@ export class GameView {
                     break;
                 case "bossAbsorbBlast":
                     // Everywhere: there's no getting out of it
-                    this.flash = { color: "#ff40c0", start: now };
+                    this.flash = { color: "#ff40c0", start: now, strength: 1 };
                     break;
                 case "powerUp": {
                     const powerUp = getPowerUp(event.id);
                     if (powerUp.flash) {
-                        this.flash = { color: powerUp.flash, start: now };
+                        this.flash = { color: powerUp.flash, start: now, strength: 1 };
                     }
                     if (powerUp.effect.kind === "nuke") {
                         pushCapped(this.blasts, { x: event.x, y: event.y, radius: 16, start: now });
@@ -563,6 +576,10 @@ export class GameView {
                 continue;
             }
             const anim = model.anims[0];
+            // Played out, and gone (an impact's dust), rather than held on its last frame
+            if (effect.once && tick - effect.startTick >= anim.totalTicks) {
+                continue;
+            }
             const frame = anim.getFrame(tick - effect.startTick, effect.loop ?? false);
             const height = this.ground(sim, effect.x, effect.y) - effect.height;
             const fit = effect.fitRadius;
@@ -573,7 +590,7 @@ export class GameView {
                 effect.x,
                 height,
                 effect.y,
-                0,
+                effect.yaw ?? 0,
                 fit !== undefined ? { scale: (fit * 128) / Math.max(1, model.radius) } : undefined,
             );
         }
@@ -929,7 +946,15 @@ export class GameView {
         const leaving = enemy.leaving;
         const fade = leaving ? Math.min(1, (leaving.endTick - tick) / LEAVING_FADE_TICKS) : 1;
         // The boss is hit all the time; a full flash would leave him white
-        const flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
+        let flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
+        if (enemy.boss && !enemy.dead && sim.isExposed(enemy)) {
+            tint = EXPOSED_TINT;
+            flash = Math.max(
+                flash,
+                EXPOSED_FLASH *
+                    (0.5 + 0.5 * Math.sin((tick + alpha) / (TICKS_PER_SECOND / EXPOSED_PULSE))),
+            );
+        }
         const options = enemyDrawOptions;
         options.scale = enemy.scale;
         options.tint = tint;
@@ -1010,7 +1035,7 @@ export class GameView {
             this.flash = undefined;
             return;
         }
-        overlay.ctx.fillStyle = withAlpha(flash.color, 0.75 * (1 - t) * (1 - t));
+        overlay.ctx.fillStyle = withAlpha(flash.color, 0.75 * flash.strength * (1 - t) * (1 - t));
         overlay.ctx.fillRect(0, 0, overlay.width, overlay.height);
     }
 

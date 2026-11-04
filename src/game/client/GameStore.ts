@@ -185,6 +185,9 @@ export type HudNumbers = {
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;
+    // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
+    // whether the boss is in its reach, and whether its guard's down, when it's worth most
+    ability?: AbilityView;
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -246,6 +249,8 @@ export type BossView = {
         // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
         // and the player's out of it
         outOfReach?: boolean;
+        // Its guard's down (BossDef.guard): exposed after a miss, or stunned
+        guard?: "exposed" | "stunned";
         // How charged each totem is, 0 to 1
         totems: number[];
         curseAttacks?: number;
@@ -254,6 +259,14 @@ export type BossView = {
 };
 
 export type BossKillView = { name: string; seconds: number };
+
+export type AbilityView = {
+    name: string;
+    iconObjId: number;
+    charge: number;
+    inReach: boolean;
+    opened: boolean;
+};
 
 // One player's own numbers for the results screen (a teammate who fell or
 // left too)
@@ -441,6 +454,7 @@ export class GameStore {
             audio: { muted: false, volume: 0.6, music: 0.6 },
             display: {
                 menuSpin: true,
+                screenShake: true,
                 pauseOnBlur: true,
                 questTracker: true,
                 damagePanel: false,

@@ -2,7 +2,7 @@ import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/acto
 import { getEnemy } from "../content/enemies";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
-import { behindPillar, cycleStage, pillarHit, statueMiddle } from "../core/arena";
+import { behindPillar, cycleStage, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -54,10 +54,6 @@ const GRAB_WARNING_ALPHA = 0.45;
 // The tick of the hands' animation the warning holds: just up out of the ground
 const GRAB_WARNING_TICK = 40;
 const LANE_CHEVRON_GAP = 4;
-// A row of bolts about to fly (BulletPatternDef.rows): its bolts, this far apart
-// along it and this faint
-const ROW_WARNING_GAP = 2;
-const ROW_WARNING_ALPHA = 0.25;
 // The line a wave or a thrown sword will take, at most this solid as it's let go
 const THROW_LINE_ALPHA = 0.3;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
@@ -138,7 +134,6 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
-        this.drawRowWarnings(actors, sim);
         this.drawShadows(actors, sim);
         this.drawStatues(actors, sim);
         this.drawFires(actors, sim);
@@ -264,68 +259,6 @@ export class BossFightView {
         }
         const model = this.assets.get("spot:" + attack.spotAnim);
         return model && { model, anim: model.anims[0] };
-    }
-
-    // The rows a volley's about to go down (BulletPatternDef.rows), each laid out
-    // faintly with its own bolts, as its statues draw: from the row's start to
-    // where it'll stop, at the first pillar in its way
-    private drawRowWarnings(actors: ActorRenderer, sim: Sim): void {
-        const rows = sim.map.features?.bolts;
-        if (!rows) {
-            return;
-        }
-        for (const emitter of sim.bulletEmitters) {
-            const pattern = emitter.attack.pattern!;
-            if (
-                !emitter.rows ||
-                emitter.volleysLeft < pattern.volleys ||
-                sim.tick >= emitter.nextTick
-            ) {
-                continue;
-            }
-            const look = this.bulletLook(emitter.attack);
-            if (!look) {
-                continue;
-            }
-            const { model, anim } = look;
-            const options = {
-                scale: Math.max(
-                    pattern.scale ?? 1,
-                    (pattern.radius * 128) / Math.max(1, model.radius),
-                ),
-                alpha: ROW_WARNING_ALPHA,
-            };
-            const frame = anim.getFrame(0);
-            for (const index of emitter.rows) {
-                const row = rows[index];
-                if (!row) {
-                    continue;
-                }
-                const dir = row.toX >= row.fromX ? 1 : -1;
-                const length = Math.abs(row.toX - row.fromX);
-                const y = row.y + 0.5;
-                const stop = pattern.pillars
-                    ? Math.min(
-                          length,
-                          pillarHit(sim.map.features?.pillars, row.fromX + 0.5, y, dir, 0, length),
-                      )
-                    : length;
-                const yaw = yawFromVector(dir, 0);
-                for (let along = 0; along <= stop; along += ROW_WARNING_GAP) {
-                    const x = row.fromX + 0.5 + dir * along;
-                    actors.draw(
-                        model,
-                        anim,
-                        frame,
-                        x,
-                        this.ground(sim, x, y) - BULLET_HEIGHT,
-                        y,
-                        yaw,
-                        options,
-                    );
-                }
-            }
-        }
     }
 
     // The bosses whose arena this is: the map's final boss from the start (its

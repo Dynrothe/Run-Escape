@@ -85,6 +85,7 @@ import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
+    AbilityView,
     ChoiceView,
     GameStore,
     HudNumbers,
@@ -168,6 +169,12 @@ const CAMERA_GROUND_EASE = 110;
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
+// A boss's blow shaking the camera (ImpactDef.shake): how long, how far at its hardest (tiles),
+// and from how many tiles off the player it's felt less, to none at SHAKE_FAR
+const SHAKE_MS = 320;
+const SHAKE_TILES = 0.3;
+const SHAKE_NEAR = 8;
+const SHAKE_FAR = 24;
 // Closer on a phone held sideways: it shows as much to each side as a desktop
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
@@ -410,6 +417,8 @@ export class GameClient implements GameFrameHandler {
     private cameraGround: number | undefined;
     // How far the camera's leaning towards a raid boss (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
+    // The camera's shake: how hard (0 to 1), and since when (ms)
+    private shake = { strength: 0, start: 0 };
     private shownDps = 0;
     // The world's brightness as last set: a raid hall can draw darker than its map
     private shownBrightness = 1;
@@ -876,6 +885,10 @@ export class GameClient implements GameFrameHandler {
 
     toggleMenuSpin(): void {
         this.setDisplay({ menuSpin: !this.display.menuSpin });
+    }
+
+    toggleScreenShake(): void {
+        this.setDisplay({ screenShake: !this.display.screenShake });
     }
 
     toggleAutoPause(): void {
@@ -1406,6 +1419,16 @@ export class GameClient implements GameFrameHandler {
                 this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
                 break;
+            case "ability":
+                if (!done) {
+                    this.sounds.denied();
+                    break;
+                }
+                this.handleEvents(sim, sim.takeEvents());
+                if (sim.state !== "playing") {
+                    this.syncOverlay();
+                }
+                break;
         }
         this.updateHud(true);
     }
@@ -1523,6 +1546,16 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.act({ kind: "item", index });
+    }
+
+    // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
+    // screen's. Out of reach, or not ready, it says no.
+    useAbility(): void {
+        const sim = this.sim;
+        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+            return;
+        }
+        this.act({ kind: "ability" });
     }
 
     // The opening animation's sounds, timed by the UI
@@ -1768,6 +1801,11 @@ export class GameClient implements GameFrameHandler {
         } else if (overlay === "paused" && this.coopRun && code.startsWith("Digit")) {
             // The run goes on behind co-op's menu
             this.useItem(parseInt(code.slice(5)) - 1);
+        } else if (
+            (overlay === "none" || (overlay === "paused" && this.coopRun)) &&
+            code === "Space"
+        ) {
+            this.useAbility();
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
@@ -1880,11 +1918,12 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean.x += (lean.x - this.cameraLean.x) * ease;
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
         const pan = this.getIntroPan(sim, px, py, alpha);
+        const shake = this.getShake(now);
         this.cameraRig.apply(
             camera,
-            px + this.cameraLean.x + pan.x,
+            px + this.cameraLean.x + pan.x + shake.x,
             ground - 0.6,
-            py + this.cameraLean.y + pan.y,
+            py + this.cameraLean.y + pan.y + shake.y,
         );
         // A raid hall can be drawn darker than the map (RaidRoomDef.hall)
         const hallBrightness =
@@ -1896,6 +1935,53 @@ export class GameClient implements GameFrameHandler {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
+    }
+
+    // The fight's own button, for the HUD (MapDef.fight.ability)
+    private getAbilityView(sim: Sim): AbilityView | undefined {
+        const ability = sim.map.fight?.ability;
+        if (!ability) {
+            return undefined;
+        }
+        const boss = sim.shownBoss;
+        const left = sim.abilitySecondsLeft();
+        return {
+            name: ability.name,
+            iconObjId: ability.iconObjId,
+            charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+            inReach: sim.abilityTarget() !== undefined,
+            opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+        };
+    }
+
+    // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
+    // all for someone who's turned it off (or asked their system for less motion)
+    private startShake(sim: Sim, x: number, y: number, strength: number): void {
+        if (!this.display.screenShake || strength <= 0) {
+            return;
+        }
+        const player = sim.heroes[this.viewHero]?.player ?? sim.player;
+        const away = Math.hypot(x - player.x, y - player.y);
+        const near = Math.min(1, Math.max(0, (SHAKE_FAR - away) / (SHAKE_FAR - SHAKE_NEAR)));
+        const now = performance.now();
+        const left = this.shakeLeft(now);
+        this.shake = { strength: Math.max(left, strength * near), start: now };
+    }
+
+    // What's left of the shake, fading out over SHAKE_MS
+    private shakeLeft(now: number): number {
+        const t = (now - this.shake.start) / SHAKE_MS;
+        return t >= 1 ? 0 : this.shake.strength * (1 - t) * (1 - t);
+    }
+
+    // The camera's offset for it now, in tiles: a quick wobble, both ways
+    private getShake(now: number): { x: number; y: number } {
+        const left = this.shakeLeft(now);
+        if (left <= 0) {
+            return { x: 0, y: 0 };
+        }
+        const reach = left * SHAKE_TILES;
+        return { x: Math.sin(now * 0.09) * reach, y: Math.cos(now * 0.077) * reach };
     }
 
     // A boss's intro that pans (BossIntroDef.pan): from the player to where it rises, held
@@ -2119,6 +2205,10 @@ export class GameClient implements GameFrameHandler {
         this.view.onEvents(sim, events);
         this.sounds.onEvents(sim, events, this.viewHero);
         for (const event of events) {
+            if (event.type === "bossImpact") {
+                this.startShake(sim, event.x, event.y, event.shake);
+                continue;
+            }
             // Co-op: a teammate's own events, said with their name if at all
             if (event.hero !== undefined && event.hero !== sim.focus) {
                 this.teammateToast(sim, sim.heroes[event.hero].name, event);
@@ -2322,6 +2412,11 @@ export class GameClient implements GameFrameHandler {
                     outOfReach:
                         reach !== undefined &&
                         Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,
+                    guard: sim.isStunned(shownBoss)
+                        ? "stunned"
+                        : sim.isExposed(shownBoss)
+                          ? "exposed"
+                          : undefined,
                     totems: phase.totems.map((totem) =>
                         phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
                     ),
@@ -2376,6 +2471,7 @@ export class GameClient implements GameFrameHandler {
             otherDps: meter.otherPerSecond,
             buffs: getBuffViews(sim),
             boss,
+            ability: this.getAbilityView(sim),
             quests: getQuestTrackViews(this.save, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows

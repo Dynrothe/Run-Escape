@@ -70,7 +70,7 @@ const PAD_CONTROLS: { icons: (PadButton | "move")[]; text: string }[] = [
     { icons: ["back"], text: "Show or hide the damage panel" },
     { icons: ["leftStick"], text: "Show or hide the quest tracker" },
     { icons: ["up", "down", "left", "right"], text: "Move the highlight, on menus and level ups" },
-    { icons: ["south"], text: "Press what's highlighted" },
+    { icons: ["south"], text: "Press what's highlighted; in a fight with its own button, use it" },
     { icons: ["east"], text: "Back, or close" },
     { icons: ["west"], text: "Reroll" },
     { icons: ["north"], text: "Skip" },
