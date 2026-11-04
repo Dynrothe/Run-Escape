@@ -1126,7 +1126,8 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades`, `upgradesSpent` and optional `upgradeRefunds` lists of paid rank prices. Each page can
+`upgrades`, `upgradesSpent`, optional `upgradeRefunds` lists of rank prices and optional
+`upgradeOrder` purchase histories (one skill id per rank). Each page can
 allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
 outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
@@ -1138,15 +1139,18 @@ Ranged and Magic start empty. Export and import preserve all three pages and the
 Solo and co-op loadouts use the actual adventurer's style, including maps with a forced adventurer;
 changing a co-op adventurer or room map refreshes the transmitted loadout.
 The arrow button on bought cards (the client's back-arrow sprite,
-`REFUND_SPRITE`) refunds the last price in that page's skill list, through
+`REFUND_SPRITE`) removes the most recently bought rank of that skill and replays the remaining
+purchase order at the lower rates. The refund includes the removed rank and every later rank's
+surcharge reduction, through
 `GameClient.persist()`. It is separate from the purchase button and has a larger hit area on coarse
 pointers. Desktop right-clicking does the same; coarse-pointer context menus never refund.
 Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover, without
 blocking the desktop right-click shortcut or the refund button.
-Older allocations have only `upgradesSpent`: their first purchase or partial refund allocates that
-balance across the existing ranks in proportion to base prices, preserving the total exactly.
-Migration checks the lists against the ranks and total spent; invalid lists use the same fallback.
-Refund all clears only the selected class's ranks and price records.
+Allocations without purchase order must use Refund all once before single-rank refunds are enabled.
+Purchases on these pages preserve their existing investment but cannot recover the missing order.
+Migration validates purchase order against ranks and replayed spending; invalid histories also
+require Refund all. No estimated chronology or automatic repricing is applied to old saves.
+Refund all clears only the selected class's ranks, price records and purchase order.
 
 ### Notice
 

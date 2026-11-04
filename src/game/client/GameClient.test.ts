@@ -914,6 +914,34 @@ describe("saving", () => {
         expect(saved).toEqual([]);
     });
 
+    test("refunding an early skill persists later purchases' lower prices", () => {
+        expect.hasAssertions();
+        const { client, store, saved } = createSaving(true);
+        client.save.coins = 50000;
+        buyUpgrade(client.save, "strength");
+        buyUpgrade(client.save, "smithing");
+        client.refundUpgrade("strength");
+        expect(client.save.coins).toBe(40000);
+        expect(client.save.skillPages.melee.upgradeRefunds).toEqual({ smithing: [10000] });
+        expect(saved).toEqual([client.save]);
+        expect(store.getSnapshot().save).toEqual(client.save);
+    });
+
+    test("legacy single-rank refunds explain the required reset without saving", () => {
+        expect.hasAssertions();
+        const { client, store, saved } = createSaving(true);
+        client.save.coins = 10000;
+        buyUpgrade(client.save, "strength");
+        delete client.save.skillPages.melee.upgradeOrder;
+        const before = structuredClone(client.save);
+        client.refundUpgrade("strength");
+        expect(client.save).toEqual(before);
+        expect(saved).toEqual([]);
+        expect(store.getSnapshot().toasts.at(-1)?.text).toBe(
+            "Use Refund all on this class once to enable single-rank refunds.",
+        );
+    });
+
     test("nothing's saved while another tab has the game", () => {
         const { client, store, saved, lockChanged } = createSaving(true);
         lockChanged(false);

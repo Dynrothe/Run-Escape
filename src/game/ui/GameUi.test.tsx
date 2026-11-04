@@ -23,8 +23,13 @@ afterEach(() => {
 
 function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "warrior") {
     const save = createSave();
+    save.coins = 1000000;
+    for (const [id, ranks] of Object.entries(upgrades)) {
+        for (let rank = 0; rank < ranks; rank++) {
+            buyUpgrade(save, id);
+        }
+    }
     save.coins = coins;
-    save.skillPages.melee.upgrades = upgrades;
     const store = new GameStore(save);
     store.set({ screen: "shop", characterId });
     const refresh = () => store.set({ save: { ...save } });
@@ -178,6 +183,25 @@ test("unbought skills have no refund button", () => {
     expect.hasAssertions();
     renderShop({});
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
+});
+
+test("legacy pages explain why partial refunds need a full reset", () => {
+    expect.hasAssertions();
+    const actions = renderShop({}, 50000);
+    fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
+    delete actions.save.skillPages.melee.upgradeOrder;
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    expect(screen.getByText(/This class has no purchase order saved/)).toBeVisible();
+    const refund = screen.getByRole("button", { name: "Refund one Strength rank" });
+    expect(refund).toBeDisabled();
+    fireEvent.click(refund);
+    fireEvent.contextMenu(screen.getByRole("button", { name: /^Strength\b/ }));
+    expect(actions.refundUpgrade).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    expect(screen.queryByText(/This class has no purchase order saved/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
+    expect(screen.getByRole("button", { name: "Refund one Strength rank" })).toBeEnabled();
 });
 
 test("touch long presses do not refund, but the refund button still works", () => {

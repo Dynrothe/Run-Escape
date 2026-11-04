@@ -516,9 +516,10 @@ version and how to run it.
   the selected class can still spend. Refunding one page never creates extra gold or changes the others.
   A run uses its adventurer's class page, including in co-op. Existing shared skills move to Melee;
   the other pages start empty. All three pages are kept when exporting and importing a save.
-  Click or tap a bought skill's arrow button to refund one rank, even when maxed, for its purchase
-  price. On desktop, right-clicking its card does the same; touch long presses do not refund.
-  Older saves without purchase prices split their tracked spending across ranks by base price.
+  Click or tap a bought skill's arrow button to refund its last rank, even when maxed. Later
+  purchases are repriced at lower rates, and their savings are included in the refund.
+  On desktop, right-clicking its card does the same; touch long presses do not refund.
+  Older class pages without purchase order need Refund all once to enable single-rank refunds.
   **Refund all** returns the selected page's remaining investment and resets only that class's skills.
   **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.
   **Firemaking** gives up to 3 banishes a run. Banish a new weapon or passive on a level up and
