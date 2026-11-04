@@ -1009,11 +1009,13 @@ still ends a guest's run.
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it
 again to everyone looking at it when it changes (within a second, and only if their page did), and
-say so with `listUpdates` in their welcome; the menu then asks only for another page, and again
-when joining fails. It asks every 5 seconds of a relay without `listUpdates`, so either can be
-deployed first. On Cloudflare every request costs, so think twice before adding a timer that
-sends something: incoming messages and calls between objects are billed (see Cost in
-`server/cloudflare/README.md`), and what the relay sends out is free.
+say so with `listUpdates` in their welcome; the menu then asks only for another page, when joining
+fails, and whenever it's back on the list, out of a room or turned away from one (`outOfRoom` in
+`CoopLobby.ts`): the Cloudflare lobby stops sending it on a create or join until it's asked again.
+It asks every 5 seconds of a relay without `listUpdates`, so either can be deployed first. On
+Cloudflare every request costs, so think twice before adding a timer that sends something: incoming
+messages and calls between objects are billed (see Cost in `server/cloudflare/README.md`), and what
+the relay sends out is free.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own, on each room member, and on a room in the list for its host. The Cloudflare

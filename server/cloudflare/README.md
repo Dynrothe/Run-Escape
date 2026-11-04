@@ -12,7 +12,9 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   hibernates between messages, so players sitting in menus cost next to nothing, and its pings are
   answered without waking it. It sends the open rooms to everyone looking at them when they change,
   so the game doesn't ask every few seconds, and closes a connection that's only asked for the
-  same page for 10 minutes (an older game's, left open on the list).
+  same page for 10 minutes (an older game's, left open on the list). Pings never reach it, so it
+  can't close a connection that only pings: the game closes its own after 9 minutes on the list
+  with nothing done (`LOBBY_IDLE_MS` in `CoopLobby.ts`).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
   inputs go through a relay close to the host rather than one fixed place.
@@ -29,12 +31,15 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
-  hibernation gives every room that long again, so on a quiet relay a room that died without a word
-  can stay until someone tries to join it, or its own 30-minute idle alarm ends it. A room asked for but never made (a second
-  click of Make) goes 60 seconds after it was asked for, however often the lobby wakes. The rooms
-  list is kept in the lobby's storage, so it survives the lobby hibernating.
+  hibernation forgets when each room last spoke, so the lobby also stores that, every 30 minutes at
+  most (`SEEN_SAVE_MS`): a room that ended without the lobby hearing goes within about half an hour
+  of that, however often the lobby wakes, and invite-only ones too, which nobody can try to join
+  from the list. A room asked for but never made (a second click of Make) goes 60 seconds after it
+  was asked for. The rooms list is kept in the lobby's storage, so it survives the lobby
+  hibernating.
 - The lobby stops sending a player the list when they make or join a room, and starts again when
-  they ask for it, which the game does on coming out of one.
+  they ask for it, which the game does whenever it's back on the list: out of a room, or turned
+  away from one.
 - A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
   lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
   (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
@@ -143,10 +148,11 @@ request. The dashboard's Metrics count every message as one, so they show far mo
 A room is billed for every second it's open (at 128 MB), whether or not anything's happening, and
 the lobby only for the moments it's handling something.
 
-What the lobby gets: about 120 pings an hour from each player connected to it (answered without
-waking it), 60 calls an hour from each room, and a message for each page of rooms someone looks at.
-A game from before the lists were sent asks for its page every 5 seconds, 720 times an hour, until
-it's closed after 10 minutes.
+What the lobby gets: each connected player's pings (`PING_INTERVAL_MS` in `CoopLobby.ts`, answered
+without waking it), each room's heartbeat (`ROOM_HEARTBEAT_MS` in `room.mjs`) and its calls when
+what the list shows changes, a storage write for each room now and then (`SEEN_SAVE_MS`), and a
+message for each page of rooms someone looks at. A game from before the lists were sent asks for
+its page every few seconds until it's closed.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
 frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
