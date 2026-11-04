@@ -1102,7 +1102,8 @@ describe("co-op relay", () => {
         const { host, guests } = await party(1);
         host.send({ t: "start", game: { seed: 5 } });
         await guests[0].next("start");
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        // The start's own room update, which can wait on the last one's timer
+        await host.roomWhere((r) => r.started);
         host.messages.length = 0;
         guests[0].send({ t: "me", characterId: "wizard" });
         guests[0].send({ t: "up", d: { m: [1, 0] } });
