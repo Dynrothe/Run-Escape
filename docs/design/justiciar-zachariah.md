@@ -299,11 +299,29 @@ Dynny, after round 5:
    (`inShadow` in `core/arena.ts`, the same tiles the view draws, tested tile by tile).
 6. **"The room gets brighter by him shining light and the safe areas are darker in shadow."** The
    blue strange-tile glows (56670) are gone. As he raises his sword the whole scene brightens,
-   up to 60% brighter as it lands (the renderer's own brightness, `getGazeLight`, and a faint warm wash over the screen), and the
-   shadowed tiles are darkened on the floor, deepening as it comes. The shadows are a colour
+   up to 60% brighter as it lands (the renderer's own brightness, `getGazeLight`, and a faint
+   warm wash over the screen), and the shadows are darkened on the floor, deepening as it comes
+   (smooth shapes since round 7). The shadows are a colour
    overlay, a deliberate exception to real assets: nothing in the cache casts a pillar's shadow,
    and they're the one thing on the floor that has to be read exactly. Neither flashes or moves,
    so they read the same with Screen shake off or less motion asked for.
+
+### Round 7
+
+Dynny: "Is it possible to make the lighting smooth?" Round 6's shadows were dark squares, a tile
+at a time. Now each pillar's shadow is drawn as the shape it really casts from where he gazes
+(`shadowOutline` in `core/arena.ts`: the pillar and what's behind it between the lines from him
+past its outermost corners, cut at the court's edge), all four as one shape so where they meet
+isn't darker, with edges blurred over about a third of a tile each way (the canvas's own shadow
+blur, the shape drawn off the screen and only its blur brought on). The hit test follows the
+shape, not tiles: you're spared if your middle's hidden, or any point of you or of a third of a
+tile round you is (`inShadow`, looking at your middle and two rings round it, a sixteenth of a
+turn apart), so the faint outer edge of the shadow counts as shadow and never the reverse. The
+test walks each shadow's edges: in it, on it and out to the soft edge, spared; past that, seen.
+The light eases in over the windup and back out after it lands (smoothstep, then the renderer's
+brightness eased towards it), and the shadows fade in with it and out over 0.4 s after. None of
+it flashes or moves, so it's the same with Screen shake off or less motion asked for. It's all
+the 2D overlay: no triangles or draw calls added to the 3D view.
 
 With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 24-27 s and the
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in

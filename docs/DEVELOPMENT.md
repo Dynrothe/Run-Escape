@@ -545,8 +545,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       none; `status` and `message` per phase, `ambients` (more timers, ground marks or cycles too),
       `confine: false` to let the player off the `bossArena` (and `Sim.confinedToArena`, which
       co-op's prediction reads).
-    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's behind a pillar; the
-      view shows the safe tiles). Blasts: `square`. Projectiles: `wave` (through everyone, once
+    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's in a pillar's
+      shadow from where it's cast, `inShadow`; the view lights the arena and draws the shadows'
+      soft outlines, `shadowOutline`, the same shapes). Blasts: `square`. Projectiles: `wave` (through everyone, once
       each), `boomerang` (out and back, once each way), `from: "knights"`, `onHit` (drag, bind with
       `player.frozen`, and the boss's next attack; `Hero.drag`), `lookId` (drawn as an NPC).
       Patterns: shape `rows`, `delay`, and `pillars`, which cuts a straight bullet's life where it
