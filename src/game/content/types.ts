@@ -427,6 +427,9 @@ export type BulletPatternDef = {
     // Walls with gapStep: the way through is this enemy instead, rolling with the rest (Ba-Ba's
     // cracked boulder), to be broken to get through. It hurts and knocks back as they do.
     cracked?: string;
+    // Drawn as this enemy's model, playing its walk (Ba-Ba's boulders, rolling as they go), at
+    // the size it hits, rather than as the attack's spot animation
+    look?: string;
     // Tiles a hit knocks the player on, the way the bullet's going
     knockback?: number;
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:
@@ -667,7 +670,12 @@ export type BossAttackDef = {
         // small and dark to dodge the pieces of), and lit up this much against dark ground (0 to 1)
         spotAnim?: number;
         bright?: number;
+        // Drawn as this enemy's model, playing its walk, as BulletPatternDef.look
+        look?: string;
     };
+    // Blasts: what lands, drawn falling into each circle from height tiles up over the windup,
+    // as this enemy's model playing its walk (Ba-Ba's boulder, spinning), scale times its size
+    falls?: { look: string; height: number; scale: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat

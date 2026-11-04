@@ -44,6 +44,23 @@ function baboon(def: Omit<EnemyDef, "idleSeq" | "walkSeq" | "deathSeq" | "radius
 }
 
 export const TOMBS_ENEMIES: EnemyDef[] = [
+    // Never spawned: what Ba-Ba's boulders are drawn as (BulletPatternDef.look, falls), her
+    // Boulder NPC rolling (9518)
+    {
+        id: "rolling_boulder",
+        name: "Boulder",
+        npcId: 11782,
+        idleSeq: 9518,
+        walkSeq: 9518,
+        attackSeq: 9518,
+        deathSeq: 9518,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 1.3,
+        xp: 0,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
     // One in each row of Ba-Ba's rolling boulders (BulletPatternDef.cracked): break it to get
     // through. It rolls on its own (Enemy.rolls), so its speed and touch are the row's.
     {
@@ -240,7 +257,9 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Breaking up where it lands, into shards flying out
                 spotAnim: ROCK,
-                // Her dark boulder, few and slow enough to see the way between
+                // A boulder dropping into the circle, then breaking into shards: her dark
+                // boulder, few and slow enough to see the way between
+                falls: { look: "rolling_boulder", height: 12, scale: 0.6 },
                 shards: {
                     count: 8,
                     speed: 3.5,
@@ -248,7 +267,7 @@ export const BA_BA: EnemyDef = {
                     radius: 0.45,
                     damage: 2,
                     scale: 1.4,
-                    spotAnim: BOULDER,
+                    look: "rolling_boulder",
                 },
                 seq: 9743,
                 sound: 5962,
@@ -268,7 +287,9 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Her dark boulder, not the pale rock, so its shards stand out on the floor
                 spotAnim: BOULDER,
+                falls: { look: "rolling_boulder", height: 12, scale: 1 },
                 shards: {
+                    look: "rolling_boulder",
                     count: 16,
                     speed: 4,
                     range: 9,
@@ -320,6 +341,7 @@ export const BA_BA: EnemyDef = {
                     gap: 1,
                     gapStep: 2,
                     cracked: "cracked_boulder",
+                    look: "rolling_boulder",
                     spacing: 3,
                     scale: 3,
                     heading: "south",

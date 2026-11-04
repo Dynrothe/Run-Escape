@@ -1,4 +1,5 @@
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import {
     BossQuarters,
@@ -106,6 +107,7 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
+        this.drawFalling(actors, sim, alpha);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -178,6 +180,39 @@ export class BossFightView {
         }
     }
 
+    // What a blast drops (BossAttackDef.falls), falling faster and faster into each of its
+    // circles, to land as the blast does
+    private drawFalling(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const falls = windup?.attack.falls;
+            if (!windup || !falls || enemy.dead) {
+                continue;
+            }
+            const def = getEnemy(falls.look);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.walkSeq);
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - windup.startTick) /
+                        Math.max(1, windup.landTick - windup.startTick),
+                ),
+            );
+            const frame = anim.getFrame(sim.tick - windup.startTick, true);
+            const drop = falls.height * (1 - t * t);
+            for (const { x, y } of windup.targets) {
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y) - drop, y, 0, {
+                    scale: falls.scale,
+                });
+            }
+        }
+    }
+
     // Her real shots, each pointing the way it's going. Drawn at their hit size.
     private drawBullets(actors: ActorRenderer, sim: Sim, alpha: number): void {
         const bullets = sim.bullets;
@@ -188,27 +223,32 @@ export class BossFightView {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)
             const attack = sim.bulletSources[source[slot]]!.attack;
-            // A blast's shards can have a look of their own (BossAttackDef.shards)
-            const model = this.assets.get("spot:" + (attack.shards?.spotAnim ?? attack.spotAnim));
+            // A blast's shards (BossAttackDef.shards) are bullets with no pattern
+            const pattern = attack.pattern;
+            // An enemy's model, rolling (BulletPatternDef.look), or a spot animation (a blast's
+            // shards can have one of their own)
+            const look = pattern?.look ?? attack.shards?.look;
+            const lookDef = look !== undefined ? getEnemy(look) : undefined;
+            const model = lookDef
+                ? this.assets.get(getEnemyModelKey(lookDef, 0))
+                : this.assets.get("spot:" + (attack.shards?.spotAnim ?? attack.spotAnim));
             if (!model) {
                 continue;
             }
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
-            const anim = model.anims[0];
-            // A blast's shards (BossAttackDef.shards) are bullets with no pattern
-            const pattern = attack.pattern;
+            const anim = lookDef ? model.getAnim(lookDef.walkSeq) : model.anims[0];
+            const fits = (radius[slot] * 128) / Math.max(1, model.radius);
             // Never smaller than what it hits, however it's scaled to be seen:
-            // what looks like a miss has to be one
-            options.scale = Math.max(
-                pattern?.scale ?? attack.shards?.scale ?? 1,
-                (radius[slot] * 128) / Math.max(1, model.radius),
-            );
+            // what looks like a miss has to be one. A look is its own size.
+            options.scale = lookDef
+                ? fits * (attack.shards?.scale ?? 1)
+                : Math.max(pattern?.scale ?? attack.shards?.scale ?? 1, fits);
             options.flash = pattern?.bright ?? attack.shards?.bright ?? 0;
             actors.draw(
                 model,
                 anim,
-                anim.getFrame(tick - startTick[slot]),
+                anim.getFrame(tick - startTick[slot], true),
                 wx,
                 this.ground(sim, wx, wy) - BULLET_HEIGHT,
                 wy,

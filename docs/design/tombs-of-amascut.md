@@ -278,3 +278,7 @@ raid's ranges.
       Boulderdash, Shaking Things Up, Jungle Japes (banana peels root you, drawn as the Banana) and
       Gotta Have Faith (the sarcophagi's bolts hit harder: there's no prayer here to scale by).
     - Her hitpoints go up with the path level (`TOMBS_BOSSES`), as does each path's boss's.
+    - Her boulders are drawn as her Boulder NPC (11782) rolling (9518): the rows
+      (`BulletPatternDef.look`), the shards, and the boulder that drops into each rockfall and boulder
+      circle over its warning (`BossAttackDef.falls`). OSRS's own falling-rock spot animations (1727, 2250) are cave-ins made for its low camera: from ours the rock stays off the top of the
+      screen.
