@@ -504,3 +504,109 @@ describe("the knights' sword: out and back", () => {
         expect(sim.enemyProjectiles).toHaveLength(2);
     });
 });
+
+describe("rows of bolts, stopped by pillars", () => {
+    const bolts = attack({
+        name: "Bolts",
+        kind: "pattern",
+        damage: 2,
+        windup: 0,
+        spotAnim: 27,
+        statues: { locId: 38445, windupSeq: 8682, seq: 8684 },
+        pattern: {
+            shape: "rows",
+            count: 1,
+            volleys: 3,
+            interval: 0.4,
+            speed: 10,
+            range: 60,
+            radius: 0.3,
+            delay: 1,
+            pillars: true,
+            rows: { sets: [[0, 2], [1]] },
+        },
+    });
+    const row = (y: number, dir: 1 | -1) => ({
+        y: BASE + y,
+        fromX: dir === 1 ? BASE + 5 : BASE + 58,
+        toX: dir === 1 ? BASE + 58 : BASE + 5,
+        dir,
+        statues: [{ x: dir === 1 ? BASE + 3 : BASE + 60, y: BASE + y }],
+    });
+    const FEATURES: ArenaFeatures = {
+        bolts: [row(20, 1), row(24, -1), row(28, 1)],
+        pillars: [{ x: BASE + 30, y: BASE + 27, size: 2 }],
+    };
+
+    function fight(pillars = true): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        sim.map.features = FEATURES;
+        const phases: BossPhasesDef = {
+            ...THREE_PHASES,
+            phases: [{ ambients: [{ attack: "Bolts", interval: 6 }] }],
+        };
+        const def = bossDef({
+            attacks: [{ ...bolts, pattern: { ...bolts.pattern!, pillars } }],
+            phases,
+        });
+        sim["eventIndex"] = 1;
+        sim.startIntro(def, "finalBoss", 1000);
+        run(sim, def.boss!.intro!.seconds - 0.1);
+        const boss = sim.enemies.find((e) => e.finalBoss)!;
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = BASE + 50;
+        sim.takeEvents();
+        return { sim, boss };
+    }
+
+    test("each time, the next set of rows: their statues draw, then fire down them", () => {
+        const { sim } = fight();
+        place(sim, BASE + 40.5, BASE + 40.5);
+        run(sim, 0.2);
+        const emitter = sim["emitters"][0];
+        expect(emitter.rows).toEqual([0, 2]);
+        const events = sim.takeEvents();
+        const seqs = (seq: number) =>
+            events
+                .filter((e) => e.type === "statueSeq" && e.seq === seq)
+                .map((e) => e.type === "statueSeq" && e.x);
+        expect(seqs(8682)).toEqual([BASE + 3, BASE + 3]);
+        // Nothing till they've drawn
+        expect(sim.bullets.count).toBe(0);
+        run(sim, 1);
+        expect(sim.bullets.count).toBe(2);
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({ type: "statueSeq", seq: 8684 }),
+        );
+        run(sim, 5);
+        expect(sim["emitters"][0].rows).toEqual([1]);
+    });
+
+    test("a bolt hits whoever's in its row, and a quiet row's quiet", () => {
+        const { sim } = fight();
+        place(sim, BASE + 40.5, BASE + 20.5);
+        sim.heroes[0].player.radius = 0.35;
+        const hp = hpOf(sim);
+        run(sim, 5);
+        expect(hpOf(sim)).toBeLessThan(hp);
+        const quiet = fight().sim;
+        place(quiet, BASE + 40.5, BASE + 22.5);
+        const before = hpOf(quiet);
+        run(quiet, 5);
+        expect(hpOf(quiet)).toBe(before);
+    });
+
+    test("the pillar takes the bolt for whoever's behind it, and only with pillars set", () => {
+        for (const [pillars, x, hit] of [
+            [true, 36.5, false], // behind the pillar
+            [true, 25.5, true], // in front of it
+            [false, 36.5, true], // a bolt that doesn't stop
+        ] as const) {
+            const { sim } = fight(pillars);
+            place(sim, BASE + x, BASE + 28.5);
+            const hp = hpOf(sim);
+            run(sim, 5);
+            expect([pillars, x, hpOf(sim) < hp]).toEqual([pillars, x, hit]);
+        }
+    });
+});

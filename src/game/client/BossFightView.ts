@@ -1,5 +1,8 @@
-import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
+import { BossAttackDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
+import { pillarHit } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -51,6 +54,10 @@ const GRAB_WARNING_ALPHA = 0.45;
 // The tick of the hands' animation the warning holds: just up out of the ground
 const GRAB_WARNING_TICK = 40;
 const LANE_CHEVRON_GAP = 4;
+// A row of bolts about to fly (BulletPatternDef.rows): its bolts, this far apart
+// along it and this faint
+const ROW_WARNING_GAP = 2;
+const ROW_WARNING_ALPHA = 0.25;
 // A charge's lane is shown this long once it's picked, at this alpha, and
 // then not at all: a glimpse to read, not a line to stare at
 const LANE_SHOW_SECONDS = 1;
@@ -106,6 +113,7 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
+        this.drawRowWarnings(actors, sim);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -187,13 +195,13 @@ export class BossFightView {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)
             const attack = sim.bulletSources[source[slot]]!.attack;
-            const model = this.assets.get("spot:" + attack.spotAnim);
-            if (!model) {
+            const look = this.bulletLook(attack);
+            if (!look) {
                 continue;
             }
+            const { model, anim } = look;
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
-            const anim = model.anims[0];
             const pattern = attack.pattern!;
             // Never smaller than what it hits, however it's scaled to be seen:
             // what looks like a miss has to be one
@@ -212,6 +220,79 @@ export class BossFightView {
                 yawFromVector(vx[slot], vy[slot]),
                 options,
             );
+        }
+    }
+
+    // What a bullet's drawn as: its spot animation, or an NPC (BossAttackDef.lookId)
+    private bulletLook(attack: BossAttackDef): { model: ActorModel; anim: ActorAnim } | undefined {
+        if (attack.lookId !== undefined) {
+            const look = getEnemy(attack.lookId);
+            const model = this.assets.get(getEnemyModelKey(look, 0));
+            return model && { model, anim: model.getAnim(look.idleSeq) };
+        }
+        const model = this.assets.get("spot:" + attack.spotAnim);
+        return model && { model, anim: model.anims[0] };
+    }
+
+    // The rows a volley's about to go down (BulletPatternDef.rows), each laid out
+    // faintly with its own bolts, as its statues draw: from the row's start to
+    // where it'll stop, at the first pillar in its way
+    private drawRowWarnings(actors: ActorRenderer, sim: Sim): void {
+        const rows = sim.map.features?.bolts;
+        if (!rows) {
+            return;
+        }
+        for (const emitter of sim.bulletEmitters) {
+            const pattern = emitter.attack.pattern!;
+            if (
+                !emitter.rows ||
+                emitter.volleysLeft < pattern.volleys ||
+                sim.tick >= emitter.nextTick
+            ) {
+                continue;
+            }
+            const look = this.bulletLook(emitter.attack);
+            if (!look) {
+                continue;
+            }
+            const { model, anim } = look;
+            const options = {
+                scale: Math.max(
+                    pattern.scale ?? 1,
+                    (pattern.radius * 128) / Math.max(1, model.radius),
+                ),
+                alpha: ROW_WARNING_ALPHA,
+            };
+            const frame = anim.getFrame(0);
+            for (const index of emitter.rows) {
+                const row = rows[index];
+                if (!row) {
+                    continue;
+                }
+                const dir = row.toX >= row.fromX ? 1 : -1;
+                const length = Math.abs(row.toX - row.fromX);
+                const y = row.y + 0.5;
+                const stop = pattern.pillars
+                    ? Math.min(
+                          length,
+                          pillarHit(sim.map.features?.pillars, row.fromX + 0.5, y, dir, 0, length),
+                      )
+                    : length;
+                const yaw = yawFromVector(dir, 0);
+                for (let along = 0; along <= stop; along += ROW_WARNING_GAP) {
+                    const x = row.fromX + 0.5 + dir * along;
+                    actors.draw(
+                        model,
+                        anim,
+                        frame,
+                        x,
+                        this.ground(sim, x, y) - BULLET_HEIGHT,
+                        y,
+                        yaw,
+                        options,
+                    );
+                }
+            }
         }
     }
 

@@ -773,6 +773,10 @@ export class Sim {
     // a long endless run doesn't keep every boss it's had
     readonly bulletSources: ({ attack: BossAttackDef; enemy: Enemy } | undefined)[] = [];
     private emitters: BulletEmitter[] = [];
+    // What the screen draws of them (a row attack's warning)
+    get bulletEmitters(): readonly BulletEmitter[] {
+        return this.emitters;
+    }
     // Where each hero is for the bullets, kept from tick to tick
     private readonly bulletTargets: BulletTarget[] = [];
     // What a boss has marked on the ground, and its corpse flowers
@@ -5401,16 +5405,28 @@ export class Sim {
                     ? this.rng.range(0, Math.PI * 2)
                     : (pattern.gapAt === "away" ? aim + Math.PI : aim) - (pattern.gap ?? 0) / 2;
         }
+        // The next of its sets of rows, in turn (BulletPatternDef.rows), its statues drawing
+        let rows: number[] | undefined;
+        if (pattern.rows) {
+            const used = (enemy.bossState!.rowSets ??= {});
+            const times = used[attack.name] ?? 0;
+            used[attack.name] = times + 1;
+            const sets = pattern.rows.sets;
+            rows = sets.length > 0 ? sets[times % sets.length] : [];
+            this.animateStatues(attack, this.rowStatues(rows), attack.statues?.windupSeq);
+        }
+        const delay = secondsToTicks(pattern.delay ?? 0);
         this.emitters.push({
             enemyUid: enemy.uid,
             attack,
             source,
-            nextTick: this.tick,
+            nextTick: this.tick + delay,
             volleysLeft: pattern.volleys,
             angle,
             aim,
             damage: this.getBossDamage(enemy, attack),
             ambient: !channel,
+            ...(rows && { rows, startTick: this.tick }),
         });
         // Still until its volleys are out, or for as long as the pattern says
         // (BulletPatternDef.channel), the rest going on behind its next attack
@@ -5418,7 +5434,7 @@ export class Sim {
             const state = enemy.bossState!;
             state.channelEnd = Math.max(
                 state.channelEnd,
-                this.tick + secondsToTicks(pattern.channel ?? patternSeconds(pattern)),
+                this.tick + delay + secondsToTicks(pattern.channel ?? patternSeconds(pattern)),
             );
         }
     }
@@ -5648,6 +5664,10 @@ export class Sim {
             this.fireGappedVolley(emitter, boss, speed, life, turn);
             return;
         }
+        if (pattern.shape === "rows") {
+            this.fireRows(emitter, speed);
+            return;
+        }
         const spread = pattern.shape === "spread";
         // Whoever's nearest now: a tracking spread's aim, a closing ring's middle
         const target = this.nearestHero(boss.x, boss.y).player;
@@ -5668,15 +5688,17 @@ export class Sim {
                     ? boss.y + fm.sin(angle) * from
                     : target.y + fm.sin(angle) * around;
             const heading = around === undefined ? angle : angle + Math.PI;
+            const vx = fm.cos(heading) * speed;
+            const vy = fm.sin(heading) * speed;
             this.bullets.add(
                 x,
                 y,
-                fm.cos(heading) * speed,
-                fm.sin(heading) * speed,
+                vx,
+                vy,
                 turn,
                 pattern.radius,
                 emitter.damage,
-                life,
+                pattern.pillars ? this.cutAtPillars(x, y, vx, vy, life) : life,
                 emitter.source,
                 this.tick,
             );
@@ -5698,6 +5720,59 @@ export class Sim {
         emitter.angle += pattern.turn ?? 0;
     }
 
+    // A bolt down each of the emitter's rows (BulletPatternDef.rows), from its
+    // fromX to its toX, or to the first pillar in its way (pillars), and its
+    // statues firing
+    private fireRows(emitter: BulletEmitter, speed: number): void {
+        const pattern = emitter.attack.pattern!;
+        const features = this.map.features;
+        const rows = features?.bolts;
+        if (!rows || !emitter.rows) {
+            return;
+        }
+        for (const index of emitter.rows) {
+            const row = rows[index];
+            if (!row) {
+                continue;
+            }
+            const dir = row.toX >= row.fromX ? 1 : -1;
+            const x = row.fromX + 0.5;
+            const y = row.y + 0.5;
+            const ticks = Math.max(1, Math.ceil(Math.abs(row.toX - row.fromX) / speed));
+            this.bullets.add(
+                x,
+                y,
+                dir * speed,
+                0,
+                0,
+                pattern.radius,
+                emitter.damage,
+                pattern.pillars ? this.cutAtPillars(x, y, dir * speed, 0, ticks) : ticks,
+                emitter.source,
+                this.tick,
+            );
+        }
+        this.animateStatues(
+            emitter.attack,
+            this.rowStatues(emitter.rows),
+            emitter.attack.statues?.seq,
+        );
+    }
+
+    // A straight bullet's ticks in the air, cut short where it meets one of the
+    // map's pillars (BulletPatternDef.pillars): worked out as it's fired, so it
+    // costs nothing in the air
+    private cutAtPillars(x: number, y: number, vx: number, vy: number, life: number): number {
+        const stop = pillarHit(this.map.features?.pillars, x, y, vx, vy, life);
+        return stop < life ? Math.max(1, Math.ceil(stop)) : life;
+    }
+
+    // The statues that fire down these of the map's bolt rows
+    private rowStatues(rows: readonly number[]): ArenaStatue[] {
+        const bolts = this.map.features?.bolts;
+        return bolts ? rows.flatMap((index) => bolts[index]?.statues ?? []) : [];
+    }
+
     // A wall or a closing ring: bullets side by side but for a gap of pattern.gap of them, which
     // moves each volley. A wall goes from the boss the way it faces, across it; a closing ring
     // forms round whoever's nearest the boss and comes in on where they stood.
@@ -5717,19 +5792,22 @@ export class Sim {
                 ? this.rng.int(count)
                 : 1 + this.rng.int(Math.max(1, count - gap - 1));
         const inGap = (i: number) => (i - gapStart + count) % count < gap;
-        const add = (x: number, y: number, angle: number, ticks: number) =>
+        const add = (x: number, y: number, angle: number, ticks: number) => {
+            const vx = fm.cos(angle) * speed;
+            const vy = fm.sin(angle) * speed;
             this.bullets.add(
                 x,
                 y,
-                fm.cos(angle) * speed,
-                fm.sin(angle) * speed,
+                vx,
+                vy,
                 turn,
                 pattern.radius,
                 emitter.damage,
-                ticks,
+                pattern.pillars ? this.cutAtPillars(x, y, vx, vy, ticks) : ticks,
                 emitter.source,
                 this.tick,
             );
+        };
         if (pattern.shape === "wall") {
             const spacing = pattern.spacing ?? pattern.radius * 2.5;
             const across = emitter.angle + Math.PI / 2;
