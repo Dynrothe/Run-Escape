@@ -1879,7 +1879,13 @@ export class GameClient implements GameFrameHandler {
         const ease = 1 - Math.exp(-deltaTimeMs / BOSS_LEAN_EASE);
         this.cameraLean.x += (lean.x - this.cameraLean.x) * ease;
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
-        this.cameraRig.apply(camera, px + this.cameraLean.x, ground - 0.6, py + this.cameraLean.y);
+        const pan = this.getIntroPan(sim, px, py, alpha);
+        this.cameraRig.apply(
+            camera,
+            px + this.cameraLean.x + pan.x,
+            ground - 0.6,
+            py + this.cameraLean.y + pan.y,
+        );
         // A raid hall can be drawn darker than the map (RaidRoomDef.hall)
         const hallBrightness =
             sim.map.raid && sim.raidStage === "waves"
@@ -1890,6 +1896,25 @@ export class GameClient implements GameFrameHandler {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
+    }
+
+    // A boss's intro that pans (BossIntroDef.pan): from the player to where it rises, held
+    // there, then eased back to the player
+    private getIntroPan(sim: Sim, px: number, py: number, alpha: number): { x: number; y: number } {
+        const intro = sim.intro;
+        const pan = intro?.def.boss?.intro?.pan;
+        const rise = sim.map.features?.rise;
+        if (!intro || !pan) {
+            return { x: 0, y: 0 };
+        }
+        const at = intro.boss ?? rise;
+        if (!at) {
+            return { x: 0, y: 0 };
+        }
+        const seconds = (sim.tick + alpha - intro.startTick) / TICKS_PER_SECOND;
+        const t = Math.min(1, Math.max(0, (seconds - pan.from) / pan.over));
+        const away = 1 - t * t * (3 - 2 * t);
+        return { x: (at.x - px) * away, y: (at.y - py) * away };
     }
 
     // Towards where a raid room's boss stands, while it's being fought, or a boss that asks for

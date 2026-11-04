@@ -73,8 +73,9 @@ const LOWER: Rect[] = [
     { x0: 40, y0: 12, x1: 51, y1: 14 },
 ];
 
-const START: Tile = { x: 31, y: 15 };
-const RISE: Tile = { x: 31, y: 21 };
+// He comes down in the court's middle; the player starts by its south edge, clear of the lanes
+const START: Tile = { x: 31, y: 22 };
+const RISE: Tile = { x: 31, y: 33 };
 const CELL = 3;
 const CELLS = (COURT.x1 - COURT.x0 + 1) / CELL;
 // The four pillars, 2 by 2, each in a stone cell, mirrored about the court's middle
@@ -101,9 +102,9 @@ export const OWLS_COURT = {
     origin: { x: (MAP_X + MARGIN) * MAP_SQUARE_SIZE, y: (MAP_Y + MARGIN) * MAP_SQUARE_SIZE },
     // The court's square, its south-west tile and side: the boss's arena
     bossArena: { x: COURT.x0, y: COURT.y0, size: COURT.x1 - COURT.x0 + 1 },
-    // Where he descends, by the court's south edge at the head of the bridge
+    // Where he descends: the court's middle
     rise: RISE,
-    // Where the player starts: the terrace's north edge, at the bridge's foot, 6 south of him
+    // Where the player starts: by the court's south edge, 11 south of him
     start: START,
     // The floor's 3 by 3 cells: a cell's parity is (cx + cy) % 2. 0 is the Sepulchre's runner as a
     // rug, which reads as blue edged in gold; 1 is the plain dark blue-grey stone.

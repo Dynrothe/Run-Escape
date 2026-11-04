@@ -737,6 +737,9 @@ export type BossIntroDef = {
     atMiddle?: boolean;
     // The player can't move until it's over: they stand and watch it rise
     holds?: boolean;
+    // The camera's on it as it rises, and from seconds into the intro takes
+    // over seconds to come back to the player
+    pan?: { from: number; over: number };
 };
 
 // A pattern a boss keeps up by itself (BossPhasesDef ambient): the attack,

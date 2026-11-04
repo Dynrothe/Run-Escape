@@ -178,7 +178,6 @@ describe("the Owl's Court", () => {
         for (const fire of fires) {
             expect(fire.x1 - fire.x0).toBe(2);
             expect(fire.y).toBeLessThan(bossArena.y);
-            expect(fire.y).toBeGreaterThan(start.y);
             // The fight draws it, on its rhythm
             expect(locsAt(fire.x0, fire.y).some((l) => l.id === 38427)).toBe(false);
             expect(drawn).toContainEqual({
@@ -195,14 +194,18 @@ describe("the Owl's Court", () => {
         }
     });
 
-    it("starts the player on the terrace, six tiles south of where he rises", () => {
+    it("starts the player by the court's south edge, clear of the lanes, south of him in its middle", () => {
         expect(reachable(rise.x, rise.y)).toBe(true);
         expect(reachable(start.x, start.y)).toBe(true);
         expect(inArena(rise.x, rise.y)).toBe(true);
-        expect(inArena(start.x, start.y)).toBe(false);
+        expect(inArena(start.x, start.y)).toBe(true);
+        const middle = Math.floor(bossArena.size / 2);
+        expect(rise).toEqual({ x: bossArena.x + middle, y: bossArena.y + middle });
         expect(start.x).toBe(rise.x);
-        expect(rise.y - start.y).toBeGreaterThan(0);
-        expect(rise.y - start.y).toBeLessThanOrEqual(6);
+        expect(bolts.every((bolt) => start.y < bolt.y0)).toBe(true);
+        // Well within his leash (16 tiles), so he doesn't leap at them as the fight starts
+        expect(rise.y - start.y).toBeGreaterThan(6);
+        expect(rise.y - start.y).toBeLessThanOrEqual(12);
         expect(OWLS_COURT_RECIPE.spawn).toEqual({ x: base + start.x, y: base + start.y });
     });
 

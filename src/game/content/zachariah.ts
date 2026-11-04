@@ -378,9 +378,11 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 subtitle: "The Owl's Court",
                 distance: ZACHARIAH_START_DISTANCE,
                 alone: true,
-                // He comes down at the head of the bridge (ArenaFeatures.rise), the player at its foot
+                // He comes down in the court's middle (ArenaFeatures.rise), the player by its south
+                // edge, and the camera comes back to them once he's down (7964 is 1.3 s)
                 atMiddle: true,
                 holds: true,
+                pan: { from: 2.6, over: 1.6 },
             },
             phases: {
                 phases: [

@@ -31,7 +31,8 @@ The Owl's Court (`owlsCourt.ts`, recipe `zachariah`): a 27 by 27 court of plain 
 and blue runner up its middle to the dais (the fight reads 3 by 3 cells off it, but only the
 lightning's glow shows them), four 2 by 2 pillars, crossbowmen in lanes of three down both rims,
 knights at the south corners, the Owl Justiciar and Saradomin's star on a dais to the north, and
-a bridge of four fire rows south to a lily terrace where the player starts. It floats in the
+a bridge of four fire rows south to a lily terrace. He descends in the court's middle, with the
+camera on him, and it pans back to the player at the court's south edge (`BossIntroDef.pan`). It floats in the
 Sepulchre's black, with a lower walkway four tiles below. The map exports everything the fight
 reads (`OWLS_COURT`), and `content/zachariah.ts` turns it into the map's `features` in world
 tiles: one bolt row per crossbowman (18), the knights, the fire rows, the pillars and the checker.
