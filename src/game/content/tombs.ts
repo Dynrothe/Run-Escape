@@ -145,7 +145,149 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
         },
         sounds: { attack: 5984, hit: 5998, death: 5971 },
     }),
+    // Ba-Ba's below
 ];
+
+// ---- Ba-Ba, the Path of Apmeken's boss ----
+//
+// On the baboons' skeleton too (NPC 11778, size 5: idle 9741, walk 9737). Her attacks are her
+// OSRS ones as bullets: a shockwave in front of her (and a stomp under her for whoever camps
+// there), rockfall where you stand, a boulder that bursts where it lands, her baboons, and at 66%
+// and 33% her rolling stones, rows of boulders across the arena with a way through each.
+
+// A rolling boulder (model 46414, the rolling boulders' own), and a thrown rock
+const BOULDER = 2245;
+const ROCK = 1727;
+// Where a rock lands (a Rockfall's, as the game's others use)
+const ROCK_IMPACT = 451;
+
+export const BA_BA: EnemyDef = {
+    id: "ba_ba",
+    name: "Ba-Ba",
+    npcId: 11778,
+    idleSeq: IDLE,
+    walkSeq: 9737,
+    attackSeq: 9745,
+    deathSeq: DEATH,
+    hp: 2000,
+    damage: 0,
+    speed: 1.3,
+    radius: 1.2,
+    xp: 1200,
+    knockbackResist: 1,
+    solid: true,
+    sounds: { attack: 5967, hit: 5998, death: 5971 },
+    spawnMessage: "Ba-Ba rises from her throne!",
+    boss: {
+        attackInterval: 2.2,
+        enrage: { message: "Ba-Ba's fur stands on end: she's furious!" },
+        // Camp under her and she stomps, quicker the longer you stay
+        stomp: { radius: 1.6, interval: 0.6, damage: 2, max: 8, sound: 5971 },
+        rollingStones: {
+            at: [0.66, 0.33],
+            seconds: 12,
+            attacks: ["Rolling boulders"],
+            interval: 1.6,
+            message: "Ba-Ba screams, and boulders come rolling! Find the gaps!",
+            endMessage: "The boulders stop rolling. Ba-Ba can be hurt again!",
+        },
+        attacks: [
+            {
+                name: "Shockwave",
+                kind: "swing",
+                damage: 6,
+                windup: 1.1,
+                cooldown: 2,
+                range: 5,
+                weight: 8,
+                radius: 4,
+                cone: 1.8,
+                underRadius: 1.4,
+                seq: 9742,
+                sound: 5984,
+                invoked: { id: "shaking_things_up", radius: 1.4 },
+            },
+            {
+                name: "Rockfall",
+                kind: "blast",
+                damage: 5,
+                windup: 1.6,
+                cooldown: 4,
+                range: 30,
+                weight: 5,
+                radius: 1.4,
+                impactSpotAnim: ROCK_IMPACT,
+                seq: 9743,
+                sound: 5962,
+                message: "Rocks fall from above! Move off the shadow!",
+            },
+            {
+                name: "Boulder",
+                kind: "pattern",
+                damage: 3,
+                windup: 1.8,
+                cooldown: 6,
+                range: 30,
+                weight: 4,
+                spotAnim: ROCK,
+                seq: 9748,
+                sound: 5962,
+                message: "Ba-Ba hurls a boulder: it'll burst where you stood!",
+                pattern: {
+                    shape: "ring",
+                    count: 14,
+                    volleys: 2,
+                    interval: 0.5,
+                    speed: 4.5,
+                    range: 12,
+                    radius: 0.4,
+                    origin: "target",
+                    from: 0.3,
+                },
+            },
+            {
+                name: "Call baboons",
+                kind: "summon",
+                damage: 0,
+                windup: 1.2,
+                cooldown: 14,
+                range: 30,
+                weight: 2,
+                seq: 9751,
+                sound: 5989,
+                summon: { enemyId: "baboon_thrower", count: 2, distance: 4 },
+                message: "Ba-Ba calls her baboons!",
+            },
+            {
+                name: "Rolling boulders",
+                kind: "pattern",
+                ordeal: true,
+                damage: 4,
+                windup: 0.6,
+                cooldown: 0,
+                range: 60,
+                weight: 1,
+                spotAnim: BOULDER,
+                sound: 5971,
+                invoked: { id: "boulderdash", speed: 2 },
+                pattern: {
+                    shape: "wall",
+                    count: 13,
+                    volleys: 1,
+                    interval: 1,
+                    speed: 3.2,
+                    range: 40,
+                    radius: 0.85,
+                    gap: 3,
+                    spacing: 1.6,
+                    scale: 2,
+                },
+            },
+        ],
+    },
+};
+
+TOMBS_ENEMIES.push(BA_BA);
 
 // ---- The Apmeken room ----
 

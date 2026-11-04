@@ -80,6 +80,22 @@ const APMEKEN: RoomCut = {
     arrive: [33, 13],
 };
 
+// Ba-Ba's arena, in square 59,84: in on the west, past the teleport crystal (local 18,32), her
+// throne on the east (46,31), debris for cover all over it. She rises in front of her throne
+// once the party's walked in past FIGHT_LINE.
+const BA_BA_ARENA: RoomCut = {
+    x: 3786,
+    y: 5396,
+    sizeX: 40,
+    sizeY: 25,
+    plane: 0,
+    cell: [2, 0],
+    arrive: [13, 12],
+};
+const BA_BA_AT = [31, 12];
+// Tiles from the arena cut's west edge: past it, the fight's on
+const FIGHT_LINE = 17;
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -96,7 +112,7 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN].map((cut) => {
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA].map((cut) => {
     const at = cellCorner(cut);
     return {
         cut,
@@ -106,6 +122,7 @@ const ROOMS = [NEXUS, APMEKEN].map((cut) => {
     };
 });
 const APMEKEN_ROOM = ROOMS[1];
+const BA_BA_ROOM = ROOMS[2];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -126,6 +143,12 @@ export const TOA_PLACES = {
                 },
             ]),
         ) as Record<ToaPathId, { x: number; y: number }>,
+    },
+    // Ba-Ba's arena: where the party comes in, where she rises, and the line past which she does
+    baba: {
+        arrive: worldTile(BA_BA_ROOM.arrive.x, BA_BA_ROOM.arrive.y),
+        at: worldTile(BA_BA_ROOM.at.x + BA_BA_AT[0], BA_BA_ROOM.at.y + BA_BA_AT[1]),
+        line: MAP_X * MAP_SQUARE_SIZE + BA_BA_ROOM.at.x + FIGHT_LINE,
     },
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
@@ -299,6 +322,12 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                         spots: TOA_PLACES.apmeken.spots,
                         gate: TOA_PLACES.apmeken.gate,
                         entrances: TOA_PLACES.apmeken.entrances,
+                        boss: {
+                            enemyId: "ba_ba",
+                            arrive: TOA_PLACES.baba.arrive,
+                            at: TOA_PLACES.baba.at,
+                            line: TOA_PLACES.baba.line,
+                        },
                     },
                 }),
             })),

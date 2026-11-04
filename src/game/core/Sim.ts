@@ -115,6 +115,7 @@ import {
     RandomEventEffect,
     SpecialAttackDef,
     Stats,
+    TombsPathDef,
     TombsSpotDef,
     UtilityDef,
     WaveDef,
@@ -739,6 +740,9 @@ type ApmekenRoom = {
     // The wave's baboons still to come out of the walls, and when the next does
     pending: string[];
     nextOutTick: number;
+    // The path's boss, once the room's beaten: its uid once it's risen (-1 till someone walks in),
+    // and when it fell
+    boss?: { uid: number; beatenTick?: number };
 };
 
 export class Sim {
@@ -4306,6 +4310,37 @@ export class Sim {
         }
     }
 
+    // An attack as an invocation that's on makes it (BossAttackDef.invoked), kept so it's the same
+    // attack every time (bullet sources go by it)
+    private readonly invokedAttacks = new Map<BossAttackDef, BossAttackDef>();
+    private invokedAttack(attack: BossAttackDef): BossAttackDef {
+        const invoked = attack.invoked;
+        if (!invoked || !this.invoked(invoked.id)) {
+            return attack;
+        }
+        let made = this.invokedAttacks.get(attack);
+        if (!made) {
+            made = {
+                ...attack,
+                radius:
+                    attack.radius !== undefined
+                        ? attack.radius * (invoked.radius ?? 1)
+                        : attack.radius,
+                damage: attack.damage * (invoked.damage ?? 1),
+                pattern: attack.pattern && {
+                    ...attack.pattern,
+                    speed: attack.pattern.speed * (invoked.speed ?? 1),
+                },
+                ground: attack.ground && {
+                    ...attack.ground,
+                    radius: attack.ground.radius * (invoked.radius ?? 1),
+                },
+            };
+            this.invokedAttacks.set(attack, made);
+        }
+        return made;
+    }
+
     // Whether an invocation's on (only ever in the Tombs)
     private invoked(id: string): boolean {
         return this.invocations.includes(id);
@@ -4390,6 +4425,84 @@ export class Sim {
         });
     }
 
+    // The path's room, as the map has it
+    private get tombsPathRoom(): TombsPathDef["room"] {
+        return this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room;
+    }
+
+    // Into the path's boss's arena, its room beaten: the boss rises once someone walks in
+    private enterTombsBoss(
+        room: ApmekenRoom,
+        boss: NonNullable<NonNullable<TombsPathDef["room"]>["boss"]>,
+    ): void {
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        this.enemyProjectiles = [];
+        this.gatherHall();
+        this.moveParty(boss.arrive);
+        room.boss = { uid: -1, beatenTick: undefined };
+        this.emit({
+            type: "notice",
+            message: `${getEnemy(boss.enemyId).name} waits on her throne. Walk in when you're ready.`,
+        });
+    }
+
+    // The boss's fight: it rises once someone's past the line, and once it's dead the path's done
+    private stepTombsBoss(room: ApmekenRoom): void {
+        const def = this.tombsPathRoom?.boss;
+        const fight = room.boss!;
+        if (!def) {
+            return;
+        }
+        if (fight.beatenTick !== undefined) {
+            if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
+                this.leaveTombsPath();
+            }
+            return;
+        }
+        if (fight.uid === -1) {
+            if (this.heroes.some((hero) => this.isUp(hero) && hero.player.x > def.line)) {
+                const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
+                if (enemy) {
+                    fight.uid = enemy.uid;
+                }
+            }
+            return;
+        }
+        // Up, the arena's entrance is no way out: nobody goes back behind the line, as with the
+        // room's barrier
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            const limit = def.line + player.radius;
+            if (player.x < limit) {
+                player.x = limit;
+            }
+        }
+        const boss = this.enemies.find((e) => e.uid === fight.uid);
+        if (!boss || boss.dead) {
+            fight.beatenTick = this.tick;
+            this.emit({ type: "notice", message: "The path is done. Back to the Nexus..." });
+        }
+    }
+
+    // Dev only: past a Tombs room to its boss, for testing the boss without the puzzle each time.
+    // The room counts as done, with nothing for it.
+    devSkipToTombsBoss(): boolean {
+        const room = this.apmeken;
+        const boss = this.tombsPathRoom?.boss;
+        if (!room || room.boss || !boss) {
+            return false;
+        }
+        room.pending = [];
+        room.issue = undefined;
+        room.doneTick = this.tick;
+        this.enterTombsBoss(room, boss);
+        return true;
+    }
+
     // The next of a wave's baboons out of the walls, once it's time
     private stepApmekenGroup(room: ApmekenRoom): void {
         if (room.pending.length === 0 || this.tick < room.nextOutTick) {
@@ -4417,10 +4530,19 @@ export class Sim {
         if (!room || !spots || this.runOver || this.state !== "playing") {
             return;
         }
+        if (room.boss) {
+            this.stepTombsBoss(room);
+            return;
+        }
         if (room.doneTick !== undefined) {
-            // Back to the Nexus, a moment after: Ba-Ba isn't built yet
-            if (this.tick - room.doneTick >= secondsToTicks(4)) {
-                this.leaveTombsPath();
+            // A moment after: on to the path's boss, or back to the Nexus without one
+            if (this.tick - room.doneTick >= secondsToTicks(3)) {
+                const boss = this.tombsPathRoom?.boss;
+                if (boss) {
+                    this.enterTombsBoss(room, boss);
+                } else {
+                    this.leaveTombsPath();
+                }
             }
             return;
         }
@@ -4547,7 +4669,7 @@ export class Sim {
     // Whether its barrier's shut: the room's begun and isn't done, so nobody goes back
     get tombsGateShut(): boolean {
         const room = this.apmeken;
-        return room !== undefined && room.started && room.doneTick === undefined;
+        return room !== undefined && room.started && room.doneTick === undefined && !room.boss;
     }
 
     // Shut, the barrier's a wall: nothing gets east of it, the party or the baboons
@@ -4624,8 +4746,18 @@ export class Sim {
         }
         this.use(current);
         this.rescaleParty();
-        this.moveParty(path.room!.arrive);
         const room = this.apmeken;
+        const bossDef = path.room?.boss;
+        if (room?.boss && bossDef) {
+            this.moveParty(bossDef.arrive);
+            room.boss = { uid: -1, beatenTick: undefined };
+            this.emit({
+                type: "notice",
+                message: `Oh dear, you are dead! Walk back in to face ${getEnemy(bossDef.enemyId).name} again.`,
+            });
+            return;
+        }
+        this.moveParty(path.room!.arrive);
         if (room) {
             room.beaten = Math.max(room.beaten, room.wave - 1);
             room.wave = -1;
@@ -5843,6 +5975,8 @@ export class Sim {
             aim,
             damage: this.getBossDamage(enemy, attack),
             ambient: !channel,
+            originX: pattern.origin === "target" ? windup.targets[0]?.x : undefined,
+            originY: pattern.origin === "target" ? windup.targets[0]?.y : undefined,
         });
         // Still until its volleys are out, or for as long as the pattern says
         // (BulletPatternDef.channel), the rest going on behind its next attack
@@ -5964,15 +6098,18 @@ export class Sim {
         const around = spread ? undefined : pattern.around;
         // Tiles out from the boss's middle it starts (BulletPatternDef.from)
         const from = pattern.from ?? 0;
+        // Out of where it landed (BulletPatternDef.origin), or the boss
+        const fromX = emitter.originX ?? boss.x;
+        const fromY = emitter.originY ?? boss.y;
         const fire = (angle: number) => {
             // Out from the boss, or in from a circle round the player
             const x =
                 around === undefined
-                    ? boss.x + fm.cos(angle) * from
+                    ? fromX + fm.cos(angle) * from
                     : target.x + fm.cos(angle) * around;
             const y =
                 around === undefined
-                    ? boss.y + fm.sin(angle) * from
+                    ? fromY + fm.sin(angle) * from
                     : target.y + fm.sin(angle) * around;
             const heading = around === undefined ? angle : angle + Math.PI;
             this.bullets.add(
@@ -6647,7 +6784,7 @@ export class Sim {
     private stepOrdeal(enemy: Enemy): void {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
-        const realm = def.shadowRealm ?? def.yellows;
+        const realm = def.shadowRealm ?? def.yellows ?? def.rollingStones;
         const exhumes = def.exhumes;
         const of = realm ?? exhumes;
         if (!of) {
@@ -6753,10 +6890,12 @@ export class Sim {
     // windup and the boss's interval after it (a chain's links, the flowers').
     private startBossAttack(
         enemy: Enemy,
-        attack: BossAttackDef,
-        windupSeconds = attack.windup,
+        given: BossAttackDef,
+        windupSeconds = given.windup,
         interval?: number,
     ): void {
+        // The Tombs: as an invocation makes it (BossAttackDef.invoked)
+        const attack = this.invokedAttack(given);
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // Its windup runs from when it's there
@@ -6778,7 +6917,14 @@ export class Sim {
             attack,
             startTick,
             landTick,
-            targets: attack.kind === "blast" ? this.pickBlastTargets(attack) : [],
+            // A blast's landing spots; a pattern bursting where the player is (origin "target"),
+            // where they are now
+            targets:
+                attack.kind === "blast"
+                    ? this.pickBlastTargets(attack)
+                    : attack.pattern?.origin === "target"
+                      ? [{ x: player.x, y: player.y }]
+                      : [],
             dirX: (player.x - enemy.x) / toPlayer,
             dirY: (player.y - enemy.y) / toPlayer,
         };

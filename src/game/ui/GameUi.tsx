@@ -2046,13 +2046,24 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
         return null;
     }
     return (
-        <div className="ui-round">
-            {wave.done
-                ? "Room done"
-                : wave.waiting
-                  ? "Through the barrier to begin"
-                  : `Wave ${wave.wave} / ${wave.of}`}
-        </div>
+        <>
+            <div className="ui-round">
+                {wave.done
+                    ? "Room done"
+                    : wave.waiting
+                      ? "Through the barrier to begin"
+                      : `Wave ${wave.wave} / ${wave.of}`}
+            </div>
+            {/* Dev server only: straight to the boss, for testing it */}
+            {import.meta.env.DEV && !wave.done && (
+                <button
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devSkipToTombsBoss()}
+                >
+                    Skip to boss (dev)
+                </button>
+            )}
+        </>
     );
 }
 

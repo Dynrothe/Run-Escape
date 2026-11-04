@@ -415,6 +415,9 @@ export type BulletPatternDef = {
     // A wall's tiles between bullets; a closing ring's tiles out
     spacing?: number;
     distance?: number;
+    // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
+    // bursting where it lands), rather than from the boss
+    origin?: "target";
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:
     // a pocket by the boss the volley never crosses, for whoever fights up close
     from?: number;
@@ -633,6 +636,9 @@ export type BossAttackDef = {
     enraged?: boolean;
     // Only used in its boss's shadow realm, exhumes or yellows (BossDef), never picked otherwise
     ordeal?: boolean;
+    // The Tombs of Amascut: with this invocation on, the attack's that much bigger, quicker or
+    // harder (Boulderdash's boulders twice as fast, Shaking Things Up's wider shockwave)
+    invoked?: { id: string; speed?: number; radius?: number; damage?: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat
@@ -837,6 +843,9 @@ export type BossDef = {
     // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
     // throws only these, balls that hit hard unless you're in the pool that comes with each one
     yellows?: BossOrdealDef & { seconds: number };
+    // Ba-Ba's rolling stones (the Tombs of Amascut): at each of these shares of her hitpoints she
+    // can't be hurt for seconds, and does only these: boulders rolling across the arena in rows
+    rollingStones?: BossOrdealDef & { seconds: number };
     // Walks with its guard up, taking awakeDamage of every hit, and every `every` seconds goes
     // down for `seconds`, standing still and taking all of it, then gets up with its `wake` attack
     // (the Pestilent Bloat). seq: its animation while it's down.
@@ -1265,6 +1274,14 @@ export type TombsPathDef = {
         gate?: { x: number; locId: number; tiles: { x: number; y: number }[] };
         // Where its enemies come in, in world tiles: the Apmeken room's holes in the walls
         entrances?: { x: number; y: number }[];
+        // The path's boss, after its room: the party's brought to arrive, and it rises at `at`
+        // once someone's walked past world x `line` (towards it), as the room waits for the barrier
+        boss?: {
+            enemyId: string;
+            arrive: { x: number; y: number };
+            at: { x: number; y: number };
+            line: number;
+        };
     };
 };
 

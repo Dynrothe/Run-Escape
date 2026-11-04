@@ -230,6 +230,9 @@ export type BulletEmitter = {
     damage: number;
     // A phase's own pattern (BossPhasesDef ambient), not an attack
     ambient?: boolean;
+    // Where a pattern with origin "target" comes out of: where the player stood as it began
+    originX?: number;
+    originY?: number;
 };
 
 // The player's controls shuffled (PlayerEffectDef curse): x and y of what's

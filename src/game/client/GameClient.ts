@@ -563,6 +563,13 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
+    devSkipToTombsBoss(): void {
+        if (import.meta.env.DEV && !this.coopRun) {
+            this.sim?.devSkipToTombsBoss();
+        }
+    }
+
     // The Tombs of Amascut's invocation board: on if it was off (taking off any it can't be on
     // with), off if it was on
     toggleInvocation(id: string): void {
@@ -2338,12 +2345,15 @@ export class GameClient implements GameFrameHandler {
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
-            tombsWave: sim.apmeken && {
-                wave: Math.max(0, sim.apmeken.wave) + 1,
-                of: APMEKEN_WAVES.length,
-                waiting: !sim.apmeken.started,
-                done: sim.apmeken.doneTick !== undefined,
-            },
+            tombsWave:
+                sim.apmeken && !sim.apmeken.boss
+                    ? {
+                          wave: Math.max(0, sim.apmeken.wave) + 1,
+                          of: APMEKEN_WAVES.length,
+                          waiting: !sim.apmeken.started,
+                          done: sim.apmeken.doneTick !== undefined,
+                      }
+                    : undefined,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,
