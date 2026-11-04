@@ -6696,6 +6696,14 @@ export class Sim {
                 if (hit && attack.cone !== undefined) {
                     hit = this.inCone(enemy, windup, attack, attack.cone);
                 }
+                // Out of its sight behind a pillar (BossAttackDef.cover)
+                if (
+                    hit &&
+                    attack.cover &&
+                    behindPillar(this.map.features?.pillars, enemy.x, enemy.y, player.x, player.y)
+                ) {
+                    hit = false;
+                }
                 if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
                     // Behind the glyph: it takes the blow
                     hit = false;

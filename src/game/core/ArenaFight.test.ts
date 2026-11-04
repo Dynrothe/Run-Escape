@@ -718,3 +718,64 @@ describe("the checker floor", () => {
         expect(sim.hazards).toEqual([]);
     });
 });
+
+describe("the gaze, and hiding from it", () => {
+    const gaze = attack({
+        name: "Gaze",
+        kind: "swing",
+        radius: 40,
+        damage: 15,
+        windup: 2.5,
+        cover: {},
+    });
+    const PILLARS: ArenaFeatures = {
+        pillars: [
+            { x: BASE + 26, y: BASE + 40, size: 2 },
+            { x: BASE + 36, y: BASE + 40, size: 2 },
+        ],
+    };
+
+    function fight(party?: number): { sim: Sim; boss: Enemy } {
+        const rows = grid(
+            (x, y) => (x === 26 || x === 27 || x === 36 || x === 37) && (y === 40 || y === 41),
+        );
+        const sim = createSim(1, rows, party);
+        sim.map.features = PILLARS;
+        const boss = startFight(sim, bossDef({ attacks: [gaze] }));
+        boss.x = boss.prevX = MIDDLE;
+        boss.y = boss.prevY = BASE + 50;
+        return { sim, boss };
+    }
+
+    test("it hits everyone it can see, and spares whoever's behind a pillar", () => {
+        const { sim, boss } = fight(3);
+        // Behind the west pillar from it; out in the open; behind the east one
+        place(sim, BASE + 25, BASE + 36, 0);
+        place(sim, MIDDLE, BASE + 36, 1);
+        place(sim, BASE + 38.5, BASE + 37, 2);
+        sim["use"](sim.heroes[1]);
+        use(sim, boss, "Gaze");
+        const hp = sim.heroes.map((h) => h.player.hp);
+        run(sim, gaze.windup + 0.05);
+        expect(sim.heroes.map((h, i) => h.player.hp < hp[i])).toEqual([false, true, false]);
+    });
+
+    test("only a pillar the line goes through: beside one, it sees them", () => {
+        const { sim, boss } = fight();
+        place(sim, BASE + 24, BASE + 44);
+        use(sim, boss, "Gaze");
+        const hp = hpOf(sim);
+        run(sim, gaze.windup + 0.05);
+        expect(hpOf(sim)).toBeLessThan(hp);
+    });
+
+    test("without cover, a pillar's no help", () => {
+        const { sim, boss } = fight();
+        boss.def.boss!.attacks[0] = { ...gaze, cover: undefined };
+        place(sim, BASE + 25, BASE + 36);
+        use(sim, boss, "Gaze");
+        const hp = hpOf(sim);
+        run(sim, gaze.windup + 0.05);
+        expect(hpOf(sim)).toBeLessThan(hp);
+    });
+});

@@ -1152,7 +1152,9 @@ export class GameView {
                 kind === "quarters" ||
                 kind === "surge" ||
                 kind === "pattern" ||
-                windup.attack.cone !== undefined
+                windup.attack.cone !== undefined ||
+                // It hits everywhere it can see: the shadows are what's shown
+                windup.attack.cover !== undefined
             ) {
                 continue;
             }

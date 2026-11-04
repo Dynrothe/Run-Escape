@@ -2,7 +2,7 @@ import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/acto
 import { getEnemy } from "../content/enemies";
 import { BossAttackDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
-import { pillarHit } from "../core/arena";
+import { behindPillar, pillarHit } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -58,6 +58,8 @@ const LANE_CHEVRON_GAP = 4;
 // along it and this faint
 const ROW_WARNING_GAP = 2;
 const ROW_WARNING_ALPHA = 0.25;
+// The safe tiles out of a gaze's sight, while it winds up
+const SHADOW_ALPHA = 0.5;
 // A charge's lane is shown this long once it's picked, at this alpha, and
 // then not at all: a glimpse to read, not a line to stare at
 const LANE_SHOW_SECONDS = 1;
@@ -85,11 +87,14 @@ export class BossFightView {
     // Whether the curse was on last frame, and when (ms) it lifted, for its flash
     private curseOn = false;
     private curseEndedAt = -1;
+    // The tiles out of a gaze's sight (BossAttackDef.cover), worked out once a windup
+    private shadows?: { windup: BossWindup; tiles: { x: number; y: number }[] };
 
     constructor(private readonly assets: GameAssets) {}
 
     reset(): void {
         this.beams = [];
+        this.shadows = undefined;
         this.curseOn = false;
         this.curseEndedAt = -1;
     }
@@ -114,6 +119,7 @@ export class BossFightView {
         }
         this.drawBullets(actors, sim, alpha);
         this.drawRowWarnings(actors, sim);
+        this.drawShadows(actors, sim);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -300,6 +306,90 @@ export class BossFightView {
         }
     }
 
+    // Where its gaze can't see (BossAttackDef.cover) while it winds up: every
+    // tile of the bossArena in its reach that a pillar hides from it, so the
+    // safe ground's there to be read
+    private shadowTiles(sim: Sim, enemy: Enemy, windup: BossWindup): { x: number; y: number }[] {
+        if (this.shadows?.windup === windup) {
+            return this.shadows.tiles;
+        }
+        const tiles: { x: number; y: number }[] = [];
+        const pillars = sim.map.features?.pillars;
+        const arena = sim.bossArena;
+        const reach = windup.attack.radius ?? 2;
+        const grid = sim.grid;
+        for (let tx = Math.floor(arena.minX); tx < Math.ceil(arena.maxX); tx++) {
+            for (let ty = Math.floor(arena.minY); ty < Math.ceil(arena.maxY); ty++) {
+                const x = tx + 0.5;
+                const y = ty + 0.5;
+                if (
+                    Math.hypot(x - enemy.x, y - enemy.y) <= reach &&
+                    grid.contains(tx, ty) &&
+                    !grid.isSolid(tx, ty) &&
+                    behindPillar(pillars, enemy.x, enemy.y, x, y)
+                ) {
+                    tiles.push({ x, y });
+                }
+            }
+        }
+        this.shadows = { windup, tiles };
+        return tiles;
+    }
+
+    private drawShadows(actors: ActorRenderer, sim: Sim): void {
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const cover = windup?.attack.cover;
+            if (!windup || !cover || enemy.dead) {
+                continue;
+            }
+            const key = cover.locId !== undefined ? "loc:" + cover.locId : "spot:" + cover.spotAnim;
+            const model =
+                cover.locId !== undefined || cover.spotAnim !== undefined
+                    ? this.assets.get(key)
+                    : undefined;
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(sim.tick - windup.startTick);
+            const options = { scale: 64 / Math.max(1, model.radius), alpha: SHADOW_ALPHA };
+            const player = sim.player;
+            for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
+                if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
+                    continue;
+                }
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, options);
+            }
+        }
+    }
+
+    // A gaze with nothing of its own to show its shadows by (cover with no
+    // locId or spotAnim): the tiles darkened, as the last resort
+    private drawShadowTiles(
+        overlay: Overlay,
+        sim: Sim,
+        enemy: Enemy,
+        windup: BossWindup,
+        t: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const player = sim.player;
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.25 + 0.25 * t})`;
+        for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
+            if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
+                continue;
+            }
+            this.traceGround(overlay, sim, [
+                { x: x - 0.5, y: y - 0.5 },
+                { x: x + 0.5, y: y - 0.5 },
+                { x: x + 0.5, y: y + 0.5 },
+                { x: x - 0.5, y: y + 0.5 },
+            ]);
+            ctx.fill();
+        }
+    }
+
     // Her petals drawing in on her before a spiral or a ring
     private drawGathering(actors: ActorRenderer, sim: Sim): void {
         for (const enemy of sim.enemies) {
@@ -423,6 +513,14 @@ export class BossFightView {
                     }
                 } else if (windup.attack.cone !== undefined) {
                     this.drawCone(overlay, sim, enemy, windup, t, scale);
+                } else if (
+                    windup.attack.cover &&
+                    windup.attack.cover.locId === undefined &&
+                    windup.attack.cover.spotAnim === undefined
+                ) {
+                    ctx.globalAlpha = 1;
+                    this.drawShadowTiles(overlay, sim, enemy, windup, t);
+                    ctx.globalAlpha = WARNING_ALPHA;
                 } else if (windup.attack.pattern) {
                     this.drawAim(overlay, sim, enemy, windup, t, scale);
                 }
