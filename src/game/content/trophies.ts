@@ -121,6 +121,13 @@ TROPHIES.push(
         from: { ...TOB, weight: 1 },
     },
     {
+        id: "holy_scythe_of_vitur_uncharged",
+        name: "Holy Scythe of Vitur (uncharged)",
+        objId: 25738,
+        how: HARD_PURPLE,
+        from: { ...TOB, weight: 1, hard: true },
+    },
+    {
         id: "holy_ornament_kit",
         name: "Holy ornament kit",
         objId: 25742,

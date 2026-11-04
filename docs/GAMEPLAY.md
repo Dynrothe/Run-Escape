@@ -176,7 +176,7 @@ version and how to run it.
     | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
     | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
     | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
-    | ToB (raid)     | Ghrazi rapier; on hard, Holy Scythe of Vitur     |                                                                                                      |
+    | ToB (raid)     |                                                  | Ghrazi rapier (its chest), Holy Scythe of Vitur (its chest, on hard or expert)                       |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -323,15 +323,17 @@ version and how to run it.
   little damage), coins for them, and a supply chest between rooms that sells food and potions
   for points. The last boss's chest rolls for a purple,
   more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'
-  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, and what
+  Zik now and then. The Ghrazi rapier from the chest unlocks it as a weapon, and on hard or expert
+  the chest has a roll of its own that can hold the Holy Scythe of Vitur (uncharged), which unlocks
+  the Holy Scythe. The bosses pray against missiles and magic, so melee hits hardest, and what
   they fire from themselves starts a couple of tiles out, so there's a pocket up close that only
   melee gets to stand in. A line at the top of the screen says what the hall wants of you, and
   whatever bones and coins are still on its floor when the boss comes go with you.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
-    - **Beaten once**: the Ghrazi rapier and hard mode.
-    - **Beaten on hard**: the Holy Scythe of Vitur, and **expert mode**: hard mode with more of the
+    - **Beaten once**: hard mode.
+    - **Beaten on hard**: **expert mode**: hard mode with more of the
       real raid. The Nylocas only take their own style (grey melee, green ranged, blue magic),
       Nylocas Vasilias changes colour, the Maiden's Matomenos crawl to her and heal her, Xarpus
       stares one way and hurts whoever hits him from in front, and Verzik's spider throws a ball

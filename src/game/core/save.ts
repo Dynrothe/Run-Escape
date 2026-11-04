@@ -618,6 +618,11 @@ function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean
             return run?.mapId === task.mapId && run.bossesKilled.includes(task.enemyId);
         case "survive":
             return run?.mapId === task.mapId && run.seconds >= task.seconds;
+        case "raidChest":
+            return (
+                save.trophies.includes(task.trophyId) ||
+                (run?.trophies ?? []).includes(task.trophyId)
+            );
     }
 }
 

@@ -3,6 +3,7 @@ import { getEnemy } from "./enemies";
 import { ITEMS } from "./items";
 import { getMap } from "./maps";
 import { PASSIVES } from "./passives";
+import { TROPHY_BY_ID } from "./trophies";
 import { UnlockTask } from "./types";
 import { WEAPONS, getWeapon } from "./weapons";
 
@@ -75,6 +76,11 @@ export function describeUnlockTask(task: UnlockTask, withMap = true): string {
             return `Kill ${getEnemy(task.enemyId).name}${where}`;
         case "survive":
             return `Survive ${describeSurvival(task.seconds)}${where}`;
+        case "raidChest": {
+            const from = TROPHY_BY_ID.get(task.trophyId)?.from;
+            const hard = from?.kind === "raid" && from.hard;
+            return `A chance from the ${map} chest${hard ? " on hard or expert" : ""}`;
+        }
     }
 }
 

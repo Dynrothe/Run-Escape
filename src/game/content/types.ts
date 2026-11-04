@@ -1047,7 +1047,9 @@ export type UnlockTask =
     // Kill this boss in a run on the map
     | { kind: "killBoss"; mapId: string; enemyId: string }
     // Last this many seconds in a run on the map
-    | { kind: "survive"; mapId: string; seconds: number };
+    | { kind: "survive"; mapId: string; seconds: number }
+    // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
+    | { kind: "raidChest"; mapId: string; trophyId: string };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =

@@ -3,8 +3,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
-import { TROPHIES } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
+import { describeUnlockTask } from "../content/unlocks";
+import { getWeapon } from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import {
     createSave,
@@ -231,16 +233,33 @@ describe("raids", () => {
         expect(isEndlessUnlocked(save, "theatre_of_blood")).toBe(false);
     });
 
-    it("unlocks the Ghrazi rapier for beating the Theatre, and the Holy scythe on hard", () => {
+    it("unlocks the Ghrazi rapier and the Holy scythe from the chest, not for a win", () => {
         const earned = (save: ReturnType<typeof createSave>) =>
             getEarnedUnlocks(save).items.map((item) => item.id);
         const save = createSave();
-        expect(earned(save)).not.toContain("ghrazi_rapier");
         save.mapVictories.theatre_of_blood = 1;
+        save.hardVictories.theatre_of_blood = 1;
+        save.expertVictories.theatre_of_blood = 1;
+        expect(earned(save)).not.toContain("ghrazi_rapier");
+        expect(earned(save)).not.toContain("holy_scythe_of_vitur");
+        save.trophies.push("ghrazi_rapier");
         expect(earned(save)).toContain("ghrazi_rapier");
         expect(earned(save)).not.toContain("holy_scythe_of_vitur");
-        save.hardVictories.theatre_of_blood = 1;
+        save.trophies.push("holy_scythe_of_vitur_uncharged");
         expect(earned(save)).toContain("holy_scythe_of_vitur");
+    });
+
+    it("has the rapier in every mode's chest, and the Holy scythe on hard and expert's only", () => {
+        const rapier = TROPHY_BY_ID.get("ghrazi_rapier")!.from;
+        const scythe = TROPHY_BY_ID.get("holy_scythe_of_vitur_uncharged")!.from;
+        expect(rapier.kind === "raid" && !rapier.hard && !rapier.expert).toBe(true);
+        expect(scythe.kind === "raid" && scythe.hard && !scythe.expert).toBe(true);
+        expect(describeUnlockTask(getWeapon("ghrazi_rapier").unlock!)).toBe(
+            "A chance from the Theatre of Blood chest",
+        );
+        expect(describeUnlockTask(getWeapon("holy_scythe_of_vitur").unlock!)).toBe(
+            "A chance from the Theatre of Blood chest on hard or expert",
+        );
     });
 
     it("scores a room on how fast its boss went down and how little you were hurt", () => {

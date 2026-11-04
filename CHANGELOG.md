@@ -5,6 +5,12 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- The Theatre of Blood's weapons come from its chest: a Ghrazi rapier in the chest unlocks the
+  rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which unlocks the
+  Holy Scythe. Weapons already unlocked stay unlocked.
+
 ### Fixed
 
 - The Theatre of Blood: a room's waves always last five minutes. Killing a boss quickly, or taking
