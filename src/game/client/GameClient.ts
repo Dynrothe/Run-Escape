@@ -34,7 +34,7 @@ import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon } from "../content/weapons";
-import { ChestAction } from "../core/Loot";
+import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { SimEvent, WeaponState } from "../core/entities";
@@ -421,7 +421,7 @@ export class GameClient implements GameFrameHandler {
     private lookChoices: (UpgradeChoice[] | undefined)[] = [];
     // The casket Auto alch last sent off (a co-op one takes a frame to come
     // back, and shouldn't go twice)
-    private autoAlchedUid = -1;
+    private autoResolvedChestUid = -1;
     private runRecorded = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
@@ -886,6 +886,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ autoAlch: !this.display.autoAlch });
     }
 
+    toggleAutoEquip(): void {
+        this.setDisplay({ autoEquip: !this.display.autoEquip });
+    }
+
     toggleQuestTracker(): void {
         this.setDisplay({ questTracker: !this.display.questTracker });
     }
@@ -1291,7 +1295,7 @@ export class GameClient implements GameFrameHandler {
         this.appearanceVersions = [];
         this.lookChoices = [];
         this.decisionKey = "";
-        this.autoAlchedUid = -1;
+        this.autoResolvedChestUid = -1;
         this.coopStopped = false;
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
@@ -1480,6 +1484,7 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.chest("open", chest.rarity);
             }
             this.store.set({ chest });
+            this.syncOverlay();
         } else {
             this.sounds.reroll();
             this.store.set({ choices: getChoiceViews(sim) });
@@ -2160,6 +2165,16 @@ export class GameClient implements GameFrameHandler {
                         );
                     }
                     break;
+                case "equip":
+                    if (this.display.autoEquip) {
+                        this.store.toast(
+                            `Equipped ${getItem(event.itemId).name}` +
+                                (event.replacedId
+                                    ? `; high alched ${getItem(event.replacedId).name} for ${event.coins.toLocaleString()} coins`
+                                    : ""),
+                        );
+                    }
+                    break;
             }
         }
     }
@@ -2213,15 +2228,31 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
-        } else if (sim.state === "chest" && sim.chest && this.display.autoAlch) {
-            // As if the High alch button had been clicked; this comes back here
-            // for whatever's next. Co-op's comes back a frame later, so once
-            // for each casket.
-            if (sim.chest.uid !== this.autoAlchedUid) {
-                this.autoAlchedUid = sim.chest.uid;
-                this.resolveChest("alch");
-            }
         } else if (sim.state === "chest" && sim.chest) {
+            const action = this.display.autoAlch
+                ? "alch"
+                : this.display.autoEquip &&
+                    shouldAutoEquip(
+                        sim.gear,
+                        sim.gearUpgrades,
+                        getItem(sim.chest.itemId),
+                        sim.chest.upgrades,
+                    )
+                  ? "take"
+                  : undefined;
+            if (action) {
+                // Co-op applies the choice a frame later; don't send it twice
+                // or leave the previous casket's buttons on screen meanwhile.
+                if (sim.chest.uid === this.autoResolvedChestUid) {
+                    return;
+                }
+                this.autoResolvedChestUid = sim.chest.uid;
+                this.store.set({ overlay: "none", chest: undefined, choices: [], waitingOn });
+                if (this.act({ kind: "chest", action })) {
+                    return;
+                }
+                this.autoResolvedChestUid = -1;
+            }
             const chest = getChestView(sim);
             const shown = this.store.getSnapshot();
             // Co-op: the same casket again keeps its animation where it is
