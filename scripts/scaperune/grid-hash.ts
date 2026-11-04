@@ -21,7 +21,7 @@ const SHIPPED_HASHES: Record<string, string> = {
     halloween: "f7f79aaf1942a939f48e72ce69335a9a12bd5e671043f00684f9098d56f2f023",
     phosani: "4f6fcdf2dee1830db95a1c3e1cac27549d1bcaac9ccc1242fce3c148479625c1",
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
-    zachariah: "d05c530aae4a0a66171eba28a4d3a867abf55634226b874b812724612549e9b8",
+    zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
 };
 
 const check = !!process.env.CHECK;

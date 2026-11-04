@@ -46,6 +46,8 @@ const LOW = 65;
 // at its own height and its lips stand level
 const LEVEL_GAP = 4;
 
+// The walkways' floor, under their tiles (shapeGround)
+const WALKWAY_FLOOR = 141;
 const LOC_WALL_CORNER = 2;
 const LOC_WALL_POST = 3;
 
@@ -366,13 +368,15 @@ function shapeGround(court: Court): void {
             }
         }
     }
-    // Every walkway is the hidden floor (the Sepulchre's, 0xFF00FF, which draws nothing and shows
-    // on the minimap) under its stone tiles. The void has no floor at all. Both it and the lower
-    // walkway, which is only to look at, are blocked.
+    // Every walkway has a plain floor the stone tiles' own dark blue-grey under them (cache
+    // overlay 140, map file 141). The Sepulchre's is the hidden floor (0xFF00FF), which draws
+    // nothing, so the hairline seams between its tiles showed the void's black through them and
+    // glittered as the camera moved. The tiles draw over it (floor decoration's priority). The void
+    // has no floor at all. Both it and the lower walkway, which is only to look at, are blocked.
     const { overlays, flags } = ground.level0;
     for (let i = 0; i < SIZE * SIZE; i++) {
         if (kind[i] !== VOID) {
-            overlays[i] = 359;
+            overlays[i] = WALKWAY_FLOOR;
         }
         if (kind[i] !== WALKWAY) {
             flags[i] |= TILE_BLOCKED;
