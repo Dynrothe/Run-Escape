@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { getCharacter } from "../content/characters";
+import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
 import { hasBadNumber } from "../core/lockstep";
@@ -20,7 +21,7 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, loadoutStats } from "./GameClient";
+import { GameClient, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
 
 function createSim(): Sim {
@@ -750,5 +751,35 @@ describe("loadoutStats", () => {
         expect(stats.might).toBeLessThan(1e9);
         expect(stats.armor).toBe(0);
         expect(stats.regen).toBe(0);
+    });
+});
+
+describe("a boss bar in phases", () => {
+    // Just what the bar reads: its hitpoints and its phases (Justiciar Zachariah's)
+    const boss = (hp: number) => {
+        const def = getEnemy("justiciar_zachariah");
+        return { def, hp, maxHp: 1000 } as unknown as Parameters<typeof getPhaseBarFraction>[0];
+    };
+
+    test("is a full bar for each of Zachariah's phases, empty at the next threshold", () => {
+        const phases = getEnemy("justiciar_zachariah").boss!.phases!;
+        expect(phases.barPerPhase).toBe(true);
+        const [first, second] = phases.phases.map((p) => (p.until ?? 0) * 1000);
+        expect(getPhaseBarFraction(boss(1000), 0)).toBe(1);
+        expect(getPhaseBarFraction(boss(first), 0)).toBe(0);
+        // The next phase starts full where the last one ended
+        expect(getPhaseBarFraction(boss(first), 1)).toBe(1);
+        expect(getPhaseBarFraction(boss((first + second) / 2), 1)).toBeCloseTo(0.5);
+        expect(getPhaseBarFraction(boss(second), 2)).toBe(1);
+        expect(getPhaseBarFraction(boss(0), 2)).toBe(0);
+    });
+
+    test("is the whole of the hitpoints for a boss that doesn't ask for it", () => {
+        const def = getEnemy("phosanis_nightmare");
+        expect(def.boss?.phases?.barPerPhase).toBeUndefined();
+        const phosani = { def, hp: 300, maxHp: 1000 } as unknown as Parameters<
+            typeof getPhaseBarFraction
+        >[0];
+        expect(getPhaseBarFraction(phosani, 1)).toBeCloseTo(0.3);
     });
 });

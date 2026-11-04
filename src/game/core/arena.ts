@@ -289,3 +289,42 @@ export function boxExit(
     }
     return to > Math.max(from, 0) ? to : 0;
 }
+
+// Out of a gaze's sight from (fromX, fromY) (BossAttackDef.cover), as it's drawn: a tile's
+// shadowed when a pillar's between the gaze and the tile's middle (shadowedTile), and a player's
+// safe when their middle is hidden, or any part of them is on a shadowed tile, whichever spares
+// them. So whoever's seen standing on the shadow is never hit.
+export function shadowedTile(
+    pillars: readonly Pillar[] | undefined,
+    fromX: number,
+    fromY: number,
+    tileX: number,
+    tileY: number,
+): boolean {
+    return behindPillar(pillars, fromX, fromY, tileX + 0.5, tileY + 0.5);
+}
+
+export function inShadow(
+    pillars: readonly Pillar[] | undefined,
+    fromX: number,
+    fromY: number,
+    x: number,
+    y: number,
+    radius: number,
+): boolean {
+    if (behindPillar(pillars, fromX, fromY, x, y)) {
+        return true;
+    }
+    for (let tx = Math.floor(x - radius); tx <= Math.floor(x + radius); tx++) {
+        for (let ty = Math.floor(y - radius); ty <= Math.floor(y + radius); ty++) {
+            if (
+                circleInBox(x, y, radius, tx + 0.5, ty + 0.5, 0.5, 0.5) &&
+                !boxCircle(pillars, tx + 0.5, ty + 0.5, 0) &&
+                shadowedTile(pillars, fromX, fromY, tx, ty)
+            ) {
+                return true;
+            }
+        }
+    }
+    return false;
+}

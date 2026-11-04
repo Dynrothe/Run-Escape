@@ -37,7 +37,7 @@ import { getWeapon } from "../content/weapons";
 import { ChestAction } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
-import { SimEvent, WeaponState } from "../core/entities";
+import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
 import {
@@ -169,6 +169,8 @@ const CAMERA_GROUND_EASE = 110;
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
+// How much brighter a gaze lights the arena at its height (getGazeLight)
+const GAZE_LIGHT = 0.6;
 // A boss's blow shaking the camera (ImpactDef.shake): how long, how far at its hardest (tiles),
 // and from how many tiles off the player it's felt less, to none at SHAKE_FAR
 const SHAKE_MS = 320;
@@ -332,6 +334,34 @@ export type GameClientOptions = {
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
 };
+
+// A boss winding up a gaze (BossAttackDef.cover) lights the arena, more as it comes: how much
+// brighter than the map's own, from 1 to 1 + GAZE_LIGHT as it lands
+export function getGazeLight(sim: Sim): number {
+    const boss = sim.shownBoss;
+    const windup = boss && !boss.dead ? boss.bossState?.windup : undefined;
+    if (!windup?.attack.cover) {
+        return 1;
+    }
+    const t = (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick);
+    return 1 + GAZE_LIGHT * Math.min(1, Math.max(0, t));
+}
+
+// What a fight on its hitpoints shows on its bar: all of them, or with BossPhasesDef.barPerPhase
+// the phase's own share, full as it begins and empty at the next threshold (each phase's until,
+// or an even split, as Sim.passThreshold has them)
+export function getPhaseBarFraction(boss: Enemy, index: number): number {
+    const phases = boss.def.boss?.phases;
+    if (!phases?.barPerPhase) {
+        return boss.hp / boss.maxHp;
+    }
+    const count = phases.phases.length;
+    const until = (i: number) =>
+        i < 0 ? 1 : i >= count - 1 ? 0 : (phases.phases[i].until ?? (count - 1 - i) / count);
+    const top = until(index - 1) * boss.maxHp;
+    const bottom = until(index) * boss.maxHp;
+    return Math.min(1, Math.max(0, (boss.hp - bottom) / Math.max(1, top - bottom)));
+}
 
 export class GameClient implements GameFrameHandler {
     static async create(
@@ -1940,7 +1970,8 @@ export class GameClient implements GameFrameHandler {
             sim.map.raid && sim.raidStage === "waves"
                 ? sim.map.raid.rooms[sim.raidRoom].hall?.brightness
                 : undefined;
-        const brightness = hallBrightness ?? sim.map.brightness ?? 1;
+        // A gaze's light, brought up as it winds up (BossAttackDef.cover)
+        const brightness = (hallBrightness ?? sim.map.brightness ?? 1) * getGazeLight(sim);
         if (brightness !== this.shownBrightness) {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
@@ -2409,7 +2440,7 @@ export class GameClient implements GameFrameHandler {
                         ? Math.max(0, (phase.finaleEnd ?? 0) - sim.tick) /
                           (finale.seconds * TICKS_PER_SECOND)
                         : phase.stage === "hp"
-                          ? shownBoss.hp / shownBoss.maxHp
+                          ? getPhaseBarFraction(shownBoss, phase.index)
                           : phase.shield / phase.shieldMax;
                 const reach = sim.map.fight?.strikeReach;
                 const player = sim.player;

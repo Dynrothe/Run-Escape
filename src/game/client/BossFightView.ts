@@ -2,7 +2,7 @@ import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/acto
 import { getEnemy } from "../content/enemies";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
-import { behindPillar, cycleStage, statueMiddle } from "../core/arena";
+import { cycleStage, shadowedTile, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
@@ -58,8 +58,14 @@ const LANE_CHEVRON_GAP = 4;
 const THROW_LINE_ALPHA = 0.3;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
 const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
-// The safe tiles out of a gaze's sight, while it winds up
+// The safe tiles out of a gaze's sight, while it winds up: a strange tile's glow this solid, or
+// darkened from this much to this much more
 const SHADOW_ALPHA = 0.5;
+const SHADOW_DARK = 0.45;
+const SHADOW_DEEPEN = 0.3;
+// And his light over the rest, warm, this solid at its height
+const GAZE_WASH = "255, 238, 190";
+const GAZE_WASH_ALPHA = 0.22;
 // A charge's lane is shown this long once it's picked, at this alpha, and
 // then not at all: a glimpse to read, not a line to stare at
 const LANE_SHOW_SECONDS = 1;
@@ -372,7 +378,8 @@ export class BossFightView {
 
     // Where its gaze can't see (BossAttackDef.cover) while it winds up: every
     // tile of the bossArena in its reach that a pillar hides from it, so the
-    // safe ground's there to be read
+    // safe ground's there to be read. From where it's cast (BossWindup.at, the
+    // middle it leaps to), tile by tile as the sim's inShadow has them.
     private shadowTiles(sim: Sim, enemy: Enemy, windup: BossWindup): { x: number; y: number }[] {
         if (this.shadows?.windup === windup) {
             return this.shadows.tiles;
@@ -382,15 +389,17 @@ export class BossFightView {
         const arena = sim.bossArena;
         const reach = windup.attack.radius ?? 2;
         const grid = sim.grid;
+        const fromX = windup.at?.x ?? enemy.x;
+        const fromY = windup.at?.y ?? enemy.y;
         for (let tx = Math.floor(arena.minX); tx < Math.ceil(arena.maxX); tx++) {
             for (let ty = Math.floor(arena.minY); ty < Math.ceil(arena.maxY); ty++) {
                 const x = tx + 0.5;
                 const y = ty + 0.5;
                 if (
-                    Math.hypot(x - enemy.x, y - enemy.y) <= reach &&
+                    Math.hypot(x - fromX, y - fromY) <= reach &&
                     grid.contains(tx, ty) &&
                     !grid.isSolid(tx, ty) &&
-                    behindPillar(pillars, enemy.x, enemy.y, x, y)
+                    shadowedTile(pillars, fromX, fromY, tx, ty)
                 ) {
                     tiles.push({ x, y });
                 }
@@ -432,8 +441,10 @@ export class BossFightView {
         }
     }
 
-    // A gaze with nothing of its own to show its shadows by (cover with no
-    // locId or spotAnim): the tiles darkened, as the last resort
+    // A gaze with nothing of its own to show its shadows by (cover with no locId or spotAnim):
+    // the pillars' shadows, the tiles darkened, deepening as it winds up, while the light's
+    // brought up everywhere else (GameClient, getGazeLight). A colour overlay: nothing in the
+    // cache casts a shadow, and it's the one thing on the floor that must be read exactly.
     private drawShadowTiles(
         overlay: Overlay,
         sim: Sim,
@@ -443,7 +454,7 @@ export class BossFightView {
     ): void {
         const ctx = overlay.ctx;
         const player = sim.player;
-        ctx.fillStyle = `rgba(0, 0, 0, ${0.25 + 0.25 * t})`;
+        ctx.fillStyle = `rgba(4, 6, 18, ${SHADOW_DARK + SHADOW_DEEPEN * t})`;
         for (const { x, y } of this.shadowTiles(sim, enemy, windup)) {
             if (Math.abs(x - player.x) > VIEW_REACH || Math.abs(y - player.y) > VIEW_REACH) {
                 continue;
@@ -588,6 +599,9 @@ export class BossFightView {
                     windup.attack.cover.spotAnim === undefined
                 ) {
                     ctx.globalAlpha = 1;
+                    // His light over everything, warm, as his sword's raised; then the shadows
+                    ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * t})`;
+                    ctx.fillRect(0, 0, overlay.width, overlay.height);
                     this.drawShadowTiles(overlay, sim, enemy, windup, t);
                     ctx.globalAlpha = WARNING_ALPHA;
                 } else if (windup.attack.pattern) {

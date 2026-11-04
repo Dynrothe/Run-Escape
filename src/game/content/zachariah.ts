@@ -11,9 +11,9 @@ import { ArenaFeatures, BossAttackDef, EnemyDef, FightAbilityDef, ImpactDef } fr
 // as in OSRS, and only from close by (MapDef.fight.strikeReach), so the player has to stay near
 // him while they read the room. Everything's warned on the ground or by a statue first.
 // The player fights back three ways (BossDef.guard): a lunge or a wave of his that misses leaves
-// his guard down, doubling what he takes; his court's bolts, lightning and swords hurt him too,
-// and lightning, a sword or a lunge into a pillar stuns him; and Smite (MapDef.fight.ability),
-// the fight's button, hits hard from right beside him.
+// his guard down, doubling what he takes; his court's bolts hurt him too, and a lunge into a
+// pillar stuns him (not again for a while after); and Smite (MapDef.fight.ability), the fight's
+// button, hits hard from right beside him.
 // The design and its numbers: docs/design/justiciar-zachariah.md.
 
 // His animations, all on his own skeleton (1756), as the cache has them for npc 7858
@@ -98,6 +98,8 @@ export const ZACHARIAH_SMITE: FightAbilityDef = {
     name: "Smite",
     damage: 50,
     reach: 3.5,
+    // His missed lunge can leave him past you: a little further while his guard's down
+    openReach: 4.5,
     cooldown: 4,
     // Saradomin's light
     iconObjId: 13256,
@@ -121,7 +123,7 @@ export const ZACHARIAH_START_DISTANCE = OWLS_COURT.rise.y - OWLS_COURT.start.y;
 const BOLT = 2;
 // How long his guard's down when a lunge or a wave of his misses, and how long he's stunned
 // (BossDef.guard), and what that does to what he takes
-const OPENS = 1.5;
+const OPENS = 2;
 const STUN = 2.5;
 const OPENED_DAMAGE = 2;
 const FIRE = 3;
@@ -250,8 +252,8 @@ const SWORD: BossAttackDef = {
 };
 
 // The lightning: every cell of one colour of the court's floor, then the other's. From a struck
-// cell's middle it's 1.85 tiles into the other colour's, under half a second, against 1.4. A cell
-// struck under him stuns him: he follows them, so they can lead him onto it.
+// cell's middle it's 1.85 tiles into the other colour's, under half a second, against 1.4. It's
+// his own: it doesn't touch him (it stunned him till round 6, cutting short nearly every cast).
 const LIGHTNING: BossAttackDef = {
     name: "Lightning",
     kind: "ground",
@@ -268,7 +270,6 @@ const LIGHTNING: BossAttackDef = {
     impactSpotAnim: 1796,
     // The cells about to be struck swirl gold, as a yellow strange tile does when it's stepped on
     // (1800, animated)
-    turns: { damage: 40, stun: true },
     impact: { shake: 0.3, flash: "#dfe8ff" },
     ground: {
         spots: [{ shape: "checker", then: 1.4 }],
@@ -382,8 +383,9 @@ const ATTACKS: BossAttackDef[] = [
         impactSpotAnim: 1458,
         radius: 40,
         toMiddle: true,
-        // The safe tiles glow blue, as the strange tiles do
-        cover: { locId: 56670 },
+        // As he raises his sword the court's lit up, and the pillars' shadows are the dark
+        // that's safe (BossFightView.drawShadowTiles)
+        cover: {},
         message: "Hide from his gaze!",
         shout: "Face judgement!",
         impact: {
@@ -512,6 +514,11 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 // (clang2) as he's stunned: among his own blows' sounds, but their own
                 exposeSound: 1971,
                 stunSound: 1141,
+                // Not stunned again for 8 s after one: no keeping him stuck in a pillar. What
+                // would have stunned him only drops his guard, and his blue light flares as he
+                // shrugs it off.
+                stunGrace: 8,
+                resisted: { spots: [{ spotAnim: BLUE_IMPACT, fit: 1.8 }] },
                 stuck: {
                     spots: [
                         { spotAnim: STOMP, fit: 2 },
@@ -580,6 +587,8 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 },
                 // The court's edges are drops: the bridge and the terrace are the player's to use
                 confine: false,
+                // Each phase its own full bar
+                barPerPhase: true,
                 shieldMessage: "",
                 blastMessage: "",
             },

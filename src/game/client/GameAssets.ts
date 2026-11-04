@@ -184,6 +184,7 @@ function getSpotAnimIds(): number[] {
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
+        addImpact(guard?.resisted);
         addImpact(enemy.boss?.leash?.jump?.land);
         addImpact(enemy.boss?.intro?.land);
         addImpact(enemy.boss?.phases?.threshold?.impact);

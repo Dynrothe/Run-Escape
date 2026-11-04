@@ -1942,10 +1942,12 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 {boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
                 {boss.fight && (
                     // Keyed on the phase, so a new one plays its pulse from the start
-                    <span key={boss.fight.phase} className="ui-boss-phase ui-boss-phase-new">
+                    <>
                         {" "}
-                        Phase {boss.fight.phase}/{boss.fight.phases}
-                    </span>
+                        <span key={boss.fight.phase} className="ui-boss-phase ui-boss-phase-new">
+                            Phase {boss.fight.phase}/{boss.fight.phases}
+                        </span>
+                    </>
                 )}
             </div>
             {boss.fight?.stage === "totems" ? (

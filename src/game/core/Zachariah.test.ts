@@ -21,7 +21,7 @@ import {
 } from "../scaperune/maps/owlsCourt";
 import { BuildContext } from "../scaperune/recipe";
 import { Sim, TICKS_PER_SECOND, yawFromVector } from "./Sim";
-import { behindPillar } from "./arena";
+import { behindPillar, inShadow, shadowedTile } from "./arena";
 import { Enemy } from "./entities";
 import { applyAction } from "./lockstep";
 import { createSave } from "./save";
@@ -480,6 +480,50 @@ describe("his attacks, each landing and each dodged", () => {
         }
     });
 
+    test("the gaze spares whoever's on a shadowed tile, any part of them, as the shadows are drawn", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 27));
+        use(sim, boss, "The Owl's gaze");
+        // Cast from the middle he's leaping to, shadows and all, from the start
+        const from = boss.bossState!.windup!.at!;
+        expect(from).toBeDefined();
+        const pillars = OWLS_COURT_FEATURES.pillars!;
+        const r = sim.player.radius;
+        const court = OWLS_COURT.bossArena;
+        let edge: { x: number; y: number } | undefined;
+        for (let tx = O.x + court.x; tx < O.x + court.x + court.size; tx++) {
+            for (let ty = O.y + court.y; ty < O.y + court.y + court.size; ty++) {
+                if (!shadowedTile(pillars, from.x, from.y, tx, ty)) {
+                    continue;
+                }
+                // Anywhere on a drawn shadow, its middle, edges or corners, is safe
+                for (const [dx, dy] of [
+                    [0.5, 0.5],
+                    [0.02, 0.5],
+                    [0.98, 0.5],
+                    [0.5, 0.02],
+                    [0.5, 0.98],
+                    [0.02, 0.02],
+                    [0.98, 0.98],
+                ]) {
+                    expect(inShadow(pillars, from.x, from.y, tx + dx, ty + dy, r)).toBe(true);
+                }
+                // A spot on it the gaze's straight line to them would still have seen
+                if (!edge && !behindPillar(pillars, from.x, from.y, tx + 0.98, ty + 0.98)) {
+                    edge = { x: tx + 0.98, y: ty + 0.98 };
+                }
+            }
+        }
+        // And somewhere in the open, nothing shadowed under them, isn't
+        expect(inShadow(pillars, from.x, from.y, at(31, 27).x, at(31, 27).y, r)).toBe(false);
+        // Stood on a shadow's corner the straight line misses: spared
+        expect(edge).toBeDefined();
+        place(sim, edge!);
+        const before = hp(sim);
+        run(sim, 4.5);
+        expect(hp(sim)).toBe(before);
+    });
+
     test("the bolts: down their rows, stopped by the pillars", () => {
         for (const [spot, hit] of [
             [at(30, 23), true], // in a lane, in the open
@@ -670,7 +714,7 @@ describe("fighting back", () => {
         expect(sim.isStunned(boss)).toBe(false);
     });
 
-    test("his court turns on him: lightning struck under him stuns him", () => {
+    test("his own lightning struck under him leaves him be: his cast goes on", () => {
         const { sim, boss } = fight();
         place(sim, at(22.5, 22.5));
         use(sim, boss, "Lightning");
@@ -679,10 +723,43 @@ describe("fighting back", () => {
         placeBoss(boss, { x: cell.x, y: cell.y });
         const before = boss.hp;
         run(sim, attackNamed("Lightning").windup + 0.1);
-        expect(sim.isStunned(boss)).toBe(true);
-        expect(before - boss.hp).toBeGreaterThanOrEqual(
-            attackNamed("Lightning").turns!.damage * 0.85,
-        );
+        expect(sim.isStunned(boss)).toBe(false);
+        expect(boss.hp).toBe(before);
+        expect(attackNamed("Lightning").turns).toBeUndefined();
+    });
+
+    test("standing behind a pillar can't keep him stuck: not stunned again for a while", () => {
+        const sim = createSim();
+        const boss = startFight(sim);
+        // Lunging at them from the north, through the south-west pillar, for a minute
+        placeBoss(boss, at(25.5, 30));
+        boss.attackCooldown = 0;
+        let stunned = 0;
+        let stuns = 0;
+        let was = false;
+        let last = -Infinity;
+        let closest = Infinity;
+        for (let i = 0; i < 60 * TICKS_PER_SECOND; i++) {
+            place(sim, at(25.5, 22));
+            sim.player.invulnerable = 1e9;
+            sim.player.frozen = 0;
+            sim.heroes[0].drag = undefined;
+            boss.hp = boss.maxHp;
+            run(sim, 0.02);
+            const now = sim.isStunned(boss);
+            if (now && !was) {
+                stuns++;
+                closest = Math.min(closest, sim.tick - last);
+                last = sim.tick;
+            }
+            stunned += now ? 1 : 0;
+            was = now;
+        }
+        const guard = zachariah().boss!.guard!;
+        expect(stuns).toBeGreaterThan(0);
+        // A stun and its grace at the least between one stun's start and the next's
+        expect(closest).toBeGreaterThanOrEqual((guard.stun + guard.stunGrace!) * TICKS_PER_SECOND);
+        expect(stunned / (60 * TICKS_PER_SECOND)).toBeLessThan(0.25);
     });
 
     test("a knight's sword thrown through him passes him by: no stun, no damage", () => {
@@ -726,7 +803,7 @@ describe("fighting back", () => {
     test("Smite: from right beside him, doubled with his guard down, and nothing out of reach", () => {
         const { sim, boss } = fight();
         const smite = ZACHARIAH_SMITE;
-        place(sim, { x: boss.x, y: boss.y - smite.reach - 1 });
+        place(sim, { x: boss.x, y: boss.y - smite.reach - 2 });
         expect(sim.useAbility()).toBe(false);
         expect(sim.abilitySecondsLeft()).toBe(0);
         place(sim, { x: boss.x, y: boss.y - smite.reach + 0.5 });
@@ -742,6 +819,37 @@ describe("fighting back", () => {
         before = boss.hp;
         expect(sim.useAbility()).toBe(true);
         expect(before - boss.hp).toBeGreaterThanOrEqual(Math.floor(smite.damage * 2 * 0.85));
+    });
+
+    test("Smite: a press a moment early is held and goes off, and it reaches further on an opening", () => {
+        const { sim, boss } = fight();
+        const smite = ZACHARIAH_SMITE;
+        place(sim, { x: boss.x, y: boss.y - smite.reach + 0.5 });
+        expect(sim.useAbility()).toBe(true);
+        // Pressed 0.2 s before it's charged: it goes off as it is, not lost
+        run(sim, smite.cooldown - 0.2);
+        let before = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        expect(boss.hp).toBe(before);
+        run(sim, 0.25);
+        expect(boss.hp).toBeLessThan(before);
+        // Just out of reach, his guard down: in reach after all
+        run(sim, smite.cooldown);
+        place(sim, { x: boss.x, y: boss.y - (smite.reach + smite.openReach!) / 2 });
+        before = boss.hp;
+        expect(sim.abilityTarget()).toBeUndefined();
+        boss.bossState!.exposedEnd = sim.tick + TICKS_PER_SECOND;
+        expect(sim.useAbility()).toBe(true);
+        expect(before - boss.hp).toBeGreaterThanOrEqual(Math.floor(smite.damage * 2 * 0.85));
+        // Held, and he never comes in reach: it runs out, and nothing's spent
+        run(sim, smite.cooldown);
+        boss.bossState!.exposedEnd = 0;
+        place(sim, { x: boss.x, y: boss.y - smite.reach - 1 });
+        before = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        run(sim, 0.5);
+        expect(boss.hp).toBe(before);
+        expect(sim.abilitySecondsLeft()).toBe(0);
     });
 
     test("nothing gets through while he kneels at a threshold, his guard or Smite", () => {

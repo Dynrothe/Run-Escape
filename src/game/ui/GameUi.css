@@ -1702,6 +1702,7 @@
 /* A new phase: its number pulses a moment (keyed on the phase, so it plays once each) */
 .ui-boss-phase-new {
     display: inline-block;
+    transform-origin: left center;
     animation: ui-boss-phase-pulse 0.5s ease-in-out 4 alternate;
 }
 

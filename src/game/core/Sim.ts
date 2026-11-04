@@ -157,6 +157,7 @@ import {
     checkerCells,
     circleInBox,
     cycleStage,
+    inShadow,
     inStrip,
     pillarHit,
     statueMiddle,
@@ -352,6 +353,10 @@ const DASH_STEP = 0.1;
 const STUN_RECOVER_SECONDS = 0.4;
 // Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
 const IMPACT_TICKS = 90;
+// A press of the fight's button held this long when it can't go off yet, and only if the boss
+// is no further than this past its reach (MapDef.fight.ability)
+const ABILITY_BUFFER_SECONDS = 0.3;
+const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
 // Tiles from the player that what holds them turns up
@@ -726,8 +731,10 @@ export type Hero = {
     // Co-op: just brought back, so nothing hurts them and enemies leave them
     // be until this tick
     immuneEndTick: number;
-    // The fight's button (MapDef.fight.ability) can be used again from this tick
+    // The fight's button (MapDef.fight.ability) can be used again from this tick, and a press
+    // that couldn't go off yet is held till this one (ABILITY_BUFFER_SECONDS)
     abilityReadyTick: number;
+    abilityHeldUntil: number;
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -1301,6 +1308,7 @@ export class Sim {
             extraRevives: 0,
             immuneEndTick: 0,
             abilityReadyTick: 0,
+            abilityHeldUntil: -1,
         };
     }
 
@@ -2334,6 +2342,7 @@ export class Sim {
         if (this.heroes.length > 1) {
             this.stepRevives();
         }
+        this.stepHeldAbilities();
         // Each hero's on a tick of its own, so a party's don't all come at once
         for (const hero of this.heroes) {
             if ((this.tick + hero.index * 2) % FLOW_FIELD_INTERVAL === 0 && this.isUp(hero)) {
@@ -6643,6 +6652,9 @@ export class Sim {
             dirX: (player.x - enemy.x) / toPlayer,
             dirY: (player.y - enemy.y) / toPlayer,
         };
+        if (middle) {
+            windup.at = { x: middle.x, y: middle.y };
+        }
         // Thrown from statues of the map's (BossAttackDef.from), there from the start
         if (attack.from === "knights") {
             windup.from = this.pickKnights(attack);
@@ -6732,12 +6744,19 @@ export class Sim {
         if (!guard || !state || boss.dead || this.runOver || state.phase?.pauseEnd !== undefined) {
             return;
         }
+        // Stunned not long ago: it shrugs this one off, and only its guard drops
+        if (stunned && this.tick < (state.stunGraceEnd ?? 0)) {
+            stunned = false;
+            seconds = Math.min(seconds, boss.def.boss!.guard!.stun);
+            this.showImpact(guard.resisted, boss.x, boss.y, undefined, boss.uid);
+        }
         const end = this.tick + secondsToTicks(seconds);
         const wasOpen = this.isExposed(boss);
         state.exposedEnd = Math.max(state.exposedEnd ?? 0, end);
         if (stunned) {
             const wasStunned = this.isStunned(boss);
             state.stunEnd = Math.max(state.stunEnd ?? 0, end);
+            state.stunGraceEnd = state.stunEnd + secondsToTicks(guard.stunGrace ?? 0);
             // Whatever it was winding up is lost, and it gets its breath back after
             state.windup = undefined;
             state.chain = undefined;
@@ -6948,15 +6967,67 @@ export class Sim {
     }
 
     // The fight's button (MapDef.fight.ability), for the current hero: whether it went off
+    // A press a moment too soon (the button still charging, or the boss just out of reach) is
+    // held for ABILITY_BUFFER_SECONDS and goes off as soon as it can, rather than lost; one that
+    // couldn't in that time says no. Whether it went off, or is held.
     useAbility(): boolean {
         const ability = this.map.fight?.ability;
         const hero = this.hero;
-        if (
-            !ability ||
-            this.state !== "playing" ||
-            !this.isUp(hero) ||
-            this.tick < hero.abilityReadyTick
-        ) {
+        if (!ability || this.state !== "playing" || !this.isUp(hero)) {
+            return false;
+        }
+        if (this.fireAbility(ability)) {
+            hero.abilityHeldUntil = -1;
+            return true;
+        }
+        const soon = this.tick + secondsToTicks(ABILITY_BUFFER_SECONDS);
+        const boss = this.shownBoss;
+        const player = this.player;
+        const near =
+            boss !== undefined &&
+            !boss.dead &&
+            boss.shieldEnd <= soon &&
+            fm.hypot(boss.x - player.x, boss.y - player.y) <=
+                this.abilityReach(ability, boss) + ABILITY_BUFFER_REACH;
+        if (hero.abilityReadyTick <= soon && near) {
+            hero.abilityHeldUntil = soon;
+            return true;
+        }
+        return false;
+    }
+
+    // Each hero's held press, tried again each tick till it goes off or runs out
+    private stepHeldAbilities(): void {
+        const ability = this.map.fight?.ability;
+        if (!ability) {
+            return;
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (hero.abilityHeldUntil < 0) {
+                continue;
+            }
+            if (this.tick > hero.abilityHeldUntil || !this.isUp(hero)) {
+                hero.abilityHeldUntil = -1;
+                continue;
+            }
+            this.use(hero);
+            if (this.fireAbility(ability)) {
+                hero.abilityHeldUntil = -1;
+            }
+        }
+        this.use(current);
+    }
+
+    // How far the fight's button reaches now: further while the boss's guard is down
+    private abilityReach(ability: FightAbilityDef, boss: Enemy): number {
+        return this.isExposed(boss) ? (ability.openReach ?? ability.reach) : ability.reach;
+    }
+
+    // The fight's button going off for the current hero, if it can now
+    private fireAbility(ability: FightAbilityDef): boolean {
+        const hero = this.hero;
+        if (this.tick < hero.abilityReadyTick) {
             return false;
         }
         const boss = this.abilityTarget(ability);
@@ -6977,6 +7048,7 @@ export class Sim {
             sound: ability.sound ?? -1,
             x: boss.x,
             y: boss.y,
+            opened: this.isExposed(boss),
         });
         this.damageSource = `ability:${ability.id}`;
         this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
@@ -6995,7 +7067,8 @@ export class Sim {
             return undefined;
         }
         const player = this.player;
-        return fm.hypot(boss.x - player.x, boss.y - player.y) <= ability.reach ? boss : undefined;
+        const reach = this.abilityReach(ability, boss);
+        return fm.hypot(boss.x - player.x, boss.y - player.y) <= reach ? boss : undefined;
     }
 
     // Seconds until a hero's button can be used again
@@ -7141,10 +7214,18 @@ export class Sim {
                     hit = this.inCone(enemy, windup, attack, attack.cone);
                 }
                 // Out of its sight behind a pillar (BossAttackDef.cover)
+                // Out of its sight: as drawn, any part of them on a shadowed tile
                 if (
                     hit &&
                     attack.cover &&
-                    behindPillar(this.map.features?.pillars, enemy.x, enemy.y, player.x, player.y)
+                    inShadow(
+                        this.map.features?.pillars,
+                        windup.at?.x ?? enemy.x,
+                        windup.at?.y ?? enemy.y,
+                        player.x,
+                        player.y,
+                        player.radius,
+                    )
                 ) {
                     hit = false;
                 }

@@ -60,6 +60,9 @@ export type BossWindup = {
     lane?: SurgeLane;
     // When its seq plays from, timed so its blow falls as it lands (BossAttackDef.strikeAt)
     seqTick?: number;
+    // Where it's cast from, where that isn't where the boss is as it begins (toMiddle's leap):
+    // a gaze's shadows are from here from the start (BossAttackDef.cover)
+    at?: { x: number; y: number };
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within
@@ -161,6 +164,8 @@ export type BossState = {
     // until stunEnd
     exposedEnd?: number;
     stunEnd?: number;
+    // It can't be stunned again until this tick (BossGuardDef.stunGrace)
+    stunGraceEnd?: number;
     // A lunge's dash (BossAttackDef line.dash): from (fromX, fromY) to (toX, toY) over these
     // ticks, stunned at the end if it's run into a pillar (stuck)
     dash?: {
@@ -916,7 +921,16 @@ type SimEventBody =
           y: number;
       }
     // The fight's button was used (MapDef.fight.ability), and on the boss it hit
-    | { type: "ability"; abilityId: string; enemyId: string; sound: number; x: number; y: number }
+    // opened: the boss's guard was down (BossDef.guard), so it did double
+    | {
+          type: "ability";
+          abilityId: string;
+          enemyId: string;
+          sound: number;
+          x: number;
+          y: number;
+          opened: boolean;
+      }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }

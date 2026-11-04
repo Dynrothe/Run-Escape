@@ -744,6 +744,8 @@ export type FightAbilityDef = {
     name: string;
     damage: number;
     reach: number;
+    // Its reach while the boss's guard is down (BossDef.guard), when it's worth most
+    openReach?: number;
     cooldown: number;
     iconObjId: number;
     impact?: ImpactDef;
@@ -781,6 +783,10 @@ export type BossGuardDef = {
     exposeSound?: number;
     // A lunge stuck in a pillar: what's thrown up where it's struck
     stuck?: ImpactDef;
+    // For this long after a stun's over, it can't be stunned again: what would have stunned it
+    // only drops its guard, and it shrugs it off with resisted round it
+    stunGrace?: number;
+    resisted?: ImpactDef;
 };
 
 // A big entrance: the player can't be hit, the screen goes dark, and everything
@@ -905,6 +911,9 @@ export type BossPhasesDef = {
         impact?: ImpactDef;
         riseImpact?: ImpactDef;
     };
+    // Without totems: the boss bar shows each phase's share of its hitpoints as a full bar of
+    // its own, filling again as the next begins, rather than one bar with the thresholds on it
+    barPerPhase?: boolean;
     // The player kept in the map's bossArena while it's up (the Nightmare's
     // square); false lets them out of it, onto the rest of an arena its collision
     // keeps them in (a court with a bridge off it)
