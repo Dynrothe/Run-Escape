@@ -38,6 +38,8 @@ go stale. Add anything that cost you time to work out.
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
+| Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
+| His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |

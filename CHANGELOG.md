@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Justiciar Zachariah, a new boss fight on the Bosses tab, open once Phosani's Nightmare is
+  beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
+  itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
+  from close by. With its own track, Blade of Forgotten Justice.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

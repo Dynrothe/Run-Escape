@@ -37,6 +37,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
+- **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
+  that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
+  reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
 

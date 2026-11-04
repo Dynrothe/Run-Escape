@@ -533,6 +533,34 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   screen's edge when it's off the screen, as the totems get.
 - `Sim.bossArena` is the square all this goes by: `MapDef.bossArena`, or the whole map. Nothing's
   sized by hand, so she fights on any square.
+- **Arena fights** (Justiciar Zachariah, `content/zachariah.ts`): a boss whose room is the weapon.
+  `MapDef.features` (`ArenaFeatures`, world tiles) is what its attacks read off the map: a
+  `checker` of cells, `pillars`, bolt `rows` with their statues, `knights`, `fires`, a `dais`,
+  `rise` (where an `atMiddle` boss rises instead of the square's middle) and statue groups. A
+  recipe exports them map-local, and `moveFeatures` (`core/arena.ts`, plain arithmetic the sim
+  and the view share) takes them to the world. Each piece is a field with nothing changing
+  without it:
+    - `BossPhasesDef` without `totems` goes by hitpoints: `phases[i].until` (an even split
+      unset), a `threshold` pause (`stage: "hp"`, `passThreshold`, `stepThreshold`) and death at
+      none; `status` and `message` per phase, `ambients` (more timers, ground marks or cycles too),
+      `confine: false` to let the player off the `bossArena` (and `Sim.confinedToArena`, which
+      co-op's prediction reads).
+    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's behind a pillar; the
+      view shows the safe tiles). Blasts: `square`. Projectiles: `wave` (through everyone, once
+      each), `boomerang` (out and back, once each way), `from: "knights"`, `onHit` (drag, bind with
+      `player.frozen`, and the boss's next attack; `Hero.drag`), `lookId` (drawn as an NPC).
+      Patterns: shape `rows`, `delay`, and `pillars`, which cuts a straight bullet's life where it
+      meets one as it's fired, so a bullet in the air costs nothing more. Ground: the `checker`
+      spot shape (square hazards, `GroundHazard.half`) and `alpha`. `cycle`: a rhythm of the
+      map's fires (`cycleStage`), as an ambient.
+    - A map can't play a placed loc's animation on demand (a map square bakes each loc with its
+      own animation), so the statues an attack animates are drawn by the fight and left out of
+      the map (`Court.forFight` in `owlsCourt.ts`): `statues` names the loc and its animations, the
+      sim's `statueSeq` events say when each starts, and `BossFightView.drawStatues` draws them
+      still until then. A loc bake takes `seqs` for that (`getStatueModelKey`).
+    - `BossDef.look` gives the shared fight screen its own colours (`edge` and `vignette` can be
+      `null`), and `lean` has the camera lean towards the boss. `MapDef.fight.strikeReach` keeps a
+      strike to its targets within that reach, and the boss bar says when it's out of it.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before

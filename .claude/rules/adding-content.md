@@ -146,7 +146,10 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   boss's `bulletGrace` how long after a bullet hits before another can (a second), a final
   boss's `fallSeconds` how long its death plays before the victory screen, and a phased boss's
   phases each take an `ambient` pattern it keeps up on its own, a `tempo` and a `speed`, with a
-  `finale` after the last blast. Boss fights as data in `docs/DEVELOPMENT.md` has the lot.
+  `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
+  (`until`, `threshold`, Justiciar Zachariah's). Attacks that read the arena (`MapDef.features`:
+  a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
+  under Arena fights there. Boss fights as data in `docs/DEVELOPMENT.md` has the lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -181,7 +184,9 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   experience, so that kit is the whole run, and the boss's hitpoints (the event's `hp`) are tuned
   to it. The spawn is the middle of the boss square, where the entrance puts the player anyway.
   The bot keeps away from bosses, so with nothing but melee it walks up to a shielded one and
-  takes her swings: its numbers say how long the kit takes, not how a player fares. It's listed
+  takes her swings: its numbers say how long the kit takes, not how a player fares. A fight can
+  open after another fight (Justiciar Zachariah after Phosani's), as long as the chain ends at a
+  map that isn't one. It's listed
   under Boss fights on the map screen's Bosses tab, and can't be endless. Sim it with
   `FLAT=1 MAP=phosani DODGE=1`, which needs no cache, and go by how long the bot lasts and what
   hits it (its `boss attacks that hit` line says which of the boss's attacks did it): it can't

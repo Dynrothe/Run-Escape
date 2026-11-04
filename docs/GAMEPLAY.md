@@ -74,42 +74,43 @@ version and how to run it.
   the adventurer screen says what each one wants, and a task done mid-run rings the town
   crier's bell.
 
-    | Adventurer          | Fights with | Starts with            | Bonus                               | Joins for                                            |
-    | ------------------- | ----------- | ---------------------- | ----------------------------------- | ---------------------------------------------------- |
-    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                 |                                                      |
-    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                   |                                                      |
-    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                    |                                                      |
-    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                  | Killing Count Draynor in Lumbridge                   |
-    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                  | Beating Lumbridge                                    |
-    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area         | Killing Ahrim in Barrows                             |
-    | Hunter              | Ranged      | Shortbow               | 50% more pickup range               | Beating Barrows                                      |
-    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier             | Surviving 10 minutes in the Wilderness               |
-    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                     | Beating the Wilderness                               |
-    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder    | Beating the Desert                                   |
-    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                 | Killing Damis in the Desert                          |
-    | Seer                | Magic       | Elemental runes        | Effects last 25% longer             | Beating the Fremennik Province                       |
-    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it      | Killing Dagannoth Rex in the Fremennik Province      |
-    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints | Beating Karamja                                      |
-    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                   | Surviving 13 minutes on Karamja                      |
-    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                   | Beating Kourend                                      |
-    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time         | Killing Sarachnis in Kourend                         |
-    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder       | Beating Varlamore                                    |
-    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area   | Killing the Javelin Colossus in Varlamore            |
-    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder              | Beating Morytania                                    |
-    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster | Killing the Pestilent Bloat in Morytania             |
-    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower      | Beating the God Wars Dungeon                         |
-    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots     | Killing Kree'arra in the God Wars Dungeon            |
-    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder  | Beating Prifddinas                                   |
-    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level      | Surviving 10 minutes in Prifddinas                   |
-    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                  | Beating the Inferno                                  |
-    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area         | Killing JalTok-Jad in the Inferno                    |
-    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier             | Surviving 10 minutes on the Grand Exchange           |
-    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster    | Killing the Clan leader in East Varrock              |
-    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                  | Surviving 6:06 in Falador                            |
-    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area   | Killing the AGS specer in Last Man Standing          |
-    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints   | Killing the Flag carrier in Castle Wars              |
-    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                     | Destroying the purple portal in Pest Control         |
-    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints      | Phosani's Nightmare only (everyone plays them there) |
+    | Adventurer          | Fights with | Starts with            | Bonus                                            | Joins for                                            |
+    | ------------------- | ----------- | ---------------------- | ------------------------------------------------ | ---------------------------------------------------- |
+    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                              |                                                      |
+    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                |                                                      |
+    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                 |                                                      |
+    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                               | Killing Count Draynor in Lumbridge                   |
+    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                               | Beating Lumbridge                                    |
+    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                      | Killing Ahrim in Barrows                             |
+    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                            | Beating Barrows                                      |
+    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                          | Surviving 10 minutes in the Wilderness               |
+    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                  | Beating the Wilderness                               |
+    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                 | Beating the Desert                                   |
+    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                              | Killing Damis in the Desert                          |
+    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                          | Beating the Fremennik Province                       |
+    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                   | Killing Dagannoth Rex in the Fremennik Province      |
+    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints              | Beating Karamja                                      |
+    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                | Surviving 13 minutes on Karamja                      |
+    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                | Beating Kourend                                      |
+    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                      | Killing Sarachnis in Kourend                         |
+    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                    | Beating Varlamore                                    |
+    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                | Killing the Javelin Colossus in Varlamore            |
+    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                           | Beating Morytania                                    |
+    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster              | Killing the Pestilent Bloat in Morytania             |
+    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                   | Beating the God Wars Dungeon                         |
+    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                  | Killing Kree'arra in the God Wars Dungeon            |
+    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder               | Beating Prifddinas                                   |
+    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                   | Surviving 10 minutes in Prifddinas                   |
+    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                               | Beating the Inferno                                  |
+    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                      | Killing JalTok-Jad in the Inferno                    |
+    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                          | Surviving 10 minutes on the Grand Exchange           |
+    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                 | Killing the Clan leader in East Varrock              |
+    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                               | Surviving 6:06 in Falador                            |
+    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                | Killing the AGS specer in Last Man Standing          |
+    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                | Killing the Flag carrier in Castle Wars              |
+    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
+    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
+    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 6 a minute | Justiciar Zachariah only (everyone plays them there) |
 
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
@@ -187,8 +188,8 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare), listed under the campaign, open
-  once the map it's the hard mode of has been beaten. Its boss rises as the run begins, there are
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
+  screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -315,6 +316,15 @@ version and how to run it.
       with you stood south of her, rooted until she's up, to The Bane of Ashihama, and comes at
       you the moment you're let go. Each of her totems' blasts heals you. It can't be endless; it has a hard mode
       once it's beaten.
+    - **Justiciar Zachariah** (a boss fight, open once Phosani's Nightmare's beaten: after the
+      Wolf's trial, the Owl's): nothing but him, in the Owl's Court, a floating stone court hung
+      in the Hallowed Sepulchre's black, built from the Sepulchre's own stone, statues and lilies:
+      a checker of gold-and-blue rugs and plain stone, four pillars, crossbowmen down both sides,
+      knights at its south corners, a dais with the Owl Justiciar and Saradomin's star to the north,
+      and a bridge of fire south to a lily terrace where you start. No waves, no picks, no items:
+      you play the Saradominist with Saradomin Strike, which only reaches him from about eight
+      and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
+      can't be endless; it has a hard mode once it's beaten.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and at the next five minute
@@ -472,6 +482,25 @@ version and how to run it.
       seconds more, untouchable, with her sleepwalkers walking in, her claws on your tile and the
       lattice doubled under them, and falls when it's up. Everyone plays the **Inquisitor** there,
       made for the fight and played nowhere else; beating her brings the Nightmare staff.
+    - **Justiciar Zachariah**: the Justiciar of the Owl, whose court is his weapon. Only
+      Saradomin Strike hurts him, and only from close by: out of its reach the boss bar says so,
+      and a faint ring shows how far it reaches. Three phases on his hitpoints, no shield and no
+      totems: at 70% and 35% he kneels a moment, untouchable, and rises into the next, and the
+      court wakes a little more. His own: a **Lunge**, a strip two wide and seven long the way he
+      faced (step off it; behind and beside him are safe); his **Shock wave**, a blue wave along
+      the ground at where you stood, which drags whoever it reaches to his feet, binds them and
+      takes three slashes (sidestep it); and **Ice barrage**, a three-by-three square on your tile
+      that freezes you (move). The court's: the **crossbowmen** draw and fire bolts straight down
+      their rows, two lanes of three rows at a time in turn, which the pillars stop; from the
+      second phase **lightning** strikes every cell of one colour of the floor, then the other
+      (the cells about to be struck glow), a **knight** throws its spinning sword at where you
+      stood, across the court and back the same way, and the **bridge's fire** cycles row by row,
+      all out together for a beat each time round. In the verdict he leaps to the court's middle
+      for **the Owl's gaze**: everything in his sight takes over half its hitpoints, and the tiles
+      hidden behind a pillar glow blue while he winds up. Then he combines: the ice and then a
+      lunge at where you're stuck, lightning round you with a sword through it, both knights at
+      once. Nothing in his court heals, but the Saradominist heals a little over the fight. A big
+      hit takes about half of your hitpoints; a bolt or the fire a tenth.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its
