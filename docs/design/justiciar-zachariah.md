@@ -27,8 +27,9 @@ scenery, and up close he's a swordsman whose signature move drags you in and bin
 
 ## 2. The arena
 
-The Owl's Court (`owlsCourt.ts`, recipe `zachariah`): a 27 by 27 court of 3 by 3 cells (blue and
-gold rugs on plain stone), four 2 by 2 pillars, crossbowmen in lanes of three down both rims,
+The Owl's Court (`owlsCourt.ts`, recipe `zachariah`): a 27 by 27 court of plain stone with a gold
+and blue runner up its middle to the dais (the fight reads 3 by 3 cells off it, but only the
+lightning's glow shows them), four 2 by 2 pillars, crossbowmen in lanes of three down both rims,
 knights at the south corners, the Owl Justiciar and Saradomin's star on a dais to the north, and
 a bridge of four fire rows south to a lily terrace where the player starts. It floats in the
 Sepulchre's black, with a lower walkway four tiles below. The map exports everything the fight

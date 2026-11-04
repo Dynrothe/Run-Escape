@@ -12,6 +12,7 @@ import { MAP_SQUARE_SIZE, createTileGrid, writeLocs, writeTerrain } from "../for
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { BuildContext, getRecipeArena } from "../recipe";
 import {
+    AISLE,
     OWLS_COURT,
     OWLS_COURT_BOSS_ARENA,
     OWLS_COURT_RECIPE,
@@ -87,18 +88,13 @@ describe("the Owl's Court", () => {
         }
     });
 
-    it("draws the checker's two colours: a rug on parity 0, plain stone on parity 1", () => {
-        for (let cy = 0; cy < checker.rows; cy++) {
-            for (let cx = 0; cx < checker.cols; cx++) {
-                for (let dy = 0; dy < checker.cell; dy++) {
-                    for (let dx = 0; dx < checker.cell; dx++) {
-                        const x = checker.x0 + cx * checker.cell + dx;
-                        const y = checker.y0 + cy * checker.cell + dy;
-                        const floor = locsAt(x, y).filter((l) => l.type === LOC_FLOOR_DECORATION);
-                        expect(floor.length, `${x},${y}`).toBe(1);
-                        expect(RUG.has(floor[0].id), `${x},${y}`).toBe((cx + cy) % 2 === 0);
-                    }
-                }
+    it("paints no checker: stone, and the runner up the aisle alone", () => {
+        for (let y = bossArena.y; y < bossArena.y + bossArena.size; y++) {
+            for (let x = bossArena.x; x < bossArena.x + bossArena.size; x++) {
+                const floor = locsAt(x, y).filter((l) => l.type === LOC_FLOOR_DECORATION);
+                expect(floor.length, `${x},${y}`).toBe(1);
+                const aisle = x >= AISLE.x0 && x <= AISLE.x1 && y >= AISLE.y0 && y <= AISLE.y1;
+                expect(RUG.has(floor[0].id), `${x},${y}`).toBe(aisle);
             }
         }
     });

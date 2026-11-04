@@ -24,8 +24,9 @@ import { BuildContext, MapPoint, MapRecipe } from "../recipe";
 //   Sepulchre stands under its walkways a level down, so here it hangs from the edge).
 // - A lower walkway runs round it all 4 tiles down, as the Sepulchre's floors stack.
 // The court is Floors 3 and 4's blue-grey stone and gold (the Owl's floor), with Floor 5's orange
-// lilies, which Zachariah grew. Its floor is a checker of 3 by 3 cells, the Sepulchre's gold and
-// blue runner (a whole rug of it a cell) on plain stone, which the fight's lightning reads.
+// lilies, which Zachariah grew. Its floor is plain stone with one gold and blue runner up the
+// middle to the dais. The fight's lightning reads a checker of 3 by 3 cells off it, but the floor
+// doesn't paint one: the strike's glow marks its cells.
 //
 // Arena tiles below are the arena square's own, 0 to 63 from its south-west corner, which is what
 // OWLS_COURT exports. The grid has a square of void round it.
@@ -156,7 +157,8 @@ const STONE_SWORDS = [38205, 38206];
 // The lower walkway's, a shade lighter, as the Sepulchre's lower levels are
 const LOWER_PLAIN = [38209, 38221, 38221, 38222, 38223];
 const LOWER_DETAIL = [38225, 38226, 38217, 38211, 38392, 38393, 38394];
-// The gold and blue runner, as a 3 by 3 rug: [id, rotation] by row from the south, west to east
+// The gold and blue runner, 3 wide: [id, rotation] by row from the south, west to east. Its
+// south end, its middle (repeated up the aisle) and its north end
 const RUG: [number, number][][] = [
     [
         [38245, 3],
@@ -627,8 +629,11 @@ function placeMotes(court: Court): void {
     }
 }
 
-// The stone underfoot, last, so what's under something solid is the plainest: the court's
-// checker, a gold rug on every cell of parity 0, and stone everywhere else
+// The runner up the court's middle, from the bridge to the dais: its three middle columns
+export const AISLE: Rect = { x0: 30, y0: COURT.y0, x1: 32, y1: COURT.y1 };
+
+// The stone underfoot, last, so what's under something solid is the plainest: the runner up the
+// aisle, and stone everywhere else
 function placeFloor(court: Court): void {
     const rng = createRng(3856);
     const { ground } = court;
@@ -647,16 +652,13 @@ function placeFloor(court: Court): void {
                 court.push(id, LOC_FLOOR_DECORATION, turn, x, y);
                 continue;
             }
-            if (inRect(COURT, x, y)) {
-                const cx = Math.floor((x - COURT.x0) / CELL);
-                const cy = Math.floor((y - COURT.y0) / CELL);
-                if ((cx + cy) % 2 === 0) {
-                    const [id, rotation] = RUG[(y - COURT.y0) % CELL][(x - COURT.x0) % CELL];
-                    court.push(id, LOC_FLOOR_DECORATION, rotation, x, y);
-                    continue;
-                }
+            if (inRect(AISLE, x, y)) {
+                const row = y === AISLE.y0 ? 0 : y === AISLE.y1 ? 2 : 1;
+                const [id, rotation] = RUG[row][x - AISLE.x0];
+                court.push(id, LOC_FLOOR_DECORATION, rotation, x, y);
+                continue;
             }
-            const detail = inRect(COURT, x, y) ? 0.06 : 0.2;
+            const detail = inRect(COURT, x, y) ? 0.12 : 0.2;
             let id = pick(rng, STONE_PLAIN);
             if (!covered && roll < detail) {
                 id = roll < 0.01 ? pick(rng, STONE_SWORDS) : pick(rng, STONE_DETAIL);
