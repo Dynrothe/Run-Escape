@@ -566,8 +566,12 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
       does nothing, the stars over it) when its arena's attack with `turns` catches it
       (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`), with `guard.open` shown as it drops. The view tints a boss
-      whose guard's down gold and rings it in gold (`BossFightView.drawGuard`).
+      (`BossState.dash`, `stepDash`), with its sounds as it drops. The view tints a boss whose
+      guard's down gold.
+    - A boss attack's `strikeAt` times its animation to land with it: held on its first frame
+      (the blow drawn back) until it's that far from landing (`BossWindup.seqTick`,
+      `Sim.playWindup`). Players held for an entrance with `BossIntroDef.faces` face the boss
+      (`Sim.introFacing`, the movement rules' `faces`).
     - A checker's cells can hurt only within the circle drawn on them (`GroundPatternDef.round`),
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and

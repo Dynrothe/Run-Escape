@@ -16,7 +16,8 @@ the version in the corner).
     he's stunned.
   - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
     a heavy blow from right beside him, twice as hard while his guard's down.
-  - Dust and flashes where his blows land, and a little camera shake.
+  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+    slams lands as his sword falls, and you face him as he comes down.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
 

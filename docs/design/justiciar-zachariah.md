@@ -91,7 +91,7 @@ mistake.
 | ---------------------------------------------------- | ------------------------ | -------------------- | --------------------------------------- | -------------- |
 | Lunge: strip 2 wide, 7 long; he dashes to its end    | 7                        | 0.85 s (0.65 again)  | 1 + 0.35 tiles sideways                 | 0.34 s         |
 | Shock wave: 1.5 wide, 6.5 tiles/s, 12 tiles          | 2, then the flurry 3 x 3 | 1 s + its flight     | 0.75 + 0.35 sideways                    | 0.28 s         |
-| Ice barrage: 3 by 3 square                           | 3, frozen 1.5 s          | 1.1 s                | 1.5 + 0.35 from its middle              | 0.46 s         |
+| Ice barrage: 3 by 3 square                           | 3, frozen 1.5 s          | 0.85 s               | 1.5 + 0.35 from its middle              | 0.46 s         |
 | Lightning: the circle on each cell of one colour     | 7                        | 1.4 s, then 1.4 s    | 1.28 + 0.35 from a cell's middle        | 0.41 s         |
 | Knight's sword: 2.6 wide, 9 tiles/s, across and back | 6 each way               | 1.2 s + its flight   | 1.3 + 0.35 sideways                     | 0.41 s         |
 | The Owl's gaze                                       | 14                       | 2.4 s after his leap | into a pillar's shadow, at most 8 tiles | 2 s            |
@@ -121,11 +121,11 @@ his own court**, put the player in it (`BossDef.guard`, `BossAttackDef.opens`, `
    one leaves his guard down for a second and a half: he fights on, but takes **double damage**
    from everything, and the strike goes off at once for anyone in reach. His lunge carries him
    to the end of its strip (his front where the strip ends; stopping at whoever it hits), so a
-   sidestep leaves him right beside you, open. Dodging well is how you deal damage. The tell
-   (round 3: "hard to see when he flashes gold"): gold sparkles rise round him (1414) with a
-   holy chime (2671, prayer_boost) as it drops, his model's tinted a deep gold and glints, a gold
-   ring pulses round his feet with "Guard down!" (or "Stunned!") in gold just in front of him,
-   and the boss bar says it too.
+   sidestep leaves him right beside you, open. Dodging well is how you deal damage. The tell:
+   his model glows gold, the boss bar says "Guard down!", and you hear his sword knocked aside
+   (swordclash5, 1971), or a metal clang as he's stunned (clang2, 1141). Round 3 made it much
+   louder (sparkles, a pulsing ring, a label, a chime); Dynny found that too obvious, and it's
+   back to round 2's look with the sound added (section 6).
 2. **His court turns on him (turning his attacks).** He chases you, so you can lead him into his
    own traps: a bolt that reaches him stops there and hurts him (8), a lightning cell struck
    under his middle hurts him (40) and stuns him, a knight's sword through him hurts (30) and
@@ -217,6 +217,37 @@ The rest of round 3:
 - **No item bar** in a boss fight (1-4 and the touch items): there are no items, only Smite.
 - **Retry** on a boss fight's results, beside Back to the title (solo).
 
+### Round 4
+
+Dynny, after round 3:
+
+1. **"The guard down is too obvious."** Round 3's sparkles, ring and label are gone: it's round
+   2's gold glow and the boss bar again, plus a sound. Not a chime, at his word, but a clip that
+   sits among his own blows and still says it: his sword knocked aside (swordclash5, 1971, 0.5 s)
+   as his guard drops, and a clang (clang2, 1141, 0.6 s) as he's stunned. The window stays 1.5 s.
+2. **Facing him through the intro.** While the player's held to watch him come down, they face
+   him (where he'll land, then him), whatever's pressed (`BossIntroDef.faces`, `MovementRules.faces`,
+   `Sim.introFacing`, which co-op's prediction uses too).
+3. **The wrong model after Retry.** Leaving a run asks for the menus' look; Retry asks for the
+   fight's straight after, before the menus' has baked. The fight's look was still the one drawn,
+   so that ask did nothing, and the menus' look landed on top when its bake finished. Now asking
+   for the look that's drawn drops one still baking (`GameAssets.setPlayerAppearance`, tested).
+4. **"The attack with a long reach: I don't know what he's actually doing."** Not yet said
+   which; his lunge reaches furthest on the ground. Every one of his own attacks played its
+   animation from the start of its windup, so the blow came well before the hit: the lunge's
+   slash was over 0.4 s before the strip hit and he slid down it standing still, and the slam
+   fell 0.4 s before the wave went. Now each holds its first frame, the blow drawn back, and plays
+   so the blow falls as it lands (`BossAttackDef.strikeAt`: the slash 0.4 s into 7853, the slam
+   0.6 s into 7962): he draws back, holds, and slashes as he lunges down the strip with its trail
+   and dust; he raises his sword, holds, and brings it down on the floor as the wave goes, with
+   the stomp ring and his blue impact. The ice, the lightning and the gaze are timed the same way.
+5. **The ice barrage quicker:** 0.85 s, from 1.1, as quick as his lunge. From the square's middle
+   it's 1.85 tiles out, 0.46 s at a walk.
+
+With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 24-27 s and the
+fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
+45-53 s and 4:48-5:14.
+
 ## 7. What it looks like when he hits (impacts)
 
 `BossAttackDef.impact` (an `ImpactDef`) puts the cache's own effects where a blow lands, each
@@ -272,8 +303,7 @@ the lunge's strip, the ice's square, the wave's and the swords' lines, and the f
 (the existing swing warning). The reach ring is a faint white circle. The lightning's warning is
 a yellow strange tile's animated swirl (spotanim 1800) on each cell, and the gaze's safe tiles are
 the blue strange tile's glow (56670). His guard down is his own model tinted gold and glinting
-(the hit flash the game already has), with a gold ring pulsing round his feet and "Guard down!"
-or "Stunned!" in gold in front of him, and the impacts' screen flashes are a third as strong as
+(the hit flash the game already has), and the impacts' screen flashes are a third as strong as
 a power-up's.
 
 ## 10. Numbers from the bot
