@@ -39,6 +39,7 @@ go stale. Add anything that cost you time to work out.
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
+| Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |

@@ -23,6 +23,7 @@ import {
     isFunMap,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
+import { getFoundPets } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -561,6 +562,16 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // The pet to take along (one of the trophies found), or none
+    selectPet(petId: string | undefined): void {
+        if (petId !== undefined && !getFoundPets(this.save.trophies).some((p) => p.id === petId)) {
+            return;
+        }
+        this.save.pet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The map for the next run. Hosting a room, it's the room's map: the relay
     // says it back in a room update, which the lobby shows, so nothing's
     // changed here until it has. Endless and hard mode stay on where everyone
@@ -742,6 +753,7 @@ export class GameClient implements GameFrameHandler {
             {
                 ...this.save.armoury,
             },
+            this.save.pet,
         );
     }
 
@@ -1165,7 +1177,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim);
+        this.enterRun(sim, [this.save.pet]);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1254,7 +1266,12 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim);
+        this.enterRun(
+            sim,
+            game.heroes.map((hero) =>
+                typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
+            ),
+        );
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1264,7 +1281,8 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private enterRun(sim: Sim): void {
+    // pets: each hero's pet, in the party's order
+    private enterRun(sim: Sim, pets: (string | undefined)[]): void {
         const map = sim.map;
         this.sim = sim;
         this.renderer.setPlane(this.grid.plane);
@@ -1296,6 +1314,7 @@ export class GameClient implements GameFrameHandler {
         this.viewHero = sim.focus;
         this.assets.dropPlayers(sim.heroes.length);
         this.view.reset();
+        this.view.pets.setPets(pets);
         this.cameraRig.pitch = RUN_PITCH;
         this.cameraRig.distance =
             isCoarsePointer && window.innerHeight <= PHONE_MAX_HEIGHT

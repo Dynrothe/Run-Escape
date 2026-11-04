@@ -714,8 +714,9 @@ export function makeLoadout(
     metaStats: Record<string, number>,
     unlockedItems: string[],
     armoury: Record<string, number>,
+    pet?: string,
 ): Loadout {
     // Only what's been bought, so it stays small
     const bought = Object.fromEntries(Object.entries(metaStats).filter(([, value]) => value !== 0));
-    return { metaStats: bought, unlockedItems, armoury };
+    return { metaStats: bought, unlockedItems, armoury, ...(pet && { pet }) };
 }

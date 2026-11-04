@@ -602,6 +602,18 @@ hits are lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`
 `?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
 its max; `?raidtest=short` does only the first.
 
+### Pets
+
+A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
+never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, behind the
+player and clear of thralls (with the map's collision, and back beside them past `PET_LEASH`), and
+`GameView` draws it. So a pet can't change a run, and co-op's copies agree without it. A co-op
+player's pet goes in their `Loadout` as `pet`, which the relays pass on whole, so it needed no
+relay change; a pet id a game doesn't know is left out. Every pet is baked in `getBaseRequests`
+(a party can bring any of them), and `slim-cache.ts` picks them up from there. A new pet needs a
+trophy that drops it and an entry in `PETS` with the follower NPC's id and animations
+(`scripts/cache/find-npcs.ts`; the lower of two ids is the follower).
+
 ### What gets drawn
 
 A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are

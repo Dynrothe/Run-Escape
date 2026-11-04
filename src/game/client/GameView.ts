@@ -47,6 +47,7 @@ import {
     getShieldedModelKey,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
 
 const FROZEN_TINT = 0xa8d8ff;
@@ -155,6 +156,8 @@ const RAMPAGE_FLASH = 0.25;
 // second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
+// Pets are drawn as big as thralls
+const PET_SCALE = 1.5;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
@@ -227,6 +230,8 @@ export class GameView {
     viewHero = 0;
 
     private readonly fight: BossFightView;
+    // The party's pets (GameClient gives them as a run starts)
+    readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
@@ -405,6 +410,13 @@ export class GameView {
 
         for (const thrall of sim.thralls) {
             this.drawThrall(actors, sim, thrall, alpha);
+        }
+
+        this.pets.update(sim);
+        for (const pet of this.pets.pets) {
+            if (this.pets.shown(sim, pet)) {
+                this.drawPet(actors, sim, pet, alpha);
+            }
         }
 
         if (sim.visitor) {
@@ -720,6 +732,27 @@ export class GameView {
             scale: THRALL_SCALE,
             alpha: Math.max(0, fade),
         });
+    }
+
+    private drawPet(actors: ActorRenderer, sim: Sim, pet: PetFollower, alpha: number): void {
+        const def = pet.def;
+        const model = this.assets.get("pet:" + def.id);
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(pet.moving ? def.walkSeq : def.idleSeq);
+        const x = lerp(pet.prevX, pet.x, alpha);
+        const y = lerp(pet.prevY, pet.y, alpha);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick + pet.hero * 5),
+            x,
+            this.ground(sim, x, y),
+            y,
+            pet.yaw,
+            { scale: PET_SCALE },
+        );
     }
 
     // Facing the player, and blinking when they're about to go

@@ -22,6 +22,7 @@ import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getPassive } from "../content/passives";
+import { PETS } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
@@ -516,6 +517,15 @@ export class GameAssets {
                 key: "thrall:" + thrall.id,
                 npcId: thrall.npcId,
                 seqIds: [thrall.idleSeq, thrall.walkSeq, thrall.attackSeq],
+            });
+        }
+        // Every pet, small as they are: a co-op party can bring any of them
+        for (const pet of PETS) {
+            requests.push({
+                kind: "npc",
+                key: "pet:" + pet.id,
+                npcId: pet.npcId,
+                seqIds: [...new Set([pet.idleSeq, pet.walkSeq])],
             });
         }
         for (const { id, effect } of POWER_UPS) {

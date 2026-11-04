@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Pets: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow you around
+  on your runs. Pick one under the adventurers. They're only for looks, and your party sees yours
+  in co-op.
+
 ## 0.24.1 - 2026-11-04
 
 ### Changed

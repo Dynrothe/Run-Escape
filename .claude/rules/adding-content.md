@@ -211,6 +211,13 @@ bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a 
 as it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`,
 `stare`, `expert` on an attack) and do nothing off a raid's expert mode.
 
+## Pet
+
+A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
+(`from`), then an entry in `PETS` (`pets.ts`) with its id, the follower NPC and its idle and walk
+animations from `scripts/cache/find-npcs.ts`. It's baked and offered once found, with nothing else
+to add. Pets never go in the sim: see Pets in `docs/DEVELOPMENT.md`.
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
