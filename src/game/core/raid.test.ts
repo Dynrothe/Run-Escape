@@ -366,9 +366,9 @@ describe("the Theatre's bullet shapes", () => {
         const { attack, shot } = volley("The maze", "tob_sotetseg");
         const pattern = attack.pattern!;
         expect(shot).toHaveLength(pattern.count - pattern.gap!);
-        // Across the way it's going (south, at the player), side by side, in front of the boss
+        // Across the way it's going (south, at the player), side by side, through the boss
         for (const bullet of shot) {
-            expect(bullet.y).toBeCloseTo(1040.5 - pattern.from!);
+            expect(bullet.y).toBeCloseTo(1040.5);
             expect(bullet.vx).toBeCloseTo(0);
             expect(bullet.vy).toBeLessThan(0);
         }
@@ -378,32 +378,38 @@ describe("the Theatre's bullet shapes", () => {
         expect(steps.filter((step) => step !== 1)).toEqual([pattern.gap! + 1]);
     });
 
-    it("a spread starts out past the melee pocket by the boss", () => {
+    it("a spread starts at the boss's middle", () => {
         const { attack, shot } = volley("Blood throw", "maiden_of_sugadinti");
         expect(shot).toHaveLength(attack.pattern!.count);
         for (const bullet of shot) {
-            expect(Math.hypot(bullet.x - 1018.5, bullet.y - 1040.5)).toBeCloseTo(
-                attack.pattern!.from!,
-            );
-            // Going away from the boss
-            expect(
-                (bullet.x - 1018.5) * bullet.vx + (bullet.y - 1040.5) * bullet.vy,
-            ).toBeGreaterThan(0);
+            expect(Math.hypot(bullet.x - 1018.5, bullet.y - 1040.5)).toBeCloseTo(0);
+            expect(Math.hypot(bullet.vx, bullet.vy)).toBeGreaterThan(0);
         }
     });
 
-    it("leaves every raid boss a melee pocket: nothing it fires from itself starts up close", () => {
+    it("leaves no safe spot on a raid boss: everything it fires from itself starts at its middle", () => {
         const bosses = TEST_BOSS_IDS.map((id) => getEnemy(id));
         for (const boss of bosses) {
             for (const attack of boss.boss!.attacks) {
-                const shape = attack.pattern?.shape;
-                if (shape && shape !== "closing") {
-                    expect(
-                        attack.pattern!.from,
-                        `${boss.id}: ${attack.name}`,
-                    ).toBeGreaterThanOrEqual(2);
-                }
+                expect(attack.pattern?.from ?? 0, `${boss.id}: ${attack.name}`).toBe(0);
             }
+        }
+    });
+
+    it("makes standing on a raid boss cost: about half its attacks up close hit all round it", () => {
+        for (const id of TEST_BOSS_IDS) {
+            const attacks = getEnemy(id).boss!.attacks.filter((a) => !a.enraged && !a.expert);
+            // Hits everywhere within reach of the boss's middle: a swing round it, or a mark under it
+            const reach = (a: BossAttackDef) =>
+                a.kind === "swing" && a.cone === undefined
+                    ? (a.radius ?? 2)
+                    : a.ground?.spots.some((spot) => spot.shape === "under") && !a.ground.safe
+                      ? a.ground.radius
+                      : 0;
+            const close = attacks.filter((a) => reach(a) >= 2.5 && a.range < 5);
+            expect(close.length, id).toBeGreaterThan(0);
+            const weight = (list: BossAttackDef[]) => list.reduce((sum, a) => sum + a.weight, 0);
+            expect(weight(close) / weight(attacks), id).toBeGreaterThanOrEqual(0.4);
         }
     });
 

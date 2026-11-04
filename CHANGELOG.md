@@ -14,6 +14,9 @@ the version in the corner).
   turns them all to 1s.
 - The Theatre of Blood's hard and expert modes fire half as many bullets again in every pattern,
   with the gaps through them as wide.
+- Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
+  has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
+  new one marked on the ground first.
 - The Theatre of Blood is brighter, the woods outside Canifis most of all.
 
 ## 0.24.1 - 2026-11-04

@@ -323,9 +323,10 @@ version and how to run it.
   little damage), coins for them, and a supply chest between rooms that sells food and potions
   for points. The last boss's chest rolls for a purple,
   more likely the more points you earned: the Theatre's uniques for the Collection log, and Lil'
-  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, and what
-  they fire from themselves starts a couple of tiles out, so there's a pocket up close that only
-  melee gets to stand in. A line at the top of the screen says what the hall wants of you, and
+  Zik now and then. The bosses pray against missiles and magic, so melee hits hardest, but there's
+  nowhere safe by them: what they fire from themselves starts from their middle, and up close
+  about half of what each boss does is a stomp, bite, claws or burst all round it, the bursts
+  marked on the ground first. A line at the top of the screen says what the hall wants of you, and
   whatever bones and coins are still on its floor when the boss comes go with you.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you

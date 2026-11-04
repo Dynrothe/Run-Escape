@@ -37,7 +37,36 @@ const ARMOR_CAP = 0.5;
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
 
+// Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
+// close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
+// the time there. A slam marks the ground under the boss as it winds up, so there's time to step
+// out and back in.
+const CLOSE_REACH = 4;
+const CLOSE_WEIGHT = 10;
+const SLAM_RADIUS = 3;
+function slam(
+    name: string,
+    spotAnim: number,
+    sound: number,
+    damage: number,
+    fit?: number,
+): BossAttackDef {
+    return {
+        name,
+        kind: "ground",
+        sound,
+        damage,
+        windup: 1.2,
+        cooldown: 4,
+        range: CLOSE_REACH - 0.5,
+        weight: CLOSE_WEIGHT,
+        ground: { spots: [{ shape: "under" }], radius: SLAM_RADIUS, spotAnim, fit },
+    };
+}
+
 const MAIDEN_ATTACKS: BossAttackDef[] = [
+    // Her blood bursts out round her
+    slam("Blood burst", 1579, 3606, 5, SPLAT_FIT),
     {
         name: "Blood throw",
         kind: "pattern",
@@ -391,6 +420,8 @@ const SOTETSEG_ATTACKS: BossAttackDef[] = [
 ];
 
 const XARPUS_ATTACKS: BossAttackDef[] = [
+    // Acid all round his pool
+    slam("Acid burst", 1654, 3606, 4, SPLAT_FIT),
     {
         // His acid stays where it lands, so the floor fills up, as in OSRS
         name: "Acid",
@@ -459,6 +490,8 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
 
 // What's added to each of Verzik's forms
 const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
+    // Lightning round her throne (her other forms have their bounce and claws)
+    slam("Lightning burst", 1585, 879, 5),
     {
         name: "Power blast ring",
         kind: "pattern",
@@ -635,28 +668,17 @@ function vasilias(): EnemyDef {
     };
 }
 
-// ToB's a melee raid: what a boss fires from itself starts this many tiles out, so there's a
-// pocket up close that its rings, spreads and walls never cross. Ranged and magic fight from
-// where they're thick, for 15% of the damage (PROTECTS).
-const MELEE_POCKET = 2.5;
-const POCKETED = new Set(["ring", "spiral", "spread", "wall"]);
-
-// A raid boss's attacks: the melee pocket, and when it attacks more often than its hits were
-// tuned for (every `from` seconds), each one lighter to match, for more to dodge and the same
-// damage over time, and HIT_HARDER on top. Expert mode's own attacks keep their damage, as the green
-// ball's meant to kill.
+// A raid boss's attacks: its close attacks picked CLOSE_WEIGHT, and when it attacks more often
+// than its hits were tuned for (every `from` seconds), each one lighter to match, for more to
+// dodge and the same damage over time, and HIT_HARDER on top. Expert mode's own attacks keep their
+// damage, as the green ball's meant to kill. What a boss fires from itself starts at its middle:
+// there's no safe spot on it, for melee or anyone, only its mechanics to play.
 function oftener(attacks: BossAttackDef[], from: number, to: number): BossAttackDef[] {
-    return attacks.map((attack) => {
-        const pattern = attack.pattern;
-        return {
-            ...attack,
-            damage: attack.expert ? attack.damage : (attack.damage * to * HIT_HARDER) / from,
-            pattern:
-                pattern && POCKETED.has(pattern.shape)
-                    ? { ...pattern, from: pattern.from ?? MELEE_POCKET }
-                    : pattern,
-        };
-    });
+    return attacks.map((attack) => ({
+        ...attack,
+        damage: attack.expert ? attack.damage : (attack.damage * to * HIT_HARDER) / from,
+        weight: attack.range <= CLOSE_REACH ? CLOSE_WEIGHT : attack.weight,
+    }));
 }
 
 // A boss from elsewhere as the raid has it: its own self, a raid id, and its fight with more on top

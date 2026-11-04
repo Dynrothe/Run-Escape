@@ -596,9 +596,11 @@ expert mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's 
 (`stepTeleporter`) asks before skipping to its boss, `SimOptions.raidTeleports` times a raid, in
 the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of,
 in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses'
-rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
 hits are lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in
 `theatre.ts`), and their bullets can hit again after `BULLET_GRACE` rather than a second.
+Every one has an attack for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a
+ground mark under it), and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set
+`BulletPatternDef.from`, so there's no safe spot on them.
 Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`). On hard and expert, every
 pattern fires `MapDef.hard.bullets` times its bullets (`Sim.bulletScale`): a ring's gap is an
 angle and keeps its width, and a wall's or closing ring's gap grows with the count. Their
