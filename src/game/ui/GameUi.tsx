@@ -1753,43 +1753,9 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <RunEventModal key={ui.event.uid} event={ui.event} client={client} />
             )}
             {ui.overlay === "paused" && hud && <PauseModal ui={ui} hud={hud} client={client} />}
-            {ui.overlay === "fallen" && <FallenModal client={client} />}
             {(ui.overlay === "dead" || ui.overlay === "victory") && (
                 <ResultModal ui={ui} client={client} />
             )}
-        </div>
-    );
-}
-
-// The Tombs' party down in a room: in OSRS they'd walk back in from the safe area, here they tap
-// to start it over
-function FallenModal({ client }: { client: GameClient }): JSX.Element {
-    const sim = client.sim;
-    const allowed = sim?.tombsDeathsAllowed ?? Infinity;
-    const left = allowed - (sim?.tombsDeaths ?? 0) - 1;
-    return (
-        <div className="ui-modal ui-center">
-            <div className="ui-panel rs-border rs-background ui-fallen">
-                <h2 className="ui-fallen-title">Oh dear, you are dead!</h2>
-                <p>
-                    The room starts over when you go back in. You keep your levels and gear, but the
-                    waves you'd beaten give nothing this time.
-                </p>
-                {Number.isFinite(allowed) && (
-                    <p className="ui-subtle">
-                        {left > 0
-                            ? `${left} ${left === 1 ? "death" : "deaths"} left after this.`
-                            : "Die again and the raid's over."}
-                    </p>
-                )}
-                <button
-                    className="ui-button ui-button-go"
-                    autoFocus
-                    onClick={() => client.respawn()}
-                >
-                    <KeyHint pad="south" /> Respawn
-                </button>
-            </div>
         </div>
     );
 }

@@ -26,7 +26,7 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { APMEKEN_SPOTANIMS } from "../content/tombs";
+import { APMEKEN_BARRIER_LOC, APMEKEN_SPOTANIMS } from "../content/tombs";
 import { EnemyDef, EnemyOutfit, GearSlot, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
@@ -562,6 +562,13 @@ export class GameAssets {
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
+        // The Tombs' barriers, glowing
+        requests.push({
+            kind: "loc",
+            key: "loc:" + APMEKEN_BARRIER_LOC,
+            locId: APMEKEN_BARRIER_LOC,
+            animated: true,
+        });
         // A raid hall's teleporter, swirling
         requests.push({
             kind: "loc",

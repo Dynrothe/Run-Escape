@@ -1259,6 +1259,12 @@ export type TombsPathDef = {
         // pillars and vents: their middles in world tiles, and how close counts as at one)
         puzzle?: "apmeken";
         spots?: TombsSpotDef[];
+        // The barrier between the safe corridor and the room (east of it): the party comes in
+        // behind it, and the room starts once someone walks through. It's the sim's: a line at
+        // world x, held while the room's on, and the loc drawn on its tiles while it's shut.
+        gate?: { x: number; locId: number; tiles: { x: number; y: number }[] };
+        // Where its enemies come in, in world tiles: the Apmeken room's holes in the walls
+        entrances?: { x: number; y: number }[];
     };
 };
 

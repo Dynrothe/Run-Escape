@@ -1,3 +1,4 @@
+import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TileGrid } from "../format";
@@ -66,7 +67,9 @@ const NEXUS_DOORS: Record<ToaPathId, [x: number, y: number, sizeX: number, sizeY
 };
 
 // The Apmeken room, in square 59,82: the entry on the east, the exit on the west, each behind a
-// barrier (45135) that holds until the room's done, so the party's brought in between them
+// barrier (45135). The party's brought in to the safe corridor behind the east one, which comes out
+// of the map: the sim holds that line instead (closed once the room's started, open while it
+// waits), as the map's collision can't change in a run.
 const APMEKEN: RoomCut = {
     x: 3790,
     y: 5267,
@@ -74,8 +77,12 @@ const APMEKEN: RoomCut = {
     sizeY: 28,
     plane: 0,
     cell: [1, 0],
-    arrive: [26, 13],
+    arrive: [33, 13],
 };
+
+// The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
+const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
+const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
 
 function cellCorner(cut: RoomCut): { x: number; y: number } {
     const [column, row] = cut.cell;
@@ -122,6 +129,28 @@ export const TOA_PLACES = {
     },
     apmeken: {
         arrive: worldTile(APMEKEN_ROOM.arrive.x, APMEKEN_ROOM.arrive.y),
+        // The six holes in the walls the baboons crawl in by (45024, wall locs in square 59,82, at
+        // 24,23 32,23 40,23 on the south wall and 24,41 32,41 40,41 on the north): the tile inside each
+        entrances: [
+            [24, 24],
+            [32, 24],
+            [40, 24],
+            [24, 40],
+            [32, 40],
+            [40, 40],
+        ].map(([x, y]) => {
+            const at = apmekenSpot("vent", x + 0.5, y + 0.5, 0);
+            return { x: at.x, y: at.y };
+        }),
+        // The east barrier's line (its tiles' west edge), and its tiles' middles, to draw it by
+        gate: {
+            x: apmekenSpot("vent", APMEKEN_GATE.x, 0, 0).x,
+            locId: APMEKEN_BARRIER,
+            tiles: APMEKEN_GATE.y.map((y) => {
+                const at = apmekenSpot("vent", APMEKEN_GATE.x + 0.5, y + 0.5, 0);
+                return { x: at.x, y: at.y };
+            }),
+        },
         spots: [
             // The four roof supports (45494, 3 by 3, in the alcoves), in square 59,82's tiles: their
             // middles, and how close counts as at one
@@ -166,6 +195,8 @@ function build(context: BuildContext): TileGrid {
     }
     for (const room of ROOMS) {
         const { cut } = room;
+        // The Apmeken room's east barrier is the sim's (APMEKEN, above)
+        const gateX = 59 * MAP_SQUARE_SIZE - APMEKEN.x + APMEKEN_GATE.x;
         ground.stamp(
             cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY),
             room.at.x,
@@ -175,6 +206,7 @@ function build(context: BuildContext): TileGrid {
                 feather: 0,
                 flatten: true,
                 height: FLOOR_HEIGHT,
+                skipLoc: (loc) => cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX,
             },
         );
     }
@@ -265,6 +297,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                         arrive: TOA_PLACES.apmeken.arrive,
                         puzzle: "apmeken" as const,
                         spots: TOA_PLACES.apmeken.spots,
+                        gate: TOA_PLACES.apmeken.gate,
+                        entrances: TOA_PLACES.apmeken.entrances,
                     },
                 }),
             })),

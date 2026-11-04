@@ -495,9 +495,7 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
 ]);
 
 // levelUp and chest wait for the player to choose
-// fallen: the Tombs' party is down in a room, and it starts over once someone respawns
-// (Sim.respawnTombs)
-export type SimState = "playing" | "levelUp" | "chest" | "event" | "fallen" | "dead" | "victory";
+export type SimState = "playing" | "levelUp" | "chest" | "event" | "dead" | "victory";
 
 export type SimOptions = {
     // Tests and offline balance comparisons; live runs use the shipped config.
@@ -736,6 +734,8 @@ type ApmekenRoom = {
     doneTick?: number;
     // The last wave beaten before a death (-1 for none): up to it, the room gives nothing again
     beaten: number;
+    // Someone's walked through the barrier from the safe corridor: until then it waits
+    started: boolean;
 };
 
 export class Sim {
@@ -2871,8 +2871,20 @@ export class Sim {
         if (!pos && def.spawnAt) {
             pos = this.pickSpawnSpot(def);
         } else if (!pos && this.tombsPath !== undefined && !boss) {
-            // A Tombs room's too small for the usual ring off the screen: in it, closer
-            pos = this.findSpawnPoint(def, TOMBS_SPAWN_MIN_DISTANCE, TOMBS_SPAWN_MAX_DISTANCE);
+            // A Tombs room's: out of one of its holes in the walls (the Apmeken room's baboons
+            // crawl in that way), or with none, closer than the usual ring off the screen, as a
+            // room's too small for it
+            const entrances = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room
+                ?.entrances;
+            if (entrances && entrances.length > 0) {
+                const at = entrances[this.rng.int(entrances.length)];
+                pos = this.walkableSpot(
+                    at.x + this.rng.range(-0.4, 0.4),
+                    at.y + this.rng.range(-0.4, 0.4),
+                );
+            } else {
+                pos = this.findSpawnPoint(def, TOMBS_SPAWN_MIN_DISTANCE, TOMBS_SPAWN_MAX_DISTANCE);
+            }
         } else if (!pos) {
             pos = boss
                 ? this.findSpawnPoint(def, BOSS_SPAWN_MIN_DISTANCE, BOSS_SPAWN_MAX_DISTANCE)
@@ -4280,8 +4292,12 @@ export class Sim {
                 nextIssueTick: this.tick + secondsToTicks(this.apmekenIssueEvery()),
                 missed: 0,
                 beaten: -1,
+                started: false,
             };
-            this.nextApmekenWave();
+            this.emit({
+                type: "notice",
+                message: "Walk through the barrier when you're ready, and the room begins.",
+            });
         }
     }
 
@@ -4324,7 +4340,9 @@ export class Sim {
     private get activeWaves(): WaveDef[] {
         if (this.map.tombs) {
             const room = this.apmeken;
-            return room && room.doneTick === undefined ? [this.apmekenTrickle(room.wave)] : [];
+            return room && room.started && room.doneTick === undefined
+                ? [this.apmekenTrickle(room.wave)]
+                : [];
         }
         return this.raidRoomDef?.waves ?? this.map.waves;
     }
@@ -4384,6 +4402,19 @@ export class Sim {
             }
             return;
         }
+        const gate = this.tombsGate;
+        if (!room.started) {
+            // Waiting in the safe corridor: it begins once someone's through the barrier
+            const through =
+                !gate || this.heroes.some((hero) => this.isUp(hero) && hero.player.x < gate.x);
+            if (through) {
+                room.started = true;
+                room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
+                this.nextApmekenWave();
+            }
+            return;
+        }
+        this.holdTombsGate();
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
         const beaten = room.group.every((uid) => !alive.has(uid));
         if (beaten && !this.tombsReplaying) {
@@ -4485,6 +4516,38 @@ export class Sim {
         return ns && ew ? `${ns}-${ew}` : ns || ew || "middle";
     }
 
+    // The barrier between a Tombs room's safe corridor and the room, while there's one
+    get tombsGate(): { x: number; locId: number; tiles: { x: number; y: number }[] } | undefined {
+        return this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.gate;
+    }
+
+    // Whether its barrier's shut: the room's begun and isn't done, so nobody goes back
+    get tombsGateShut(): boolean {
+        const room = this.apmeken;
+        return room !== undefined && room.started && room.doneTick === undefined;
+    }
+
+    // Shut, the barrier's a wall: nothing gets east of it, the party or the baboons
+    private holdTombsGate(): void {
+        const gate = this.tombsGate;
+        if (!gate || !this.tombsGateShut) {
+            return;
+        }
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            const limit = gate.x - player.radius;
+            if (player.x > limit) {
+                player.x = limit;
+            }
+        }
+        for (const enemy of this.enemies) {
+            const limit = gate.x - enemy.radius;
+            if (!enemy.dead && enemy.x > limit) {
+                enemy.x = limit;
+            }
+        }
+    }
+
     // Where the issue is, for the game's hint arrow over it
     get tombsIssue(): { x: number; y: number; kind: "pillar" | "vent" } | undefined {
         const issue = this.apmeken?.issue;
@@ -4509,18 +4572,8 @@ export class Sim {
         return room !== undefined && room.wave <= room.beaten;
     }
 
-    // The Tombs' party down in a room (state "fallen"), the room starts over when a player asks:
-    // in OSRS they'd walk back in from the safe area, here it's a tap
-    respawnTombs(): boolean {
-        if (this.state !== "fallen") {
-            return false;
-        }
-        this.failTombsRoom();
-        this.state = "playing";
-        return true;
-    }
-
-    // Everyone down in a Tombs room: it starts over, everyone up at its start on full hitpoints.
+    // Everyone down in a Tombs room: back in its safe corridor on full hitpoints, the room waiting
+    // to start over.
     // What they've got they keep (their levels, weapons, gear); what they used is gone. The waves
     // they'd beaten come again for nothing.
     private failTombsRoom(): void {
@@ -4556,14 +4609,14 @@ export class Sim {
             room.group = [];
             room.issue = undefined;
             room.missed = 0;
-            room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
-            this.nextApmekenWave();
+            room.started = false;
         }
         const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({
             type: "notice",
             message:
-                `You've died, and the room starts over. The waves you'd beaten give nothing this time.` +
+                "Oh dear, you are dead! You're back in the safe corridor: walk through the barrier " +
+                "to start the room again. The waves you'd beaten give nothing this time." +
                 (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
         });
     }
@@ -7414,8 +7467,7 @@ export class Sim {
         this.hero.outTick = this.tick;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
-                this.state = "fallen";
-                this.emit({ type: "heroDown" });
+                this.failTombsRoom();
                 return;
             }
             this.endRun("dead");

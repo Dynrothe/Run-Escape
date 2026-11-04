@@ -15,7 +15,6 @@ import { MAP_BY_ID, getMap } from "../content/maps";
 import { APMEKEN, APMEKEN_WAVES } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
-import { applyAction } from "./lockstep";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
 
@@ -362,29 +361,48 @@ describe("the Tombs' invocations", () => {
 });
 
 describe("a death in the Tombs", () => {
-    // Down, then the respawn the popup asks for, if the raid isn't over
+    // Down, and back in the safe corridor if the raid isn't over: the test map's room has no
+    // barrier, so it starts again on the next step
     function die(sim: Sim): void {
         sim.revivesLeft = 0;
         sim.player.invulnerable = 0;
         sim["damagePlayer"](1e6, "test", false, undefined, true);
         if (!sim.runOver) {
-            expect(sim.state).toBe("fallen");
-            expect(sim.respawnTombs()).toBe(true);
+            expect(sim.apmeken!.started).toBe(false);
+            sim.step();
         }
     }
 
-    it("waits for a respawn before the room starts over", () => {
-        const sim = apmeken();
-        sim.revivesLeft = 0;
-        sim["damagePlayer"](1e6, "test", false, undefined, true);
-        expect(sim.state).toBe("fallen");
-        const tick = sim.tick;
-        sim.step();
-        expect(sim.tick).toBe(tick);
-        expect(applyAction(sim, { kind: "respawn" })).toBe(true);
-        expect(sim.state).toBe("playing");
-        expect(sim.player.hp).toBe(sim.player.maxHp);
-        expect(applyAction(sim, { kind: "respawn" })).toBe(false);
+    it("waits in the safe corridor until someone's through the barrier, then holds it", () => {
+        const room = TEST_TOMBS.tombs!.paths.find((p) => p.id === "apmeken")!.room!;
+        room.gate = { x: 1030, locId: 45135, tiles: [] };
+        try {
+            const sim = apmeken();
+            expect(sim.apmeken!.started).toBe(false);
+            seconds(sim, 3, { x: 1036.5, y: 1060.5 });
+            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.enemies.filter((e) => !e.dead)).toHaveLength(0);
+            expect(sim.tombsGateShut).toBe(false);
+            seconds(sim, 0.2, { x: 1028.5, y: 1060.5 });
+            expect(sim.apmeken!.started).toBe(true);
+            expect(sim.apmeken!.wave).toBe(0);
+            expect(sim.tombsGateShut).toBe(true);
+            // Shut: back east is a wall
+            sim.player.x = sim.player.prevX = 1035;
+            sim.step();
+            expect(sim.player.x).toBeLessThanOrEqual(1030);
+            // A death: back in the corridor, the room waiting again
+            sim.revivesLeft = 0;
+            sim.player.invulnerable = 0;
+            sim["damagePlayer"](1e6, "test", false, undefined, true);
+            expect(sim.runOver).toBe(false);
+            expect(sim.apmeken!.started).toBe(false);
+            expect(sim.tombsGateShut).toBe(false);
+            expect(sim.player.x).toBeCloseTo(1036.5);
+            expect(sim.player.hp).toBe(sim.player.maxHp);
+        } finally {
+            delete room.gate;
+        }
     });
 
     it("in co-op, fails the room only once everyone's down", () => {
@@ -421,9 +439,10 @@ describe("a death in the Tombs", () => {
         expect(a.down).toBe(true);
         expect(sim.state).toBe("playing");
         down(b);
-        expect(sim.state).toBe("fallen");
-        sim.respawnTombs();
+        // Both down: back in the corridor, both up
+        expect(sim.runOver).toBe(false);
         expect(a.down || b.down).toBe(false);
+        expect(sim.tombsDeaths).toBe(1);
     });
 
     it("starts the room over instead of ending the run, everyone up on full hitpoints", () => {

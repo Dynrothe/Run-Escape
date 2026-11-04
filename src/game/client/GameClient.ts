@@ -1336,11 +1336,6 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // The Tombs: the party's down in a room, and it starts over
-    respawn(): void {
-        this.act({ kind: "respawn" });
-    }
-
     // Co-op sends what the player does to the host, to be done in the frame
     // it goes in (on every copy at once); on your own it's done now. Returns
     // false when it can't be done.
@@ -1367,11 +1362,7 @@ export class GameClient implements GameFrameHandler {
             case "choose":
                 this.syncOverlay();
                 break;
-            // The Tombs: the room's started over, so the popup goes
-            case "respawn":
-                this.handleEvents(sim, sim.takeEvents());
-                this.syncOverlay();
-                break;
+
             case "chest":
                 this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
@@ -2237,11 +2228,6 @@ export class GameClient implements GameFrameHandler {
             this.finishRun();
             this.store.set({ overlay: sim.state, choices: [], chest: undefined, waitingOn: [] });
             this.updateHud(true);
-        } else if (sim.state === "fallen") {
-            if (this.store.getSnapshot().overlay !== "fallen") {
-                this.sounds.playerDied();
-            }
-            this.store.set({ overlay: "fallen", choices: [], chest: undefined, waitingOn: [] });
         } else if (sim.state === "chest" && sim.chest && this.display.autoAlch) {
             // As if the High alch button had been clicked; this comes back here
             // for whatever's next. Co-op's comes back a frame later, so once

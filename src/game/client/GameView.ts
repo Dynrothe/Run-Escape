@@ -155,6 +155,8 @@ const RAMPAGE_FLASH = 0.25;
 // second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
+// The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
+const TOMBS_GATE_YAW = 512;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
@@ -545,6 +547,7 @@ export class GameView {
         if (teleporter) {
             this.drawTeleporter(actors, sim, teleporter);
         }
+        this.drawTombsGate(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -648,6 +651,32 @@ export class GameView {
                 scale: FLAME_SCALE,
             });
         });
+    }
+
+    // A Tombs room's barrier, which isn't in the map (the sim holds its line): on its tiles until
+    // the room's done, as the loc stands there turned a quarter
+    private drawTombsGate(actors: ActorRenderer, sim: Sim): void {
+        const gate = sim.tombsGate;
+        if (!gate || !sim.apmeken || sim.apmeken.doneTick !== undefined) {
+            return;
+        }
+        const model = this.assets.get("loc:" + gate.locId);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        for (const tile of gate.tiles) {
+            const height = this.ground(sim, tile.x, tile.y);
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                tile.x,
+                height,
+                tile.y,
+                TOMBS_GATE_YAW,
+            );
+        }
     }
 
     // A raid hall's teleporter, once the raid's been beaten

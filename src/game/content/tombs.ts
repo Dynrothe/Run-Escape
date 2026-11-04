@@ -187,6 +187,10 @@ export function getApmekenTrickle(wave: number): WaveDef {
     };
 }
 
+// The barrier between the room and its safe corridor, drawn by the game (it isn't in the map: the
+// sim holds its line), animated on its own seq (9495)
+export const APMEKEN_BARRIER_LOC = 45135;
+
 // What an issue looks like: falling debris at a pillar giving way (models of the room's own
 // Debris, 45320 on), a vent's gas building, and each as it goes. Guesses from the cache's ids,
 // to be looked at.
