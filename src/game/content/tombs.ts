@@ -270,7 +270,8 @@ export const BA_BA: EnemyDef = {
                 invoked: { id: "boulderdash", speed: 2 },
                 pattern: {
                     shape: "wall",
-                    count: 13,
+                    // Across her arena's floor (15 tiles), not out over its walls
+                    count: 10,
                     volleys: 1,
                     interval: 1,
                     speed: 3.2,
