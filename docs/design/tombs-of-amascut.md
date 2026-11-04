@@ -83,8 +83,8 @@ The waves no longer run on a clock, but they're still where experience and caske
   corners (ground decoration 5982, about local 24,37 25,28 40,37 41,28). The six holes in the walls
   (45024) are where OSRS's baboons crawl in. The crates of hammers (45497) and potions (45498) are
   scenery: here the fix is standing at it.
-- **The loop**: "You sense an issue" every so often, and a pillar or a vent shows it. Standing at it
-  for about two seconds fixes it; one left too long hurts everyone, more for each left. Each fix is a
+- **The loop**: "You sense an issue" every so often, and a pillar or a vent shows it. Stepping on a
+  vent fixes it at once (OSRS drops a potion in), and a pillar takes about a second (a hammer's hit); one left too long hurts everyone, more for each left. Each fix is a
   step: it sends the next of the room's eight baboon waves and drops a casket. After the eighth,
   the west barrier opens to Ba-Ba. Sight is everyone's solo; in co-op one player holds it and only
   they see which needs fixing.

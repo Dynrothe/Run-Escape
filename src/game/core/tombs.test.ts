@@ -270,7 +270,7 @@ describe("the Apmeken room", () => {
         seconds(sim, APMEKEN.issueEvery + 0.5, { x: 1036.5, y: 1060.5 });
         const issue = sim.tombsIssue!;
         expect(issue).toBeDefined();
-        seconds(sim, APMEKEN.fixSeconds + 0.2, { x: issue.x, y: issue.y - 1 });
+        seconds(sim, APMEKEN.fixSeconds[issue.kind] + 0.2, { x: issue.x, y: issue.y - 1 });
         expect(sim.tombsIssue).toBeUndefined();
         expect(sim.apmeken!.missed).toBe(0);
     });

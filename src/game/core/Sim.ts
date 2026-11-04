@@ -4405,7 +4405,7 @@ export class Sim {
                 this.isUp(hero) && fm.hypot(hero.player.x - at.x, hero.player.y - at.y) <= at.reach,
         );
         issue.fixTicks = fixing ? issue.fixTicks + 1 : 0;
-        if (issue.fixTicks >= secondsToTicks(APMEKEN.fixSeconds)) {
+        if (issue.fixTicks >= Math.max(1, secondsToTicks(APMEKEN.fixSeconds[at.kind]))) {
             room.issue = undefined;
             room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
             this.emit({

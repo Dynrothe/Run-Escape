@@ -202,8 +202,9 @@ export const APMEKEN = {
     issueEvery: 9,
     // Seconds to fix one before it goes (less one and a half a path level)
     deadline: 12,
-    // Seconds stood at it to fix it
-    fixSeconds: 2,
+    // Seconds stood at one to fix it, as quick as OSRS's: a vent the moment you're on it (a potion
+    // dropped in), a pillar about a second (a hammer's hit)
+    fixSeconds: { vent: 0, pillar: 1 },
     // Tiles from its middle that count as at it
     reach: 2,
     // What one left to go does to every player, before the enemies' scaling (and the room's), and
