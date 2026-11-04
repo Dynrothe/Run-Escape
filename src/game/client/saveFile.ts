@@ -2,6 +2,8 @@
 // iOS Safari can open as a page instead of downloading (on some phones, with no choice offered).
 // The file's name keeps its .json, and its bytes are the same.
 const DOWNLOAD_TYPE = "application/octet-stream";
+// iOS asks before it downloads, and the link has to last until the player answers
+const KEEP_LINK_MS = 60_000;
 
 function download(file: File): void {
     const url = URL.createObjectURL(new Blob([file], { type: DOWNLOAD_TYPE }));
@@ -9,8 +11,7 @@ function download(file: File): void {
     link.href = url;
     link.download = file.name;
     link.click();
-    // Once the download has its copy
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), KEEP_LINK_MS);
 }
 
 // Only iOS has navigator.standalone, and it's true when opened from the home

@@ -1090,8 +1090,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   `favicon.png`, to keep its pixels square.
 - `client/saveFile.ts` exports a save. Installed on iOS it uses the share sheet, since a download
   there opens a sheet too small to use when held sideways. Everywhere else it's a plain download,
-  of a file typed `application/octet-stream` (still named `.json`): typed as JSON, older iOS Safari
-  opens it as a page, with no way to save it.
+  of a file typed `application/octet-stream` (still named `.json`): typed as JSON, a player's
+  older iPhone opened it as a page in Safari, with no way to save it (which iOS, nobody knows; the
+  game needs WebGL2, so it's at least 15, where download links work). The link lasts a minute,
+  since iOS asks before it downloads.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
