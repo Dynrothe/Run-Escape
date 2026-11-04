@@ -7,9 +7,9 @@ the version in the corner).
 
 ### Fixed
 
-- Controller button icons showed as broken images in the Windows app.
+- Controller button icons showed as broken images in the Windows app. Fixed by Okaeri.
 - A PlayStation controller through DS4Windows showed as two controllers taking turns, and its
-  buttons did nothing on the menus.
+  buttons did nothing on the menus. Fixed by Okaeri.
 
 ## 0.24.1 - 2026-11-04
 

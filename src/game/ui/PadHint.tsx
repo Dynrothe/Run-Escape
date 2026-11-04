@@ -38,18 +38,17 @@ export function KeyHint({
 // "move" for the left stick. A pad of another make has Xbox's, as it has
 // Xbox's labels. They're in the bundle as data URLs rather than files beside
 // it: the desktop app's launcher 1.0.0 serves .svg files with no image type, so
-// an <img> of one draws nothing there, and players keep their launcher.
+// an <img> of one draws nothing there, and players keep their launcher. Vite
+// makes the data URLs (?inline), keyed here as "xbox/south".
+const ICON_DIR = "./input-prompts/";
 export const PAD_ICONS: Record<string, string> = Object.fromEntries(
     Object.entries(
         import.meta.glob<string>("./input-prompts/*/*.svg", {
-            query: "?raw",
+            query: "?inline",
             import: "default",
             eager: true,
         }),
-    ).map(([file, svg]) => [
-        file.replace("./input-prompts/", "").replace(".svg", ""),
-        "data:image/svg+xml," + encodeURIComponent(svg),
-    ]),
+    ).map(([file, url]) => [file.slice(ICON_DIR.length, -".svg".length), url]),
 );
 
 export function PadIcon({

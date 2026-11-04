@@ -177,6 +177,17 @@ const TRIGGER_PRESSED = 0.5;
 const NAV_THRESHOLD = 0.6;
 const REPEAT_DELAY_MS = 400;
 const REPEAT_MS = 150;
+// Another pad takes over once it's been pressed this long with the one in use
+// let go. One controller can show as two (DS4Windows adds an Xbox pad beside
+// the PlayStation one) that change a frame or so apart, and taking the other up
+// when it's ahead would lose the press and swap them back and forth.
+const HAND_OVER_MS = 50;
+// A pad held the same way this long has something resting on it (or a stuck
+// button, or an axis that rests at its end, like a throttle's), so it neither
+// keeps another pad from taking over nor takes over itself
+const RESTING_MS = 2000;
+// How far the stick moves to count as the player doing something
+const STICK_MOVED = 0.1;
 
 // The stick as a move like the keys': length 0 or 1, x east and y north (a
 // pad's y is down). Full speed in any direction outside the dead zone, as
@@ -274,7 +285,8 @@ function showHints(kind: PadKind | undefined): void {
 }
 
 // Reads the pads each frame. One pad's used at a time: whichever was pressed
-// last, so a second pad lying there doesn't fight the one in hand.
+// last, once the one in use has been let go (see HAND_OVER_MS), so a second pad
+// lying there doesn't fight the one in hand.
 export class GamePads {
     // The pad in use, if any
     info?: PadInfo;
@@ -297,6 +309,13 @@ export class GamePads {
     private readonly sent = new Map<PadButton, string>();
     private readonly move: MoveVector = { x: 0, y: 0 };
     private nav?: { direction: Direction; next: number };
+    // What each pad has down, and when that last changed (see RESTING_MS)
+    private readonly traces = new Map<
+        number,
+        { buttons: number; x: number; y: number; changed: number }
+    >();
+    // Another pad pressed while the one in use is let go, since when (see HAND_OVER_MS)
+    private handOver?: { index: number; since: number };
 
     constructor() {
         window.addEventListener("gamepaddisconnected", this.onPadGone);
@@ -323,16 +342,33 @@ export class GamePads {
                 ? navigator.getGamepads()
                 : [];
         let pad = this.index !== undefined ? pads[this.index] : null;
-        // Take up whichever pad has something pressed, once the one in use is let go. One
-        // controller can show as two that press together (DS4Windows' Xbox pad beside the
-        // PlayStation one), and taking the other up each frame would lose every press.
-        const idle = !pad || !pad.connected || !this.touched(pad);
-        for (const other of idle ? pads : []) {
-            if (other && other.index !== this.index && other.connected && this.touched(other)) {
+        for (const each of pads) {
+            if (each?.connected) {
+                this.trace(each, now);
+            }
+        }
+        // Another pad with something pressed. With none in use it's taken up at
+        // once, so that press counts; otherwise only once the one in use has
+        // been let go a moment (HAND_OVER_MS), as a copy of it can lag a frame.
+        const other = pads.find(
+            (p): p is Gamepad =>
+                !!p && p.connected && p.index !== this.index && this.pressing(p, now),
+        );
+        if (!pad || !pad.connected) {
+            this.handOver = undefined;
+            if (other) {
                 this.use(other);
                 pad = other;
-                break;
             }
+        } else if (other && !this.pressing(pad, now)) {
+            if (this.handOver?.index !== other.index) {
+                this.handOver = { index: other.index, since: now };
+            } else if (now - this.handOver.since >= HAND_OVER_MS) {
+                this.use(other);
+                pad = other;
+            }
+        } else {
+            this.handOver = undefined;
         }
         if (!pad || !pad.connected || !this.info) {
             this.move.x = 0;
@@ -488,7 +524,39 @@ export class GamePads {
         );
     }
 
+    // Notes when a pad's buttons or stick last changed
+    private trace(pad: Gamepad, now: number): void {
+        let buttons = 0;
+        pad.buttons.forEach((b, i) => {
+            if (b.pressed || b.value > TRIGGER_PRESSED) {
+                buttons |= 1 << i;
+            }
+        });
+        const x = pad.axes[0] ?? 0;
+        const y = pad.axes[1] ?? 0;
+        const last = this.traces.get(pad.index);
+        if (!last) {
+            this.traces.set(pad.index, { buttons, x, y, changed: now });
+        } else if (
+            buttons !== last.buttons ||
+            Math.abs(x - last.x) > STICK_MOVED ||
+            Math.abs(y - last.y) > STICK_MOVED
+        ) {
+            last.buttons = buttons;
+            last.x = x;
+            last.y = y;
+            last.changed = now;
+        }
+    }
+
+    // Something's pressed on the pad, and it isn't just resting there
+    private pressing(pad: Gamepad, now: number): boolean {
+        const last = this.traces.get(pad.index);
+        return !!last && now - last.changed < RESTING_MS && this.touched(pad);
+    }
+
     private use(pad: Gamepad): void {
+        this.handOver = undefined;
         this.release();
         // The press that wakes the first pad counts (a browser shows no pad
         // until one), but what's held on a second as it takes over doesn't
@@ -515,6 +583,7 @@ export class GamePads {
     }
 
     private onPadGone = (event: GamepadEvent) => {
+        this.traces.delete(event.gamepad.index);
         if (event.gamepad.index !== this.index || !this.info) {
             return;
         }
