@@ -40,6 +40,8 @@ const BLUE_IMPACT = 1458;
 const SWORD_TRAIL = 1515;
 const SARADOMIN_LIGHT = 1221;
 const STARS = 80;
+// The gold sparkles of a premier club emote, round him as his guard drops
+const GOLD_SPARKLES = 1414;
 // Landing from a leap, and from his descent
 const LANDING: ImpactDef = {
     spots: [
@@ -83,7 +85,7 @@ const lane = (i: number) => [i * 3, i * 3 + 1, i * 3 + 2];
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Saradominist's Saradomin Strike's level,
 // and how near him they have to be for it to reach him, in tiles from his middle
-export const ZACHARIAH_HITPOINTS = 5600;
+export const ZACHARIAH_HITPOINTS = 4200;
 export const ZACHARIAH_STRIKE_LEVEL = 7;
 export const ZACHARIAH_STRIKE_REACH = 8.5;
 
@@ -94,9 +96,9 @@ export const ZACHARIAH_STRIKE_REACH = 8.5;
 export const ZACHARIAH_SMITE: FightAbilityDef = {
     id: "smite",
     name: "Smite",
-    damage: 40,
+    damage: 50,
     reach: 3.5,
-    cooldown: 5,
+    cooldown: 4,
     // Saradomin's light
     iconObjId: 13256,
     impact: {
@@ -119,7 +121,7 @@ export const ZACHARIAH_START_DISTANCE = OWLS_COURT.rise.y - OWLS_COURT.start.y;
 const BOLT = 2;
 // How long his guard's down when a lunge or a wave of his misses, and how long he's stunned
 // (BossDef.guard), and what that does to what he takes
-const OPENS = 1;
+const OPENS = 1.5;
 const STUN = 2.5;
 const OPENED_DAMAGE = 2;
 const FIRE = 3;
@@ -169,8 +171,13 @@ const CROSSBOW_ROWS: BossAttackDef = {
     },
 };
 
-// His lunge: a strip two wide and seven long the way he faced as it began, and he goes four and
-// a half tiles down it, stopping at whoever it's hit or anything in the way. A step of a tile and
+// How far his lunge reaches, and how wide he is
+const LUNGE_LENGTH = 7;
+const RADIUS = 1.2;
+
+// His lunge: a strip two wide and seven long the way he faced as it began, and he goes down it
+// till he's at its end (his middle his radius short of it), stopping at whoever it's hit or
+// anything in the way. A step of a tile and
 // a third (a third of a second) takes the player off it, against 0.85 s; behind or beside him is
 // safe. Missed, it leaves him past them with his guard down, and run into a pillar it sticks
 // there, stunned.
@@ -184,7 +191,7 @@ const LUNGE: BossAttackDef = {
     weight: 4,
     seq: SLASH_SEQ,
     sound: 3876,
-    line: { width: 2, length: 7, dash: 4.5 },
+    line: { width: 2, length: LUNGE_LENGTH, dash: LUNGE_LENGTH - RADIUS },
     opens: OPENS,
     impact: {
         trail: { spotAnim: SWORD_TRAIL, fit: 1 },
@@ -232,7 +239,8 @@ const SWORD: BossAttackDef = {
     radius: 1.3,
     from: "knights",
     lookId: "zachariah_sword",
-    boomerang: { reach: 27, catchSeq: 8668, catchSound: 4442 },
+    // Right across the court to its far side, however near they stood
+    boomerang: { reach: 27, toEdge: true, catchSeq: 8668, catchSound: 4442 },
     statues: { locId: KNIGHT, windupSeq: 8667 },
     turns: { damage: 30, stun: true },
 };
@@ -261,8 +269,10 @@ const LIGHTNING: BossAttackDef = {
         spots: [{ shape: "checker", then: 1.4 }],
         radius: 1.5,
         spotAnim: 1800,
-        // Inside the cell, and plain to see: it's the warning of a big hit everywhere
+        // Inside the cell, and plain to see: it's the warning of a big hit everywhere. What
+        // hits is that circle, not the cell's corners (round)
         fit: 0.85,
+        round: true,
         alpha: 0.8,
     },
 };
@@ -427,7 +437,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
         damage: 0,
         // Three quarters of the player's pace, quicker by the phase: he chases
         speed: 3,
-        radius: 1.2,
+        radius: RADIUS,
         xp: 0,
         knockbackResist: 1,
         solid: true,
@@ -485,6 +495,11 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 stun: STUN,
                 stunSpotAnim: STARS,
                 stunHeight: 2.4,
+                // Gold sparkles rising round him and a holy chime (prayer_boost) as his guard
+                // drops: the moment to step in and smite, on a phone too
+                open: { spots: [{ spotAnim: GOLD_SPARKLES, fit: 2.4 }] },
+                exposeSound: 2671,
+                stunSound: 2671,
                 stuck: {
                     spots: [
                         { spotAnim: STOMP, fit: 2 },
@@ -496,12 +511,12 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
             phases: {
                 phases: [
                     {
-                        until: 0.78,
+                        until: 0.85,
                         status: "The trial begins",
                         ambients: [{ attack: "Crossbow rows", interval: 4, delay: 1.5 }],
                     },
                     {
-                        until: 0.4,
+                        until: 0.45,
                         status: "The Sepulchre wakes",
                         message: "The Sepulchre wakes!",
                         opener: "Lightning",

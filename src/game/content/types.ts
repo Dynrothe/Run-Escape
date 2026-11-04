@@ -470,6 +470,9 @@ export type GroundPatternDef = {
     locId?: number;
     spotAnim?: number;
     fit?: number;
+    // A square spot (a checker's cell) hurts only within the circle drawn on it (its radius
+    // times fit), not to its corners: what's seen is what's hit
+    round?: boolean;
     // How solid that's drawn (0.1, faint, when unset): a mark that's the only warning of a big
     // hit over the whole floor wants to be plainer (the checker's glowing cells)
     alpha?: number;
@@ -682,7 +685,9 @@ export type BossAttackDef = {
     // Projectiles: out reach tiles the way they're thrown, then back the way they
     // came to where they were thrown from, hitting each player once each way; at
     // the end catchSeq on the statue that threw it (statues) and catchSound
-    boomerang?: { reach: number; catchSeq?: number; catchSound?: number };
+    // toEdge: out to where its line leaves the bossArena instead (a knight's sword thrown right
+    // across the court, to its far side), never less than reach
+    boomerang?: { reach: number; toEdge?: boolean; catchSeq?: number; catchSound?: number };
     // Projectiles: thrown from count of the map's knight statues (ArenaFeatures.knights),
     // picked at random as it begins, at where the player was then, not from the boss
     from?: "knights";
@@ -769,6 +774,8 @@ export type BossGuardDef = {
     exposeSound?: number;
     // A lunge stuck in a pillar: what's thrown up where it's struck
     stuck?: ImpactDef;
+    // Shown round it as its guard drops (exposed, or stunned)
+    open?: ImpactDef;
 };
 
 // A big entrance: the player can't be hit, the screen goes dark, and everything

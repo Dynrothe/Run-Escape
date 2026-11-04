@@ -21,6 +21,9 @@
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
+//   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
+//                    # in every 10 (out of a reach-limited weapon's reach), and misses about
+//                    # half the chances to use the fight's button
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -71,6 +74,10 @@ const finalBoss = process.env.FINAL_BOSS;
 const fresh = process.env.FRESH === "1";
 const dodges = process.env.DODGE === "1";
 const smites = process.env.SMITE !== "0";
+const sloppy = process.env.SLOPPY === "1";
+// A sloppy bot's lapses: these seconds in every SLOPPY_EVERY it backs off from the boss
+const SLOPPY_EVERY = 10;
+const SLOPPY_LAPSE = 3;
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
@@ -416,6 +423,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             }
         }
     }
+    // A less careful person: now and then backs off and loses reach
+    if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {
+        const away = towards(boss.x, boss.y);
+        return { x: -away.x, y: -away.y };
+    }
     // In to use the fight's button while the boss's guard is down (BossDef.guard), if it's ready
     const ability = sim.map.fight?.ability;
     if (
@@ -461,7 +473,16 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
 // A fight's button (MapDef.fight.ability), pressed while the boss's guard is down and it'd land
 function useAbility(sim: Sim): void {
     const boss = sim.shownBoss;
-    if (smites && boss && sim.map.fight?.ability && sim.isExposed(boss) && sim.abilityTarget()) {
+    // A sloppy one only sees the chance every other second
+    const sees = !sloppy || Math.floor(sim.tick / TICKS_PER_SECOND) % 2 === 0;
+    if (
+        sees &&
+        smites &&
+        boss &&
+        sim.map.fight?.ability &&
+        sim.isExposed(boss) &&
+        sim.abilityTarget()
+    ) {
         sim.useAbility();
     }
 }

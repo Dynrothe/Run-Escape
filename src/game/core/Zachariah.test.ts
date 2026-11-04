@@ -387,6 +387,31 @@ describe("his attacks, each landing and each dodged", () => {
         expect(hp(sim)).toBe(before);
     });
 
+    test("the lightning hits the circle drawn on a cell, not the cell's corners", () => {
+        const ground = attackNamed("Lightning").ground!;
+        const drawn = (OWLS_COURT.checker.cell / 2) * ground.fit!;
+        // From a struck cell's middle: inside the drawn circle, just clear of it (where the
+        // cell's square used to reach them), and towards its corner (in the square, outside
+        // the circle)
+        for (const [dx, dy, hit] of [
+            [0.8, 0, true],
+            [drawn + 0.4, 0, false],
+            [1.3, 1.3, false],
+        ] as const) {
+            const { sim, boss } = fight();
+            place(sim, at(22.5, 22.5));
+            use(sim, boss, "Lightning");
+            const first = sim.hazards.filter((h) => h.startTick === sim.tick);
+            const cell = first.find(
+                (h) => Math.abs(h.x - sim.player.x) < 3 && Math.abs(h.y - sim.player.y) < 3,
+            )!;
+            place(sim, { x: cell.x + dx, y: cell.y + dy });
+            const before = hp(sim);
+            run(sim, attackNamed("Lightning").windup + 0.1);
+            expect([dx, dy, hp(sim) < before]).toEqual([dx, dy, hit]);
+        }
+    });
+
     test("the knight's sword: out from a knight at where they stood and back, hitting each way", () => {
         const { sim, boss } = fight();
         place(sim, at(31, 21.5));
@@ -397,8 +422,28 @@ describe("his attacks, each landing and each dodged", () => {
         run(sim, 1.4 + 2);
         const once = hp(sim);
         expect(once).toBeLessThan(before);
-        run(sim, 4);
+        // Back from the court's far side
+        run(sim, 5);
         expect(hp(sim)).toBeLessThan(once);
+        expect(sim.enemyProjectiles).toEqual([]);
+    });
+
+    test("the knight's sword: right across the court to its far side, and back", () => {
+        const { sim, boss } = fight();
+        place(sim, at(31, 21.5));
+        use(sim, boss, "Knight's sword");
+        const knight = boss.bossState!.windup!.from![0];
+        const from = { x: knight.x + 1.5, y: knight.y + 1.5 };
+        let far = 0;
+        for (let i = 0; i < 8 * TICKS_PER_SECOND; i++) {
+            run(sim, 0.02);
+            for (const sword of sim.enemyProjectiles) {
+                far = Math.max(far, Math.hypot(sword.x - from.x, sword.y - from.y));
+            }
+        }
+        // Past the far edge of the court, east or west, from a knight on the other side
+        const court = OWLS_COURT.bossArena;
+        expect(far).toBeGreaterThanOrEqual(court.size + 1);
         expect(sim.enemyProjectiles).toEqual([]);
     });
 
@@ -504,7 +549,7 @@ describe("fighting back", () => {
         use(sim, boss, "Lunge");
         place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
         const events: string[] = [];
-        for (let i = 0; i < 1.2 * TICKS_PER_SECOND; i++) {
+        for (let i = 0; i < 1.4 * TICKS_PER_SECOND; i++) {
             run(sim, 0.02);
             for (const event of sim.takeEvents()) {
                 if (event.type === "bossGuard") {
@@ -514,8 +559,11 @@ describe("fighting back", () => {
         }
         expect(hp(sim)).toBe(sim.player.maxHp);
         expect(events).toEqual(["Lunge false"]);
-        // Down his strip, past where they were
-        expect(boss.y).toBeLessThan(sim.player.y + 0.5);
+        // Down his strip to its end, his front where it's drawn to and hits to
+        const line = attackNamed("Lunge").line!;
+        expect(at(31, 33).y - boss.y).toBeCloseTo(line.length - boss.radius, 1);
+        // Gold rising round him as it drops, with its chime
+        expect(sim.effects.some((e) => e.spotAnim === guard().open!.spots![0].spotAnim)).toBe(true);
         expect(sim.isExposed(boss)).toBe(true);
         expect(sim.isStunned(boss)).toBe(false);
         expect(hit100(sim, boss)).toBeGreaterThanOrEqual(170);

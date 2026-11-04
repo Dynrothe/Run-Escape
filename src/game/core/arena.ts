@@ -259,3 +259,33 @@ export function boxCircle(
     }
     return undefined;
 }
+
+// How far along (x, y) + (dirX, dirY) * t, a unit direction, it is to where the line leaves the
+// box (an arena's bounds) for good, or 0 if it never crosses it
+export function boxExit(
+    box: { minX: number; minY: number; maxX: number; maxY: number },
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+): number {
+    let from = -Infinity;
+    let to = Infinity;
+    const axes: [number, number, number, number][] = [
+        [x, dirX, box.minX, box.maxX],
+        [y, dirY, box.minY, box.maxY],
+    ];
+    for (const [p, d, lo, hi] of axes) {
+        if (Math.abs(d) < 1e-12) {
+            if (p < lo || p > hi) {
+                return 0;
+            }
+            continue;
+        }
+        const t1 = (lo - p) / d;
+        const t2 = (hi - p) / d;
+        from = Math.max(from, Math.min(t1, t2));
+        to = Math.min(to, Math.max(t1, t2));
+    }
+    return to > Math.max(from, 0) ? to : 0;
+}

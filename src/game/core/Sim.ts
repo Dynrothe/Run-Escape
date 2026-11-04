@@ -152,6 +152,7 @@ import {
 import {
     behindPillar,
     boxCircle,
+    boxExit,
     checkerCellAt,
     checkerCells,
     circleInBox,
@@ -6176,13 +6177,15 @@ export class Sim {
         // Struck under its own boss's middle (BossAttackDef.turns)
         if (show && hit && attack.turns) {
             const boss = this.enemies.find((e) => e.uid === hazard.enemyUid);
-            const half = hazard.half;
+            const ground = attack.ground;
+            const half = ground?.round ? undefined : hazard.half;
+            const reach = hazard.half && !half ? hazard.radius * (ground?.fit ?? 1) : radius;
             if (
                 boss &&
                 !boss.dead &&
                 (half
                     ? Math.abs(boss.x - x) <= half && Math.abs(boss.y - y) <= half
-                    : fm.hypot(boss.x - x, boss.y - y) <= radius)
+                    : fm.hypot(boss.x - x, boss.y - y) <= reach)
             ) {
                 this.turnOnBoss(boss, attack);
             }
@@ -6209,15 +6212,17 @@ export class Sim {
         if (!hit) {
             return;
         }
+        // A square's drawn circle, when that's what hurts (GroundPatternDef.round)
+        const half = attack.ground?.round ? undefined : hazard.half;
+        const reach = hazard.half && !half ? hazard.radius * (attack.ground?.fit ?? 1) : radius;
         this.forEachHeroInReach(() => {
             const player = this.player;
             const index = this.hero.index;
-            const half = hazard.half;
             if (
                 this.runOver ||
                 (half
                     ? !circleInBox(player.x, player.y, player.radius, x, y, half, half)
-                    : fm.hypot(player.x - x, player.y - y) > radius + player.radius) ||
+                    : fm.hypot(player.x - x, player.y - y) > reach + player.radius) ||
                 landed[index] ||
                 hazard.hit.includes(index)
             ) {
@@ -6729,6 +6734,9 @@ export class Sim {
                     boss.uid,
                 );
             }
+        }
+        if (!wasOpen || stunned) {
+            this.showImpact(guard.open, boss.x, boss.y);
         }
         const sound = stunned ? guard.stunSound : guard.exposeSound;
         if (sound !== undefined) {
@@ -7357,7 +7365,7 @@ export class Sim {
     ): void {
         const vx = fm.cos(angle) * speed;
         const vy = fm.sin(angle) * speed;
-        const reach = attack.boomerang?.reach ?? attack.wave?.reach ?? attack.range;
+        const reach = this.throwReach(attack, x, y, fm.cos(angle), fm.sin(angle));
         const out = Math.max(1, Math.ceil(reach / speed));
         this.enemyProjectiles.push({
             uid: this.nextUid++,
@@ -7382,6 +7390,16 @@ export class Sim {
                 boomerang: { fromX: x, fromY: y, turnTick: this.tick + out, hitBack: [], statue },
             }),
         });
+    }
+
+    // How far a wave or a boomerang goes before it turns or is gone, from (x, y) along dirX,
+    // dirY: a boomerang that goes to the arena's edge (toEdge) as far as that is
+    throwReach(attack: BossAttackDef, x: number, y: number, dirX: number, dirY: number): number {
+        const boomerang = attack.boomerang;
+        if (boomerang?.toEdge) {
+            return Math.max(boomerang.reach, boxExit(this.bossArena, x, y, dirX, dirY));
+        }
+        return boomerang?.reach ?? attack.wave?.reach ?? attack.range;
     }
 
     // A wave's or a boomerang's tick: on through everyone it reaches, each hit
