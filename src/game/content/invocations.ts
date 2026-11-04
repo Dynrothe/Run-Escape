@@ -258,7 +258,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "baba",
         level: 10,
         description: "Her shockwave is bigger.",
-        comes: "Ba-Ba",
     },
     {
         id: "boulderdash",
@@ -267,7 +266,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "baba",
         level: 10,
         description: "Her rolling boulders come twice as fast.",
-        comes: "Ba-Ba",
     },
 ];
 

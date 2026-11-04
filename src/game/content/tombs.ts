@@ -188,7 +188,8 @@ export const BA_BA: EnemyDef = {
             // Over sooner if someone gets back up to her (TombsPathDef boss.boulders)
             seconds: 20,
             attacks: ["Rolling boulders"],
-            interval: 1.6,
+            // A row every this many seconds, each with its way through somewhere new
+            interval: 1.3,
             message: "Ba-Ba flees to her altar and boulders come rolling! Get back up to her!",
             endMessage: "The boulders stop rolling. Ba-Ba can be hurt again!",
         },
@@ -219,7 +220,7 @@ export const BA_BA: EnemyDef = {
                 impactSpotAnim: ROCK_IMPACT,
                 // Breaking up where it lands, into shards flying out
                 spotAnim: ROCK,
-                // Her dark boulder, lit up, few and slow enough to see the way between
+                // Her dark boulder, few and slow enough to see the way between
                 shards: {
                     count: 8,
                     speed: 3.5,
@@ -228,7 +229,6 @@ export const BA_BA: EnemyDef = {
                     damage: 2,
                     scale: 1.4,
                     spotAnim: BOULDER,
-                    bright: 0.35,
                 },
                 seq: 9743,
                 sound: 5962,
@@ -255,7 +255,6 @@ export const BA_BA: EnemyDef = {
                     radius: 0.45,
                     damage: 3,
                     scale: 1.4,
-                    bright: 0.35,
                 },
                 seq: 9748,
                 sound: 5962,
@@ -296,7 +295,8 @@ export const BA_BA: EnemyDef = {
                     // From her altar to the arena's foot, and no further: not into the safe room
                     range: 19,
                     radius: 0.85,
-                    gap: 3,
+                    // One boulder missing: about a tile and a half to slip through
+                    gap: 1,
                     spacing: 1.6,
                     scale: 2,
                     heading: "south",
