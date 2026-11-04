@@ -82,7 +82,7 @@ TROPHIES.push(
         id: "ghrazi_rapier",
         name: "Ghrazi rapier",
         objId: 22324,
-        how: PURPLE,
+        how: `${PURPLE} Unlocks the rapier as a weapon.`,
         from: { ...TOB, weight: 2 },
     },
     {
@@ -124,7 +124,7 @@ TROPHIES.push(
         id: "holy_scythe_of_vitur_uncharged",
         name: "Holy Scythe of Vitur (uncharged)",
         objId: 25738,
-        how: HARD_PURPLE,
+        how: `${HARD_PURPLE} Unlocks the Holy Scythe as a weapon.`,
         from: { ...TOB, weight: 1, hard: true },
     },
     {

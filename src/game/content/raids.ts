@@ -358,6 +358,9 @@ export const RAID_MAPS: MapDef[] = [
             "and their bullets leave a gap up close.\n\n" +
             "**Raid points** come from fast, clean rooms. They pay coins, buy supplies between " +
             "rooms, and raise your chance of a purple at the end.\n\n" +
+            "**Weapons come from the chest**, not for clearing: a Ghrazi rapier from it unlocks " +
+            "the rapier, a chance each clear. On hard or expert it can also hold the Holy Scythe " +
+            "of Vitur, which unlocks the Holy Scythe.\n\n" +
             "**Portals:** once you've killed a room's boss, its hall has a portal straight to it " +
             "(three a raid).\n\n" +
             "**Hard mode** opens when you beat the raid.\n\n" +
