@@ -16,6 +16,7 @@ npx tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's m
 npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
 npx tsx scripts/cache/find-locs.ts multicannon           # scenery
 npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+npx tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
 ```
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
@@ -60,9 +61,11 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 ## Passive
 
 Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, and `alsoAdds` puts
-the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item.
-The enabled prayer sprites are Chivalry 945, Piety 946, Rigour 1420 and Augury 1421.
-`slim-cache.ts` collects these sprites from the passive definitions automatically.
+the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item
+(a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
+with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
+one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
+there, and `slim-cache.ts` keeps them.
 
 ## Stat
 

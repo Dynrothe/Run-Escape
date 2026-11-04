@@ -749,6 +749,7 @@ scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death an
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
+scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability

@@ -43,6 +43,30 @@ describe("ItemIcon", () => {
         rerender(<ItemIcon objId={4151} />);
         expect(container.querySelector("img")).toBeNull();
     });
+
+    test("shows the item when the cache hasn't got its sprite", () => {
+        const scroll = "data:image/png;base64,scroll";
+        let sprite: string | undefined;
+        let spriteLoaded: ((url: string) => void) | undefined;
+        let itemLoaded: ((url: string) => void) | undefined;
+        vi.spyOn(iconCache, "getSprite").mockImplementation(() => sprite);
+        vi.spyOn(iconCache, "get").mockImplementation(() => undefined);
+        vi.spyOn(iconCache, "requestSprite").mockImplementation((_id, callback) => {
+            spriteLoaded = callback;
+        });
+        const request = vi
+            .spyOn(iconCache, "request")
+            .mockImplementation((_id, _count, callback) => {
+                itemLoaded = callback;
+            });
+        const { container } = render(<ItemIcon objId={21034} spriteId={1420} />);
+        expect(request).not.toHaveBeenCalled();
+        sprite = "";
+        act(() => spriteLoaded!(""));
+        expect(request).toHaveBeenCalledWith(21034, 1, expect.any(Function));
+        act(() => itemLoaded!(scroll));
+        expect(container.querySelector("img")).toHaveAttribute("src", scroll);
+    });
 });
 
 describe("IconCache", () => {
@@ -89,6 +113,20 @@ describe("IconCache", () => {
         expect(flag).toHaveBeenCalledWith("");
         expect(cache.getFrame(815, 6)).toBe("");
         expect(cache.getSprite(815)).toBeUndefined();
+    });
+
+    test("a sprite the cache hasn't got is kept as an empty url, for the item instead", async () => {
+        const queueLoad = vi
+            .fn()
+            .mockResolvedValue([{ id: 1420, width: 0, height: 0, pixels: new Int32Array(0) }]);
+        const cache = new IconCache();
+        cache.setWorkerPool({ queueLoad } as never);
+        const callback = vi.fn();
+        cache.requestSprite(1420, callback);
+        await tick();
+        await tick();
+        expect(callback).toHaveBeenCalledWith("");
+        expect(cache.getSprite(1420)).toBe("");
     });
 
     test("icons on screen when a load failed are asked for again in a moment", async () => {
