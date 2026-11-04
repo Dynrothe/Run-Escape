@@ -121,7 +121,8 @@ const FIGHT_LINE = 12;
 // the floor that isn't drawn (overlay 42) at x 10 to 14 (y 10 to 14 in the cut's own tiles),
 // rubble either side, out to the first row past the line the fight holds (FIGHT_LINE), so the
 // middle of the foot is a drop and her boulders' knockback can put you in it.
-const BA_BA_ALTAR = [12, 33];
+// (row 33 and up is her throne's, solid: the floor's top row is 32)
+const BA_BA_ALTAR = [12, 31];
 const BA_BA_FOOT = [7, 14];
 const BA_BA_PIT = { x0: 10, x1: 15, y0: 9, y1: FIGHT_LINE + 1.9 };
 

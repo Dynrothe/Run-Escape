@@ -756,6 +756,8 @@ type ApmekenRoom = {
 const DEV_BOSS_WEAPON = "corrupted_twisted_bow";
 // Tiles past its line someone has to be for a Tombs boss to rise: clear of the gap at its foot
 const TOMBS_BOSS_RISE = 1.5;
+// Tiles south of Ba-Ba's altar that count as back up to her, ending her boulders
+const TOMBS_ALTAR_REACH = 2.5;
 
 export class Sim {
     readonly grid: ArenaGrid;
@@ -7053,10 +7055,19 @@ export class Sim {
 
     // Each tick of her rolling stones: true once someone's back up to her
     private stepRollingStones(enemy: Enemy): boolean {
+        // Up to her altar's rows, anywhere across: she's solid and stands in the middle, so the
+        // way up the sides has to count too
+        const altar = this.tombsPathRoom?.boss?.boulders?.altar;
         const reached = this.heroes.some((hero) => {
             const player = hero.player;
+            if (!this.isUp(hero)) {
+                return false;
+            }
+            if (altar) {
+                return player.y >= altar.y - TOMBS_ALTAR_REACH;
+            }
             const reach = enemy.radius + player.radius + 1;
-            return this.isUp(hero) && fm.hypot(player.x - enemy.x, player.y - enemy.y) <= reach;
+            return fm.hypot(player.x - enemy.x, player.y - enemy.y) <= reach;
         });
         if (reached) {
             this.emit({ type: "notice", message: "You reach Ba-Ba! Her boulders stop." });

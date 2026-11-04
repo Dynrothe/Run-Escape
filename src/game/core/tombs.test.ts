@@ -673,8 +673,9 @@ describe("Ba-Ba", () => {
 
     it("stops her boulders once someone gets back up to her", () => {
         const { sim, boss } = rolling();
-        sim.player.x = sim.player.prevX = 1036.5;
-        sim.player.y = sim.player.prevY = 1046.5 - 2.5;
+        // Up the side, well away from her: the top rows are what count
+        sim.player.x = sim.player.prevX = 1036.5 - 7;
+        sim.player.y = sim.player.prevY = 1046.5 - 2.4;
         sim.step();
         sim.step();
         expect(boss.bossState!.ordeal).toBeUndefined();

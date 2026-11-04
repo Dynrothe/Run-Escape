@@ -294,7 +294,7 @@ export const BA_BA: EnemyDef = {
                     interval: 1,
                     speed: 3.2,
                     // From her altar to the arena's foot, and no further: not into the safe room
-                    range: 22,
+                    range: 19,
                     radius: 0.85,
                     gap: 3,
                     spacing: 1.6,
