@@ -119,6 +119,22 @@ The waves no longer run on a clock, but they're still where experience and caske
        Elidinis' Warden, Zebak and Ba-Ba with Tumeken's), everything at once, and at 5% the floor
        falling away row by row.
 
+### The Wardens' third phase floor (for when they're built)
+
+The owner's ask: the real floor, with its tiles moving under the slams, as tech for other maps too.
+What the cache has, in square 61,80: a grid of plates, each its own loc id (45650 on, one a plate,
+4 by 4 in the middle and 4 by 2 along the edges, plus edge pieces 45715 to 45725), none with an
+animation of its own: OSRS's server moves them. So:
+
+- **Each plate a model the game draws**, baked as a loc (as the cannon is), at a height the sim
+  sets: sinking, shaking as a warning, or falling away. The motion's ours, as the cache has none.
+- **Collision that changes**: the map's collision is an array the sim reads every tick, so a plate
+  gone blocks its tiles. It's kept per map across runs, so a run puts it back when it ends.
+- **The slams**: a half of the floor shakes, then drops and comes back (right, left, both). **The
+  enrage**: plates fall away for good, row by row from the back.
+- **For other maps**: moving plates as a feature of their own (any loc a map marks, with its height
+  and collision the sim's), for collapsing bridges, rising platforms, trap floors.
+
 ## 7. Invocations
 
 `content/invocations.ts`. They replace endless, hard and expert there: the Theatre of Blood keeps
