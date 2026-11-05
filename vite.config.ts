@@ -1,6 +1,5 @@
 import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
@@ -17,27 +16,21 @@ const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json
 // Which build this is, for co-op: copies of a run from different builds fall
 // out of step, so a room only takes players on the host's. The slim cache is
 // made for one too (build.json). The commit, or when the server started
-// without one. With uncommitted changes the commit doesn't say what's in it,
-// so it gets a hash of the changes as well: the same changes on another
-// machine give the same id, and different ones don't. Files git doesn't track
-// yet aren't in it.
-export function getBuildId(version: string, git: (...args: string[]) => Buffer): string {
+// without one.
+function buildId(): string {
     try {
-        const commit = git("rev-parse", "--short=8", "HEAD").toString().trim();
-        const changes = git("diff", "HEAD", "--binary", "--no-color", "--no-ext-diff");
-        if (changes.byteLength === 0) {
-            return `${version}-${commit}`;
-        }
-        const hash = createHash("sha256").update(changes).digest("hex").slice(0, 8);
-        return `${version}-${commit}-dirty-${hash}`;
+        const commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+        return `${version}-${commit}`;
     } catch {
         return `${version}-${Date.now().toString(36)}`;
     }
 }
 
-const BUILD_ID = getBuildId(version, (...args) =>
-    execFileSync("git", args, { stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 28 }),
-);
+// Worked out once, so build.json and the game can't disagree
+const BUILD_ID = buildId();
 
 // Writes build.json beside index.html, for scripts/cache/slim-cache.ts: a slim
 // cache is made for one build, and the game checks that it's the one it's on
