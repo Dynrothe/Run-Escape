@@ -659,6 +659,24 @@ describe("Ba-Ba", () => {
     }
     const baba = (sim: Sim) => sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
 
+    it("has her adds drop food at Entry, less higher up, and none from Expert", () => {
+        withEntryScale();
+        expect(atBaba()["tombsBossFood"]()).toBeCloseTo(TOMBS_BOSS_FOOD.chance);
+        const expert = [
+            "insanity",
+            "pathmaster",
+            "walk_the_path",
+            "no_help_needed",
+            "dehydration",
+            "quiet_prayers",
+            "deadly_prayers",
+            "double_trouble",
+            "feeling_special",
+        ];
+        expect(getRaidLevel(expert)).toBeGreaterThanOrEqual(TOMBS_BOSS_FOOD.untilLevel);
+        expect(atBaba(expert)["tombsBossFood"]()).toBe(0);
+    });
+
     it("is skipped to from her room on the dev server, rising once someone walks in", () => {
         const sim = apmeken();
         expect(sim.devSkipToTombsBoss()).toBe(true);
@@ -2600,6 +2618,19 @@ describe("a wipe on the Wardens", () => {
         expect(sim.player.hp).toBe(sim.player.maxHp);
     });
 
+    it("set down what the party carries where it can be walked to, even by a wall", () => {
+        const sim = tombs([]);
+        sim.pickups = [];
+        for (let i = 0; i < 8; i++) {
+            sim["dropPickup"]("coins", sim.player.x, sim.player.y, 1);
+        }
+        // Beside the field's west wall (tile 1000): the ring round it reaches into the wall
+        sim["moveParty"]({ x: 1001.5, y: 1036.5 });
+        for (const pickup of sim.pickups) {
+            expect(sim.grid.isSolid(Math.floor(pickup.x), Math.floor(pickup.y))).toBe(false);
+        }
+    });
+
     it("spill food as a phase ends at Entry, where there's nothing else to heal with", () => {
         withEntryScale();
         const food = (invocations: string[]) => {
@@ -2865,6 +2896,25 @@ describe("the Wardens' second and last phases", () => {
         expect(two.kneel).toBeDefined();
         expect(two.current).toBe(going);
         expect(fight.marks.length).toBeGreaterThan(0);
+    });
+
+    it("lays their last floor again after a wipe there, back to the first phase", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        find(sim, fight.two!.wardenUid).hp = 0;
+        step(sim, WARDENS.two.toLast + 0.2);
+        expect(fight.phase).toBe(3);
+        const floor = sim.floor;
+        sim.grid.dropTile(LAST_FLOOR.x0 + 2, LAST_FLOOR.y0 + 2);
+        expect(sim.grid.isDropped(LAST_FLOOR.x0 + 2, LAST_FLOOR.y0 + 2)).toBe(true);
+        sim.devGod = false;
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](sim.player.maxHp * 10, "wardens_obelisk", false, undefined, true);
+        sim.step();
+        expect(sim.runOver).toBe(false);
+        expect(sim.tombsWardens!.phase).toBe(1);
+        expect(sim.floor).not.toBe(floor);
+        expect(sim.grid.isDropped(LAST_FLOOR.x0 + 2, LAST_FLOOR.y0 + 2)).toBe(false);
     });
 
     it("brings the fallen Warden back over the moving floor, slamming east, west, then both", () => {

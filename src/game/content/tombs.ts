@@ -56,6 +56,15 @@ function baboon(def: Omit<EnemyDef, "idleSeq" | "walkSeq" | "deathSeq" | "radius
     return { idleSeq: IDLE, walkSeq: WALK, deathSeq: DEATH, radius: 0.35, ...def };
 }
 
+// Spot animations the Tombs show that are no attack's: Kephri's shield (up, and taking a swarm),
+// the Arcane Scarab's charge, and the Warden that loses the first phase blowing up
+export const TOMBS_SPOTANIMS = {
+    kephriShield: 2141,
+    kephriShieldSwarm: 2144,
+    arcaneCharge: 2150,
+    wardenBlowsUp: 2216,
+};
+
 export const TOMBS_ENEMIES: EnemyDef[] = [
     // Never spawned: what Ba-Ba's boulders are drawn as (BulletPatternDef.look, falls), her
     // Boulder NPC rolling (9518)

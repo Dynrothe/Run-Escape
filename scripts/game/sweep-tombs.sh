@@ -6,7 +6,8 @@
 #   ROOMS="baba akkha" LEVELS="0 150" KITS="zero" CHARACTERS="wizard" SEEDS=2 scripts/game/sweep-tombs.sh
 #
 #   KITS: zero (nothing bought), shop (META=max), all (META=max ARMOURY=max), dev (KIT=max)
-#   JOBS=3 runs that many at once
+#   JOBS=3 runs that many at once (with bash's `wait -n`: bash 4.3 or later, as Git Bash is;
+#   macOS's own bash 3.2 isn't)
 ROOMS=${ROOMS:-"apmeken het scabaras crondis baba akkha kephri zebak wardens"}
 LEVELS=${LEVELS:-"0 150 300 400 500"}
 KITS=${KITS:-"zero shop all"}

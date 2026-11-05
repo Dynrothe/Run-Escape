@@ -20,6 +20,8 @@ the version in the corner).
 
 - Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
   it: they waited for its middle to come into reach. Fixed by Okaeri.
+- A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of
+  reach. Fixed by Okaeri.
 
 ## 0.27.0 - 2026-11-05
 

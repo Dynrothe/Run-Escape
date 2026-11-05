@@ -31,7 +31,6 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
-import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     INVOCATIONS,
     INVOCATION_BY_ID,
@@ -44,6 +43,7 @@ import {
     getRaidLevel,
     getRaidLevelScale,
 } from "../content/invocations";
+import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
@@ -2329,11 +2329,7 @@ function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
         return null;
     }
     return (
-        <button
-            className="ui-button ui-button-small"
-            aria-pressed={on}
-            onClick={() => client.toggleDevGod()}
-        >
+        <button className="ui-button ui-button-small" onClick={() => client.toggleDevGod()}>
             God mode (dev): {on ? "on" : "off"}
         </button>
     );
@@ -2406,7 +2402,6 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// Akkha's shadows: how many are left, and how long till those still up flood their quarters
 // Zebak's roar coming: how long there is to get behind a boulder
 function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
     const seconds = useHudNumber(client, (n) => n.tombsRoar);
@@ -2442,6 +2437,7 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
     );
 }
 
+// Akkha's shadows: how many are left, and how long till those still up flood their quarters
 function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | null {
     const shadows = useHudNumber(client, (n) => n.tombsShadows);
     if (!shadows) {

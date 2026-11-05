@@ -4,9 +4,9 @@
 // turns, beam pulses and seal openings, Scabaras's boards and wrong steps, Crondis's trips, spills
 // and growth.
 //
-//   DEV_MAPS=1 npx tsx scripts/game/simulate-tombs.ts                  # the whole raid, warrior, 3 seeds
-//   DEV_MAPS=1 ROOM=scabaras npx tsx scripts/game/simulate-tombs.ts wizard 10   # one puzzle room
-//   DEV_MAPS=1 ROOM=zebak KIT=max npx tsx scripts/game/simulate-tombs.ts        # a boss, best of everything
+//   DEV_MAPS=1 bun run tsx scripts/game/simulate-tombs.ts                  # the whole raid, warrior, 3 seeds
+//   DEV_MAPS=1 ROOM=scabaras bun run tsx scripts/game/simulate-tombs.ts wizard 10   # one puzzle room
+//   DEV_MAPS=1 ROOM=zebak KIT=max bun run tsx scripts/game/simulate-tombs.ts        # a boss, best of everything
 //   ROOM=     apmeken het scabaras crondis (puzzle rooms), baba akkha kephri zebak (bosses),
 //             wardens, raid (the default: Nexus to chest)
 //   LEVEL=2   the path level: as many other paths done first (0 to 3)

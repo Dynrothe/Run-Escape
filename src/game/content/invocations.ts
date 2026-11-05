@@ -1,3 +1,4 @@
+import { fm } from "../core/fmath";
 import { TROPHIES } from "./trophies";
 
 // The Tombs of Amascut's invocations (docs/design/tombs-of-amascut.md): picked before the raid,
@@ -438,11 +439,8 @@ export const RAID_BAND_SPRITES: Record<RaidBand, number> = {
     Expert: 4662,
 };
 
-// What the raid's chest can hold, shown on the board: its purples, the pet, and the jewels. Below
-// a unique's minLevel it's greyed out there, as OSRS's are: it only comes with an extra 1 in 50 roll
-// (fang and Lightbearer from raid level 50, the ward, Masori and the shadow from 150; the pet, the
-// thread and the jewels at any level, more often the more raids you've done)
-// The chest's uniques for the board, with the raid level each comes from (trophies.ts)
+// What the raid's chest can hold, shown on the board, each with the raid level it comes from
+// (trophies.ts): below it, it's greyed out there
 export const TOMBS_UNIQUES: { name: string; objId: number; minLevel: number }[] = TROPHIES.flatMap(
     (trophy) =>
         trophy.from.kind === "tombs"
@@ -532,9 +530,9 @@ export function getRaidLevelScale(level: number): RaidLevelScale {
     const b = points[i + 1];
     const t = (at - a.level) / (b.level - a.level);
     return {
-        hp: a.hp * Math.pow(b.hp / a.hp, t),
-        damage: a.damage * Math.pow(b.damage / a.damage, t),
-        bossHp: a.bossHp * Math.pow(b.bossHp / a.bossHp, t),
-        bullets: a.bullets * Math.pow(b.bullets / a.bullets, t),
+        hp: a.hp * fm.pow(b.hp / a.hp, t),
+        damage: a.damage * fm.pow(b.damage / a.damage, t),
+        bossHp: a.bossHp * fm.pow(b.bossHp / a.bossHp, t),
+        bullets: a.bullets * fm.pow(b.bullets / a.bullets, t),
     };
 }

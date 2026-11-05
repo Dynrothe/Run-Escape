@@ -149,11 +149,12 @@ room's enemies rise more gently than its bosses: a run levels up on them from le
 raises raid points and the purple chance. Bands: Entry under 150, Normal under 300, Expert from
 there.
 
-Below Normal the raid goes easier on a run with nothing: a puzzle room's worth two levels as it's
-done, a boss's adds drop food (none from Expert up), food spills as each of the Wardens' phases
-ends, hits that take a share of your hitpoints take less, Crondis's crocodiles come fewer, and the
-path level counts for about a third. The path level itself scales gently (+15% a room's enemies'
-hitpoints a level, +12% a boss's), as OSRS's does.
+A puzzle room's worth two levels as it's done, whatever the raid level. For a run with nothing
+bought the raid goes easier the lower it is: a boss's adds drop food, and food spills as each of
+the Wardens' phases ends, less of both the higher the raid level and none from Expert up; and
+below Normal, hits that take a share of your hitpoints take less, Crondis's crocodiles come fewer,
+and the path level counts for about a quarter. The path level itself scales gently
+(`APMEKEN.levelHp`, `TOMBS_BOSSES`), as OSRS's does.
 
 | Group          | Here                                                           |
 | -------------- | -------------------------------------------------------------- |
@@ -257,7 +258,14 @@ raid's ranges.
   last 11761 to 11764, the obelisk 11750 to 11752, the core 11770/11771, the energy siphon 11772,
   the phantoms of Zebak 11774, Ba-Ba 11775, Kephri 11776 and Akkha 11777.
 - **Pets**: Tumeken's and Elidinis' Guardians (11652/11653), their damaged recolours, Akkhito,
-  Babi, Kephriti and Zebo.
+  Babi, Kephriti and Zebo. Tumeken's guardian, the chest's pet, follows as 11812 (idle 9655, walk
+  9651).
+- **The chest's uniques** (`trophies.ts`): Osmumten's fang 26219, Lightbearer 25975, Elidinis'
+  ward 25985, the Masori mask, body and chaps 27226/27229/27232, Tumeken's shadow 27277, Tumeken's
+  guardian 27352, the thread of Elidinis 27279, the breach of the scarab 27283, the eye of the
+  corruptor 27285, the jewel of the sun 27289 and the jewel of Amascut 30893. The Helpful Spirit's
+  supplies are 27315 to 27347 (`TOMBS_SUPPLIES`).
+- **The Wardens' last floor**: its slabs and rubble 45585 to 45645 (`LocOverrides.ts`).
 - **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455/45457; Zebak's
   waterfall 45398/45399; pillars 45530/45531; pressure plates 45340/45344 and tiles 45356 to 45364;
   Ba-Ba's throne 45756 and sarcophagi 45752/46044; the invocation board 46073.
@@ -552,10 +560,10 @@ What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds e
 | 500          | 0 of 9         | 0 of 9 | 0 of 9           |
 
 With nothing bought, all eight adventurers clear most rooms on their own at Entry, and 10 of 24
-whole raids. From Expert the bot gets through the paths but not the Wardens (with every Wardens
-invocation on): it dodges, it doesn't plan, so Expert and past it are set by the curve and want
-playtesting more than the bot's numbers.
+whole raids. From Expert the bot mostly gets through the paths and then can't beat the Wardens
+(with every Wardens invocation on): it dodges, it doesn't plan, so Expert and past it are set by
+the curve and want playtesting more than the bot's numbers.
 
-**For trying a boss** (the dev server only): the Nexus has God mode and a button to each boss (the
-path bosses as the run is, with the dev skip's bow; the Wardens with the best of everything or as
-the run is). They're for the dev map, and go before the raid ships.
+**For trying a boss** (the dev server only, solo): God mode, on any map, and in the Nexus a button
+to each boss (the path bosses as the run is, with the dev skip's bow; the Wardens with the best of
+everything or as the run is). The boss buttons are for the dev map, and go before the raid ships.

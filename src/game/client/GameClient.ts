@@ -1565,7 +1565,6 @@ export class GameClient implements GameFrameHandler {
             case "choose":
                 this.syncOverlay();
                 break;
-
             case "chest":
                 this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();

@@ -1275,11 +1275,11 @@ export class Sim {
     raidBossDueTick = 0;
     readonly testing?: SimTesting;
     raidStage: "waves" | "boss" | "cleared" = "waves";
+    // Deadly Prayers: until when each hero's open to a harder hit
+    private readonly tombsOpenUntil = new Map<number, number>();
     // The Tombs' Nexus: the door each hero's at, if any (stepTombs), and the path the party's on,
     // undefined in the Nexus
     private readonly tombsDoors = new Map<number, string | undefined>();
-    // Deadly Prayers: until when each hero's open to a harder hit
-    private readonly tombsOpenUntil = new Map<number, number>();
     tombsPath: string | undefined;
     // The paths done, in the order they were
     tombsPathsDone: string[] = [];
@@ -3000,7 +3000,12 @@ export class Sim {
         if (player.poisonEnd === -1) {
             return;
         }
-        if ((player.poisonEnd - this.tick) % TICKS_PER_SECOND === 0 && !this.reviving) {
+        // God mode (dev) keeps poison off too, as it keeps hits off
+        if (
+            (player.poisonEnd - this.tick) % TICKS_PER_SECOND === 0 &&
+            !this.reviving &&
+            !this.devGod
+        ) {
             const amount = player.poisonDamage;
             player.hp -= amount;
             this.damageTaken += amount;
@@ -4966,7 +4971,7 @@ export class Sim {
     // The Tombs' path levels, from the invocations (Pathseeker 1 to Pathmaster 3), with each path
     // the raid's done before this one adding one, so the rooms grow with the raid
     // The path level as what scales by it smoothly (hitpoints, damage, how often things come)
-    // feels it: a third or so at Entry, where a run's bought nothing and every path it's done
+    // feels it: a quarter at Entry, where a run's bought nothing and every path it's done
     // makes the next tougher, in full from Normal (the raid level's damage) up. What it counts
     // (more waves, longer orders, more decoys) goes by tombsPathLevel itself.
     get tombsPathWeight(): number {
