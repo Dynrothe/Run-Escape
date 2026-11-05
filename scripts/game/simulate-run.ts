@@ -21,12 +21,16 @@
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
+//   MAP=tombs_of_amascut DEV_MAPS=1 ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
+//   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
+//                                          # board allows: one of a group that's one at a time)
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
+import { INVOCATIONS } from "../../src/game/content/invocations";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
@@ -41,8 +45,14 @@ import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
+import { TombsLog, tombsMove } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
+// The Tombs' invocations
+const invocations =
+    process.env.INVOCATIONS === "all"
+        ? INVOCATIONS.map((i) => i.id)
+        : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
 const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // How often to print progress (REPORT=15 for every 15 seconds)
@@ -519,6 +529,10 @@ function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: num
 // answer to every question
 // How long a run can go: two minutes past the final boss's time
 function runSeconds(): number {
+    // The Tombs: as long as a slow raid takes
+    if (map.tombs) {
+        return 90 * 60;
+    }
     const rooms = map.raid?.rooms;
     return (rooms ? rooms[rooms.length - 1].at : RUN_LENGTH) + 120;
 }
@@ -561,6 +575,7 @@ function runOnce(characterId: string, seed: number) {
         hard,
         expert,
         armoury,
+        invocations,
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -592,7 +607,9 @@ function runOnce(characterId: string, seed: number) {
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
     const reachTicks: number[] = [];
+    const tombsLog = sim.map.tombs ? new TombsLog() : undefined;
     while (sim.tick < maxTicks && !sim.runOver) {
+        tombsLog?.step(sim);
         if (sim.state === "levelUp") {
             const ranked = sim.choices
                 .map((choice, index) => ({ choice, index }))
@@ -644,7 +661,11 @@ function runOnce(characterId: string, seed: number) {
         if (sim.tick % 25 === 0) {
             useItems(sim);
         }
-        if (sim.tick % 5 === 0) {
+        // The Tombs' bot steers every tick: plates and mirrors want it exact
+        const planned = tombsMove(sim);
+        if (planned) {
+            move = planned;
+        } else if (sim.tick % 5 === 0) {
             move = fightMove(sim) ?? botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
             if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
@@ -761,6 +782,7 @@ function runOnce(characterId: string, seed: number) {
         }
     }
     const result = sim.getResult();
+    tombsLog?.report(sim);
     const ms = performance.now() - startTime;
     runs++;
     for (const set of started) {
@@ -799,6 +821,7 @@ function runParty(characterId: string, seed: number) {
         endless,
         hard,
         expert,
+        invocations,
         party: Array.from({ length: partySize }, (_, i) => ({
             name: "bot" + (i + 1),
             characterId,
@@ -811,7 +834,9 @@ function runParty(characterId: string, seed: number) {
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
     let firstDown: number | undefined;
     let fightTicks = 0;
+    const tombsLog = sim.map.tombs ? new TombsLog() : undefined;
     while (sim.tick < maxTicks && !sim.runOver) {
+        tombsLog?.step(sim);
         if (sim.state !== "playing") {
             for (const hero of sim.waitingOn) {
                 sim.as(hero.index, () => {
@@ -840,7 +865,10 @@ function runParty(characterId: string, seed: number) {
                 if (sim.tick % 25 === 0) {
                     useItems(sim);
                 }
-                if (sim.tick % 5 === 0) {
+                const planned = tombsMove(sim);
+                if (planned) {
+                    moves[hero.index] = planned;
+                } else if (sim.tick % 5 === 0) {
                     moves[hero.index] = fightMove(sim) ?? botMove(sim);
                 }
                 useAbility(sim);

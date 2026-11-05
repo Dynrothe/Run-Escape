@@ -5771,6 +5771,19 @@ export class Sim {
                 this.tombsPathsDone.push(path.id);
             }
         }
+        this.devWardensKit();
+        this.enterWardens();
+        this.emit({
+            type: "notice",
+            message: "The Wardens (dev): every path done, best of everything.",
+        });
+        return true;
+    }
+
+    // Dev only (and the Tombs' sims): the whole party fitted with the best of everything, the
+    // shop's every upgrade, DEV_WARDENS_KIT at its last level, each piece as far as the Armoury
+    // takes it, on full hitpoints
+    devWardensKit(): void {
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
@@ -5806,12 +5819,6 @@ export class Sim {
             this.appearanceVersion++;
         }
         this.use(current);
-        this.enterWardens();
-        this.emit({
-            type: "notice",
-            message: "The Wardens (dev): every path done, best of everything.",
-        });
-        return true;
     }
 
     // Into the Wardens' room, the whole party, with what's on the floor
