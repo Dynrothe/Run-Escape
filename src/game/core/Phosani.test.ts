@@ -525,6 +525,7 @@ describe("her fight", () => {
         sim.player.invulnerable = 1e9;
         // Bolts in the air and burns from her entrance land first
         run(sim, 5);
+        sim.takeEvents();
         const shield = phaseOf(boss).shield;
         const parasite = sim.spawnEnemy(getEnemy("phosani_parasite"), "normal", {
             x: boss.x - 2,
@@ -532,6 +533,12 @@ describe("her fight", () => {
         })!;
         run(sim, 3);
         expect(parasite.dead).toBe(false);
+        // Told, for Parasite-Free
+        expect(sim.takeEvents()).toContainEqual({
+            type: "enemyHealed",
+            enemyId: "phosanis_nightmare",
+            healerId: "phosani_parasite",
+        });
         expect(phaseOf(boss).shield - shield).toBeGreaterThanOrEqual(
             Math.round(phaseOf(boss).shieldMax * 0.15),
         );

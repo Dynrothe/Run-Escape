@@ -84,6 +84,42 @@ describe("Combat Achievements' tasks", () => {
         }
     });
 
+    // What a damage rule lets through, as no one can dodge it, has to be its bosses' by name too
+    test("let through only attacks their bosses have, by name", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if ((goal.kind !== "kill" && goal.kind !== "win") || !goal.except) {
+                continue;
+            }
+            const bossIds =
+                goal.kind === "kill"
+                    ? goal.bossIds
+                    : getGoalMaps(goal.maps).flatMap((id) =>
+                          MAP_BY_ID.get(id)!.events.map((e) => e.enemyId),
+                      );
+            const names = new Set(
+                bossIds.flatMap(
+                    (id) => ENEMY_BY_ID.get(id)!.boss?.attacks.map((a) => a.name) ?? [],
+                ),
+            );
+            for (const name of goal.except) {
+                expect(names.has(name), `${task.id}: ${name}`).toBe(true);
+            }
+        }
+    });
+
+    // Her last stand opens with sleepwalkers, whose blast lands whatever's done: the rest of it is
+    // what Wide Awake asks to dodge, all of it
+    test("Wide Awake watches all of Phosani's last stand but its opener", () => {
+        const finale = ENEMY_BY_ID.get("phosanis_nightmare")!.boss!.phases!.finale!;
+        const goal = COMBAT_TASKS.find((t) => t.id === "wide_awake")!.goal;
+        const watched =
+            goal.kind === "kill"
+                ? (goal.without ?? []).flatMap((a) => (typeof a === "object" ? a.attacks : []))
+                : [];
+        expect(new Set(watched)).toEqual(new Set([...finale.attacks, finale.ambient!.attack]));
+    });
+
     test("count a guard dropped by its boss's own attacks, by name, or a pillar", () => {
         for (const task of COMBAT_TASKS) {
             const goal = task.goal;

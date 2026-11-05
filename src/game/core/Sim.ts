@@ -3913,6 +3913,7 @@ export class Sim {
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
         }
+        this.emit({ type: "enemyHealed", enemyId: target.def.id, healerId: enemy.def.id });
         enemy.anim = "attack";
         enemy.animStart = tick;
         enemy.attackSeq = enemy.def.attackSeq;

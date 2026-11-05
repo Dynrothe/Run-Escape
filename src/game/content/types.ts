@@ -1385,15 +1385,16 @@ export type CombatTaskType =
     | "mechanical"
     | "stamina";
 
-// What a kill has to be without, from its boss's arrival to its kill: hits from the boss
-// (hitBy), damage from these attacks by name, any damage at all, being cursed, a sleepwalker
-// reaching it, or a parasite taking hold
+// What a kill has to be without, from its boss's arrival to its kill: hits from the boss,
+// damage from these attacks by name, any damage at all, a hit while cursed, a sleepwalker
+// reaching it, or a healer (Phosani's parasites) healing it. Damage and hits while cursed let
+// through the goal's except.
 export type CombatAvoid =
     | "hits"
     | "damage"
-    | "curse"
+    | "hurtCursed"
     | "sleepwalkers"
-    | "parasite"
+    | "heals"
     | { attacks: string[] };
 
 // What a run has to keep to while it beats its map
@@ -1410,6 +1411,8 @@ export type CombatRules = {
     // A raid: no teleporter used, no raid points spent at the supply chest
     noTeleports?: boolean;
     noSupplies?: boolean;
+    // No sleepwalker reaching its boss
+    noSleepwalkers?: boolean;
 };
 
 export type CombatGoal =
@@ -1428,13 +1431,15 @@ export type CombatGoal =
     | { kind: "reachPhase"; bossId: string; phase: number }
     // Kill a boss (bossIds: all its forms, the first the one that arrives) without any of
     // these, within this many seconds of its arrival if set. from: "finale" times it from its
-    // last stand rather than its arrival.
+    // last stand rather than its arrival. except: attacks whose damage doesn't count, as
+    // nothing the player does can stop it (a mark, the sleepwalkers' blast).
     | {
           kind: "kill";
           bossIds: string[];
           without?: CombatAvoid[];
           within?: number;
           from?: "finale";
+          except?: string[];
       }
     // Each of these bosses killed within this many seconds of its own arrival
     | { kind: "killEachWithin"; bossIds: string[]; seconds: number }
@@ -1443,13 +1448,15 @@ export type CombatGoal =
     // count of this boss killed within this many seconds, first to last
     | { kind: "killTogether"; bossId: string; count: number; seconds: number }
     // Beat the map (maps: these, or the campaign's from this one on), keeping to these. hard: on
-    // hard mode; within: seconds; damage: taken at most; hpAbove: never below this fraction.
+    // hard mode; within: seconds; damage: taken at most, leaving out except's attacks (as a
+    // kill's); hpAbove: never below this fraction.
     | {
           kind: "win";
           maps: string[] | { campaignFrom: string };
           hard?: boolean;
           within?: number;
           damage?: number;
+          except?: string[];
           hpAbove?: number;
           rules?: CombatRules;
       }

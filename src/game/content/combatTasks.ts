@@ -43,7 +43,7 @@ export const COMBAT_SPEED_SECONDS = {
     wiseOldMan: 60,
     dagannothKings: 60,
     tripleJads: 10,
-    phosani: 270,
+    phosani: 300,
     zachariah: 180,
 };
 
@@ -51,6 +51,16 @@ const NEX = ["nex", "nex_shadow", "nex_blood", "nex_ice"];
 const TOB_VERZIK = ["tob_verzik_vitur", "tob_verzik_vitur_risen", "tob_verzik_vitur_spider"];
 const ZACHARIAH = ["justiciar_zachariah"];
 const PHOSANI = ["phosanis_nightmare"];
+// The Nightmare's and Phosani's that no one can dodge, which tasks that avoid damage leave out: the
+// blast as her last sleepwalker goes (even with none let through) and a parasite bursting (a
+// mark, on them wherever they are)
+const UNDODGEABLE = ["Sleepwalkers", "Sleepwalkers (more)", "Parasites"];
+// Phosani's last stand (her finale): its claws, and its dream
+const PHOSANI_LAST_STAND = [
+    "Grasping Claws (on you)",
+    "Grasping Claws (random)",
+    "The dream's lattice",
+];
 const TOB = "theatre_of_blood";
 
 // In the list's order: all over first, then map by map
@@ -290,11 +300,18 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "insomniac",
         name: "Insomniac",
-        description: "Kill The Nightmare without being cursed.",
+        description:
+            "Kill The Nightmare without being hurt while cursed, apart from her sleepwalkers' " +
+            "blast and parasites.",
         tier: "hard",
         type: "mechanical",
         mapId: "halloween",
-        goal: { kind: "kill", bossIds: ["the_nightmare"], without: ["curse"] },
+        goal: {
+            kind: "kill",
+            bossIds: ["the_nightmare"],
+            without: ["hurtCursed"],
+            except: UNDODGEABLE,
+        },
     },
 
     // Phosani's Nightmare
@@ -319,30 +336,43 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "parasite_free",
         name: "Parasite-Free",
-        description: "Kill Phosani's Nightmare without a parasite ever taking hold.",
+        description: "Kill Phosani's Nightmare without a parasite healing her.",
         tier: "hard",
         type: "mechanical",
         mapId: "phosani",
-        goal: { kind: "kill", bossIds: PHOSANI, without: ["parasite"] },
+        goal: { kind: "kill", bossIds: PHOSANI, without: ["heals"] },
     },
     {
         id: "lucid_dreamer",
         name: "Lucid Dreamer",
         description:
-            "Kill Phosani's Nightmare without being cursed or letting a sleepwalker reach her.",
+            "Kill Phosani's Nightmare without letting a sleepwalker reach her or being hurt while " +
+            "cursed, apart from her sleepwalkers' blast and parasites.",
         tier: "elite",
         type: "mechanical",
         mapId: "phosani",
-        goal: { kind: "kill", bossIds: PHOSANI, without: ["curse", "sleepwalkers"] },
+        goal: {
+            kind: "kill",
+            bossIds: PHOSANI,
+            without: ["hurtCursed", "sleepwalkers"],
+            except: UNDODGEABLE,
+        },
     },
     {
         id: "wide_awake",
         name: "Wide Awake",
-        description: "Take no damage in Phosani's Nightmare's last stand, and kill her.",
+        description:
+            "Take no damage from her claws or the dream in Phosani's Nightmare's last stand, and " +
+            "kill her.",
         tier: "elite",
         type: "perfection",
         mapId: "phosani",
-        goal: { kind: "kill", bossIds: PHOSANI, without: ["damage"], from: "finale" },
+        goal: {
+            kind: "kill",
+            bossIds: PHOSANI,
+            without: [{ attacks: PHOSANI_LAST_STAND }],
+            from: "finale",
+        },
     },
     {
         id: "speedy_slumber",
@@ -356,11 +386,20 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "dreamless",
         name: "Dreamless",
-        description: "Kill Phosani's Nightmare on hard mode without taking any damage.",
+        description:
+            "Kill Phosani's Nightmare on hard mode without letting a sleepwalker reach her or " +
+            "taking any damage, apart from her sleepwalkers' blast and parasites.",
         tier: "grandmaster",
         type: "perfection",
         mapId: "phosani",
-        goal: { kind: "win", maps: ["phosani"], hard: true, damage: 0 },
+        goal: {
+            kind: "win",
+            maps: ["phosani"],
+            hard: true,
+            damage: 0,
+            except: UNDODGEABLE,
+            rules: { noSleepwalkers: true },
+        },
     },
 
     // Justiciar Zachariah
@@ -556,7 +595,7 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         tier: "elite",
         type: "mechanical",
         mapId: TOB,
-        goal: { kind: "kill", bossIds: ["xarpus"], without: [{ attacks: ["Acid"] }] },
+        goal: { kind: "kill", bossIds: ["xarpus"], without: [{ attacks: ["Acid", "Acid burst"] }] },
     },
     {
         id: "green_light",
@@ -568,7 +607,9 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: {
             kind: "kill",
             bossIds: TOB_VERZIK,
-            without: [{ attacks: ["Green balls", "Green balls close in", "Doom ball"] }],
+            without: [
+                { attacks: ["Green balls", "Green balls close in", "Green ball", "Doom ball"] },
+            ],
         },
     },
     {

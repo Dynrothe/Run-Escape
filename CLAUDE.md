@@ -79,7 +79,9 @@ Combat Achievements are for solo runs only. `CombatTracker` watches the `Sim` an
 from outside it, and must never write to either: the run's hash has to come out the same with it
 (`CombatTracker.test.ts` checks). `GameClient.handleEvents` hands it every batch of events, empty
 ones too, so every `sim.takeEvents()` has to go straight into it. Actions between ticks emit
-events as well: a Smite can kill Zachariah, or move him on a phase, there and then.
+events as well: a Smite can kill Zachariah, or move him on a phase, there and then. Every task has
+to be doable on every run, by playing well: see Combat task in `.claude/rules/adding-content.md`
+for what that rules out.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in

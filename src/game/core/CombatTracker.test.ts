@@ -253,35 +253,107 @@ describe("boss kills", () => {
         expect(ids(tracker.observe(sim, [killed("justiciar_zachariah")]))).toContain("objection");
     });
 
-    test("a sleepwalker reaching The Nightmare spoils Sweet Dreams, a curse Insomniac", () => {
+    // Hurt by this attack, by this much
+    function hurt(sim: Sim, attack: string, amount: number): void {
+        const hero = sim.heroes[0];
+        hero.damageTaken += amount;
+        hero.damageByAttack[attack] = (hero.damageByAttack[attack] ?? 0) + amount;
+    }
+
+    test("a sleepwalker reaching The Nightmare spoils Sweet Dreams, a hit while cursed Insomniac", () => {
         const sim = createSim("halloween");
         const tracker = track(sim);
         tracker.observe(sim, [spawned("the_nightmare")]);
         tracker.observe(sim, [{ type: "bossAbsorbBlast", absorbed: 0, ...at }]);
-        tracker.observe(sim, [{ type: "playerCursed", cursed: true }]);
-        expect(ids(tracker.observe(sim, [killed("the_nightmare")]))).toEqual(["sweet_dreams"]);
+        // Cursed, and only what no one can dodge lands meanwhile; then a hit once it's worn off
+        sim.applyPlayerEffect({ kind: "curse", attacks: 3 });
+        tracker.observe(sim, sim.takeEvents());
+        hurt(sim, "Sleepwalkers", 1);
+        tracker.observe(sim, []);
+        hurt(sim, "Parasites", 9);
+        tracker.observe(sim, []);
+        sim.heroes[0].curse = undefined;
+        tracker.observe(sim, [{ type: "playerCursed", cursed: false }]);
+        hurt(sim, "Melee", 10);
+        tracker.observe(sim, []);
+        expect(ids(tracker.observe(sim, [killed("the_nightmare")]))).toEqual([
+            "sweet_dreams",
+            "insomniac",
+        ]);
 
         const fed = createSim("halloween");
         const other = track(fed);
         other.observe(fed, [spawned("the_nightmare")]);
         other.observe(fed, [{ type: "bossAbsorbBlast", absorbed: 2, ...at }]);
-        expect(ids(other.observe(fed, [killed("the_nightmare")]))).toEqual(["insomniac"]);
+        fed.applyPlayerEffect({ kind: "curse", attacks: 3 });
+        other.observe(fed, fed.takeEvents());
+        hurt(fed, "Melee", 2);
+        other.observe(fed, []);
+        expect(ids(other.observe(fed, [killed("the_nightmare")]))).toEqual([]);
     });
 
-    test("Wide Awake counts from her last stand, not her arrival", () => {
+    test("Wide Awake watches her last stand's claws and dream, from her last stand", () => {
         const sim = createSim("phosani");
         const tracker = track(sim);
-        const hero = sim.heroes[0];
         tracker.observe(sim, [spawned("phosanis_nightmare")]);
-        hero.damageTaken += 20;
+        hurt(sim, "Grasping Claws (random)", 12);
         tracker.observe(sim, [stage("phosanis_nightmare", 4, "finale")]);
+        // The sleepwalkers she opens it with blast whatever's done
+        hurt(sim, "Sleepwalkers (more)", 2);
+        tracker.observe(sim, []);
         expect(ids(tracker.observe(sim, [killed("phosanis_nightmare")]))).toContain("wide_awake");
 
         const late = createSim("phosani");
-        const hurt = track(late);
-        hurt.observe(late, [stage("phosanis_nightmare", 4, "finale")]);
-        late.heroes[0].damageTaken += 1;
-        expect(ids(hurt.observe(late, [killed("phosanis_nightmare")]))).not.toContain("wide_awake");
+        const clawed = track(late);
+        clawed.observe(late, [stage("phosanis_nightmare", 4, "finale")]);
+        hurt(late, "The dream's lattice", 4);
+        clawed.observe(late, []);
+        expect(ids(clawed.observe(late, [killed("phosanis_nightmare")]))).not.toContain(
+            "wide_awake",
+        );
+    });
+
+    test("Dreamless lets through only her sleepwalkers' blast and parasites, none let through", () => {
+        const won = (sim: Sim, events: SimEvent[] = []) => {
+            const tracker = track(sim);
+            sim.state = "victory";
+            return ids(tracker.observe(sim, events));
+        };
+        const clean = createSim("phosani", { hard: true });
+        hurt(clean, "Sleepwalkers", 3);
+        hurt(clean, "Parasites", 13);
+        expect(won(clean)).toContain("dreamless");
+        const grazed = createSim("phosani", { hard: true });
+        hurt(grazed, "Parasites", 13);
+        hurt(grazed, "Melee", 1);
+        expect(won(grazed)).not.toContain("dreamless");
+        const fed = createSim("phosani", { hard: true });
+        expect(won(fed, [{ type: "bossAbsorbBlast", absorbed: 1, ...at }])).not.toContain(
+            "dreamless",
+        );
+    });
+
+    test("a parasite healing Phosani spoils Parasite-Free; anything else healed doesn't", () => {
+        const heal = (enemyId: string): SimEvent => ({
+            type: "enemyHealed",
+            enemyId,
+            healerId: "phosani_parasite",
+        });
+        const sim = createSim("phosani");
+        const tracker = track(sim);
+        tracker.observe(sim, [spawned("phosanis_nightmare")]);
+        tracker.observe(sim, [heal("phosani_totem_charging")]);
+        expect(ids(tracker.observe(sim, [killed("phosanis_nightmare")]))).toContain(
+            "parasite_free",
+        );
+
+        const fed = createSim("phosani");
+        const other = track(fed);
+        other.observe(fed, [spawned("phosanis_nightmare")]);
+        other.observe(fed, [heal("phosanis_nightmare")]);
+        expect(ids(other.observe(fed, [killed("phosanis_nightmare")]))).not.toContain(
+            "parasite_free",
+        );
     });
 
     test("Barrows brothers each killed before the next rises is Brotherly Haste", () => {

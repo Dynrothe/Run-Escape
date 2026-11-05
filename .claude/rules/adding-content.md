@@ -264,4 +264,12 @@ thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`
 - Only kill counts, map wins and endless rounds are retroactive: `applyRetroCombatTasks` in
   `save.ts` gives old saves those once, at the version 12 migration, without coins.
 - Co-op runs never count, so there's no party field and no co-op task.
+- **Every task has to be doable every run, by playing well, not by luck.** A task that avoids
+  damage leaves out what no one can dodge, in its goal's `except`: a mark lands wherever the player
+  is (a curse, Phosani's parasites bursting), the sleepwalkers' blast lands even with none let
+  through, and a hit always costs at least 1, armour or not. Don't spoil a task on something the
+  boss picks at random (being cursed at all): spoil it on what the player could have stopped (hurt
+  while cursed, a parasite reaching her). A homing shot has to be dodgeable at the player's own
+  speed; Jad's Magic needs about +25% move speed, or a long head start. Probe a new one in a
+  throwaway test before relying on it.
 - A new boss fight should come with its tasks.

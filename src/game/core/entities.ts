@@ -1025,6 +1025,8 @@ type SimEventBody =
     // A boss took coins from the player, or gave them back when it died
     | { type: "coinsStolen"; enemyId: string; amount: number }
     | { type: "coinsReturned"; enemyId: string; amount: number }
+    // A healer (a Yt-HurKot, a parasite) healed an enemy, or fed back its shield or charge
+    | { type: "enemyHealed"; enemyId: string; healerId: string }
     // A random event's visitor came, went or did what they do; on screen for a
     // moment. sound: cache sound effect, -1 for none.
     | { type: "visitor"; message: string; sound: number }

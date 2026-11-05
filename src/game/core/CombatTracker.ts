@@ -1,6 +1,6 @@
 import { COMBAT_TASKS, canTrackOn, getGoalMaps } from "../content/combatTasks";
 import { isDevMap, isFunMap } from "../content/maps";
-import { CombatAvoid, CombatGoal, CombatTaskDef } from "../content/types";
+import { CombatGoal, CombatTaskDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { fm } from "./fmath";
@@ -11,6 +11,8 @@ import { SaveData, getCombatProgress } from "./save";
 // run plays and hashes exactly as it would without it. Time is the sim's ticks. Co-op runs and
 // runs that don't count get none (forRun).
 
+type Hero = Sim["heroes"][number];
+
 type Watch = {
     task: CombatTaskDef;
     done: boolean;
@@ -19,8 +21,11 @@ type Watch = {
     // A boss's window (kill, stayInReach): open from its arrival (or last stand) to its kill
     open: boolean;
     openTick: number;
+    // The damage that counts (countedDamage), and the avoided attacks', as it opened
     damageAtOpen: number;
     attacksAtOpen: number;
+    // hurtCursed: the damage that counted as the curse on now began; undefined while there's none
+    curseBase?: number;
     boss?: Enemy;
     // stayInReach: the tick they went out of reach, -1 while in it. A tick, not a count of looks,
     // as it's looked at between ticks too (a casket, an item, the fight's button).
@@ -250,6 +255,13 @@ export class CombatTracker {
                     watch.failed = true;
                     return false;
                 }
+                if (
+                    goal.rules?.noSleepwalkers &&
+                    events.some((e) => e.type === "bossAbsorbBlast" && e.absorbed > 0)
+                ) {
+                    watch.failed = true;
+                    return false;
+                }
                 return sim.state === "victory" && this.keptTo(goal, sim);
             }
             case "evolve":
@@ -296,7 +308,7 @@ export class CombatTracker {
         if (goal.within !== undefined && sim.seconds >= goal.within) {
             return false;
         }
-        if (goal.damage !== undefined && hero.damageTaken > goal.damage) {
+        if (goal.damage !== undefined && countedDamage(hero, goal.except) > goal.damage) {
             return false;
         }
         if (rules.oneWeapon && hero.weapons.length > 1) {
@@ -352,14 +364,16 @@ export class CombatTracker {
                 (e.type === "bossAbsorbBlast" &&
                     e.absorbed > 0 &&
                     without.includes("sleepwalkers")) ||
-                (e.type === "playerCursed" && e.cursed && without.includes("curse"));
+                (e.type === "enemyHealed" &&
+                    without.includes("heals") &&
+                    goal.bossIds.includes(e.enemyId));
             if (broke) {
                 watch.open = false;
                 continue;
             }
             if (e.type === "kill" && goal.bossIds.includes(e.enemyId)) {
                 watch.open = false;
-                if (this.windowClean(watch, without, hero) && this.inTime(watch, goal, sim)) {
+                if (this.windowClean(watch, goal, hero) && this.inTime(watch, goal, sim)) {
                     return true;
                 }
             }
@@ -368,7 +382,7 @@ export class CombatTracker {
         // boss next arrives, in an endless run's next round)
         if (
             watch.open &&
-            (!this.windowClean(watch, without, hero) || !this.inTime(watch, goal, sim))
+            (!this.windowClean(watch, goal, hero) || !this.inTime(watch, goal, sim))
         ) {
             watch.open = false;
         }
@@ -377,18 +391,23 @@ export class CombatTracker {
 
     private windowClean(
         watch: Watch,
-        without: readonly CombatAvoid[],
-        hero: Sim["heroes"][number],
+        goal: Extract<CombatGoal, { kind: "kill" }>,
+        hero: Hero,
     ): boolean {
-        for (const avoid of without) {
-            if (avoid === "damage" && hero.damageTaken > watch.damageAtOpen) {
+        const counted = countedDamage(hero, goal.except);
+        for (const avoid of goal.without ?? []) {
+            if (avoid === "damage" && counted > watch.damageAtOpen) {
                 return false;
             }
-            if (avoid === "curse" && hero.curse) {
-                return false;
-            }
-            if (avoid === "parasite" && hero.parasite) {
-                return false;
+            // Polled: whatever hurt them between one look and the next while the curse was on
+            if (avoid === "hurtCursed") {
+                if (!hero.curse) {
+                    watch.curseBase = undefined;
+                } else if (watch.curseBase === undefined) {
+                    watch.curseBase = counted;
+                } else if (counted > watch.curseBase) {
+                    return false;
+                }
             }
             if (
                 typeof avoid === "object" &&
@@ -450,8 +469,9 @@ export class CombatTracker {
         const goal = watch.task.goal;
         watch.open = true;
         watch.openTick = sim.tick;
-        watch.damageAtOpen = hero.damageTaken;
+        watch.damageAtOpen = countedDamage(hero, goal.kind === "kill" ? goal.except : undefined);
         watch.outSince = -1;
+        watch.curseBase = undefined;
         if (goal.kind === "kill") {
             const attacks = goal.without?.flatMap((a) => (typeof a === "object" ? a.attacks : []));
             watch.attacksAtOpen = sumAttacks(hero.damageByAttack, attacks ?? []);
@@ -466,6 +486,11 @@ export class CombatTracker {
     private isMine(event: SimEvent, sim: Sim): boolean {
         return event.hero === undefined || event.hero === sim.focus;
     }
+}
+
+// What they've taken, less what these attacks did: what a damage goal counts
+function countedDamage(hero: Hero, except: readonly string[] = []): number {
+    return hero.damageTaken - sumAttacks(hero.damageByAttack, except);
 }
 
 function sumAttacks(damage: Record<string, number>, attacks: readonly string[]): number {
