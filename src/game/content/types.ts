@@ -1405,6 +1405,9 @@ export type CharacterDef = {
     kits?: number[];
     colors?: number[];
     bonus: Partial<Stats>;
+    // A revive of their own (bonus.revival) as the HUD shows it, beside the
+    // shop's Ring of life: the Pyromancer's phoenix
+    reviveLook?: { name: string; objId: number };
     // Always available when unset
     unlock?: UnlockTask;
     // Played on this map alone (a boss fight's, MapDef.fight.character), and
@@ -1422,6 +1425,8 @@ export type ShopUpgradeDef = {
     perRank: number;
     maxRank: number;
     baseCost: number;
+    // The item it's themed as, for one the HUD shows while it lasts (Ring of life)
+    objId?: number;
 };
 
 export type WaveDef = {

@@ -9,6 +9,9 @@ version and how to run it.
 - On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
   screen to pause and use items, with the thumb still on the stick if you like. Tap the DPS for each
   weapon's damage. Phones play sideways, with gear and quests in the pause menu.
+- Your **revives** show beside your active effects, without a timer: a **Ring of life** from the
+  shop, and the Pyromancer's own as a **Phoenix**. The phoenix is used first, and each icon goes
+  once it's saved you. In co-op they're your own, not a teammate's.
 - Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather

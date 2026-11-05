@@ -109,6 +109,7 @@ import {
     getEventView,
     getGearViews,
     getInventoryViews,
+    getUsedRevive,
 } from "./ItemViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -2489,9 +2490,11 @@ export class GameClient implements GameFrameHandler {
                 case "coinsReturned":
                     this.store.toast(`You get your ${event.amount} coins back!`);
                     break;
-                case "revive":
-                    this.store.toast("Your ring of life saves you!");
+                case "revive": {
+                    const revive = getUsedRevive(sim.heroes[sim.focus]);
+                    this.store.toast(`Your ${revive.name.toLowerCase()} saves you!`);
                     break;
+                }
                 case "roundStarted":
                     this.store.toast(describeRound(sim), 7000);
                     break;
@@ -2569,9 +2572,11 @@ export class GameClient implements GameFrameHandler {
             case "heroLeft":
                 this.store.toast(`${name} left the game.`);
                 break;
-            case "revive":
-                this.store.toast(`${name}'s ring of life saves them!`);
+            case "revive": {
+                const revive = getUsedRevive(sim.heroes[event.hero!]);
+                this.store.toast(`${name}'s ${revive.name.toLowerCase()} saves them!`);
                 break;
+            }
             case "powerUp":
                 this.store.toast(`${name} picked up the ${getPowerUp(event.id).name}!`);
                 break;
