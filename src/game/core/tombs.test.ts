@@ -18,6 +18,7 @@ import {
     CRONDIS,
     TOMBS_BOSSES,
     TOMBS_POINTS,
+    TOMBS_SUPPLIES,
     WARDENS,
 } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -2896,5 +2897,62 @@ describe("the Tombs' chest", () => {
             expect(from.kind === "tombs" && from.level <= level).toBe(true);
         }
         expect(high.sim.heroes[0].raidChest!.level).toBe(level);
+    });
+});
+
+describe("the Helpful Spirit", () => {
+    // Back in the Nexus from a path, with so many others done before it
+    const back = (invocations: string[], before: number) => {
+        const sim = tombs(invocations);
+        const ids = sim.map.tombs!.paths.map((p) => p.id);
+        sim.tombsPathsDone.push(...ids.slice(1, 1 + before));
+        sim.tombsPath = ids[0];
+        sim["leaveTombsPath"]();
+        return sim;
+    };
+
+    it("comes after the second path and the fourth, its supplies bought with raid points", () => {
+        expect(back([], 0).state).toBe("playing");
+        const sim = back([], 1);
+        expect(sim.state).toBe("event");
+        expect(sim.offer!.def.id).toBe("helpful_spirit");
+        expect(sim.offer!.options).toHaveLength(TOMBS_SUPPLIES.length);
+        // Points to spend, which the chest doesn't miss
+        sim.heroes[0].raidPoints = 1000;
+        sim.heroes[0].tombsPoints = 1000;
+        const nectar = sim.offer!.options.findIndex(
+            (o) => o.kind === "supply" && o.supplyId === "nectar",
+        );
+        expect(sim.chooseEventOption(nectar)).toBe(true);
+        expect(sim.raidPoints).toBe(700);
+        expect(sim.heroes[0].tombsPoints).toBe(1000);
+        sim.leaveEvent();
+        expect(sim.state).toBe("playing");
+        expect(back([], 3).state).toBe("event");
+    });
+
+    it("has fewer supplies with Need Less Help, and none that heal with Dehydration", () => {
+        const less = back(["need_less_help"], 1).offer!.options;
+        expect(less).toHaveLength(Math.round(TOMBS_SUPPLIES.length / 3));
+        const dry = back(["dehydration"], 1).offer!.options;
+        for (const option of dry) {
+            const supply = TOMBS_SUPPLIES.find(
+                (s) => option.kind === "supply" && s.id === option.supplyId,
+            )!;
+            expect(supply.effect.kind).not.toBe("heal");
+        }
+    });
+});
+
+describe("the Tombs' time limits", () => {
+    it("drop the chest's raid level once the raid's past its time", () => {
+        const sim = tombs(["walk_for_it", "insanity"]);
+        const level = sim.raidLevel;
+        expect(sim["tombsChestLevel"]()).toBe(level);
+        Object.assign(sim, { tick: 41 * 60 * TICKS_PER_SECOND });
+        expect(sim["tombsChestLevel"]()).toBe(level - 20);
+        sim["openTombsChest"]();
+        expect(sim.heroes[0].raidChest!.level).toBe(level - 20);
+        expect(sim.getResult().tombs!.timeLimit).toEqual({ minutes: 40, drop: 20, met: false });
     });
 });

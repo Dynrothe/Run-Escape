@@ -57,9 +57,6 @@ export const INVOCATION_GROUPS: InvocationGroupDef[] = [
     { id: "wardens", name: "The Wardens" },
 ];
 
-const RAID = "the raid's rooms";
-const SPIRIT = "the Helpful Spirit";
-
 export const INVOCATIONS: InvocationDef[] = [
     // Attempts: how many times the party can go down and be brought back
     {
@@ -102,7 +99,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "time",
         level: 10,
         description: "Finish within 40 minutes, or the raid level drops by 20.",
-        comes: RAID,
     },
     {
         id: "jog_for_it",
@@ -111,7 +107,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "time",
         level: 15,
         description: "Finish within 35 minutes, or the raid level drops by 30.",
-        comes: RAID,
     },
     {
         id: "run_for_it",
@@ -120,7 +115,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "time",
         level: 20,
         description: "Finish within 30 minutes, or the raid level drops by 40.",
-        comes: RAID,
     },
     {
         id: "sprint_for_it",
@@ -129,7 +123,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "time",
         level: 25,
         description: "Finish within 25 minutes, or the raid level drops by 50.",
-        comes: RAID,
     },
     // The Helpful Spirit's supplies in the Nexus, after two paths and after all four
     {
@@ -139,7 +132,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "helpfulSpirit",
         level: 15,
         description: "The Helpful Spirit's supplies are two thirds as many.",
-        comes: SPIRIT,
     },
     {
         id: "need_less_help",
@@ -148,7 +140,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "helpfulSpirit",
         level: 25,
         description: "The Helpful Spirit's supplies are a third as many.",
-        comes: SPIRIT,
     },
     {
         id: "no_help_needed",
@@ -157,7 +148,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "helpfulSpirit",
         level: 40,
         description: "The Helpful Spirit has almost nothing for you.",
-        comes: SPIRIT,
     },
     // Path levels: every room harder, with more to its puzzle and faster, denser bullets
     {
@@ -225,7 +215,6 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "restoration",
         level: 30,
         description: "No regeneration, and no healing supplies.",
-        comes: "the Helpful Spirit (its healing supplies)",
     },
     {
         id: "overly_draining",

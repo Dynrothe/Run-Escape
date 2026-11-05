@@ -319,7 +319,25 @@ function runOnce(seed: number): Outcome {
                     } else if (sim.state === "chest") {
                         sim.resolveChest("take");
                     } else {
-                        sim.leaveEvent();
+                        // The Helpful Spirit: the dearest supply it can afford, as simulate-run's
+                        // bot buys
+                        const options = sim.offer?.options ?? [];
+                        let best = -1;
+                        let bestPrice = -1;
+                        options.forEach((option, index) => {
+                            if (
+                                option.kind === "supply" &&
+                                !option.sold &&
+                                option.price <= sim.raidPoints &&
+                                option.price > bestPrice
+                            ) {
+                                best = index;
+                                bestPrice = option.price;
+                            }
+                        });
+                        if (best === -1 || !sim.chooseEventOption(best)) {
+                            sim.leaveEvent();
+                        }
                     }
                 });
             }

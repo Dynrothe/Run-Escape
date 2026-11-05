@@ -1273,6 +1273,13 @@ function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
                     </tbody>
                 </table>
             </div>
+            {tombs.timeLimit && (
+                <div className="ui-subtle">
+                    {tombs.timeLimit.met
+                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
+                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
+                </div>
+            )}
             {tombs.wipes > 0 && (
                 <div className="ui-subtle">
                     The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.

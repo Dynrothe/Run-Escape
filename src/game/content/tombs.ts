@@ -6,6 +6,8 @@ import {
     EnemyShotDef,
     KephriDef,
     PlayerEffectDef,
+    RaidSupplyDef,
+    RandomEventDef,
     WardensDef,
     WaveDef,
     ZebakDef,
@@ -2817,4 +2819,91 @@ export const TOMBS_POINTS = {
     wardenThree: 1500,
     deathLoss: 0.2,
     full: 4 * (500 + 1000) + 500 + 1000 + 1500,
+};
+
+// The Helpful Spirit, in the Nexus after the second path and again after the fourth (Sim's
+// openNextRaidShop): supplies bought with raid points, as the Theatre of Blood's chest's are, the
+// points the party's earned spent (the chest's chance goes by what's earned, not what's left).
+// Need Some Help and the rest leave fewer of them, and Dehydration none that heal.
+export const TOMBS_SPIRIT: RandomEventDef = {
+    id: "helpful_spirit",
+    name: "Helpful Spirit",
+    weight: 0,
+    speech: "I can help you on your way. Spend your raid points on supplies.",
+    effect: { kind: "shop", leaveLabel: "Back to the Nexus" },
+};
+
+export const TOMBS_SUPPLIES: RaidSupplyDef[] = [
+    {
+        id: "nectar",
+        name: "Nectar",
+        description: "Heals 25% of your hitpoints.",
+        objId: 27315,
+        price: 300,
+        effect: { kind: "heal", fraction: 0.25 },
+    },
+    {
+        id: "silk_dressing",
+        name: "Silk dressing",
+        description: "Heals 40% of your hitpoints.",
+        objId: 27323,
+        price: 450,
+        effect: { kind: "heal", fraction: 0.4 },
+    },
+    {
+        id: "ambrosia",
+        name: "Ambrosia",
+        description: "Heals you in full.",
+        objId: 27347,
+        price: 1000,
+        effect: { kind: "heal", fraction: 1 },
+    },
+    {
+        id: "tears_of_elidinis",
+        name: "Tears of Elidinis",
+        description: "Cures poison and drains, and keeps them off for 2 minutes.",
+        objId: 27327,
+        price: 400,
+        effect: { kind: "buff", stats: {}, seconds: 120, cures: true },
+    },
+    {
+        id: "liquid_adrenaline",
+        name: "Liquid adrenaline",
+        description: "+20% movement speed for 3 minutes.",
+        objId: 27339,
+        price: 500,
+        effect: { kind: "buff", stats: { moveSpeed: 0.2 }, seconds: 180 },
+    },
+    {
+        id: "smelling_salts",
+        name: "Smelling salts",
+        description: "+15% damage with every style for 3 minutes.",
+        objId: 27343,
+        price: 800,
+        effect: { kind: "buff", stats: { might: 0.15 }, seconds: 180 },
+    },
+    {
+        id: "blessed_crystal_scarab",
+        name: "Blessed crystal scarab",
+        description: "Every hit 2 less for 3 minutes.",
+        objId: 27335,
+        price: 600,
+        effect: { kind: "buff", stats: { armor: 2 }, seconds: 180 },
+    },
+];
+
+// How many of the Spirit's supplies each of its invocations leaves (of all of them)
+export const TOMBS_SPIRIT_SHARE: Record<string, number> = {
+    need_some_help: 2 / 3,
+    need_less_help: 1 / 3,
+    no_help_needed: 0.15,
+};
+
+// The time limit invocations: the raid's clock past this many minutes, and the chest goes by a
+// raid level this much lower
+export const TOMBS_TIME_LIMITS: Record<string, { minutes: number; drop: number }> = {
+    walk_for_it: { minutes: 40, drop: 20 },
+    jog_for_it: { minutes: 35, drop: 30 },
+    run_for_it: { minutes: 30, drop: 40 },
+    sprint_for_it: { minutes: 25, drop: 50 },
 };

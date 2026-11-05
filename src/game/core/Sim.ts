@@ -98,6 +98,10 @@ import {
     SCABARAS_WAVES,
     TOMBS_BOSSES,
     TOMBS_POINTS,
+    TOMBS_SPIRIT,
+    TOMBS_SPIRIT_SHARE,
+    TOMBS_SUPPLIES,
+    TOMBS_TIME_LIMITS,
     WARDENS,
     WARDENS_WINDMILL,
     getApmekenTrickle,
@@ -143,6 +147,7 @@ import {
     PowerUpEffect,
     QuartersDef,
     RaidRoomDef,
+    RaidSupplyDef,
     RandomEventDef,
     RandomEventEffect,
     SpecialAttackDef,
@@ -643,6 +648,9 @@ export type TombsSummary = {
     wardensSeconds?: number;
     wipes: number;
     party: { name: string; points: number; deaths: number; chance: number; you: boolean }[];
+    // A time limit invocation's: its minutes, and whether the raid was in time (the chest's raid
+    // level drops by `drop` if not)
+    timeLimit?: { minutes: number; drop: number; met: boolean };
 };
 
 export type RunResult = {
@@ -1275,6 +1283,8 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // The Helpful Spirit's due as the party's back in the Nexus
+    private tombsSpiritDue = false;
     // Each path taken, when it was entered and how long it took, for the result's board
     private tombsTimes: { id: string; startTick: number; seconds?: number }[] = [];
     // Jungle Japes's banana peels, in a path boss's fight
@@ -5042,6 +5052,7 @@ export class Sim {
             for (const hero of this.heroes) {
                 if (!hero.left) {
                     hero.tombsPoints += TOMBS_POINTS.room;
+                    hero.raidPoints += TOMBS_POINTS.room;
                 }
             }
         }
@@ -9150,6 +9161,11 @@ export class Sim {
         this.rescaleParty();
         if (this.tombsPath && !this.tombsPathsDone.includes(this.tombsPath)) {
             this.tombsPathsDone.push(this.tombsPath);
+            // The Helpful Spirit, after the second path and the fourth: each player's turn
+            const done = this.tombsPathsDone.length;
+            if (done === 2 || done === 4) {
+                this.tombsSpiritDue = true;
+            }
         }
         const time = this.tombsTimes.find(
             (t) => t.id === this.tombsPath && t.seconds === undefined,
@@ -9168,6 +9184,13 @@ export class Sim {
         this.gatherHall();
         this.moveParty(tombs.nexus);
         this.emit({ type: "notice", message: "Back in the Nexus." });
+        if (this.tombsSpiritDue) {
+            this.tombsSpiritDue = false;
+            this.raidShopQueue = this.heroes
+                .filter((hero) => this.isUp(hero))
+                .map((hero) => hero.index);
+            this.openNextRaidShop();
+        }
     }
 
     // A room's waves, from the top, in its hall
@@ -9521,15 +9544,31 @@ export class Sim {
             return;
         }
         this.use(this.heroes[index]);
+        const tombs = this.map.tombs !== undefined;
         this.openOffer(
-            RAID_SUPPLY_CHEST,
-            RAID_SUPPLIES.map((supply) => ({
+            tombs ? TOMBS_SPIRIT : RAID_SUPPLY_CHEST,
+            (tombs ? this.tombsSpiritSupplies() : RAID_SUPPLIES).map((supply) => ({
                 kind: "supply",
                 supplyId: supply.id,
                 price: supply.price,
                 sold: false,
             })),
         );
+    }
+
+    // What the Helpful Spirit has: fewer with Need Some Help and the rest (picked on the event
+    // roll, so they don't move the run's), none that heal with Dehydration, and always one
+    private tombsSpiritSupplies(): RaidSupplyDef[] {
+        const dry = this.invoked("dehydration");
+        const pool = TOMBS_SUPPLIES.filter((supply) => !dry || supply.effect.kind !== "heal");
+        const share = Object.entries(TOMBS_SPIRIT_SHARE).find(([id]) => this.invoked(id))?.[1] ?? 1;
+        const count = Math.max(1, Math.round(pool.length * share));
+        const left = [...pool];
+        const picked: RaidSupplyDef[] = [];
+        while (picked.length < count && left.length > 0) {
+            picked.push(left.splice(this.eventRng.int(left.length), 1)[0]);
+        }
+        return pool.filter((supply) => picked.includes(supply));
     }
 
     // The chest once the raid's done, each of the party their own: a purple, more likely the more
@@ -9591,7 +9630,7 @@ export class Sim {
     // 500), from those its level allows, then its pet, the Thread and the jewels, each a roll of
     // its own from its raid level
     private openTombsChest(): void {
-        const level = this.raidLevel;
+        const level = this.tombsChestLevel();
         const open = TROPHIES.flatMap((trophy) =>
             trophy.from.kind === "tombs" && level >= trophy.from.level
                 ? [{ trophy, from: trophy.from }]
@@ -9637,11 +9676,18 @@ export class Sim {
         this.use(current);
     }
 
+    // The raid level the chest goes by: a time limit invocation's missed, its drop off it
+    private tombsChestLevel(): number {
+        const limit = Object.entries(TOMBS_TIME_LIMITS).find(([id]) => this.invoked(id))?.[1];
+        const late = limit !== undefined && this.seconds > limit.minutes * 60;
+        return Math.max(0, this.raidLevel - (late ? limit.drop : 0));
+    }
+
     // A hero's chance of a purple from the Tombs' chest: the raid level's (PURPLE_CHANCE's least
     // at 0, its most at 500), all of it with a whole raid's points, less with fewer
     private tombsChance(hero: Hero): number {
         const [min, max] = PURPLE_CHANCE;
-        const level = min + ((max - min) * Math.min(this.raidLevel, 500)) / 500;
+        const level = min + ((max - min) * Math.min(this.tombsChestLevel(), 500)) / 500;
         return level * Math.min(1, hero.tombsPoints / TOMBS_POINTS.full);
     }
 
@@ -9671,6 +9717,7 @@ export class Sim {
         }
         const wardens = this.tombsWardens;
         const end = this.fellTick >= 0 ? this.fellTick : this.tick;
+        const limit = Object.entries(TOMBS_TIME_LIMITS).find(([id]) => this.invoked(id))?.[1];
         return {
             level: this.raidLevel,
             invocations: cleanInvocations(this.invocations),
@@ -9684,6 +9731,13 @@ export class Sim {
                 wardensSeconds: (end - wardens.startTick) / TICKS_PER_SECOND,
             }),
             wipes: this.tombsDeaths,
+            ...(limit && {
+                timeLimit: {
+                    minutes: limit.minutes,
+                    drop: limit.drop,
+                    met: this.seconds <= limit.minutes * 60,
+                },
+            }),
             party: this.heroes.map((hero) => ({
                 name: hero.name,
                 points: Math.round(hero.tombsPoints),
@@ -9699,7 +9753,7 @@ export class Sim {
     }
 
     private useRaidSupply(supplyId: string): void {
-        const supply = getRaidSupply(supplyId);
+        const supply = TOMBS_SUPPLIES.find((s) => s.id === supplyId) ?? getRaidSupply(supplyId);
         const effect = supply.effect;
         if (effect.kind === "heal") {
             this.heal(this.player.maxHp * effect.fraction);
@@ -14102,7 +14156,9 @@ export class Sim {
             const taken = Math.max(0, hpBefore - Math.max(0, pointsTo.hp));
             // Shared out by damage in co-op: a fair share of each boss is its whole worth
             const party = this.heroes.filter((hero) => !hero.left).length;
-            this.hero.tombsPoints += (taken / pointsTo.maxHp) * worth * party;
+            const points = (taken / pointsTo.maxHp) * worth * party;
+            this.hero.tombsPoints += points;
+            this.hero.raidPoints += points;
         }
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;
