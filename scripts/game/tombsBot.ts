@@ -55,7 +55,15 @@ export function walkTo(sim: Sim, x: number, y: number): Point {
 // mustn't step on): they're walls to its flow field
 const avoidFields = new WeakMap<Sim, { field: FlowField; key: string }>();
 
-export function walkAvoiding(sim: Sim, x: number, y: number, avoid: Point[], around = 1): Point {
+export function walkAvoiding(
+    sim: Sim,
+    x: number,
+    y: number,
+    avoid: Point[],
+    around = 1,
+    // With no way round, the plain way (false: stand still instead)
+    fallBack = true,
+): Point {
     const player = sim.player;
     const dx = x - player.x;
     const dy = y - player.y;
@@ -95,7 +103,7 @@ export function walkAvoiding(sim: Sim, x: number, y: number, avoid: Point[], aro
     const py = Math.floor(player.y);
     if (!cached.field.getStep(walls, px, py, step)) {
         // Boxed in by what it's keeping clear of (standing in it): the plain way
-        return walkTo(sim, x, y);
+        return fallBack ? walkTo(sim, x, y) : { x: 0, y: 0 };
     }
     const nx = px + step.x + 0.5 - player.x;
     const ny = py + step.y + 0.5 - player.y;
@@ -225,6 +233,11 @@ function puzzleMove(sim: Sim, def: PathRoom): Point | undefined {
     if (room.doneTick !== undefined) {
         return { x: 0, y: 0 };
     }
+    // Co-op: one player works a puzzle that two would undo between them (mirrors, plates); the
+    // rest fight beside them, clear of what they'd set off. Water's each player's own to carry.
+    if (def.puzzle !== "crondis" && !isLeader(sim)) {
+        return helperMove(sim, def);
+    }
     switch (def.puzzle) {
         case "apmeken":
             return apmekenMove(sim, def);
@@ -236,6 +249,53 @@ function puzzleMove(sim: Sim, def: PathRoom): Point | undefined {
             return room.crondis ? crondisMove(sim, def) : undefined;
     }
     return undefined;
+}
+
+// The party's first player up, who works the puzzles
+function isLeader(sim: Sim): boolean {
+    const leader = sim.heroes.find((hero) => !hero.down && !hero.left);
+    return leader === sim["hero"];
+}
+
+// A player helping the puzzle's worker: near them, off the mirrors and plates, fighting
+function helperMove(sim: Sim, def: PathRoom): Point {
+    const leader = sim.heroes.find((hero) => !hero.down && !hero.left)!;
+    const room = sim.tombsRoom!;
+    const avoid: Point[] = [
+        ...(room.het?.mirrors ?? []),
+        ...(def.scabaras
+            ? [
+                  ...def.scabaras.sequence,
+                  ...def.scabaras.lights,
+                  ...def.scabaras.addition,
+                  ...def.scabaras.matching.north,
+                  ...def.scabaras.matching.south,
+              ]
+            : []),
+    ];
+    const near = (p: Point) =>
+        avoid.some((a) => Math.abs(a.x - p.x) < 1.6 && Math.abs(a.y - p.y) < 1.6);
+    const player = sim.player;
+    // A spot of its own a few tiles off the worker, on open floor clear of all of it: round them,
+    // each helper starting from its own side
+    const index = sim["hero"].index;
+    let to: Point | undefined;
+    for (let r = 3; r <= 9 && !to; r++) {
+        for (let k = 0; k < 8 && !to; k++) {
+            const angle = ((index * 3 + k) / 8) * Math.PI * 2;
+            const spot = {
+                x: Math.floor(leader.player.x + Math.cos(angle) * r) + 0.5,
+                y: Math.floor(leader.player.y + Math.sin(angle) * r) + 0.5,
+            };
+            if (!near(spot) && !sim.grid.isSolid(Math.floor(spot.x), Math.floor(spot.y))) {
+                to = spot;
+            }
+        }
+    }
+    if (!to || Math.hypot(to.x - player.x, to.y - player.y) < 1.2) {
+        return near(player) ? { x: 0, y: 0 } : dodging(sim, { x: 0, y: 0 });
+    }
+    return walkAvoiding(sim, to.x, to.y, avoid, 1, false);
 }
 
 // Apmeken: the issue that's up, stood at till it's fixed; the waves fought round the room's middle
@@ -591,7 +651,11 @@ export function dodge(sim: Sim): Point | undefined {
             const dx = player.x - enemy.x;
             const dy = player.y - enemy.y;
             const away = Math.hypot(dx, dy) || 0.01;
-            const reach = (windup.attack.line?.length ?? windup.attack.radius ?? 2) + enemy.radius + player.radius + 0.8;
+            const reach =
+                (windup.attack.line?.length ?? windup.attack.radius ?? 2) +
+                enemy.radius +
+                player.radius +
+                0.8;
             if (away < reach) {
                 awayX += (dx / away) * 4;
                 awayY += (dy / away) * 4;
