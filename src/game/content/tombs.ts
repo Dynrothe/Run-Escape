@@ -1831,8 +1831,8 @@ export const ZEBAK: ZebakDef = {
         enemyId: "zebak_jug",
         count: 3,
         // Walk into one and it rolls off the way you pushed it, speed tiles a second, up to
-        // reach tiles, breaking on a boulder or the island's edge: its water
-        // clears acid within water tiles each way (less with Upset Stomach)
+        // reach tiles, breaking on a boulder or the island's edge: its water clears acid within
+        // water tiles each way (less with Upset Stomach). Weapons pass it by.
         speed: 6,
         reach: 6,
         water: 2,

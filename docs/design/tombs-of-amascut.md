@@ -378,4 +378,22 @@ raid's ranges.
     - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
       (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
       growth, never below the stage it's reached.
-    - Not in yet: Zebak. The bot doesn't know the room.
+    - The bot doesn't know the room.
+- **Zebak** (`ZEBAK` in `content/tombs.ts`, `Sim.stepZebak`), the Crondis path's boss: the great
+  crocodile (11730) lying in the water north of his island, never moving. His attacks are a pot
+  that splits into red orbs, a rock that splinters, and acid sprayed. At 85, 70, 55 and 40% a
+  special, turn about, each with acid pools (45570) and jugs spat over the island:
+    - **Acid**: 3 by 3 pools that hurt more the longer you stand in one, and poison, until a jug's
+      water or a wave clears them.
+    - **Jugs** (11736): walk into one and it rolls off the way you pushed it, breaking on a boulder,
+      the island's edge or at the end of its roll, its water clearing the acid round it. Weapons
+      pass them by (`EnemyDef.unhittable`): hit, they broke the moment they were down.
+    - **Great Roar**: boulders across the island, then three roars a few seconds later, each a
+      fifth of your hitpoints and a knock back, unless a boulder's between you and him.
+    - **Tidal Waves**: two waves across the island (11738), up from the south then down from the
+      north, each with a gap to stand in, narrower with path levels; they wash away his acid.
+    - **Enrage** below 25%: quicker, with no more specials.
+    - **Invocations**: Not Just a Head (blood clouds up the steps after you, wasting as they come,
+      healing him if they reach you), Arterial Spray (they heal more), Blood Thinners (three at a
+      time), Upset Stomach (wider acid, less water from a jug).
+    - Not in yet: his phantom (the Wardens'), and the bot doesn't know his fight.
