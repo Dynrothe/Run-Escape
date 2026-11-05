@@ -24,8 +24,8 @@
 // them, with the build it was made for (dist/build.json): the game won't load
 // another build's. The same cache and content always give the same chunks.
 // Make it again after every build. A checked run is kept in caches/slim/, and
-// when nothing it read from (src/, scripts/cache/, the packages, the full
-// cache) has changed since, the next run reuses it rather than loading it all.
+// when its runtime dependencies, configuration and full cache haven't changed,
+// the next run reuses it rather than loading it all.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -210,27 +210,25 @@ function readBuildId(): string | undefined {
     }
 }
 
-// Everything that decides what the slim cache holds: the game's code and
-// content, this script, the packages and the full cache (its listing, keys, and
-// every file's length, which download-caches changes when it fills one in).
+// The extraction pipeline's runtime imports, configuration and full cache
+// (its listing, keys and file lengths, which change when a download fills one in).
 // Undefined, with a warning, if one can't be read: then the run is neither
 // reused nor kept.
-function hashSlimInputs(fullInfo: CacheInfo): string | undefined {
+async function hashSlimInputs(fullInfo: CacheInfo): Promise<string | undefined> {
     const cacheDir = `caches/${GAME_CACHE_NAME}/`;
     try {
         const cacheFiles = fs
             .readdirSync(cacheDir)
             .sort()
             .map((file) => [file, fs.statSync(cacheDir + file).size]);
-        return hashInputs(
-            ["src", "scripts/cache"],
+        return await hashInputs(
             [
-                "package.json",
-                "bun.lock",
-                "tsconfig.json",
-                cacheDir + "info.json",
-                cacheDir + "keys.json",
+                "scripts/cache/slim-cache.ts",
+                // Worker entry points are passed through URLs and workerData, not static imports.
+                "scripts/cache/slim-cache-worker.ts",
+                "scripts/cache/slim-cache-boot.mjs",
             ],
+            ["bun.lock", "tsconfig.json", cacheDir + "info.json", cacheDir + "keys.json"],
             JSON.stringify({ cache: fullInfo, files: cacheFiles }),
         );
     } catch (e) {
@@ -357,7 +355,7 @@ async function main(): Promise<void> {
         );
     }
 
-    const inputs = hashSlimInputs(fullInfo);
+    const inputs = await hashSlimInputs(fullInfo);
     const reusable = REUSE && inputs ? await findReusable(STORE_DIR, inputs) : undefined;
     if (reusable) {
         const info: CacheInfo = { ...reusable, build };

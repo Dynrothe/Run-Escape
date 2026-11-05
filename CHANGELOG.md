@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Game updates, by @braiansmarzaro: preparing unchanged game assets can now skip rebuilding them after interface-only changes.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added
