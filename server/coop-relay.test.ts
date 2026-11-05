@@ -660,6 +660,7 @@ describe("co-op relay", () => {
                 coop_run_check_move_total: 0,
                 coop_run_check_action_total: 0,
                 coop_run_check_auto_total: 0,
+                coop_run_check_desync_total: 0,
                 coop_run_check_hosts_caught_total: 0,
                 coop_connections_limit: 800,
                 coop_rooms_limit: 500,

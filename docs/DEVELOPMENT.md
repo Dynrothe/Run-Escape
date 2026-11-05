@@ -1220,7 +1220,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
-  run, rather than everyone waiting on a copy that can't recover.
+  run, rather than everyone waiting on a copy that can't recover. It tells the relay first
+  (`outOfStep`), for the relay's log; the host ignores it.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.

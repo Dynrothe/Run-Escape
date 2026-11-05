@@ -10,7 +10,9 @@ const TICK_MS = 1000 / TICKS_PER_SECOND;
 // Each kind, and how many of it in a run is enough to end the run, when the
 // relay's set to (see endsCaughtRuns)
 const STRIKES = { ahead: 25, move: 3, action: 3, auto: 3 };
-export const RUN_CHECKS = Object.keys(STRIKES);
+// desync: a guest's game found its run no longer matches the host's, and
+// left. Logged for each guest, never a strike: they've gone already.
+export const RUN_CHECKS = [...Object.keys(STRIKES), "desync"];
 
 const AHEAD_MS = 5000;
 const CLOCK_MS = 10_000;
@@ -138,13 +140,18 @@ export class RunWatch {
         }
     }
 
-    // A guest's input, once the host has it (not while its connection's down)
-    up(id, d, now = Date.now()) {
+    // A guest's input. delivered: the host has it (not while its connection's
+    // down).
+    up(id, d, now = Date.now(), delivered = true) {
         const guest = this.guests.get(id);
         if (!guest || !d || typeof d !== "object") {
             return;
         }
-        if ("move" in d) {
+        if ("outOfStep" in d) {
+            this.outOfStep(id, guest, d.outOfStep);
+        } else if (!delivered) {
+            return;
+        } else if ("move" in d) {
             const key = moveKey(d.move);
             if (key) {
                 // Newest last, so the oldest goes first
@@ -169,6 +176,22 @@ export class RunWatch {
                 guest.actions.shift();
             }
         }
+    }
+
+    // Each guest says so once. Two or more at the same frame point at the host.
+    outOfStep(id, guest, frame) {
+        if (!Number.isSafeInteger(frame) || guest.outOfStep !== undefined) {
+            return;
+        }
+        guest.outOfStep = frame;
+        const guests = [...this.guests.values()].filter((g) => g.outOfStep === frame).length;
+        this.counts.desync = (this.counts.desync ?? 0) + 1;
+        this.report?.("desync", {
+            hero: this.heroIds.indexOf(id),
+            frame,
+            guests,
+            of: this.guests.size,
+        });
     }
 
     // The host's frames, as they went to the guests

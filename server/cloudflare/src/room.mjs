@@ -860,9 +860,7 @@ export class Room extends DurableObject {
                             host,
                             `${text.slice(0, end)},"from":${JSON.stringify(client.id)}}`,
                         );
-                        if (host.socket) {
-                            this.runWatch()?.up(client.id, message.d);
-                        }
+                        this.runWatch()?.up(client.id, message.d, Date.now(), !!host.socket);
                     }
                 }
                 return;

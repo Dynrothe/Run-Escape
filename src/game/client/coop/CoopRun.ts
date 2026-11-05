@@ -424,6 +424,9 @@ export class CoopRun {
                 if (expected !== syncHash(this.sim) && !this.desynced) {
                     this.desynced = true;
                     console.warn(`Co-op run out of step with the host at frame ${frame}`);
+                    // For the relay's log, which a modified host can't keep
+                    // it out of (the host ignores it)
+                    this.link.sendUp({ outOfStep: frame });
                 }
             }
         }

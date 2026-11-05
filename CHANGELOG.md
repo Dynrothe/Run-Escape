@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Co-op's out-of-step message, by trippy22: a guest whose game stops matching the host's is now
+  told an integrity check failed.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

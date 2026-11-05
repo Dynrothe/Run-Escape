@@ -227,6 +227,27 @@ describe("watching a run", () => {
         expect(caught).toEqual(["move"]);
     });
 
+    it("logs each guest whose run stopped matching the host's, and how many did", () => {
+        watch = new RunWatch(["host", "a", "b"], "host", {
+            now,
+            // Even made again mid-run: a guest only says it once
+            resumed: true,
+            report: (kind, detail) => reports.push([kind, detail]),
+            caught: (kind) => caught.push(kind),
+        });
+        watch.up("a", { outOfStep: 500 }, now);
+        // Again, or with the host's connection down: it still goes in once
+        watch.up("a", { outOfStep: 550 }, now);
+        watch.up("b", { outOfStep: 500 }, now, false);
+        watch.up("b", { outOfStep: "x" }, now);
+        expect(reports).toEqual([
+            ["desync", { hero: 1, frame: 500, guests: 1, of: 2 }],
+            ["desync", { hero: 2, frame: 500, guests: 2, of: 2 }],
+        ]);
+        // They've left already: it isn't the host caught
+        expect(caught).toEqual([]);
+    });
+
     it("copes with nonsense", () => {
         for (const d of [
             undefined,
