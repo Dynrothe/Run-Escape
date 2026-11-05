@@ -26,7 +26,7 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
-import { getRaidBossShare } from "../content/raidBosses";
+import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
@@ -283,7 +283,9 @@ function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
     if (share === undefined) {
         return undefined;
     }
-    return `-${Math.round((1 - share) * 100)}% damage to bosses: they pray against ${style}`;
+    // Nylocas Vasilias takes her colour's style better, so it's most of the Theatre's bosses
+    const bosses = raidHasColours(sim.map) ? "most bosses" : "bosses";
+    return `-${Math.round((1 - share) * 100)}% damage to ${bosses}: they pray against ${style}`;
 }
 
 function getChoiceViews(sim: Sim): ChoiceView[] {

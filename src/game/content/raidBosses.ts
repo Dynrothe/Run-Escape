@@ -1,6 +1,19 @@
 import { getEnemy } from "./enemies";
 import { CombatStyle, EnemyDef, MapDef } from "./types";
 
+// Whether an enemy's prayer does nothing: on expert a Nylocas takes its own style in full
+// (EnemyDef.onlyStyle), unless it's a boss with colours (Nylocas Vasilias), whose prayer holds.
+// Sim.prayedAgainst, the cards' warning and the overheads all go by this.
+export function isPrayerIgnored(def: EnemyDef, expert: boolean): boolean {
+    return expert && def.onlyStyle !== undefined && !def.boss?.colours;
+}
+
+// Whether a raid has a boss with colours, which takes its colour's style better than its prayer
+// says (BossDef.colours.ownStyle): the cards' warning is then for most of its bosses
+export function raidHasColours(map: MapDef): boolean {
+    return (map.raid?.rooms ?? []).some((room) => getEnemy(room.boss).boss?.colours !== undefined);
+}
+
 // The share of a style's damage every boss in a raid takes, when they all pray against it (the
 // Theatre's against ranged and magic), for a weapon card to warn of it; undefined when a boss takes
 // it in full. As Sim.prayedAgainst: on expert a Nylocas takes its own style in full, unless it's a
@@ -20,11 +33,7 @@ export function getRaidBossShare(
     for (const room of rooms) {
         const boss = getEnemy(room.boss);
         const protects = boss.protects;
-        if (
-            !protects ||
-            !protects.styles.includes(style) ||
-            (expert && boss.onlyStyle && !boss.boss?.colours)
-        ) {
+        if (!protects || !protects.styles.includes(style) || isPrayerIgnored(boss, expert)) {
             return undefined;
         }
         share = Math.max(share, protects.damage);

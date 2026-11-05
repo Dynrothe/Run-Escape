@@ -1,6 +1,6 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
-import { getBossPrayerStyles } from "../content/raidBosses";
+import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -1166,7 +1166,7 @@ export class BossFightView {
             if (!enemy.boss || enemy.dead || enemy.flung) {
                 continue;
             }
-            if (sim.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
+            if (isPrayerIgnored(enemy.def, sim.expert)) {
                 continue;
             }
             // A colour of Nylocas Vasilias shows the two styles it holds back, not its prayer

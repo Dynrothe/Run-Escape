@@ -349,8 +349,9 @@ version and how to run it.
   earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
   from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
   can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
-  against missiles and magic, so melee hits hardest (their overhead prayer shows it, and a ranged
-  or magic weapon's level up card says so in red), but there's nowhere safe by them: what they
+  against missiles and magic, so melee hits hardest (their overhead prayer shows it, Nylocas
+  Vasilias's the two styles her colour holds back, and a ranged or magic weapon's level up card says
+  so in red), but there's nowhere safe by them: what they
   fire from themselves starts from their middle, and up close about half of what each boss does is a
   stomp, bite, claws or burst all round it, the bursts marked on the ground first. A line at the top
   of the screen says what the hall wants of you, and whatever bones and coins are still on its floor

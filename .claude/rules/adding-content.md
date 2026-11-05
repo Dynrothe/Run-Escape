@@ -65,7 +65,7 @@ the same amount on more stats. `iconSpriteId` shows an interface sprite instead 
 (a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
 with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
 one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
-there, and `slim-cache.ts` keeps them.
+there, and the overhead prayers' frames, and `slim-cache.ts` keeps them.
 
 ## Stat
 

@@ -390,7 +390,7 @@ describe("power-ups in the cache", () => {
 });
 
 describe("a boss's overhead prayer", () => {
-    test("is OSRS's own for the styles it prays against, in any order", () => {
+    test("has a frame for each style and pair, whichever way round, that the client loads", () => {
         // A pair's the same frame whichever way round it's listed, and not either one's own
         const pair = getPrayerHeadicon(["ranged", "magic"]);
         expect(pair).toBeDefined();
@@ -398,7 +398,16 @@ describe("a boss's overhead prayer", () => {
         expect(pair).not.toBe(getPrayerHeadicon(["ranged"]));
         expect(pair).not.toBe(getPrayerHeadicon(["magic"]));
         // Every frame it can give is one the client loads (and sprites.ts check finds drawn)
-        for (const styles of [["melee"], ["ranged"], ["magic"], ["ranged", "magic"]]) {
+        const asked = [
+            ["melee"],
+            ["ranged"],
+            ["magic"],
+            ["ranged", "magic"],
+            ["melee", "magic"],
+            ["melee", "ranged"],
+        ];
+        for (const styles of asked) {
+            expect(getPrayerHeadicon(styles)).toBeDefined();
             expect(PRAYER_HEADICON_FRAME_IDS).toContain(getPrayerHeadicon(styles));
         }
     });

@@ -49,6 +49,7 @@ import {
     THRALLS,
     getPowerUp,
 } from "../content/powerups";
+import { isPrayerIgnored } from "../content/raidBosses";
 import {
     EXPERT_NYLOCAS_KEEP,
     EXPERT_RAID_COINS,
@@ -4554,7 +4555,7 @@ export class Sim {
         // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle). A boss's colour
         // (BossDef.colours) goes on to the rule below as on normal: its own style through its
         // prayer's ownStyle, and expert never lets another style this far (wrongStyle)
-        if (this.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
+        if (isPrayerIgnored(enemy.def, this.expert)) {
             return 1;
         }
         const style = this.sourceStyle;
