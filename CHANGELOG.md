@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Toxic blowpipe, by braiansmarzaro: its darts visibly upgrade from bronze to dragon as it levels.
+
 ## 0.25.0 - 2026-11-05
 
 ### Added

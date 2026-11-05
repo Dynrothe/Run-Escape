@@ -3346,6 +3346,38 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(20997);
     });
 
+    test.each([
+        [1, 226, 1, 5, 0.45, 3, 3],
+        [2, 228, 1, 5, 0.45, 4, 3],
+        [3, 229, 2, 5, 0.45, 4, 3],
+        [4, 231, 2, 7, 0.35, 4, 3],
+        [5, 1122, 2, 7, 0.35, 6, 4],
+    ])(
+        "the Toxic blowpipe at level %i fires its dart model without changing its stats",
+        (level, spotAnim, amount, damage, cooldown, venom, duration) => {
+            const sim = armed("toxic_blowpipe", "ranger");
+            expect(sim.weapons[0].def.levels).toHaveLength(5);
+            sim.weapons[0].level = level;
+            dummy(sim, 5, 0);
+            attack(sim);
+            expect(sim.getHeldObjId()).toBe(12926);
+            expect(sim.weapons[0].def.levels[level - 1]).toMatchObject({
+                damage,
+                cooldown,
+                amount,
+                venom,
+                duration,
+                pierce: 0,
+                speed: 18,
+                knockback: 0.1,
+            });
+            expect(sim.projectiles).toHaveLength(amount);
+            for (const projectile of sim.projectiles) {
+                expect(projectile).toMatchObject({ spotAnim, objId: -1 });
+            }
+        },
+    );
+
     test("the Toxic blowpipe's venom hurts every second, and spreads", () => {
         const sim = armed("toxic_blowpipe", "ranger");
         const near = dummy(sim, 2, 0);

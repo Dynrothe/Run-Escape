@@ -74,6 +74,19 @@ function getBody(request: BakeRequest): Partial<BakeRequest> {
     return "seqIds" in body ? { ...body, seqIds: body.seqIds.slice(0, 1) } : body;
 }
 
+test("every Toxic blowpipe dart is baked before the run, and included in the slim cache", () => {
+    const requests = GameAssets.getBaseRequests();
+    const darts = getWeapon("toxic_blowpipe").levels.map((level) => level.projectileSpotAnim);
+    expect(darts).toEqual([226, 228, 229, 231, 1122]);
+    for (const id of darts) {
+        expect(requests).toContainEqual({
+            kind: "spotanim",
+            key: "spot:" + id,
+            spotAnimId: id,
+        });
+    }
+});
+
 describe("merged enemy bakes", () => {
     const maps = ALL_MAPS.map((map) => ({
         map,
