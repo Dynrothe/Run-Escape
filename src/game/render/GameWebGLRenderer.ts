@@ -209,6 +209,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             return;
         }
         actors.renderOutlines();
+        actors.renderEarly();
         actors.renderSilhouettes();
         actors.renderOpaque();
     }

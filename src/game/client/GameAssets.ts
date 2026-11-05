@@ -184,6 +184,11 @@ function getSpotAnimIds(): number[] {
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
+        // and each skin's own (FloorSkinDef.material)
+        for (const skin of map.floor?.skins ?? []) {
+            const { rise, fall, crack } = skin.material ?? {};
+            add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim);
+        }
     }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
@@ -338,6 +343,11 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
+export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): FloorSkinDef {
+    return { spotAnim: floor.slam.spotAnim };
+}
+
 // A piece of what's under a floor (FloorDef.under)
 export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
@@ -349,10 +359,16 @@ export function getFloorSkinKey(skin: FloorSkinDef): string {
     return "floorskin:" + JSON.stringify([spotAnim, loc, model, recolor, retexture, scale]);
 }
 
-function getFloorSkinRequest(skin: FloorSkinDef): BakeRequest {
+// The same, its top alone, for a tile at rest among others (FloorView: none of its sides show)
+export function getFloorLidKey(skin: FloorSkinDef): string {
+    return getFloorSkinKey(skin) + ":top";
+}
+
+function getFloorSkinRequest(skin: FloorSkinDef, topOnly = false): BakeRequest {
     return {
         kind: "model",
-        key: getFloorSkinKey(skin),
+        key: topOnly ? getFloorLidKey(skin) : getFloorSkinKey(skin),
+        topOnly,
         spotAnimId: skin.spotAnim,
         locId: skin.loc,
         modelId: skin.model,
@@ -633,7 +649,11 @@ export class GameAssets {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
             }
             for (const skin of map.floor?.skins ?? []) {
-                requests.push(getFloorSkinRequest(skin));
+                requests.push(getFloorSkinRequest(skin), getFloorSkinRequest(skin, true));
+            }
+            // The slam's own slab, for a floor with no skins of its own
+            if (map.floor && !map.floor.skins) {
+                requests.push(getFloorSkinRequest(DEFAULT_FLOOR_SKIN(map.floor), true));
             }
         }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {

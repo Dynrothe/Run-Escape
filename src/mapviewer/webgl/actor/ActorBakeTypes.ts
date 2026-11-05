@@ -69,6 +69,9 @@ export type ModelBakeRequest = {
     retexture?: [from: number, to: number][];
     scale?: number;
     still?: boolean;
+    // Only its top: the faces looking up near its top, for a tile whose sides and underside can't
+    // be seen (the game's floor, at rest among others: client/FloorView.ts)
+    topOnly?: boolean;
 };
 
 export type BakeRequest =

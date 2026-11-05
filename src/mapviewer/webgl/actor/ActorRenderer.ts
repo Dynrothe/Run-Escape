@@ -113,6 +113,9 @@ export type ActorDrawOptions = {
     stretchZ?: number;
     pitch?: number;
     roll?: number;
+    // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
+    // the world: a floor's pillars and raised tiles, which hide the player as walls would
+    early?: boolean;
 };
 
 class InstanceList {
@@ -270,7 +273,8 @@ export class ActorSegment {
     readonly instances = new InstanceList();
     readonly silhouettes = new InstanceList();
     readonly outlines = new InstanceList();
-    readonly lists = [this.instances, this.silhouettes, this.outlines];
+    readonly early = new InstanceList();
+    readonly lists = [this.instances, this.silhouettes, this.outlines, this.early];
 
     constructor(
         readonly vertexArray: VertexArray,
@@ -298,7 +302,7 @@ export class ActorPage {
     get instanceCount(): number {
         let count = 0;
         for (const segment of this.segments) {
-            count += segment.instances.count;
+            count += segment.instances.count + segment.early.count;
         }
         return count;
     }
@@ -443,6 +447,7 @@ export class ActorRenderer {
                 segment.instances.reset();
                 segment.silhouettes.reset();
                 segment.outlines.reset();
+                segment.early.reset();
             }
         }
     }
@@ -477,7 +482,7 @@ export class ActorRenderer {
         const edgeWidth = options?.edgeWidth ?? 0;
         const edgeColor = options?.edgeColor ?? NO_TINT;
         const segment = model.page.segments[anim.segments[frame]];
-        segment.instances.push(
+        (options?.early ? segment.early : segment.instances).push(
             anim.ranges,
             frame,
             x,
@@ -640,13 +645,25 @@ export class ActorRenderer {
         }
     }
 
+    // Expects depth test on, blending off: what's drawn early (ActorDrawOptions.early), before
+    // the silhouettes, so they show through it as through the world.
+    renderEarly(): void {
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                const list = segment.early;
+                this.drawList(segment.drawCall, list, list.opaqueOffsets, list.opaqueCounts);
+            }
+        }
+    }
+
     // Expects blending on.
     renderAlpha(): void {
         for (const page of this.pages) {
             for (const segment of page.segments) {
-                const list = segment.instances;
-                if (list.alphaElements > 0) {
-                    this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                for (const list of [segment.early, segment.instances]) {
+                    if (list.alphaElements > 0) {
+                        this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                    }
                 }
             }
         }

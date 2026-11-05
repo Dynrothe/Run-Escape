@@ -62,6 +62,43 @@ function getModelBounds(model: Model): { height: number; radius: number } {
     return { height, radius };
 }
 
+// A model's top alone (ModelBakeRequest.topOnly): every face but those looking up, within the top
+// part of it, hidden as the cache hides one (a third colour of -2), on a copy
+function topOnly(model: Model): Model {
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (let i = 0; i < model.verticesCount; i++) {
+        top = Math.min(top, model.verticesY[i]);
+        bottom = Math.max(bottom, model.verticesY[i]);
+    }
+    // Up is negative
+    const near = top + Math.max(2, (bottom - top) * 0.4);
+    const colors = model.faceColors3.slice();
+    const { verticesX: vx, verticesY: vy, verticesZ: vz } = model;
+    for (let f = 0; f < model.faceCount; f++) {
+        const a = model.indices1[f];
+        const b = model.indices2[f];
+        const c = model.indices3[f];
+        const ux = vx[b] - vx[a];
+        const uy = vy[b] - vy[a];
+        const uz = vz[b] - vz[a];
+        const wx = vx[c] - vx[a];
+        const wy = vy[c] - vy[a];
+        const wz = vz[c] - vz[a];
+        const nx = uy * wz - uz * wy;
+        const ny = uz * wx - ux * wz;
+        const nz = ux * wy - uy * wx;
+        const length = Math.hypot(nx, ny, nz);
+        const middle = (vy[a] + vy[b] + vy[c]) / 3;
+        if (length === 0 || Math.abs(ny) / length < 0.6 || middle > near) {
+            colors[f] = -2;
+        }
+    }
+    const copy: Model = Object.assign(Object.create(Object.getPrototypeOf(model)), model);
+    copy.faceColors3 = colors;
+    return copy;
+}
+
 function getModelReach(model: Model): number {
     let reach = 0;
     for (let i = 0; i < model.verticesCount; i++) {
@@ -323,8 +360,14 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     if (!spotAnim) {
                         break;
                     }
-                    const getModel: ModelSource = (_seqId, frame) =>
+                    const getFull: ModelSource = (_seqId, frame) =>
                         extra.spotAnimModelLoader.getModel(spotAnim, frame);
+                    const getModel: ModelSource = request.topOnly
+                        ? (seqId, frame) => {
+                              const model = getFull(seqId, frame);
+                              return model && topOnly(model);
+                          }
+                        : getFull;
                     const seqIds = spotAnim.sequenceId !== -1 ? [spotAnim.sequenceId] : [];
                     sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
                     break;
