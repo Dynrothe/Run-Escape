@@ -31,10 +31,25 @@ item, each map's arena and the map squares around it) with the game's own loader
 groups they read. It writes them in chunks (`src/rs/cache/ChunkedCache.ts`), each a range of
 archive ids from one index, named after the first 32 hex digits of its sha256, and lists them in
 `caches.json` with the build they're for (from `dist/build.json`, which the build writes). Then
-it loads it all again from the chunks and fails if anything is missing. It takes a few minutes.
-**Run it after every build**: `bun run build` empties `dist/`. `bun run preview` serves the build
-with its slim cache, to try it before uploading. The full cache works too, if you'd rather host
-that, and the map viewer (`?viewer=1`) needs it.
+it loads it all again from the chunks and fails if anything is missing. **Run it after every
+build**: `bun run build` empties `dist/`. `bun run preview` serves the build with its slim cache,
+to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
+(`?viewer=1`) needs it.
+
+It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
+each holding the full cache, so a pass takes about a minute on 4 of them rather than nearly three
+on one. Which worker loads what doesn't change the result: it's the union of what they read,
+sorted. A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if
+nothing it reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock` and the
+full cache. Chunks are written under a temporary name and renamed into place, so one that stopped
+partway leaves no broken chunk behind. tsx's loader doesn't reach worker threads by itself, so each
+starts from `slim-cache-boot.mjs`, which registers it.
+
+- `SLIM_WORKERS=n`: how many worker threads. The cores less one, up to 4, unless it's set. Each
+  holds about 230 MB.
+- `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. Leave
+  the check on for anything players get. An unchecked run isn't kept for reuse.
+- `SLIM_REUSE=0`: does it all even when nothing has changed.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
@@ -937,7 +952,8 @@ scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
-scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache)
+scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
+                                         SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
 scripts/scaperune/relief.ts out.png preset=Alpine        a generated map's height, in seconds, without the cache
