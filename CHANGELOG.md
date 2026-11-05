@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.26.1 - 2026-11-05
 
 ### Added
 
@@ -41,6 +41,7 @@ the version in the corner).
   nothing of the world showing. Fixed by Okaeri.
 - Hard and expert mode: a boss's fan of shots (the Maiden's Blood throw) shows a line for every
   shot, rather than fewer lines than shots, which left shots between them. Fixed by Okaeri.
+- Justiciar Zachariah: the great owls' plinths no longer flicker against the floor.
 
 ## 0.26.0 - 2026-11-05
 
