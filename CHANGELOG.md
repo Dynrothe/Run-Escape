@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+
 ## 0.25.0 - 2026-11-05
 
 ### Added

@@ -52,16 +52,26 @@ function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "
     return { ...actions, save };
 }
 
+test("skills explain how combat-style presets are used", () => {
+    renderShop({});
+    expect(screen.getByRole("tablist", { name: "Skill presets" })).toBeInTheDocument();
+    expect(
+        screen.getByText(
+            "Melee, Ranged and Magic are separate skill presets, used automatically by adventurers of that combat style.",
+        ),
+    ).toBeVisible();
+});
+
 test("switching class pages keeps purchases and single-rank refunds isolated", () => {
     expect.hasAssertions();
     const actions = renderShop({}, 50000);
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     const melee = structuredClone(actions.save.skillPages.melee);
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Ranged");
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Ranged preset");
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     const ranged = structuredClone(actions.save.skillPages.ranged);
-    fireEvent.click(screen.getByRole("tab", { name: "Magic" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Magic preset" }));
     expect(screen.getByRole("button", { name: "Refund all" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     fireEvent.contextMenu(screen.getByRole("button", { name: /^Strength\b/ }));
@@ -69,18 +79,18 @@ test("switching class pages keeps purchases and single-rank refunds isolated", (
     expect(actions.save.skillPages.magic.upgrades).toEqual({});
     expect(actions.save.skillPages.melee).toEqual(melee);
     expect(actions.save.skillPages.ranged).toEqual(ranged);
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
     fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
     expect(actions.refundUpgrades).toHaveBeenLastCalledWith("ranged");
     expect(actions.save.skillPages.melee).toEqual(melee);
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
     expect(screen.getByRole("button", { name: "Refund all" })).toBeEnabled();
 }, 30000);
 
 test("each page can afford the full gold budget after another class spends it", () => {
     expect.hasAssertions();
     const actions = renderShop({}, 10000);
-    for (const label of ["Melee", "Ranged", "Magic"]) {
+    for (const label of ["Melee preset", "Ranged preset", "Magic preset"]) {
         fireEvent.click(screen.getByRole("tab", { name: label }));
         const card = screen.getByRole("button", { name: /^Ring of life\b/ });
         expect(card).not.toHaveClass("ui-card-dim");
@@ -97,9 +107,9 @@ test("each page can afford the full gold budget after another class spends it", 
 }, 30000);
 
 test.each([
-    ["warrior", "Melee"],
-    ["ranger", "Ranged"],
-    ["wizard", "Magic"],
+    ["warrior", "Melee preset"],
+    ["ranger", "Ranged preset"],
+    ["wizard", "Magic preset"],
 ])("skills open on %s's class page", (characterId, label) => {
     expect.hasAssertions();
     renderShop({}, 0, characterId);
@@ -110,10 +120,10 @@ test("class tabs support arrow keys and wrap without changing any skill pages", 
     expect.hasAssertions();
     const actions = renderShop({ strength: 1 }, 50000);
     const before = structuredClone(actions.save);
-    const melee = screen.getByRole("tab", { name: "Melee" });
+    const melee = screen.getByRole("tab", { name: "Melee preset" });
     melee.focus();
     fireEvent.keyDown(melee, { key: "ArrowLeft" });
-    const magic = screen.getByRole("tab", { name: "Magic" });
+    const magic = screen.getByRole("tab", { name: "Magic preset" });
     expect(magic).toHaveFocus();
     expect(magic).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(magic, { key: "ArrowRight" });
@@ -190,8 +200,8 @@ test("legacy pages explain why partial refunds need a full reset", () => {
     const actions = renderShop({}, 50000);
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     delete actions.save.skillPages.melee.upgradeOrder;
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
     expect(screen.getByText(/purchase order wasn't saved/)).toBeVisible();
     const refund = screen.getByRole("button", { name: "Refund one Strength rank" });
     expect(refund).toBeDisabled();
@@ -209,8 +219,8 @@ test("Refund all clears ranks that have no spending recorded", () => {
     const actions = renderShop({ strength: 2 });
     actions.save.skillPages.melee.upgradesSpent = 0;
     delete actions.save.skillPages.melee.upgradeOrder;
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
     fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
     expect(actions.refundUpgrades).toHaveBeenCalledExactlyOnceWith("melee");
     expect(actions.save.skillPages.melee.upgrades).toEqual({});
