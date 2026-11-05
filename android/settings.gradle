@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = 'RunEscapeAndroid'
+rootProject.name = 'RunEscape'
 include ':app'

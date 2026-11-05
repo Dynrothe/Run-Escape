@@ -21,8 +21,17 @@ function canUseShareSheet(file: File): boolean {
     return standalone === true && !!navigator.canShare?.({ files: [file] });
 }
 
+// The Android app puts this in its page (android/, MainActivity.java): a WebView can't download a
+// file itself, so the app asks the player where to keep it
+type AppDownloads = { postMessage(message: string): void };
+
 // Gives the player a file to keep. Has to be called from a tap.
 export function saveFile(name: string, text: string, type: string): void {
+    const app = (globalThis as { NativeDownloads?: AppDownloads }).NativeDownloads;
+    if (app) {
+        app.postMessage(JSON.stringify({ name, text }));
+        return;
+    }
     const file = new File([text], name, { type });
     if (!canUseShareSheet(file)) {
         download(file);

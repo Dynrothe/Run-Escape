@@ -36,6 +36,22 @@ if (!coopUrl.isEmpty()) {
         throw new GradleException('coopUrl must be a wss URL with a valid port and no credentials, query or fragment.')
     }
 }
+// The run collector the web build was given as VITE_RUN_ANALYTICS_URL (src/util/runAnalyticsUrl.ts)
+def runAnalyticsUrl = providers.gradleProperty('runAnalyticsUrl').getOrElse('').trim()
+if (!runAnalyticsUrl.isEmpty()) {
+    URI collector
+    try {
+        collector = new URI(runAnalyticsUrl)
+    } catch (Exception exception) {
+        throw new GradleException('runAnalyticsUrl must be an https URL.', exception)
+    }
+    if (collector.scheme != 'https' || !collector.host || collector.userInfo != null
+            || collector.rawQuery != null || collector.rawFragment != null
+            || collector.rawPath != '/v1/runs'
+            || (collector.port != -1 && (collector.port < 1 || collector.port > 65535))) {
+        throw new GradleException('runAnalyticsUrl must be an https URL ending in /v1/runs, with no credentials, query or fragment.')
+    }
+}
 
 def signingKeys = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD',
                    'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
@@ -46,17 +62,19 @@ if (!hasSigning && signingKeys.any { releaseSigning[it] }) {
 }
 
 android {
-    namespace 'io.jere.runescapearchive'
+    namespace 'io.jere.run_escape'
     compileSdk 36
     buildToolsVersion '36.0.0'
 
     defaultConfig {
-        applicationId 'io.jere.runescapearchive'
+        // Android players' saves belong to this: never change it (see Android in docs/DEVELOPMENT.md)
+        applicationId 'io.jere.run_escape'
         minSdk 26
         targetSdk 35
         versionCode gameVersionCode.toInteger()
         versionName gamePackage.version
         buildConfigField 'String', 'COOP_URL', groovy.json.JsonOutput.toJson(coopUrl)
+        buildConfigField 'String', 'RUN_ANALYTICS_URL', groovy.json.JsonOutput.toJson(runAnalyticsUrl)
     }
 
     buildFeatures {
@@ -87,7 +105,9 @@ android {
     }
 
     androidResources {
-        noCompress += ['dat', 'dat2', 'idx', 'wasm']
+        // The slim cache's chunks (caches/chunks/*.bin) are compressed already. A match is on the
+        // end of a file's name.
+        noCompress += ['bin', 'wasm']
     }
 }
 

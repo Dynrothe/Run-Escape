@@ -114,4 +114,20 @@ describe("saveFile", () => {
         saveFile(NAME, "{}", "application/json");
         expect(downloaded).toEqual([NAME]);
     });
+
+    test("hands the file, with its name, to the Android app", () => {
+        const postMessage = vi.fn();
+        vi.stubGlobal("NativeDownloads", { postMessage });
+        try {
+            saveFile("run-escape-save-unreadable.json", '{"coins":5}', "application/json");
+            expect(JSON.parse(postMessage.mock.calls[0][0])).toEqual({
+                name: "run-escape-save-unreadable.json",
+                text: '{"coins":5}',
+            });
+            expect(downloaded).toEqual([]);
+            expect(URL.createObjectURL).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
 });

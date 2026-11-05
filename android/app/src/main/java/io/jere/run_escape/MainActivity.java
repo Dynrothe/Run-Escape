@@ -1,4 +1,4 @@
-package io.jere.runescapearchive;
+package io.jere.run_escape;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -37,12 +38,15 @@ import org.json.JSONTokener;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Runs the bundled game on a private, intercepted HTTPS origin. */
 public final class MainActivity extends Activity {
@@ -54,16 +58,22 @@ public final class MainActivity extends Activity {
     private static final int WEB_FILE_PICKER = 100;
     private static final int EXPORT_SAVE = 102;
     private static final int MAX_SAVE_BYTES = 2 * 1024 * 1024;
+    // The names the game gives its files (src/game/client/GameClient.ts), such as
+    // run-escape-save-unreadable.json
+    private static final Pattern SAVE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.json");
+    private static final String DEFAULT_SAVE_NAME = "run-escape-save.json";
+    // A save waiting for the document picker, kept on disk in case Android stops the app meanwhile
+    private static final String PENDING_EXPORT = "pending-export.json";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final RelayPolicy relayPolicy = new RelayPolicy(BuildConfig.COOP_URL);
+    private final RelayPolicy relayPolicy =
+            new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL);
     private WebView webView;
     private FrameLayout root;
     private TextView loading;
     private Button menuButton;
     private ValueCallback<Uri[]> webFileCallback;
     private String pendingExport;
-    private String downloadToken;
     private boolean gameReady;
     private boolean destroyed;
     private int diagnosticGeneration;
@@ -109,8 +119,6 @@ public final class MainActivity extends Activity {
                     .build();
             webView.setWebViewClient(new OfflineClient(assetLoader));
             webView.setWebChromeClient(new OfflineChromeClient());
-            webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) ->
-                    downloadSave(url));
 
             loading = new TextView(this);
             loading.setText("Preparing your game…");
@@ -278,7 +286,8 @@ public final class MainActivity extends Activity {
                                             + "uninstalling or clearing the app's data.")
                                     .setPositiveButton("Close", null).show();
                             break;
-                        case 2: webView.reload(); break;
+                        // The renderer can have gone while this menu was open
+                        case 2: if (webView != null) webView.reload(); break;
                         case 3:
                             new AlertDialog.Builder(this).setTitle("Run Escape " + BuildConfig.VERSION_NAME)
                                     .setMessage("Solo play works offline, including in airplane mode. "
@@ -325,47 +334,47 @@ public final class MainActivity extends Activity {
                 .setOnDismissListener(dialog -> hideSystemBars()).show();
     }
 
-    // Export exactly the game's Blob, including protected newer or unreadable saves.
-    // Imports stay in the game so its migration and save-lock checks remain in force.
-    private void downloadSave(String url) {
-        if (!gameReady || webView == null || destroyed || pendingExport != null || downloadToken != null
-                || url == null || !url.startsWith("blob:" + ORIGIN + "/")) return;
-        String token = java.util.UUID.randomUUID().toString();
-        downloadToken = token;
-        String script = "(async()=>{try{const r=await fetch(" + JSONObject.quote(url) + ");"
-                + "const b=await r.blob();if(b.size>" + MAX_SAVE_BYTES + ")throw Error('size');"
-                + "NativeDownloads.postMessage(JSON.stringify({token:" + JSONObject.quote(token)
-                + ",text:await b.text()}));}catch(e){NativeDownloads.postMessage(JSON.stringify({token:"
-                + JSONObject.quote(token) + ",error:true}));}})();";
-        webView.evaluateJavascript(script, null);
-        handler.postDelayed(() -> {
-            if (token.equals(downloadToken)) {
-                downloadToken = null;
-                toast("The save could not be exported. Please try again.");
-            }
-        }, 10000);
-    }
-
+    // The game hands over a file to keep (src/game/client/saveFile.ts): {name, text}. Its text is
+    // written exactly, protected newer or unreadable saves included. Imports stay in the game so its
+    // migration and save-lock checks remain in force.
     private void receiveDownload(String message) {
-        if (destroyed || !gameReady || isFinishing() || downloadToken == null) return;
+        if (destroyed || !gameReady || isFinishing() || pendingExport != null) return;
         try {
-            JSONObject result = new JSONObject(message);
-            if (!downloadToken.equals(result.optString("token"))) return;
-            downloadToken = null;
-            if (result.optBoolean("error") || !result.has("text")) throw new IllegalArgumentException();
-            String text = result.getString("text");
-            if (text.getBytes(StandardCharsets.UTF_8).length > MAX_SAVE_BYTES) {
-                throw new IllegalArgumentException();
-            }
+            JSONObject file = new JSONObject(message);
+            String text = file.getString("text");
+            byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > MAX_SAVE_BYTES) throw new IllegalArgumentException();
+            String name = file.optString("name");
+            if (!SAVE_NAME.matcher(name).matches()) name = DEFAULT_SAVE_NAME;
+            Files.write(pendingExportFile().toPath(), bytes);
             pendingExport = text;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("application/json");
-            intent.putExtra(Intent.EXTRA_TITLE, "run-escape-save.json");
+            intent.putExtra(Intent.EXTRA_TITLE, name);
             startActivityForResult(intent, EXPORT_SAVE);
         } catch (Exception exception) {
             pendingExport = null;
+            pendingExportFile().delete();
             toast("The save could not be exported. Please try again.");
+        }
+    }
+
+    private File pendingExportFile() {
+        return new File(getCacheDir(), PENDING_EXPORT);
+    }
+
+    // The save waiting for the picker: in memory, or on disk when Android stopped the app meanwhile
+    private byte[] takePendingExport() {
+        File file = pendingExportFile();
+        try {
+            if (pendingExport != null) return pendingExport.getBytes(StandardCharsets.UTF_8);
+            return file.isFile() ? Files.readAllBytes(file.toPath()) : null;
+        } catch (Exception exception) {
+            return null;
+        } finally {
+            pendingExport = null;
+            file.delete();
         }
     }
 
@@ -376,24 +385,30 @@ public final class MainActivity extends Activity {
             if (webFileCallback != null) {
                 webFileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
                 webFileCallback = null;
+            } else if (resultCode == RESULT_OK) {
+                // Android stopped the app while the picker was open, and the game started over
+                toast("The import was interrupted. Please choose the file again.");
             }
             return;
         }
         if (requestCode == EXPORT_SAVE) {
+            byte[] save = takePendingExport();
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+            Uri document = data.getData();
             try {
-                if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingExport != null) {
-                    try (OutputStream stream = getContentResolver().openOutputStream(data.getData(), "wt")) {
-                        if (stream == null) throw new IllegalStateException("No output stream");
-                        stream.write(pendingExport.getBytes(StandardCharsets.UTF_8));
-                    }
-                    toast("Save exported.");
+                if (save == null) throw new IllegalStateException("No save to write");
+                try (OutputStream stream = getContentResolver().openOutputStream(document, "wt")) {
+                    if (stream == null) throw new IllegalStateException("No output stream");
+                    stream.write(save);
                 }
+                toast("Save exported.");
             } catch (Exception exception) {
+                // The picker made the document already: don't leave an empty one that looks like a save
+                try {
+                    DocumentsContract.deleteDocument(getContentResolver(), document);
+                } catch (Exception ignored) { }
                 toast("The save could not be written. Please try again.");
-            } finally {
-                pendingExport = null;
             }
-            return;
         }
     }
 
@@ -428,7 +443,7 @@ public final class MainActivity extends Activity {
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
             if (!isLocal(uri)) {
-                if ("GET".equals(request.getMethod()) && relayPolicy.allowsNetworkRequest(uri.toString())) {
+                if (relayPolicy.allowsNetworkRequest(request.getMethod(), uri.toString())) {
                     return null;
                 }
                 return textResponse("text/plain", "Not available", 404);

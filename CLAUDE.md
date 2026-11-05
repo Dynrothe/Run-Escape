@@ -98,8 +98,8 @@ bun run build && bun run slim-cache    # build for hosting (only when deploying)
 bun run serve              # serve the build, co-op's relay too (serve:singleplayer without)
 bun run desktop            # the Windows app, on that build
 bun run desktop:dist       # the app's zip, game zip and manifest, into release/
-node scripts/android/prepare-game.mjs --dist dist # bundle that build and its slim cache for Android
-cd android && ./gradlew test assembleDebug        # Android shell (Java 21 and Android SDK 36)
+bun run tsx scripts/android/prepare-game.ts --dist dist  # that build, into the Android app
+cd android && ./gradlew test assembleDebug     # the Android app (Java 21 and Android SDK 36)
 ```
 
 There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the whole repository.
@@ -167,21 +167,6 @@ bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or 
 
 ## Tests on the release build
 
-The Android wrapper is in `android/`; do not commit its generated game assets, caches, APKs or
-signing keys. `scripts/android/prepare-game.mjs` stages either the desktop release's verified
-game ZIP or an already-built `dist/` with its slim cache. The release workflow reuses the desktop
-ZIP, so Android and desktop have the same co-op build ID. Pass the same `COOP_URL` to the web
-build (`VITE_COOP_URL`) and Android (`-PcoopUrl`). Keep the Android application ID, its local HTTPS
-origin and save keys stable. The in-game Settings screen owns save import/export and its
-read-only protections; the wrapper supplies Android's document picker without bypassing them.
-
-`.github/workflows/android.yml` compiles and tests the wrapper on pull requests without the game
-cache. Its manual playable build bundles the cache and uploads an installable debug APK. Official
-Android release signing is opt-in; see Android in `docs/DEVELOPMENT.md`. A wrapper-only change
-does not need a gameplay simulation, but test the relay policy, offline asset staging and Android
-build. An Android device with current WebView is needed for final touch, online and airplane-mode
-checks; a passing shell compilation is not a device test.
-
 `.github/workflows/check.yml` runs the type check and `bun run test` on every pull request, without
 the game's cache. The release workflow runs the tests with it, and a failure there stops the
 desktop build.
@@ -195,6 +180,21 @@ desktop build.
   doesn't, which leaves only a single test blocking for that long.
 - **`server/coop-relay.test.ts` needs Node 22's `WebSocket`**, as the workflow has. On Node 21, run
   with `NODE_OPTIONS=--experimental-websocket`.
+
+## The Android app
+
+- **Never change its application ID (`io.jere.run_escape`) or its page's address**
+  (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
+  ID can't have a hyphen.
+- It packs the same game zip as the Windows app, so their co-op build ids match.
+  `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
+  change one, change the other.
+- The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
+  the relay, and the run collector. A new address the game reaches needs adding to both.
+- Its generated game files, APKs and keys stay out of Git (`.gitignore`).
+- Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
+  there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:
+  a passing build isn't one. A change to the app alone needs no simulation.
 
 ## Testing in the browser
 

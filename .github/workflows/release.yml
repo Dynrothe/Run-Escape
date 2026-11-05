@@ -149,6 +149,7 @@ jobs:
             contents: read
         env:
             COOP_URL: ${{ vars.COOP_URL }}
+            RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
             VERSION: ${{ needs.check.outputs.version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -163,10 +164,13 @@ jobs:
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version: 22
-                  cache: npm
 
-            - run: npm ci --ignore-scripts
-            - run: node scripts/android/prepare-game.mjs release
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version-file: package.json
+
+            - run: bun install --frozen-lockfile --ignore-scripts
+            - run: bun run tsx scripts/android/prepare-game.ts release
 
             - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
               with:
@@ -185,7 +189,9 @@ jobs:
 
             - name: Test and build Android
               working-directory: android
-              run: gradle --no-daemon test :app:assembleRelease -PcoopUrl="$COOP_URL"
+              run: >-
+                  gradle --no-daemon test :app:assembleRelease -PcoopUrl="$COOP_URL"
+                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL"
 
             - name: Sign and verify the APK
               env:

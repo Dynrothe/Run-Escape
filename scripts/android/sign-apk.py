@@ -1,7 +1,6 @@
 """Sign the Android release with the repository's persistent release key."""
 import argparse
 import base64
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,18 +30,24 @@ def main():
     unsigned = root / "android/app/build/outputs/apk/release/app-release-unsigned.apk"
     if not unsigned.is_file():
         raise SystemExit("Build android/:app:assembleRelease before signing.")
+    # The slim cache's chunks, as scripts/android/prepare-game.ts checked them
     with zipfile.ZipFile(unsigned) as apk:
         apk.getinfo("assets/game/index.html")
         caches = json.loads(apk.read("assets/game/caches/caches.json"))
-        if not isinstance(caches, list) or not caches:
-            raise SystemExit("The APK is missing its bundled slim cache.")
-        for cache in caches:
-            name = cache.get("name", "")
-            if not cache.get("slimOf") or not name or any(c in name for c in "/\\:"):
-                raise SystemExit("The APK must contain only the game's slim cache.")
-            for file in ["main_file_cache.dat2", "main_file_cache.idx255"]:
-                if apk.getinfo(f"assets/game/caches/{name}/{file}").file_size == 0:
-                    raise SystemExit("The APK contains an empty cache file.")
+        if not isinstance(caches, list) or len(caches) != 1 or not caches[0].get("slimOf"):
+            raise SystemExit("The APK must contain only the game's slim cache.")
+        build = json.loads(apk.read("assets/game/build.json")).get("build")
+        if caches[0].get("build") != build:
+            raise SystemExit("The APK's slim cache was made for another build.")
+        chunks = caches[0].get("chunks")
+        if not isinstance(chunks, list) or not chunks:
+            raise SystemExit("The APK's slim cache has no chunks.")
+        for chunk in chunks:
+            file = chunk.get("file", "")
+            if not re.fullmatch(r"[0-9a-f]{32}\.bin", file):
+                raise SystemExit("The APK's slim cache lists a chunk with a bad name.")
+            if apk.getinfo(f"assets/game/caches/chunks/{file}").file_size != chunk.get("size"):
+                raise SystemExit(f"The APK's chunk {file} isn't the size caches.json lists.")
     release = root / "release"
     release.mkdir(exist_ok=True)
     output = release / f"Run-Escape-{version}-android.apk"
@@ -67,8 +72,6 @@ def main():
         subprocess.run([str(tools / "apksigner"), "verify", "--verbose", str(output)], check=True)
         subprocess.run([str(tools / "zipalign"), "-c", "4", str(output)], check=True)
 
-    digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    output.with_suffix(".apk.sha256").write_text(f"{digest}  {output.name}\n")
     print(f"Signed and verified {output.name} ({output.stat().st_size:,} bytes)")
 
 

@@ -9,7 +9,7 @@ on:
             - android/**
             - scripts/android/**
             - package.json
-            - package-lock.json
+            - bun.lock
             - .github/workflows/android.yml
             - .github/workflows/release.yml
     pull_request:
@@ -17,7 +17,7 @@ on:
             - android/**
             - scripts/android/**
             - package.json
-            - package-lock.json
+            - bun.lock
             - .github/workflows/android.yml
             - .github/workflows/release.yml
     workflow_dispatch:
@@ -28,7 +28,7 @@ on:
                 default: true
                 type: boolean
             coop_url:
-                description: Relay URL (blank uses COOP_URL or the public game relay)
+                description: Relay URL (blank uses the COOP_URL repository variable, or none for solo only)
                 required: false
                 type: string
 
@@ -45,7 +45,8 @@ jobs:
         permissions:
             contents: read
         env:
-            COOP_URL: ${{ inputs.coop_url || vars.COOP_URL || 'wss://jere.io/coop' }}
+            COOP_URL: ${{ inputs.coop_url || vars.COOP_URL }}
+            RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
         steps:
             - name: Choose whether to bundle the game
               id: mode
@@ -61,9 +62,13 @@ jobs:
               if: steps.mode.outputs.playable == 'true'
               with:
                   node-version: 22
-                  cache: npm
 
-            - run: npm ci
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              if: steps.mode.outputs.playable == 'true'
+              with:
+                  bun-version-file: package.json
+
+            - run: bun install --frozen-lockfile
               if: steps.mode.outputs.playable == 'true'
 
             - name: Find the game's cache
@@ -86,7 +91,7 @@ jobs:
               env:
                   CACHE_NAME: ${{ steps.game-cache.outputs.name }}
               run: |
-                  npm run download-caches
+                  bun run download-caches
                   test -f "caches/$CACHE_NAME/main_file_cache.dat2"
                   test -f caches/caches.json
 
@@ -100,10 +105,11 @@ jobs:
               if: steps.mode.outputs.playable == 'true'
               env:
                   VITE_COOP_URL: ${{ env.COOP_URL }}
+                  VITE_RUN_ANALYTICS_URL: ${{ env.RUN_ANALYTICS_URL }}
               run: |
-                  npm run build
-                  npm run slim-cache
-                  node scripts/android/prepare-game.mjs --dist dist
+                  bun run build
+                  bun run slim-cache
+                  bun run tsx scripts/android/prepare-game.ts --dist dist
 
             - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
               with:
@@ -122,7 +128,9 @@ jobs:
 
             - name: Test and build Android
               working-directory: android
-              run: gradle --no-daemon test :app:assembleDebug -PcoopUrl="$COOP_URL"
+              run: >-
+                  gradle --no-daemon test :app:assembleDebug -PcoopUrl="$COOP_URL"
+                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL"
 
             - name: Name the playable APK
               if: steps.mode.outputs.playable == 'true'
