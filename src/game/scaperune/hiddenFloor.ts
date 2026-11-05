@@ -79,21 +79,34 @@ export function findHiddenFloor(
     return found;
 }
 
-// check-maps' warning line for holes in a built map's floor, or undefined if it has none
+// check-maps' warnings about a built map's floor: holes in it, and floor decoration laid over
+// nothing. A tile of floor decoration over a hidden floor is drawn, but the hairlines between two
+// such tiles show what's under them, the renderer's black, and glitter as the camera moves. The
+// Owl's Court's walkways did, till they had a plain overlay of the stone tiles' own colour under
+// them (overlay 141, and the decoration draws over it). Empty if neither.
 export function describeHiddenFloor(
     grid: TileGrid,
     locs: (id: number) => LocInfo,
     overlays: { load(id: number): OverlayLook },
     rect?: { x0: number; y0: number; x1: number; y1: number },
-): string | undefined {
+): string[] {
     const flags = getCollisionFlags(grid, locs);
-    const { bare } = findHiddenFloor(grid, flags, getHiddenOverlays(overlays), rect);
-    if (bare.length === 0) {
-        return undefined;
+    const { bare, covered } = findHiddenFloor(grid, flags, getHiddenOverlays(overlays), rect);
+    const warnings: string[] = [];
+    if (bare.length > 0) {
+        const at = bare
+            .slice(0, 4)
+            .map((i) => `${i % grid.sizeX},${Math.floor(i / grid.sizeX)}`)
+            .join(" ");
+        warnings.push(
+            `warning: ${bare.length} open tiles draw no floor (hidden overlay or none), at ${at}`,
+        );
     }
-    const at = bare
-        .slice(0, 4)
-        .map((i) => `${i % grid.sizeX},${Math.floor(i / grid.sizeX)}`)
-        .join(" ");
-    return `warning: ${bare.length} open tiles draw no floor (hidden overlay or none), at ${at}`;
+    if (covered > 0) {
+        warnings.push(
+            `warning: ${covered} open tiles are floor decoration over a hidden floor, so the ` +
+                `void shows in the seams between them: put a plain overlay of their colour under them`,
+        );
+    }
+    return warnings;
 }

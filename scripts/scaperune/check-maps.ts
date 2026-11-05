@@ -1349,14 +1349,13 @@ function checkMap(
     for (const problem of problems.slice(0, Number(process.env.SHOW ?? 16))) {
         console.log(`  ${problem}`);
     }
-    const hiddenFloor = describeHiddenFloor(
+    for (const warning of describeHiddenFloor(
         map.grid,
         context.locs,
         sceneBuilder.overlayTypeLoader,
         gridRect,
-    );
-    if (hiddenFloor) {
-        console.log(`  ${hiddenFloor}`);
+    )) {
+        console.log(`  ${warning}`);
     }
     // Solid locs on each other: a warning on a shipped map, as moving one re-rolls its dressing
     const overlaps =
