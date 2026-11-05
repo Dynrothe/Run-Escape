@@ -19,6 +19,7 @@ import { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import {
     BuffView,
+    CombatTrackView,
     GameStore,
     GearSlotView,
     HudNumbers,
@@ -1941,6 +1942,7 @@ const Hud = memo(function Hud({
                     {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
                     <RaidRoomInfo client={client} />
                     <HudQuests open={questTracker} client={client} />
+                    <HudCombatTasks open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
             </div>
@@ -2012,6 +2014,70 @@ function HudQuests({ open, client }: { open: boolean; client: GameClient }): JSX
     return quests && quests.length > 0 ? (
         <QuestTracker quests={quests} open={open} client={client} />
     ) : null;
+}
+
+// The pinned Combat Achievements the run follows, under the quests, folding with them (Q)
+function HudCombatTasks({
+    open,
+    client,
+}: {
+    open: boolean;
+    client: GameClient;
+}): JSX.Element | null {
+    const tasks = useHudNumber(client, (n) => n.combatTasks);
+    const pinned = tasks?.filter((task) => task.pinned) ?? [];
+    if (pinned.length === 0) {
+        return null;
+    }
+    return (
+        <div className="ui-quest-tracker ui-combat-tracker">
+            <button
+                className="ui-quest-tracker-title"
+                onClick={() => client.toggleQuestTracker()}
+                title="Show or hide the quests and pinned combat tasks (Q)"
+            >
+                Combat tasks {open ? "▾" : "▸"}
+            </button>
+            {open && pinned.map((task) => <CombatTrack key={task.id} task={task} />)}
+        </div>
+    );
+}
+
+// Kept from the last update while it's the same (shareUnchanged)
+const CombatTrack = memo(function CombatTrack({ task }: { task: CombatTrackView }): JSX.Element {
+    return (
+        <div
+            className={"ui-quest-track " + combatTrackClass(task)}
+            title={task.reason ? `${task.description} Failed: ${task.reason}.` : task.description}
+        >
+            <span className="ui-quest-track-name">{task.name}</span>
+            <span className="ui-quest-track-progress">{formatCombatTrack(task)}</span>
+        </div>
+    );
+});
+
+// As the quests: green once done, yellow while under way, and red once it's failed; the rest
+// plain, as nothing's spoilt them
+function combatTrackClass(task: CombatTrackView): string {
+    return task.state === "done"
+        ? "ui-quest-done"
+        : task.state === "failed"
+          ? "ui-combat-failed"
+          : task.progress && task.progress.done > 0
+            ? "ui-quest-started"
+            : "ui-combat-on";
+}
+
+function formatCombatTrack(task: CombatTrackView): string {
+    if (task.state === "done") {
+        return "Done";
+    }
+    if (task.state === "failed") {
+        return "Failed";
+    }
+    return task.progress
+        ? `${task.progress.done.toLocaleString()} / ${task.progress.of.toLocaleString()}`
+        : "";
 }
 
 function HudBuffs({ client }: { client: GameClient }): JSX.Element | null {
@@ -2446,6 +2512,7 @@ function PauseModal({
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
+    const combatTasks = useHudNumber(client, (n) => n.combatTasks) ?? [];
     const padKind = usePadKind();
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
@@ -2553,6 +2620,33 @@ function PauseModal({
                                             <span className="ui-pause-detail">{quest.task}</span>
                                             <span className="ui-quest-progress">
                                                 {formatQuestProgress(quest)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        {combatTasks.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">Combat tasks</h3>
+                                <div className="ui-pause-list">
+                                    {combatTasks.map((task) => (
+                                        <div
+                                            key={task.id}
+                                            className={
+                                                "ui-pause-quest " +
+                                                combatTrackClass(task) +
+                                                (task.pinned ? " ui-pause-pinned" : "")
+                                            }
+                                        >
+                                            <span className="ui-quest-name">{task.name}</span>
+                                            <span className="ui-pause-detail">
+                                                {task.reason
+                                                    ? `Failed: ${task.reason}.`
+                                                    : task.description}
+                                            </span>
+                                            <span className="ui-quest-progress">
+                                                {formatCombatTrack(task)}
                                             </span>
                                         </div>
                                     ))}

@@ -6,6 +6,7 @@ import {
     COMBAT_TASKS,
     COMBAT_TASK_TYPES,
     COMBAT_TIERS,
+    MAX_COMBAT_PINS,
     getCombatPoints,
     getTaskTier,
     getTierThresholds,
@@ -19,7 +20,8 @@ import "./CombatAchievementsScreen.css";
 import { ItemIcon } from "./ItemIcon";
 
 // Combat Achievements, after the client's own interface: points and the next tier's reward at the
-// top, an overview of the six tiers, and every task with filters. Solo runs only.
+// top, an overview of the six tiers, and every task with filters. Solo runs only. A task still to
+// do can be pinned, for a row on the run's HUD and a word when it's spoilt.
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
@@ -46,6 +48,8 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
     const [type, setType] = useState(0);
     const [place, setPlace] = useState(0);
     const [hideDone, setHideDone] = useState(false);
+    const [onlyPinned, setOnlyPinned] = useState(false);
+    const pinned = save.combatPinned ?? [];
     const points = getCombatPoints(save.combatTasks);
     const thresholds = getTierThresholds();
     const reached = COMBAT_TIERS.filter((t) => points >= thresholds[t.id]);
@@ -59,7 +63,8 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
             (tier === "all" || t.tier === tier) &&
             (shownType === "all" || t.type === shownType) &&
             (shownPlace === undefined || (t.mapId ?? "") === shownPlace) &&
-            !(hideDone && save.combatTasks.includes(t.id)),
+            !(hideDone && save.combatTasks.includes(t.id)) &&
+            !(onlyPinned && !pinned.includes(t.id)),
     );
     return (
         <div className="ui-fill ui-center">
@@ -135,10 +140,24 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
                             >
                                 Hide completed
                             </button>
+                            <button
+                                className={
+                                    "ui-log-tab ui-ca-filter" +
+                                    (onlyPinned ? " ui-log-selected" : "")
+                                }
+                                onClick={() => setOnlyPinned(!onlyPinned)}
+                            >
+                                Pinned ({pinned.length} / {MAX_COMBAT_PINS})
+                            </button>
                         </div>
                         <div className="ui-ca-list">
                             {tasks.map((task) => (
-                                <TaskRow key={task.id} save={save} task={task} />
+                                <TaskRow
+                                    key={task.id}
+                                    save={save}
+                                    task={task}
+                                    onPin={() => client.toggleCombatPin(task.id)}
+                                />
                             ))}
                             {tasks.length === 0 && (
                                 <p className="ui-subtle">No tasks match those filters.</p>
@@ -204,8 +223,19 @@ function Overview({
     );
 }
 
-function TaskRow({ save, task }: { save: SaveData; task: CombatTaskDef }): JSX.Element {
+function TaskRow({
+    save,
+    task,
+    onPin,
+}: {
+    save: SaveData;
+    task: CombatTaskDef;
+    onPin: () => void;
+}): JSX.Element {
     const done = save.combatTasks.includes(task.id);
+    const pins = save.combatPinned ?? [];
+    const pinned = pins.includes(task.id);
+    const full = !pinned && pins.length >= MAX_COMBAT_PINS;
     const progress = done ? undefined : getCombatProgress(save, task);
     const state = done ? "done" : progress && progress.done > 0 ? "started" : "new";
     const tier = getTaskTier(task);
@@ -235,6 +265,25 @@ function TaskRow({ save, task }: { save: SaveData; task: CombatTaskDef }): JSX.E
             <span className="ui-ca-task-points">
                 {tier.points} pt{tier.points === 1 ? "" : "s"}
             </span>
+            {done ? (
+                <span />
+            ) : (
+                <button
+                    className={"ui-log-tab ui-ca-pin" + (pinned ? " ui-log-selected" : "")}
+                    disabled={full}
+                    title={
+                        pinned
+                            ? "Unpin it from the run's HUD"
+                            : full
+                              ? `${MAX_COMBAT_PINS} are pinned already: unpin one first`
+                              : "Pin it to the run's HUD, with a word when it's spoilt"
+                    }
+                    aria-pressed={pinned}
+                    onClick={onPin}
+                >
+                    {pinned ? "Pinned" : "Pin"}
+                </button>
+            )}
         </div>
     );
 }

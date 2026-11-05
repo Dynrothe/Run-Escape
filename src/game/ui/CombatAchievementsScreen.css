@@ -130,10 +130,10 @@
     color: var(--ui-orange);
 }
 
-/* Tasks: tier, name and what it asks, type, how far it's got, points */
+/* Tasks: tier, name and what it asks, type, how far it's got, points, and its pin */
 .ui-ca-task {
     display: grid;
-    grid-template-columns: 90px minmax(0, 1fr) 90px 70px 44px;
+    grid-template-columns: 90px minmax(0, 1fr) 90px 70px 44px 62px;
     align-items: center;
     gap: 8px;
     min-height: 34px;
@@ -193,6 +193,15 @@
     color: #b8aa8a;
 }
 
+.ui-ca-pin {
+    padding: 1px 6px;
+}
+
+.ui-ca-pin:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 /* Narrow windows: one column, the details under the name */
 @media (max-width: 759px) {
     .ui-ca-header {
@@ -215,7 +224,7 @@
     }
 
     .ui-ca-task {
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
         row-gap: 0;
     }
 

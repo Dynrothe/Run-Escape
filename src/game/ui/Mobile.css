@@ -624,8 +624,13 @@
         grid-column: auto;
     }
 
+    /* Tier, name, how far, points and pin: the type's left out at any width */
     .ui-ca-task {
-        grid-template-columns: 84px minmax(0, 1fr) auto 40px;
+        grid-template-columns: 84px minmax(0, 1fr) auto 40px 64px;
+    }
+
+    .ui-ca-task-type {
+        display: none;
     }
 
     .ui-ca-task-tier,

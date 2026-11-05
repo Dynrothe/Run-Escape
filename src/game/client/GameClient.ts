@@ -66,6 +66,7 @@ import {
     recordRun,
     refundUpgrade,
     refundUpgrades,
+    toggleCombatPin,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
@@ -97,6 +98,7 @@ import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
     ChoiceView,
+    CombatTrackView,
     GameStore,
     HudNumbers,
     HudView,
@@ -238,6 +240,35 @@ function describeRound(sim: Sim): string {
         `Round ${sim.round} begins! Monsters have ${times(sim.roundHp)} the hitpoints and hit ` +
         `${times(sim.roundDamage)} as hard, and caskets' gear comes +${sim.round - 1}.`
     );
+}
+
+// The Combat Achievements the run follows, the pinned ones first in the order they were pinned
+// (the HUD shows those), then the rest in the list's order (the pause menu has them all)
+function getCombatTrackViews(
+    save: SaveData,
+    tracker: CombatTracker | undefined,
+    sim: Sim,
+): CombatTrackView[] {
+    if (!tracker) {
+        return [];
+    }
+    const pinned = save.combatPinned ?? [];
+    const views = tracker.statuses(sim).map(({ task, state, reason, progress }) => ({
+        id: task.id,
+        name: task.name,
+        description: task.description,
+        tier: getTaskTier(task).name,
+        state,
+        ...(reason !== undefined && { reason }),
+        ...(progress && { progress }),
+        pinned: pinned.includes(task.id),
+    }));
+    const order = (view: CombatTrackView) => {
+        const at = pinned.indexOf(view.id);
+        return at < 0 ? pinned.length : at;
+    };
+    // (a stable sort: the rest keep the list's order)
+    return views.sort((a, b) => order(a) - order(b));
 }
 
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
@@ -659,6 +690,12 @@ export class GameClient implements GameFrameHandler {
         }
         this.save.favouriteCharacter =
             this.save.favouriteCharacter === characterId ? undefined : characterId;
+        this.persist();
+    }
+
+    // Pins a Combat Achievement to the HUD, or unpins it (MAX_COMBAT_PINS at most)
+    toggleCombatPin(taskId: string): void {
+        toggleCombatPin(this.save, taskId);
         this.persist();
     }
 
@@ -1862,9 +1899,12 @@ export class GameClient implements GameFrameHandler {
         const trophiesBefore = this.save.trophies.length;
         const combatBefore = this.save.combatTasks.length;
         const combatTasks = this.combat ? [...this.combat.done] : undefined;
+        const combatProgress = this.combat ? [...this.combat.earned] : undefined;
         // A co-op run's numbers can come from another player's modified game,
         // and a NaN in a solo one's would come back from the save as 0 coins
-        const quests = hasBadNumber(result) ? [] : recordRun(this.save, { ...result, combatTasks });
+        const quests = hasBadNumber(result)
+            ? []
+            : recordRun(this.save, { ...result, combatTasks, combatProgress });
         this.persist();
         // Combat Achievements banked, and the tier rewards they brought
         const combatDone = this.save.combatTasks
@@ -1917,7 +1957,16 @@ export class GameClient implements GameFrameHandler {
     // The Combat Achievements tracker's look at what's just happened (it only reads the sim and
     // its events). The tasks done together get one toast, so none are pushed off the screen.
     private observeCombat(sim: Sim, events: readonly SimEvent[]): void {
-        const done = this.combat?.observe(sim, events) ?? [];
+        if (!this.combat) {
+            return;
+        }
+        const done = this.combat.observe(sim, events);
+        // A pinned one spoilt: what did it, so it's known for next time
+        for (const { task, reason } of this.combat.takeFailed()) {
+            if (this.save.combatPinned?.includes(task.id)) {
+                this.store.toast(`Combat task failed: ${task.name} (${reason}).`, 5000);
+            }
+        }
         if (done.length === 0) {
             return;
         }
@@ -2827,6 +2876,7 @@ export class GameClient implements GameFrameHandler {
             boss,
             ability: this.getAbilityView(sim),
             quests: getQuestTrackViews(this.save, sim),
+            combatTasks: getCombatTrackViews(this.save, this.combat, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows
         // only that doesn't draw again

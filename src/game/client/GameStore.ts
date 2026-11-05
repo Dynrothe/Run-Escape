@@ -190,6 +190,8 @@ export type HudNumbers = {
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
+    // The Combat Achievements a solo run follows, pinned ones first (none in co-op)
+    combatTasks: CombatTrackView[];
 };
 
 // next, keeping each of prev's fields that's the same (by value), so a memoized
@@ -295,6 +297,21 @@ export type QuestTrackView = {
     done: number;
     of: number;
     finished: boolean;
+};
+
+// A Combat Achievement the run's following: on (still to do), done this run, or failed (reason:
+// what spoilt it, for the rest of the run or until its boss comes again); progress for one that
+// counts its way there (kills, Smites, maps beaten)
+export type CombatTrackView = {
+    id: string;
+    name: string;
+    description: string;
+    // Its tier's name
+    tier: string;
+    state: "on" | "done" | "failed";
+    reason?: string;
+    progress?: { done: number; of: number };
+    pinned: boolean;
 };
 
 export type ChoiceView = {
