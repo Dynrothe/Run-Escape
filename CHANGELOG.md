@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Ring of life, by @braiansmarzaro: stays visible beside your active effects until it saves you.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

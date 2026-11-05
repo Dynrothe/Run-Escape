@@ -9,6 +9,8 @@ version and how to run it.
 - On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
   screen to pause and use items, with the thumb still on the stick if you like. Tap the DPS for each
   weapon's damage. Phones play sideways, with gear and quests in the pause menu.
+- **Ring of life** shows beside your active effects without a timer while its revive is available.
+  Its icon disappears once it saves you; in co-op it tracks your own ring, not a teammate's.
 - Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather

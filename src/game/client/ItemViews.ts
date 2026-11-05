@@ -5,6 +5,7 @@ import { getPowerUp } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
+import { RING_OF_LIFE_OBJ } from "../content/shop";
 import { diffStats } from "../content/stats";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
@@ -256,6 +257,14 @@ export function getBuffViews(sim: Sim): BuffView[] {
             objId: debuff.iconObjId,
             ...timer(debuff.startTick, debuff.endTick),
             harmful: true,
+        });
+    }
+    if (sim.revivesLeft > 0) {
+        buffs.push({
+            id: "ring_of_life",
+            name: "Ring of life",
+            objId: RING_OF_LIFE_OBJ,
+            harmful: false,
         });
     }
     return buffs;

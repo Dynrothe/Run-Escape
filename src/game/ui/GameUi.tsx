@@ -1896,11 +1896,15 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                     title={buff.name}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
-                    <span>{buff.secondsLeft}s</span>
-                    <div
-                        className="ui-buff-bar"
-                        style={{ transform: `scaleX(${buff.fraction})` }}
-                    />
+                    {buff.secondsLeft !== undefined && (
+                        <>
+                            <span>{buff.secondsLeft}s</span>
+                            <div
+                                className="ui-buff-bar"
+                                style={{ transform: `scaleX(${buff.fraction})` }}
+                            />
+                        </>
+                    )}
                 </div>
             ))}
         </div>

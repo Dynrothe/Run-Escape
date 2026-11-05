@@ -62,6 +62,43 @@ function renderHud() {
 afterEach(cleanup);
 
 describe("the run's HUD", () => {
+    test("shows an untimed ring beside timed buffs, and removes it when spent", () => {
+        const { store, view } = renderHud();
+        const potion = {
+            id: "potion",
+            name: "Potion",
+            objId: 2436,
+            harmful: false,
+            secondsLeft: 30,
+            fraction: 0.5,
+        };
+        act(() =>
+            store.setNumbers(
+                numbers({
+                    buffs: [
+                        potion,
+                        {
+                            id: "ring_of_life",
+                            name: "Ring of life",
+                            objId: 2570,
+                            harmful: false,
+                        },
+                    ],
+                }),
+            ),
+        );
+        const ring = view.getByTitle("Ring of life");
+        expect(ring.querySelector(".ui-icon")).not.toBeNull();
+        expect(ring).not.toHaveTextContent(/\ds/);
+        expect(ring.querySelector(".ui-buff-bar")).toBeNull();
+        const timed = view.getByTitle("Potion");
+        expect(timed).toHaveTextContent("30s");
+        expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
+        act(() => store.setNumbers(numbers({ buffs: [potion] })));
+        expect(view.queryByTitle("Ring of life")).toBeNull();
+        expect(view.getByTitle("Potion")).toHaveTextContent("30s");
+    });
+
     test("shows its numbers as they change, apart from the rest of the UI", () => {
         const { store, view } = renderHud();
         const timer = () => view.container.querySelector(".ui-timer")!.textContent;

@@ -199,6 +199,33 @@ describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
 
+    test.each([undefined, 0, 1])(
+        "shows only the focused hero's unspent ring of life (focus %s)",
+        (focus) => {
+            const sim = createSim(focus);
+            const { client, store } = createClient(sim, false);
+            for (const hero of sim.heroes) {
+                hero.revivesLeft = hero.index === sim.focus ? 0 : 1;
+            }
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+            sim.revivesLeft = 1;
+            updateHud(client, true);
+            const buffs = store.getNumbers()!.buffs;
+            expect(buffs).toEqual([
+                { id: "ring_of_life", name: "Ring of life", objId: 2570, harmful: false },
+            ]);
+            sim.tick += 50;
+            updateHud(client);
+            expect(store.getNumbers()!.buffs).toBe(buffs);
+            sim.player.invulnerable = 0;
+            sim["damagePlayer"](99999, "goblin", false);
+            expect(sim.revivesLeft).toBe(0);
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+        },
+    );
+
     test.each([
         [0, "boss"],
         [1, "boss"],

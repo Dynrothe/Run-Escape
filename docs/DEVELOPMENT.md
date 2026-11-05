@@ -1066,6 +1066,8 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   when nothing's changed. Something new that changes often goes in `HudNumbers`, and its numbers
   are rounded as they're shown (whole seconds), so they don't change when nothing on screen does.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
+  `BuffView` omits both timer fields for untimed effects. Ring of life uses the focused hero's
+  remaining `revivesLeft`, not their purchased revival stat; its icon is kept by `slim-load.ts`.
 - **The minimap** redraws 30 times a second at most, leaves out enemies off it, and draws its
   dots a colour at a time.
 - **The casket's rays** have their fade drawn into them (an SVG gradient), not a `mask-image`, which

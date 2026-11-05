@@ -61,12 +61,16 @@ export type BuffView = {
     id: string;
     name: string;
     objId: number;
-    secondsLeft: number;
-    // Time left, 1 when just drunk
-    fraction: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
-};
+} & (
+    | {
+          secondsLeft: number;
+          // Time left, 1 when just drunk
+          fraction: number;
+      }
+    | { secondsLeft?: never; fraction?: never }
+);
 
 // An opened reward casket, for the opening animation and the decision after
 export type ChestView = {
@@ -358,9 +362,7 @@ export type Toast = { id: number; text: string; until: number };
 // a newer version of it (which this one would undo), or it couldn't be read
 // and there's no room to keep a copy
 export type SaveBlock =
-    | { kind: "otherTab" }
-    | ({ kind: "newerGame" } & NewerSave)
-    | { kind: "noRoom" };
+    { kind: "otherTab" } | ({ kind: "newerGame" } & NewerSave) | { kind: "noRoom" };
 
 export type UiSnapshot = {
     screen: Screen;
