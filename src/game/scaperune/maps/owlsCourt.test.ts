@@ -258,4 +258,16 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("the Owl's Court's loc
         );
         expect(stdout).toContain("The Owl's Court's loc table matches the cache");
     }, 130000);
+
+    // Its hanging wall's cap, a wizard statue's plate and the great owls' plinths each z-fought
+    // the floor till LocOverrides.ts lifted them
+    it("draws no two faces in one plane", async () => {
+        const { stdout } = await promisify(execFile)(
+            process.execPath,
+            ["--import", "tsx", "scripts/scaperune/check-coplanar.ts", "zachariah"],
+            { encoding: "utf8", timeout: 120000, env: { ...process.env, CHECK: "1" } },
+        );
+        expect(stdout).toContain("zachariah: ");
+        expect(stdout).toContain(" 0 pairs in one plane");
+    }, 130000);
 });
