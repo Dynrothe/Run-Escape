@@ -36,6 +36,7 @@ const SING_FLASH = 0.45;
 const SING_TINT = 0x9fefff;
 // Her reflection in the water
 const REFLECTION_ALPHA = 0.55;
+const REFLECTION_SCALE = 1.6;
 // Toll's reach round the player, and its widening for a Grace
 const REACH = "255, 255, 255";
 const GRACE_MS = 600;
@@ -236,6 +237,8 @@ export class SongView {
                 alpha: REFLECTION_ALPHA,
                 tint: SING_TINT,
                 flash: 0.2,
+                // Her head's small beside her: big enough to be seen across the nave
+                scale: REFLECTION_SCALE,
             },
         );
     }
