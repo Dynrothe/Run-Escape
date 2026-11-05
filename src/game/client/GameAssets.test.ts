@@ -126,19 +126,6 @@ function getBody(request: BakeRequest): Partial<BakeRequest> {
     return "seqIds" in body ? { ...body, seqIds: body.seqIds.slice(0, 1) } : body;
 }
 
-test("every Toxic blowpipe dart is baked before the run, and included in the slim cache", () => {
-    const requests = GameAssets.getBaseRequests();
-    const darts = getWeapon("toxic_blowpipe").levels.map((level) => level.projectileSpotAnim);
-    expect(darts).toEqual([226, 228, 229, 231, 1122]);
-    for (const id of darts) {
-        expect(requests).toContainEqual({
-            kind: "spotanim",
-            key: "spot:" + id,
-            spotAnimId: id,
-        });
-    }
-});
-
 describe("merged enemy bakes", () => {
     const maps = ALL_MAPS.map((map) => ({
         map,
@@ -379,6 +366,21 @@ describe("power-ups in the cache", () => {
             }
         }
         expect(keys).toContain("spot:" + VISITOR_SPOTANIM);
+    });
+
+    // Every level's, not only the first: the Toxic blowpipe's darts change as it levels
+    test("weapons' spot animations are baked at every level, so the slim cache gets them", () => {
+        const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
+        for (const weapon of WEAPONS) {
+            for (const level of weapon.levels) {
+                const ids = [level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim];
+                for (const id of ids) {
+                    if (id !== undefined) {
+                        expect(keys, weapon.id).toContain("spot:" + id);
+                    }
+                }
+            }
+        }
     });
 
     test("Toktz-mej-tal's fire is baked with its animation", () => {

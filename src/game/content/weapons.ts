@@ -1979,7 +1979,6 @@ export const WEAPONS: WeaponDef[] = [
                 knockback: 0.1,
                 objId: 12926,
                 projectileSpotAnim: DART_PROJECTILES.bronze,
-                description: "Bronze darts.",
             },
             {
                 projectileSpotAnim: DART_PROJECTILES.steel,

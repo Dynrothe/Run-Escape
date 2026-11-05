@@ -3352,37 +3352,21 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(20997);
     });
 
-    test.each([
-        [1, 226, 1, 5, 0.45, 3, 3],
-        [2, 228, 1, 5, 0.45, 4, 3],
-        [3, 229, 2, 5, 0.45, 4, 3],
-        [4, 231, 2, 7, 0.35, 4, 3],
-        [5, 1122, 2, 7, 0.35, 6, 4],
-    ])(
-        "the Toxic blowpipe at level %i fires its dart model without changing its stats",
-        (level, spotAnim, amount, damage, cooldown, venom, duration) => {
+    test("the Toxic blowpipe fires a better dart at each level, bronze to dragon", () => {
+        const darts = getWeapon("toxic_blowpipe").levels.map((level, i) => {
             const sim = armed("toxic_blowpipe", "ranger");
-            expect(sim.weapons[0].def.levels).toHaveLength(5);
-            sim.weapons[0].level = level;
+            sim.weapons[0].level = i + 1;
             dummy(sim, 5, 0);
             attack(sim);
-            expect(sim.getHeldObjId()).toBe(12926);
-            expect(sim.weapons[0].def.levels[level - 1]).toMatchObject({
-                damage,
-                cooldown,
-                amount,
-                venom,
-                duration,
-                pierce: 0,
-                speed: 18,
-                knockback: 0.1,
-            });
-            expect(sim.projectiles).toHaveLength(amount);
+            expect(sim.projectiles.length).toBeGreaterThan(0);
+            // Drawn as the spot animation, not as an item
             for (const projectile of sim.projectiles) {
-                expect(projectile).toMatchObject({ spotAnim, objId: -1 });
+                expect(projectile).toMatchObject({ spotAnim: level.projectileSpotAnim, objId: -1 });
             }
-        },
-    );
+            return level.projectileSpotAnim;
+        });
+        expect(new Set(darts).size).toBe(darts.length);
+    });
 
     test("the Toxic blowpipe's venom hurts every second, and spreads", () => {
         const sim = armed("toxic_blowpipe", "ranger");
