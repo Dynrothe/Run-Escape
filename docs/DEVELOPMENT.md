@@ -1059,7 +1059,10 @@ and a hit can still arrive after the local picture appears to have moved clear.
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.
 - **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
-  room only takes players on the host's, as different builds fall out of step.
+  room only takes players on the host's, as different builds fall out of step. A build with
+  uncommitted changes adds `-dirty-` and a hash of them (`getBuildId` in `vite.config.ts`), so two
+  checkouts with the same changes share rooms and ones with different changes don't. Files git
+  doesn't track yet aren't in the hash. The slim cache checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
   run, rather than everyone waiting on a copy that can't recover.
