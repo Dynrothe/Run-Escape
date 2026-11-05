@@ -5,7 +5,9 @@
 // What a unit reads doesn't depend on what ran before it in the same worker,
 // except that a loader may skip a group an earlier unit already read. That
 // group is in the reads anyway, so the union of every unit's reads is the same
-// whichever worker runs which unit, and in whatever order.
+// whichever worker runs which unit, and in whatever order. A map takes out the
+// ScapeRune squares an earlier one put in (they sit side by side, inside each
+// other's margins), so it reads what a player who plays it first does.
 import {
     GameAssets,
     HITSPLAT_SPRITES,
@@ -53,6 +55,7 @@ import {
     createWorkerState,
 } from "../../src/mapviewer/worker/WorkerState";
 import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
+import { CustomMapFileLoader } from "../../src/rs/map/CustomMapFileLoader";
 import {
     EquipSlot,
     PlayerAppearance,
@@ -90,7 +93,7 @@ Object.assign(globalThis, { ImageData: NodeImageData, OffscreenCanvas: NodeOffsc
 
 // Every group read since the last takeReads, as "index:archive"
 const reads = new Set<string>();
-export const readGroup = MemoryStore.prototype.read;
+const readGroup = MemoryStore.prototype.read;
 MemoryStore.prototype.read = function (indexId: number, archiveId: number): Int8Array {
     reads.add(indexId + ":" + archiveId);
     return readGroup.call(this, indexId, archiveId);
@@ -375,6 +378,10 @@ export class SlimLoader {
 
     private async loadMap(mapId: string): Promise<void> {
         const map = ALL_MAPS.find((m) => m.id === mapId)!;
+        const mapFiles = this.state.sceneBuilder.mapFileLoader;
+        if (mapFiles instanceof CustomMapFileLoader) {
+            mapFiles.squares.clear();
+        }
         installRecipeInSceneBuilder(this.state.sceneBuilder, map.id);
         await this.load(new RegionDataLoader(), getArenaRegion(map));
 

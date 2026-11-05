@@ -37,18 +37,24 @@ to try it before uploading. The full cache works too, if you'd rather host that,
 (`?viewer=1`) needs it.
 
 It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
-each holding the full cache, so a pass takes about a minute on 4 of them rather than nearly three
-on one. Which worker loads what doesn't change the result: it's the union of what they read,
-sorted. A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if
-nothing it reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock` and the
-full cache. Chunks are written under a temporary name and renamed into place, so one that stopped
-partway leaves no broken chunk behind. tsx's loader doesn't reach worker threads by itself, so each
-starts from `slim-cache-boot.mjs`, which registers it.
+each holding the full cache. Which worker loads what doesn't change the result: it's the union of
+what they read, sorted, and each map takes out the ScapeRune squares an earlier one put in. Before
+anything's published, the chunks in the out dir are read back, and every group has to come out of
+them as it went in; the check then loads it all from those same chunks.
 
-- `SLIM_WORKERS=n`: how many worker threads. The cores less one, up to 4, unless it's set. Each
-  holds about 230 MB.
-- `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. Leave
-  the check on for anything players get. An unchecked run isn't kept for reuse.
+A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if nothing it
+reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock`, `tsconfig.json`,
+and the full cache's `info.json`, `keys.json` and the size of each of its files. Chunks are
+written under a temporary name and renamed into place (tried again for a few seconds while Windows
+holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
+doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
+registers it.
+
+- `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
+  less one, up to 4, unless it's set.
+- `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
+  chunks are still read back and compared group by group. Leave the check on for anything players
+  get. An unchecked run isn't kept for reuse.
 - `SLIM_REUSE=0`: does it all even when nothing has changed.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
@@ -75,7 +81,9 @@ else changes under the same name, so it has to be checked with the server each t
 `bun run serve` sends these. The game asks for `caches.json` with `no-cache` and its build in the
 query, so a browser or CDN that keeps it anyway can't give a new page an old one. Upload the
 chunks before `caches.json` and `index.html`, and if you can, leave the old chunks there for a
-while, so a page that started loading before the upload can finish.
+while, so a page that started loading before the upload can finish. `slim-cache` takes the ones
+the new `caches.json` doesn't list out of `dist/`, so that means uploading without deleting what
+isn't in `dist/` (no `rsync --delete`), and clearing them out later.
 
 The server has to send two more headers with the page. The game shares the cache with its workers
 in a SharedArrayBuffer, which browsers only allow on a cross-origin isolated page; without them
@@ -433,10 +441,12 @@ A release also carries the game in two parts: `game-<version>-lite.zip`, the gam
 `caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
 them (`lite`, with its sha256 and size, and `chunks`). A launcher that knows them copies the chunks
 the game it's playing already has, each checked against its name, and downloads the lite zip and
-only the chunks that changed, each checked too. If it has none to copy (a game from before chunks),
-it downloads the whole zip, as one download is quicker than one per chunk. Launchers from before
-this ignore both and download the whole zip, so it didn't need a new `LAUNCHER_VERSION`. Either
-way, a game whose `caches.json` lists a chunk it hasn't got isn't installed.
+only the chunks that changed, a few at a time, each checked too. When those are more than half of
+the chunks' bytes (a game from before chunks has none to copy), it downloads the whole zip instead,
+as one download is quicker than many. If any part of a split update fails, short of the player
+cancelling, it downloads the whole zip after all, and the launcher's log says why. Launchers from
+before this ignore both and download the whole zip, so it didn't need a new `LAUNCHER_VERSION`.
+Either way, a game whose `caches.json` lists a chunk it hasn't got isn't installed.
 
 The game's Cache API copy of the chunks is under `GAME_ORIGIN`, which never changes, so after an
 update the game reads the chunks it had from there, and drops the ones it no longer needs.

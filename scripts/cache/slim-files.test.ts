@@ -4,7 +4,14 @@ import path from "node:path";
 
 import { CacheInfo } from "../../src/rs/cache/CacheInfo";
 import { getChunkFileName } from "../../src/rs/cache/ChunkedCache";
-import { findReusable, hashInputs, pruneChunks, storeRun, writeChunks } from "./slim-files";
+import {
+    findReusable,
+    hashInputs,
+    pruneChunks,
+    renameWithRetry,
+    storeRun,
+    writeChunks,
+} from "./slim-files";
 
 let dir: string;
 
@@ -52,6 +59,32 @@ describe("writeChunks", () => {
     });
 });
 
+describe("renameWithRetry", () => {
+    const failing = (codes: string[]) => {
+        const calls: string[] = [];
+        const rename = (from: fs.PathLike) => {
+            calls.push(String(from));
+            const code = codes.shift();
+            if (code) {
+                throw Object.assign(new Error(code), { code });
+            }
+        };
+        return { calls, rename };
+    };
+
+    test("tries again while Windows holds the file", () => {
+        const { calls, rename } = failing(["EPERM", "EBUSY"]);
+        renameWithRetry("a.tmp", "a", rename);
+        expect(calls).toHaveLength(3);
+    });
+
+    test("gives up straight away on any other error", () => {
+        const { calls, rename } = failing(["ENOENT"]);
+        expect(() => renameWithRetry("a.tmp", "a", rename)).toThrow("ENOENT");
+        expect(calls).toHaveLength(1);
+    });
+});
+
 describe("pruneChunks", () => {
     test("drops chunks it's not given and what a stopped run left", async () => {
         const { bytes, files } = await chunks("kept", "stale");
@@ -83,10 +116,18 @@ describe("hashInputs", () => {
             fs.renameSync(path.join("src", "deep", "a.ts"), path.join("src", "deep", "c.ts"));
             expect(hash()).not.toBe(changed);
 
+            const renamed = hash();
             fs.writeFileSync("lock", "2");
             const locked = hash();
+            expect(locked).not.toBe(renamed);
+
             fs.writeFileSync(path.join("src", "new.ts"), "");
-            expect(hash()).not.toBe(locked);
+            const added = hash();
+            expect(added).not.toBe(locked);
+
+            // What it isn't given doesn't count
+            fs.writeFileSync("notes.txt", "anything");
+            expect(hash()).toBe(added);
         } finally {
             process.chdir(cwd);
         }

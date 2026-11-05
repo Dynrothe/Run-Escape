@@ -102,7 +102,20 @@ async function loadChunkedCache(
         signal,
         onProgress,
     });
-    const files = buildCacheFiles(buffers.flatMap(readChunk), info.indexSizes, true);
+    return assembleChunkedCache(info, buffers, true);
+}
+
+// A slim cache from its chunks' bytes, put together as the game does. slim-cache.ts checks
+// what it wrote through this too.
+export function assembleChunkedCache(
+    info: CacheInfo,
+    buffers: Uint8Array[],
+    shared: boolean,
+): LoadedCache {
+    if (!info.indexSizes) {
+        throw new Error(`caches.json has no indexSizes for ${info.name}`);
+    }
+    const files = buildCacheFiles(buffers.flatMap(readChunk), info.indexSizes, shared);
     const xteas: XteaMap = new Map(
         Object.entries(info.xteas ?? {}).map(([key, value]) => [parseInt(key), value]),
     );

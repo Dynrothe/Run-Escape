@@ -19,8 +19,28 @@ export function writeChunks(dir: string, files: string[], chunks: Uint8Array[]):
         }
         const temporary = `${target}.${process.pid}.tmp`;
         fs.writeFileSync(temporary, chunks[i]);
-        fs.renameSync(temporary, target);
+        renameWithRetry(temporary, target);
     });
+}
+
+const RENAME_ATTEMPTS = 10;
+const pause = new Int32Array(new SharedArrayBuffer(4));
+
+// Windows refuses a rename for a moment while a virus scanner or the indexer
+// has the new file open, so a refused one is tried again, for a few seconds
+export function renameWithRetry(from: string, to: string, rename = fs.renameSync): void {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            rename(from, to);
+            return;
+        } catch (e) {
+            const code = (e as NodeJS.ErrnoException).code ?? "";
+            if (attempt === RENAME_ATTEMPTS || !["EPERM", "EACCES", "EBUSY"].includes(code)) {
+                throw e;
+            }
+            Atomics.wait(pause, 0, 0, 100 * attempt);
+        }
+    }
 }
 
 // Leaves only these chunks in dir, and none of what a stopped run left
@@ -33,13 +53,17 @@ export function pruneChunks(dir: string, files: string[]): void {
     }
 }
 
-// A hash of every file in these folders and these files, by path and contents
+// A hash of every file in these folders and these files, by path and contents.
+// A link to a folder is followed.
 export function hashInputs(dirs: string[], files: string[], salt: string): string {
     const all = [...files];
     const walk = (dir: string) => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
             const file = path.posix.join(dir, entry.name);
-            if (entry.isDirectory()) {
+            if (
+                entry.isDirectory() ||
+                (entry.isSymbolicLink() && fs.statSync(file).isDirectory())
+            ) {
                 walk(file);
             } else {
                 all.push(file);
