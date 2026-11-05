@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 // A chunk of the slim cache, in caches/chunks/ (src/rs/cache/ChunkedCache.ts): its name is the
@@ -16,6 +17,10 @@ export type GameManifest = {
 };
 
 export const CHUNK_FILE_PATTERN = /^[0-9a-f]{32}\.bin$/;
+
+// The name a chunk with these bytes has
+export const chunkName = (data: Uint8Array) =>
+    createHash("sha256").update(data).digest("hex").slice(0, 32) + ".bin";
 
 // Where a game folder keeps its chunks
 export const chunkPath = (folder: string, file: string) =>

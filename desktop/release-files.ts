@@ -7,7 +7,13 @@ import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { CHUNK_FILE_PATTERN, GameManifest, ManifestChunk, changelogSection } from "./gameFiles";
+import {
+    CHUNK_FILE_PATTERN,
+    GameManifest,
+    ManifestChunk,
+    changelogSection,
+    chunkName,
+} from "./gameFiles";
 import { MANIFEST_NAME, chunkAssetName, gameZipName, liteZipName } from "./gameUpdate";
 import { LAUNCHER_VERSION } from "./version";
 
@@ -39,7 +45,12 @@ function checkDist(): ManifestChunk[] {
         throw new Error("dist/caches isn't only the slim cache: run bun run slim-cache");
     }
     // The game won't load a cache made for another build
-    const { build } = JSON.parse(readFileSync(path.join(DIST, "build.json"), "utf8"));
+    let build: string | undefined;
+    try {
+        build = JSON.parse(readFileSync(path.join(DIST, "build.json"), "utf8")).build;
+    } catch {
+        throw new Error("No dist/build.json: run bun run build, then bun run slim-cache");
+    }
     if (caches[0].build !== build) {
         throw new Error("dist/caches was made for another build: run bun run slim-cache");
     }
@@ -48,8 +59,7 @@ function checkDist(): ManifestChunk[] {
         const data = CHUNK_FILE_PATTERN.test(file)
             ? readFileSync(path.join(CHUNK_DIR, file))
             : undefined;
-        const name = data && createHash("sha256").update(data).digest("hex").slice(0, 32);
-        if (!data || name + ".bin" !== file || data.byteLength !== size) {
+        if (!data || chunkName(data) !== file || data.byteLength !== size) {
             throw new Error(`dist/caches/chunks/${file} isn't the chunk caches.json lists`);
         }
     }

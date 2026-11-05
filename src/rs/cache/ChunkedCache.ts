@@ -260,7 +260,8 @@ export async function fetchChunks(
         await cache
             .put(
                 url,
-                new Response(bytes.slice(), {
+                // A Response takes a copy of what it's given
+                new Response(bytes as Uint8Array<ArrayBuffer>, {
                     headers: { "Content-Type": "application/octet-stream" },
                 }),
             )

@@ -14,17 +14,20 @@ const CACHES_ROOT = resolve(process.cwd(), "caches");
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
 
 // Which build this is, for co-op: copies of a run from different builds fall
-// out of step, so a room only takes players on the host's. The commit, or
-// when the server started without one.
+// out of step, so a room only takes players on the host's. The slim cache is
+// made for one too (build.json). The commit, or when the server started
+// without one. With uncommitted changes the commit doesn't say what's in it,
+// so that gets the time as well.
 function buildId(): string {
+    const git = (...args: string[]) =>
+        execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const time = Date.now().toString(36);
     try {
-        const commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-        }).trim();
-        return `${version}-${commit}`;
+        const commit = git("rev-parse", "--short=8", "HEAD").trim();
+        const dirty = git("status", "--porcelain", "--untracked-files=no").trim() !== "";
+        return dirty ? `${version}-${commit}-dirty-${time}` : `${version}-${commit}`;
     } catch {
-        return `${version}-${Date.now().toString(36)}`;
+        return `${version}-${time}`;
     }
 }
 

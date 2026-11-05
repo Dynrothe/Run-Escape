@@ -1,7 +1,16 @@
 import JSZip from "jszip";
 import { createHash } from "node:crypto";
 import { constants, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import {
+    access,
+    copyFile,
+    mkdir,
+    readFile,
+    readdir,
+    rename,
+    rm,
+    writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -12,6 +21,7 @@ import {
     GameFolder,
     GameManifest,
     ManifestChunk,
+    chunkName,
     chunkPath,
     compareVersions,
     isVersion,
@@ -244,15 +254,13 @@ export async function readInstalledGames(dataDir: string): Promise<GameFolder[]>
     return folders;
 }
 
-const chunkName = (data: Buffer) =>
-    createHash("sha256").update(data).digest("hex").slice(0, 32) + ".bin";
-
-// The chunk from one of the folders, if one has it as it should be
-async function findChunk(file: string, folders: string[]): Promise<Buffer | undefined> {
+// Where one of the folders has the chunk as it should be
+async function findChunk(file: string, folders: string[]): Promise<string | undefined> {
     for (const folder of folders) {
-        const data = await readFile(chunkPath(folder, file)).catch(() => undefined);
+        const source = chunkPath(folder, file);
+        const data = await readFile(source).catch(() => undefined);
         if (data && chunkName(data) === file) {
-            return data;
+            return source;
         }
     }
     return undefined;
@@ -266,7 +274,7 @@ async function installSplit(
     manifest: GameManifest & Required<Pick<GameManifest, "lite" | "chunks">>,
     split: SplitUpdate,
     missing: ManifestChunk[],
-    have: Map<string, Buffer>,
+    have: Map<string, string>,
     workDir: string,
     extracted: string,
     signal: AbortSignal,
@@ -279,8 +287,8 @@ async function installSplit(
     }
     await extractZip(liteFile, extracted, signal);
     await mkdir(path.dirname(chunkPath(extracted, "x")), { recursive: true });
-    for (const [file, data] of have) {
-        await writeFile(chunkPath(extracted, file), data);
+    for (const [file, source] of have) {
+        await copyFile(source, chunkPath(extracted, file));
     }
     for (const { file, size } of missing) {
         const target = chunkPath(extracted, file);
@@ -334,11 +342,12 @@ export async function installUpdate(
     try {
         const extracted = path.join(workDir, "extracted");
         const { lite, chunks } = manifest;
-        const have = new Map<string, Buffer>();
+        // Each chunk the game has, by where it is
+        const have = new Map<string, string>();
         for (const { file } of split && lite && chunks ? chunks : []) {
-            const data = await findChunk(file, reuseFrom);
-            if (data) {
-                have.set(file, data);
+            const source = await findChunk(file, reuseFrom);
+            if (source) {
+                have.set(file, source);
             }
         }
         if (split && lite && chunks && have.size > 0) {
