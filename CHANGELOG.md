@@ -12,6 +12,8 @@ the version in the corner).
   is smaller too.
 - Co-op rooms cost much less to keep running, by trippy22: they sleep between messages on the
   relay, which changes nothing in play.
+- The Skills page, by trippy22: every skill fits on the screen at once, without a scroll bar,
+  on most computers and tablets.
 
 ### Fixed
 

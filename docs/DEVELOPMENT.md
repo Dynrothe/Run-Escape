@@ -1403,6 +1403,12 @@ prices make one unbroken run that replays to exactly the same prices. A page tha
 ranks the old way leaves gaps and gets none. Never guess an order.
 Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
 the page has ranks, even with no spending recorded.
+The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
+and the page needs no scrolling on any window at least as tall as the UI's layout (and on
+tablets). The cards scroll inside the panel only on a window too short for that, such as a
+phone held sideways, where the tabs and buttons stay in view. On a touch screen the refund
+button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
+skill adds a card, so check the page still fits at 1024x768 and 1280x720.
 
 ### Notice
 

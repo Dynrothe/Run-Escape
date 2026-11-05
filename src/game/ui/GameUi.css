@@ -956,10 +956,20 @@
 
 /* Skills */
 
+/* As wide as the window allows, so every skill fits in a few rows and the
+   page needs no scrolling. On a window too small for that only the skills
+   scroll, and the tabs and buttons stay in view. */
 .ui-shop {
-    width: min(760px, calc(94vw / var(--ui-scale)));
-    max-height: calc(90vh / var(--ui-scale));
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(1180px, calc(94vw / var(--ui-scale)));
+    max-height: calc((100vh - 24px) / var(--ui-scale));
+    overflow: hidden;
+}
+
+.ui-shop > :not(.ui-shop-grid) {
+    flex-shrink: 0;
 }
 
 .ui-shop-tabs {
@@ -985,8 +995,10 @@
 
 .ui-shop-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .ui-shop-entry {
@@ -998,6 +1010,7 @@
 .ui-shop-card {
     flex-direction: column;
     align-items: flex-start;
+    gap: 3px;
     width: 100%;
     min-width: 0;
 }
@@ -1060,15 +1073,20 @@
     filter: grayscale(1) brightness(0.6);
 }
 
+/* A finger-sized button, reaching up beside the pips rather than making the
+   cost's row taller, so a page of skills still fits a tablet */
 @media (pointer: coarse) {
     .ui-shop-card .ui-card-cost {
-        min-height: 44px;
-        padding-right: 52px;
+        padding-right: 40px;
     }
 
     .ui-shop-refund {
+        right: 2px;
+        bottom: 2px;
+        box-sizing: border-box;
         width: 44px;
         height: 44px;
+        padding: 4px;
     }
 }
 
