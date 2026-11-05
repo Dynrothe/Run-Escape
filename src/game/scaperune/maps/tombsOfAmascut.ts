@@ -277,6 +277,46 @@ const KEPHRI_SWARMS = [
     [2, 6],
 ];
 
+// The Crondis room, square 61,82 from local x 10 to 55: the palm's room in the middle, a corridor
+// north and south from each side of it to a waterfall (45398) at its end, and the way in on the
+// west (45397, local 12,31) behind a barrier (45135, x 18). Turned half round, as Het's room, so it's
+// entered from the east: a tile (x, y) of the cut lies at (45 - x, 63 - y). The waterfalls come
+// out of the map to be drawn by the client, running or dry.
+const CRONDIS: RoomCut = {
+    x: 3914,
+    y: 5248,
+    sizeX: 46,
+    sizeY: 64,
+    plane: 0,
+    cell: [1, 1],
+    arrive: [40, 32],
+    turns: 2,
+};
+const CRONDIS_GATE = { x: 8, y: [31, 32, 33] };
+const CRONDIS_WATERFALL = 45398;
+// (turned) The palm's middle, each waterfall's middle and rotation and where you fill up before
+// it, and each corridor (its floor, its statues' columns, its waterfall, which end that's at)
+const CRONDIS_PALM = [23, 31];
+const CRONDIS_FALLS = [
+    { at: [30.5, 3.5], rotation: 0, fill: [30, 7] },
+    { at: [16.5, 3.5], rotation: 0, fill: [16, 7] },
+    { at: [30.5, 59.5], rotation: 2, fill: [30, 56] },
+    { at: [16.5, 59.5], rotation: 2, fill: [16, 56] },
+];
+const CRONDIS_LANES = [
+    { x0: 28, x1: 33, y0: 9, y1: 18, low: 27, high: 34, fall: 0, fromLow: true },
+    { x0: 14, x1: 19, y0: 9, y1: 18, low: 13, high: 20, fall: 1, fromLow: true },
+    { x0: 28, x1: 33, y0: 44, y1: 53, low: 27, high: 34, fall: 2, fromLow: false },
+    { x0: 14, x1: 19, y0: 44, y1: 53, low: 13, high: 20, fall: 3, fromLow: false },
+];
+// Where its crocodiles come in: the palm room's corners
+const CRONDIS_ENTRANCES = [
+    [32, 39],
+    [33, 23],
+    [14, 39],
+    [13, 23],
+];
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -293,26 +333,29 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS, KEPHRI_ARENA].map((cut) => {
-    const at = cellCorner(cut);
-    return {
-        cut,
-        at,
-        rect: {
-            x0: at.x,
-            y0: at.y,
-            x1: at.x + turnedSize(cut)[0] - 1,
-            y1: at.y + turnedSize(cut)[1] - 1,
-        },
-        arrive: { x: at.x + cut.arrive[0], y: at.y + cut.arrive[1] },
-    };
-});
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS, KEPHRI_ARENA, CRONDIS].map(
+    (cut) => {
+        const at = cellCorner(cut);
+        return {
+            cut,
+            at,
+            rect: {
+                x0: at.x,
+                y0: at.y,
+                x1: at.x + turnedSize(cut)[0] - 1,
+                y1: at.y + turnedSize(cut)[1] - 1,
+            },
+            arrive: { x: at.x + cut.arrive[0], y: at.y + cut.arrive[1] },
+        };
+    },
+);
 const APMEKEN_ROOM = ROOMS[1];
 const BA_BA_ROOM = ROOMS[2];
 const HET_ROOM = ROOMS[3];
 const AKKHA_ROOM = ROOMS[4];
 const SCABARAS_ROOM = ROOMS[5];
 const KEPHRI_ROOM = ROOMS[6];
+const CRONDIS_ROOM = ROOMS[7];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -365,6 +408,36 @@ export const TOA_PLACES = {
                 x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x1,
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
             },
+        },
+    },
+    crondis: {
+        arrive: worldTile(CRONDIS_ROOM.arrive.x, CRONDIS_ROOM.arrive.y),
+        gate: {
+            x: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + (45 - CRONDIS_GATE.x),
+            locId: APMEKEN_BARRIER_LOC,
+            tiles: CRONDIS_GATE.y.map((y) =>
+                worldTile(CRONDIS_ROOM.at.x + 45 - CRONDIS_GATE.x, CRONDIS_ROOM.at.y + 63 - y),
+            ),
+        },
+        entrances: CRONDIS_ENTRANCES.map(([x, y]) =>
+            worldTile(CRONDIS_ROOM.at.x + x, CRONDIS_ROOM.at.y + y),
+        ),
+        puzzle: {
+            palm: crondisPoint(CRONDIS_PALM[0], CRONDIS_PALM[1]),
+            falls: CRONDIS_FALLS.map(({ at, rotation, fill }) => ({
+                at: crondisPoint(at[0], at[1]),
+                rotation,
+                fill: worldTile(CRONDIS_ROOM.at.x + fill[0], CRONDIS_ROOM.at.y + fill[1]),
+            })),
+            lanes: CRONDIS_LANES.map((lane) => ({
+                ...lane,
+                x0: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + lane.x0,
+                x1: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + lane.x1,
+                y0: MAP_Y * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.y + lane.y0,
+                y1: MAP_Y * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.y + lane.y1,
+                low: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + lane.low,
+                high: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + lane.high,
+            })),
         },
     },
     kephri: {
@@ -479,6 +552,14 @@ export const TOA_PLACES = {
     },
 };
 
+// A point in the Crondis room, turned, in world tiles
+function crondisPoint(x: number, y: number): { x: number; y: number } {
+    return {
+        x: MAP_X * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.x + x,
+        y: MAP_Y * MAP_SQUARE_SIZE + CRONDIS_ROOM.at.y + y,
+    };
+}
+
 // A tile's middle in the Scabaras room, in world tiles
 function scabarasTile(x: number, y: number): { x: number; y: number } {
     return worldTile(SCABARAS_ROOM.at.x + x, SCABARAS_ROOM.at.y + y);
@@ -530,6 +611,8 @@ function build(context: BuildContext): TileGrid {
             (loc) =>
                 !(cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX) &&
                 !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
+                !(cut === CRONDIS && loc.id === APMEKEN_BARRIER && loc.x === CRONDIS_GATE.x) &&
+                !(cut === CRONDIS && loc.id === CRONDIS_WATERFALL) &&
                 !(
                     cut === AKKHA_ARENA &&
                     (loc.id === AKKHA_BARRIER ||
@@ -574,6 +657,18 @@ function build(context: BuildContext): TileGrid {
                 height: FLOOR_HEIGHT,
             },
         );
+        // The Crondis room's waterfalls, out of the map to be drawn: still solid
+        if (cut === CRONDIS) {
+            for (const { at } of CRONDIS_FALLS) {
+                for (let dy = -2; dy <= 2; dy++) {
+                    for (let dx = -3; dx <= 3; dx++) {
+                        const x = room.at.x + Math.floor(at[0]) + dx;
+                        const y = room.at.y + Math.floor(at[1]) + dy;
+                        blockTile(ground.grid, ground.tile(x, y));
+                    }
+                }
+            }
+        }
         // The Het room's statues, which OSRS places as the room starts
         if (cut === HET) {
             for (const [id, [x, y]] of [
@@ -684,6 +779,15 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                             line: TOA_PLACES.akkha.line,
                             quadrants: TOA_PLACES.akkha.quadrants,
                         },
+                    },
+                }),
+                ...(id === "crondis" && {
+                    room: {
+                        arrive: TOA_PLACES.crondis.arrive,
+                        puzzle: "crondis" as const,
+                        gate: TOA_PLACES.crondis.gate,
+                        entrances: TOA_PLACES.crondis.entrances,
+                        crondis: TOA_PLACES.crondis.puzzle,
                     },
                 }),
                 ...(id === "scabaras" && {

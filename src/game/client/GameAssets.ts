@@ -30,6 +30,7 @@ import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
     APMEKEN_SPOTANIMS,
+    CRONDIS,
     HET,
     JUNGLE_JAPES,
     KEPHRI,
@@ -171,6 +172,8 @@ function getSpotAnimIds(): number[] {
     add(2141, 2144, KEPHRI.dung.spotAnim, KEPHRI.dung.dropSpotAnim, KEPHRI.eggs.spotAnim);
     add(KEPHRI.arcane.spotAnim, 2150);
     add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
+    // The Crondis room's poison, pale and dark, and its water poured
+    add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
     // The Scabaras room's falling roof
     add(SCABARAS.rockSpotAnim);
     // Akkha's quadrants' elements, which are no attack of his
@@ -590,6 +593,8 @@ export class GameAssets {
         objIds.add(JUNGLE_JAPES.objId);
         // Ba-Ba's sarcophagi, open
         locIds.add(SARCOPHAGI.loc);
+        // The Crondis room's spears
+        locIds.add(CRONDIS.locs.spear);
         // Kephri's dung, a wall where it's dropped
         locIds.add(KEPHRI.dung.pileLoc);
         // The Scabaras room's plates, as they stand
@@ -619,6 +624,11 @@ export class GameAssets {
             locId: APMEKEN_BARRIER_LOC,
             animated: true,
         });
+
+        // The Crondis room's waterfalls, running and dry
+        for (const id of [CRONDIS.locs.waterfall, CRONDIS.locs.dry]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
 
         // The Scabaras room's plates' glows
         for (const id of [

@@ -12,7 +12,7 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
-import { APMEKEN, APMEKEN_WAVES, TOMBS_BOSSES } from "../content/tombs";
+import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { createSave, migrateSave } from "./save";
@@ -1965,5 +1965,227 @@ describe("Kephri", () => {
         expect(risen.def.id).toBe("kephri_final");
         expect(sim.tombsKephri!.final).toBe(true);
         expect(sim.tombsKephri!.dung?.heroes).toEqual([0]);
+    });
+});
+
+// The Crondis room in the open field: the palm in the middle, a corridor running north to a
+// waterfall
+const CRONDIS_DEF = {
+    palm: { x: 1036.5, y: 1036.5 },
+    falls: [{ fill: { x: 1036.5, y: 1058.5 }, at: { x: 1036.5, y: 1062.5 }, rotation: 0 }],
+    lanes: [
+        { x0: 1034, x1: 1039, y0: 1044, y1: 1053, low: 1033, high: 1040, fall: 0, fromLow: false },
+    ],
+};
+const TEST_CRONDIS: MapDef = {
+    ...TEST_TOMBS,
+    id: "test_crondis",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                id: "crondis",
+                name: "Path of Crondis",
+                door: { x: 1042.5, y: 1036.5 },
+                room: {
+                    arrive: { x: 1046.5, y: 1030.5 },
+                    puzzle: "crondis",
+                    entrances: [{ x: 1028.5, y: 1028.5 }],
+                    crondis: CRONDIS_DEF,
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_CRONDIS.id, TEST_CRONDIS);
+
+describe("the Crondis room", () => {
+    // Off the corridor, away from the palm and the waterfall
+    const AWAY = { x: 1050.5, y: 1030.5 };
+    function crondis(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_CRONDIS.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.tombsPath).toBe("crondis");
+        at(sim, AWAY);
+        expect(sim.tombsRoom!.crondis).toBeDefined();
+        return sim;
+    }
+    const room = (sim: Sim) => sim.tombsRoom!.crondis!;
+    // A tick somewhere, with no traps coming and nothing about
+    function at(sim: Sim, where: { x: number; y: number }, quiet = true): void {
+        const crondis = sim.tombsRoom?.crondis;
+        if (crondis && quiet) {
+            crondis.spears.forEach((s) => (s.nextTick = sim.tick + 1000));
+            crondis.nextCloudTick.fill(sim.tick + 1000);
+            sim.tombsRoom!.pending = [];
+            for (const enemy of sim.enemies) {
+                if (!enemy.dead && enemy.def.id.startsWith("crondis_crocodile")) {
+                    sim["vanish"](enemy);
+                }
+            }
+        }
+        sim.player.invulnerable = 0;
+        sim.player.hp = sim.player.maxHp;
+        sim.player.x = sim.player.prevX = where.x;
+        sim.player.y = sim.player.prevY = where.y;
+        if (sim.state === "chest") {
+            sim.resolveChest("take");
+        }
+        if (sim.state === "levelUp") {
+            sim.choose(0);
+        }
+        sim.step();
+    }
+    function fill(sim: Sim): void {
+        for (let i = 0; i < 2 * TICKS_PER_SECOND && room(sim).water[0] === 0; i++) {
+            at(sim, CRONDIS_DEF.falls[0].fill);
+        }
+    }
+    const palm = (sim: Sim) => sim.enemies.find((e) => e.uid === room(sim).palmUid)!;
+
+    it("starts with the palm a sapling that can't be hurt, and the first wave", () => {
+        const sim = crondis();
+        const tree = palm(sim);
+        expect(tree.def.id).toBe("crondis_palm_0");
+        expect(tree.maxHp).toBe(room(sim).goal);
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(tree, 100, 0, tree.x, tree.y)).toBe(0);
+        expect(sim.tombsRoom!.wave).toBe(0);
+    });
+
+    it("needs more water with the party and the path level", () => {
+        expect(room(crondis(["pathmaster"])).goal).toBeGreaterThan(room(crondis()).goal);
+    });
+
+    it("fills up at a waterfall, which runs dry a while after", () => {
+        const sim = crondis();
+        fill(sim);
+        expect(room(sim).water[0]).toBe(100);
+        expect(room(sim).dryUntil[0]).toBeGreaterThan(sim.tick);
+        // Poured out, and stood there again: nothing while it's dry
+        room(sim).water[0] = 0;
+        at(sim, CRONDIS_DEF.falls[0].fill);
+        at(sim, CRONDIS_DEF.falls[0].fill);
+        expect(room(sim).water[0]).toBe(0);
+    });
+
+    it("grows the palm a stage a quarter, for a casket and the next wave, and ends the room", () => {
+        const sim = crondis();
+        const caskets = () => sim.pickups.filter((p) => p.kind === "casket").length;
+        const before = caskets();
+        for (let trip = 0; trip < 10 && sim.tombsRoom!.doneTick === undefined; trip++) {
+            room(sim).dryUntil.fill(-1);
+            fill(sim);
+            at(sim, { x: CRONDIS_DEF.palm.x + 3, y: CRONDIS_DEF.palm.y });
+            if (trip === 0) {
+                expect(room(sim).growth).toBe(100);
+                expect(room(sim).stage).toBe(1);
+                expect(palm(sim).def.id).toBe("crondis_palm_1");
+                expect(sim.tombsRoom!.wave).toBe(1);
+            }
+        }
+        expect(room(sim).stage).toBe(4);
+        expect(sim.tombsRoom!.doneTick).toBeDefined();
+        expect(caskets() + (sim.state === "chest" ? 1 : 0)).toBeGreaterThan(before);
+    });
+
+    it("thrusts its spears across a pair of rows, spilling your water", () => {
+        const sim = crondis();
+        fill(sim);
+        const thrust = { lane: 0, pair: 2, side: "low" as const, startTick: sim.tick, hit: [] };
+        const area = sim.crondisSpearArea(CRONDIS_DEF, thrust);
+        expect(area).toEqual({ x0: 1034, x1: 1037, y0: 1048, y1: 1050 });
+        room(sim).thrusts.push(thrust);
+        const spot = { x: 1035.5, y: 1048.5 };
+        for (let i = 0; i < CRONDIS.spearTell * TICKS_PER_SECOND - 1; i++) {
+            at(sim, spot);
+        }
+        // Still its tell: nothing yet
+        expect(room(sim).water[0]).toBe(100);
+        for (let i = 0; i < 3; i++) {
+            at(sim, spot);
+        }
+        expect(room(sim).water[0]).toBe(50);
+        expect(sim.debuffs.some((d) => d.id === "crondis_trap")).toBe(true);
+    });
+
+    it("sends its spears down the corridor a pair at a time, each side in turn", () => {
+        const sim = crondis();
+        room(sim).spears[0].nextTick = sim.tick;
+        sim.player.x = sim.player.prevX = AWAY.x;
+        const seen = new Map<string, { pair: number; side: string }>();
+        for (let i = 0; i < 2.5 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.step();
+            for (const t of room(sim).thrusts) {
+                seen.set(t.lane + ":" + t.startTick, { pair: t.pair, side: t.side });
+            }
+        }
+        const thrusts = [...seen.values()];
+        // All five pairs of rows, down the corridor, each side in turn
+        expect(thrusts.map((t) => t.pair)).toEqual([0, 1, 2, 3, 4]);
+        expect(thrusts.map((t) => t.side)).toEqual(["low", "high", "low", "high", "low"]);
+    });
+
+    it("rolls its poison down from the waterfall's end, the pale cloud ahead of the dark", () => {
+        const sim = crondis();
+        fill(sim);
+        const cloud = { lane: 0, startTick: sim.tick, hit: [] as number[] };
+        room(sim).clouds.push(cloud);
+        // At the waterfall's end of the corridor (y1, as fromLow is false)
+        const spot = { x: 1036.5, y: 1052.5 };
+        let paleSeen = false;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && room(sim).water[0] === 100; i++) {
+            const { pale, dark } = sim.crondisCloud(CRONDIS_DEF, cloud);
+            if (pale > 1 && dark === 0) {
+                paleSeen = true;
+            }
+            at(sim, spot);
+            room(sim).clouds = room(sim).clouds.length ? room(sim).clouds : [cloud];
+        }
+        expect(paleSeen).toBe(true);
+        expect(room(sim).water[0]).toBe(50);
+        expect(cloud.hit).toEqual([0]);
+    });
+
+    it("has a crocodile's bite spill your water", () => {
+        const sim = crondis();
+        fill(sim);
+        sim["damagePlayer"](3, "crondis_crocodile", false);
+        expect(room(sim).water[0]).toBe(50);
+    });
+
+    it("has its hungry crocodiles eat the palm's growth, but not below the stage it's reached", () => {
+        const sim = crondis();
+        const crondis_ = room(sim);
+        crondis_.growth = crondis_.goal * 0.4;
+        crondis_.stage = 1;
+        const tree = palm(sim);
+        const croc = sim.spawnEnemy(getEnemy("crondis_crocodile_hungry"), "normal", {
+            x: tree.x + tree.radius + 1,
+            y: tree.y,
+        })!;
+        for (let i = 0; i < 6 * TICKS_PER_SECOND; i++) {
+            croc.x = croc.prevX = tree.x + tree.radius + 1;
+            croc.y = croc.prevY = tree.y;
+            sim.player.invulnerable = 1e6;
+            sim.player.x = sim.player.prevX = AWAY.x;
+            sim.player.y = sim.player.prevY = AWAY.y;
+            sim.step();
+        }
+        expect(crondis_.growth).toBeLessThan(crondis_.goal * 0.4);
+        expect(crondis_.growth).toBeGreaterThanOrEqual(crondis_.goal / 4);
     });
 });

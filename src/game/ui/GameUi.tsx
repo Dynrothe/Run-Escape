@@ -1974,6 +1974,7 @@ const Hud = memo(function Hud({
                     <TombsWaveInfo client={client} />
                     <TombsShadowsInfo client={client} />
                     <TombsScabarasInfo client={client} />
+                    <TombsCrondisInfo client={client} />
                     <DevGodButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
@@ -2088,6 +2089,19 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
 }
 
 // Akkha's shadows: how many are left, and how long till those still up flood their quarters
+// The Crondis room: your water, and the palm's growth
+function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsCrondis);
+    if (!info) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Water {info.water}: the palm has {info.growth} of {info.goal}
+        </div>
+    );
+}
+
 // The Scabaras room's puzzles: how many are solved, and the Ancient tablet's number
 function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | null {
     const info = useHudNumber(client, (n) => n.tombsScabaras);

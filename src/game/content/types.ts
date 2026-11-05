@@ -1447,7 +1447,7 @@ export type TombsPathDef = {
         arrive: { x: number; y: number };
         // What it's played as (content/tombs.ts), and the spots its issues come at (Apmeken's
         // pillars and vents: their middles in world tiles, and how close counts as at one)
-        puzzle?: "apmeken" | "het" | "scabaras";
+        puzzle?: "apmeken" | "het" | "scabaras" | "crondis";
         spots?: TombsSpotDef[];
         // The Het room's puzzle, in world tiles: where the Caster statue's beam starts (heading
         // south), the Shielded statue it has to reach (a rect), Het's Seal's middle, and the floor
@@ -1457,6 +1457,28 @@ export type TombsPathDef = {
             target: { x0: number; y0: number; x1: number; y1: number };
             seal: { x: number; y: number };
             floor: { x0: number; y0: number; x1: number; y1: number };
+        };
+        // The Crondis room, in world tiles: the palm's middle; each waterfall, where you stand to
+        // fill up (fill) and where it's drawn (at, the loc's middle, and its rotation); and each
+        // corridor: its floor's tiles (x0 to x1, y0 to y1), its spear statues' columns either
+        // side (low, high), its waterfall, and whether that's at its y0 end (clouds come from it)
+        crondis?: {
+            palm: { x: number; y: number };
+            falls: {
+                fill: { x: number; y: number };
+                at: { x: number; y: number };
+                rotation: number;
+            }[];
+            lanes: {
+                x0: number;
+                x1: number;
+                y0: number;
+                y1: number;
+                low: number;
+                high: number;
+                fall: number;
+                fromLow: boolean;
+            }[];
         };
         // The Scabaras room's boards, each plate's middle in world tiles: Sequence's, Lights out's
         // ring (in order round it), Addition's, and Matching's two boards (SCABARAS in tombs.ts)

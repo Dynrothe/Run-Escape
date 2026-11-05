@@ -362,3 +362,20 @@ raid's ranges.
       thrown back), Medic! (swarms between her shield's breaks too, at half speed), Aerial
       Assault (bigger, harder fireballs).
     - Not in yet: her phantom (the Wardens'), and the bot doesn't know her fight.
+- **The Crondis room** (`CRONDIS` in `content/tombs.ts`, `Sim.stepCrondis`): square 61,82 from local
+  x 10, turned half round so it's entered from the east behind its barrier. Grow the Palm of
+  Resourcefulness (11700 to 11704, a stage a quarter, never hurt, its bar its growth) with 300 water,
+  more for each of the party and each path level: each stage a casket and the next wave.
+    - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
+      fill your container, 100, and it's dry for 10 s after. Near the palm you pour it.
+    - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
+      a time, down the corridor, the side turning about, then rest; a tell (the spear glinting out
+      a tile) first. **Poison** comes down each corridor from its waterfall's end every 9 s (less
+      with path levels): pale first, the dark cloud a second behind it. It's the Spitting Scarab's
+      green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
+      nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
+      animation only).
+    - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
+      (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
+      growth, never below the stage it's reached.
+    - Not in yet: Zebak. The bot doesn't know the room.

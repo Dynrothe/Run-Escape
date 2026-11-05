@@ -5,6 +5,7 @@ import {
     EnemyDef,
     EnemyShotDef,
     KephriDef,
+    PlayerEffectDef,
     WaveDef,
 } from "./types";
 
@@ -1629,3 +1630,175 @@ TOMBS_ENEMIES.push(
         sounds: { attack: -1, hit: -1, death: -1 },
     },
 );
+
+// ---- The Crondis room ----
+
+// The Palm of Resourcefulness, one form for each stage of its growth (11700 to 11704): never
+// hurt, its bar its growth (Sim.stepCrondis), and what the hungry crocodiles go for
+export const CRONDIS_PALMS = [11700, 11701, 11702, 11703, 11704].map(
+    (npcId, stage): EnemyDef => ({
+        id: "crondis_palm_" + stage,
+        name: "Palm of Resourcefulness",
+        npcId,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 1000,
+        damage: 0,
+        speed: 0,
+        radius: 2.2,
+        xp: 0,
+        knockbackResist: 1,
+        stationary: true,
+        solid: true,
+        healthBar: true,
+        shield: { seconds: 0 },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    }),
+);
+
+const crocodile = (id: string, more: Partial<EnemyDef>): EnemyDef => ({
+    id,
+    name: "Crocodile",
+    npcId: 11705,
+    idleSeq: 2037,
+    walkSeq: 2036,
+    attackSeq: 2039,
+    deathSeq: 2038,
+    hp: 30,
+    damage: 4,
+    speed: 1.9,
+    radius: 0.9,
+    xp: 22,
+    sounds: { attack: -1, hit: -1, death: -1 },
+    ...more,
+});
+
+export const CRONDIS_ENEMIES: EnemyDef[] = [
+    ...CRONDIS_PALMS,
+    // Never spawned: what the room's spears and poison hit as
+    {
+        id: "crondis_trap",
+        name: "Trap",
+        npcId: 11705,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 0,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    // Its bite spills half your water (Sim.crondisSpill)
+    crocodile("crondis_crocodile", {}),
+    // Makes for the palm, and eats its growth there (heals' walk, Sim.stepCrondis)
+    crocodile("crondis_crocodile_hungry", {
+        speed: 1.6,
+        heals: {
+            fraction: 0,
+            interval: 99,
+            range: 1,
+            targets: CRONDIS_PALMS.map((palm) => palm.id),
+            seek: 60,
+        },
+    }),
+];
+TOMBS_ENEMIES.push(...CRONDIS_ENEMIES);
+
+// Its waves: one as it starts, and one each time the palm grows a stage, with a casket for each
+export const CRONDIS_WAVES: string[][] = [
+    ["crondis_crocodile", "crondis_crocodile", "crondis_crocodile_hungry"],
+    [
+        "crondis_crocodile",
+        "crondis_crocodile",
+        "crondis_crocodile",
+        "crondis_crocodile_hungry",
+        "crondis_crocodile_hungry",
+    ],
+    [
+        ...Array<string>(5).fill("crondis_crocodile"),
+        "crondis_crocodile_hungry",
+        "crondis_crocodile_hungry",
+        "agile_scarab",
+    ],
+    [
+        ...Array<string>(6).fill("crondis_crocodile"),
+        ...Array<string>(3).fill("crondis_crocodile_hungry"),
+        "agile_scarab",
+        "agile_scarab",
+    ],
+    [
+        ...Array<string>(7).fill("crondis_crocodile"),
+        ...Array<string>(4).fill("crondis_crocodile_hungry"),
+        "agile_scarab",
+        "agile_scarab",
+    ],
+];
+
+// The crocodiles crawling in meanwhile, more with each wave
+export function getCrondisTrickle(wave: number): WaveDef {
+    return {
+        start: 0,
+        spawnRate: 0.3 + wave * 0.08,
+        minAlive: 0,
+        maxAlive: 4 + wave * 2,
+        enemies: [
+            { id: "crondis_crocodile", weight: 3 },
+            { id: "crondis_crocodile_hungry", weight: 1 },
+        ],
+    };
+}
+
+// The Crondis room's numbers. The palm needs goal water (perHero more for each of the party
+// after the first, perLevel more each path level), and grows a stage each quarter of it: each a
+// casket and the next wave. You carry up to carry water; standing fill seconds at a waterfall
+// fills it, and it's dry refill seconds after. Within pour tiles of the palm's edge you pour.
+// Its corridors' spear statues thrust out across their rows one pair at a time down the
+// corridor, every spearStep seconds, sides turn about, then rest spearRest: a tell (the statue
+// flashing) spearTell before, out for spearHold, for spearDamage. Poison clouds come down a
+// corridor from its waterfall's end every cloudEvery seconds (less with path levels), cloudSpeed
+// tiles a second: the pale ones first, the dark ones cloudBehind seconds after, cloudLength tiles
+// of them, for cloudDamage. Any trap's hit, or a crocodile's bite, spills spill of your water,
+// and a trap weakens you (weakened). Hungry crocodiles at the palm eat eat water a second.
+export const CRONDIS = {
+    goal: 300,
+    perHero: 120,
+    perLevel: 40,
+    carry: 100,
+    fill: 1,
+    refill: 10,
+    pour: 1.8,
+    spearStep: 0.45,
+    spearRest: 1.4,
+    spearTell: 0.5,
+    spearHold: 0.5,
+    spearDamage: 5,
+    cloudEvery: 9,
+    cloudEveryLeast: 4,
+    cloudSpeed: 3.5,
+    cloudBehind: 1.1,
+    cloudLength: 3,
+    cloudDamage: 4,
+    spill: 0.5,
+    eat: 6,
+    weakened: {
+        kind: "debuff",
+        id: "crondis_trap",
+        name: "Hit by a trap",
+        iconObjId: 27295,
+        stats: { armor: -3, moveSpeed: -0.1 },
+        seconds: 8,
+    } as PlayerEffectDef,
+    // The waterfall, as it runs and dry; the spear statues' spear; the poison, the Spitting
+    // Scarab's green splash (2155: the room's own, 2129 to 2131, draw nothing as spot
+    // animations), faint while it's the warning; the water as it's poured (Water Wave's splash)
+    locs: { waterfall: 45398, dry: 45399, spear: 45416, statue: 45415 },
+    spotAnims: { pale: 2155, dark: 2155, pour: 163 },
+    paleAlpha: 0.35,
+    // The water container, for the HUD
+    containerObjId: 27295,
+};

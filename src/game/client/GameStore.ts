@@ -172,6 +172,8 @@ export type HudNumbers = {
     tombsShadows?: { left: number; seconds: number };
     // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
     tombsScabaras?: { solved: number; of: number; target: number; sum: number };
+    // The Crondis room: your water, and the palm's growth against what it needs
+    tombsCrondis?: { water: number; growth: number; goal: number };
     // Dev server only: god mode's on (GameClient.toggleDevGod)
     devGod?: boolean;
     hp: number;

@@ -83,6 +83,9 @@ import {
     APMEKEN,
     APMEKEN_SPOTANIMS,
     APMEKEN_WAVES,
+    CRONDIS,
+    CRONDIS_PALMS,
+    CRONDIS_WAVES,
     HET,
     HET_WAVES,
     JUNGLE_JAPES,
@@ -94,6 +97,7 @@ import {
     SCABARAS_WAVES,
     TOMBS_BOSSES,
     getApmekenTrickle,
+    getCrondisTrickle,
     getHetTrickle,
     getScabarasTrickle,
 } from "../content/tombs";
@@ -766,6 +770,35 @@ type TombsRoom = {
     het?: HetRoom;
     // The Scabaras room's, once it's begun (Sim.stepScabaras)
     scabaras?: ScabarasRoom;
+    // The Crondis room's, once it's begun (Sim.stepCrondis)
+    crondis?: CrondisRoom;
+};
+
+type CrondisDef = NonNullable<NonNullable<TombsPathDef["room"]>["crondis"]>;
+// The Crondis room (CRONDIS in tombs.ts): the palm, its growth and the water it needs, the stage
+// it's reached; each hero's water and how long they've stood filling up; when each waterfall runs
+// again; each corridor's next spear and which pair of rows it's at, the thrusts out now (their
+// side, and when each began, its tell first); the poison clouds coming down (who each has caught),
+// and when each corridor's next comes
+export type CrondisRoom = {
+    palmUid: number;
+    growth: number;
+    goal: number;
+    stage: number;
+    water: number[];
+    filling: number[];
+    dryUntil: number[];
+    spears: { nextTick: number; pair: number }[];
+    thrusts: {
+        lane: number;
+        pair: number;
+        side: "low" | "high";
+        startTick: number;
+        // Who it's caught: once each
+        hit: number[];
+    }[];
+    clouds: { lane: number; startTick: number; hit: number[] }[];
+    nextCloudTick: number[];
 };
 
 type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
@@ -3812,6 +3845,10 @@ export class Sim {
         }
         player.hp -= amount;
         this.damageTaken += amount;
+        // A Crondis crocodile's bite spills your water
+        if (enemyId === "crondis_crocodile" || enemyId === "crondis_crocodile_hungry") {
+            this.crondisSpill("The crocodile's bite spills your water!");
+        }
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
         this.emit({ type: "playerHit", amount, enemyId, elite, sound });
@@ -4555,6 +4592,12 @@ export class Sim {
                 return [];
             }
             // The Scabaras room's scarabs, the Het room's swarms, or the Apmeken room's baboons
+            if (this.tombsPathRoom?.crondis) {
+                const trickle = getCrondisTrickle(Math.max(0, room.wave));
+                return [
+                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                ];
+            }
             if (this.tombsPathRoom?.scabaras) {
                 const trickle = getScabarasTrickle(Math.max(0, room.wave));
                 return [
@@ -5351,7 +5394,13 @@ export class Sim {
         const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
         const het = this.tombsPathRoom?.het;
         const scabaras = this.tombsPathRoom?.scabaras;
-        if (!room || (!spots && !het && !scabaras) || this.runOver || this.state !== "playing") {
+        const crondis = this.tombsPathRoom?.crondis;
+        if (
+            !room ||
+            (!spots && !het && !scabaras && !crondis) ||
+            this.runOver ||
+            this.state !== "playing"
+        ) {
             return;
         }
         if (room.boss) {
@@ -5381,6 +5430,8 @@ export class Sim {
                     this.startHet(room, het);
                 } else if (scabaras) {
                     this.startScabaras(room, scabaras);
+                } else if (crondis) {
+                    this.startCrondis(room, crondis);
                 } else {
                     room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
                     this.nextApmekenWave();
@@ -5396,6 +5447,10 @@ export class Sim {
         }
         if (scabaras) {
             this.stepScabaras(room, scabaras);
+            return;
+        }
+        if (crondis) {
+            this.stepCrondis(room, crondis);
             return;
         }
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
@@ -5746,6 +5801,318 @@ export class Sim {
     // Who Kephri's flies are round, for drawing them
     get kephriDungHeroes(): number[] {
         return this.tombsKephri?.dung?.heroes ?? [];
+    }
+
+    // ---- The Crondis room ----
+
+    // Begins: the palm a sapling, everyone's container empty, the waterfalls running, and the
+    // first wave in
+    private startCrondis(room: TombsRoom, def: CrondisDef): void {
+        const palm = this.spawnEnemy(getEnemy(CRONDIS_PALMS[0].id), "normal", def.palm);
+        const goal =
+            CRONDIS.goal +
+            CRONDIS.perHero * (this.heroes.length - 1) +
+            CRONDIS.perLevel * this.tombsPathLevel;
+        if (palm) {
+            palm.noDrops = true;
+            palm.maxHp = goal;
+            palm.hp = 1;
+            palm.shieldEnd = this.tick + 2;
+        }
+        const step = secondsToTicks(CRONDIS.spearStep);
+        room.crondis = {
+            palmUid: palm?.uid ?? -1,
+            growth: 0,
+            goal,
+            stage: 0,
+            water: this.heroes.map(() => 0),
+            filling: this.heroes.map(() => 0),
+            dryUntil: def.falls.map(() => -1),
+            // Each corridor's spears a little out of step with the others'
+            spears: def.lanes.map((_, i) => ({ nextTick: this.tick + i * step * 2, pair: 0 })),
+            thrusts: [],
+            clouds: [],
+            nextCloudTick: def.lanes.map(
+                (_, i) => this.tick + secondsToTicks(3 + (i * this.crondisCloudEvery()) / 4),
+            ),
+        };
+        this.nextCrondisWave(room);
+        this.emit({
+            type: "notice",
+            message:
+                "Grow the Palm of Resourcefulness! Fill up at the waterfalls and bring it back, " +
+                "past the spears and the poison. A hit spills your water.",
+        });
+    }
+
+    private crondisCloudEvery(): number {
+        return Math.max(CRONDIS.cloudEveryLeast, CRONDIS.cloudEvery - 1.2 * this.tombsPathLevel);
+    }
+
+    private nextCrondisWave(room: TombsRoom): void {
+        room.wave = Math.min(room.wave + 1, CRONDIS_WAVES.length - 1);
+        room.waveTick = this.tick;
+        const ids = [...CRONDIS_WAVES[room.wave]];
+        for (let i = 0; i < this.tombsPathLevel; i++) {
+            ids.push(ids[ids.length - 1]);
+        }
+        room.group = [];
+        room.pending = [...room.pending, ...ids];
+        room.nextOutTick = this.tick;
+    }
+
+    private stepCrondis(room: TombsRoom, def: CrondisDef): void {
+        const crondis = room.crondis;
+        if (!crondis) {
+            return;
+        }
+        const palm = this.enemies.find((e) => e.uid === crondis.palmUid && !e.dead);
+        if (palm) {
+            palm.shieldEnd = this.tick + 2;
+        }
+        this.stepCrondisWater(room, crondis, def, palm);
+        if (room.doneTick !== undefined) {
+            return;
+        }
+        this.stepCrondisSpears(crondis, def);
+        this.stepCrondisClouds(crondis, def);
+        // Hungry crocodiles at the palm eat its growth (not below the stage it's reached)
+        if (palm) {
+            const eat = CRONDIS.eat / TICKS_PER_SECOND;
+            const floor = (crondis.stage * crondis.goal) / 4;
+            for (const enemy of this.enemies) {
+                if (enemy.dead || enemy.def.id !== "crondis_crocodile_hungry") {
+                    continue;
+                }
+                const reach = palm.radius + enemy.radius + 0.8;
+                if (fm.hypot(enemy.x - palm.x, enemy.y - palm.y) <= reach) {
+                    crondis.growth = Math.max(floor, crondis.growth - eat);
+                }
+            }
+            // Its bar's its growth: never quite full, so the crocodiles always want it
+            palm.hp = Math.max(1, Math.min(palm.maxHp - 1, Math.round(crondis.growth)));
+        }
+    }
+
+    // Filling up at a running waterfall, and pouring it on the palm
+    private stepCrondisWater(
+        room: TombsRoom,
+        crondis: CrondisRoom,
+        def: CrondisDef,
+        palm: Enemy | undefined,
+    ): void {
+        const fill = secondsToTicks(CRONDIS.fill);
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                crondis.filling[hero.index] = 0;
+                continue;
+            }
+            const { x, y } = hero.player;
+            const at = def.falls.findIndex(
+                (fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5,
+            );
+            if (
+                at !== -1 &&
+                this.tick >= crondis.dryUntil[at] &&
+                crondis.water[hero.index] < CRONDIS.carry
+            ) {
+                crondis.filling[hero.index]++;
+                if (crondis.filling[hero.index] >= fill) {
+                    crondis.filling[hero.index] = 0;
+                    crondis.water[hero.index] = CRONDIS.carry;
+                    crondis.dryUntil[at] = this.tick + secondsToTicks(CRONDIS.refill);
+                    this.use(hero);
+                    this.emit({ type: "notice", message: "You fill your water container." }, true);
+                }
+            } else {
+                crondis.filling[hero.index] = 0;
+            }
+            const water = crondis.water[hero.index];
+            if (palm && water > 0) {
+                const reach = palm.radius + hero.player.radius + CRONDIS.pour;
+                if (fm.hypot(palm.x - x, palm.y - y) <= reach) {
+                    crondis.water[hero.index] = 0;
+                    crondis.growth = Math.min(crondis.goal, crondis.growth + water);
+                    this.addEffect(CRONDIS.spotAnims.pour, palm.x, palm.y, 0, 40);
+                }
+            }
+        }
+        this.use(current);
+        // A stage grown: a casket, the next wave, and the palm as it is now
+        const stage = Math.min(4, Math.floor((crondis.growth / crondis.goal) * 4 + 1e-9));
+        if (stage <= crondis.stage) {
+            return;
+        }
+        crondis.stage = stage;
+        if (palm) {
+            palm.def = getEnemy(CRONDIS_PALMS[stage].id);
+            this.appearanceVersion++;
+        }
+        if (!this.tombsReplaying) {
+            const player = this.player;
+            this.dropCasket(player.x + 0.8, player.y, false);
+        }
+        if (stage === 4) {
+            room.doneTick = this.tick;
+            crondis.thrusts = [];
+            crondis.clouds = [];
+            this.emit({
+                type: "notice",
+                message: "The Palm of Resourcefulness is fully grown! The way on is open.",
+            });
+            return;
+        }
+        this.emit({ type: "notice", message: `The palm grows! ${stage} of 4.` });
+        this.nextCrondisWave(room);
+    }
+
+    // The spear statues: down each corridor a pair of rows at a time, the side turning about,
+    // then a rest; each thrust's tell, then out across its three tiles
+    private stepCrondisSpears(crondis: CrondisRoom, def: CrondisDef): void {
+        const tell = secondsToTicks(CRONDIS.spearTell);
+        const hold = secondsToTicks(CRONDIS.spearHold);
+        def.lanes.forEach((lane, i) => {
+            const spears = crondis.spears[i];
+            if (this.tick < spears.nextTick) {
+                return;
+            }
+            const pairs = Math.floor((lane.y1 - lane.y0 + 1) / 2);
+            const side = (spears.pair + i) % 2 === 0 ? "low" : "high";
+            crondis.thrusts.push({
+                lane: i,
+                pair: spears.pair,
+                side,
+                startTick: this.tick,
+                hit: [],
+            });
+            spears.pair++;
+            const rest = spears.pair >= pairs;
+            if (rest) {
+                spears.pair = 0;
+            }
+            spears.nextTick =
+                this.tick + secondsToTicks(rest ? CRONDIS.spearRest : CRONDIS.spearStep);
+        });
+        const damage = CRONDIS.spearDamage * this.tombsRoomScale().damage;
+        crondis.thrusts = crondis.thrusts.filter((thrust) => {
+            const age = this.tick - thrust.startTick;
+            if (age >= tell + hold) {
+                return false;
+            }
+            if (age < tell) {
+                return true;
+            }
+            const area = this.crondisSpearArea(def, thrust);
+            this.forEachHeroInReach(() => {
+                const { x, y } = this.player;
+                const index = this.hero.index;
+                if (
+                    !thrust.hit.includes(index) &&
+                    x >= area.x0 &&
+                    x <= area.x1 &&
+                    y >= area.y0 &&
+                    y <= area.y1
+                ) {
+                    thrust.hit.push(index);
+                    this.crondisTrapHit(damage, "The spear catches you: your water spills!");
+                }
+            });
+            return true;
+        });
+    }
+
+    // The tiles a thrust reaches: three out from its statue, across its pair of rows
+    crondisSpearArea(
+        def: CrondisDef,
+        thrust: CrondisRoom["thrusts"][number],
+    ): { x0: number; x1: number; y0: number; y1: number } {
+        const lane = def.lanes[thrust.lane];
+        const y0 = lane.y0 + thrust.pair * 2;
+        const x0 = thrust.side === "low" ? lane.low + 1 : lane.high - 3;
+        return { x0, x1: x0 + 3, y0, y1: y0 + 2 };
+    }
+
+    // Poison down each corridor from its waterfall's end: the pale cloud first, the dark one
+    // behind it
+    private stepCrondisClouds(crondis: CrondisRoom, def: CrondisDef): void {
+        def.lanes.forEach((_, i) => {
+            if (this.tick >= crondis.nextCloudTick[i]) {
+                crondis.nextCloudTick[i] = this.tick + secondsToTicks(this.crondisCloudEvery());
+                crondis.clouds.push({ lane: i, startTick: this.tick, hit: [] });
+            }
+        });
+        const damage = CRONDIS.cloudDamage * this.tombsRoomScale().damage;
+        crondis.clouds = crondis.clouds.filter((cloud) => {
+            const lane = def.lanes[cloud.lane];
+            const { dark } = this.crondisCloud(def, cloud);
+            const length = lane.y1 - lane.y0 + 1;
+            if (dark - CRONDIS.cloudLength > length + 2) {
+                return false;
+            }
+            this.forEachHeroInReach(() => {
+                const hero = this.hero;
+                const { x, y } = this.player;
+                if (cloud.hit.includes(hero.index) || x < lane.x0 || x > lane.x1 + 1) {
+                    return;
+                }
+                // How far along from the waterfall's end
+                const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
+                if (along <= dark && along >= dark - CRONDIS.cloudLength) {
+                    cloud.hit.push(hero.index);
+                    this.crondisTrapHit(damage, "The poison catches you: your water spills!");
+                }
+            });
+            return true;
+        });
+    }
+
+    // How far down its corridor a cloud's pale front and dark front are, in tiles from the
+    // waterfall's end
+    crondisCloud(
+        def: CrondisDef,
+        cloud: CrondisRoom["clouds"][number],
+    ): { pale: number; dark: number } {
+        const seconds = (this.tick - cloud.startTick) / TICKS_PER_SECOND;
+        return {
+            pale: seconds * CRONDIS.cloudSpeed,
+            dark: Math.max(0, seconds - CRONDIS.cloudBehind) * CRONDIS.cloudSpeed,
+        };
+    }
+
+    // A trap's hit on the current hero: hurt, their water spilt, weakened
+    private crondisTrapHit(damage: number, message: string): void {
+        if (this.damagePlayer(damage, "crondis_trap", false) === 0) {
+            return;
+        }
+        this.crondisSpill(message);
+        this.applyPlayerEffect(CRONDIS.weakened);
+    }
+
+    // The current hero's water, half of it spilt (a trap, or a crocodile's bite)
+    private crondisSpill(message?: string): void {
+        const crondis = this.tombsRoom?.crondis;
+        const index = this.hero.index;
+        if (!crondis || crondis.water[index] <= 0) {
+            return;
+        }
+        crondis.water[index] = Math.floor(crondis.water[index] * (1 - CRONDIS.spill));
+        if (message) {
+            this.emit({ type: "notice", message }, true);
+        }
+    }
+
+    // The room for the HUD: your water, and the palm's growth against what it needs
+    get crondisInfo(): { water: number; growth: number; goal: number } | undefined {
+        const crondis = this.tombsRoom?.crondis;
+        if (!crondis || this.tombsRoom?.doneTick !== undefined) {
+            return undefined;
+        }
+        return {
+            water: crondis.water[this.hero.index] ?? 0,
+            growth: Math.floor(crondis.growth),
+            goal: crondis.goal,
+        };
     }
 
     // ---- The Scabaras room ----
@@ -6754,6 +7121,7 @@ export class Sim {
             // The Het room's laid out afresh, as OSRS's is after a wipe
             room.het = undefined;
             room.scabaras = undefined;
+            room.crondis = undefined;
         }
         const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({

@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { AKKHA, HET, JUNGLE_JAPES, KEPHRI, SARCOPHAGI, SCABARAS } from "../content/tombs";
+import { AKKHA, CRONDIS, HET, JUNGLE_JAPES, KEPHRI, SARCOPHAGI, SCABARAS } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -161,6 +161,11 @@ const TOMBS_GATE_YAW = 512;
 // Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
 // Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
 // (they're a tile across)
+// The Crondis room's poison: the Spitting Scarab's green splash, that much bigger to fill a
+// corridor, pale for the warning and dark for the real thing
+const CRONDIS_CLOUD_SCALE = 1.6;
+const CRONDIS_PALE_TINT = 0xffffff;
+const CRONDIS_DARK_TINT = 0x608040;
 // Kephri's swarm shield, round her while it's up
 const KEPHRI_SHIELD_SPOTANIM = 2141;
 const AKKHA_SYMBOL_OUT = 1.5;
@@ -565,6 +570,7 @@ export class GameView {
         this.drawAkkha(actors, sim);
         this.drawScabaras(actors, sim);
         this.drawKephri(actors, sim);
+        this.drawCrondis(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -771,6 +777,95 @@ export class GameView {
                     one.y,
                     yaw,
                 );
+            }
+        }
+    }
+
+    // The Crondis room: its waterfalls, running or dry; its spears, glinting out of their
+    // statues as their tell and then right out across their rows; its poison coming down the
+    // corridors, the pale clouds ahead of the dark
+    private drawCrondis(actors: ActorRenderer, sim: Sim): void {
+        const crondis = sim.tombsRoom?.crondis;
+        const def = sim.tombsPathRoom?.crondis;
+        if (!crondis || !def) {
+            return;
+        }
+        const locs = CRONDIS.locs;
+        def.falls.forEach((fall, i) => {
+            const dry = sim.tick < crondis.dryUntil[i];
+            const model =
+                this.assets.get("loc:" + (dry ? locs.dry : locs.waterfall)) ??
+                this.assets.get("loc:" + locs.waterfall);
+            if (model) {
+                const anim = model.anims[0];
+                const { x, y } = fall.at;
+                actors.draw(
+                    model,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y),
+                    y,
+                    fall.rotation * 512,
+                );
+            }
+        });
+        const spear = this.assets.get("loc:" + locs.spear);
+        const tell = Math.round(CRONDIS.spearTell * TICKS_PER_SECOND);
+        if (spear) {
+            const anim = spear.anims[0];
+            for (const thrust of crondis.thrusts) {
+                const area = sim.crondisSpearArea(def, thrust);
+                const telling = sim.tick - thrust.startTick < tell;
+                // Out from its statue's side: a tile out while it's telling, its three once it's out
+                const out = telling ? 1 : 3;
+                const low = thrust.side === "low";
+                const x = low ? area.x0 + out / 2 : area.x1 - out / 2;
+                // One spear from its statue, between the two rows it covers
+                const y = area.y0 + 1;
+                actors.draw(spear, anim, 0, x, this.ground(sim, x, y), y, low ? 0 : 1024, {
+                    flash: telling ? 0.6 : 0,
+                });
+            }
+        }
+        // Each puff a little out of step with the next, so the cloud churns
+        const play = (spotAnim: number, x: number, y: number, tint: number, alpha = 1) => {
+            const model = this.assets.get("spot:" + spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(sim.tick + Math.floor(x * 7 + y * 3), true);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                alpha,
+                tint,
+                scale: CRONDIS_CLOUD_SCALE,
+            });
+        };
+        for (const cloud of crondis.clouds) {
+            const lane = def.lanes[cloud.lane];
+            const { pale, dark } = sim.crondisCloud(def, cloud);
+            const length = lane.y1 - lane.y0 + 1;
+            const at = (along: number) => (lane.fromLow ? lane.y0 + along : lane.y1 + 1 - along);
+            for (let along = Math.floor(dark) + 0.5; along < pale && along < length; along++) {
+                for (let x = lane.x0 + 1; x <= lane.x1 + 0.5; x += 1.5) {
+                    play(
+                        CRONDIS.spotAnims.pale,
+                        x,
+                        at(along),
+                        CRONDIS_PALE_TINT,
+                        CRONDIS.paleAlpha,
+                    );
+                }
+            }
+            for (
+                let along = Math.max(0.5, Math.floor(dark - CRONDIS.cloudLength) + 0.5);
+                along < dark && along < length;
+                along++
+            ) {
+                for (let x = lane.x0 + 0.5; x <= lane.x1 + 0.5; x += 1) {
+                    play(CRONDIS.spotAnims.dark, x, at(along), CRONDIS_DARK_TINT);
+                }
             }
         }
     }
