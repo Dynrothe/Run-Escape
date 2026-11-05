@@ -18,6 +18,15 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
   inputs go through a relay close to the host rather than one fixed place.
+- **Rooms hibernate too.** Their connections use Cloudflare's hibernation API, so a room is billed
+  only while it's handling a message, not for every second it's open. A pending `setTimeout` or
+  `setInterval` would keep it billed throughout, so everything a room waits for (the 10 seconds to
+  make or join it, a dropped player's 15, the save and update throttles, the heartbeat) goes
+  through its one alarm, with `later()`. After 10 seconds with nothing to do (a room sitting on
+  its menu, never mid-run), Cloudflare can take it out of memory and keep its connections open.
+  The next message or alarm makes it again, from its storage and what each socket carries
+  (`remember()`): who it's for and when the room was last used. A dropped player's time away is
+  saved, so it doesn't start again each time the room's made. Pings are answered without waking it.
 - To make or join a room, the lobby checks the relay's limits and answers with a `goto`: the room's
   code and a one-time ticket, good for 30 seconds. The game opens the room's own connection with
   it and sends its `create` or `join` there. Everything said in a room (`me`, `start`, `up`, `down`
@@ -156,8 +165,8 @@ Cloudflare bills Durable Objects by requests and by how long they're awake, not 
 Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. Each
 call from a room to the lobby (`redeem`, `roomUpdate`, `roomGone`) and each connection is a whole
 request. The dashboard's Metrics count every message as one, so they show far more than is billed.
-A room is billed for every second it's open (at 128 MB), whether or not anything's happening, and
-the lobby only for the moments it's handling something.
+Rooms and the lobby are billed (at 128 MB) only for the moments they're handling something:
+a message, a connection or an alarm. Mid-run, that's a sliver of each second.
 
 What the lobby gets: each connected player's pings (`PING_INTERVAL_MS` in `CoopLobby.ts`, answered
 without waking it), each room's heartbeat (`ROOM_HEARTBEAT_MS` in `room.mjs`) and its calls when
@@ -167,18 +176,18 @@ its page every few seconds until it's closed.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
 frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
-four is around 37 a second. That works out to, for each hour a room is open:
+four is around 37 a second. That's about 5,300 requests for each hour a two-player room is open,
+and 6,700 for four. Before rooms hibernated, they were also billed 450 GB-s an hour (every second
+at 128 MB), which was most of the bill. Now duration is only the time spent handling messages, a few
+GB-s an hour, so requests are what's left: measure it on the dashboard (Durable Objects, Duration)
+after a change to how a room handles messages.
 
-| Party    | Requests | Duration  |
-| -------- | -------- | --------- |
-| 2 people | ~5,300   | ~450 GB-s |
-| 4 people | ~6,700   | ~450 GB-s |
-
-- **Free plan**: 100,000 requests and 13,000 GB-s a day, about 15 to 19 hours of rooms a day. Past
-  a limit, co-op fails until the next day, so it's for testing rather than for players.
+- **Free plan**: 100,000 requests a day, about 15 to 19 hours of rooms a day. Past a limit, co-op
+  fails until the next day, so it's for testing rather than for players.
 - **Workers Paid ($5 a month)**: 1 million requests and 400,000 GB-s a month included, then
-  $0.15 a million requests and $12.50 a million GB-s. That's under a cent for each hour a room of
-  four is open, so about $6.50 a month for 1,000 room-hours, and about $70 for 10,000.
+  $0.15 a million requests and $12.50 a million GB-s. About $1 a month more for every 1,000
+  room-hours past the first 150 or so, so 100 players in rooms around the clock (about 20,000
+  room-hours a month) comes to roughly $25.
 
 Check [Cloudflare's pricing](https://developers.cloudflare.com/durable-objects/platform/pricing)
 for the current numbers. Usage is under Workers & Pages, `run-escape-coop`, Metrics, in the
@@ -186,7 +195,7 @@ dashboard.
 
 **Against abuse.** Workers Paid has no spending cap, so the relay keeps what one connection can cost
 bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (an open
-socket keeps a room billed), a room's saved to storage at most once a second however often its
+socket keeps a room in storage and its alarm going), a room's saved to storage at most once a second however often its
 host changes settings (joins, leaves and a run starting or ending are saved at once), and rooms are capped per address and in all, as on the Node relay. Before
 pointing a paid account at players, also:
 

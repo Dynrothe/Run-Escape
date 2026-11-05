@@ -136,9 +136,13 @@ never crash or desync another player, or cost the maintainer money.
 
 ### Cloudflare's relay
 
-- **The lobby hibernates**, and anything kept in memory goes with it. Each wake runs the
-  constructor again, so code there that touches stored state runs far more often than it looks.
-- **A pending timer keeps it awake**, and billed, which can undo a change meant to cut cost.
+- **The lobby and the rooms hibernate**, and anything kept in memory goes with it. Each wake runs
+  the constructor again, so code there that touches stored state runs far more often than it looks.
+  A room that's quiet for 10 seconds can be made again from storage and its sockets' attachments,
+  so anything it has to remember past that goes in one or the other.
+- **A pending timer keeps it awake**, and billed, which can undo a change meant to cut cost. A room
+  waits only with `later()`, on its one alarm, never `setTimeout` or `setInterval`
+  (`room.test.ts` checks).
 - **Pings are answered without waking it**, so an idle check never runs for a connection that only
   pings.
 - **Cost from strangers.** Anything an unauthenticated request can start (a Durable Object per
