@@ -1,4 +1,4 @@
-import type { FloorSkinDef } from "./types";
+import type { FloorMaterialDef, FloorSkinDef } from "./types";
 
 // Ready-made tile skins for floors (FloorDef.skins), by name: put them in a floor's skins and
 // pick them by index in its tiles rules. All are opaque and a tile across, checked in the game;
@@ -20,6 +20,46 @@ const paving = (stone: number, joints: number, dark: number): [number, number][]
     [16425, joints],
     [10398, dark],
 ];
+
+// What a skin throws up and sounds like as it rises, falls and cracks (FloorSkinDef.material).
+// Spot animations and sounds from the cache; the sounds' names are the OSRS Wiki's, and which
+// suits which material is a choice, not the game's own (none of these is a floor's in OSRS but
+// stone's, the Wardens').
+export const FLOOR_MATERIALS = {
+    // The Wardens' own: the Sepulchre's dust (2699) up as it rises, the Tombs' blown dust (2184)
+    // as it goes, a chip of their rock (2210) as it cracks; toa_pos_p3_rocks_hit and
+    // toa_amp_rocks_fall_02
+    stone: {
+        rise: { spotAnim: 2699, sound: 6555, scale: 1.6 },
+        fall: { spotAnim: 2184, sound: 6572 },
+        crack: { spotAnim: 2210, sound: 6555, scale: 0.8 },
+    },
+    // Bricks: the rockfall's tumble (451, Jad's and the Kalphite Queen's falling rocks) as it goes,
+    // with the sound of collapsing pillars (1659) and the Tombs' dust as it cracks
+    brick: {
+        rise: { spotAnim: 2699, sound: 6555, scale: 1.2 },
+        fall: { spotAnim: 451, sound: 1659, scale: 0.5 },
+        crack: { spotAnim: 2184, sound: 1659, scale: 0.7 },
+    },
+    // Ice: Ice Burst's impact (363, ice_burst_impact 170) as it rises and cracks, and Ice
+    // Barrage's (369, ice_barrage_impact 168) as it shatters and goes
+    ice: {
+        rise: { spotAnim: 363, sound: 170, scale: 0.6 },
+        fall: { spotAnim: 369, sound: 168, scale: 0.6 },
+        crack: { spotAnim: 363, sound: 170, scale: 0.8 },
+    },
+    // Lava: embers (2246) drifting up as it rises and goes, with the Wardens' stone sounds
+    lava: {
+        rise: { spotAnim: 2246, sound: 6555 },
+        fall: { spotAnim: 2246, sound: 6572 },
+        crack: { spotAnim: 2246, sound: 6555 },
+    },
+} satisfies Record<string, FloorMaterialDef>;
+
+// The Wardens' slab, recoloured, for the tiles that do something to whoever's on them
+// (FloorSkinDef.effect): the cache's HSL, a hue (64 to a turn), a saturation (8) and a lightness (128)
+const hsl = (hue: number, saturation: number, lightness: number) =>
+    (hue << 10) | (saturation << 7) | lightness;
 
 export const FLOOR_SKINS = {
     // The Wardens' own slab, rising with its own animation
@@ -52,4 +92,39 @@ export const FLOOR_SKINS = {
     // tile, and the Tombs' gold-banded pillar on a 2 by 2 slab
     stonePillar: { loc: 7016 },
     tombsPillar: { loc: 45582, size: 2 },
+    // Tiles that do something (FloorEffect). Lava: a dark red crust, glowing a little all over and
+    // bright orange in its cracks, that burns.
+    lava: {
+        spotAnim: 2220,
+        recolor: slabTop(hsl(2, 7, 30), hsl(1, 7, 22), hsl(0, 6, 12)),
+        tint: 0xff6a28,
+        glow: 0.14,
+        light: 0xff7a1a,
+        effect: "burn",
+        material: FLOOR_MATERIALS.lava,
+    },
+    // Ice: pale blue, and you slide on it
+    ice: {
+        spotAnim: 2220,
+        recolor: slabTop(hsl(34, 2, 112), hsl(34, 3, 98), hsl(35, 3, 80)),
+        glow: 0.08,
+        tint: 0xe4f4ff,
+        effect: "ice",
+        material: FLOOR_MATERIALS.ice,
+    },
+    // Mud and sand: brown and pale, and slow going
+    mud: {
+        spotAnim: 2220,
+        recolor: slabTop(hsl(6, 3, 34), hsl(6, 3, 26), hsl(5, 3, 18)),
+        effect: "slow",
+    },
+    sand: {
+        spotAnim: 2220,
+        recolor: slabTop(hsl(8, 3, 92), hsl(8, 3, 84), hsl(8, 3, 74)),
+        effect: "slow",
+    },
+    // A glyph that heals whoever's on it: the rune decal, lit green (give it a skin under it)
+    healGlyph: { loc: 56393, light: 0x6dff8e, effect: "heal" },
+    // A speed plate: the Tombs' glyph plate, lit a cold blue
+    speedPlate: { loc: 45349, light: 0x7fd4ff, effect: "haste" },
 } satisfies Record<string, FloorSkinDef>;
