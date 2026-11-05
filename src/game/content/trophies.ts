@@ -177,10 +177,10 @@ TROPHIES.push(
             chance: 1 / 50,
         },
     },
-    // The Hallowed Sepulchre's own pet, as the item that brings it
+    // The Hallowed Sepulchre's pet (pets.ts), shown as the Dark acorn, its item in OSRS
     {
-        id: "dark_acorn",
-        name: "Dark acorn",
+        id: "dark_squirrel",
+        name: "Dark squirrel",
         objId: 24733,
         how: "1 in 10 for defeating Justiciar Zachariah; always on hard mode.",
         from: {

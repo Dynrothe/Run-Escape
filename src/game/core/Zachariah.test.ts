@@ -1,6 +1,7 @@
 import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { getMap } from "../content/maps";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, emptyStats } from "../content/types";
 import {
@@ -900,7 +901,7 @@ describe("fighting back", () => {
     });
 });
 
-describe("the dark acorn", () => {
+describe("the dark squirrel", () => {
     // Down in his last phase, with what the kill rolls for its trophies
     function kill(sim: Sim, roll?: boolean): number[] {
         const boss = startFight(sim);
@@ -918,26 +919,30 @@ describe("the dark acorn", () => {
     }
 
     test("1 in 10 for beating him, always on hard mode, never for dying", () => {
-        const trophy = TROPHY_BY_ID.get("dark_acorn")!;
+        const trophy = TROPHY_BY_ID.get("dark_squirrel")!;
         expect(trophy.from).toMatchObject({ enemyId: "justiciar_zachariah", mapId: "zachariah" });
+        // A pet once found: the cache's follower squirrel
+        expect(PET_BY_ID.get("dark_squirrel")?.npcId).toBe(9637);
+        expect(isPetFound([], "dark_squirrel")).toBe(false);
+        expect(isPetFound(["dark_squirrel"], "dark_squirrel")).toBe(true);
         // Normal: a 1 in 10 roll, and it's his if it comes up
         const normal = createSim();
         expect(kill(normal, true)).toContain(1 / 10);
-        expect(normal.trophies.has("dark_acorn")).toBe(true);
+        expect(normal.trophies.has("dark_squirrel")).toBe(true);
         const unlucky = createSim();
         kill(unlucky, false);
-        expect(unlucky.trophies.has("dark_acorn")).toBe(false);
+        expect(unlucky.trophies.has("dark_squirrel")).toBe(false);
         // Hard: certain, as rolled
         const hard = createSim(1, undefined, true);
         expect(kill(hard)).toContain(1);
-        expect(hard.trophies.has("dark_acorn")).toBe(true);
+        expect(hard.trophies.has("dark_squirrel")).toBe(true);
         // Dying to him: nothing
         const dead = createSim(1, undefined, true);
         startFight(dead);
         dead["playerDied"]();
         run(dead, 3);
         expect(dead.state).toBe("dead");
-        expect(dead.trophies.has("dark_acorn")).toBe(false);
+        expect(dead.trophies.has("dark_squirrel")).toBe(false);
     });
 });
 
