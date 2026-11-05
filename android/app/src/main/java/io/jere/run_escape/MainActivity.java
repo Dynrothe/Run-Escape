@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private static final String GAME_URL = ORIGIN + GAME_ROOT + "index.html";
     private static final String CHECK_URL = ORIGIN + GAME_ROOT + "offline-check.html";
     private static final String WORKER_URL = ORIGIN + GAME_ROOT + "offline-check-worker.js";
+    private static final String RELEASES_URL = "https://github.com/Dynrothe/Run-Escape/releases";
     private static final int WEB_FILE_PICKER = 100;
     private static final int EXPORT_SAVE = 102;
     private static final int MAX_SAVE_BYTES = 2 * 1024 * 1024;
@@ -282,8 +283,10 @@ public final class MainActivity extends Activity {
                             new AlertDialog.Builder(this).setTitle("Your progress")
                                     .setMessage("From the title screen, open Settings, then use Export "
                                             + "to save a copy or Import to restore one.\n\n"
-                                            + "Progress is kept on this device. Export a copy before "
-                                            + "uninstalling or clearing the app's data.")
+                                            + "Progress is kept on this device. To update, install the "
+                                            + "new version's APK over this one: uninstalling first "
+                                            + "deletes your progress. Export a copy before uninstalling "
+                                            + "or clearing the app's data.")
                                     .setPositiveButton("Close", null).show();
                             break;
                         // The renderer can have gone while this menu was open
@@ -295,8 +298,12 @@ public final class MainActivity extends Activity {
                                             + "Source: github.com/Dynrothe/Run-Escape\n\n"
                                             + "A fan project, not affiliated with Jagex. "
                                             + "Old School RuneScape assets belong to Jagex.\n\n"
+                                            + "New versions are on GitHub, and the app doesn't update "
+                                            + "itself: install a new version's APK over this one. Co-op "
+                                            + "needs everyone on the same version.\n\n"
                                             + "Use Android's Back action to reopen this menu.")
                                     .setNeutralButton("Licenses", (about, action) -> showLicenses())
+                                    .setNegativeButton("New versions", (about, action) -> openReleases())
                                     .setPositiveButton("Close", null).show();
                             break;
                         case 4: finish(); break;
@@ -304,6 +311,15 @@ public final class MainActivity extends Activity {
                     }
                     hideSystemBars();
                 }).setOnDismissListener(dialog -> hideSystemBars()).show();
+    }
+
+    // The only place the APK is published. The app never checks for or downloads a new version.
+    private void openReleases() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)));
+        } catch (ActivityNotFoundException exception) {
+            toast("No browser is available to open this link.");
+        }
     }
 
     private void showLicenses() {

@@ -201,10 +201,15 @@ jobs:
                   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: python3 scripts/android/sign-apk.py --version "$VERSION"
 
+            # How to install it and update it, for the release's notes: the app never updates itself
+            - run: sed "s/<version>/$VERSION/g" android/release-notes.md > release/android-notes.md
+
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: android-release
-                  path: release/Run-Escape-*-android.apk
+                  path: |
+                      release/Run-Escape-*-android.apk
+                      release/android-notes.md
                   if-no-files-found: error
                   retention-days: 1
                   compression-level: 0
@@ -242,6 +247,8 @@ jobs:
                       release/game-manifest.json)
                   if [ "$ANDROID_BUILT" = true ]; then
                       files+=("release/Run-Escape-$VERSION-android.apk")
+                      printf '\n' >> release/notes.md
+                      cat release/android-notes.md >> release/notes.md
                   fi
                   if [ "$DRAFT_EXISTS" = true ]; then
                       gh release upload "v$VERSION" "${files[@]}" --clobber

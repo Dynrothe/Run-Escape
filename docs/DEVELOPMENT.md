@@ -430,9 +430,25 @@ job fails, there's no draft at all, rather than one without the APK. Without the
 are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
 environment variables.
 
+**Only on GitHub, and no updates.** The APK is only ever published on this repository's releases,
+never in an app store, and the app never checks for, downloads or installs a new version. That's
+by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
+first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
+job adds to the draft when the APK's built), and so do the app's About and Save help, whose New
+versions button opens the releases page. Unlike desktop players, whose launcher updates the game,
+Android players on an older APK can't join rooms on the current build until they install it.
+
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
-`-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down. The app
-has no game updates of its own: a new game is a new APK.
+`-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
+won't install an older APK over a newer one.
+
+**Google's developer verification** applies outside app stores too. Certified Android phones are
+starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
+from 30 September 2026 in Brazil, Indonesia, Singapore and Thailand, and everywhere in 2027, as
+reported in 2026 (check Google's own page for where it stands). Players can still install an
+unregistered APK with ADB, or a slow opt-in in developer options. Registering, in the Android
+Developer Console, takes the application ID and the release key's certificate, so make the key
+first.
 
 ## Desktop
 

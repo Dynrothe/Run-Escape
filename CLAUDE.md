@@ -186,6 +186,9 @@ desktop build.
 - **Never change its application ID (`io.jere.run_escape`) or its page's address**
   (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
   ID can't have a hyphen.
+- **It's only published on GitHub's releases, and never updates itself.** Don't add an update
+  check, a download or an app store build: players install a new APK over the old one, as the
+  release notes (`android/release-notes.md`) and the app's About say.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.

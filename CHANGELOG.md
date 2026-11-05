@@ -10,8 +10,9 @@ the version in the corner).
 - Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
   to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
 - An Android app, by coltencleland-hub: the APK on the release page. The whole game's in it, so
-  solo play works offline, even on the first launch, and co-op works online. Export and Import in
-  Settings carry a save between it and a browser.
+  solo play works offline, even on the first launch, and co-op works online. It doesn't update
+  itself: install a new version's APK over the old one. Export and Import in Settings carry a save
+  between it and a browser.
 
 ### Changed
 
