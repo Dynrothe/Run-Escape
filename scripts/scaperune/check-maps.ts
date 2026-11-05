@@ -11,9 +11,9 @@
 // the four rules for the ground: fields are level, roads can be walked, water's flat but at a
 // fall, and falls are seated in their faces. Fails if not.
 //
-//   npx tsx scripts/scaperune/check-maps.ts
-//   ONLY=volcanoes npx tsx scripts/scaperune/check-maps.ts    # the maps whose names match
-//   SHOW=500 npx tsx scripts/scaperune/check-maps.ts          # more than 16 problems a map
+//   bun run tsx scripts/scaperune/check-maps.ts
+//   ONLY=volcanoes bun run tsx scripts/scaperune/check-maps.ts    # the maps whose names match
+//   SHOW=500 bun run tsx scripts/scaperune/check-maps.ts          # more than 16 problems a map
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { FlowField } from "../../src/game/core/world/FlowField";
 import { isStamped } from "../../src/game/scaperune/Ground";

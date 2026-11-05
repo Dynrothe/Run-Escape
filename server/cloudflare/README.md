@@ -47,8 +47,9 @@ check` tests the lobby itself.
 
 ## Setting it up
 
-You need a Cloudflare account, Bun for the install, and Node 22.12 or newer for Wrangler.
-The relay runs at a `workers.dev` address.
+You need a Cloudflare account (free is fine to start: see Cost below), Bun to install Wrangler, and
+Node 22 or newer, which Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev`
+address.
 
 1. **Install and log in.** From the repository:
 

@@ -7,7 +7,7 @@ with Share run stats in Settings. Gameplay and local saves never wait for report
 
 ## Set up the collector
 
-You need a Cloudflare account, Bun and Node 22.12 or newer. The scripts use the Wrangler
+You need a Cloudflare account (free is fine), Bun and Node 22 or newer. The scripts use the Wrangler
 installed for the co-op relay, but deploy a different Worker, `run-escape-analytics`.
 
 1. **Install and log in**, from the repository:
@@ -146,10 +146,16 @@ GROUP BY characters, map_id, mode;
 
 ## Export and look through it
 
-`bun run wrangler d1 export run-escape-analytics --remote --output runs-2026-11-05.sql -c ../analytics/wrangler.toml`
-writes the whole database, schema and rows, as SQL. `--table daily_stats` (repeatable) limits it
-to some tables and `--no-schema` leaves out the `CREATE` statements; without `runs`, the viewer
-below has no party composition, leaderboard or single runs to show. An export
+From `server/cloudflare`, the following command writes the whole database, schema and rows, as SQL.
+
+```sh
+bun run wrangler d1 export run-escape-analytics --remote \
+    --output runs-2026-11-05.sql -c ../analytics/wrangler.toml
+```
+
+Pass `--table daily_stats` to export a single table. Repeat `--table` for more tables or pass
+`--no-schema` to omit the `CREATE` statements. The viewer needs the `runs` table to show party
+composition, the leaderboard and individual runs. An export
 [holds up the database's other requests](https://developers.cloudflare.com/d1/best-practices/import-export-data/)
 while it runs. Raw runs expire after `RAW_RETENTION_DAYS`, so keep an export at least that often
 to look back further.

@@ -105,9 +105,8 @@ There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the
 1. Run the tests and the type check, and format what you changed.
 2. **Run a simulation if the change can affect gameplay or balance** (see below).
 3. **If you added anything from the cache** (an item, enemy, map, animation or sprite), say so in the
-   pull request. Don't run `bun run slim-cache` as part of a change: it's slow and heavy on memory, and
-   it's done when deploying. A deployed game with an old slim cache stops on a "missing from the
-   cache" error.
+   pull request. Leave `bun run slim-cache` for deployment. It takes time and memory, and a deployed
+   game with an old slim cache stops on a "missing from the cache" error.
 4. Try UI and visual changes in the browser. Tests don't cover how things look.
 5. Note the change in `CHANGELOG.md` under Unreleased.
 6. Update the docs (see [Keep these files up to date](#keep-these-files-up-to-date)).
@@ -121,9 +120,11 @@ the pull request. If a sim wasn't run, say so there.
 ```sh
 bun run tsx scripts/game/simulate-run.ts wizard 3                # one adventurer, 3 seeds
 MAP=barrows bun run tsx scripts/game/simulate-run.ts "" 3        # everyone on one map, 3 seeds
-MAP=morytania META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3    # everything bought
+# everything bought
+MAP=morytania META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3
 ENDLESS=1 bun run tsx scripts/game/simulate-run.ts wizard 3      # endless mode
-HARD=1 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts wizard 3    # hard mode
+# hard mode
+HARD=1 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts wizard 3
 WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3    # co-op
 ```

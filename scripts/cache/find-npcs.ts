@@ -1,8 +1,8 @@
 // Lists NPC types whose name matches, with their combat level, size and
 // idle/walk animations, and whether it's a pet's follower.
 //
-//   npx tsx scripts/cache/find-npcs.ts goblin
-//   npx tsx scripts/cache/find-npcs.ts "^count draynor$"
+//   bun run tsx scripts/cache/find-npcs.ts goblin
+//   bun run tsx scripts/cache/find-npcs.ts "^count draynor$"
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

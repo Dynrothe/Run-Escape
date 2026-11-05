@@ -1,18 +1,18 @@
 // Plays runs with a simple bot on the real arena (collision from a snapshot of
 // the cache, see collision-snapshot.ts) and prints how they go, for balancing waves, weapons and the XP curve.
 //
-//   npx tsx scripts/game/simulate-run.ts                 # every character once
-//   npx tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
-//   npx tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
-//   MAP=barrows npx tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
-//   UNLOCKS=none npx tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
-//   META=max npx tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
-//   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
-//   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
-//   HARD=1 npx tsx scripts/game/simulate-run.ts          # on hard mode
+//   bun run tsx scripts/game/simulate-run.ts                 # every character once
+//   bun run tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
+//   bun run tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
+//   MAP=barrows bun run tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
+//   UNLOCKS=none bun run tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
+//   META=max bun run tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
+//   ARMOURY=max bun run tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
+//   ENDLESS=1 bun run tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
+//   HARD=1 bun run tsx scripts/game/simulate-run.ts          # on hard mode
 //   EXPERT=1 MAP=theatre_of_blood ...  # a raid's expert mode (hard, and the Nylocas's colours)
-//   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
-//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
+//   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
+//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what a phased boss marks on the ground, and sidesteps bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls

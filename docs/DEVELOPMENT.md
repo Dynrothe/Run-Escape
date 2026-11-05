@@ -3,6 +3,10 @@
 How the code is laid out, the tools that come with it, how to host a build, and the desktop app.
 The [README](../README.md) covers getting it running.
 
+**A checkout that was installed with npm** needs `node_modules` deleted before `bun install`.
+Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
+its `yallist`, and the dev server fails with `Yallist is not a constructor`.
+
 ## Hosting
 
 ```
@@ -62,9 +66,9 @@ The simplest way to host everything: `bun run serve` (`node server/serve.mjs`, n
 `dist/` with the headers above on `PORT` (8080), and runs the co-op relay in the same process.
 Multiplayer is on unless it's turned off (`bun run serve:singleplayer`, `MULTIPLAYER=off` or
 `--no-multiplayer`), and either way the game only offers it when a relay answers: it asks once,
-in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds. Run `bun run build` first; with no
-slim cache in `dist/caches` it serves the full one from `caches/`, so it also works for trying a
-build locally (http://localhost:8080). Put something that does HTTPS in front of it, like Caddy
+in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds.
+Run `bun run build` first. If `dist/caches` is missing, the server uses the full cache in `caches/`
+so you can try the build locally (http://localhost:8080). For HTTPS, use a proxy like Caddy
 (`caddy reverse-proxy --from game.example.com --to localhost:8080`).
 
 The relay is light. In a load test at the game's own rates (host frames 25 times a second, guests'
@@ -1328,5 +1332,6 @@ game loads rather than built in, so on a hosted game `notice.md` can be edited o
 
 The version is `package.json`'s, shown in the title screen's corner, and [CHANGELOG.md](../CHANGELOG.md)
 says what changed in each one; the title screen shows it too. Note changes under Unreleased as
-they're made. For a release, `bun pm version minor --no-git-tag-version` (or `patch` for fixes alone),
-then turn Unreleased into the new version's heading with the date. A test checks the two agree.
+they're made. For a release, run `bun pm version minor --no-git-tag-version` (use `patch` for fixes
+alone), then turn Unreleased into the new version's heading with the date. A test checks the two
+agree.

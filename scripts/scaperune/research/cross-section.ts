@@ -1,8 +1,8 @@
 // Text picture of a rectangle of the world: each tile's slope, floor and what stands on it, so
 // a cliff's make-up can be read without a browser. Plus a column of heights down its middle.
 //
-//   npx tsx scripts/scaperune/research/cross-section.ts x y sizeX sizeY
-//   npx tsx scripts/scaperune/research/cross-section.ts id@mapX,mapY sizeX sizeY    # the part of
+//   bun run tsx scripts/scaperune/research/cross-section.ts x y sizeX sizeY
+//   bun run tsx scripts/scaperune/research/cross-section.ts id@mapX,mapY sizeX sizeY    # the part of
 //                                                       a square with the most of that loc
 import { openWorld } from "./lib";
 

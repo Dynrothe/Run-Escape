@@ -1,7 +1,7 @@
 // Lists identity kits (player body parts): id, body part, whether players can
 // pick it in character creation, and its models.
 //
-//   npx tsx scripts/cache/dump-idk.ts
+//   bun run tsx scripts/cache/dump-idk.ts
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { createIdkTypeLoader } from "../../src/rs/config/idktype/IdkTypeLoader";

@@ -11,9 +11,10 @@ each field. Find a similar entry, copy its shape, and look up real ids in the ca
 
 ```sh
 bun run tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
-bun run tsx scripts/cache/find-npcs.ts "^count draynor$"     # NPCs and their idle and walk animations
+bun run tsx scripts/cache/find-npcs.ts "^count draynor$"  # NPCs and their idle and walk animations
 bun run tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
-bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
+# tell attack and death animations apart
+bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183
 bun run tsx scripts/cache/find-locs.ts multicannon           # scenery
 bun run tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
 bun run tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through

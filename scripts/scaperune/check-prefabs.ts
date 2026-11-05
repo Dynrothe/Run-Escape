@@ -3,7 +3,7 @@
 // flooding in from outside, rather than trusting what getInsideTiles decided. A
 // rectangle that cuts a wall off leaks and fails here. Fails if any does.
 //
-//   npx tsx scripts/scaperune/check-prefabs.ts
+//   bun run tsx scripts/scaperune/check-prefabs.ts
 import { Ground } from "../../src/game/scaperune/Ground";
 import { Exit, findExits } from "../../src/game/scaperune/building";
 import { TileGrid } from "../../src/game/scaperune/format";

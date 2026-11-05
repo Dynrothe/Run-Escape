@@ -62,8 +62,9 @@ changing both.
 
 ## Getting started
 
-Install [Bun](https://bun.com/) 1.3.14 and [Node.js](https://nodejs.org/) 22.12 or newer.
-Bun installs dependencies and runs project commands. Node runs Vite, Vitest and the co-op relay.
+You need [Bun](https://bun.com/) (the version in `package.json`'s `packageManager`) and
+[Node.js](https://nodejs.org/) 20 or newer. Bun installs the packages and runs the project's
+commands, and Node runs Vite, Vitest and the co-op relay.
 
 ```sh
 bun install --frozen-lockfile
