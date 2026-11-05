@@ -95,13 +95,31 @@ function isSeq(value) {
 
 // ---- Watching the host's frames ----
 
+// A frame as seconds into the run, to a tenth
+function runSeconds(frame) {
+    return Math.round((frame / TICKS_PER_SECOND) * 10) / 10;
+}
+
+// The newest few of what a guest sent, for a log entry to compare with
+const SHOWN_SENT = 5;
+
 export class RunWatch {
-    // report(kind, detail) hears of a kind once a minute at most; caught(kind)
-    // once, when a kind has had its STRIKES. resumed: made again mid-run.
-    constructor(heroIds, hostId, { report, caught, now = Date.now(), resumed = false }) {
+    // log(entry) hears of each finding (a kind once a minute at most, with a
+    // count of all), of the host being caught, and of the run's summary.
+    // caught(kind) hears once, when a kind has had its STRIKES. run: what each
+    // entry says the run is (room, map, build); names: player id -> name.
+    // resumed: made again mid-run.
+    constructor(
+        heroIds,
+        hostId,
+        { log, caught, run = {}, names = new Map(), now = Date.now(), resumed = false },
+    ) {
         this.heroIds = heroIds;
-        this.report = report;
+        this.hostId = hostId;
+        this.log = log;
         this.caught = caught;
+        this.run = run;
+        this.names = names;
         this.from = resumed ? now + RESUMED_MS : now;
         this.guests = new Map();
         for (const id of heroIds) {
@@ -123,20 +141,55 @@ export class RunWatch {
         this.checkedUpTo = 0;
         this.reportedAt = new Map();
         this.counts = {};
-        this.isCaught = false;
+        this.caughtFor = undefined;
+        this.finished = false;
     }
 
-    flag(kind, detail, now) {
+    // An entry for the log: the same fields from both relays, for a log
+    // that's searched by them
+    entry(kind, fields) {
+        const guest = fields.hero === undefined ? undefined : this.heroIds[fields.hero];
+        return {
+            event: "coop_run_check",
+            kind,
+            ...this.run,
+            party: this.heroIds.length,
+            host: this.names.get(this.hostId),
+            ...(guest !== undefined && { guest: this.names.get(guest) }),
+            ...(fields.frame !== undefined && { runSeconds: runSeconds(fields.frame) }),
+            ...fields,
+        };
+    }
+
+    flag(kind, fields, now) {
         const count = (this.counts[kind] ?? 0) + 1;
         this.counts[kind] = count;
         const last = this.reportedAt.get(kind);
         if (last === undefined || now - last >= REPORT_EVERY_MS) {
             this.reportedAt.set(kind, now);
-            this.report?.(kind, { ...detail, count });
+            this.log?.(this.entry(kind, { ...fields, count }));
         }
-        if (!this.isCaught && count >= STRIKES[kind]) {
-            this.isCaught = true;
+        if (this.caughtFor === undefined && count >= STRIKES[kind]) {
+            this.caughtFor = kind;
+            this.log?.(this.entry("caught", { by: kind, counts: { ...this.counts } }));
             this.caught?.(kind);
+        }
+    }
+
+    // The run's over: what was found in it, if anything was. Once.
+    finish() {
+        if (this.finished) {
+            return;
+        }
+        this.finished = true;
+        if (Object.keys(this.counts).length > 0) {
+            this.log?.(
+                this.entry("summary", {
+                    counts: { ...this.counts },
+                    caught: this.caughtFor ?? null,
+                    runSeconds: runSeconds(this.checkedUpTo),
+                }),
+            );
         }
     }
 
@@ -186,12 +239,14 @@ export class RunWatch {
         guest.outOfStep = frame;
         const guests = [...this.guests.values()].filter((g) => g.outOfStep === frame).length;
         this.counts.desync = (this.counts.desync ?? 0) + 1;
-        this.report?.("desync", {
-            hero: this.heroIds.indexOf(id),
-            frame,
-            guests,
-            of: this.guests.size,
-        });
+        this.log?.(
+            this.entry("desync", {
+                hero: this.heroIds.indexOf(id),
+                frame,
+                guests,
+                of: this.guests.size,
+            }),
+        );
     }
 
     // The host's frames, as they went to the guests
@@ -229,7 +284,8 @@ export class RunWatch {
         if (now - this.clockFrom < CLOCK_MS) {
             this.zeroAt = Math.min(this.zeroAt ?? Infinity, zeroAt);
         } else if (this.zeroAt - zeroAt > AHEAD_MS) {
-            this.flag("ahead", { frames: Math.round((this.zeroAt - zeroAt) / TICK_MS) }, now);
+            const ahead = this.zeroAt - zeroAt;
+            this.flag("ahead", { frame: upTo, aheadSeconds: Math.round(ahead / 100) / 10 }, now);
         }
     }
 
@@ -242,10 +298,23 @@ export class RunWatch {
         while (guest.actions.length > 0 && now - guest.actions[0].at > KEEP_MS) {
             guest.actions.shift();
         }
+        const at = { hero: event.hero, frame: event.frame };
         if (event.move !== undefined) {
-            const sentAt = guest.moves.get(moveKey(event.move));
+            const key = moveKey(event.move);
+            const sentAt = guest.moves.get(key);
             if (sentAt === undefined || now - sentAt > KEEP_MS) {
-                this.flag("move", { hero: event.hero, frame: event.frame }, now);
+                this.flag(
+                    "move",
+                    {
+                        ...at,
+                        move: cleanMove(event.move) ?? null,
+                        sent: [...guest.moves.keys()]
+                            .slice(-SHOWN_SENT)
+                            .reverse()
+                            .map((sent) => sent.split(",").map(Number)),
+                    },
+                    now,
+                );
             }
         }
         if (event.action === undefined) {
@@ -253,20 +322,40 @@ export class RunWatch {
         }
         if (event.auto === true) {
             if (now - guest.autoAt < AUTO_AFTER_MS) {
-                this.flag("auto", { hero: event.hero, frame: event.frame }, now);
+                const since = now - guest.autoAt;
+                this.flag(
+                    "auto",
+                    {
+                        ...at,
+                        // Since the run began, for its first
+                        secondsSinceLast: Math.round(since / 100) / 10,
+                    },
+                    now,
+                );
             }
             guest.autoAt = now;
             return;
         }
         const key = actionKey(event.action);
         const seq = isSeq(event.actionSeq) ? event.actionSeq : undefined;
-        const at = guest.actions.findIndex(
+        const found = guest.actions.findIndex(
             (a) => a.key === key && (seq === undefined || a.seq === seq),
         );
-        if (at < 0) {
-            this.flag("action", { hero: event.hero, frame: event.frame }, now);
+        if (found < 0) {
+            this.flag(
+                "action",
+                {
+                    ...at,
+                    action: key ?? null,
+                    sent: guest.actions
+                        .slice(-SHOWN_SENT)
+                        .reverse()
+                        .map((a) => a.key),
+                },
+                now,
+            );
         } else {
-            guest.actions.splice(at, 1);
+            guest.actions.splice(found, 1);
         }
     }
 }

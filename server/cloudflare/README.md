@@ -157,9 +157,22 @@ phone locking, a lost signal) has no close to answer, and still ends abnormally.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. `MULTIPLAYER_RUN_CHECKS = "end"` ends a run whose host
-the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged, which
-`bun run wrangler tail` shows. The other limits are at the top of `src/shared.mjs`, the same
-numbers as `coop-relay.mjs`.
+the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged. The other limits
+are at the top of `src/shared.mjs`, the same numbers as `coop-relay.mjs`.
+
+**The run checks' log**: an object for each entry, with `event: "coop_run_check"` and its `kind`,
+which `bun run wrangler tail` shows as it happens. To keep them (for 7 days, searchable by field in
+the dashboard), turn on Workers Logs without its log of every invocation:
+
+```toml
+[observability.logs]
+enabled = true
+invocation_logs = false
+```
+
+Cloudflare's docs don't say whether that also leaves out each WebSocket message to a room, which
+would be a log event apiece and far past what the plan includes. After turning it on, watch the
+Worker's log events in the dashboard for a while before leaving it on.
 
 **Taking it down**: `bun run wrangler delete run-escape-coop`.
 

@@ -500,10 +500,16 @@ describe("co-op relay", () => {
                     });
                     await guests[0].next("down");
                 }
-                expect(warn).toHaveBeenCalledWith(
-                    expect.stringMatching(/^Co-op run check: move in room /),
-                    expect.objectContaining({ hero: 1 }),
-                );
+                // One line of JSON each
+                const logged = warn.mock.calls.map(([line]: [string]) => JSON.parse(line));
+                expect(logged[0]).toMatchObject({
+                    event: "coop_run_check",
+                    kind: "move",
+                    room: room.code,
+                    hero: 1,
+                    move: [127, 0],
+                });
+                expect(logged.map((entry: any) => entry.kind)).toContain("caught");
                 if (endCaughtRuns) {
                     expect((await guests[0].next("gone")).reason).toBe("hostLeft");
                 } else {

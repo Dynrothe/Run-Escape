@@ -450,8 +450,12 @@ describe("Cloudflare co-op room", () => {
             warn.mockRestore();
             delete env.MULTIPLAYER_RUN_CHECKS;
         });
+        // What the run checks logged: an object each, which Workers Logs keeps
+        // field by field
         const checked = () =>
-            warn.mock.calls.filter(([text]: [string]) => text.startsWith("Co-op run check"));
+            warn.mock.calls
+                .map(([entry]: [any]) => entry)
+                .filter((entry: any) => entry?.event === "coop_run_check");
         const heroes = [{ id: "host" }, { id: "guest" }];
         // Frames giving the guest a move they never sent
         const forged = (room: any, host: any, frame: number) =>
@@ -472,12 +476,25 @@ describe("Cloudflare co-op room", () => {
             for (let frame = 2; frame <= 5; frame++) {
                 forged(room, host, frame);
             }
-            expect(checked()[0]).toEqual([
-                "Co-op run check: move in room ABCDEFGH",
-                expect.objectContaining({ hero: 1, frame: 2 }),
-            ]);
+            expect(checked()[0]).toMatchObject({
+                kind: "move",
+                room: "ABCDEFGH",
+                host: "host",
+                guest: "guest",
+                hero: 1,
+                frame: 2,
+                move: [127, 0],
+                sent: [[0, 127]],
+            });
             expect(guest.socket.sent.at(-1)).toMatchObject({ t: "down", d: { upTo: 5 } });
             expect(room.room.started).toBe(true);
+            // And sums it up when the run's over
+            say(room, host, { t: "end" });
+            expect(checked().at(-1)).toMatchObject({
+                kind: "summary",
+                counts: { move: 4 },
+                caught: "move",
+            });
         });
 
         it("ends the run when it's set to", async () => {

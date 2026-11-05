@@ -1002,6 +1002,7 @@ export function createRelay(limits = {}) {
         }
         if (room.members.length === 0) {
             rooms.delete(room.code);
+            room.watch?.finish();
             listChanged();
             return;
         }
@@ -1024,6 +1025,8 @@ export function createRelay(limits = {}) {
 
     function disband(room, reason) {
         rooms.delete(room.code);
+        room.watch?.finish();
+        room.watch = undefined;
         listChanged();
         for (const member of room.members) {
             member.room = undefined;
@@ -1158,14 +1161,20 @@ export function createRelay(limits = {}) {
         if (!heroIds) {
             return undefined;
         }
+        const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(heroIds, room.hostId, {
-            report: (kind, detail) => {
-                counters.runChecks[kind] = (counters.runChecks[kind] ?? 0) + 1;
-                console.warn(`Co-op run check: ${kind} in room ${room.code}`, detail);
+            run: { room: room.code, map: room.mapId, build: host?.build },
+            names: new Map(room.members.map((m) => [m.id, m.name])),
+            log: (entry) => {
+                if (entry.kind === "caught") {
+                    counters.hostsCaught++;
+                } else if (RUN_CHECKS.includes(entry.kind)) {
+                    counters.runChecks[entry.kind] = (counters.runChecks[entry.kind] ?? 0) + 1;
+                }
+                // One line of JSON, for whatever reads the relay's output
+                console.warn(JSON.stringify(entry));
             },
-            caught: (kind) => {
-                counters.hostsCaught++;
-                console.warn(`Co-op run check: room ${room.code}'s host caught (${kind})`);
+            caught: () => {
                 watch.end = endCaughtRuns;
             },
         });
@@ -1457,6 +1466,7 @@ export function createRelay(limits = {}) {
                 // The host's back in the lobby: the room is again
                 if (isHost && room.started) {
                     room.started = false;
+                    room.watch?.finish();
                     room.watch = undefined;
                     roomChanged(room);
                 }
@@ -1492,6 +1502,7 @@ export function createRelay(limits = {}) {
                     room.watch?.down(message.d);
                     if (room.watch?.end) {
                         // Which ends the run for everyone, as the host leaving does
+                        room.watch.finish();
                         room.watch = undefined;
                         client.connection.close(1008);
                     }

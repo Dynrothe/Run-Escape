@@ -627,6 +627,8 @@ export class Room extends DurableObject {
         for (const key of ["heartbeat", "update", "save"]) {
             this.cancel(key);
         }
+        this.watch?.finish();
+        this.watch = undefined;
         this.room = undefined;
         this.kicked.clear();
         this.ctx.storage.deleteAll().catch(() => {});
@@ -844,6 +846,7 @@ export class Room extends DurableObject {
                 if (isHost && room.started) {
                     room.started = false;
                     room.heroIds = undefined;
+                    this.watch?.finish();
                     this.watch = undefined;
                     this.persist(true);
                     this.broadcastRoom();
@@ -884,13 +887,14 @@ export class Room extends DurableObject {
     }
 
     newWatch(room, resumed) {
-        const code = this.code;
+        const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(room.heroIds, room.hostId, {
             resumed,
-            report: (kind, detail) =>
-                console.warn(`Co-op run check: ${kind} in room ${code}`, detail),
-            caught: (kind) => {
-                console.warn(`Co-op run check: room ${code}'s host caught (${kind})`);
+            run: { room: this.code, map: room.mapId, build: host?.build },
+            names: new Map(room.members.map((m) => [m.id, m.name])),
+            // An object, which Workers Logs keeps field by field
+            log: (entry) => console.warn(entry),
+            caught: () => {
                 watch.end = this.endsCaught;
             },
         });

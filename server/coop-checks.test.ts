@@ -43,8 +43,19 @@ describe("the relay's copy of the host's checks", () => {
     });
 });
 
+// A finding's kind and the fields that say where it was
+const core = (entry: any) => [
+    entry.kind,
+    Object.fromEntries(
+        ["hero", "frame", "count", "guests", "of"]
+            .filter((key) => entry[key] !== undefined)
+            .map((key) => [key, entry[key]]),
+    ),
+];
+
 describe("watching a run", () => {
     const TICK = 20;
+    let entries: any[];
     let reports: [string, any][];
     let caught: string[];
     let now: number;
@@ -55,11 +66,17 @@ describe("watching a run", () => {
         new RunWatch(["host", "guest"], "host", {
             now,
             resumed,
-            report: (kind, detail) => reports.push([kind, detail]),
+            log: (entry) => {
+                entries.push(entry);
+                if (entry.kind !== "caught" && entry.kind !== "summary") {
+                    reports.push(core(entry) as [string, any]);
+                }
+            },
             caught: (kind) => caught.push(kind),
         });
 
     beforeEach(() => {
+        entries = [];
         reports = [];
         caught = [];
         now = 1_000_000;
@@ -232,7 +249,12 @@ describe("watching a run", () => {
             now,
             // Even made again mid-run: a guest only says it once
             resumed: true,
-            report: (kind, detail) => reports.push([kind, detail]),
+            log: (entry) => {
+                entries.push(entry);
+                if (entry.kind !== "caught" && entry.kind !== "summary") {
+                    reports.push(core(entry) as [string, any]);
+                }
+            },
             caught: (kind) => caught.push(kind),
         });
         watch.up("a", { outOfStep: 500 }, now);
@@ -246,6 +268,99 @@ describe("watching a run", () => {
         ]);
         // They've left already: it isn't the host caught
         expect(caught).toEqual([]);
+    });
+
+    it("logs entries a log can be searched by, and a summary when the run's over", () => {
+        watch = new RunWatch(["host", "guest"], "host", {
+            now,
+            run: { room: "ABCDEFGH", map: "lumbridge", build: "1.2.3+abc" },
+            names: new Map([
+                ["host", "Brave Imp"],
+                ["guest", "Quiet Goblin"],
+            ]),
+            log: (entry) => entries.push(entry),
+            caught: (kind) => caught.push(kind),
+        });
+        pass(4000);
+        watch.up("guest", { move: [0, 127] }, now);
+        watch.up("guest", { action: { kind: "reroll" }, actionSeq: 2 }, now);
+        for (let i = 0; i < 3; i++) {
+            pass(1000, [{ hero: 1, move: [127, 0] }]);
+        }
+        pass(100, [{ hero: 1, action: { kind: "skip" } }]);
+        pass(100, [{ hero: 1, action: { kind: "choose", index: 0 }, auto: true }]);
+        watch.finish();
+        watch.finish();
+        const run = {
+            event: "coop_run_check",
+            room: "ABCDEFGH",
+            map: "lumbridge",
+            build: "1.2.3+abc",
+            party: 2,
+            host: "Brave Imp",
+        };
+        expect(entries).toEqual([
+            {
+                ...run,
+                kind: "move",
+                guest: "Quiet Goblin",
+                hero: 1,
+                frame: expect.any(Number),
+                runSeconds: 5,
+                move: [127, 0],
+                sent: [[0, 127]],
+                count: 1,
+            },
+            { ...run, kind: "caught", by: "move", counts: { move: 3 } },
+            {
+                ...run,
+                kind: "action",
+                guest: "Quiet Goblin",
+                hero: 1,
+                frame: expect.any(Number),
+                runSeconds: expect.any(Number),
+                action: "skip",
+                sent: ["reroll"],
+                count: 1,
+            },
+            {
+                ...run,
+                kind: "auto",
+                guest: "Quiet Goblin",
+                hero: 1,
+                frame: expect.any(Number),
+                runSeconds: expect.any(Number),
+                secondsSinceLast: 7.2,
+                count: 1,
+            },
+            {
+                ...run,
+                kind: "summary",
+                counts: { move: 3, action: 1, auto: 1 },
+                caught: "move",
+                // As far as the frames went
+                runSeconds: Math.round((frame / 50) * 10) / 10,
+            },
+        ]);
+        // As the Node relay prints them
+        expect(JSON.parse(JSON.stringify(entries))).toEqual(entries);
+    });
+
+    it("says how far ahead the frames were", () => {
+        pass(12_000);
+        for (let i = 0; i < 25 * 10; i++) {
+            now += 40;
+            frame += 3;
+            watch.down({ upTo: frame, events: [] }, now);
+        }
+        expect(entries[0]).toMatchObject({ kind: "ahead", aheadSeconds: expect.any(Number) });
+        expect(entries[0].aheadSeconds).toBeGreaterThanOrEqual(5);
+    });
+
+    it("has nothing to sum up after an honest run", () => {
+        pass(30_000);
+        watch.finish();
+        expect(entries).toEqual([]);
     });
 
     it("copes with nonsense", () => {
