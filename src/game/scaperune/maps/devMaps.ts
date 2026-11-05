@@ -15,6 +15,7 @@ import { TERRAIN_TEST } from "./terrainTest";
 import { TOMBS_OF_AMASCUT } from "./tombsOfAmascut";
 import { VARDHELM } from "./vardhelm";
 import { WALL_SHEET } from "./wallSheet";
+import { WARDENS_FLOOR } from "./wardensFloor";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
 // needs its own squares: nothing in the cache lives at x 70-99, y 66-199, and the
@@ -136,4 +137,5 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     KALUAS_WAKE,
     SHATTERED_REALM,
     TOMBS_OF_AMASCUT,
+    WARDENS_FLOOR,
 ];

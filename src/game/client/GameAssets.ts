@@ -21,7 +21,7 @@ import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { MAPS } from "../content/maps";
+import { ALL_MAPS, MAPS } from "../content/maps";
 import { getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
@@ -204,6 +204,12 @@ function getSpotAnimIds(): number[] {
     };
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
+    }
+    // A floor's slabs (a dev map's, so they're only there on the dev server)
+    for (const map of ALL_MAPS) {
+        add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
+        const effects = map.floor?.effects;
+        add(effects?.dust, effects?.fallDust, effects?.rock);
     }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);

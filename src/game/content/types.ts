@@ -1767,6 +1767,9 @@ export type MapDef = {
     // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
     // place of hard mode
     tombs?: TombsDef;
+    // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
+    // it fall away. A prototype, on a dev map only.
+    floor?: FloorDef;
 };
 
 export type TombsDef = {
@@ -1865,6 +1868,82 @@ export type TombsPathDef = {
 };
 
 export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reach: number };
+
+// A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut
+// (core/ArenaFloor.ts runs it, client/FloorView.ts draws it). It's a rectangle of 1 by 1 tiles,
+// each drawn by the game as a slab, so each can shake, rise and fall on its own. Its front is
+// north, where a boss would stand: slams travel out from it, and rows fall away from the south,
+// the back, towards it. Every hit is warned by the tiles themselves shaking.
+export type FloorDef = {
+    // World tiles, both ends in
+    rect: { x0: number; y0: number; x1: number; y1: number };
+    slam: {
+        // Seconds a tile shakes before it rises
+        warn: number;
+        // Seconds after it starts rising that it hits whoever's on it: while it's up
+        hurt: [from: number, to: number];
+        // Of the player's hitpoints
+        damage: number;
+        // Seconds after a hit from the floor before it can hit them again
+        grace: number;
+        // The slab coming up: a 1 by 1 tile, its top flush with the ground at rest
+        spotAnim: number;
+        // As tiles come up (one a tick at most, where they are), and as one hits the player
+        sound: number;
+    };
+    drop: {
+        // Seconds a tile shakes and sags before it falls
+        warn: number;
+        // Of the player's hitpoints, for being on a tile as it goes; they're pushed to the
+        // nearest tile that isn't going, over shove seconds
+        damage: number;
+        shove: number;
+        // The slab tumbling, and how long it's drawn falling into the dark
+        spotAnim: number;
+        fall: number;
+        // Rows that never fall: the last row in front of the boss
+        keepRows: number;
+        // As tiles fall, and as the player's hurt by one
+        sound: number;
+    };
+    // What it throws up, all spot animations (client/FloorView.ts): dust as a slab comes up and
+    // as a tile goes, and a chip of rock (crumbling off a tile about to go, and falling with it)
+    effects?: { dust: number; fallDust: number; rock: number };
+    // A slab coming up this near a player shakes the camera this much, and a tile going from under
+    // or beside them this much (ImpactDef.shake; Settings can turn it off)
+    shake?: { slam: number; drop: number };
+    // What the floor does, at seconds into the loop, and then the loop again from the top
+    script: FloorBeatDef[];
+    loopSeconds: number;
+};
+
+export type FloorBeatDef = {
+    at: number;
+    pattern: FloorPatternDef;
+    // On-screen notice as it starts
+    message?: string;
+};
+
+// side: one half of the floor rises, row by row away from the front, the middle column with it
+// (east or west), or all of it but the middle three columns (both). sweep: every row from the
+// front, each with a gap of gap tiles that wanders a tile at a time. ripple: square rings out from
+// a tile (the player's, or the middle), with spokes along which nothing rises (a cross, or the
+// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
+// holes: single tiles fall away at random, never next to another hole or the floor's edge.
+// restore: everything that's fallen comes back up, front first.
+export type FloorPatternDef =
+    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
+    | { kind: "sweep"; rowSeconds: number; gap: number }
+    | {
+          kind: "ripple";
+          at: "player" | "middle";
+          ringSeconds: number;
+          radius: number;
+          spokes: "cross" | "diagonal";
+      }
+    | { kind: "dropRows"; rows: number; rowSeconds: number }
+    | { kind: "holes"; count: number }
+    | { kind: "restore"; rowSeconds: number };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into
 // its boss's room, which nobody leaves while the boss is up. Killing it takes them on to the next

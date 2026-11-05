@@ -47,6 +47,7 @@ import {
 } from "../core/entities";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
+import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -263,11 +264,13 @@ export class GameView {
     viewHero = 0;
 
     private readonly fight: BossFightView;
+    private readonly floor: FloorView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
+        this.floor = new FloorView(assets);
     }
 
     reset(): void {
@@ -615,6 +618,7 @@ export class GameView {
         }
 
         this.fight.submitActors(actors, sim, alpha);
+        this.floor.submitActors(actors, sim, alpha);
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
