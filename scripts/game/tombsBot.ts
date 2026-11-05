@@ -561,6 +561,72 @@ function spearDodge(sim: Sim, def: PathRoom, to: Point): Point | undefined {
     return nudge(sim, player.x, y);
 }
 
+// Bullets about to reach the bot, sidestepped (the nearer, the more), as the run sim's DODGE does;
+// undefined with nothing coming
+export function dodge(sim: Sim): Point | undefined {
+    const player = sim.player;
+    let awayX = 0;
+    let awayY = 0;
+    const { bullets } = sim;
+    for (let i = 0; i < bullets.count; i++) {
+        const slot = bullets.order[i];
+        const dx = player.x - bullets.x[slot];
+        const dy = player.y - bullets.y[slot];
+        const distSq = dx * dx + dy * dy;
+        if (distSq < 9 && dx * bullets.vx[slot] + dy * bullets.vy[slot] > 0) {
+            const weight = 1 / Math.max(distSq, 0.1);
+            const side = dx * bullets.vy[slot] - dy * bullets.vx[slot] >= 0 ? 1 : -1;
+            awayX += bullets.vy[slot] * side * weight;
+            awayY += -bullets.vx[slot] * side * weight;
+        }
+    }
+    // Out from under a boss's blast as it winds up, straight away from where it'll land
+    for (const enemy of sim.enemies) {
+        const windup = enemy.bossState?.windup;
+        if (enemy.dead || !windup || windup.attack.kind !== "blast") {
+            continue;
+        }
+        const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
+        for (const spot of windup.targets) {
+            const dx = player.x - spot.x;
+            const dy = player.y - spot.y;
+            const away = Math.hypot(dx, dy);
+            if (away < reach) {
+                awayX += away > 0.01 ? (dx / away) * 4 : 4;
+                awayY += away > 0.01 ? (dy / away) * 4 : 0;
+            }
+        }
+    }
+    // And out from under what's about to land (a ground mark), straight away from its middle
+    for (const hazard of sim.hazards) {
+        if (hazard.landTick < sim.tick || hazard.landTick > sim.tick + 75) {
+            continue;
+        }
+        const dx = player.x - hazard.x;
+        const dy = player.y - hazard.y;
+        const away = Math.hypot(dx, dy);
+        if (away < hazard.radius + player.radius + 0.6) {
+            const len = away || 1;
+            awayX += (away > 0.01 ? dx / len : 1) * 4;
+            awayY += (away > 0.01 ? dy / len : 0) * 4;
+        }
+    }
+    const length = Math.hypot(awayX, awayY);
+    return length > 0 ? { x: awayX / length, y: awayY / length } : undefined;
+}
+
+// A move with a sidestep from what's coming mixed in, if anything is
+function dodging(sim: Sim, move: Point): Point {
+    const away = dodge(sim);
+    if (!away) {
+        return move;
+    }
+    const x = move.x * 0.35 + away.x;
+    const y = move.y * 0.35 + away.y;
+    const length = Math.hypot(x, y) || 1;
+    return { x: x / length, y: y / length };
+}
+
 function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
     // Not up yet: north past the line, where it rises
     if (uid === -1) {
@@ -571,16 +637,21 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
         return { x: 0, y: 0 };
     }
     if (sim.tombsZebak) {
-        return zebakMove(sim, def, boss);
+        const roaring = sim.tombsZebak.roar !== undefined;
+        const move = zebakMove(sim, def, boss);
+        return roaring ? move : dodging(sim, move);
     }
     if (sim.tombsAkkha) {
-        return akkhaMove(sim, def, boss);
+        const remembering = sim.tombsAkkha.memory !== undefined;
+        const move = akkhaMove(sim, def, boss);
+        return remembering ? move : dodging(sim, move);
     }
     if (def.boulders) {
-        return babaMove(sim, def, boss);
+        const move = babaMove(sim, def, boss);
+        return boss.bossState?.ordeal ? move : dodging(sim, move);
     }
     // Kephri, and anything else: near enough for every weapon, off what's close
-    return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5);
+    return dodging(sim, kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5));
 }
 
 // Ba-Ba: up to her altar while her stones roll (round the edges, where the gap isn't), beside a
@@ -679,7 +750,8 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
             return go({ x: (live.x + q.middle.x) / 2, y: (live.y + q.middle.y) / 2 });
         }
     }
-    return kite(sim, { x: boss.x, y: boss.y - 3 }, 2.5);
+    // Out of his spear's reach, near enough for the rest
+    return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 5) }, 2.5);
 }
 
 // Zebak: on his island near enough for weapons to reach him; south of a boulder on the line
