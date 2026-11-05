@@ -1,5 +1,6 @@
 import type {
     FloorDef,
+    FloorEffect,
     FloorShapeDef,
     FloorTileRuleDef,
     FloorTileType,
@@ -25,6 +26,18 @@ export const TYPE_FRAGILE = 3;
 export const TYPE_SAFE = 4;
 export const TYPE_PILLAR = 5;
 
+// What standing on a tile does (FloorEffect): layout.effect is its index here plus 1, 0 for nothing
+export const FLOOR_EFFECTS: readonly FloorEffect[] = ["burn", "heal", "haste", "slow", "ice"];
+export const EFFECT_NONE = 0;
+export const EFFECT_BURN = 1;
+export const EFFECT_HEAL = 2;
+export const EFFECT_HASTE = 3;
+export const EFFECT_SLOW = 4;
+export const EFFECT_ICE = 5;
+// A ramp's way up, as ArenaFloor's FLOOR_NORTH and on; none
+export const RAMP_NONE = -1;
+const RAMPS = ["north", "east", "south", "west"] as const;
+
 export type FloorLayout = {
     sizeX: number;
     sizeY: number;
@@ -38,6 +51,21 @@ export type FloorLayout = {
     anchor: Int32Array;
     slabX: Uint8Array;
     slabY: Uint8Array;
+    // What standing on it does (FLOOR_EFFECTS' index plus 1, or EFFECT_NONE), and whether a rule
+    // said so (so a skin swapped in brings its own only where none did)
+    effect: Uint8Array;
+    effectSet: Uint8Array;
+    // Seconds after it falls that it comes back: 0 never, -1 as the floor says (FloorDef.rebuild)
+    rebuild: Float32Array;
+    // What stepping on it sets off: an index into triggerNames, or -1
+    trigger: Int16Array;
+    triggerNames: string[];
+    // Named groups of tiles (FloorTileRuleDef.group), for actions
+    groups: Map<string, number[]>;
+    // How high it stands, in tiles (below 0 sunken), and a ramp's way up (RAMP_NONE, or
+    // ArenaFloor's FLOOR_NORTH and on)
+    height: Float32Array;
+    ramp: Int8Array;
     // The floor's extent, both ends in
     minX: number;
     maxX: number;
@@ -174,6 +202,14 @@ export function layoutFloor(def: FloorDef, sizeX: number, sizeY: number): FloorL
         anchor: Int32Array.from({ length: count }, (_, i) => i),
         slabX: new Uint8Array(count).fill(1),
         slabY: new Uint8Array(count).fill(1),
+        effect: new Uint8Array(count),
+        effectSet: new Uint8Array(count),
+        rebuild: new Float32Array(count).fill(-1),
+        trigger: new Int16Array(count).fill(-1),
+        triggerNames: Object.keys(def.triggers ?? {}),
+        groups: new Map(),
+        height: new Float32Array(count),
+        ramp: new Int8Array(count).fill(RAMP_NONE),
         minX: sizeX,
         maxX: -1,
         minY: sizeY,
@@ -198,9 +234,27 @@ export function layoutFloor(def: FloorDef, sizeX: number, sizeY: number): FloorL
             layout.skin[i] = layout.skin[a];
             layout.type[i] = layout.type[a];
             layout.turn[i] = layout.turn[a];
+            layout.effect[i] = layout.effect[a];
+            layout.effectSet[i] = layout.effectSet[a];
+            layout.rebuild[i] = layout.rebuild[a];
+            layout.trigger[i] = layout.trigger[a];
+            layout.height[i] = layout.height[a];
+            layout.ramp[i] = layout.ramp[a];
         }
     }
+    applySkinEffects(layout, def);
     return layout;
+}
+
+// Each tile no rule gave an effect has its skin's (FloorSkinDef.effect), as laid out and whenever
+// its skin's swapped (a phase)
+export function applySkinEffects(layout: FloorLayout, def: FloorDef): void {
+    for (let i = 0; i < layout.effect.length; i++) {
+        if (!layout.effectSet[i]) {
+            const effect = def.skins?.[layout.skin[i]]?.effect;
+            layout.effect[i] = effect ? FLOOR_EFFECTS.indexOf(effect) + 1 : EFFECT_NONE;
+        }
+    }
 }
 
 function applyRule(
@@ -227,6 +281,32 @@ function applyRule(
         if (rule.turn !== undefined) {
             layout.turn[i] =
                 rule.turn === "random" ? Math.floor(chance(seed, r, i, 2) * 4) : rule.turn & 3;
+        }
+        if (rule.effect !== undefined) {
+            layout.effect[i] =
+                rule.effect === "none" ? EFFECT_NONE : FLOOR_EFFECTS.indexOf(rule.effect) + 1;
+            layout.effectSet[i] = 1;
+        }
+        if (rule.rebuild !== undefined) {
+            layout.rebuild[i] = Math.max(0, rule.rebuild);
+        }
+        if (rule.trigger !== undefined) {
+            layout.trigger[i] = layout.triggerNames.indexOf(rule.trigger);
+        }
+        if (rule.height !== undefined) {
+            layout.height[i] = rule.height;
+        }
+        if (rule.ramp !== undefined) {
+            layout.ramp[i] = RAMPS.indexOf(rule.ramp);
+        }
+    };
+    // A group's every tile the rule covers, slabs whole
+    const group = rule.group;
+    const tag = (i: number) => {
+        if (group !== undefined) {
+            const tiles = layout.groups.get(group) ?? [];
+            tiles.push(i);
+            layout.groups.set(group, tiles);
         }
     };
     const pick = (skins: { skin: number; weight: number }[], i: number): number => {
@@ -261,6 +341,11 @@ function applyRule(
                 }
                 const a = x + y * sizeX;
                 set(a);
+                for (let dy = 0; dy < h; dy++) {
+                    for (let dx = 0; dx < w; dx++) {
+                        tag(x + dx + (y + dy) * sizeX);
+                    }
+                }
                 // A slab longer one way than the other only turns end over end
                 if (w !== h) {
                     layout.turn[a] &= 2;
@@ -280,6 +365,7 @@ function applyRule(
         for (let x = 0; x < sizeX; x++) {
             if (covers(x, y)) {
                 set(x + y * sizeX);
+                tag(x + y * sizeX);
             }
         }
     }

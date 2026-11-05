@@ -553,6 +553,9 @@ export type BossAttackDef = {
     damage: number;
     // Seconds the boss stands winding up (and animating) before it lands
     windup: number;
+    // What it does to the map's floor (MapDef.floor) as it starts, aimed at the player it's after
+    // (Sim.floorAct): drop the tile under them, start a pattern, change phase
+    floor?: FloorActionDef;
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1589,14 +1592,94 @@ export type FloorDef = {
     // What the floor does, at seconds into the loop, and then the loop again from the top
     script: FloorBeatDef[];
     loopSeconds: number;
+    // How much the tiles' effects do (FloorTileRuleDef.effect), over their defaults
+    tileEffects?: FloorTileEffectsDef;
+    // Fallen tiles rise back by themselves (FloorRebuildDef); a tiles rule can say otherwise
+    rebuild?: FloorRebuildDef;
+    // Patterns by name, for triggers, phases and bosses to start (FloorActionDef "pattern")
+    patterns?: Record<string, FloorPatternDef>;
+    // What stepping on a tile with a trigger does (FloorTileRuleDef.trigger: its name here)
+    triggers?: Record<string, FloorTriggerDef>;
+    // The floor's phases by name (FloorActionDef "phase"): another script, and skins swapped
+    phases?: Record<string, FloorPhaseDef>;
 };
 
 export type FloorBeatDef = {
     at: number;
-    pattern: FloorPatternDef;
+    // A pattern to start, or something else to do (FloorActionDef); one of them
+    pattern?: FloorPatternDef;
+    action?: FloorActionDef;
     // On-screen notice as it starts
     message?: string;
 };
+
+// What standing on a tile does to whoever's on it (FloorTileRuleDef.effect, or its skin's).
+// burn: hurts, a share of their hitpoints every so often (lava); enemies too. heal: heals the
+// player, a share of their hitpoints every so often (a glyph). haste and slow: faster or slower,
+// enemies too (a speed plate, mud or sand). ice: they keep their momentum and steer only a little
+// each tick, so they slide (enemies aren't moved by it).
+export type FloorEffect = "burn" | "heal" | "haste" | "slow" | "ice";
+
+// How much: burn's and heal's share of the player's hitpoints, every so often (seconds), and
+// burn's hit on an enemy; haste's and slow's change to speed (0.4 is 40% faster or slower); ice's
+// grip, how much of the way to where they're steering they get each tick (0 to 1)
+export type FloorTileEffectsDef = {
+    burn?: { damage?: number; every?: number; enemyDamage?: number };
+    heal?: { amount?: number; every?: number };
+    haste?: number;
+    slow?: number;
+    ice?: { grip?: number };
+};
+
+// Fallen tiles coming back: after seconds, warned for warn seconds (a light far down the hole and
+// the tile rising into view), taking rise seconds to come up. A rule's rebuild (seconds, or 0 for
+// never) is over this, for its tiles.
+export type FloorRebuildDef = { after: number; warn?: number; rise?: number };
+
+// A tile that does something when it's stepped on (a pressure plate): what, and then not again for
+// cooldown seconds (5 when unset); once, never again. A trigger that starts disarmed does nothing
+// until something arms it (FloorActionDef "arm"). Only players set them off.
+export type FloorTriggerDef = {
+    actions: FloorActionDef[];
+    cooldown?: number;
+    once?: boolean;
+    armed?: boolean;
+    message?: string;
+};
+
+// Something done to the floor, by a trigger, a beat, a phase or a boss's attack (Sim.floorAct),
+// after delay seconds if it has one. pattern: start one (or one of FloorDef.patterns by name).
+// drop: a group's tiles fall (warned as a fall is); raise: a group's fallen tiles come back;
+// slam: a group's tiles rise, a warning from now (a trap). dropUnder: the tile under whoever it's
+// aimed at falls (a boss's). arm: a trigger armed or disarmed. phase: one of FloorDef.phases.
+export type FloorActionDef = (
+    | { kind: "pattern"; pattern: FloorPatternDef | string }
+    | { kind: "drop"; group: string }
+    | { kind: "raise"; group: string }
+    | { kind: "slam"; group: string }
+    | { kind: "dropUnder" }
+    | { kind: "arm"; trigger: string; armed?: boolean }
+    | { kind: "phase"; phase: string }
+) & { delay?: number };
+
+// A phase of the floor (FloorActionDef "phase"): its own script from now (with its own loop), and
+// skins swapped on every tile, [from, to] by index, effects going with them (their skins'); and
+// what's said as it starts
+export type FloorPhaseDef = {
+    script?: FloorBeatDef[];
+    loopSeconds?: number;
+    skins?: [from: number, to: number][];
+    message?: string;
+};
+
+// What a skin does as it rises, falls, and cracks (a fragile tile's rise that brings it nearer
+// giving way), each a spot animation and a sound, either or both (FloorSkinDef.material)
+export type FloorMaterialDef = {
+    rise?: FloorMaterialFxDef;
+    fall?: FloorMaterialFxDef;
+    crack?: FloorMaterialFxDef;
+};
+export type FloorMaterialFxDef = { spotAnim?: number; sound?: number; scale?: number };
 
 // side: one half of the floor rises, row by row away from the front, the middle column with it
 // (east or west), or all of it but the middle three columns (both). sweep: every row from the
@@ -1664,6 +1747,15 @@ export type FloorSkinDef = {
     // (FloorDef.glow when unset), its strength and width (times as much), and the tremor before
     // a tile's own warning (times as much)
     cue?: { color?: number; strength?: number; width?: number; tremor?: number };
+    // A glow all over it, in its tint's colour (0 to 1): lava's
+    glow?: number;
+    // What standing on it does (FloorEffect), unless a tiles rule says otherwise
+    effect?: FloorEffect;
+    // Its dust, chips and sounds as it rises, falls and cracks (FloorMaterialDef; FLOOR_MATERIALS)
+    material?: FloorMaterialDef;
+    // Skins (their indices) to draw instead once a fragile tile's risen once, twice and so on, so
+    // you can see when it's about to go; without, it darkens and sits askew a little more each time
+    stages?: number[];
 };
 
 // What a tile does. normal: rises and falls. solid: never rises or falls. reinforced: rises,
@@ -1691,6 +1783,11 @@ export type FloorWhereDef =
 // turns (0 to 3), or any by chance; slab: tiles that rise and fall as one piece, [x, y] tiles
 // across, laid from the south-west wherever the whole of one fits in what the rule covers and
 // isn't in a slab already.
+// effect: what standing on it does (FloorEffect; "none" for nothing, over its skin's). rebuild:
+// seconds after it falls that it comes back, 0 never (FloorDef.rebuild when unset). trigger: the
+// name of what stepping on it sets off (FloorDef.triggers). group: a name for its tiles, for
+// actions (FloorActionDef). height: tiles up (or down, below 0) it stands, a platform or a sunken
+// tile; ramp: a slope up the way it says, from the tile behind it to the one ahead (core/floorLayout.ts).
 export type FloorTileRuleDef = {
     where?: FloorWhereDef;
     share?: number;
@@ -1698,6 +1795,12 @@ export type FloorTileRuleDef = {
     type?: FloorTileType;
     turn?: number | "random";
     slab?: [x: number, y: number];
+    effect?: FloorEffect | "none";
+    rebuild?: number;
+    trigger?: string;
+    group?: string;
+    height?: number;
+    ramp?: "north" | "east" | "south" | "west";
 };
 
 export type FloorPatternDef = (

@@ -285,7 +285,7 @@ describe("its whole shape, known as it starts", () => {
     test("the Wardens' floor shows its both-halves slams bold, and the rest subtle", () => {
         const def = createWardensFloor(RECT);
         expect(def.cue).toBe("subtle");
-        const bold = def.script.filter((beat) => beat.pattern.cue === "bold");
+        const bold = def.script.filter((beat) => beat.pattern?.cue === "bold");
         expect(bold.length).toBeGreaterThan(0);
         for (const beat of bold) {
             expect(beat.pattern).toMatchObject({ kind: "side", side: "both" });
