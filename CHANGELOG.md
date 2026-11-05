@@ -9,6 +9,9 @@ the version in the corner).
 
 - Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
   to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
+- Export reminder, by Okaeri: your progress lives only in your browser, so once you've played a
+  run, the title screen offers to export a copy on any day you haven't yet. Not today hides it
+  until tomorrow, and an exported save now says when it was made.
 
 ### Changed
 

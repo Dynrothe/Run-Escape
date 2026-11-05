@@ -107,6 +107,9 @@ export type SaveData = {
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
+    // When the player last exported it (Date.now()), so an exported file says
+    // when it was made, and the title screen can remind them to keep a copy
+    lastExported?: number;
 };
 
 // The round reached, and how long the run lasted
@@ -278,6 +281,11 @@ export function migrateSave(raw: unknown): SaveData {
         CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)
     ) {
         save.favouriteCharacter = data.favouriteCharacter;
+    }
+    // A time a Date can hold, or the reminder couldn't tell its day
+    const exported = data.lastExported;
+    if (typeof exported === "number" && exported > 0 && !isNaN(new Date(exported).getTime())) {
+        save.lastExported = exported;
     }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {

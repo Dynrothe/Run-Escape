@@ -1185,6 +1185,25 @@ describe("saving", () => {
         spy.mockRestore();
     });
 
+    test("an export says when it was made, and the save remembers it", async () => {
+        const saveFile = await import("./saveFile");
+        const spy = vi.spyOn(saveFile, "saveFile").mockImplementation(() => {});
+        vi.spyOn(Date, "now").mockReturnValue(1_790_000_000_000);
+        try {
+            const { client, store, saved, lockChanged } = createSaving(false);
+            lockChanged(true);
+            expect(client.save.lastExported).toBeUndefined();
+            client.exportSave();
+            const text = spy.mock.lastCall![1];
+            expect(JSON.parse(text).lastExported).toBe(1_790_000_000_000);
+            expect(saved.at(-1)?.lastExported).toBe(1_790_000_000_000);
+            expect(store.getSnapshot().save.lastExported).toBe(1_790_000_000_000);
+        } finally {
+            vi.mocked(Date.now).mockRestore();
+            spy.mockRestore();
+        }
+    });
+
     test("another tab taking the save pauses a solo run, once, and not co-op's", () => {
         const { client, lockChanged } = createSaving(true);
         const pause = vi.fn();
