@@ -1550,11 +1550,14 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>Skills</h2>
-                <p className="ui-subtle">Coins found in runs train your skills for good.</p>
+                <p className="ui-subtle ui-shop-help">
+                    Melee, Ranged and Magic are separate skill presets, used automatically by
+                    adventurers of that combat style.
+                </p>
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
-                    aria-label="Class skills"
+                    aria-label="Skill presets"
                     onKeyDown={(event) => {
                         const next = getTabFromKey(event.key, STYLES, style);
                         if (next) {
@@ -1577,7 +1580,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                             aria-controls="skills-page"
                             onClick={() => setStyle(tab)}
                         >
-                            {STYLE_NAMES[tab]}
+                            {STYLE_NAMES[tab]} preset
                         </button>
                     ))}
                 </div>

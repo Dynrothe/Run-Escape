@@ -544,10 +544,11 @@
         font-size: 18px;
     }
 
-    /* Skills: the subtitle goes */
+    /* Skills: unlike other panels' subtitles, the help stays, as it says which
+       preset an adventurer uses. One line, about 15px of the cards' room. */
 
-    .ui-shop > .ui-subtle {
-        display: none;
+    .ui-shop-help {
+        font-size: 14px;
     }
 
     .ui-shop-grid {

@@ -569,12 +569,14 @@ version and how to run it.
   power-ups in their colours. Bosses, caskets and power-ups out of range sit on the rim.
 - **Hitsplats** are the client's own sprites: red for damage (on you too), green for poison.
 - **Coins** are banked when a run ends. Spend them on **Skills** (permanent bonuses, refundable).
-  Melee, Ranged and Magic each have their own skill page, ranks and prices. Each can allocate the
+  Melee, Ranged and Magic each have their own skill preset, ranks and prices. The Skills tabs are
+  labelled **Melee preset**, **Ranged preset** and **Magic preset**. Each can allocate the
   full gold budget: 10,000 coins can fund 10,000 in skills on every class, not 10,000 split between them.
   Only the largest page's investment is reserved from the coin bank; the Skills balance shows what
   the selected class can still spend. Refunding one page never creates extra gold or changes the others.
-  A run uses its adventurer's class page, including in co-op. Existing shared skills move to Melee;
-  the other pages start empty. All three pages are kept when exporting and importing a save.
+  A run automatically uses its adventurer's combat-style preset, including in co-op. Existing shared
+  skills move to Melee; the other pages start empty. All three pages are kept when exporting and
+  importing a save.
   The same skills cost the same whatever order they're bought in, but each rank on a page adds a
   little to the price of everything on it, so a cheap skill can cost several times its own price
   once dear ones are bought.

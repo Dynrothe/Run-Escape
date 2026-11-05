@@ -17,6 +17,7 @@ the version in the corner).
 - Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
   pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
   more once dearer ones are bought.
+- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
 
