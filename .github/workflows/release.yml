@@ -245,6 +245,21 @@ jobs:
               run: |
                   files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/cache-*.bin
                       release/game-manifest.json)
+                  # Links at the top, as the cache's chunks bury these among the assets. They
+                  # work once the draft's published, which is when the tag exists.
+                  base="https://github.com/$GH_REPO/releases/download/v$VERSION"
+                  {
+                      printf '### Downloads\n\n'
+                      printf -- '- Windows: [Run-Escape-%s-win-x64.zip](%s/Run-Escape-%s-win-x64.zip)\n' \
+                          "$VERSION" "$base" "$VERSION"
+                      if [ "$ANDROID_BUILT" = true ]; then
+                          printf -- '- Android: [Run-Escape-%s-android.apk](%s/Run-Escape-%s-android.apk)\n' \
+                              "$VERSION" "$base" "$VERSION"
+                      fi
+                      printf '\n'
+                      cat release/notes.md
+                  } > release/full-notes.md
+                  mv release/full-notes.md release/notes.md
                   if [ "$ANDROID_BUILT" = true ]; then
                       files+=("release/Run-Escape-$VERSION-android.apk")
                       printf '\n' >> release/notes.md
