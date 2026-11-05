@@ -80,7 +80,7 @@ import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
-import { SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
+import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
@@ -798,6 +798,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         <TitleStat name="Best level" value={save.bestLevel} />
                     </div>
                 </div>
+                {/* Under the menu, so a controller's highlight still starts on
+                    Singleplayer; not while nothing's saving, as that panel comes first */}
+                {!ui.saveBlock && <ExportReminder save={save} client={client} />}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">

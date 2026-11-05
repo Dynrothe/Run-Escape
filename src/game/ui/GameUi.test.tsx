@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
@@ -314,4 +314,59 @@ test("map tabs support arrow keys and wrap", () => {
     fireEvent.keyDown(bosses, { key: "ArrowLeft" });
     fireEvent.keyDown(campaign, { key: "ArrowLeft" });
     expect(screen.getAllByRole("tab").at(-1)).toHaveFocus();
+});
+
+function renderTitle(runs: number, lastExported?: number) {
+    const save = { ...createSave(), runs, lastExported };
+    const store = new GameStore(save);
+    store.set({ screen: "title" });
+    const client = {
+        exportSave: vi.fn(() => {
+            store.set({ save: { ...store.getSnapshot().save, lastExported: Date.now() } });
+        }),
+        playClick: vi.fn(),
+    };
+    render(<GameUi store={store} client={client as unknown as GameClient} />);
+    return { client, store };
+}
+
+describe("the title's export reminder", () => {
+    afterEach(() => window.localStorage.clear());
+
+    test("isn't there for a new player, or once the save's been exported today", () => {
+        expect.hasAssertions();
+        renderTitle(0);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+        cleanup();
+        renderTitle(4, Date.now());
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("exports, and then goes", () => {
+        expect.hasAssertions();
+        const { client } = renderTitle(4);
+        fireEvent.click(screen.getByRole("button", { name: "Export save" }));
+        expect(client.exportSave).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("put off, it stays gone for the day, here and after a reload", () => {
+        expect.hasAssertions();
+        const { client } = renderTitle(4, Date.now() - 3 * 24 * 60 * 60 * 1000);
+        expect(screen.getByText(/^Last exported/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Not today" }));
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+        expect(client.exportSave).not.toHaveBeenCalled();
+        cleanup();
+        renderTitle(4);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("waits while the game isn't saving", () => {
+        expect.hasAssertions();
+        const { store } = renderTitle(4);
+        expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
+        act(() => store.set({ saveBlock: { kind: "otherTab" }, saveBlockClosed: true }));
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
 });

@@ -920,6 +920,21 @@ describe("the favourite adventurer", () => {
     });
 });
 
+describe("when it was last exported", () => {
+    it("is kept, and goes with an exported save", () => {
+        const save = { ...createSave(), lastExported: 1_790_000_000_000 };
+        expect(migrateSave(save).lastExported).toBe(1_790_000_000_000);
+        expect(importSave(exportSave(save, GAME), GAME).lastExported).toBe(1_790_000_000_000);
+        expect(migrateSave(createSave()).lastExported).toBeUndefined();
+    });
+
+    it("is dropped unless it's a time a date can hold", () => {
+        for (const lastExported of ["2026-11-05", -5, 0, NaN, Infinity, 1e20, null]) {
+            expect(migrateSave({ ...createSave(), lastExported }).lastExported).toBeUndefined();
+        }
+    });
+});
+
 describe("hard mode", () => {
     const hardWin = (mapId: string) => run(mapId, { hard: true, victory: true, seconds: 900 });
 

@@ -1506,6 +1506,16 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
+**Exports are the only backup.** Clearing the browser's data loses the save for good, so once a
+run's been played (`runs > 0`) the title screen shows a slim reminder under its menu on any day it
+hasn't been exported (`ui/exportReminder.ts`, `ExportReminder` in `ui/SavePanels.tsx`), except while
+the game isn't saving. It comes after the menu so a controller's highlight still starts on
+Singleplayer. Export stamps `SaveData.lastExported` (`Date.now()`) before writing the file, so the
+file says when it was made and the reminder goes until tomorrow. Days are the player's local ones,
+and an export dated ahead of the clock doesn't count. Not today keeps the day in localStorage
+(`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's reminder, it
+shouldn't travel in an exported file, and it can be put off while another tab holds the save.
+
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or
 reloads: getting the lock reads the stored save, which replaces what this tab had in memory. When

@@ -13,6 +13,9 @@ the version in the corner).
   solo play works offline, even on the first launch, and co-op works online. It doesn't update
   itself: install a new version's APK over the old one. Export and Import in Settings carry a save
   between it and a browser.
+- Export reminder, by Okaeri: your progress lives only in your browser, so once you've played a
+  run, the title screen offers to export a copy on any day you haven't yet. Not today hides it
+  until tomorrow, and an exported save now says when it was made.
 
 ### Changed
 

@@ -1025,12 +1025,15 @@ export class GameClient implements GameFrameHandler {
     }
 
     // Gives the player the save as a file. One from a newer game goes as it
-    // is: this game's copy has dropped what it doesn't know.
+    // is: this game's copy has dropped what it doesn't know. Marked first, so
+    // the file says when it was made, and the title's reminder goes till tomorrow.
     exportSave(): void {
+        this.save.lastExported = Date.now();
         const text =
             (this.newerSave && this.saveStore.read()) ??
             exportSave(this.save, this.saveStore.gameVersion);
         saveFile("run-escape-save.json", text, "application/json");
+        this.persist();
     }
 
     // Gives the player a save that couldn't be read, as it was
