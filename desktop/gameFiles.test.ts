@@ -49,6 +49,25 @@ describe("parseManifest", () => {
     ])("refuses %s", (_name, text) => {
         expect(() => parseManifest(text)).toThrow();
     });
+
+    const chunk = { file: "0".repeat(32) + ".bin", size: 10 };
+    const split = { ...manifest, lite: { sha256: SHA, size: 100 }, chunks: [chunk] };
+
+    test("reads the split zip and its chunks", () => {
+        expect(parseManifest(JSON.stringify(split))).toEqual(split);
+    });
+
+    test.each([
+        ["a lite zip with no chunks", { ...manifest, lite: split.lite }],
+        ["chunks with no lite zip", { ...manifest, chunks: [chunk] }],
+        ["a chunk that climbs", { ...split, chunks: [{ file: "../evil.bin", size: 1 }] }],
+        ["an uppercase chunk", { ...split, chunks: [{ ...chunk, file: "A".repeat(32) + ".bin" }] }],
+        ["the same chunk twice", { ...split, chunks: [chunk, chunk] }],
+        ["a chunk with no size", { ...split, chunks: [{ file: chunk.file }] }],
+        ["a lite zip with a bad sha256", { ...split, lite: { sha256: "abc", size: 1 } }],
+    ])("refuses %s", (_name, value) => {
+        expect(() => parseManifest(JSON.stringify(value))).toThrow();
+    });
 });
 
 describe("pickGameFolder", () => {

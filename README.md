@@ -124,13 +124,14 @@ bun run slim-cache
 ```
 
 writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only what the game
-reads, about 26 MB instead of 227 MB). The page has to be served with
-`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
-HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples. `bun run serve` serves the build with those headers from one Node process with no
-packages, co-op's relay included (`bun run serve:singleplayer` leaves it out). The game only offers
-Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
-[Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
+reads, about 22 MB instead of 227 MB, in chunks so an update downloads only what changed). The
+page has to be served with `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, over HTTPS, and `caches/caches.json` with
+`Cache-Control: no-cache`. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details,
+with nginx and Apache examples. `bun run serve` serves the build with those headers from one Node
+process with no packages, co-op's relay included (`bun run serve:singleplayer` leaves it out). The
+game only offers Multiplayer where a relay answers, so a plain static host serves it as a
+single-player game; see [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
 `bun run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).

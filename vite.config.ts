@@ -28,6 +28,24 @@ function buildId(): string {
     }
 }
 
+const BUILD_ID = buildId();
+
+// Writes build.json beside index.html, for scripts/cache/slim-cache.ts: a slim
+// cache is made for one build, and the game checks that it's the one it's on
+function buildIdFilePlugin(): Plugin {
+    return {
+        name: "build-id-file",
+        apply: "build",
+        generateBundle() {
+            this.emitFile({
+                type: "asset",
+                fileName: "build.json",
+                source: JSON.stringify({ build: BUILD_ID }),
+            });
+        },
+    };
+}
+
 const MIME_TYPES: Record<string, string> = {
     ".dat": "application/octet-stream",
     ".dat2": "application/octet-stream",
@@ -79,7 +97,8 @@ function glslIncludesPlugin(): Plugin {
 function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, ""));
+            // The game asks for caches.json?build=<its build>
+            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -220,10 +239,11 @@ export default defineConfig({
         wasmAssetUrlPlugin(),
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
+        buildIdFilePlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),
-        __BUILD_ID__: JSON.stringify(buildId()),
+        __BUILD_ID__: JSON.stringify(BUILD_ID),
     },
     resolve: {
         // ".web.*" takes precedence so browser-specific variants (e.g. Gzip.web.ts)

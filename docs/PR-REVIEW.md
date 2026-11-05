@@ -78,8 +78,8 @@ All of these are in `CLAUDE.md`'s "After every change":
 - **What you ran**: tests, type check, Prettier, simulations (the commands, settings and before and
   after numbers), frame costs, the browser, a phone. Say plainly what you didn't try. "Not tried
   on a phone" will come back as a finding, so try it if you can.
-- **Anything new from the cache**: name the ids. The hosted game needs `bun run slim-cache` before
-  the release, or it stops with a "missing from the cache" error.
+- **Anything new from the cache**: name the ids. The hosted game needs `bun run slim-cache` after
+  each build anyway, as it won't load a cache made for another build.
 - **Trade-offs for players**, with numbers: a reward that gets rarer, an unlock that becomes a
   grind, a fight that gets longer. They're the maintainer's call, so make them visible.
 

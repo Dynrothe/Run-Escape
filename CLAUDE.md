@@ -64,6 +64,7 @@ go stale. Add anything that cost you time to work out.
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
+| The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
@@ -105,8 +106,8 @@ There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the
 1. Run the tests and the type check, and format what you changed.
 2. **Run a simulation if the change can affect gameplay or balance** (see below).
 3. **If you added anything from the cache** (an item, enemy, map, animation or sprite), say so in the
-   pull request. Leave `bun run slim-cache` for deployment. It takes time and memory, and a deployed
-   game with an old slim cache stops on a "missing from the cache" error.
+   pull request. Leave `bun run slim-cache` for deployment, after every build. It takes time and
+   memory, and a deployed game won't load a slim cache made for another build: it says so.
 4. Try UI and visual changes in the browser. Tests don't cover how things look.
 5. Note the change in `CHANGELOG.md` under Unreleased.
 6. Update the docs (see [Keep these files up to date](#keep-these-files-up-to-date)).
