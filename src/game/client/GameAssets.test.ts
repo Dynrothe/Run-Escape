@@ -11,6 +11,7 @@ import { REVIVE_SEQ } from "../content/coop";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
+import { PASSIVES } from "../content/passives";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { emptyStats } from "../content/types";
@@ -18,10 +19,13 @@ import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
+    GAME_VIEW_SPRITES,
     GameAssets,
+    HINT_ARROW_SPRITE,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
+    getGameSpriteIds,
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
@@ -384,5 +388,32 @@ describe("power-ups in the cache", () => {
                 }
             }
         }
+    });
+});
+
+describe("sprites", () => {
+    test("the slim cache keeps every sprite the game view loads", async () => {
+        const asked: number[][] = [];
+        const workerPool = {
+            queueLoad: async (_loader: unknown, input: { spriteIds: number[] }) => {
+                asked.push(input.spriteIds);
+                return [];
+            },
+        };
+        const assets = new GameAssets(workerPool as never, undefined as never, undefined as never);
+        await assets.loadSprites();
+        expect(asked).toEqual([[...GAME_VIEW_SPRITES]]);
+        expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
+        expect(getGameSpriteIds()).toEqual(expect.arrayContaining([...GAME_VIEW_SPRITES]));
+    });
+
+    test("the slim cache keeps every passive's icon", () => {
+        const ids = getGameSpriteIds();
+        for (const { iconSpriteId } of PASSIVES) {
+            if (iconSpriteId !== undefined) {
+                expect(ids).toContain(iconSpriteId);
+            }
+        }
+        expect(new Set(ids).size).toBe(ids.length);
     });
 });

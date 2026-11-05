@@ -10,18 +10,17 @@
 // other's margins), so it reads what a player who plays it first does.
 import {
     GameAssets,
-    HITSPLAT_SPRITES,
     PICKUP_OBJS,
     PILE_LOOKS,
     PLAYER_SEQS,
     getCharacterAppearance,
+    getGameSpriteIds,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
 } from "../../src/game/client/GameAssets";
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
-import { FLAG_SPRITE } from "../../src/game/content/flags";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
@@ -30,11 +29,7 @@ import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
-import {
-    COLLECTION_LOG_OBJ,
-    REFUND_SPRITE,
-    TITLE_TAB_SPRITES,
-} from "../../src/game/content/titleIcons";
+import { COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
 import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
@@ -356,19 +351,7 @@ export class SlimLoader {
             state.textureLoader.getPixelsArgb(id, 128, true, 1.0);
         }
         await this.load(new SoundLoader(), { ids: getGameSoundIds() });
-        // The hitsplats, the title screen's tabs, the skills' refund button, co-op's
-        // flags (every frame comes with the first), and the passives with an
-        // interface sprite for an icon
-        const spriteIds = [
-            ...Object.values(HITSPLAT_SPRITES),
-            ...Object.values(TITLE_TAB_SPRITES),
-            REFUND_SPRITE,
-            FLAG_SPRITE,
-            ...PASSIVES.flatMap((passive) =>
-                passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
-            ),
-        ];
-        await this.load(new SpriteDataLoader(), { spriteIds });
+        await this.load(new SpriteDataLoader(), { spriteIds: getGameSpriteIds() });
         await this.load(new ItemIconLoader(), {
             requests: getContentObjIds().flatMap((objId) =>
                 getStackCounts(state, objId).map((count) => ({ objId, count })),

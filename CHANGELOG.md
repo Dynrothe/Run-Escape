@@ -16,6 +16,8 @@ the version in the corner).
 - From this version on, when the website's updated, a copy of the page the browser kept from
   before reloads itself, rather than stopping partway through loading on a "missing from the
   cache" error. Fixed by trippy22.
+- In Phosani's Nightmare, the yellow arrow over her Parasitic eggs now shows on the website and in
+  the desktop app. It was missing from their copy of the game's files.
 
 ## 0.26.0 - 2026-11-05
 

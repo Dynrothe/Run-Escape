@@ -68,6 +68,9 @@ with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits bes
 one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
 there, and `slim-cache.ts` keeps them.
 
+Any other interface sprite the game shows goes in `getGameSpriteIds` in `client/GameAssets.ts`
+(one the game view draws, in `GAME_VIEW_SPRITES`), or the slim cache won't have it.
+
 ## Stat
 
 Add the key to `StatKey` and `emptyStats` in `types.ts`, and to `STAT_INFO` in `stats.ts`.
