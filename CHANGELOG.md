@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
+  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
+- Saves get the Combat Achievements their kill counts, wins and endless rounds had already done,
+  without the coins.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added
@@ -25,10 +34,6 @@ the version in the corner).
   - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
-- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
-  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
-- Saves get the Combat Achievements their kill counts, wins and endless rounds had already done,
-  without the coins.
 
 ### Changed
 
