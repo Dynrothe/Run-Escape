@@ -37,6 +37,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
+- **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
+  that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
+  reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
 
@@ -81,7 +84,8 @@ loads are quick.
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
-the mouse wheel zooms.
+the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
 
 Hover over an item in your bag to read the description shown when you found it.
 

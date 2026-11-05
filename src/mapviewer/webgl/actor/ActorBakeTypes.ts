@@ -45,12 +45,15 @@ export type ObjBakeRequest = {
 };
 
 // A scenery model (e.g. the dwarf multicannon), static unless animated asks for
-// its own animation (e.g. a fire's flicker), which it then has as its one anim
+// its own animation (e.g. a fire's flicker), which it then has as its one anim.
+// seqs: these animations instead, -1 for it standing still (a statue a boss
+// fight plays its aim and fire on)
 export type LocBakeRequest = {
     kind: "loc";
     key: string;
     locId: number;
     animated?: boolean;
+    seqs?: number[];
 };
 
 export type BakeRequest =

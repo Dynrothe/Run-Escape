@@ -4,6 +4,7 @@ import { isCoarsePointer } from "../../util/DeviceUtil";
 import { GameClient } from "../client/GameClient";
 import { InventorySlotView, UiSnapshot } from "../client/GameStore";
 import { STICK_RADIUS, SharedTaps } from "../client/GameTouch";
+import { AbilityButton } from "./AbilityButton";
 import { InventoryItem } from "./InventoryItem";
 import "./Mobile.css";
 
@@ -182,6 +183,7 @@ export const TouchControls = memo(function TouchControls({
                     client.pause();
                 }}
             />
+            <AbilityButton client={client} touch />
             <div className="ui-touch-items">
                 {inventory.map((slot, i) => (
                     <div key={i} className="ui-touch-item-place">

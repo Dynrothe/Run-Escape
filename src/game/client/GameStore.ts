@@ -185,6 +185,9 @@ export type HudNumbers = {
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;
+    // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
+    // whether the boss is in its reach, and whether its guard's down, when it's worth most
+    ability?: AbilityView;
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -238,8 +241,16 @@ export type BossView = {
     fight?: {
         phase: number;
         phases: number;
-        // finale: its last stand, and fraction is the time left in it
-        stage: "shield" | "totems" | "finale";
+        // finale: its last stand, and fraction is the time left in it; hp: a
+        // fight on its hitpoints alone (no totems)
+        stage: "shield" | "totems" | "finale" | "hp";
+        // The bar's line under it (BossPhasesDef phases' status), when it has its own
+        status?: string;
+        // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
+        // and the player's out of it
+        outOfReach?: boolean;
+        // Its guard's down (BossDef.guard): exposed after a miss, or stunned
+        guard?: "exposed" | "stunned";
         // How charged each totem is, 0 to 1
         totems: number[];
         curseAttacks?: number;
@@ -248,6 +259,14 @@ export type BossView = {
 };
 
 export type BossKillView = { name: string; seconds: number };
+
+export type AbilityView = {
+    name: string;
+    iconObjId: number;
+    charge: number;
+    inReach: boolean;
+    opened: boolean;
+};
 
 // One player's own numbers for the results screen (a teammate who fell or
 // left too)

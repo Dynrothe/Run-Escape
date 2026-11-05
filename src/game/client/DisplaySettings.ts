@@ -3,6 +3,8 @@
 export type DisplaySettings = {
     // The camera circles the character on the title screen and the menus
     menuSpin: boolean;
+    // The camera shakes a little when a boss's blow lands hard (ImpactDef.shake)
+    screenShake: boolean;
     // A run pauses when the window loses focus or the tab is hidden
     pauseOnBlur: boolean;
     // The quest tracker on the HUD is open (Q, or its title, opens and shuts it)
@@ -49,7 +51,7 @@ const SETTINGS_KEY = "rune-survivors-display";
 // before then has it off, as its default, whether or not the player chose that.
 const PREDICTION_ON_BY_DEFAULT = "movePredictionDefaultOn";
 
-// The menu camera stands still for anyone who's asked for less motion
+// The menu camera stands still, and nothing shakes it, for anyone who's asked for less motion
 export function getDefaultDisplaySettings(): DisplaySettings {
     let reducedMotion = false;
     try {
@@ -57,6 +59,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
     } catch (e) {}
     return {
         menuSpin: !reducedMotion,
+        screenShake: !reducedMotion,
         pauseOnBlur: true,
         questTracker: true,
         damagePanel: false,
@@ -77,6 +80,9 @@ export function loadDisplaySettings(): DisplaySettings {
             const data = JSON.parse(json);
             if (typeof data.menuSpin === "boolean") {
                 settings.menuSpin = data.menuSpin;
+            }
+            if (typeof data.screenShake === "boolean") {
+                settings.screenShake = data.screenShake;
             }
             if (typeof data.pauseOnBlur === "boolean") {
                 settings.pauseOnBlur = data.pauseOnBlur;

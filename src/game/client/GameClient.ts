@@ -38,7 +38,7 @@ import { getWeapon } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
-import { SimEvent, WeaponState } from "../core/entities";
+import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
 import {
@@ -87,6 +87,7 @@ import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
+    AbilityView,
     ChoiceView,
     GameStore,
     HudNumbers,
@@ -174,6 +175,16 @@ const CAMERA_GROUND_EASE = 110;
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
+// How much brighter a gaze lights the arena at its height (getGazeLight)
+const GAZE_LIGHT = 0.6;
+// Ms the light takes to catch up with that, roughly
+const GAZE_LIGHT_EASE = 180;
+// A boss's blow shaking the camera (ImpactDef.shake): how long, how far at its hardest (tiles),
+// and from how many tiles off the player it's felt less, to none at SHAKE_FAR
+const SHAKE_MS = 320;
+const SHAKE_TILES = 0.3;
+const SHAKE_NEAR = 8;
+const SHAKE_FAR = 24;
 // Closer on a phone held sideways: it shows as much to each side as a desktop
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
@@ -332,6 +343,35 @@ export type GameClientOptions = {
     raidTest?: "max" | "short";
 };
 
+// A boss winding up a gaze (BossAttackDef.cover) lights the arena, more as it comes: how much
+// brighter than the map's own, from 1 to 1 + GAZE_LIGHT as it lands
+export function getGazeLight(sim: Sim): number {
+    const boss = sim.shownBoss;
+    const windup = boss && !boss.dead ? boss.bossState?.windup : undefined;
+    if (!windup?.attack.cover) {
+        return 1;
+    }
+    const raw = (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick);
+    const t = Math.min(1, Math.max(0, raw));
+    return 1 + GAZE_LIGHT * t * t * (3 - 2 * t);
+}
+
+// What a fight on its hitpoints shows on its bar: all of them, or with BossPhasesDef.barPerPhase
+// the phase's own share, full as it begins and empty at the next threshold (each phase's until,
+// or an even split, as Sim.passThreshold has them)
+export function getPhaseBarFraction(boss: Enemy, index: number): number {
+    const phases = boss.def.boss?.phases;
+    if (!phases?.barPerPhase) {
+        return boss.hp / boss.maxHp;
+    }
+    const count = phases.phases.length;
+    const until = (i: number) =>
+        i < 0 ? 1 : i >= count - 1 ? 0 : (phases.phases[i].until ?? (count - 1 - i) / count);
+    const top = until(index - 1) * boss.maxHp;
+    const bottom = until(index) * boss.maxHp;
+    return Math.min(1, Math.max(0, (boss.hp - bottom) / Math.max(1, top - bottom)));
+}
+
 export class GameClient implements GameFrameHandler {
     static async create(
         mapViewer: MapViewer,
@@ -417,6 +457,10 @@ export class GameClient implements GameFrameHandler {
     private cameraGround: number | undefined;
     // How far the camera's leaning towards a raid boss (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
+    // How lit a gaze has the arena now (getGazeLight, eased)
+    private gazeLight = 1;
+    // The camera's shake: how hard (0 to 1), and since when (ms)
+    private shake = { strength: 0, start: 0 };
     private shownDps = 0;
     // The world's brightness as last set: a raid hall can draw darker than its map
     private shownBrightness = 1;
@@ -906,6 +950,10 @@ export class GameClient implements GameFrameHandler {
 
     toggleMenuSpin(): void {
         this.setDisplay({ menuSpin: !this.display.menuSpin });
+    }
+
+    toggleScreenShake(): void {
+        this.setDisplay({ screenShake: !this.display.screenShake });
     }
 
     toggleAutoPause(): void {
@@ -1473,6 +1521,16 @@ export class GameClient implements GameFrameHandler {
                 this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
                 break;
+            case "ability":
+                if (!done) {
+                    this.sounds.denied();
+                    break;
+                }
+                this.handleEvents(sim, sim.takeEvents());
+                if (sim.state !== "playing") {
+                    this.syncOverlay();
+                }
+                break;
         }
         this.updateHud(true);
     }
@@ -1595,6 +1653,16 @@ export class GameClient implements GameFrameHandler {
         this.act({ kind: "item", index });
     }
 
+    // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
+    // screen's. Out of reach, or not ready, it says no.
+    useAbility(): void {
+        const sim = this.sim;
+        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+            return;
+        }
+        this.act({ kind: "ability" });
+    }
+
     // The opening animation's sounds, timed by the UI
     playChestSound(cue: ChestCue, rarity: Rarity): void {
         this.sounds.chest(cue, rarity);
@@ -1654,6 +1722,16 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
+    // The same boss fight again, from its results (MapDef.fight), on your own
+    retry(): void {
+        const mapId = this.sim?.map.id;
+        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+            return;
+        }
+        this.leaveRun();
+        void this.startRun(mapId);
+    }
+
     leaveRun(show = true): void {
         const wasCoop = this.coopRun !== undefined;
         if (wasCoop && show && this.coop.isHost) {
@@ -1844,6 +1922,11 @@ export class GameClient implements GameFrameHandler {
         } else if (overlay === "paused" && this.coopRun && code.startsWith("Digit")) {
             // The run goes on behind co-op's menu
             this.useItem(parseInt(code.slice(5)) - 1);
+        } else if (
+            (overlay === "none" || (overlay === "paused" && this.coopRun)) &&
+            code === "Space"
+        ) {
+            this.useAbility();
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
@@ -1961,27 +2044,108 @@ export class GameClient implements GameFrameHandler {
         const ease = 1 - Math.exp(-deltaTimeMs / BOSS_LEAN_EASE);
         this.cameraLean.x += (lean.x - this.cameraLean.x) * ease;
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
-        this.cameraRig.apply(camera, px + this.cameraLean.x, ground - 0.6, py + this.cameraLean.y);
+        const pan = this.getIntroPan(sim, px, py, alpha);
+        const shake = this.getShake(now);
+        this.cameraRig.apply(
+            camera,
+            px + this.cameraLean.x + pan.x + shake.x,
+            ground - 0.6,
+            py + this.cameraLean.y + pan.y + shake.y,
+        );
         // A raid hall can be drawn darker than the map (RaidRoomDef.hall)
         const hallBrightness =
             sim.map.raid && sim.raidStage === "waves"
                 ? sim.map.raid.rooms[sim.raidRoom].hall?.brightness
                 : undefined;
-        const brightness = hallBrightness ?? sim.map.brightness ?? 1;
+        // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
+        // eased both ways so it never steps
+        const light = getGazeLight(sim);
+        this.gazeLight += (light - this.gazeLight) * (1 - Math.exp(-deltaTimeMs / GAZE_LIGHT_EASE));
+        const brightness = (hallBrightness ?? sim.map.brightness ?? 1) * this.gazeLight;
         if (brightness !== this.shownBrightness) {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
     }
 
-    // Towards where a raid room's boss stands, while it's being fought
-    private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
-        const room = sim.map.raid?.rooms[sim.raidRoom];
-        if (!room || sim.raidStage !== "boss") {
+    // The fight's own button, for the HUD (MapDef.fight.ability)
+    private getAbilityView(sim: Sim): AbilityView | undefined {
+        const ability = sim.map.fight?.ability;
+        if (!ability) {
+            return undefined;
+        }
+        const boss = sim.shownBoss;
+        const left = sim.abilitySecondsLeft();
+        return {
+            name: ability.name,
+            iconObjId: ability.iconObjId,
+            charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+            inReach: sim.abilityTarget() !== undefined,
+            opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+        };
+    }
+
+    // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
+    // all for someone who's turned it off (or asked their system for less motion)
+    private startShake(sim: Sim, x: number, y: number, strength: number): void {
+        if (!this.display.screenShake || strength <= 0) {
+            return;
+        }
+        const player = sim.heroes[this.viewHero]?.player ?? sim.player;
+        const away = Math.hypot(x - player.x, y - player.y);
+        const near = Math.min(1, Math.max(0, (SHAKE_FAR - away) / (SHAKE_FAR - SHAKE_NEAR)));
+        const now = performance.now();
+        const left = this.shakeLeft(now);
+        this.shake = { strength: Math.max(left, strength * near), start: now };
+    }
+
+    // What's left of the shake, fading out over SHAKE_MS
+    private shakeLeft(now: number): number {
+        const t = (now - this.shake.start) / SHAKE_MS;
+        return t >= 1 ? 0 : this.shake.strength * (1 - t) * (1 - t);
+    }
+
+    // The camera's offset for it now, in tiles: a quick wobble, both ways
+    private getShake(now: number): { x: number; y: number } {
+        const left = this.shakeLeft(now);
+        if (left <= 0) {
             return { x: 0, y: 0 };
         }
-        const dx = (room.bossAt.x - px) * BOSS_LEAN;
-        const dy = (room.bossAt.y - py) * BOSS_LEAN;
+        const reach = left * SHAKE_TILES;
+        return { x: Math.sin(now * 0.09) * reach, y: Math.cos(now * 0.077) * reach };
+    }
+
+    // A boss's intro that pans (BossIntroDef.pan): from the player to where it rises, held
+    // there, then eased back to the player
+    private getIntroPan(sim: Sim, px: number, py: number, alpha: number): { x: number; y: number } {
+        const intro = sim.intro;
+        const pan = intro?.def.boss?.intro?.pan;
+        const rise = sim.map.features?.rise;
+        if (!intro || !pan) {
+            return { x: 0, y: 0 };
+        }
+        const at = intro.boss ?? rise;
+        if (!at) {
+            return { x: 0, y: 0 };
+        }
+        const seconds = (sim.tick + alpha - intro.startTick) / TICKS_PER_SECOND;
+        const t = Math.min(1, Math.max(0, (seconds - pan.from) / pan.over));
+        const away = 1 - t * t * (3 - 2 * t);
+        return { x: (at.x - px) * away, y: (at.y - py) * away };
+    }
+
+    // Towards where a raid room's boss stands, while it's being fought, or a boss that asks for
+    // it (BossLookDef.lean), wherever it is
+    private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
+        const room = sim.map.raid?.rooms[sim.raidRoom];
+        const boss = sim.shownBoss;
+        const leaning = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
+        const at = room && sim.raidStage === "boss" ? room.bossAt : leaning;
+        if (!at) {
+            return { x: 0, y: 0 };
+        }
+        const dx = (at.x - px) * BOSS_LEAN;
+        const dy = (at.y - py) * BOSS_LEAN;
         const length = Math.hypot(dx, dy);
         const scale = length > BOSS_LEAN_MAX ? BOSS_LEAN_MAX / length : 1;
         return { x: dx * scale, y: dy * scale };
@@ -2187,6 +2351,10 @@ export class GameClient implements GameFrameHandler {
         this.view.onEvents(sim, events);
         this.sounds.onEvents(sim, events, this.viewHero);
         for (const event of events) {
+            if (event.type === "bossImpact") {
+                this.startShake(sim, event.x, event.y, event.shake);
+                continue;
+            }
             // Co-op: a teammate's own events, said with their name if at all
             if (event.hero !== undefined && event.hero !== sim.focus) {
                 this.teammateToast(sim, sim.heroes[event.hero].name, event);
@@ -2433,16 +2601,31 @@ export class GameClient implements GameFrameHandler {
                 enraged: !shownBoss.dead && (shownBoss.bossState?.enraged ?? false),
             };
             if (phase && !shownBoss.dead) {
-                const finale = shownBoss.def.boss?.phases?.finale;
+                const phases = shownBoss.def.boss?.phases;
+                const finale = phases?.finale;
                 boss.fraction =
                     phase.stage === "finale" && finale
                         ? Math.max(0, (phase.finaleEnd ?? 0) - sim.tick) /
                           (finale.seconds * TICKS_PER_SECOND)
-                        : phase.shield / phase.shieldMax;
+                        : phase.stage === "hp"
+                          ? getPhaseBarFraction(shownBoss, phase.index)
+                          : phase.shield / phase.shieldMax;
+                const reach = sim.map.fight?.strikeReach;
+                const player = sim.player;
                 boss.fight = {
                     phase: phase.index + 1,
-                    phases: shownBoss.def.boss?.phases?.phases.length ?? 1,
+                    phases: phases?.phases.length ?? 1,
                     stage: phase.stage,
+                    status:
+                        phase.stage === "finale" ? undefined : phases?.phases[phase.index]?.status,
+                    outOfReach:
+                        reach !== undefined &&
+                        Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,
+                    guard: sim.isStunned(shownBoss)
+                        ? "stunned"
+                        : sim.isExposed(shownBoss)
+                          ? "exposed"
+                          : undefined,
                     totems: phase.totems.map((totem) =>
                         phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
                     ),
@@ -2497,6 +2680,7 @@ export class GameClient implements GameFrameHandler {
             otherDps: meter.otherPerSecond,
             buffs: getBuffViews(sim),
             boss,
+            ability: this.getAbilityView(sim),
             quests: getQuestTrackViews(this.save, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows

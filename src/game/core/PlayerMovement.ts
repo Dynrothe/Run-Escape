@@ -15,6 +15,8 @@ export type MovementRules = {
     held: boolean;
     curse?: PlayerCurse;
     arena?: MovementBounds;
+    // Turned to face this spot whatever's pressed (a boss rising, watched: Sim.introFacing)
+    faces?: { x: number; y: number };
 };
 type MovementBody = Pick<Player, "x" | "y" | "yaw"> & Partial<Pick<Player, "facingX" | "facingY">>;
 
@@ -40,7 +42,15 @@ export function movePlayer(
         const speed = walkSpeed(rules);
         moveCircle(grid, body, moveX * speed * ticks, moveY * speed * ticks, rules.radius);
     }
-    if (moving || (rules.frozen && rules.held && input)) {
+    const faces = rules.faces;
+    const toX = faces ? faces.x - body.x : 0;
+    const toY = faces ? faces.y - body.y : 0;
+    if (faces && (toX !== 0 || toY !== 0)) {
+        const len = fm.hypot(toX, toY);
+        body.facingX = toX / len;
+        body.facingY = toY / len;
+        body.yaw = yawFromVector(toX, toY);
+    } else if (moving || (rules.frozen && rules.held && input)) {
         const len = fm.hypot(moveX, moveY);
         body.facingX = moveX / len;
         body.facingY = moveY / len;

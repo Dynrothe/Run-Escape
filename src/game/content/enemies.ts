@@ -4,6 +4,7 @@ import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
 import { getTheatreBosses } from "./theatre";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
 // classify-npc-seqs.ts (attack = widest reach, death = ends collapsed).
@@ -8342,6 +8343,7 @@ export const ENEMIES: EnemyDef[] = [
     // The Nightmare and all that comes with her (nightmare.ts)
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
+    ...ZACHARIAH_ENEMIES,
 ];
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above

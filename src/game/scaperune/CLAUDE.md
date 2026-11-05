@@ -743,7 +743,8 @@ in water), the two quads that line holes (14416, 14427), and every id the cache 
 (`THEATRE_LOCS`) or the Nightmare's arena (`NIGHTMARE_LOCS`). Something else that's wrong: add it.
 
 **Kit pieces** (`KIT_PIECES`, beside it) only work with others: the Theatre's wall pillars (no back), the Nylocas egg sac and
-the war table (come apart alone), the dream's stacked spikes, posts, trunks and Torii gates, and the Sanctuary's cracked flags.
+the war table (come apart alone), the dream's stacked spikes, posts, trunks and Torii gates, the Sanctuary's cracked flags, and
+the Hallowed Sepulchre's edges, tall walls, wall-line pieces, gold and blue runner, banner columns and fire traps.
 Each has its reason and, where it's known, its `set`: ranges of ids that must have a loc within `reach` tiles of it, on any
 level. `check-maps.ts` fails a dev map with one placed without its set. Locs from a stamped prefab (`isStamped`) count as
 whole, since a set cut from the real place is the set as built. A piece with no known set is only fine that way.
@@ -1453,7 +1454,19 @@ that.
   start is 7 tiles south of the middle).
 
 `theatreOfBlood.ts` (12 regions: a hall and a boss room for each of six rooms, with each room's start, arrival and boss)
-and `sisterhoodSanctuary.ts` (one region, her square, with `min` its whole area) are the examples.
+and `sisterhoodSanctuary.ts` (one region, her square, with `min` its whole area) are the examples. `owlsCourt.ts` is one
+region that isn't a rectangle of open ground: the court, a bridge and a terrace in one `rect`, with the void and the blocked
+rims and dais in it blocked first, so `maxSealed: 0` says nothing open was cut off.
+
+**Walkways over a void, as the Hallowed Sepulchre is built** (`owlsCourt.ts`, Justiciar Zachariah's arena): every walkway
+tile is the hidden overlay (359) under a type 22 stone tile, and the void has no floor at all, so it draws the renderer's
+black. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
+where only a corner touches), and its tall wall 38924 under every edge the camera can see. The cache stands that wall on the
+level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and it hangs from the
+edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
+each is flat at its height and the lips stand level. The camera's always over the court, so west faces west of it and east
+faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
+1 and east at 3.
 
 ### How big a map can be
 
@@ -1541,7 +1554,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
   y 200. Each recipe needs its own, and nothing checks that: see `devMaps.ts` and each map's `mapX`, `mapY`. The
-  shipped maps have Hallowed Night at x 72-76, y 72-76 and the Sisterhood Sanctuary at x 78-80, y 72-74. The
+  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74 and the Owl's Court at
+  x 82-84, y 76-78. The
   map generator's screen, and scripts given settings, have x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.
@@ -1593,9 +1607,9 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   `generator.test.ts` runs it when the cache is there. A change meant to change a shipped map updates its hash on purpose,
   and says why in the pull request. A new shipped map adds its hash: the check fails on a shipped map with none.
 - A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
-  Sanctuary's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds that table to the cache, and a
-  cache-gated test in `sisterhoodSanctuary.test.ts` runs it, so a cache update that changes a size or a clip fails a test
-  instead of shipping a wrong map. A new map with a table like it should get the same check.
+  Sanctuary's and the Owl's Court's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds those
+  tables to the cache, and a cache-gated test in each map's test runs it, so a cache update that changes a size or a clip
+  fails a test instead of shipping a wrong map. A new map with a table like it goes in the script's `TABLES`.
 - **Phones choke on the heaviest view, not the map's total.** `view-weight.ts` sums the triangles of the locs the play
   camera draws from every arena tile (18 tiles away, or 15 with `PHONE=1`, culled in 8-tile cells as the renderer does),
   prints the heaviest views with what's heaviest in each, and draws a heat map. On `phosani` the north edge is the heaviest,

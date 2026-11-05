@@ -29,4 +29,13 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     [37735, { height: 170 }],
     [37736, { height: 220 }],
     [37737, { height: 190 }],
+    // The Hallowed Sepulchre's tall wall (Floor 3's), which the cache stands on a level under each
+    // walkway, rising 4 tiles to its edge. A map draws one level, so here it hangs the 4 tiles
+    // down from the walkway's edge instead (maps/owlsCourt.ts). The cache places it only there.
+    // 4 units further: its top is a flat cap over the tile, which at the floor's height and
+    // priority z-fought the plain floor tiles as the camera moved; the edge's lip hides the step.
+    [38924, { height: -516 }],
+    // A Sepulchre wizard statue (the Owl's Court's bridge): the plate in front of it is flat on the
+    // floor, so it z-fought the floor tile under it; 2 units up it doesn't
+    [38417, { height: 2 }],
 ]);

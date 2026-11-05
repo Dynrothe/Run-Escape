@@ -21,6 +21,7 @@ export const PETS: PetDef[] = [
     { id: "lil_nylo", npcId: 10872, idleSeq: 8002, walkSeq: 8003 },
     { id: "lil_sot", npcId: 10873, idleSeq: 8137, walkSeq: 9032 },
     { id: "lil_xarp", npcId: 10874, idleSeq: 9033, walkSeq: 9033 },
+    { id: "dark_squirrel", npcId: 9637, idleSeq: 7309, walkSeq: 7310 },
 ];
 
 export const PET_BY_ID: Map<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));

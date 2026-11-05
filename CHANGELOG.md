@@ -3,6 +3,33 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.26.0 - 2026-11-05
+
+### Added
+
+- Justiciar Zachariah, a new boss fight on the Bosses tab, open once Phosani's Nightmare is
+  beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
+  itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
+  from close by. With its own track, Blade of Forgotten Justice.
+  - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
+    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+    for a few seconds after, as he'll tell you).
+  - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
+    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+    early still lands.
+  - Each phase has its own full health bar.
+  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
+  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+    slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
+    a burst of light as he kneels, and a ring across the court as he rises.
+  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
+- A Screen shake setting, on unless your system asks for less motion.
+- Retry on a boss fight's results, to go straight into it again.
+
+### Changed
+
+- Boss fights don't show the item bar: there are no items in them.
+
 ## 0.25.0 - 2026-11-05
 
 ### Added

@@ -65,6 +65,7 @@ import {
     isMapUnlocked,
 } from "../core/save";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
+import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -588,6 +589,13 @@ function SettingsPanel({
                             on={ui.display.menuSpin}
                             label="Camera spin"
                             onToggle={() => client.toggleMenuSpin()}
+                        />
+                    </Setting>
+                    <Setting name="Screen shake" text="The camera shakes when a boss's blow lands">
+                        <Toggle
+                            on={ui.display.screenShake}
+                            label="Screen shake"
+                            onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
@@ -1694,7 +1702,11 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <ReviveNote revive={ui.revive} />
             )}
             {isCoarsePointer && hud && (
-                <TouchControls inventory={hud.inventory} overlay={ui.overlay} client={client} />
+                <TouchControls
+                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    overlay={ui.overlay}
+                    client={client}
+                />
             )}
             <div className="ui-toasts">
                 {ui.toasts.map((toast) => (
@@ -1922,7 +1934,13 @@ const Hud = memo(function Hud({
             <BossBar mapId={hud.mapId} client={client} />
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
-                <Inventory inventory={hud.inventory} client={client} />
+                <div className="ui-hud-actions">
+                    {/* A boss fight has no items, only its own button */}
+                    {!getMap(hud.mapId).fight && (
+                        <Inventory inventory={hud.inventory} client={client} />
+                    )}
+                    <AbilityButton client={client} />
+                </div>
                 <HpBar client={client} />
             </div>
         </>
@@ -2035,10 +2053,13 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 {boss.name}
                 {boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
                 {boss.fight && (
-                    <span className="ui-boss-phase">
+                    // Keyed on the phase, so a new one plays its pulse from the start
+                    <>
                         {" "}
-                        Phase {boss.fight.phase}/{boss.fight.phases}
-                    </span>
+                        <span key={boss.fight.phase} className="ui-boss-phase ui-boss-phase-new">
+                            Phase {boss.fight.phase}/{boss.fight.phases}
+                        </span>
+                    </>
                 )}
             </div>
             {boss.fight?.stage === "totems" ? (
@@ -2055,18 +2076,29 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             ) : (
                 <div className="ui-boss-bar">
                     <div
-                        className={boss.fight ? "ui-boss-fill ui-boss-fill-shield" : "ui-boss-fill"}
+                        className={
+                            boss.fight && boss.fight.stage !== "hp"
+                                ? "ui-boss-fill ui-boss-fill-shield"
+                                : "ui-boss-fill"
+                        }
                         style={{ transform: `scaleX(${boss.fraction})` }}
                     />
                 </div>
             )}
             {boss.fight && (
                 <div className="ui-boss-status">
-                    {boss.fight.stage === "totems"
-                        ? "Charge the totems!"
-                        : boss.fight.stage === "finale"
-                          ? "Stay on your feet!"
-                          : "Break her shield!"}
+                    {boss.fight.outOfReach
+                        ? "Out of reach!"
+                        : boss.fight.guard === "stunned"
+                          ? "Stunned!"
+                          : boss.fight.guard === "exposed"
+                            ? "Guard down!"
+                            : (boss.fight.status ??
+                              (boss.fight.stage === "totems"
+                                  ? "Charge the totems!"
+                                  : boss.fight.stage === "finale"
+                                    ? "Stay on your feet!"
+                                    : "Break her shield!"))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
                     )}
@@ -2932,7 +2964,20 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    <button className="ui-button ui-button-go" onClick={() => client.leaveRun()}>
+                    {/* A boss fight on your own: straight into it again */}
+                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                        <button className="ui-button ui-button-go" onClick={() => client.retry()}>
+                            Retry
+                        </button>
+                    )}
+                    <button
+                        className={
+                            !ui.coop.room && getMap(ui.mapId).fight
+                                ? "ui-button"
+                                : "ui-button ui-button-go"
+                        }
+                        onClick={() => client.leaveRun()}
+                    >
                         {ui.coop.room ? "Back to the party" : "Back to the title"}
                     </button>
                 </div>

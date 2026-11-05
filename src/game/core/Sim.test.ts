@@ -2790,7 +2790,13 @@ describe("maps", () => {
                 expect(map.events.length).toBe(1);
                 expect(map.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
                 expect(getEnemy(map.events[0].enemyId).boss?.intro?.alone).toBe(true);
-                expect(getMap(map.fight.requires).fight).toBeUndefined();
+                // Opened by beating another map: a campaign map, or another fight that is (the
+                // Owl's trial after the Wolf's), never round in a circle
+                let requires = getMap(map.fight.requires);
+                for (let i = 0; requires.fight && i < MAPS.length; i++) {
+                    requires = getMap(requires.fight.requires);
+                }
+                expect(requires.fight).toBeUndefined();
                 expect(CHARACTERS.some((c) => c.id === map.fight!.character)).toBe(true);
                 continue;
             }

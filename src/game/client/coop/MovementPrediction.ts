@@ -241,7 +241,8 @@ export class MovementPrediction {
             frozen: player.frozen > 0 || sim.introHolds,
             held: !!hero.hold || sim.introHolds,
             curse: hero.curse,
-            arena: sim.map.bossArena && sim.shownBoss?.def.boss?.phases ? sim.bossArena : undefined,
+            arena: sim.confinedToArena ? sim.bossArena : undefined,
+            faces: sim.introFacing,
         };
         // Keep the newest input when a lead exceeds the replay budget: starts,
         // stops and turns mustn't get stranded beyond the end of an old window.
