@@ -5,14 +5,17 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Overhead prayers, by Okaeri: bosses that pray show OSRS's overhead prayer for it, as the Theatre
+  of Blood's do, Protect from Missiles and Magic.
+- Boss prayer warnings, by Okaeri: in the Theatre of Blood, a ranged or magic weapon's level up
+  card says in red how much less damage it does to the bosses, as they pray against it.
+
 ### Changed
 
 - Theatre of Blood, by Okaeri: the Maiden's Blood burst comes half as often, so melee can stay in
   on her.
-- Theatre of Blood, by Okaeri: a ranged or magic weapon's level up card says, in red, that it does
-  85% less damage to the bosses, as they pray against it.
-- Bosses that pray show their overhead prayer, as in OSRS: the Theatre of Blood's, Protect from
-  Missiles and Magic. Added by Okaeri.
 
 ### Fixed
 

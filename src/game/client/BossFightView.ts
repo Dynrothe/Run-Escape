@@ -1156,11 +1156,8 @@ export class BossFightView {
         ctx.stroke();
     }
 
-    // The game's hint arrow over whatever asks for one (EnemyDef.hintArrow),
-    // bobbing as it does over an NPC you're pointed at, and from the screen's
-    // edge when it's off it
     // A boss's overhead prayer, OSRS's own, for the styles it prays against (EnemyDef.protects):
-    // not one whose prayer does nothing on expert (a coloured Nylocas, Sim.prayedAgainst)
+    // not on expert for a Nylocas whose prayer does nothing there (Sim.prayedAgainst)
     private drawOverheads(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
         const ctx = overlay.ctx;
         for (const enemy of sim.enemies) {
@@ -1168,7 +1165,7 @@ export class BossFightView {
             if (!protects || !enemy.boss || enemy.dead || enemy.flung) {
                 continue;
             }
-            if (sim.expert && enemy.def.onlyStyle) {
+            if (sim.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
                 continue;
             }
             const frame = getPrayerHeadicon(protects.styles);
@@ -1198,6 +1195,9 @@ export class BossFightView {
         }
     }
 
+    // The game's hint arrow over whatever asks for one (EnemyDef.hintArrow),
+    // bobbing as it does over an NPC you're pointed at, and from the screen's
+    // edge when it's off it
     private drawHintArrows(
         overlay: Overlay,
         sim: Sim,

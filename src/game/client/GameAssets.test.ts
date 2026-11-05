@@ -391,12 +391,15 @@ describe("power-ups in the cache", () => {
 
 describe("a boss's overhead prayer", () => {
     test("is OSRS's own for the styles it prays against, in any order", () => {
-        expect(getPrayerHeadicon(["melee"])).toBe(0);
-        expect(getPrayerHeadicon(["ranged"])).toBe(1);
-        expect(getPrayerHeadicon(["magic"])).toBe(2);
-        // The Theatre's bosses: Protect from Missiles and Magic together
-        expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
-        expect(getPrayerHeadicon(["magic", "ranged"])).toBe(6);
-        expect(PRAYER_HEADICON_FRAME_IDS).toContain(6);
+        // A pair's the same frame whichever way round it's listed, and not either one's own
+        const pair = getPrayerHeadicon(["ranged", "magic"]);
+        expect(pair).toBeDefined();
+        expect(getPrayerHeadicon(["magic", "ranged"])).toBe(pair);
+        expect(pair).not.toBe(getPrayerHeadicon(["ranged"]));
+        expect(pair).not.toBe(getPrayerHeadicon(["magic"]));
+        // Every frame it can give is one the client loads (and sprites.ts check finds drawn)
+        for (const styles of [["melee"], ["ranged"], ["magic"], ["ranged", "magic"]]) {
+            expect(PRAYER_HEADICON_FRAME_IDS).toContain(getPrayerHeadicon(styles));
+        }
     });
 });

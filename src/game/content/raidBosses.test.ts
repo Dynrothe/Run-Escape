@@ -12,8 +12,9 @@ describe("a raid's bosses' prayers, for weapon cards", () => {
         expect(getRaidBossShare(theatre, "melee", false)).toBeUndefined();
     });
 
-    it("has nothing to warn of on expert, where the Nylocas take their own colour in full", () => {
-        expect(getRaidBossShare(theatre, "ranged", true)).toBeUndefined();
+    it("still warns on expert, where Nylocas Vasilias keeps praying through her colours", () => {
+        expect(getRaidBossShare(theatre, "ranged", true)).toBe(0.15);
+        expect(getRaidBossShare(theatre, "magic", true)).toBe(0.15);
     });
 
     it("has nothing to warn of off a raid", () => {

@@ -6,6 +6,10 @@
 import fs from "fs";
 import path from "path";
 
+import {
+    PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
+} from "../../src/game/client/GameAssets";
 import { PASSIVES } from "../../src/game/content/passives";
 import { SpriteImage, decodeSpriteImage } from "../../src/mapviewer/worker/SpriteDataLoader";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
@@ -93,11 +97,20 @@ switch (command) {
                 missing++;
             }
         }
+        // The overhead prayers' frames, drawn over bosses that pray
+        for (const frame of PRAYER_HEADICON_FRAME_IDS) {
+            const sprite = decodeSpriteImage(spriteIndex, PRAYER_HEADICON_SPRITE, frame);
+            const drawn = sprite.pixels.some((argb) => argb >>> 24 !== 0);
+            console.log(`overhead prayer frame ${frame}: ${describe(sprite)}`);
+            if (!drawn) {
+                missing++;
+            }
+        }
         if (missing > 0) {
-            console.log(`${missing} passive sprites are missing or blank`);
+            console.log(`${missing} sprites are missing or blank`);
             process.exitCode = 1;
         } else {
-            console.log("Every passive's sprite is in the cache");
+            console.log("Every passive's sprite and overhead prayer is in the cache");
         }
         break;
     }
