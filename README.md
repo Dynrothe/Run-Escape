@@ -87,10 +87,13 @@ hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damag
 the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
 **Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
 
-Hover over an item in your bag to read the description shown when you found it.
+Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
+upgrades) to read their descriptions.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
+Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
+On small screens, worn equipment and its descriptions are in the pause menu.
 Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 

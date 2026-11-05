@@ -1470,22 +1470,20 @@
     color: var(--ui-yellow);
 }
 
-/* What a weapon or passive does, on a card under it while it's pointed at */
-.ui-slot-tip {
-    display: none;
-    position: absolute;
-    left: 0;
-    top: calc(100% + 4px);
-    z-index: 5;
-    padding: 6px 8px;
-    font-size: 14px;
-    color: var(--ui-white);
-    white-space: nowrap;
-    pointer-events: none;
+.ui-slot {
+    padding: 0;
+    font: inherit;
+    cursor: help;
 }
 
-.ui-slot:hover .ui-slot-tip {
-    display: block;
+.ui-slot:disabled {
+    cursor: default;
+}
+
+.ui-slot:focus-visible,
+.ui-armoury-step:focus-visible {
+    outline: 2px solid var(--ui-yellow);
+    outline-offset: 2px;
 }
 
 .ui-slot-tip-level {
@@ -1668,22 +1666,21 @@
     text-shadow: 1px 1px 0 #000;
 }
 
-.ui-inv-tip {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 6px);
-    z-index: 5;
+.ui-description-tip {
+    position: fixed;
+    z-index: 100;
     display: flex;
     flex-direction: column;
     gap: 4px;
     width: 260px;
-    max-width: calc(100vw / var(--ui-scale) - 24px);
+    box-sizing: border-box;
     padding: 8px 10px;
     font-family: "OSRS Small", sans-serif;
     font-size: 16px;
     font-weight: normal;
     color: var(--ui-white);
     text-align: left;
+    text-shadow: 1px 1px 0 #000;
     white-space: normal;
     pointer-events: none;
 }

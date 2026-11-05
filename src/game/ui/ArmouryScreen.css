@@ -84,7 +84,7 @@
     color: var(--ui-white);
 }
 
-.ui-armoury-stats .ui-armoury-set {
+.ui-armoury-set {
     color: var(--ui-cyan);
 }
 
@@ -104,6 +104,8 @@
     border: 1px solid transparent;
     opacity: 0.45;
     filter: grayscale(0.7);
+    background: transparent;
+    cursor: help;
 }
 
 .ui-armoury-step-done {

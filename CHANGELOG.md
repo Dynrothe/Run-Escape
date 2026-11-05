@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Hover or hold weapons, passives, worn equipment and Armoury pieces to read their descriptions, including future Armoury upgrades.
+
 ## 0.26.1 - 2026-11-05
 
 ### Added

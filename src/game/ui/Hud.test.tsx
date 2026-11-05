@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
 import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
+import { getUpgradeLine } from "../content/armoury";
+import { CASKET_GEAR, getGear } from "../content/items";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 
@@ -88,5 +91,92 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")).toBeNull();
         act(() => store.setNumbers(numbers({ bossIn: 42 })));
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
+    });
+
+    test("weapons and passives describe their current stats and evolution on focus", () => {
+        const { store } = renderHud();
+        const weapon: SlotView = {
+            ...slot("bow", 8),
+            stats: ["Damage: 20", "Cooldown: 1s"],
+            detail: "Shoots an arrow.",
+            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+        };
+        const passive: SlotView = { ...slot("Piety", 2), detail: "+10% damage" };
+        act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));
+        const bow = screen.getByRole("button", { name: "bow" });
+        fireEvent.focus(bow);
+        const tip = screen.getByRole("tooltip");
+        expect(bow).toHaveAttribute("aria-describedby", tip.id);
+        for (const text of ["Max level", ...weapon.stats!, weapon.detail, "Piety"]) {
+            expect(tip).toHaveTextContent(text);
+        }
+        fireEvent.blur(bow);
+        const prayer = screen.getByRole("button", { name: "Piety" });
+        fireEvent.focus(prayer);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Level 2 of 8");
+        expect(screen.getByRole("tooltip")).toHaveTextContent(passive.detail);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+        fireEvent.focus(prayer);
+        act(() => store.set({ overlay: "paused" }));
+        expect(prayer).toBeDisabled();
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    test("worn equipment shows the reward description and current set bonus", () => {
+        const { store } = renderHud();
+        const item = {
+            ...getItemView(CASKET_GEAR[0], 2),
+            set: { text: "Set bonus active", active: true },
+        };
+        act(() =>
+            store.set({
+                hud: { ...hud([]), gear: [{ slot: CASKET_GEAR[0].slot, name: "Head", item }] },
+            }),
+        );
+        const button = screen.getByRole("button", { name: item.name });
+        fireEvent.focus(button);
+        const tip = screen.getByRole("tooltip");
+        for (const text of [item.name, ...item.lines, item.set.text]) {
+            expect(tip).toHaveTextContent(text);
+        }
+        expect(within(tip).getByText(item.set.text)).toHaveClass("ui-good");
+        expect(button).not.toHaveAttribute("title");
+    });
+
+    test("Armoury tiles and future upgrades describe the actual piece without buying it", () => {
+        const { store, view } = renderHud();
+        const base = CASKET_GEAR.find((g) => getUpgradeLine(g.id).length > 2)!;
+        const line = getUpgradeLine(base.id);
+        const save = createSave();
+        save.foundGear = [base.id];
+        save.armoury[base.id] = 1;
+        act(() => store.set({ screen: "armoury", save }));
+        const tile = within(
+            view.container.querySelector<HTMLElement>(".ui-armoury-slots")!,
+        ).getByRole("button", { name: getGear(line[1]).name });
+        fireEvent.focus(tile);
+        const current = getItemView(getGear(line[1]));
+        for (const text of [current.name, ...current.lines]) {
+            expect(screen.getByRole("tooltip")).toHaveTextContent(text);
+        }
+        fireEvent.blur(tile);
+        const future = getItemView(getGear(line[2]));
+        const step = within(
+            view.container.querySelector<HTMLElement>(".ui-armoury-line")!,
+        ).getByRole("button", { name: future.name });
+        fireEvent.focus(step);
+        for (const text of [future.name, ...future.lines]) {
+            expect(screen.getByRole("tooltip")).toHaveTextContent(text);
+        }
+        fireEvent.blur(step);
+        const locked = view.container.querySelector<HTMLElement>(
+            ".ui-armoury-tile.ui-card-locked",
+        )!;
+        fireEvent.focus(locked);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Not found yet");
+        fireEvent.click(locked);
+        expect(locked).toHaveAttribute("aria-pressed", "true");
+        expect(save.armoury[base.id]).toBe(1);
     });
 });

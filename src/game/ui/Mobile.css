@@ -69,7 +69,7 @@
     }
 
     .ui-slot {
-        pointer-events: none;
+        pointer-events: auto;
     }
 
     /* Keys don't mean anything here */
@@ -585,6 +585,13 @@
     .ui-armoury-tile {
         width: 44px;
         height: 44px;
+    }
+
+    .ui-armoury-step {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
     }
 
     /* Quests and the collection log */

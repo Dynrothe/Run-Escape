@@ -1176,12 +1176,19 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   is down, so the sim gets the same input a keyboard gives: length 0 or 1.
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
-  `click` for a second finger while the thumb's down. `ui/InventoryItem.tsx` shares the bag buttons
-  with the desktop HUD: hover or hold for 500 ms to read the same `ItemView.lines` as the casket.
+  `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
+  keyboard focus and 500 ms holds across bag items, weapons, passives, worn gear and Armoury
+  tiles and upgrade steps. `ui/InventoryItem.tsx` uses it for both bag layouts, with the same
+  `ItemView.lines` as the casket. Descriptions are portalled outside scrolling panels and the
+  phone HUD's extra zoom, clamped to the viewport while keeping the UI's text scale.
+  The HUD renders after the touch movement zone so its slots receive holds; a run overlay
+  disables those slots and dismisses their descriptions.
   Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
   further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
   The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
-  clicks still use the item.
+  clicks still use the item. Holding an Armoury tile never selects or buys it; a quick tap
+  still selects it. Scroll and Escape dismiss descriptions too. Small phones keep worn gear
+  and its descriptions in the pause menu.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
