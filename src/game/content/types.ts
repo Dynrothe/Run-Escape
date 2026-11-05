@@ -142,6 +142,9 @@ export type EnemyDef = {
     // On a raid's expert mode, only this style's weapons hurt it (the Nylocas:
     // grey melee, green ranged, blue magic). Everything else still does.
     onlyStyle?: CombatStyle;
+    // And there its own style does this many times the damage: with the other two
+    // doing nothing, a wave's Nylocas go down quickly to the right one (not a boss)
+    expertOwnStyle?: number;
     // On a raid's expert mode, it turns up as this enemy instead (the Maiden's
     // Nylocas Matomenos, as ones that heal her)
     expertAs?: string;
@@ -320,6 +323,9 @@ export type EnemyShotDef = {
     // Shoots when the player is this many tiles away or closer, and stops
     // walking up at about three quarters of it
     range: number;
+    // On a raid's expert mode it stops this many tiles off instead: the blue
+    // Nylocas, which only magic hurts there, come in where a magic aura reaches
+    expertKeep?: number;
     // Seconds between shots
     interval: number;
     // Tiles per second
@@ -1340,8 +1346,8 @@ export type BossDef = {
 // Nightmare: each unset is hers. edge: the stroke round the bossArena while it's
 // up, or none (a court whose edges are drops). vignette: the dim round the
 // screen's edges while it's up, or none. dark: its entrance's dark (r, g, b).
-// lean: the camera leans towards it, as in a raid's boss room, so a boss north of
-// the player stays on the screen.
+// lean: the camera leans towards it, so a boss north of the player stays on the
+// screen (a raid's boss rooms lean only as far as keeps theirs below the boss bar).
 export type BossLookDef = {
     lean?: boolean;
     title?: string;
@@ -2232,7 +2238,8 @@ export type RaidRoomDef = {
     // tuned to take a strong player
     par: number;
     // How its hall looks while its waves are on: drawn this bright (as MapDef.brightness, lower
-    // darker), and the screen washed with this colour (multiplied over it, so white is no change)
+    // darker), and the world washed with this colour ("#rrggbb", multiplied over it in the
+    // shader, so white is no change)
     hall?: { brightness?: number; wash?: string };
 };
 

@@ -19,6 +19,7 @@ import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
     GameAssets,
+    PRAYER_HEADICON_FRAME_IDS,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
@@ -26,6 +27,7 @@ import {
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
+    getPrayerHeadicon,
     getRunAttackSeqs,
     getShieldedModelKey,
     getStatueModelKey,
@@ -384,5 +386,40 @@ describe("power-ups in the cache", () => {
                 }
             }
         }
+    });
+});
+
+describe("a boss's overhead prayer", () => {
+    test("has a frame for each style and pair, whichever way round, that the client loads", () => {
+        // A pair's the same frame whichever way round it's listed, and not either one's own
+        const pair = getPrayerHeadicon(["ranged", "magic"]);
+        expect(pair).toBeDefined();
+        expect(getPrayerHeadicon(["magic", "ranged"])).toBe(pair);
+        expect(pair).not.toBe(getPrayerHeadicon(["ranged"]));
+        expect(pair).not.toBe(getPrayerHeadicon(["magic"]));
+        // Every frame it can give is one the client loads (and sprites.ts check finds drawn)
+        const asked = [
+            ["melee"],
+            ["ranged"],
+            ["magic"],
+            ["ranged", "magic"],
+            ["melee", "magic"],
+            ["melee", "ranged"],
+        ];
+        for (const styles of asked) {
+            expect(getPrayerHeadicon(styles)).toBeDefined();
+            expect(PRAYER_HEADICON_FRAME_IDS).toContain(getPrayerHeadicon(styles));
+        }
+    });
+
+    test("is the frame sprite 440 draws that prayer, or pair, in", () => {
+        // Pinned from the cache (sprites.ts png 440): a swapped pair would show green Nylocas
+        // Vasilias the wrong prayers, and sprites.ts check only finds a frame drawn
+        expect(getPrayerHeadicon(["melee"])).toBe(0);
+        expect(getPrayerHeadicon(["ranged"])).toBe(1);
+        expect(getPrayerHeadicon(["magic"])).toBe(2);
+        expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
+        expect(getPrayerHeadicon(["melee", "ranged"])).toBe(7);
+        expect(getPrayerHeadicon(["melee", "magic"])).toBe(8);
     });
 });

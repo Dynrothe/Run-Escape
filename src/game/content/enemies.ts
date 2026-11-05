@@ -217,6 +217,11 @@ function jadAttacks(stomp: number, magic: number): BossAttackDef[] {
     ];
 }
 
+// On a raid's expert mode, the times its damage a Nylocas in the waves takes from its own colour's
+// style (EnemyDef.expertOwnStyle): the other two do nothing, and its hitpoints are the raid's, so
+// at full damage the right spell still took a while to bring one down
+const NYLOCAS_OWN_STYLE = 3;
+
 export const ENEMIES: EnemyDef[] = [
     {
         id: "chicken",
@@ -4727,6 +4732,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.35,
         xp: 14,
         onlyStyle: "melee",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
     },
     {
@@ -4743,6 +4749,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.35,
         xp: 14,
         onlyStyle: "ranged",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
     },
     {
@@ -4759,6 +4766,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.35,
         xp: 14,
         onlyStyle: "magic",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
     },
     {
@@ -4775,6 +4783,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 24,
         onlyStyle: "melee",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.4,
@@ -4794,6 +4803,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 24,
         onlyStyle: "ranged",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.4,
@@ -4813,6 +4823,7 @@ export const ENEMIES: EnemyDef[] = [
         radius: 0.45,
         xp: 24,
         onlyStyle: "magic",
+        expertOwnStyle: NYLOCAS_OWN_STYLE,
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.4,

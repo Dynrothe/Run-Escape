@@ -203,7 +203,8 @@ const TOB_ROOMS: RaidRoomDef[] = [
             boss: "maiden_of_sugadinti",
             // Seconds for all its speed points (early: fast is fine)
             par: 30,
-            bossHp: 30000,
+            // The first boss, met at about level 20: under the later ones
+            bossHp: 12000,
         },
         0,
     ),

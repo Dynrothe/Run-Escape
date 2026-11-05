@@ -1,5 +1,6 @@
 import { CacheIndex } from "../../rs/cache/CacheIndex";
 import { IndexType } from "../../rs/cache/IndexType";
+import { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 import { SpriteLoader } from "../../rs/sprite/SpriteLoader";
 import { RenderDataLoader, RenderDataResult } from "./RenderDataLoader";
 import { WorkerState } from "./RenderDataWorker";
@@ -10,6 +11,7 @@ import { WorkerState } from "./RenderDataWorker";
 
 export type SpriteImage = {
     id: number;
+    frame: number;
     width: number;
     height: number;
     // ARGB, width x height; empty when the sprite isn't in the cache
@@ -19,18 +21,17 @@ export type SpriteImage = {
 // frames: the frame of each sprite id, in the same order (the first, without)
 export type SpriteDataInput = { spriteIds: number[]; frames?: number[] };
 
-export function loadSpriteImage(state: WorkerState, id: number, frame: number = 0): SpriteImage {
-    return decodeSpriteImage(state.cacheSystem.getIndex(IndexType.DAT2.sprites), id, frame);
-}
-
-// The same from the sprites' index itself, for scripts
+// A sprite's frame from the sprites' index, for scripts
 export function decodeSpriteImage(
     spriteIndex: CacheIndex,
     id: number,
     frame: number = 0,
 ): SpriteImage {
-    const empty = { id, width: 0, height: 0, pixels: new Int32Array(0) };
-    const sprite = SpriteLoader.loadIntoIndexedSprite(spriteIndex, id, frame);
+    return toImage(id, frame, SpriteLoader.loadIntoIndexedSprite(spriteIndex, id, frame));
+}
+
+function toImage(id: number, frame: number, sprite: IndexedSprite | undefined): SpriteImage {
+    const empty = { id, frame, width: 0, height: 0, pixels: new Int32Array(0) };
     if (!sprite || sprite.width <= 0 || sprite.height <= 0) {
         return empty;
     }
@@ -48,7 +49,7 @@ export function decodeSpriteImage(
                 (alpha << 24) | (palette[index] & 0xffffff);
         }
     }
-    return { id, width, height, pixels };
+    return { id, frame, width, height, pixels };
 }
 
 export class SpriteDataLoader implements RenderDataLoader<SpriteDataInput, SpriteImage[]> {
@@ -60,12 +61,21 @@ export class SpriteDataLoader implements RenderDataLoader<SpriteDataInput, Sprit
         state: WorkerState,
         input: SpriteDataInput,
     ): Promise<RenderDataResult<SpriteImage[]>> {
+        const spriteIndex = state.cacheSystem.getIndex(IndexType.DAT2.sprites);
+        // Each sprite's archive decoded once, however many of its frames are asked for
+        const decoded = new Map<number, (IndexedSprite | undefined)[] | undefined>();
         const sprites = input.spriteIds.map((id, i) => {
+            const frame = input.frames?.[i] ?? 0;
             try {
-                return loadSpriteImage(state, id, input.frames?.[i] ?? 0);
+                if (!decoded.has(id)) {
+                    decoded.set(id, SpriteLoader.loadIntoIndexedSprites(spriteIndex, id));
+                }
+                return toImage(id, frame, decoded.get(id)?.[frame]);
             } catch (e) {
+                // Once: its other frames don't read it again
+                decoded.set(id, undefined);
                 console.error("Failed loading sprite", id, e);
-                return { id, width: 0, height: 0, pixels: new Int32Array(0) };
+                return { id, frame, width: 0, height: 0, pixels: new Int32Array(0) };
             }
         });
         return { data: sprites, transferables: sprites.map((sprite) => sprite.pixels.buffer) };

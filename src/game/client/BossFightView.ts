@@ -1,5 +1,6 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
+import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -11,7 +12,14 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
-import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey, getStatueModelKey } from "./GameAssets";
+import {
+    GameAssets,
+    HINT_ARROW_SPRITE,
+    PRAYER_HEADICON_SPRITE,
+    getEnemyModelKey,
+    getPrayerHeadicon,
+    getStatueModelKey,
+} from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 
 // What a boss with a fight of its own puts in the world (BossDef.phases,
@@ -78,6 +86,9 @@ const TOTEM_ARROW = 14;
 const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
+// A boss's overhead prayer: drawn that much bigger, and this many tiles over its head
+export const OVERHEAD_SCALE = 1.5;
+export const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
 function locYaw(rotation = 0): number {
@@ -1077,12 +1088,13 @@ export class BossFightView {
         }
         const ctx = overlay.ctx;
         const base = Math.atan2(windup.dirY, windup.dirX);
-        const arc = pattern.arc ?? 1;
+        // A line where each of its bullets goes: hard mode's more of them, in a wider fan
+        const shape = sim.volleyShape(pattern);
         ctx.strokeStyle = "#ffb060";
         ctx.globalAlpha = (0.3 + 0.5 * t) * WARNING_ALPHA;
         ctx.lineWidth = Math.max(2, 3 * scale);
-        for (let i = 0; i < pattern.count; i++) {
-            const angle = base - arc / 2 + (arc * i) / Math.max(1, pattern.count - 1);
+        for (let i = 0; i < shape.count; i++) {
+            const angle = sim.volleyHeading(shape, base, i);
             const from = overlay.project(
                 enemy.x,
                 this.ground(sim, enemy.x, enemy.y),
@@ -1105,6 +1117,7 @@ export class BossFightView {
     drawScreen(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawBeams(overlay, sim, now, scale);
         this.drawTotemArrows(overlay, sim, scale);
+        this.drawOverheads(overlay, sim, alpha, scale);
         this.drawHintArrows(overlay, sim, alpha, now, scale);
         const boss = sim.shownBoss;
         const width = overlay.width;
@@ -1245,6 +1258,50 @@ export class BossFightView {
         ctx.stroke();
     }
 
+    // On the screen, gap tiles over the top of an enemy's model, where it is this frame: what's
+    // drawn over its head (its overhead prayer, a hint arrow) sits on this
+    private overHead(overlay: Overlay, sim: Sim, enemy: Enemy, alpha: number, gap: number) {
+        const x = lerp(enemy.prevX, enemy.x, alpha);
+        const y = lerp(enemy.prevY, enemy.y, alpha);
+        const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+        const top = this.ground(sim, x, y) - ((model?.height ?? 128) * enemy.scale) / 128 - gap;
+        return overlay.project(x, top, y, this.a);
+    }
+
+    // A boss's overhead prayer, OSRS's own, for the styles it holds back (getBossPrayerStyles: a
+    // colour of Nylocas Vasilias, the two that aren't it): not on expert for a Nylocas whose prayer
+    // does nothing there (Sim.prayedAgainst)
+    private drawOverheads(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const enemy of sim.enemies) {
+            if (!enemy.boss || enemy.dead || enemy.flung) {
+                continue;
+            }
+            if (isPrayerIgnored(enemy.def, sim.expert)) {
+                continue;
+            }
+            // A colour of Nylocas Vasilias shows the two styles it holds back, not its prayer
+            const styles = getBossPrayerStyles(enemy.def);
+            const frame = styles.length > 0 ? getPrayerHeadicon(styles) : undefined;
+            const sprite =
+                frame === undefined
+                    ? undefined
+                    : this.assets.getSprite(PRAYER_HEADICON_SPRITE, frame);
+            if (!sprite) {
+                continue;
+            }
+            const p = this.overHead(overlay, sim, enemy, alpha, OVERHEAD_GAP);
+            if (p.behind) {
+                continue;
+            }
+            const w = sprite.width * OVERHEAD_SCALE * scale;
+            const h = sprite.height * OVERHEAD_SCALE * scale;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h), w, h);
+            ctx.imageSmoothingEnabled = true;
+        }
+    }
+
     // The game's hint arrow over whatever asks for one (EnemyDef.hintArrow),
     // bobbing as it does over an NPC you're pointed at, and from the screen's
     // edge when it's off it
@@ -1264,14 +1321,7 @@ export class BossFightView {
             if (!enemy.def.hintArrow || enemy.dead || enemy.flung) {
                 continue;
             }
-            const x = lerp(enemy.prevX, enemy.x, alpha);
-            const y = lerp(enemy.prevY, enemy.y, alpha);
-            const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
-            const top =
-                this.ground(sim, x, y) -
-                ((model?.height ?? 128) * enemy.scale) / 128 -
-                HINT_ARROW_GAP;
-            const p = overlay.project(x, top, y, this.a);
+            const p = this.overHead(overlay, sim, enemy, alpha, HINT_ARROW_GAP);
             if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
                 this.drawEdgeArrow(overlay, sim, enemy.x, enemy.y, TOTEM_ARROW * scale, 40 * scale);
                 continue;
