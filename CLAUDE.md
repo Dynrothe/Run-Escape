@@ -165,6 +165,9 @@ The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts` (`DE
 room, a boss, the Wardens or the whole raid (`ROOM=scabaras`, `ROOM=zebak`, `ROOM=raid`), with what
 each puzzle room came to (mirrors turned, boards, trips and spills) and what hurt. Run it after any
 change to the raid, at a path level or two (`LEVEL=2`), with invocations and with `PARTY=2`.
+Without `KIT=max` it plays the raid up to the room asked for, as a run would get there. For the
+difficulty curve, `scripts/game/sweep-tombs.sh` runs rooms by raid level (`INVOCATIONS=level:N`)
+and kit; it's slow, so run it in the background.
 
 After a content change, also run the checks that apply:
 

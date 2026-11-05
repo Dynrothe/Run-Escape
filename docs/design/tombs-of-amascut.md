@@ -139,9 +139,21 @@ animation of its own: OSRS's server moves them. So:
 
 `content/invocations.ts`. They replace endless, hard and expert there: the Theatre of Blood keeps
 its switches. Only one of a group marked `one` (attempts, time limit, Helpful Spirit, path level)
-is on at a time. Each adds to the raid level, which makes every enemy 2% tougher every 5 levels
-(hitpoints all the way, damage up to 150% more), as OSRS's does, and will raise raid points and
-the purple chance. Bands: Entry under 150, Normal under 300, Expert from there.
+is on at a time. Each adds to the raid level, which sets the whole raid's scale
+(`RAID_LEVEL_SCALE`, the map's own difficulty being a first map's): enemies' hitpoints and
+damage, bosses' hitpoints, and how many bullets a boss's patterns fire, through points at 0, 150,
+300 and 500, each growing by the same share a level between them. Entry is for a run that's
+bought nothing: weaker than a first map, and it can be won from scratch, slowly. Normal wants the
+shop's upgrades and better gear, Expert more, and past it bosses climb quicker and quicker. A
+room's enemies rise more gently than its bosses: a run levels up on them from level one. It also
+raises raid points and the purple chance. Bands: Entry under 150, Normal under 300, Expert from
+there.
+
+Below Normal the raid goes easier on a run with nothing: a puzzle room's worth two levels as it's
+done, a boss's adds drop food (none from Expert up), food spills as each of the Wardens' phases
+ends, hits that take a share of your hitpoints take less, Crondis's crocodiles come fewer, and the
+path level counts for about a third. The path level itself scales gently (+15% a room's enemies'
+hitpoints a level, +12% a boss's), as OSRS's does.
 
 | Group          | Here                                                           |
 | -------------- | -------------------------------------------------------------- |
@@ -523,8 +535,27 @@ has: Apmeken's issues fixed and missed, Het's mirror turns, beam pulses and seal
 Scabaras's boards and wrong steps, Crondis's fills, trips, spills and growth; and every run says what
 hurt it, by source and by boss attack. Run it with `DEV_MAPS=1`.
 
-What it showed (November 2026, the max dev kit): the whole raid won every time solo and in parties
-of 2 and 4 (14 to 21 minutes), and each puzzle room and boss on its own at the base level. At
-Normal invocations (raid level 120) it's through most rooms but Zebak and the Wardens still take
-some raids; at Expert (345) the bosses beat it, and at 600 Ba-Ba's boulders do. That's the bot's
-play as much as the raid: it dodges, it doesn't plan.
+Without the max kit, a boss (or a room with paths before it) is reached by playing the raid up to
+it from the Nexus (`PATHS=` for the order), so the run has the levels and gear it would really
+have; the bot loots as a person does (caskets, the better gear, food when hurt). `INVOCATIONS=level:300`
+makes up a raid level as people tend to (the bosses' own first; never Attempts or a time limit).
+`scripts/game/sweep-tombs.sh` runs every room, or the raid, by raid level and kit (`zero`, `shop`
+for `META=max`, `all` with `ARMOURY=max`, `dev`), a line each.
+
+What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds each):
+
+| Raid level   | Nothing bought | Shop   | Shop and Armoury |
+| ------------ | -------------- | ------ | ---------------- |
+| Entry (0)    | 6 of 9         | 9 of 9 | 9 of 9           |
+| Normal (160) | 0 of 9         | 6 of 9 | 4 of 9           |
+| Expert (300) | 0 of 9         | 0 of 9 | 1 of 9           |
+| 500          | 0 of 9         | 0 of 9 | 0 of 9           |
+
+With nothing bought, all eight adventurers clear most rooms on their own at Entry, and 10 of 24
+whole raids. From Expert the bot gets through the paths but not the Wardens (with every Wardens
+invocation on): it dodges, it doesn't plan, so Expert and past it are set by the curve and want
+playtesting more than the bot's numbers.
+
+**For trying a boss** (the dev server only): the Nexus has God mode and a button to each boss (the
+path bosses as the run is, with the dev skip's bow; the Wardens with the best of everything or as
+the run is). They're for the dev map, and go before the raid ships.

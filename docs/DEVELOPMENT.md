@@ -867,7 +867,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 The Tombs of Amascut is in development, as a dev map until it's finished: its plan, and what's
 built so far, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
 door to each path), and its invocations (`content/invocations.ts`) take hard mode's place there:
-the sim's `hardScale` is their raid level's (`getRaidLevelScale`), and `hard` stays off.
+the sim's `hardScale` is their raid level's (`getRaidLevelScale`, `RAID_LEVEL_SCALE`), and `hard`
+stays off.
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
 where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due, then the party's
@@ -1170,9 +1171,14 @@ scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's b
                                                         (DEV_MAPS=1; ROOM=apmeken, het, scabaras,
                                                         crondis, baba, akkha, kephri, zebak,
                                                         wardens or raid; LEVEL=2 the path level;
-                                                        INVOCATIONS=a,b or all; PARTY=2; KIT=max
-                                                        the dev kit; MINUTES; VERBOSE=1), with
-                                                        each puzzle room's own account
+                                                        INVOCATIONS=a,b, all or level:300;
+                                                        PARTY=2; KIT=max the dev kit; PATHS=het,
+                                                        apmeken the order; LEADIN=0 straight
+                                                        there at level one; MINUTES; VERBOSE=1),
+                                                        with each puzzle room's own account
+scripts/game/sweep-tombs.sh                             simulate-tombs over rooms, raid levels and
+                                                        kits (ROOMS, LEVELS, KITS=zero shop all
+                                                        dev, CHARACTERS, SEEDS, JOBS), a line each
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and
