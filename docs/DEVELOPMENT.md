@@ -1415,7 +1415,9 @@ cards, so the tabs and buttons stay in view; the whole panel scrolls only when e
 fit. The cards' grid scrolls, so it clips what's outside it: its 6px padding (and `scroll-padding`)
 is room for a controller's highlight around the cards at its edges. On a touch screen the refund
 button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
-skill adds a card, so check the page still fits at 1024x768 and 1280x720.
+skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a phone the
+one-line help under the title stays, though other panels drop their subtitle there: it says which
+preset an adventurer uses. Keep it to one line at 667 wide.
 
 ### Notice
 
