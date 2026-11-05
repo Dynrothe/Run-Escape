@@ -6368,7 +6368,7 @@ export class Sim {
                 this.hero.floorEffectNext = this.tick + burnEvery;
                 const share = burn?.damage ?? FLOOR_BURN_DAMAGE;
                 const damage = Math.max(1, Math.round(player.maxHp * share));
-                this.damagePlayer(damage, FLOOR_SOURCE, false, undefined, true, false);
+                this.damagePlayer(damage, FLOOR_SOURCE, false, -1, true, false);
             } else if (player.hp < player.maxHp) {
                 this.hero.floorEffectNext = this.tick + healEvery;
                 this.heal(

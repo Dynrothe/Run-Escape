@@ -384,6 +384,15 @@ export class ArenaFloor {
                     this.rebuilt[i] = 1;
                 }
             }
+            // A tile rebuilding by itself waits for floor beside it, so it never comes back cut off
+            if (this.restoreAt[i] === tick && this.rebuilt[i] && this.layout.anchor[i] === i) {
+                if (!this.besideStanding(i)) {
+                    for (const j of slabTiles(this.layout, i)) {
+                        this.restoreAt[j]++;
+                        this.restoredAt[j]++;
+                    }
+                }
+            }
             if (this.restoredAt[i] === tick) {
                 this.grid.restoreTile(tileX, tileY);
                 this.dropWarnAt[i] = NONE;
@@ -396,7 +405,55 @@ export class ArenaFloor {
                 back.push(tileX, tileY);
             }
         }
+        // Rows rebuilt from the back are rows to fall again
+        if (back.length > 0 && this.rowsDropped > 0) {
+            this.rowsDropped = this.rowsGone();
+        }
         return { rose, fell, back, messages };
+    }
+
+    // Rows from the back, one after another, with a tile in them that's gone or going
+    private rowsGone(): number {
+        const { minX, maxX, minY } = this.layout;
+        let rows = 0;
+        for (let y = minY; y < this.sizeY; y++) {
+            let gone = false;
+            for (let x = minX; x <= maxX && !gone; x++) {
+                gone = this.dropWarnAt[x + y * this.sizeX] !== NONE;
+            }
+            if (!gone) {
+                break;
+            }
+            rows++;
+        }
+        return rows;
+    }
+
+    // Whether a tile (or its slab) has floor that's there beside it, on a side
+    private besideStanding(i: number): boolean {
+        const { layout } = this;
+        for (const j of slabTiles(layout, i)) {
+            const x = this.x0 + (j % this.sizeX);
+            const y = this.y0 + Math.floor(j / this.sizeX);
+            for (const [dx, dy] of [
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+                [0, -1],
+            ]) {
+                const k = this.index(x + dx, y + dy);
+                if (
+                    k >= 0 &&
+                    layout.mask[k] &&
+                    layout.anchor[k] !== layout.anchor[i] &&
+                    layout.type[k] !== TYPE_PILLAR &&
+                    this.dropWarnAt[k] === NONE
+                ) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // How long before a rebuilding tile comes back it's warned, in ticks
