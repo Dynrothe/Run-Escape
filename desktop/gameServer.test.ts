@@ -187,6 +187,9 @@ describe("serveGame", () => {
 describe("contentSecurityPolicy", () => {
     test("lets the page connect to the app alone, and to the relay if there is one", () => {
         expect(contentSecurityPolicy(undefined)).toBe("connect-src 'self'");
+        expect(contentSecurityPolicy(undefined, "https://stats.example/v1/runs")).toBe(
+            "connect-src 'self' https://stats.example/v1/runs",
+        );
         expect(contentSecurityPolicy("https://example.com:8443")).toBe(
             "connect-src 'self' https://example.com:8443 wss://example.com:8443",
         );

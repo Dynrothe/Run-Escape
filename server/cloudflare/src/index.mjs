@@ -32,9 +32,10 @@ export default {
             if (upgrade) {
                 return lobbyStub(env).fetch(url.toString(), { headers });
             }
+            // Answered here: asking the lobby would be a billed request for
+            // every game that loads, and the game only wants to know it's here
             if (request.method === "GET" || request.method === "HEAD") {
-                const status = await lobbyStub(env).status();
-                return new Response(JSON.stringify(status), {
+                return new Response(JSON.stringify({ coop: true }), {
                     headers: {
                         "Content-Type": "application/json",
                         "Cache-Control": "no-store",

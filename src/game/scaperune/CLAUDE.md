@@ -45,7 +45,9 @@ Write this down before touching a setting:
 
 ### Pacing: contrast, not evenness
 
-A screen is what the play camera sees, about 27 by 16 tiles.
+A screen is what the play camera sees, about 27 by 16 tiles. It looks north, so keep a set piece within about 6
+tiles north of where the player stands: the Theatre's arrivals are 3 to 7 tiles south of each boss, and Phosani's start is
+7 south of her.
 
 - **Real screens run from nothing to 130 or more objects.** Over whole regions, p10/50/90 is 0-16 / 18-73 / 129-185.
   Aim for about **5/40/130**.
@@ -166,7 +168,14 @@ Pick one per place. A line of big objects along a cliff is none of these.
   underside on the low side. 92% to 100% of real ground decoration is contoured, and so are all the rock kits.
 - **A footprint says nothing about a model.** Sea rocks look like boulders and sink 3.5 tiles. The Tombs of Amascut's floor
   plates stand 6 tiles high. Check a new loc before using it: see [Trying a new loc](#trying-a-new-loc).
-- **Use what was made for the open.** Nothing from a raid floor or a boss room. There's no exception for boss arenas.
+- **Use what was made for the open.** Nothing from a raid floor or a boss room: the Theatre of Blood's rooms and the
+  Nightmare's arena are on the ban list by range (`THEATRE_LOCS`, `NIGHTMARE_LOCS` in `catalogue.ts`). A map that's a raid
+  or a boss room on purpose is a shipped map, and lists the banned ranges it uses in `allowLocs`: see
+  [Shipping a map](#shipping-a-map).
+- **Don't use broken assets.** Some locs are pieces of a kit, meant to be combined with others: a wall's sections, half a
+  model, one face of something, the levels of a stack. Alone they have holes or invisible sides, or read as something else
+  from the camera. Use one only with its whole set, as designed: cut together from the real place, or placed with the rest
+  of the set. `KIT_PIECES` lists the known ones.
 
 ### The one rule that's ours: density goes in what doesn't block
 
@@ -513,8 +522,18 @@ npx tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # ever
 npx tsx scripts/scaperune/world-index.ts world.json                       # once, for the next line
 npx tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
 npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2   # scenery from above, which preview can't show
+npx tsx scripts/scaperune/view-weight.ts scaperune_oasis                       # triangles per camera view (PHONE=1 for a phone's)
+npx tsx scripts/scaperune/check-coplanar.ts scaperune_oasis                    # faces in one plane, which z-fight
+npx tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off   # will a cut hold waves?
 DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
 ```
+
+**Will a cut hold together?** `find-prefabs.ts rect=x,y,w,h collision=1` draws the game's collision (`.` open, `#` blocked,
+`+` a wall on the tile's edge), and `pieces=1` lists the biggest pieces of open ground with their tile counts and boxes.
+`doors=off` and `props=off` show what taking doors and one-tile blocking props off would open up. Meiyerditch's slums come
+out in 190 pieces, the biggest 1,356 tiles; with doors and props off it's 4,116. Run it on every cut before building on it:
+a town that falls into pieces has nowhere for waves to come at you. In a recipe,
+`findPieces(getCollisionFlags(grid, locs), sizeX, sizeY, rect)` (`collision.ts`) gives the same list, biggest first, to throw on if the biggest is too small.
 
 Before you finish: `npx vitest run src/game/scaperune`, which runs `check-maps.ts` over every dev map, about 60 settings at
 their extremes, the presets and 12 random rolls. That takes a few minutes.
@@ -570,7 +589,11 @@ in a big arena still reads low. `steepest` can't see tiles within 2 of water or 
 **Catalogue:**
 
 - `banned loc N at x,y: why`: swap it. Rockslides (11433 to 11435) for sea rocks, 4769 Pile of bricks for fallen roofs, raised
-  ground and plain stone for a dais.
+  ground and plain stone for a dais. `from the Theatre of Blood's rooms, a raid` (or `the Nightmare's arena`) is a raid's or a
+  boss room's own loc: swap it for something from the open, or on a raid or boss map made of those rooms on purpose, list
+  the range in the recipe's `allowLocs`.
+- `kit piece N at x,y without its set: why`: a piece of a kit standing alone (`KIT_PIECES`). Cut it with its set from the real
+  place (a stamped prefab's locs count as whole), place the rest of its set within `reach` tiles, or use a freestanding loc.
 - `loc 13312 at x,y draws nothing as ground decoration`: that blood only has a wall's model. Use 652, Bloodsplatter.
 - `foam at x,y isn't at a fall`: foam (26499) is for within 14 tiles of a fall. Take it away, or list the fall in `detail`.
 
@@ -616,12 +639,36 @@ that didn't ask `ground.claims`:
 - Anything but `0 stranded`: the generator can't do this. By hand, find it with `findStranded`, then give it a way in, or block
   it and count what you block.
 - `refused: These settings leave too little ground to play on.`: fine in a sweep. On your own map, less water or fewer cliffs.
+- `X leaks: its start reaches N open tiles outside it`: a doorway or corridor out of a room is open. Seal with
+  `outside: "block"`, or make the rectangle take in what's meant to be walked. See [A map of rooms](#a-map-of-rooms).
+- `N open tiles are outside every region`: something open nobody's brought to. Same fix.
+- `X at x,y is solid`, `can't be reached from Y`: a point's in a wall, or in the wrong room.
 
 **`0 stranded` proves nothing if the recipe blocks what's cut off.** A whole island sealed off still passes, as nothing
-open is left stranded: one map lost 4,964 tiles that way. Have the recipe count what it blocks and throw over a limit.
-`placeBridges` also skips a bridge that doesn't fit without saying so, so count what comes back. `check-maps.ts` skips a
+open is left stranded: one map lost 4,964 tiles that way. Have the recipe count what it blocks and throw over a limit:
+`sealFrom`'s `maxSealed` does that. On a map with `regions`, `check-maps.ts` prints a `regions:` line with each region's
+open tiles, so a room that shrank shows there. `placeBridges` also skips a bridge that doesn't fit without saying so, so count what comes back. `check-maps.ts` skips a
 hand-made map with no `detail`, and only checks a road's grade or a landmark's ground if `detail` passes them on, so
 `steepest road 0.0` or `0 landmarks` means unchecked.
+
+**Warnings** print under the map's line and don't fail it:
+
+- `N open tiles draw no floor`: a hole in the floor (`hiddenFloor.ts`). The tile's under the cache's hidden overlay (magenta,
+  `0xFF00FF`, which draws nothing) or has no floor at all. In the world that ground is under something else, so a cut brought
+  in a hole. Tiles drawn from level 1, under a bridge, or covered by floor decoration aren't counted. `overview.ts` hatches the
+  hidden overlay black and grey.
+- `N open tiles are floor decoration over a hidden floor`: the tiles are drawn, but the hairline seams between two of them
+  show what's under them, which is the renderer's black, and they glitter as the camera moves. The Owl's Court's walkways
+  did. Put a plain overlay of the decoration's own colour under them (theirs is 141); the decoration draws over it. The
+  Theatre's Bloat and Verzik rooms have 704 such tiles, as cut.
+- `X and Y have faces in one plane, which z-fight` (`coplanar.ts`), ours first, then `as cut from the real place` for what a
+  stamp brought as the real world has it. It doesn't fail a map, since some dev maps had a few before it was checked
+  (Vardhelm's city towers on their walls, Ysmar's big props, overlapping falls and floes), but a new map should have none:
+  `CHECK=1 check-coplanar.ts <map>` fails on any of ours. See [Traps](#traps).
+- `N warnings from the catalogue:`, on a shipped map: the ban list minus its `allowLocs`, kit pieces, blood and foam. A
+  shipped map went out looked at in the game, so each is a question, not a bug.
+- `N tiles have two solid locs on them`, on a shipped map (`findSolidOverlaps` in `placer.ts`): usually a placement helper
+  that went by the wrong mask. The Sanctuary's 61 stay until someone decides to re-roll its chamber.
 
 ### What's not on the look line
 
@@ -679,11 +726,18 @@ Vite reloads the page and kills the job.
 npx tsx scripts/scaperune/research/model-bounds.ts 3709 60440    # contour, triangles, how far it really reaches
 npx tsx scripts/scaperune/research/where.ts 44,56 3709           # how the world uses it: the ground, and what's round it
 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22      # draw it, about as the play camera sees it
+TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646   # every loc at the same scale, on its footprint
+npx tsx scripts/scaperune/research/kit-scan.ts kits.json          # suggests kit pieces from the whole cache
 ```
 
 Read `model-bounds.ts` like this: `contour` 0 or more follows the ground, and -1 stands level, so it wants flat ground.
 `height tiles` under 0 sinks that far below its origin. `x` and `z` past half its size reach past its tiles. `tris` over about
 60 is too heavy for anything there are thousands of. A loc with `types 4` only has a model as wall decoration.
+
+The plain sheet shrinks a loc that's too big for its cell, so a tall model and a small one come out the same size. Compare
+sizes with `TRUE_SCALE=1`: every loc at the same pixels a tile (`TILE_PIXELS`, 26 if not set) over its footprint. A model
+that floats over its footprint, or is far bigger than its tiles, shows there. **Then look at it in the game, close up,
+before building with it**: three rounds of Phosani's arena went on pieces that looked right on a sheet.
 
 `where.ts` needs a square. This finds them from the index. Squares under y 64 are the surface:
 
@@ -692,9 +746,22 @@ node -e 'for(const s of require("./world.json").squares){const n=Object.keys(s.l
 ```
 
 No surface use isn't a verdict by itself: Prifddinas and the Darkwood are up there. A list by hand is why `BANNED_LOCS`
-(`catalogue.ts`) exists, and it's what `check-maps.ts` enforces on everything but shipped maps: the Tombs of Amascut's dial
-and pillars (45872 to 45915), a sunken city's fallen roof (48328 to 48333), instance debris (48972, 48973), sea rocks on land
-(60436 to 60444, fine in water) and the two quads that line holes (14416, 14427). Something else that's wrong: add it.
+(`catalogue.ts`) exists, and it's what `check-maps.ts` fails a dev map on: the Tombs of Amascut's dial and pillars (45872 to
+45915), a sunken city's fallen roof (48328 to 48333), instance debris (48972, 48973), sea rocks on land (60436 to 60444, fine
+in water), the two quads that line holes (14416, 14427), and every id the cache places only in the Theatre of Blood's rooms
+(`THEATRE_LOCS`) or the Nightmare's arena (`NIGHTMARE_LOCS`). Something else that's wrong: add it.
+
+**Kit pieces** (`KIT_PIECES`, beside it) only work with others: the Theatre's wall pillars (no back), the Nylocas egg sac and
+the war table (come apart alone), the dream's stacked spikes, posts, trunks and Torii gates, the Sanctuary's cracked flags, and
+the Hallowed Sepulchre's edges, tall walls, wall-line pieces, gold and blue runner, banner columns and fire traps.
+Each has its reason and, where it's known, its `set`: ranges of ids that must have a loc within `reach` tiles of it, on any
+level. `check-maps.ts` fails a dev map with one placed without its set. Locs from a stamped prefab (`isStamped`) count as
+whole, since a set cut from the real place is the set as built. A piece with no known set is only fine that way.
+
+`research/kit-scan.ts` suggests more from every square in the cache: locs that face one way (see-through from behind), that
+always have the same companions, or that are stacked over another level. It's thousands of candidates, most of them real kits
+nobody would place alone (sails, redwoods), so it's a list to go through, not a check. It misses pieces that only _read_
+wrong (posts, trunks, the egg sac): only the game shows those.
 
 `LocInfo` doesn't carry contouring or a model's reach, so nothing in the generator can check them. Only these scripts know.
 
@@ -890,6 +957,9 @@ cuts off is only looked at, and a river would cut the land in two for good, so `
 
 ```sh
 npx tsx scripts/scaperune/world-index.ts world.json         # every square's locs and floors, once
+npx tsx scripts/scaperune/find-place.ts world.json colour=red surface=0                  # places whose ground is mostly red
+npx tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1    # by locs, upstairs
+npx tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1      # a cut, upstairs, as the game walks it
 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22 # draws locs, about as the play camera sees them
 npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle of the world from above
 npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
@@ -901,6 +971,13 @@ npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # e
 npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90          # a place's streets, blocks and gaps, as numbers
 npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1    # the same inside a made wall
 ```
+
+`find-place.ts` searches the index: floor colour by name (`red`, `brown`, `yellow`, `green`, `blue`, `purple`, `grey`,
+`white`, `black`) or `colour=RRGGBB within=N`, with `share=` the least share of the floor (default a half); loc ids (`loc=`)
+or a name pattern (`name=`, with `locs=` the least); `plane=N`; and `surface=1` or `0` (the surface is south of y 6400).
+Squares that touch are one place, printed with the box round it in world tiles. That's how to find somewhere like Vampyrium
+(x 2432 to 2815, y 7680 to 7935, by `colour=red surface=0`), which isn't where you'd guess. The index has every level: the
+ground floor's at the top of each square, the levels over it in `upper`.
 
 The index is JSON: a few lines of anything will list a region's commonest locs, which is the quick way to choose. A loc's
 name is often `null`, so look at them. Sheets are close, not exact: textures are their average colour, and big things are
@@ -1017,8 +1094,13 @@ which would hide the player, so its gate is a gap.
   edges join up. Picking shapes from whole tiles can't do that: a line ending at a corner next to one
   ending at a side's middle makes a tooth. Don't use shape 11: it dips to both corners, so a row of them is
   a row of teeth.
-- **Ids are as the map files store them, the cache's id plus one.** `find-prefabs.ts` prints them this way,
-  so copy from there.
+- **Ids are as the map files store them, the cache's id plus one.** A recipe and a grid use the map files'
+  number, and `find-prefabs.ts` prints them this way, so copy from there. The floor loaders take the cache's:
+  look a grid's floor up with `cacheFloorId(id)` (`format.ts`), never `id - 1` by hand. `dump-square.ts`
+  prints both, as `map file id/cache id`.
+- **Patterned floors are usually type 22 decoration**, not overlays: a hall's tiles or a mosaic are locs on
+  a plain floor. Find them with `dump-square.ts` or the world index, and cut them with a rug (see
+  [Prefabs](#prefabs)).
 - **Heights** are one byte per tile corner, going up, 8 scene units each. A tile is 128 units across, so 16
   a tile is 45°. Real lowland stays between about 0 and 80, and real mountains use all of 0 to 255. `setHeight`
   rounds and clamps for you. The generator works in floats in `Terrain`: see [Height](#height).
@@ -1185,8 +1267,9 @@ There's no building entity in the cache. A building is its locs and floor tiles,
 rectangle of the real world.
 
 1. **Find one.** `find-buildings.ts` finds whole buildings in a block of squares, and `loc-sheet.ts` draws what it finds.
-   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with
-   world coordinates down the side. Pick a rectangle that holds the whole building and nothing else.
+   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world coordinates down the
+   side; `rect=x,y,w,h` draws any rectangle instead, across squares, and `plane=N` another level. Pick a rectangle
+   that holds the whole building and nothing else.
 2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles, and give it a kind in
    `BUILDING_KINDS`. The rectangle must take in every wall of the building, with nothing else in it. A rectangle a row short
    loses that wall, and the floor behind it with it. The start of its name is its family, so a new prefab for an existing
@@ -1199,6 +1282,14 @@ rectangle of the real world.
    the generator won't pick and `check-prefabs.ts` won't check. For anything else,
    `ground.stamp(rotatePrefab(loadPrefab(context, def), turns, locs), x, y, options)`.
 
+**A place can be upstairs.** Xarpus's room and the Sanctuary's chamber are both on level 1, so a plain cut of them
+comes out empty: 0 open tiles. `scripts/cache/dump-square.ts` lists a square level by level, which is how to tell.
+`cutPrefab(maps, x, y, w, h, { plane: 1 })` (`prefab.ts`), or `plane: 1` in a `PrefabDef`, brings that level and the
+ones above it down to the ground floor, as the game only draws one. Each level's flags come down with it: level 1's
+`TILE_SHOWN` or `TILE_BRIDGE` lands on level 0, where it means nothing, and level 2's bridge now marks level 1.
+
+**`rotatePrefab` turns a whole cut**, locs and all, even 100 by 120 tiles of a town (the Theatre's Meiyerditch hall).
+
 `stamp` options:
 
 - `floor`: `"footprint"` keeps our ground and takes only the floor inside the walls, so the ground runs up to
@@ -1210,7 +1301,18 @@ rectangle of the real world.
   Lumbridge house gets a green halo in the snow.
 - `keepHeights`: leaves the ground's height alone, for a map that pins it in `Terrain`.
 - `skipLoc`: leaves locs out. The generator drops doors: closed ones block, like walls.
+  `skipBlocking(context, { doors: true, props: "one-tile" })` (`prefabs.ts`) clears a cut of real streets so it can be
+  walked: doors off, and the props that block on one tile (`props: "all"` for every size). It decides what blocks by the
+  game's collision (`getLocBlocking`), so a patterned floor stays and only the ground level counts; pass `prefab` so a
+  bridge's level counts as ground. Don't write your own rule: `type >= 10 && 1 by 1 && clipType > 0` also takes every
+  patterned floor and everything upstairs.
+- `locs: context.locs`: marks what blocks in the prefab as `occupied`, so a `Placer` keeps off it.
 - `height` and `anchor`: stand it at a height, and say which of its own heights that means.
+
+**A rug** for a painted hall: `cutRug(context, { worldX, worldY, sizeX, sizeY }, { plane, maxStep })` (`rug.ts`) cuts only
+the floor and the floor decoration that's walked on onto level 0: nothing that blocks, and no flags. It leaves out tiles whose
+corners stand more than `maxStep` off the rug's middle height (a raised pad or a slope), and tiles whose floor belongs to
+another level. Stamp it with `floor: "all"`, or `floor: (overlay) => overlay !== 0` to keep our floor where it has none.
 
 ### Writing a recipe by hand
 
@@ -1286,6 +1388,9 @@ waves, enemy density and brightness from a real map, and `mapDef` goes over the 
 one with its own waves needs a boss in `fun`, and `paced()` needs exactly 15 wave sets.
 
 To have `check-maps.ts` hold it to the rules, give the recipe a `detail` that returns a `GeneratedMap`, and have `build` use it.
+A place cut whole from the real world can't keep the generator's rules for its ground: list its rectangles in `designed`, and
+`check-maps.ts` lets its clashes, bridges, slopes and tilted water go (the game's collision must still agree with the
+generator's). The Theatre's halls and boss rooms are.
 
 Three maps are whole worked examples, each going further than this one:
 
@@ -1300,6 +1405,104 @@ Three maps are whole worked examples, each going further than this one:
 
 Grid tiles start at the grid's south-west corner, x east and y north. `getRecipeWorldTile` turns them
 into world tiles.
+
+#### Placing props by hand: `Placer`
+
+The example's `isClear` and `place` are fine for trees on open grass. For anything more (a chamber full of statues, a camp,
+a set piece), use a `Placer` (`placer.ts`):
+
+```ts
+const placer = new Placer(ground, { rng, locs: context.locs });
+placer.refuse("arena", (x, y) => inArena(x, y)).refuse("gateway", onGateway);
+
+placer.solid(STATUE, x, y, { rotation: 1, gap: 1, kind: "statues" }); // its size turns with it
+placer.solid(BARRIER, x, y, { allow: ["gateway"] }); // the gate's own things stand on its way through
+placer.dress(CANDLE, x, y, { type: LOC_NORMAL }); // walked through: one to a tile
+placer.scatter(
+    "dead raiders",
+    10,
+    () => randomSpot(),
+    (x, y) => placer.solid(RAIDER, x, y),
+);
+expect(placer.describeShortfalls()).toEqual([]); // or read placer.report() per kind
+```
+
+- **Solid things go by `Ground.occupied`, not `reserved`.** `reserved` is set by painted floor too, so `isClear` refuses a
+  statue on a painted path. `occupied` is only what's standing there: what `place()` put down (not floor decoration), and
+  what a stamp brought that blocks, if its options have `locs: context.locs`. A building's `footprint` is refused too.
+- **Sizes come from the cache** and turn with the rotation. A test that builds without the cache passes
+  `sizes: [[id, sizeX, sizeY], ...]`; an id in neither throws.
+- **Zones** say where nothing goes. Each `solid` or `dress` can `allow` some by name.
+- **Count the build.** Every call is counted by `kind` (the id by default): requested, placed, and why the rest were refused
+  (`occupied`, `dressed`, `building`, `off the grid`, or the zone's name). A recipe test can then assert what was placed
+  instead of someone counting by eye.
+- **A loc off a whole tile throws** (`Ground.place`, `Placer.dress` and `writeLocs`), rather than the map file quietly moving
+  it: `x / 2` of an odd width is the usual cause. Use `Math.floor`.
+- **What a boss fight animates is a stand-in** (`placer.standIn(id, x, y, { rotation, walkThrough, kind })`). A map square
+  bakes each loc with its own animation only, so a placed statue can't be told to aim or throw on cue; the fight draws it
+  instead (`BossAttackDef.statues`). A stand-in's tiles are taken and blocked (open if `walkThrough`) as though it stood
+  there, but it's left out of the map and listed in `placer.standIns`. Hand them on as the map's `standIns`, so
+  `view-weight.ts` counts their triangles: the Owl's Court's 24 (crossbowmen, knights, fire jets) take its heaviest phone
+  view from 38k to 60k, which a count without them never showed.
+
+The Sanctuary and Hallowed Night still use their own copies: moving them onto `Placer` would re-roll their dressing.
+
+#### A map of rooms
+
+A boss or raid map is islands, not one open map: a hall per room, a boss room beside it, an arena with nothing walkable
+round it. Two things in `collision.ts` build one, and the recipe says what it's made of so `check-maps.ts` can hold it to
+that.
+
+- **`sealFrom(grid, context.locs, regions, { outside, label })`**. Each region is a `name`, a `rect` and a `from` tile, in
+  grid tiles. It floods each region from its start without leaving the rectangle, then blocks every tile of the rectangle
+  no flood reached. With `outside: "block"` everything outside every region is blocked too, which is what a map of only
+  rooms wants. It returns each region's `open` and `sealed` counts, and throws, before blocking anything, if a region comes
+  to fewer than its `min` tiles or would seal more than its `maxSealed`. `min` set to the rectangle's area means nothing
+  solid stands on it (the Sanctuary's square).
+- **`assertReachable(sealed, points, label)`** throws unless each point (`name`, `x`, `y`, optional `region`) is on a tile
+  `sealFrom` left open, and reached from its own region's start if it names one. Use it for where the game puts the party
+  and the bosses: a boss in a wall throws here, not in a playtest.
+- **On the recipe**, `regions` (the same objects: a `SealRegion` is a `MapRegion` with `min` and `maxSealed`) and `points`.
+  `check-maps.ts` then counts each region's open and stranded tiles from its own start, with the game's collision, instead
+  of the whole arena's from the spawn, and fails on a leak, on open tiles outside every region, and on a point that's solid
+  or can't be reached. Declare every point the game uses, including a `MapDef` spawn that isn't the recipe's (Phosani's
+  start is 7 tiles south of the middle).
+
+`theatreOfBlood.ts` (12 regions: a hall and a boss room for each of six rooms, with each room's start, arrival and boss)
+and `sisterhoodSanctuary.ts` (one region, her square, with `min` its whole area) are the examples. `owlsCourt.ts` is one
+region that isn't a rectangle of open ground: the court, a bridge and a terrace in one `rect`, with the void and the blocked
+rims and dais in it blocked first, so `maxSealed: 0` says nothing open was cut off.
+
+**Walkways over a void, as the Hallowed Sepulchre is built** (`owlsCourt.ts`, Justiciar Zachariah's arena): every walkway
+tile is a type 22 stone tile over a plain overlay of the stones' own dark blue-grey (141), and the void has no floor at all,
+so it draws the renderer's black. The Sepulchre's own floor under its tiles is the hidden overlay (359), which showed the
+black through the seams between the tiles: `check-maps.ts` warns of that now. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
+where only a corner touches), and its tall wall 38924 under every edge the camera can see. The cache stands that wall on the
+level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and 4 units (its cap
+would be in the floor's plane otherwise) and it hangs from the edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
+each is flat at its height and the lips stand level. The camera's always over the court, so west faces west of it and east
+faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
+1 and east at 3.
+
+#### A boss fight's arena
+
+What the Owl's Court (`owlsCourt.ts`, `docs/design/justiciar-zachariah.md`) learnt, for the next arena:
+
+- **The fight reads the arena off the map.** Export everything it reads in arena tiles (`OWLS_COURT`: the boss's square, his
+  rise, the start, pillars, crossbow lanes, knights, fire rows, the dais), and have the content turn that into the `MapDef`'s
+  `features`. The fight never hard-codes a tile. Each of them is a `points` entry too, so a lane's end in a wall throws in
+  `assertReachable`, not in a playtest.
+- **He comes in where the player isn't running past him.** He descends in the court's middle and the player starts by its
+  south edge, 11 tiles off, inside his 16-tile leash. The intro holds the camera on him and pans back to the player
+  (`BossIntroDef.pan`), and the player faces him while held (`faces`). The first layout started the player on the terrace
+  with him at the bridge's head, and they ran past him to reach the court.
+- **Don't paint a mechanic on the floor.** The court first laid its lightning's 3 by 3 checker as rugs, and it read as a board
+  game. The floor's plain stone with one runner up the aisle; the strike's own glow marks the cells it's about to hit.
+- **What it animates is a stand-in** (`Placer.standIn`, above), and counts on the phone like anything else. A crossbowman
+  statue is 1,434 triangles, so three lanes a side; the lightning is his own cast, not a pair of priest statues, which would
+  have been about 1,500 triangles more on the heaviest view. Run `PHONE=1 view-weight.ts` with the stand-ins in.
+- **What the cache can't do is the fight's to draw.** Nothing in the cache casts a pillar's shadow, so the gaze's safe ground
+  is a colour overlay the fight draws (the design doc's section 9). Keep that for what has to be read exactly.
 
 ### How big a map can be
 
@@ -1350,6 +1553,14 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   need the sea sunk first, or a river's lowest point isn't known.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
   first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
+- **Faces in one plane z-fight.** Two up-facing faces at the same height that overlap flicker as the camera moves, whatever
+  their priorities: the renderer's depth bias (`main.vert.glsl`, 0.0007 of a tile a priority step) doesn't keep them apart.
+  The Owl's Court had three: its hanging wall's cap at the floor's height, a wizard statue's plate flat on the floor, and the
+  great owls' plinth, whose steps every 2 units met the raised edge of a stone tile 6 up. `check-coplanar.ts` (and
+  `check-maps.ts`) finds them from the scene as the renderer builds it. Lift the loc a unit or a few in `LocOverrides.ts`
+  (`height`), an odd number for steps that go up in 2s, or sink a cap that a lip hides.
+- **Floor decoration over the hidden overlay shows the void.** Tiled type 22 floors leave hairline seams, and with nothing
+  under them the seams are black and glitter. Give them a plain overlay of their own colour underneath.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
   `createRng` and `createNoise`. If you add a call to `rng()` early on, every later roll changes, and
   so does the map. Anything new goes on a seed of its own.
@@ -1387,7 +1598,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
   y 200. Each recipe needs its own, and nothing checks that: see `devMaps.ts` and each map's `mapX`, `mapY`. The
-  shipped maps have Hallowed Night at x 72-76, y 72-76 and the Sisterhood Sanctuary at x 78-80, y 72-74. The
+  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74 and the Owl's Court at
+  x 82-84, y 76-78. The
   map generator's screen, and scripts given settings, have x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.
@@ -1409,15 +1621,15 @@ the small one: it builds without the cache, as its test shows, since it stamps n
 of its locs block. It's also the one map built from a real place's own squares: `scripts/cache/dump-square.ts`
 lists what a map square is made of, level by level (the Sanctuary's floor is on level 1 of 59,152; her dream's
 arena is square 60,155), and `loc-sheet.ts` and `model-bounds.ts` then say what each loc is. It's a boss
-room on purpose, against the rule above, because the ask was the real arena. Its chamber is scenery
+room on purpose, because the ask was the real arena, so its recipe's `allowLocs` lists `NIGHTMARE_LOCS` and the Theatre's dead it lays out. Its chamber is scenery
 only, every tile of it blocked, since enemies turn up anywhere walkable within 24 tiles of the player
 and a ring of scenery would strand them outside: a sealed arena needs nothing walkable past its edge. The Theatre of Blood
 (`maps/theatreOfBlood.ts`) is a raid's: halls cut from real places (doors off, and in a town the one-tile props that
 block, which split its streets into pieces too small for waves), and real boss rooms cut from the
-cache onto pads beside them, sealed by what can be walked to from where the party's brought in.
-A raid on purpose uses raid locs, which the catalogue keeps off dev maps, so it's a shipped map.
-Its `bringDown` brings an upstairs room (Xarpus's, on plane 1) down to the ground floor, as only one
-plane is drawn.
+cache onto pads beside them, sealed by what can be walked to from where the party's brought in
+(`sealFrom`: see [A map of rooms](#a-map-of-rooms)). A raid on purpose uses raid locs, which the catalogue
+keeps off dev maps, so it's a shipped map, and its recipe's `allowLocs: THEATRE_LOCS` says so. Xarpus's
+room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 
 - List the recipe in `maps/shippedMaps.ts`. `getRecipe` and `check-maps` read that list. `check-maps` only picks
   up ids in it or starting `scaperune_` (but not the palette, prefabs and cliffs sheets).
@@ -1432,11 +1644,21 @@ plane is drawn.
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay
   lines vanish through `smoothField`.
-- Shipped maps aren't held to the catalogue or the look rules, and must stay byte for byte: Hallowed Night imports `Ground`,
-  `collision`, `format`, `mapBuild`, `noise`, `prefabs` and `recipe`. After a change to any of those, check that
-  `npx tsx scripts/scaperune/grid-hash.ts halloween` still prints what it did on `main`. That hash isn't recorded
-  anywhere yet, so the check needs a second checkout with the cache: record it (in `grid-hash.ts`, and a test in
-  `generator.test.ts` that runs when the cache is there) the next time someone has `main` and the cache to hand.
+- Shipped maps aren't held to the look rules, and get the catalogue (ban list minus `allowLocs`, kit pieces, blood and
+  foam) as warnings, not failures. They must stay byte for byte: Hallowed Night imports `Ground`, `collision`, `format`,
+  `mapBuild`, `noise`, `prefabs` and `recipe`. Each shipped map's hash is pinned in `scripts/scaperune/grid-hash.ts`
+  (`SHIPPED_HASHES`), and `CHECK=1 npx tsx scripts/scaperune/grid-hash.ts` builds every shipped map and fails if one moved;
+  `generator.test.ts` runs it when the cache is there. A change meant to change a shipped map updates its hash on purpose,
+  and says why in the pull request. A new shipped map adds its hash: the check fails on a shipped map with none.
+- A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
+  Sanctuary's and the Owl's Court's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds those
+  tables to the cache, and a cache-gated test in each map's test runs it, so a cache update that changes a size or a clip
+  fails a test instead of shipping a wrong map. A new map with a table like it goes in the script's `TABLES`.
+- **Phones choke on the heaviest view, not the map's total.** `view-weight.ts` sums the triangles of the locs the play
+  camera draws from every arena tile (18 tiles away, or 15 with `PHONE=1`, culled in 8-tile cells as the renderer does),
+  prints the heaviest views with what's heaviest in each, and draws a heat map. On `phosani` the north edge is the heaviest,
+  at about 1.7 times the median on a desktop, mostly the Sanctuary's wall (37746) and the dead mercenaries (32754). Thin out
+  what tops that list before thinning the whole map.
 
 ### The slim cache
 

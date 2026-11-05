@@ -33,6 +33,7 @@ import {
 } from "../core/Sim";
 import {
     Enemy,
+    EnemyProjectile,
     FairyRing,
     FallingRock,
     Glyph,
@@ -57,6 +58,7 @@ import {
     getShieldedModelKey,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
 
 const FROZEN_TINT = 0xa8d8ff;
@@ -66,6 +68,10 @@ export const TEAMMATE_COLOR = "#00ff80";
 const TEAMMATE_DOWN_COLOR = "#9a9a9a";
 // Shielded enemies (that can't be hurt yet) are washed in lilac
 const SHIELDED_TINT = 0xd0b8ff;
+// A boss with its guard down (BossDef.guard): warmed gold, and glinting as it pulses
+const EXPOSED_TINT = 0xffc860;
+const EXPOSED_FLASH = 0.3;
+const EXPOSED_PULSE = 12;
 // A blockable attack winding up shows the shelter behind the glyph out this
 // far from the boss, in tiles
 const SHELTER_LENGTH = 30;
@@ -149,6 +155,8 @@ const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
+// Of a full flash, a boss's impact's (ImpactDef.flash)
+const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
@@ -219,7 +227,8 @@ type Shout = { enemyUid: number; text: string; start: number };
 const VISITOR_SHOUT = -1000;
 // Random events' visitors stand out from the crowd
 const VISITOR_SCALE = 1.5;
-type FlashFx = { color: string; start: number };
+// strength: of the full flash (a power-up's), a boss's impact's being fainter
+type FlashFx = { color: string; start: number; strength: number };
 
 // Adds an effect, dropping the oldest past MAX_EFFECTS
 function pushCapped<T>(list: T[], item: T): void {
@@ -254,6 +263,8 @@ export class GameView {
     viewHero = 0;
 
     private readonly fight: BossFightView;
+    // The party's pets (GameClient gives them as a run starts)
+    readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
@@ -286,7 +297,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
-            this.fight.onEvent(event, now);
+            this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
@@ -319,6 +330,12 @@ export class GameView {
                     });
                     break;
                 }
+                case "bossImpact":
+                    // Faint: a lightning strike's or his gaze's light, not a power-up's
+                    if (event.flash) {
+                        this.flash = { color: event.flash, start: now, strength: IMPACT_FLASH };
+                    }
+                    break;
                 case "bossSwing":
                     pushCapped(this.swings, {
                         x: event.x,
@@ -374,12 +391,12 @@ export class GameView {
                     break;
                 case "bossAbsorbBlast":
                     // Everywhere: there's no getting out of it
-                    this.flash = { color: "#ff40c0", start: now };
+                    this.flash = { color: "#ff40c0", start: now, strength: 1 };
                     break;
                 case "powerUp": {
                     const powerUp = getPowerUp(event.id);
                     if (powerUp.flash) {
-                        this.flash = { color: powerUp.flash, start: now };
+                        this.flash = { color: powerUp.flash, start: now, strength: 1 };
                     }
                     if (powerUp.effect.kind === "nuke") {
                         pushCapped(this.blasts, { x: event.x, y: event.y, radius: 16, start: now });
@@ -434,6 +451,13 @@ export class GameView {
             this.drawThrall(actors, sim, thrall, alpha);
         }
 
+        // Walked by GameClient on the sim's ticks; here they're only drawn
+        for (const pet of this.pets.pets) {
+            if (this.pets.shown(sim, pet)) {
+                this.drawPet(actors, sim, pet, alpha);
+            }
+        }
+
         if (sim.visitor) {
             this.drawVisitor(actors, sim, sim.visitor);
         }
@@ -459,6 +483,10 @@ export class GameView {
         }
 
         for (const projectile of sim.enemyProjectiles) {
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                this.drawSweeping(actors, sim, projectile, alpha, tick);
+                continue;
+            }
             const spotAnim = projectile.attack.spotAnim;
             const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
             if (!model || !hasGeometry(model)) {
@@ -594,6 +622,10 @@ export class GameView {
                 continue;
             }
             const anim = model.anims[0];
+            // Played out, and gone (an impact's dust), rather than held on its last frame
+            if (effect.once && tick - effect.startTick >= anim.totalTicks) {
+                continue;
+            }
             const frame = anim.getFrame(tick - effect.startTick, effect.loop ?? false);
             const height = this.ground(sim, effect.x, effect.y) - effect.height;
             const fit = effect.fitRadius;
@@ -604,7 +636,7 @@ export class GameView {
                 effect.x,
                 height,
                 effect.y,
-                0,
+                effect.yaw ?? 0,
                 fit !== undefined ? { scale: (fit * 128) / Math.max(1, model.radius) } : undefined,
             );
         }
@@ -1178,6 +1210,42 @@ export class GameView {
         });
     }
 
+    // A wave along the ground, or what's thrown drawn as an NPC (a knight's spinning
+    // sword, BossAttackDef.lookId), never smaller than what it hits
+    private drawSweeping(
+        actors: ActorRenderer,
+        sim: Sim,
+        projectile: EnemyProjectile,
+        alpha: number,
+        tick: number,
+    ): void {
+        const attack = projectile.attack;
+        const look = attack.lookId !== undefined ? getEnemy(attack.lookId) : undefined;
+        const model = look
+            ? this.assets.get(getEnemyModelKey(look, 0))
+            : this.assets.get("spot:" + attack.spotAnim);
+        if (!model) {
+            return;
+        }
+        const anim = look ? model.getAnim(look.idleSeq) : model.anims[0];
+        const x = lerp(projectile.prevX, projectile.x, alpha);
+        const y = lerp(projectile.prevY, projectile.y, alpha);
+        const scale = Math.max(
+            look?.scale ?? 1,
+            (projectile.radius * 128) / Math.max(1, model.radius),
+        );
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(tick - projectile.startTick),
+            x,
+            this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
+            y,
+            (projectile.yaw + (attack.spotYaw ?? 0)) & 2047,
+            { scale },
+        );
+    }
+
     // A boss's glyph, idling as it slides, facing the boss
     private drawGlyph(actors: ActorRenderer, sim: Sim, glyph: Glyph, alpha: number): void {
         const model = this.assets.get(getEnemyModelKey(glyph.look, 0));
@@ -1221,6 +1289,27 @@ export class GameView {
             scale: THRALL_SCALE,
             alpha: Math.max(0, fade),
         });
+    }
+
+    // At the cache's size, smaller than the player as in OSRS
+    private drawPet(actors: ActorRenderer, sim: Sim, pet: PetFollower, alpha: number): void {
+        const def = pet.def;
+        const model = this.assets.getPet(def.id);
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(pet.moving ? def.walkSeq : def.idleSeq);
+        const x = lerp(pet.prevX, pet.x, alpha);
+        const y = lerp(pet.prevY, pet.y, alpha);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick + pet.hero * 5),
+            x,
+            this.ground(sim, x, y),
+            y,
+            pet.yaw,
+        );
     }
 
     // Facing the player, and blinking when they're about to go
@@ -1389,7 +1478,15 @@ export class GameView {
         const leaving = enemy.leaving;
         const fade = leaving ? Math.min(1, (leaving.endTick - tick) / LEAVING_FADE_TICKS) : 1;
         // The boss is hit all the time; a full flash would leave him white
-        const flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
+        let flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
+        if (enemy.boss && !enemy.dead && sim.isExposed(enemy)) {
+            tint = EXPOSED_TINT;
+            flash = Math.max(
+                flash,
+                EXPOSED_FLASH *
+                    (0.5 + 0.5 * Math.sin((tick + alpha) / (TICKS_PER_SECOND / EXPOSED_PULSE))),
+            );
+        }
         const options = enemyDrawOptions;
         options.scale = enemy.scale;
         options.tint = tint;
@@ -1470,7 +1567,7 @@ export class GameView {
             this.flash = undefined;
             return;
         }
-        overlay.ctx.fillStyle = withAlpha(flash.color, 0.75 * (1 - t) * (1 - t));
+        overlay.ctx.fillStyle = withAlpha(flash.color, 0.75 * flash.strength * (1 - t) * (1 - t));
         overlay.ctx.fillRect(0, 0, overlay.width, overlay.height);
     }
 
@@ -1627,7 +1724,11 @@ export class GameView {
                 kind === "quarters" ||
                 kind === "surge" ||
                 kind === "pattern" ||
-                windup.attack.cone !== undefined
+                windup.attack.cone !== undefined ||
+                // It hits everywhere it can see: the shadows are what's shown
+                windup.attack.cover ||
+                // Thrown by the arena's statues, not the boss: their lines are shown
+                windup.attack.from !== undefined
             ) {
                 continue;
             }
@@ -1655,7 +1756,30 @@ export class GameView {
                 // Where to hide instead of where it hits (it hits everywhere else)
                 continue;
             }
-            if (kind === "swing" || kind === "blast") {
+            const line = kind === "swing" ? windup.attack.line : undefined;
+            const square = kind === "blast" ? windup.attack.square : undefined;
+            if (line || square) {
+                // A lunge's strip, filling from the boss out; a blast's squares, from the middle
+                const shapes = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, 1)]
+                    : windup.targets.map((spot) => squareCorners(spot.x, spot.y, square! / 2));
+                const filled = line
+                    ? [stripCorners(enemy.x, enemy.y, windup.dirX, windup.dirY, line, t)]
+                    : windup.targets.map((spot) =>
+                          squareCorners(spot.x, spot.y, (square! / 2) * t),
+                      );
+                for (let i = 0; i < shapes.length; i++) {
+                    this.fight.traceGround(overlay, sim, shapes[i]);
+                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                    this.fight.traceGround(overlay, sim, filled[i]);
+                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+                    ctx.fill();
+                }
+            } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
                 const spots =
                     kind === "blast"
@@ -1784,6 +1908,10 @@ export class GameView {
     ): void {
         const ctx = overlay.ctx;
         for (const projectile of sim.enemyProjectiles) {
+            // Big enough to see as they are
+            if (projectile.attack.wave || projectile.attack.lookId !== undefined) {
+                continue;
+            }
             const x = lerp(projectile.prevX, projectile.x, alpha);
             const y = lerp(projectile.prevY, projectile.y, alpha);
             const p = overlay.project(
@@ -2493,3 +2621,34 @@ export function formatTime(seconds: number): string {
 }
 
 export { TICKS_PER_SECOND };
+
+// A lunge's strip (BossAttackDef.line) on the ground, the first share of its length
+function stripCorners(
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    line: { width: number; length: number },
+    share: number,
+): { x: number; y: number }[] {
+    const sideX = (-dirY * line.width) / 2;
+    const sideY = (dirX * line.width) / 2;
+    const endX = x + dirX * line.length * share;
+    const endY = y + dirY * line.length * share;
+    return [
+        { x: x + sideX, y: y + sideY },
+        { x: endX + sideX, y: endY + sideY },
+        { x: endX - sideX, y: endY - sideY },
+        { x: x - sideX, y: y - sideY },
+    ];
+}
+
+// A square half tiles either way of x, y
+function squareCorners(x: number, y: number, half: number): { x: number; y: number }[] {
+    return [
+        { x: x - half, y: y - half },
+        { x: x + half, y: y - half },
+        { x: x + half, y: y + half },
+        { x: x - half, y: y + half },
+    ];
+}

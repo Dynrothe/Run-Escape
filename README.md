@@ -37,6 +37,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
+- **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
+  that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
+  reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
 
@@ -81,10 +84,14 @@ loads are quick.
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
-the mouse wheel zooms.
+the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
+
+Hover over an item in your bag to read the description shown when you found it.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
-use your items, and everything else is a tap. To open it full screen from its own icon, pick Add to
+use your items: tap an item to use it, or hold it to read its description without using it.
+Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
 A controller works too, in the browser and the desktop app. The left stick or d-pad moves, the
@@ -136,13 +143,17 @@ and Export and Import in Settings carry one across.
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome. Before you open a pull request, go through
+[docs/PR-REVIEW.md](docs/PR-REVIEW.md), which lists what review looks for, and give it to your agent
+if you work with one.
 
-- Format with Prettier (`npm run lint`), and keep `npm test` and the type check passing.
+- Base your branch on the current `release-<version>` branch (or `main` if there isn't one), and
+  point the pull request at it.
+- Format what you changed with Prettier (`npx prettier --write <files>`), and keep `npm test` and
+  the type check passing.
 - Content is plain data in `src/game/content/`, with real cache ids; the tools in `scripts/cache/`
-  find them. After changing content, `npm run slim-cache` checks that everything it needs is in the
-  cache.
-- Note what you change under a version in [CHANGELOG.md](CHANGELOG.md). It's written for players,
+  find them. Say in the pull request if it uses anything new from the cache.
+- Note what you change under Unreleased in [CHANGELOG.md](CHANGELOG.md). It's written for players,
   and the game shows it on its title screen.
 
 ## Credits

@@ -5,6 +5,7 @@ import { PHOSANI_ENEMIES } from "./phosani";
 import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
 // classify-npc-seqs.ts (attack = widest reach, death = ends collapsed).
@@ -5165,7 +5166,9 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 3605, hit: 3607, death: 3606 },
         scale: 0.8,
         knockbackResist: 0.5,
-        // Crawls to the Maiden and feeds her, as in OSRS: kill it on the way
+        // Crawls to the Maiden and feeds her, as in OSRS: kill it on the way. On a raid's
+        // expert mode, it feeds her more (theatre.ts)
+        expertAs: "tob_nylocas_matomenos_feeder",
         heals: {
             fraction: 0.02,
             interval: 1.5,
@@ -8341,6 +8344,7 @@ export const ENEMIES: EnemyDef[] = [
     // The Nightmare and all that comes with her (nightmare.ts)
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
+    ...ZACHARIAH_ENEMIES,
 ];
 
 // The Tombs of Amascut's (in development)

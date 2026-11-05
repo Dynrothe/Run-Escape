@@ -29,6 +29,7 @@ import {
     UiSnapshot,
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
+import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import {
     INVOCATIONS,
@@ -53,6 +54,7 @@ import {
     getMap,
     getMapCharacter,
 } from "../content/maps";
+import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -65,6 +67,7 @@ import type { RaidChest } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
+    canRefundSkillPage,
     getNextUpgradeCost,
     getSkillCoins,
     importSave,
@@ -74,6 +77,7 @@ import {
     isMapUnlocked,
 } from "../core/save";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
+import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -83,6 +87,7 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
+import { InventoryItem } from "./InventoryItem";
 import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
@@ -350,6 +355,40 @@ function CoopFlagSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// Only in a build that has a collector to send to
+function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
+    if (!RUN_ANALYTICS_URL) {
+        return null;
+    }
+    return (
+        <Setting
+            name="Share run stats"
+            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game"
+        >
+            <Toggle
+                on={ui.display.runStats}
+                label="Share run stats"
+                onToggle={() => client.toggleRunStats()}
+            />
+        </Setting>
+    );
+}
+
+function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Auto equip"
+            text="Equip casket gear into empty slots or when no bonus drops and at least one improves. Always ask before replacing a set piece. Auto alch takes priority."
+        >
+            <Toggle
+                on={ui.display.autoEquip}
+                label="Auto equip"
+                onToggle={() => client.toggleAutoEquip()}
+            />
+        </Setting>
+    );
+}
+
 const FRAME_RATE_NAMES: Record<FrameRate, string> = {
     auto: "Auto",
     "30": "30",
@@ -564,10 +603,19 @@ function SettingsPanel({
                             onToggle={() => client.toggleMenuSpin()}
                         />
                     </Setting>
+                    <Setting name="Screen shake" text="The camera shakes when a boss's blow lands">
+                        <Toggle
+                            on={ui.display.screenShake}
+                            label="Screen shake"
+                            onToggle={() => client.toggleScreenShake()}
+                        />
+                    </Setting>
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
+                    <AutoEquipSetting ui={ui} client={client} />
                     <MovePredictionSetting ui={ui} client={client} />
                     <CoopFlagSetting ui={ui} client={client} />
+                    <RunStatsSetting ui={ui} client={client} />
                     <FrameRateSetting ui={ui} client={client} />
                 </section>
                 {padKind && (
@@ -1186,6 +1234,7 @@ export function AdventurerPanel({
     // The roster: not an adventurer played on one map alone (CharacterDef.only)
     const roster = CHARACTERS.filter((c) => !c.only);
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
+    const shown = fixed ?? peek ?? ui.characterId;
     return (
         <div
             className={
@@ -1193,6 +1242,13 @@ export function AdventurerPanel({
                 (fixed ? " ui-select-fixed" : "")
             }
             onMouseLeave={stopPeeking(setPeek)}
+            // Only focus leaving the panel: moving to the favourite button mustn't swap the
+            // details, and the button, out from under the click
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setPeek(undefined);
+                }
+            }}
         >
             <h2 className="ui-select-heading">
                 Adventurer
@@ -1241,7 +1297,6 @@ export function AdventurerPanel({
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
-                                                onBlur={() => setPeek(undefined)}
                                                 onClick={() => {
                                                     setPeek(character.id);
                                                     client.selectCharacter(character.id);
@@ -1268,23 +1323,75 @@ export function AdventurerPanel({
                     );
                 })}
             </div>
+            <PetRow ui={ui} client={client} />
             <AdventurerDetails
-                key={fixed ?? peek ?? ui.characterId}
+                key={shown}
                 save={ui.save}
-                character={getCharacter(fixed ?? peek ?? ui.characterId)}
+                character={getCharacter(shown)}
+                onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
             />
         </div>
     );
 }
 
+// The pet to take along, from those found (looks only): none until one's been found
+function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
+    const found = getFoundPets(ui.save.trophies);
+    if (found.length === 0) {
+        return null;
+    }
+    const chosen = ui.save.pet;
+    const name = chosen ? getPetTrophy(PET_BY_ID.get(chosen)!).name : "None";
+    return (
+        <div className="ui-pet-row">
+            <span className="ui-pet-label">
+                Pet: <span className="ui-pet-name">{name}</span>
+            </span>
+            <div className="ui-pet-tiles">
+                <button
+                    className={"ui-card ui-pet-tile" + (chosen ? "" : " ui-card-selected")}
+                    aria-label="No pet"
+                    aria-pressed={!chosen}
+                    title="No pet"
+                    onClick={() => client.selectPet(undefined)}
+                >
+                    <span className="ui-pet-none">None</span>
+                </button>
+                {found.map((pet) => {
+                    const trophy = getPetTrophy(pet);
+                    const selected = pet.id === chosen;
+                    return (
+                        <button
+                            key={pet.id}
+                            className={
+                                "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
+                            }
+                            aria-label={trophy.name}
+                            aria-pressed={selected}
+                            title={trophy.name}
+                            onClick={() => client.selectPet(pet.id)}
+                        >
+                            <ItemIcon objId={trophy.objId} size={26} />
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+// onFavourite: the favourite button's (not on a map's own adventurer, who can't be picked)
 function AdventurerDetails({
     save,
     character,
+    onFavourite,
 }: {
     save: SaveData;
     character: CharacterDef;
+    onFavourite?: () => void;
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
+    const favourite = save.favouriteCharacter === character.id;
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -1293,6 +1400,23 @@ function AdventurerDetails({
                     <div className="ui-card-title">{character.name}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
+                {onFavourite && unlocked && (
+                    // The label says whether it's on, so no aria-pressed as well
+                    <button
+                        className={
+                            "ui-button ui-button-small ui-favourite" +
+                            (favourite ? " ui-favourite-on" : "")
+                        }
+                        title={
+                            favourite
+                                ? "The game starts on this adventurer. Click to stop."
+                                : "Start the game on this adventurer"
+                        }
+                        onClick={onFavourite}
+                    >
+                        {favourite ? "Favourite" : "Make favourite"}
+                    </button>
+                )}
             </div>
             <div className="ui-card-text">{character.description}</div>
             {!unlocked && character.unlock && (
@@ -1557,7 +1681,11 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
                             key={reward.kind + reward.id}
                             className={"ui-reward" + (earned(reward) ? "" : " ui-reward-locked")}
                         >
-                            <ItemIcon objId={reward.iconObjId} size={20} />
+                            <ItemIcon
+                                objId={reward.iconObjId}
+                                spriteId={reward.iconSpriteId}
+                                size={20}
+                            />
                             {reward.name}
                         </span>
                     ))}
@@ -1587,11 +1715,18 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
+    const singleRefunds = canRefundSkillPage(page);
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>Skills</h2>
                 <p className="ui-subtle">Coins found in runs train your skills for good.</p>
+                {!singleRefunds && (
+                    <p className="ui-subtle ui-shop-notice">
+                        This class's purchase order wasn't saved, so single ranks can't be refunded.
+                        Use Refund all once to start keeping it.
+                    </p>
+                )}
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
@@ -1640,7 +1775,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     }
                                     aria-disabled={!affordable}
                                     title={
-                                        rank > 0 && !isCoarsePointer
+                                        rank > 0 && !isCoarsePointer && singleRefunds
                                             ? "Right-click to refund one rank"
                                             : undefined
                                     }
@@ -1652,7 +1787,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     onContextMenu={(event) => {
                                         if (rank > 0) {
                                             event.preventDefault();
-                                            if (!isCoarsePointer) {
+                                            if (!isCoarsePointer && singleRefunds) {
                                                 client.refundUpgrade(upgrade.id, style);
                                             }
                                         }
@@ -1676,7 +1811,12 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     <button
                                         className="ui-shop-refund"
                                         aria-label={`Refund one ${upgrade.name} rank`}
-                                        title={`Refund one ${upgrade.name} rank`}
+                                        disabled={!singleRefunds}
+                                        title={
+                                            singleRefunds
+                                                ? `Refund one ${upgrade.name} rank`
+                                                : "Use Refund all first"
+                                        }
                                         onClick={() => client.refundUpgrade(upgrade.id, style)}
                                     >
                                         <span className="ui-shop-refund-icon" aria-hidden="true">
@@ -1699,7 +1839,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                     <Coins amount={coins} />
                     <button
                         className="ui-button"
-                        disabled={page.upgradesSpent === 0}
+                        disabled={Object.keys(page.upgrades).length === 0}
                         onClick={() => client.refundUpgrades(style)}
                     >
                         Refund all
@@ -1730,7 +1870,11 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <ReviveNote revive={ui.revive} />
             )}
             {isCoarsePointer && hud && (
-                <TouchControls inventory={hud.inventory} overlay={ui.overlay} client={client} />
+                <TouchControls
+                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    overlay={ui.overlay}
+                    client={client}
+                />
             )}
             <div className="ui-toasts">
                 {ui.toasts.map((toast) => (
@@ -1885,8 +2029,6 @@ const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): J
 });
 
 // Utility items, used with 1-4 (a controller's shoulder buttons) or a click
-const ITEM_BUTTONS = ["leftBumper", "rightBumper", "leftTrigger", "rightTrigger"] as const;
-
 const Inventory = memo(function Inventory({
     inventory,
     client,
@@ -1897,25 +2039,7 @@ const Inventory = memo(function Inventory({
     return (
         <div className="ui-inventory">
             {inventory.map((slot, i) => (
-                <button
-                    key={i}
-                    data-silent
-                    className="ui-inv-slot"
-                    style={slot ? { borderColor: slot.item.rarity.color } : undefined}
-                    disabled={!slot}
-                    title={slot ? `${slot.item.name}: ${slot.item.lines.join(" ")}` : ""}
-                    // Keep focus on the game, so Space doesn't press it again
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => client.useItem(i)}
-                >
-                    <KeyHint
-                        keyLabel={String(i + 1)}
-                        pad={ITEM_BUTTONS[i]}
-                        className="ui-inv-key"
-                    />
-                    {slot && <ItemIcon objId={slot.item.objId} size={30} />}
-                    {slot && slot.count > 1 && <span className="ui-inv-count">{slot.count}</span>}
-                </button>
+                <InventoryItem key={i} slot={slot} index={i} onUse={() => client.useItem(i)} />
             ))}
         </div>
     );
@@ -1984,7 +2108,13 @@ const Hud = memo(function Hud({
             <BossBar mapId={hud.mapId} client={client} />
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
-                <Inventory inventory={hud.inventory} client={client} />
+                <div className="ui-hud-actions">
+                    {/* A boss fight has no items, only its own button */}
+                    {!getMap(hud.mapId).fight && (
+                        <Inventory inventory={hud.inventory} client={client} />
+                    )}
+                    <AbilityButton client={client} />
+                </div>
                 <HpBar client={client} />
             </div>
         </>
@@ -2190,10 +2320,13 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 {boss.name}
                 {boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
                 {boss.fight && (
-                    <span className="ui-boss-phase">
+                    // Keyed on the phase, so a new one plays its pulse from the start
+                    <>
                         {" "}
-                        Phase {boss.fight.phase}/{boss.fight.phases}
-                    </span>
+                        <span key={boss.fight.phase} className="ui-boss-phase ui-boss-phase-new">
+                            Phase {boss.fight.phase}/{boss.fight.phases}
+                        </span>
+                    </>
                 )}
             </div>
             {boss.fight?.stage === "totems" ? (
@@ -2210,18 +2343,29 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             ) : (
                 <div className="ui-boss-bar">
                     <div
-                        className={boss.fight ? "ui-boss-fill ui-boss-fill-shield" : "ui-boss-fill"}
+                        className={
+                            boss.fight && boss.fight.stage !== "hp"
+                                ? "ui-boss-fill ui-boss-fill-shield"
+                                : "ui-boss-fill"
+                        }
                         style={{ transform: `scaleX(${boss.fraction})` }}
                     />
                 </div>
             )}
             {boss.fight && (
                 <div className="ui-boss-status">
-                    {boss.fight.stage === "totems"
-                        ? "Charge the totems!"
-                        : boss.fight.stage === "finale"
-                          ? "Stay on your feet!"
-                          : "Break her shield!"}
+                    {boss.fight.outOfReach
+                        ? "Out of reach!"
+                        : boss.fight.guard === "stunned"
+                          ? "Stunned!"
+                          : boss.fight.guard === "exposed"
+                            ? "Guard down!"
+                            : (boss.fight.status ??
+                              (boss.fight.stage === "totems"
+                                  ? "Charge the totems!"
+                                  : boss.fight.stage === "finale"
+                                    ? "Stay on your feet!"
+                                    : "Break her shield!"))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
                     )}
@@ -2706,6 +2850,7 @@ function PauseModal({
                         />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
+                        <AutoEquipSetting ui={ui} client={client} />
                         <MovePredictionSetting ui={ui} client={client} />
                         <FrameRateSetting ui={ui} client={client} />
                     </div>
@@ -3086,7 +3231,20 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    <button className="ui-button ui-button-go" onClick={() => client.leaveRun()}>
+                    {/* A boss fight on your own: straight into it again */}
+                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                        <button className="ui-button ui-button-go" onClick={() => client.retry()}>
+                            Retry
+                        </button>
+                    )}
+                    <button
+                        className={
+                            !ui.coop.room && getMap(ui.mapId).fight
+                                ? "ui-button"
+                                : "ui-button ui-button-go"
+                        }
+                        onClick={() => client.leaveRun()}
+                    >
                         {ui.coop.room ? "Back to the party" : "Back to the title"}
                     </button>
                 </div>

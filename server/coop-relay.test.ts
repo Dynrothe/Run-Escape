@@ -302,6 +302,33 @@ describe("co-op relay", () => {
         expect(rooms[0].name).toBe(open.name);
     });
 
+    it("sends everyone browsing the open rooms as they change, without asking", async () => {
+        await restart({ listPushMs: 10 });
+        const browser = await connect();
+        browser.send({ t: "list" });
+        expect((await browser.next("rooms")).rooms).toEqual([]);
+        const open = await party(1, true);
+        // The room as it's made, then with the guest in (however the timing
+        // falls, the latest says so)
+        let rooms;
+        do {
+            ({ rooms } = await browser.next("rooms"));
+        } while (rooms[0]?.players !== 2);
+        expect(rooms.map((r: { code: string }) => r.code)).toEqual([open.code]);
+        // Nothing that changes what they see, nothing sent
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        browser.messages.length = 0;
+        await party(0, false);
+        open.guests[0].send({ t: "me", ready: true });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(browser.messages.filter((m) => m.t === "rooms")).toEqual([]);
+        // A change the list shows is sent
+        open.host.send({ t: "settings", mapId: "draynor" });
+        expect((await browser.next("rooms")).rooms[0].mapId).toBe("draynor");
+        // Not to those in a room, who aren't looking
+        expect(open.host.messages.filter((m) => m.t === "rooms")).toEqual([]);
+    });
+
     it("names players itself, and won't take one they send", async () => {
         const client = new TestClient(url);
         clients.push(client);
@@ -1075,7 +1102,8 @@ describe("co-op relay", () => {
         const { host, guests } = await party(1);
         host.send({ t: "start", game: { seed: 5 } });
         await guests[0].next("start");
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        // The start's own room update, which can wait on the last one's timer
+        await host.roomWhere((r) => r.started);
         host.messages.length = 0;
         guests[0].send({ t: "me", characterId: "wizard" });
         guests[0].send({ t: "up", d: { m: [1, 0] } });
@@ -1121,20 +1149,31 @@ describe("co-op relay", () => {
         await raw.saw("503 Service Unavailable");
     });
 
-    it("closes a connection in no room that only pings, not one browsing or in a room", async () => {
+    it("closes a connection in no room that only pings or asks again, not one browsing or in a room", async () => {
         await restart({ idleConnectionMs: 500 });
         const { host } = await party(0);
         const idle = await connect();
         const browsing = await connect();
+        // An older game's, asking for the same page every few seconds
+        const left = await connect();
+        left.send({ t: "list" });
+        await left.next("rooms");
         await new Promise((resolve) => setTimeout(resolve, 600));
         idle.send({ t: "ping" });
         await idle.next("pong");
         browsing.send({ t: "list" });
         await browsing.next("rooms");
+        left.send({ t: "list" });
+        await left.next("rooms");
         relay.sweep(Date.now());
-        await new Promise<void>((resolve) => {
-            idle.socket.onclose = () => resolve();
-        });
+        await Promise.all(
+            [idle, left].map(
+                (client) =>
+                    new Promise<void>((resolve) => {
+                        client.socket.onclose = () => resolve();
+                    }),
+            ),
+        );
         browsing.send({ t: "ping" });
         await browsing.next("pong");
         host.send({ t: "ping" });

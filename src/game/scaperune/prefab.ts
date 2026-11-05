@@ -8,6 +8,12 @@ import {
 } from "./format";
 import type { BuildContext, LocInfo } from "./recipe";
 
+export type CutOptions = {
+    // The level to cut from, brought down to the ground floor with the levels above it: for a
+    // place that's upstairs (Xarpus's room, the Sanctuary's chamber), as the game only draws one
+    plane?: number;
+};
+
 // Cuts a rectangle out of the real world, every level of it: there's no
 // building entity in the cache, a building is its locs and floor tiles.
 export function cutPrefab(
@@ -16,6 +22,7 @@ export function cutPrefab(
     worldY: number,
     sizeX: number,
     sizeY: number,
+    options: CutOptions = {},
 ): TileGrid {
     const grid = createTileGrid(sizeX, sizeY);
     const firstX = Math.floor(worldX / MAP_SQUARE_SIZE);
@@ -37,7 +44,24 @@ export function cutPrefab(
             }
         }
     }
-    return grid;
+    return bringDown(grid, options.plane ?? 0);
+}
+
+// A grid with level `plane` as its ground floor and the levels above it over that, and the
+// levels below and their locs gone. Each level keeps its own flags, so a level's TILE_BRIDGE or
+// TILE_SHOWN comes down with it: what was level 1's lands on level 0, where it means nothing.
+export function bringDown(grid: TileGrid, plane: number): TileGrid {
+    if (plane === 0) {
+        return grid;
+    }
+    const out = createTileGrid(grid.sizeX, grid.sizeY);
+    for (let level = plane; level < grid.levels.length; level++) {
+        out.levels[level - plane] = grid.levels[level];
+    }
+    out.locs = grid.locs
+        .filter((loc) => loc.level >= plane)
+        .map((loc) => ({ ...loc, level: loc.level - plane }));
+    return out;
 }
 
 // Turns a prefab clockwise, rotation quarter turns, the way the client turns
@@ -92,21 +116,5 @@ export function rotatePrefab(
             y: turnY(loc.x, loc.y, w, h),
         };
     });
-    return out;
-}
-
-// A cut of the real world with the plane it's on brought down to the ground floor, as the game
-// only draws one
-export function bringDown(grid: TileGrid, plane: number): TileGrid {
-    if (plane === 0) {
-        return grid;
-    }
-    const out = createTileGrid(grid.sizeX, grid.sizeY);
-    for (let level = plane; level < grid.levels.length; level++) {
-        out.levels[level - plane] = grid.levels[level];
-    }
-    out.locs = grid.locs
-        .filter((loc) => loc.level >= plane)
-        .map((loc) => ({ ...loc, level: loc.level - plane }));
     return out;
 }

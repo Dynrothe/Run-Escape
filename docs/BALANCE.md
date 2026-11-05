@@ -144,4 +144,8 @@ upgrades, every affected map, all three styles, solo/two/four players and both d
 applicable. Report wins and run lengths. Short forced-loadout checks don't replace full progression
 and win-rate testing. The bot is limited at strike weapons and co-op teamwork.
 
+A change to a map's collision (a ScapeRune map rebuilt, a prop moved, a wall opened) reshuffles every
+seed on it, so before and after aren't matched any more. Compare tuning on a map that hasn't changed,
+or over 6 to 12 seeds rather than 1 to 3.
+
 For a repeatable attack-level comparison, run `npx tsx scripts/game/measure-weapon-dps.ts`.

@@ -11,6 +11,7 @@ export const MAX_CREATES_PER_MINUTE = 10;
 export const MAX_JOINS_PER_MINUTE = 12;
 export const MAX_WRONG_CODES_PER_MINUTE = 20;
 export const IDLE_MS = 30 * 60_000;
+export const IDLE_CONNECTION_MS = 10 * 60_000;
 export const MAX_LOADOUT_BYTES = 16 * 1024;
 export const MAX_MESSAGE_BYTES = 256 * 1024;
 export const MAX_FRAMES_PER_SECOND = 400;
@@ -195,6 +196,18 @@ export function parseMessage(data) {
         return undefined;
     }
     return message;
+}
+
+// Answers a player's close. At this compatibility date Cloudflare leaves that
+// to us, and an unanswered one keeps the player's browser waiting until it
+// gives up and drops the connection, so it ends abnormally rather than cleanly.
+// 1005 (no code given) can't be sent back; a socket that's already gone throws.
+export function answerClose(socket, code) {
+    try {
+        socket.close(code === 1005 ? 1000 : code);
+    } catch {
+        // Already closed
+    }
 }
 
 // Counts a connection's messages and bytes each second; false once it's over

@@ -1,5 +1,6 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
+import { MAPS } from "../content/maps";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
@@ -39,10 +40,13 @@ export function getGameSoundIds(): number[] {
         ids.push(enemy.spawnSound ?? -1, enemy.explodes?.sound ?? -1, enemy.blinks?.sound ?? -1);
         for (const attack of enemy.boss?.attacks ?? []) {
             ids.push(attack.windupSound ?? -1, attack.sound ?? -1, attack.hitSound ?? -1);
+            ids.push(attack.boomerang?.catchSound ?? -1);
         }
         const boss = enemy.boss;
         ids.push(boss?.intro?.darkSound ?? -1, boss?.intro?.sound ?? -1);
-        ids.push(boss?.phases?.totems.blastSound ?? -1, boss?.phases?.totems.chargedSound ?? -1);
+        ids.push(boss?.phases?.totems?.blastSound ?? -1, boss?.phases?.totems?.chargedSound ?? -1);
+        ids.push(boss?.phases?.threshold?.sound ?? -1);
+        ids.push(boss?.guard?.stunSound ?? -1, boss?.guard?.exposeSound ?? -1);
         ids.push(enemy.shot?.sound ?? -1, enemy.shot?.hitSound ?? -1);
     }
     for (const weapon of WEAPONS) {
@@ -56,6 +60,9 @@ export function getGameSoundIds(): number[] {
     }
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
+    }
+    for (const map of MAPS) {
+        ids.push(map.fight?.ability?.sound ?? -1);
     }
     ids.push(VISITOR_SOUND);
     for (const { effect } of RANDOM_EVENTS) {
@@ -152,6 +159,9 @@ export class GameSounds {
                 }
                 case "bossAttack":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.8 });
+                    break;
+                case "ability":
+                    audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });
                     break;
                 case "playerHit": {
                     // A boss attack has its own sound (played when it was used)

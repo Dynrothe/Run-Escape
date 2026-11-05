@@ -3,28 +3,107 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.26.0 - 2026-11-05
+
+### Added
+
+- Justiciar Zachariah, a new boss fight on the Bosses tab, open once Phosani's Nightmare is
+  beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
+  itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
+  from close by. With its own track, Blade of Forgotten Justice.
+  - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
+    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+    for a few seconds after, as he'll tell you).
+  - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
+    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+    early still lands.
+  - Each phase has its own full health bar.
+  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
+  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+    slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
+    a burst of light as he kneels, and a ring across the court as he rises.
+  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
+- A Screen shake setting, on unless your system asks for less motion.
+- Retry on a boss fight's results, to go straight into it again.
 
 ### Changed
 
-- The Theatre of Blood's bosses are much tougher: two and a half to six times their hitpoints,
-  harder hits, and their bullets can hit twice as often.
-- The Theatre of Blood's bosses take less from missiles and magic: 15% of their damage, from 30%.
-- Armour takes off at most half of a Theatre of Blood boss's hit, so Protect from Melee no longer
-  turns them all to 1s.
-- The Theatre of Blood's hard and expert modes fire half as many bullets again in every pattern,
-  with the gaps through them as wide.
-- Standing on a Theatre of Blood boss is no longer safe: its bullets start from its middle, and each
-  has an attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a
-  new one marked on the ground first.
-- Keeping away from a Theatre of Blood boss isn't safe either: the Pestilent Bloat's flies and
-  Verzik's power blasts close in round you, and Verzik's spider leaps on you. The Bloat naps for
-  less of the fight.
-- Each Theatre of Blood boss has a mechanic of its own: the Maiden's Nylocas crawl to her and feed
-  her, Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-  Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-- The Theatre of Blood's green and blue Nylocas shoot from range.
-- The Theatre of Blood is brighter, the woods outside Canifis most of all.
+- Boss fights don't show the item bar: there are no items in them.
+
+## 0.25.0 - 2026-11-05
+
+### Added
+
+- Auto equip, by Deivid Smarzaro: an option in Settings and the pause menu that wears casket gear
+  in an empty slot, or gear that beats what's worn without being worse at anything. Anything else
+  still asks, as does replacing a piece of a set. Auto alch comes first if both are on.
+- Pets, by Okaeri: a pet you've found (the Little Nightmare, Lil' Zik and its looks) can follow
+  you around on your runs. Pick one under the adventurers. They're only for looks, and your party
+  sees yours in co-op.
+- A favourite adventurer, by Okaeri: pick Make favourite in an adventurer's details, and the game
+  starts on them every time you open it.
+- Item descriptions, by Deivid Smarzaro: hover over an item in your bag, or hold it on a phone,
+  to read what it does without using it.
+- Run stats, by trippy22: when a run ends, the game sends its map, mode, adventurers and result,
+  with nothing that says who played, to help balance the game. Turn it off with Share run stats
+  in Settings.
+
+### Changed
+
+- Co-op has moved to a new server, with each room close to its host. In the Windows app, download
+  the new zip to keep Multiplayer: older ones can't reach it.
+- The co-op rooms list, by trippy22: it updates by itself when rooms open, fill or start, rather
+  than every few seconds.
+- The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
+- The Theatre of Blood's bosses, by Okaeri: each one a real fight, with a mechanic of its own.
+  - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
+    Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+    Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+  - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
+    bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
+  - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
+    to 1s.
+  - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
+    attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
+    one marked on the ground first.
+  - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
+    round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
+  - Hard and expert mode fire half as many bullets again, with the space between them as wide:
+    spreads fan out wider, and rings with no way through stay as they are.
+  - The raid's green and blue Nylocas shoot from range, Verzik's too.
+  - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
+    fight is worth as much as a quick early one.
+  - The Theatre is brighter, the woods outside Canifis most of all.
+- Expert mode in the Theatre of Blood, by Okaeri:
+  - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
+    Vasilias turns to a colour its weapon can't hurt.
+  - The Maiden's Nylocas feed her more.
+  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+    can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
+  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
+- The Theatre of Blood's weapons come from its chest, by Okaeri: a Ghrazi rapier in the chest
+  unlocks the rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which
+  unlocks the Holy Scythe. Beating the raid no longer unlocks them. Weapons already unlocked stay
+  unlocked.
+
+### Fixed
+
+- Augury and Rigour show their prayer icons instead of prayer scrolls. Fixed by Deivid Smarzaro.
+- Refunding a skill also gives back what it added to the price of every skill bought after it. Some
+  class pages from older saves need Refund all once before single ranks can be refunded again.
+  Fixed by Deivid Smarzaro.
+- On a phone held sideways, the Multiplayer screen fits, so its Back button is always in reach,
+  even with an error showing. Fixed by trippy22.
+- Controller button icons showed as broken images in the Windows app. Fixed by Okaeri.
+- A PlayStation controller through DS4Windows showed as two controllers taking turns, and its
+  buttons did nothing on the menus. Fixed by Okaeri.
+- Exporting your save on an iPhone downloads the file, rather than opening it as a page in
+  older versions of Safari. Fixed by Okaeri.
+- On the Theatre of Blood's expert mode, Xarpus's stare hurts properly. A moment before he turns
+  he faces where he'll stare, and says which side. Fixed by Okaeri.
+- Turning hard mode off turns expert off with it. Fixed by Okaeri.
+- The Theatre of Blood: a room's waves always last five minutes. Killing a boss quickly, or taking
+  a portal, used to make the next room's waves longer by the time saved. Fixed by Okaeri.
 
 ## 0.24.1 - 2026-11-04
 

@@ -120,6 +120,13 @@ export class BulletPool {
         this.count = 0;
     }
 
+    // Spends the one at index (of order) now, rather than when its life runs out
+    remove(index: number): void {
+        if (index >= 0 && index < this.count) {
+            this.removeAt(index);
+        }
+    }
+
     // Swaps the last one in use into its place, so its slot's free
     private removeAt(index: number): void {
         const slot = this.order[index];

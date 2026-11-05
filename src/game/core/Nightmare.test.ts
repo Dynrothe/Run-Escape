@@ -225,7 +225,7 @@ describe("her phases", () => {
         for (const size of [40, 64, 96]) {
             const sim = createSim(size);
             const boss = startFight(sim);
-            const margin = nightmare().boss!.phases!.totems.margin;
+            const margin = nightmare().boss!.phases!.totems!.margin;
             const corners = phaseOf(boss)
                 .totems.map((t) => `${Math.round(t.x - BASE)},${Math.round(t.y - BASE)}`)
                 .sort();

@@ -3,9 +3,13 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
-import { TROPHIES } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
+import { describeUnlockTask } from "../content/unlocks";
+import { getWeapon } from "../content/weapons";
+import { yawFromVector } from "./PlayerMovement";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { fm } from "./fmath";
 import {
     createSave,
     getEarnedUnlocks,
@@ -40,6 +44,7 @@ const lumbridge = getMap("lumbridge");
 function room(x: number, boss: string, at: number): RaidRoomDef {
     return {
         name: boss,
+        par: 40,
         start: { x: x + 0.5, y: 1010.5 },
         arrive: { x: x + 0.5, y: 1050.5 },
         bossAt: { x: x + 4.5, y: 1056.5 },
@@ -166,8 +171,8 @@ describe("raids", () => {
         expect(sim.player.y).toBeCloseTo(1010.5);
         expect(sim.timeLeftForBoss).toBeGreaterThan(28);
 
-        // Its boss is due at the run's 80th second, about 47 seconds into the room
-        toRoomSecond(sim, 50);
+        // Its boss is due 50 seconds into the room (the gap between the rooms' `at`)
+        toRoomSecond(sim, 51);
         expect(sim.raidStage).toBe("boss");
         const boss = sim.enemies.find((enemy) => enemy.boss && !enemy.dead)!;
         expect(boss.def.id).toBe("giant_rat");
@@ -231,23 +236,64 @@ describe("raids", () => {
         expect(isEndlessUnlocked(save, "theatre_of_blood")).toBe(false);
     });
 
-    it("unlocks the Ghrazi rapier for beating the Theatre, and the Holy scythe on hard", () => {
+    it("unlocks the Ghrazi rapier and the Holy scythe from the chest, not for a win", () => {
         const earned = (save: ReturnType<typeof createSave>) =>
             getEarnedUnlocks(save).items.map((item) => item.id);
         const save = createSave();
-        expect(earned(save)).not.toContain("ghrazi_rapier");
         save.mapVictories.theatre_of_blood = 1;
+        save.hardVictories.theatre_of_blood = 1;
+        save.expertVictories.theatre_of_blood = 1;
+        expect(earned(save)).not.toContain("ghrazi_rapier");
+        expect(earned(save)).not.toContain("holy_scythe_of_vitur");
+        save.trophies.push("ghrazi_rapier");
         expect(earned(save)).toContain("ghrazi_rapier");
         expect(earned(save)).not.toContain("holy_scythe_of_vitur");
-        save.hardVictories.theatre_of_blood = 1;
+        save.trophies.push("holy_scythe_of_vitur_uncharged");
         expect(earned(save)).toContain("holy_scythe_of_vitur");
     });
 
+    it("has every raid boss call in the raid's Nylocas, which shoot", () => {
+        const tob = MAP_BY_ID.get("theatre_of_blood")!;
+        const bosses = new Set(tob.raid!.rooms.map((r) => r.boss));
+        for (const id of [...bosses]) {
+            const rises = getEnemy(id).boss?.rises?.into;
+            if (rises) {
+                bosses.add(rises);
+            }
+        }
+        for (const id of bosses) {
+            const boss = getEnemy(id).boss!;
+            const called = [
+                ...(boss.summonsAt ?? []).map((s) => s.enemyId),
+                ...boss.attacks.flatMap((a) => (a.summon ? [a.summon.enemyId] : [])),
+            ];
+            for (const enemyId of called.filter((e) => /toxobolos|hagios/.test(e))) {
+                expect(getEnemy(enemyId).shot, `${id}: ${enemyId}`).toBeDefined();
+            }
+        }
+    });
+
+    it("has the rapier in every mode's chest, and the Holy scythe on hard and expert's only", () => {
+        const rapier = TROPHY_BY_ID.get("ghrazi_rapier")!.from;
+        const scythe = TROPHY_BY_ID.get("holy_scythe_of_vitur_uncharged")!.from;
+        expect(rapier.kind === "raid" && !rapier.hard && !rapier.expert).toBe(true);
+        expect(scythe.kind === "raid" && scythe.hard && !scythe.expert).toBe(true);
+        expect(describeUnlockTask(getWeapon("ghrazi_rapier").unlock!)).toBe(
+            "Find a Ghrazi rapier in the Theatre of Blood chest",
+        );
+        expect(describeUnlockTask(getWeapon("holy_scythe_of_vitur").unlock!)).toBe(
+            "Find a Holy Scythe of Vitur (uncharged) in the Theatre of Blood chest on hard or expert",
+        );
+    });
+
     it("scores a room on how fast its boss went down and how little you were hurt", () => {
-        expect(getRoomPoints(10, 0, 100)).toBe(200);
-        expect(getRoomPoints(120, 100, 100)).toBe(50);
-        expect(getRoomPoints(70, 50, 100)).toBe(125);
-        expect(getRoomPoints(300, 500, 100)).toBe(50);
+        expect(getRoomPoints(10, 0, 100, 40)).toBe(200);
+        expect(getRoomPoints(120, 100, 100, 40)).toBe(50);
+        expect(getRoomPoints(70, 50, 100, 40)).toBe(125);
+        expect(getRoomPoints(300, 500, 100, 40)).toBe(50);
+        // A room's par is what it takes for all the speed points: a longer fight's par is longer
+        expect(getRoomPoints(150, 0, 100, 150)).toBe(200);
+        expect(getRoomPoints(150, 0, 100, 40)).toBe(100);
     });
 
     it("opens the supply chest once a room's cleared, paid for in raid points", () => {
@@ -430,12 +476,17 @@ describe("the Theatre's bullet shapes", () => {
 
     it("hard mode fires half as many bullets again, with as wide a way through", () => {
         expect(getMap("theatre_of_blood").hard?.bullets).toBe(1.5);
-        // A ring: its gap is an angle
-        const ring = volley("Blood throw", "maiden_of_sugadinti");
-        const hardRing = volley("Blood throw", "maiden_of_sugadinti", 1.5);
-        const more = hardRing.shot.length / ring.shot.length;
+        // A spread: more bullets, fanned out wider, as far apart
+        const fan = volley("Blood throw", "maiden_of_sugadinti");
+        const hardFan = volley("Blood throw", "maiden_of_sugadinti", 1.5);
+        const more = hardFan.shot.length / fan.shot.length;
         expect(more).toBeGreaterThan(1.4);
         expect(more).toBeLessThan(1.7);
+        const apart = (shot: { vx: number; vy: number }[]) => {
+            const angles = shot.map((b) => Math.atan2(b.vy, b.vx)).sort((a, b) => a - b);
+            return Math.min(...angles.slice(1).map((a, i) => a - angles[i]));
+        };
+        expect(apart(hardFan.shot)).toBeCloseTo(apart(fan.shot), 3);
         // A wall: as long, closer together, and its gap as many tiles across
         const wall = volley("The maze", "tob_sotetseg");
         const hardWall = volley("The maze", "tob_sotetseg", 1.5);
@@ -556,6 +607,75 @@ describe("the Theatre's bosses", () => {
         expect(sim.visitor).toBeUndefined();
     });
 
+    it("caps what armour takes off a raid boss's hits however they land, its boss gone or not", () => {
+        const sim = raid();
+        const def = getEnemy("xarpus");
+        const cap = def.boss!.armorCap!;
+        // Enough to take every hit here and stand
+        sim.player.maxHp = sim.player.hp = 1000;
+        sim.stats.armor = 1000;
+        // Straight to the player, as a stomp or a stare's are
+        sim.player.invulnerable = 0;
+        expect(sim["damagePlayer"](40, def.id, false)).toBeGreaterThanOrEqual(
+            Math.round(40 * (1 - cap)),
+        );
+        // A pool whose boss is gone: as much as it does with no armour, less the cap at most
+        const attack = def.boss!.attacks.find((a) => a.name === "Acid")!;
+        const pool = (armor: number) => {
+            // A tick on, past the last hit's grace
+            sim.tick += 40;
+            sim.stats.armor = armor;
+            sim.player.invulnerable = 0;
+            sim.player.hp = sim.player.maxHp;
+            sim.hazards = [
+                {
+                    uid: 998,
+                    enemyUid: -1,
+                    enemyId: def.id,
+                    attack,
+                    x: sim.player.x,
+                    y: sim.player.y,
+                    radius: attack.ground!.radius,
+                    damage: 40,
+                    startTick: sim.tick,
+                    landTick: sim.tick,
+                    endTick: sim.tick,
+                    armed: false,
+                    fuseTick: -1,
+                    grabEnd: 0,
+                    hit: [],
+                    lingerEnd: -1,
+                    nextHurt: -1,
+                },
+            ];
+            sim["stepHazards"]();
+            return sim.player.maxHp - sim.player.hp;
+        };
+        const bare = pool(0);
+        expect(bare).toBeGreaterThan(1);
+        expect(pool(1000)).toBeGreaterThanOrEqual(Math.floor(bare * (1 - cap)));
+    });
+
+    it("brings all the Maiden's healers on, however close to a wall she stands", () => {
+        const sim = raid();
+        const def = getEnemy("maiden_of_sugadinti");
+        const summon = def.boss!.summonsAt!.find((s) => s.enemyId === "nylocas_matomenos_healer")!;
+        // In a corner of the room: most of the ring her healers come on in is in its walls
+        const boss = sim.spawnEnemy(def, "boss", { x: 1069.5, y: 1069.5 })!;
+        sim.player.x = sim.player.prevX = 1064.5;
+        sim.player.y = sim.player.prevY = 1064.5;
+        sim.step();
+        boss.hp = Math.floor(boss.maxHp * summon.hp);
+        const before = sim.enemies.filter((e) => e.def.id === summon.enemyId && !e.dead).length;
+        sim["callSummons"](boss, false);
+        const healers = sim.enemies.filter((e) => e.def.id === summon.enemyId && !e.dead);
+        expect(healers.length - before).toBe(summon.count);
+        for (const healer of healers) {
+            expect(healer.x).toBeLessThan(1071);
+            expect(healer.y).toBeLessThan(1071);
+        }
+    });
+
     it("leave blood and acid on the floor that hurts for as long as you stand in it", () => {
         const sim = raid();
         const def = getEnemy("xarpus");
@@ -568,6 +688,7 @@ describe("the Theatre's bosses", () => {
         sim.hazards.push({
             uid: 999,
             enemyUid: boss.uid,
+            enemyId: boss.def.id,
             attack,
             x,
             y,
@@ -747,7 +868,8 @@ describe("expert mode", () => {
         const smother = attack.ground!.smother!;
         const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
         sim["damageSource"] = "weapon:scythe_of_vitur";
-        // He comes up in his pool, out of reach
+        // Down to his first exhumes: he sinks into his pool, out of reach
+        boss.hp = Math.floor(boss.maxHp * exhumes.at[0]);
         sim["stepOrdeal"](boss);
         expect(sim.damageEnemy(boss, 100, 0, sim.player.x, sim.player.y)).toBe(0);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
@@ -755,6 +877,7 @@ describe("expert mode", () => {
             const hazard = {
                 uid: 900 + sim.hazards.length,
                 enemyUid: boss.uid,
+                enemyId: boss.def.id,
                 attack,
                 x,
                 y,
@@ -804,6 +927,7 @@ describe("expert mode", () => {
         const def = getEnemy("xarpus");
         const exhumes = def.boss!.exhumes!;
         const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        boss.hp = Math.floor(boss.maxHp * exhumes.at[0]);
         sim["stepOrdeal"](boss);
         boss.hp = boss.maxHp / 2;
         sim.tick += Math.round(exhumes.seconds * TICKS_PER_SECOND);
@@ -903,6 +1027,203 @@ describe("expert mode", () => {
         expect(sim.damageEnemy(xarpus, 100, 0, sim.player.x, sim.player.y)).toBeGreaterThan(0);
     });
 
+    it("has Xarpus's stare hurt as his hits do, armour and all, and say so before he turns", () => {
+        const sim = raid(true);
+        const xarpus = sim.spawnEnemy(getEnemy("xarpus"), "boss", { x: 1030.5, y: 1030.5 })!;
+        const state = xarpus.bossState!;
+        state.enraged = true;
+        sim["stepStare"](xarpus);
+        // Said, but not turned yet: he faces where he'll stare, and the notice names the side
+        expect(state.stareNext).toBeDefined();
+        expect(state.stareAngle).toBeUndefined();
+        const next = state.stareNext!;
+        const side = ["east", "north", "west", "south"][
+            ((Math.round(next / (Math.PI / 2)) % 4) + 4) % 4
+        ];
+        expect(sim.takeEvents().some((e) => e.type === "notice" && e.message.includes(side))).toBe(
+            true,
+        );
+        expect(xarpus.yaw).toBe(yawFromVector(fm.cos(next), fm.sin(next)));
+        sim.tick = state.nextStare!;
+        sim["stepStare"](xarpus);
+        expect(state.stareAngle).toBeDefined();
+        expect(state.stareNext).toBeUndefined();
+        // Hitting it from in front with lots of armour still hurts: armour takes at most half
+        const angle = state.stareAngle!;
+        sim.player.x = sim.player.prevX = xarpus.x + Math.cos(angle) * 3;
+        sim.player.y = sim.player.prevY = xarpus.y + Math.sin(angle) * 3;
+        sim.stats.armor = 1000;
+        sim.player.invulnerable = 0;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        const hp = sim.player.hp;
+        expect(sim.damageEnemy(xarpus, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        const stare = getEnemy("xarpus").boss!.stare!;
+        expect(hp - sim.player.hp).toBeGreaterThanOrEqual(
+            Math.floor(stare.damage * xarpus.damageScale * 0.5),
+        );
+    });
+
+    it("leaves a Nylocas a weapon can't hurt alone: no aiming at it, and no venom", () => {
+        const sim = raid(true);
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        sim["damageSource"] = "weapon:toxic_blowpipe";
+        const near = (style?: string) =>
+            sim["nearestEnemies"](sim.player.x, sim.player.y, 10, 5, style as never);
+        expect(near("ranged")).not.toContain(grey);
+        sim["envenom"](grey, 50, 100);
+        expect(grey.venom).toBe(0);
+        // Its own style aims at it as ever
+        expect(near("melee")).toContain(grey);
+        // and what isn't a weapon (thralls, the cannon, power-ups) hurts any, so aims at any,
+        // whatever weapon fired last
+        expect(near()).toContain(grey);
+    });
+
+    it("aims each weapon by its own style, not whichever fired last", () => {
+        const sim = raid(true);
+        sim.weapons = [];
+        sim.addWeapon("twisted_bow");
+        sim.addWeapon("scythe_of_vitur");
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 1,
+            y: sim.player.y,
+        })!;
+        // A tick for it to be where weapons look, with them held back meanwhile
+        for (const weapon of sim.weapons) {
+            weapon.cooldown = 1000;
+        }
+        sim.step();
+        for (const weapon of sim.weapons) {
+            weapon.cooldown = 0;
+        }
+        // The bow's left as the source, as it would be after it fires
+        sim["damageSource"] = "weapon:twisted_bow";
+        const hp = grey.hp;
+        sim["stepWeapons"]();
+        // The scythe swung (rather than waiting, with nothing it thought it could reach), and hit
+        const scythe = sim.weapons.find((w) => w.def.id === "scythe_of_vitur")!;
+        expect(scythe.cooldown).toBeGreaterThan(10);
+        expect(grey.hp).toBeLessThan(hp);
+    });
+
+    it("stops a weapon's venom once the enemy's colour is one it can't hurt", () => {
+        const sim = raid(true);
+        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+            x: sim.player.x + 6,
+            y: sim.player.y,
+        })!;
+        // Put on while it could be hurt (as on green Vasilias, before it turned)
+        Object.assign(grey, {
+            venom: 5,
+            venomEnd: sim.tick + 100,
+            venomNext: sim.tick,
+            venomSource: "weapon:toxic_blowpipe",
+        });
+        const hp = grey.hp;
+        sim.step();
+        expect(grey.hp).toBe(hp);
+        expect(grey.venomEnd).toBeLessThan(sim.tick);
+    });
+
+    it("keeps Verzik's Nylocas to their own style on expert: a party needs all three", () => {
+        for (const id of ["tob_verzik_vitur_risen", "tob_verzik_vitur_spider"]) {
+            const boss = getEnemy(id).boss!;
+            const called = [
+                ...(boss.summonsAt ?? []).map((s) => s.enemyId),
+                ...boss.attacks.flatMap((a) => (a.summon ? [a.summon.enemyId] : [])),
+            ];
+            expect(called.length, id).toBeGreaterThan(0);
+            for (const enemyId of called) {
+                expect(getEnemy(enemyId).onlyStyle, `${id}: ${enemyId}`).toBeDefined();
+            }
+        }
+    });
+
+    it("has Nylocas Vasilias's colour still pray for its own style's share on expert", () => {
+        const sim = raid(true);
+        const own = getEnemy("nylocas_vasilias").boss!.colours!.ownStyle!;
+        // Big hits, so rounding to whole numbers doesn't hide the share
+        const dealt = (id: string, weaponId: string) => {
+            const enemy = sim.spawnEnemy(getEnemy(id), "boss", { x: 1030.5, y: 1030.5 })!;
+            // Never down, so every hit counts in full
+            enemy.hp = enemy.maxHp = 1e9;
+            sim["damageSource"] = `weapon:${weaponId}`;
+            let total = 0;
+            for (let i = 0; i < 40; i++) {
+                total += sim.damageEnemy(enemy, 100, 0, sim.player.x, sim.player.y);
+            }
+            enemy.dead = true;
+            return total;
+        };
+        // One weapon on its colour and on a Nylocas of the same style with no prayer, so neither
+        // weapon's balance comes into it
+        const prayed = dealt("nylocas_vasilias_ranged", "twisted_bow");
+        const unprayed = dealt("tob_nylocas_toxobolos", "twisted_bow");
+        expect(prayed / unprayed).toBeCloseTo(own, 1);
+        expect(hits(sim, "nylocas_vasilias_ranged", "scythe_of_vitur")).toBe(0);
+    });
+
+    it("feeds the Maiden more on expert", () => {
+        const normal = raid(false).spawnEnemy(getEnemy("nylocas_matomenos_healer"), "normal", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        const expert = raid(true).spawnEnemy(getEnemy("nylocas_matomenos_healer"), "normal", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        expect(expert.def.heals!.fraction).toBeGreaterThan(normal.def.heals!.fraction);
+        expect(expert.def.heals!.targets).toEqual(normal.def.heals!.targets);
+    });
+
+    it("holds Verzik's yellows until her doom ball's landed", () => {
+        const sim = raid(true);
+        const def = getEnemy("tob_verzik_vitur_spider");
+        const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        const ball = def.boss!.attacks.find((a) => a.expert)!;
+        boss.hp = Math.floor(boss.maxHp * def.boss!.yellows!.at[0]);
+        sim.enemyProjectiles.push({ enemyUid: boss.uid, attack: ball } as never);
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        // and she can't be hurt meanwhile, so the wait can't take her past the next one too
+        const hp = boss.hp;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(boss, boss.maxHp, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(boss.hp).toBe(hp);
+        sim.enemyProjectiles = [];
+        sim["stepOrdeal"](boss);
+        expect(boss.bossState!.ordeal).toBeDefined();
+    });
+
+    it("has Verzik throw no more doom balls while her yellows wait for one", () => {
+        const doomBalls = (hpShare: number) => {
+            const sim = raid(true);
+            const def = getEnemy("tob_verzik_vitur_spider");
+            const boss = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+            const ball = def.boss!.attacks.find((a) => a.expert)!;
+            boss.hp = Math.floor(boss.maxHp * hpShare);
+            sim.enemyProjectiles.push({ enemyUid: boss.uid, attack: ball } as never);
+            const picked = () => boss.bossState!.windup?.attack;
+            let thrown = 0;
+            for (let i = 0; i < 300; i++) {
+                boss.bossState!.windup = undefined;
+                boss.bossState!.cooldowns.fill(0);
+                boss.attackCooldown = 0;
+                sim.tick++;
+                sim["stepBoss"](boss, 10);
+                thrown += picked() === ball ? 1 : 0;
+            }
+            expect(boss.bossState!.ordeal).toBeUndefined();
+            return thrown;
+        };
+        // With no yellows due she throws them as ever, so the count below can fail
+        expect(doomBalls(0.9)).toBeGreaterThan(10);
+        expect(doomBalls(getEnemy("tob_verzik_vitur_spider").boss!.yellows!.at[0])).toBe(0);
+    });
+
     it("has Verzik's green ball spare only whoever's in its circle", () => {
         const sim = raid(true);
         const spider = getEnemy("tob_verzik_vitur_spider");
@@ -947,6 +1268,26 @@ describe("expert mode", () => {
     });
 });
 
+describe("a raid room's pace", () => {
+    it("scales its enemies and caskets by where it'd be with no boss time before it", () => {
+        const rooms = TEST_RAID.raid!.rooms;
+        const fresh = raid();
+        fresh["beginRaidRoom"](1);
+        const late = raid();
+        // As if the bosses before it took five minutes
+        late.tick += 300 * TICKS_PER_SECOND;
+        late["beginRaidRoom"](1);
+        const expected = rooms[1].at - late["raidWaveLength"](1);
+        expect(late["paceSeconds"]).toBeCloseTo(expected);
+        expect(late["paceSeconds"]).toBeCloseTo(fresh["paceSeconds"]);
+        expect(late["enemyHpScale"]()).toBeCloseTo(fresh["enemyHpScale"]());
+        expect(late["casketSeconds"]).toBeCloseTo(fresh["casketSeconds"]);
+        // and runs on with the room's own clock
+        late.tick += 10 * TICKS_PER_SECOND;
+        expect(late["paceSeconds"]).toBeCloseTo(expected + 10);
+    });
+});
+
 describe("raid teleporters", () => {
     const room = () => TEST_RAID.raid!.rooms[0];
     function walkUp(sim: Sim): void {
@@ -964,6 +1305,27 @@ describe("raid teleporters", () => {
         expect(sim.chooseEventOption(0)).toBe(true);
         expect(sim.raidStage).toBe("boss");
         expect(sim.raidTeleportsLeft).toBe(1);
+        // The room's boss timer is cancelled
+        expect(sim.raidBossDueTick).toBeLessThanOrEqual(sim.tick);
+        expect(sim.timeLeftForBoss).toBe(0);
+    });
+
+    it("leave the next room its full waves, not the time saved as well", () => {
+        const sim = raid(false, 2);
+        toRoomSecond(sim, 5);
+        walkUp(sim);
+        sim.chooseEventOption(0);
+        killBosses(sim);
+        expect(sim.raidStage).toBe("cleared");
+        toRoomSecond(sim, 8);
+        expect(sim.raidRoom).toBe(1);
+        // 50 seconds of waves, as it'd have had without the teleport
+        expect(sim.timeLeftForBoss).toBeGreaterThan(49);
+        expect(sim.timeLeftForBoss).toBeLessThanOrEqual(50);
+        toRoomSecond(sim, 49);
+        expect(sim.raidStage).toBe("waves");
+        toRoomSecond(sim, 51);
+        expect(sim.raidStage).toBe("boss");
     });
 
     it("can be turned down, and ask again only once you've stepped away", () => {

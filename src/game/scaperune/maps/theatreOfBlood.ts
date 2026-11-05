@@ -1,10 +1,12 @@
 import { Ground } from "../Ground";
-import { blockTile, findReachable, getCollisionFlags } from "../collision";
-import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
+import { THEATRE_LOCS } from "../catalogue";
+import { SealRegion, assertReachable, sealFrom } from "../collision";
+import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
+import type { GeneratedMap } from "../generator";
 import { createRng } from "../noise";
-import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
+import { cutPrefab, rotatePrefab } from "../prefab";
 import { isDoor } from "../prefabs";
-import { BuildContext, MapRecipe } from "../recipe";
+import { BuildContext, MapPoint, MapRecipe } from "../recipe";
 
 // The Theatre of Blood, as a raid (MapDef.raid): six rooms, one for each of its bosses, walled off
 // from each other in the dark, so the only way between them is the sim's teleport. Each room is a
@@ -204,6 +206,20 @@ export const TOB_ROOM_PLACES = PLACES.map((place) => ({
     },
 }));
 
+// Each room's hall, walked from where the party starts it, and its boss room, from where they're
+// brought in. Anything a region's start can't walk to is sealed.
+const REGIONS: SealRegion[] = PLACES.flatMap((place) => [
+    { name: `${place.id} hall`, rect: place.hall, from: place.start, min: 100 },
+    { name: `${place.id} room`, rect: place.chamber, from: place.arrive, min: 100 },
+]);
+
+// Where the raid puts the party and the bosses (TOB_ROOM_PLACES), each reached from its own region
+const POINTS: MapPoint[] = PLACES.flatMap((place) => [
+    { name: `${place.id} start`, ...place.start, region: `${place.id} hall` },
+    { name: `${place.id} arrival`, ...place.arrive, region: `${place.id} room` },
+    { name: `${place.id}'s boss`, ...place.boss, region: `${place.id} room` },
+]);
+
 function inRect(rect: Rect, x: number, y: number): boolean {
     return x >= rect.x0 && y >= rect.y0 && x <= rect.x1 && y <= rect.y1;
 }
@@ -266,7 +282,7 @@ function stampHall(ground: Ground, context: BuildContext, place: RoomPlace): voi
     });
 }
 
-function build(context: BuildContext): TileGrid {
+function buildDetail(context: BuildContext): GeneratedMap {
     const ground = new Ground(SIZE_X, SIZE_Y);
     for (let y = 0; y <= SIZE_Y; y++) {
         for (let x = 0; x <= SIZE_X; x++) {
@@ -280,10 +296,9 @@ function build(context: BuildContext): TileGrid {
             spillBlood(ground, place, blood, 7200 + i);
         }
         const { cut } = ROOMS[i];
-        const room = bringDown(
-            cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY),
-            cut.plane,
-        );
+        const room = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY, {
+            plane: cut.plane,
+        });
         ground.stamp(room, place.chamber.x0, place.chamber.y0, {
             floor: "all",
             feather: 0,
@@ -294,43 +309,18 @@ function build(context: BuildContext): TileGrid {
 
     // Only a hall, or what can be walked to in a boss room from where the party's brought in, is
     // open: the rest is blocked, the boss rooms' doorways and corridors included
-    const collision = getCollisionFlags(ground.grid, context.locs);
-    const open = new Uint8Array(SIZE_X * SIZE_Y);
-    for (const place of PLACES) {
-        for (const [rect, from] of [
-            [place.hall, place.start],
-            [place.chamber, place.arrive],
-        ] as const) {
-            const reached = findReachable(collision, SIZE_X, SIZE_Y, rect, from.x, from.y);
-            let count = 0;
-            for (let i = 0; i < reached.length; i++) {
-                if (reached[i]) {
-                    open[i] = 1;
-                    count++;
-                }
-            }
-            if (count < 100) {
-                throw new Error(
-                    `Theatre of Blood: ${place.id} has ${count} open tiles at ${from.x},${from.y}`,
-                );
-            }
-            if (rect === place.chamber && !reached[ground.tile(place.boss.x, place.boss.y)]) {
-                throw new Error(`Theatre of Blood: ${place.id}'s boss can't be reached`);
-            }
-        }
-    }
+    const sealed = sealFrom(ground.grid, context.locs, REGIONS, {
+        outside: "block",
+        label: "Theatre of Blood",
+    });
+    assertReachable(sealed, POINTS, "Theatre of Blood");
+    // Nothing to see outside the halls and the boss rooms
     for (let y = 0; y < SIZE_Y; y++) {
         for (let x = 0; x < SIZE_X; x++) {
-            const i = ground.tile(x, y);
-            if (!open[i]) {
-                blockTile(ground.grid, i);
-                // Nothing to see outside the halls and the boss rooms
-                if (
-                    !PLACES.some((place) => inRect(place.hall, x, y) || inRect(place.chamber, x, y))
-                ) {
-                    ground.level0.underlays[i] = 0;
-                    ground.level0.overlays[i] = 0;
-                }
+            if (!PLACES.some((place) => inRect(place.hall, x, y) || inRect(place.chamber, x, y))) {
+                const i = ground.tile(x, y);
+                ground.level0.underlays[i] = 0;
+                ground.level0.overlays[i] = 0;
             }
         }
     }
@@ -346,11 +336,28 @@ function build(context: BuildContext): TileGrid {
             ground.level0.flags[ground.tile(hall.x1 + 1, y)] |= TILE_BLOCKED;
         }
     }
-    return ground.grid;
+    // No roads, buildings or landmarks of the generator's to hold it to
+    return {
+        grid: ground.grid,
+        footprint: ground.footprint,
+        roadTiles: new Uint8Array(SIZE_X * SIZE_Y),
+        lines: [],
+        buildings: [],
+        landmarks: [],
+        passes: [],
+        walkSlope: 12,
+        caves: [],
+        falls: [],
+        waterfalls: [],
+        // Cut from the real world, upstairs and all
+        designed: PLACES.flatMap((place) => [place.hall, place.chamber]),
+    };
 }
 
 export const THEATRE_OF_BLOOD: MapRecipe = {
     id: "theatre_of_blood",
+    // A raid on purpose: its boss rooms are the real ones
+    allowLocs: THEATRE_LOCS,
     mapX: MAP_X,
     mapY: MAP_Y,
     squaresX: SQUARES_X,
@@ -358,5 +365,8 @@ export const THEATRE_OF_BLOOD: MapRecipe = {
     margin: MARGIN,
     // The Maiden's hall
     spawn: PLACES[0].start,
-    build,
+    build: (context) => buildDetail(context).grid,
+    detail: buildDetail,
+    regions: REGIONS,
+    points: POINTS,
 };

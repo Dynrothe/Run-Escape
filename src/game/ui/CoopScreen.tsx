@@ -209,7 +209,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                     )}
                     {coop.status === "offline" && (
                         <div className="ui-coop-empty">
-                            The co-op server isn't answering.{" "}
+                            Not connected to the co-op server.{" "}
                             <button
                                 className="ui-button ui-button-small"
                                 onClick={() => client.openCoop()}

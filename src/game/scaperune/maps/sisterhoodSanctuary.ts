@@ -1,6 +1,8 @@
+import { PHOSANI_START_DISTANCE } from "../../content/phosani";
 import { Ground } from "../Ground";
 import { BIOMES } from "../biomes";
-import { blockTile, findReachable, getCollisionFlags } from "../collision";
+import { NIGHTMARE_LOCS } from "../catalogue";
+import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { dressGround, dressRock, paintRockFloor } from "../dress";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED } from "../format";
 import type { GeneratedMap } from "../generator";
@@ -15,7 +17,7 @@ import {
     smoothstep,
 } from "../mapBuild";
 import { Rng, createNoise, createRng } from "../noise";
-import { BuildContext, MapRecipe } from "../recipe";
+import { BuildContext, MapPoint, MapRecipe } from "../recipe";
 
 // The Sisterhood Sanctuary: where Phosani's Nightmare is fought (content/phosani.ts), on its
 // own. It's the real fight's two places in one, both read from the cache's own squares. The
@@ -667,28 +669,22 @@ function dressArena(sanctuary: Sanctuary): void {
     }
 }
 
+// Her square, walked from the spawn: every tile of it must be reached, so nothing solid stands on it
+const ARENA_REGION: SealRegion = {
+    name: "her square",
+    rect: { x0: ARENA_MIN, y0: ARENA_MIN, x1: ARENA_MAX, y1: ARENA_MAX },
+    from: { x: MIDDLE, y: MIDDLE },
+    min: (ARENA_MAX - ARENA_MIN + 1) ** 2,
+};
+
 // Nothing solid on the arena, all of it reachable, and the chamber sealed
 function finish(sanctuary: Sanctuary): void {
     const { context, ground } = sanctuary;
-    for (let y = 0; y < SIZE; y++) {
-        for (let x = 0; x < SIZE; x++) {
-            if (!inArena(x, y)) {
-                blockTile(ground.grid, ground.tile(x, y));
-            }
-        }
-    }
-    const rect = { x0: ARENA_MIN, y0: ARENA_MIN, x1: ARENA_MAX, y1: ARENA_MAX };
-    const collision = getCollisionFlags(ground.grid, context.locs);
-    const { spawn } = SISTERHOOD_SANCTUARY;
-    const reached = findReachable(collision, SIZE, SIZE, rect, spawn.x, spawn.y);
-    for (let y = ARENA_MIN; y <= ARENA_MAX; y++) {
-        for (let x = ARENA_MIN; x <= ARENA_MAX; x++) {
-            const i = ground.tile(x, y);
-            if (!reached[i] || ground.level0.flags[i] & TILE_BLOCKED) {
-                throw new Error(`Sisterhood Sanctuary: something solid on her ground at ${x},${y}`);
-            }
-        }
-    }
+    const sealed = sealFrom(ground.grid, context.locs, [ARENA_REGION], {
+        outside: "block",
+        label: "Sisterhood Sanctuary",
+    });
+    assertReachable(sealed, POINTS, "Sisterhood Sanctuary");
 }
 
 function buildDetail(context: BuildContext): GeneratedMap {
@@ -723,6 +719,13 @@ function buildDetail(context: BuildContext): GeneratedMap {
     };
 }
 
+// Where the game puts her and the player, in grid tiles: she rises at the middle, the bossArena's,
+// and her entrance stands the player south of it (the MapDef's spawn)
+const POINTS: MapPoint[] = [
+    { name: "her rise", x: MIDDLE, y: MIDDLE, region: ARENA_REGION.name },
+    { name: "the start", x: MIDDLE, y: MIDDLE - PHOSANI_START_DISTANCE, region: ARENA_REGION.name },
+];
+
 // MapDef.bossArena, in world tiles: the whole arena
 export const SANCTUARY_BOSS_ARENA = {
     baseX: 78 * MAP_SQUARE_SIZE + ARENA_MIN,
@@ -732,14 +735,22 @@ export const SANCTUARY_BOSS_ARENA = {
 
 export const SISTERHOOD_SANCTUARY: MapRecipe = {
     id: "phosani",
+    // The boss room's own on purpose: the dream's floor and ring, and the Theatre's dead
+    allowLocs: [
+        ...NIGHTMARE_LOCS,
+        ...[...DEAD_RAIDERS.map(([id]) => id), EXHUMED].map((id): [number, number] => [id, id]),
+    ],
     // East of Hallowed Night's squares, and clear of the rest (see CLAUDE.md's traps)
     mapX: 78,
     mapY: 72,
     squaresX: SQUARES,
     squaresY: SQUARES,
     margin: MARGIN,
-    // The middle of the arena, where her entrance puts the player anyway
+    // The middle of the arena, where she rises. The game starts the player PHOSANI_START_DISTANCE
+    // south of it (the MapDef's spawn), which is in POINTS as "the start"
     spawn: { x: MIDDLE, y: MIDDLE },
     build: (context) => buildDetail(context).grid,
     detail: buildDetail,
+    regions: [ARENA_REGION],
+    points: POINTS,
 };

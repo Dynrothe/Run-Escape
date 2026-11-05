@@ -1,6 +1,8 @@
 import { getInsideTiles } from "./building";
+import { getLocBlocking, getLocSize } from "./collision";
 import { PlacedLoc, TILE_BLOCKED, TileGrid, TileLevel, createTileGrid } from "./format";
 import { smoothField } from "./noise";
+import type { LocInfo } from "./recipe";
 import { Reservations } from "./reservations";
 import { getCoveredShare, getCoveredSides, getOverlayShape } from "./shapes";
 
@@ -26,6 +28,9 @@ export type StampOptions = {
     // Keeps our underlays under the prefab's overlays, for one from other ground: a
     // Lumbridge bridge's grass would show as a green halo in the snow
     keepUnderlays?: boolean;
+    // What each loc is, so that the ones that block mark their tiles occupied. Without it,
+    // a stamp leaves occupied alone.
+    locs?: (id: number) => Pick<LocInfo, "sizeX" | "sizeY" | "clipType" | "drawn">;
 };
 
 // An overlay, or which one for a tile
@@ -34,11 +39,28 @@ export type OverlayChoice = number | ((x: number, y: number) => number);
 // A box of tile corners, both ends in
 type CornerArea = { x0: number; y0: number; x1: number; y1: number };
 
+// Loc type 22, walked over
+const LOC_FLOOR_DECORATION = 22;
+
 // How many corners past a mask paintOverlay can reach, with one spare for smoothing's edge
 const OVERLAY_REACH = 3;
 
 function smoothstep(t: number): number {
     return t * t * (3 - 2 * t);
+}
+
+// Locs that came onto a map in a stamped prefab, cut with whatever was round them in the real
+// place: check-maps.ts takes a kit piece among them as used whole (findLoneKitPieces)
+const STAMPED = new WeakSet<PlacedLoc>();
+
+export function isStamped(loc: PlacedLoc): boolean {
+    return STAMPED.has(loc);
+}
+
+// A loc whose set is there when it's played, though not in the map: a boss fight draws the rest
+// (the Owl's Court's fire jets, between its wizard statues). Taken as whole, as stamped ones are.
+export function markWhole(loc: PlacedLoc): void {
+    STAMPED.add(loc);
 }
 
 // A map being built: our own ground, in plain tile terms, with prefabs stamped
@@ -52,6 +74,10 @@ export class Ground {
     readonly reserved: Uint8Array;
     // Tiles of buildings, walls included. Nothing else goes on these.
     readonly footprint: Uint8Array;
+    // Tiles a loc stands on: what place() put down, and what a stamp brought that blocks (given
+    // its locs). Unlike reserved, painted floor doesn't count, so this is what says whether
+    // something solid can still go on a tile (see placer.ts).
+    readonly occupied: Uint8Array;
     // What's spoken for, and by what: see reservations.ts
     readonly claims: Reservations;
 
@@ -62,6 +88,7 @@ export class Ground {
         this.level0 = this.grid.levels[0];
         this.reserved = new Uint8Array(sizeX * sizeY);
         this.footprint = new Uint8Array(sizeX * sizeY);
+        this.occupied = new Uint8Array(sizeX * sizeY);
         this.claims = new Reservations(sizeX, sizeY, this.reserved);
     }
 
@@ -222,12 +249,37 @@ export class Ground {
         return true;
     }
 
+    // Puts a loc down on the tiles it fills, sizeX by sizeY as it's turned. They're reserved, and
+    // occupied too unless it's floor decoration, which is walked over.
     place(loc: PlacedLoc, sizeX: number, sizeY: number): void {
+        // The map file packs a loc's tile into whole numbers, and would quietly move it
+        if (!Number.isInteger(loc.x) || !Number.isInteger(loc.y)) {
+            throw new Error(`Loc ${loc.id} placed off a whole tile, at ${loc.x},${loc.y}`);
+        }
         this.grid.locs.push(loc);
+        const occupies = loc.type !== LOC_FLOOR_DECORATION;
         for (let ty = loc.y; ty < loc.y + sizeY; ty++) {
             for (let tx = loc.x; tx < loc.x + sizeX; tx++) {
                 if (this.inside(tx, ty)) {
                     this.reserved[this.tile(tx, ty)] = 1;
+                    if (occupies) {
+                        this.occupied[this.tile(tx, ty)] = 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // Marks the tiles a loc fills as occupied, if it blocks them (and is on level 0)
+    occupy(loc: PlacedLoc, info: Pick<LocInfo, "sizeX" | "sizeY" | "clipType" | "drawn">): void {
+        if (loc.level !== 0 || getLocBlocking(loc.type, info) !== "tiles") {
+            return;
+        }
+        const [sizeX, sizeY] = getLocSize(loc, info);
+        for (let ty = loc.y; ty < loc.y + sizeY; ty++) {
+            for (let tx = loc.x; tx < loc.x + sizeX; tx++) {
+                if (this.inside(tx, ty)) {
+                    this.occupied[this.tile(tx, ty)] = 1;
                 }
             }
         }
@@ -350,7 +402,12 @@ export class Ground {
             ) {
                 continue;
             }
-            this.grid.locs.push({ ...loc, x: loc.x + x, y: loc.y + y });
+            const placed = { ...loc, x: loc.x + x, y: loc.y + y };
+            this.grid.locs.push(placed);
+            if (options.locs) {
+                this.occupy(placed, options.locs(loc.id));
+            }
+            STAMPED.add(placed);
             if (inside && loc.level === 0 && (loc.type <= 3 || loc.type === 9)) {
                 this.footprint[this.tile(loc.x + x, loc.y + y)] = 1;
                 this.reserved[this.tile(loc.x + x, loc.y + y)] = 1;

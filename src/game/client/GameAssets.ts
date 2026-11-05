@@ -21,7 +21,9 @@ import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { MAPS } from "../content/maps";
 import { getPassive } from "../content/passives";
+import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
@@ -41,7 +43,7 @@ import {
     SCABARAS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, EnemyOutfit, GearSlot, WeaponDef } from "../content/types";
+import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
@@ -142,6 +144,22 @@ function getSpotAnimIds(): number[] {
         VISITOR_SPOTANIM,
         REVIVE_SPOTANIM,
         ...Object.values(APMEKEN_SPOTANIMS),
+        // GALLERY-TEMP
+        318,
+        713,
+        2699,
+        451,
+        157,
+        3049,
+        347,
+        1745,
+        1207,
+        1221,
+        2315,
+        3406,
+        3588,
+        2056,
+        1356,
     ]);
     const add = (...spotAnims: (number | undefined)[]) => {
         for (const id of spotAnims) {
@@ -181,6 +199,12 @@ function getSpotAnimIds(): number[] {
     add(SCABARAS.rockSpotAnim);
     // Akkha's quadrants' elements, which are no attack of his
     add(...AKKHA.elements.map((element) => element.spotAnim));
+    const addImpact = (impact: ImpactDef | undefined) => {
+        add(...(impact?.spots ?? []).map((spot) => spot.spotAnim), impact?.trail?.spotAnim);
+    };
+    for (const map of MAPS) {
+        addImpact(map.fight?.ability?.impact);
+    }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
@@ -196,9 +220,18 @@ function getSpotAnimIds(): number[] {
             // An exhumed's orb as it heals its boss, and its end as it's smothered
             add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);
             add(...(attack.impactSpotAnims ?? []));
+            addImpact(attack.impact);
         }
+        const guard = enemy.boss?.guard;
+        add(guard?.stunSpotAnim);
+        addImpact(guard?.stuck);
+        addImpact(guard?.resisted);
+        addImpact(enemy.boss?.leash?.jump?.land);
+        addImpact(enemy.boss?.intro?.land);
+        addImpact(enemy.boss?.phases?.threshold?.impact);
+        addImpact(enemy.boss?.phases?.threshold?.riseImpact);
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
-        add(enemy.boss?.phases?.totems.blastSpotAnim);
+        add(enemy.boss?.phases?.totems?.blastSpotAnim, enemy.boss?.phases?.threshold?.spotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);
         add(enemy.revives?.spotAnim, enemy.splits?.spotAnim, enemy.explodes?.spotAnim);
         add(enemy.blinks?.castSpotAnim, enemy.blinks?.impactSpotAnim);
@@ -330,6 +363,36 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
+export function getStatueModelKey(locId: number): string {
+    return "statue:" + locId;
+}
+
+// The statues (and jets) a boss's attacks animate, by loc, with their animations
+export function getStatueSeqs(enemy: EnemyDef): Map<number, number[]> {
+    const seqs = new Map<number, number[]>();
+    const add = (locId: number, ...ids: (number | undefined)[]) => {
+        const list = seqs.get(locId) ?? [];
+        for (const id of ids) {
+            if (id !== undefined && id !== -1 && !list.includes(id)) {
+                list.push(id);
+            }
+        }
+        seqs.set(locId, list);
+    };
+    for (const attack of enemy.boss?.attacks ?? []) {
+        const statues = attack.statues;
+        if (statues) {
+            add(statues.locId, statues.windupSeq, statues.seq, attack.boomerang?.catchSeq);
+        }
+        const cycle = attack.cycle;
+        if (cycle) {
+            add(cycle.locId, cycle.seqs.warn, cycle.seqs.burn, cycle.seqs.out);
+        }
+    }
+    return seqs;
+}
+
 // The baked model for an enemy's look while shielded (EnemyDef.shield.look)
 export function getShieldedModelKey(def: EnemyDef): string {
     return "npc:" + def.id + ":shielded";
@@ -373,7 +436,8 @@ function getRequestBody(request: BakeRequest): string {
         case "obj":
             return `obj:${request.objId}:${request.count}`;
         case "loc":
-            return `loc:${request.locId}:${request.animated ? 1 : 0}`;
+            // A statue's (seqs) isn't plain scenery
+            return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
     }
 }
 
@@ -426,6 +490,8 @@ export class GameAssets {
     private readonly requestedEnemies = new Set<string>();
     // Counts the times the enemies were dropped: a bake from before is stale
     private enemyBakes = 0;
+    // Pets baked or being baked, by id. They're kept once they are.
+    private readonly petBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -450,6 +516,8 @@ export class GameAssets {
             enemy.boss?.surgeSeq ?? -1,
             enemy.boss?.leash?.jump?.downSeq ?? -1,
             enemy.boss?.leash?.jump?.upSeq ?? -1,
+            enemy.boss?.phases?.threshold?.seq ?? -1,
+            enemy.boss?.phases?.threshold?.riseSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -485,11 +553,32 @@ export class GameAssets {
                 }
             }
         }
+        // The arena's statues and jets its attacks animate (BossAttackDef.statues,
+        // cycle), standing still and with each animation
+        for (const [locId, seqIds] of getStatueSeqs(enemy)) {
+            requests.push({
+                kind: "loc",
+                key: getStatueModelKey(locId),
+                locId,
+                seqs: [-1, ...seqIds],
+            });
+        }
         return requests;
     }
 
     static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
         return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // Pets aren't in every run's bake, as most players haven't found one: they're baked as
+    // they're picked, and for a co-op party, the party's
+    static getPetRequests(pets: readonly PetDef[]): BakeRequest[] {
+        return pets.map((pet) => ({
+            kind: "npc",
+            key: getPetModelKey(pet.id),
+            npcId: pet.npcId,
+            seqIds: [...new Set([pet.idleSeq, pet.walkSeq])],
+        }));
     }
 
     // Requests that would bake the same model, as one: several enemies can be
@@ -695,6 +784,41 @@ export class GameAssets {
 
     async loadBase(onProgress?: (done: number, total: number) => void): Promise<void> {
         await this.bakeInTasks(GameAssets.getBaseRequests(), this.loadBake, onProgress);
+    }
+
+    // Bakes these pets (ids this game doesn't know are left out), unless they're baked already
+    // or on their way. A pet that won't bake is only missing: it's never a reason to stop.
+    loadPets(ids: readonly (string | undefined)[]): Promise<void> {
+        const waits: Promise<void>[] = [];
+        const pets: PetDef[] = [];
+        for (const id of new Set(ids)) {
+            const pet = id === undefined ? undefined : PET_BY_ID.get(id);
+            const baking = pet && this.petBakes.get(pet.id);
+            if (baking) {
+                waits.push(baking);
+            } else if (pet) {
+                pets.push(pet);
+            }
+        }
+        if (pets.length > 0) {
+            const baking = this.bakeInTasks(GameAssets.getPetRequests(pets), this.loadBake).catch(
+                (e) => console.error("Couldn't bake", pets.map((pet) => pet.id).join(", "), e),
+            );
+            for (const pet of pets) {
+                this.petBakes.set(pet.id, baking);
+            }
+            waits.push(baking);
+        }
+        return Promise.all(waits).then(() => undefined);
+    }
+
+    // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
+    getPet(id: string): ActorModel | undefined {
+        const model = this.models.get(getPetModelKey(id));
+        if (!model && !this.petBakes.has(id)) {
+            void this.loadPets([id]);
+        }
+        return model;
     }
 
     hasEnemies(enemies: EnemyDef[]): boolean {
@@ -903,10 +1027,13 @@ export class GameAssets {
         const player = this.getPlayerBake(slot);
         const appearanceKey = getAppearanceKey(appearance);
         const wanted = [...attackSeqs, ...offeredSeqs];
-        if (
-            lookHas(player.key, appearanceKey, wanted) ||
-            lookHas(player.pendingKey, appearanceKey, wanted)
-        ) {
+        if (lookHas(player.key, appearanceKey, wanted)) {
+            // What's drawn already is what's wanted, so another look on its way is out of date
+            // (the menus' look asked for as a run ends, and a Retry straight back into one)
+            player.pendingKey = undefined;
+            return;
+        }
+        if (lookHas(player.pendingKey, appearanceKey, wanted)) {
             return;
         }
         const seqs = wanted.filter((seq, i) => wanted.indexOf(seq) === i);

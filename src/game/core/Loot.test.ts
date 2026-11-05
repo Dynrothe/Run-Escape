@@ -31,6 +31,7 @@ import {
     rollCasketItem,
     rollCasketTier,
     setChange,
+    shouldAutoEquip,
     shouldWear,
 } from "./Loot";
 import { Rng } from "./Rng";
@@ -51,6 +52,94 @@ describe("items", () => {
             expect(UTILITY.some((i) => i.rarity === rarity)).toBe(true);
             expect(GEAR.some((i) => i.rarity === rarity)).toBe(true);
         }
+    });
+
+    describe("auto equip", () => {
+        test("fills empty slots, including with a set piece, but never takes utility items", () => {
+            for (const item of GEAR) {
+                expect(shouldAutoEquip({}, {}, item, 0), item.id).toBe(true);
+            }
+            for (const item of UTILITY) {
+                expect(shouldAutoEquip({}, {}, item, 0), item.id).toBe(false);
+            }
+        });
+
+        test.each([
+            ["rune_boots", "dragon_boots", true],
+            ["dragon_boots", "rune_boots", false],
+            ["rune_boots", "rune_boots", false],
+            ["climbing_boots", "rune_boots", false],
+            ["climbing_boots", "dragon_boots", false],
+            ["dragon_boots", "bandos_boots", false],
+            ["rune_full_helm", "helm_of_neitiznot", true],
+            ["helm_of_neitiznot", "berserker_helm", true],
+            ["rune_full_helm", "coif", false],
+            ["slayer_helmet", "black_slayer_helmet", true],
+            ["black_slayer_helmet", "slayer_helmet", false],
+            ["rune_full_helm", "void_melee_helm", true],
+        ])("%s to %s: %s", (wornId, offeredId, expected) => {
+            const worn = getGear(wornId);
+            expect(shouldAutoEquip({ [worn.slot]: worn.id }, {}, getGear(offeredId), 0)).toBe(
+                expected,
+            );
+        });
+
+        test("compares actual endless upgrades, including stats that do not scale", () => {
+            const boots = getGear("rune_boots");
+            expect(shouldAutoEquip({ feet: boots.id }, {}, boots, 1)).toBe(true);
+            expect(shouldAutoEquip({ feet: boots.id }, { feet: 1 }, boots, 1)).toBe(false);
+            expect(
+                shouldAutoEquip({ feet: boots.id }, { feet: 2 }, getGear("dragon_boots"), 0),
+            ).toBe(false);
+            expect(
+                shouldAutoEquip({ feet: boots.id }, { feet: 2 }, getGear("dragon_boots"), 2),
+            ).toBe(true);
+            expect(
+                shouldAutoEquip({ feet: "climbing_boots" }, {}, getGear("climbing_boots"), 10),
+            ).toBe(false);
+        });
+
+        test("asks for every worn set piece and Armoury variant, even without an active bonus", () => {
+            for (const worn of GEAR.filter((item) => item.set)) {
+                const gear = { [worn.slot]: worn.id };
+                expect(shouldAutoEquip(gear, {}, worn, 10), worn.id).toBe(false);
+                const replacement = { ...worn, id: "replacement", set: undefined };
+                expect(shouldAutoEquip(gear, {}, replacement, 10), worn.id).toBe(false);
+            }
+            expect(
+                shouldAutoEquip(
+                    {
+                        head: "void_melee_helm",
+                        body: "void_knight_top",
+                        hands: "void_knight_gloves",
+                    },
+                    {},
+                    getGear("slayer_helmet"),
+                    0,
+                ),
+            ).toBe(false);
+            expect(
+                shouldAutoEquip({ head: "crystal_helm" }, {}, getGear("corrupted_crystal_helm"), 0),
+            ).toBe(false);
+        });
+
+        test("does not ignore a newly introduced penalty", () => {
+            const worn = getGear("rune_boots");
+            const offered = { ...worn, stats: { armor: 1, moveSpeed: -0.05 } };
+            expect(shouldAutoEquip({ feet: worn.id }, {}, offered, 0)).toBe(false);
+        });
+
+        test("takes stats an upgrade's rounding has a hair apart as equal", () => {
+            // A coif upgraded once has 0.15000000000000002 speed
+            const coif = getGear("coif");
+            const worn = { head: coif.id };
+            const upgraded = { head: 1 };
+            expect(getGearStats(coif, 1).speed).not.toBe(0.15);
+            const same = { ...coif, id: "same", stats: { speed: 0.15 } };
+            expect(shouldAutoEquip(worn, upgraded, same, 0)).toBe(false);
+            const better = { ...coif, id: "better", stats: { speed: 0.15, armor: 1 } };
+            expect(shouldAutoEquip(worn, upgraded, better, 0)).toBe(true);
+        });
     });
 
     test("every piece of gear adds something", () => {

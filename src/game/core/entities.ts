@@ -1,4 +1,5 @@
 import {
+    ArenaStatue,
     BossAttackDef,
     CasketTier,
     EnemyDef,
@@ -48,13 +49,20 @@ export type BossWindup = {
     startTick: number;
     landTick: number;
     // Where a blast lands: where the player was when it started, and for a
-    // blast of several, spots scattered around it
+    // blast of several, spots scattered around it. Thrown from statues
+    // (BossAttackDef.from): where the player was, and from: the statues.
     targets: { x: number; y: number }[];
+    from?: ArenaStatue[];
     // The way the boss faced as it began (a cone swing's wedge)
     dirX: number;
     dirY: number;
     // A surge's lane, there on the ground the whole time it winds up
     lane?: SurgeLane;
+    // When its seq plays from, timed so its blow falls as it lands (BossAttackDef.strikeAt)
+    seqTick?: number;
+    // Where it's cast from, where that isn't where the boss is as it begins (toMiddle's leap):
+    // a gaze's shadows are from here from the start (BossAttackDef.cover)
+    at?: { x: number; y: number };
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within
@@ -81,16 +89,25 @@ export type BossSurge = {
 export type BossPhase = {
     // Counts from 0
     index: number;
-    // finale: after the last blast, its last stand (BossPhasesDef.finale)
-    stage: "shield" | "totems" | "finale";
+    // finale: after the last blast, its last stand (BossPhasesDef.finale); hp:
+    // a fight with no totems, on its hitpoints
+    stage: "shield" | "totems" | "finale" | "hp";
     shield: number;
     shieldMax: number;
     // Its four totems
     totems: Enemy[];
     // The attack it's to open this phase with, until it has
     opener?: BossAttackDef;
-    // When its ambient pattern begins again (BossPhasesDef ambient)
+    // When its ambient pattern begins again (BossPhasesDef ambient), and each
+    // of its ambients
     ambientNext: number;
+    ambientsNext?: number[];
+    // The tick the phase began
+    startTick?: number;
+    // A phase's threshold (BossPhasesDef.threshold): kneeling until riseTick,
+    // up again at pauseEnd
+    riseTick?: number;
+    pauseEnd?: number;
     // When the finale's over and it falls
     finaleEnd?: number;
 };
@@ -138,13 +155,47 @@ export type BossState = {
     // BossDef.stare: the way it's staring (radians, none until it does), and when it next turns
     stareAngle?: number;
     nextStare?: number;
+    // Where it'll stare once it turns at nextStare, picked and said a moment before
+    stareNext?: number;
     // BossDef.stomp: hits since the player stepped under it, and the next one
     stomps?: number;
     nextStomp?: number;
+    // How many times each row attack's been used (BulletPatternDef.rows), by name
+    rowSets?: Record<string, number>;
+    // The rhythms going (BossAttackDef.cycle)
+    cycles?: BossCycle[];
+    // BossDef.guard: its guard's down until exposedEnd, and it's stunned (doing nothing)
+    // until stunEnd
+    exposedEnd?: number;
+    stunEnd?: number;
+    // It can't be stunned again until this tick (BossGuardDef.stunGrace)
+    stunGraceEnd?: number;
+    // A lunge's dash (BossAttackDef line.dash): from (fromX, fromY) to (toX, toY) over these
+    // ticks, stunned at the end if it's run into a pillar (stuck)
+    dash?: {
+        attack: BossAttackDef;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        startTick: number;
+        endTick: number;
+        stuck: boolean;
+    };
     // BossDef.shadowRealm, exhumes or yellows: how many have begun, and the one it's in, until
     // endTick or, for exhumes, its exhumeds are all smothered (left, -1 for the others)
     ordealsDone?: number;
     ordeal?: { endTick: number; left: number; during: { attacks: string[]; interval: number } };
+    // One's due but waiting for expert's projectile to land: no more of expert's own meanwhile
+    ordealHeld?: boolean;
+};
+
+// A rhythm of a boss's (BossAttackDef.cycle) since startTick: when each player
+// (by index) can be hurt by it again
+export type BossCycle = {
+    attack: BossAttackDef;
+    startTick: number;
+    nextHit: number[];
 };
 
 // A boss's big entrance (BossDef.intro)
@@ -174,6 +225,9 @@ export type EnemyLeaving = {
 export type GroundHazard = {
     uid: number;
     enemyUid: number;
+    // Its boss's EnemyDef id, kept for once the boss is gone (what its hits are said to be from,
+    // and its armour cap)
+    enemyId: string;
     attack: BossAttackDef;
     x: number;
     y: number;
@@ -192,6 +246,9 @@ export type GroundHazard = {
     // and when it next hurts whoever's in it
     lingerEnd: number;
     nextHurt: number;
+    // A square this far either way of x, y rather than the circle radius (a
+    // checker's cell); unset for a circle
+    half?: number;
     // An exhumed's ticks stood in so far (GroundPatternDef.smother)
     stood?: number;
 };
@@ -235,6 +292,9 @@ export type BulletEmitter = {
     // Where a pattern with origin "target" comes out of: where the player stood as it began
     originX?: number;
     originY?: number;
+    // A row attack's rows (BulletPatternDef.rows), by index, and when it began
+    rows?: number[];
+    startTick?: number;
 };
 
 // The player's controls shuffled (PlayerEffectDef curse): x and y of what's
@@ -512,6 +572,20 @@ export type EnemyProjectile = {
     // A normal enemy's shot rather than a boss attack: it only lands when a
     // crowd's hit could (not just after the player was hit)
     crowd?: boolean;
+    // A wave's or a boomerang's (BossAttackDef.wave, boomerang): who it's hit (by
+    // hero index), and a boomerang's who it's hit on the way back
+    hit?: number[];
+    // A boomerang: thrown from here (by this statue), turning back at turnTick
+    boomerang?: {
+        fromX: number;
+        fromY: number;
+        turnTick: number;
+        hitBack: number[];
+        statue?: ArenaStatue;
+    };
+    // An attack that turns on its boss (BossAttackDef.turns): it's caught it on the way out
+    // (1) and back (2)
+    hitBoss?: number;
 };
 
 export type PickupKind = "bones" | "coins" | "food" | "casket" | "powerUp";
@@ -590,6 +664,10 @@ export type Effect = {
     // Scaled so the model's radius is this many tiles (a claw's hands, as
     // wide as the spot they come up in), rather than drawn as it is
     fitRadius?: number;
+    // Turned this way (a lunge's trail along its strip), rather than as it is
+    yaw?: number;
+    // Gone once its animation's played, however long it's kept (an impact's dust)
+    once?: boolean;
 };
 
 // A multicannon set up by a power-up
@@ -740,6 +818,9 @@ export type DamageSource =
     | `weapon:${string}`
     | `item:${string}`
     | `powerUp:${string}`
+    // A fight's button (MapDef.fight.ability), and its arena's attacks that turned on the boss
+    | `ability:${string}`
+    | "court"
     | "recoil"
     | "other";
 
@@ -860,6 +941,30 @@ type SimEventBody =
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
     | { type: "bossSwing"; x: number; y: number; radius: number }
+    // Something of a fight's landed hard at (x, y): the camera shakes (0 to 1) and the screen
+    // can flash (ImpactDef)
+    | { type: "bossImpact"; x: number; y: number; shake: number; flash?: string }
+    // A boss's guard is down (BossDef.guard): exposed, or stunned, and by what (the attack's
+    // name: its own that missed, or its arena's that caught it, or "Pillar")
+    | {
+          type: "bossGuard";
+          enemyId: string;
+          stunned: boolean;
+          cause: string;
+          x: number;
+          y: number;
+      }
+    // The fight's button was used (MapDef.fight.ability), and on the boss it hit
+    // opened: the boss's guard was down (BossDef.guard), so it did double
+    | {
+          type: "ability";
+          abilityId: string;
+          enemyId: string;
+          sound: number;
+          x: number;
+          y: number;
+          opened: boolean;
+      }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
@@ -873,6 +978,9 @@ type SimEventBody =
           x: number;
           y: number;
       }
+    // A statue the fight draws (BossAttackDef.statues) starts this animation:
+    // the one of locId whose south-west tile is x, y
+    | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it

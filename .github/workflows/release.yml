@@ -115,10 +115,12 @@ jobs:
             - run: npm run build
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
+                  VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
             - run: npm run slim-cache
             - run: npm run desktop:dist
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
+                  VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:

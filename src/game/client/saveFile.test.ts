@@ -9,6 +9,16 @@ function setNavigator(values: { standalone?: boolean; canShare?: unknown; share?
     }
 }
 
+// jsdom's Blob has no text(), but its FileReader reads one
+function readText(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+    });
+}
+
 describe("saveFile", () => {
     let click: ReturnType<typeof vi.spyOn>;
     let downloaded: string[];
@@ -34,6 +44,29 @@ describe("saveFile", () => {
         setNavigator({ standalone: true, canShare: () => true, share: shareSpy });
         return shareSpy;
     }
+
+    test("downloads the save as it is, typed as bytes rather than JSON", async () => {
+        setNavigator({});
+        saveFile(NAME, '{"coins":5}', "application/json");
+        expect(downloaded).toEqual([NAME]);
+        const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+        expect(blob.type).toBe("application/octet-stream");
+        expect(await readText(blob)).toBe('{"coins":5}');
+    });
+
+    test("keeps the download's link while iOS asks whether to download", () => {
+        vi.useFakeTimers();
+        try {
+            setNavigator({});
+            saveFile(NAME, "{}", "application/json");
+            vi.advanceTimersByTime(30_000);
+            expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(30_000);
+            expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:save");
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 
     test("downloads in a browser that isn't an installed game on iOS", () => {
         const share = vi.fn(async () => {});

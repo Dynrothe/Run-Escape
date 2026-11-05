@@ -36,6 +36,7 @@ import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../../src/game/conte
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
+import { PETS } from "../../src/game/content/pets";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
@@ -260,7 +261,9 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
     ];
     const bakeLoader = new ActorBakeLoader();
     const enemyRequests = GameAssets.getEnemyRequests(ENEMIES);
-    for (const all of [GameAssets.getBaseRequests(), enemyRequests, playerRequests]) {
+    // Pets are baked as they're picked, not with the base: every one of them
+    const petRequests = GameAssets.getPetRequests(PETS);
+    for (const all of [GameAssets.getBaseRequests(), enemyRequests, petRequests, playerRequests]) {
         // The game bakes a map's worth at a time. Everything in one buffer is more
         // than an array can hold (Invalid array length).
         for (let i = 0; i < all.length; i += BAKE_BATCH) {
