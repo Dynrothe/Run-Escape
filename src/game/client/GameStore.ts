@@ -320,6 +320,8 @@ export type ChoiceView = {
     banishable: boolean;
     // Banished: greyed out, and can't be picked
     banished: boolean;
+    // A weapon whose style a raid's bosses all pray against: what it loses against them
+    bossPenalty?: string;
 };
 
 // Co-op: a player in the run besides you, for the party frames

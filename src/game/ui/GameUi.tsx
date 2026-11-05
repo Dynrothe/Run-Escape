@@ -2234,6 +2234,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                     {choice.stats && choice.stats.length > 0 && (
                                         <ChoiceStats stats={choice.stats} />
                                     )}
+                                    {choice.bossPenalty && (
+                                        <div className="ui-card-penalty">{choice.bossPenalty}</div>
+                                    )}
                                 </div>
                                 {choice.rarity && (
                                     <span

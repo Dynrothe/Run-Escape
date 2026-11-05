@@ -9,6 +9,8 @@ the version in the corner).
 
 - Theatre of Blood, by Okaeri: the Maiden's Blood burst comes half as often, so melee can stay in
   on her.
+- Theatre of Blood, by Okaeri: a ranged or magic weapon's level up card says, in red, that it does
+  85% less damage to the bosses, as they pray against it.
 
 ### Fixed
 

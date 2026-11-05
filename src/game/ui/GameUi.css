@@ -1976,6 +1976,11 @@
     color: #ff5a5a;
 }
 
+/* A weapon whose style a raid's bosses pray against: what it loses against them */
+.ui-card-penalty {
+    color: #ff5a5a;
+}
+
 /* What a card's weapon or passive evolves; bright once the other half's owned */
 .ui-card-evolves {
     color: #b8aa8a;

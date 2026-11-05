@@ -26,6 +26,7 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
+import { getRaidBossShare } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
@@ -34,7 +35,7 @@ import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { getWeapon } from "../content/weapons";
+import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
@@ -263,6 +264,26 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
     };
 }
 
+// A raid whose bosses all pray against a weapon's style (the Theatre's, against ranged and
+// magic): what its card says it loses against them
+function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
+    const weaponId =
+        choice.kind === "evolve" || choice.kind === "hilt"
+            ? choice.into
+            : choice.kind === "newWeapon" || choice.kind === "weaponLevel"
+              ? choice.weaponId
+              : undefined;
+    if (!weaponId) {
+        return undefined;
+    }
+    const style = getWeaponStyle(getWeapon(weaponId));
+    const share = getRaidBossShare(sim.map, style, sim.expert);
+    if (share === undefined) {
+        return undefined;
+    }
+    return `-${Math.round((1 - share) * 100)}% damage to bosses: they pray against ${style}`;
+}
+
 function getChoiceViews(sim: Sim): ChoiceView[] {
     const style = getCharacter(sim.characterId).style;
     return sim.choices.map((choice, index) => {
@@ -282,6 +303,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
             banished: sim.isBanishedChoice(index),
+            bossPenalty: getBossPenalty(sim, choice),
         };
     });
 }
