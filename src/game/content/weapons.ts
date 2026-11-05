@@ -27,6 +27,8 @@ const SHORTBOWS = [841, 843, 849, 853, 857, 861];
 const ARROWS = { bronze: 10, iron: 9, steel: 11, black: 14, mithril: 12, adamant: 13, rune: 15 };
 // Darts in flight: the metals recolour one model, and dragon has its own
 const DART_PROJECTILES = { bronze: 226, steel: 228, mithril: 229, rune: 231, dragon: 1122 };
+// Bolt items keep the metals distinct; most share the same tiny flight graphic.
+const BOLT_PROJECTILES = { bronze: 877, steel: 9141, mithril: 9142, runite: 9144, dragon: 21905 };
 // Bronze to rune, then dragon
 const THROWNAXES = [800, 801, 802, 803, 804, 805, 20849, 20849];
 // Thrownaxes in flight, spinning: one model the metals recolour, and the
@@ -2042,6 +2044,8 @@ export const WEAPONS: WeaponDef[] = [
         id: "armadyl_crossbow",
         name: "Armadyl crossbow",
         kind: "missile",
+        projectileScale: 3,
+        projectileYawOffset: 1024,
         description:
             "Fires bolts at the nearest enemy that pass through it. One in five is enchanted: a ruby's takes a fifth of what's left of its hitpoints, a diamond's goes on through more, a dragonstone's burns.",
         iconObjId: 11785,
@@ -2084,13 +2088,28 @@ export const WEAPONS: WeaponDef[] = [
                 duration: 0,
                 knockback: 0.4,
                 objId: 11785,
-                // A crossbow bolt
-                projectileSpotAnim: 27,
+                projectileObjId: BOLT_PROJECTILES.bronze,
             },
-            { damage: 18, description: "+3 damage." },
-            { amount: 2, description: "Fires one more bolt." },
-            { cooldown: 0.85, description: "Fires a little faster." },
-            { damage: 23, description: "+5 damage." },
+            {
+                projectileObjId: BOLT_PROJECTILES.steel,
+                damage: 18,
+                description: "Steel bolts. +3 damage.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.mithril,
+                amount: 2,
+                description: "Mithril bolts. Fires one more bolt.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.runite,
+                cooldown: 0.85,
+                description: "Runite bolts. Fires a little faster.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.dragon,
+                damage: 23,
+                description: "Dragon bolts. +5 damage.",
+            },
         ),
         unlock: { kind: "killBoss", mapId: "god_wars", enemyId: "kreearra" },
     },

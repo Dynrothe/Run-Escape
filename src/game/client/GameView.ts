@@ -505,8 +505,12 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
-                scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+            const yaw = (projectile.yaw + (projectile.weapon?.projectileYawOffset ?? 0)) & 2047;
+            actors.draw(model, anim, frame, x, height, y, yaw, {
+                scale:
+                    projectile.kind === "rune"
+                        ? RUNE_SCALE
+                        : (projectile.weapon?.projectileScale ?? 1),
             });
         }
 

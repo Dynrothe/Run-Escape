@@ -9725,7 +9725,7 @@ export class Sim {
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
-            objId: kind === "knife" ? (level.projectileObjId ?? level.objId ?? -1) : -1,
+            objId: level.projectileObjId ?? (kind === "knife" ? (level.objId ?? -1) : -1),
             startTick: this.tick,
             ...(def.split && { split: def.split }),
         });

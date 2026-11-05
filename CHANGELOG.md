@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- The Armadyl crossbow, by @braiansmarzaro: clearer bolts that upgrade from bronze to dragon as it levels.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added
