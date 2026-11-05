@@ -539,6 +539,8 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
     "extraRevive",
     "playerCursed",
     "ability",
+    "songToll",
+    "songGrace",
 ]);
 
 // levelUp and chest wait for the player to choose
@@ -7407,7 +7409,22 @@ export class Sim {
         }
         const inBar = song.beat - song.barBeat;
         this.emit({ type: "songBeat", beat: song.beat, inBar, ticksPerBeat: song.ticksPerBeat });
+        // The water rings out from the tenor, but not in a rest
+        const tenor = this.map.features?.tenor;
+        const ripple = def.ripple;
         const phase = boss?.bossState?.phase;
+        const resting =
+            (song.rest !== undefined && this.tick >= song.rest.fromTick - def.early) ||
+            // and the quiet bar of a key change, before its count-in
+            (phase?.pauseEnd !== undefined && this.tick < (phase.riseTick ?? 0));
+        if (tenor && ripple && boss && !resting) {
+            const { x, y } = statueMiddle(tenor);
+            this.addImpactSpot(
+                { spotAnim: ripple.spotAnim, fit: inBar === 0 ? ripple.downbeatFit : ripple.fit },
+                x,
+                y,
+            );
+        }
         // Its lanes play once it's up and between thresholds
         song.playing =
             boss !== undefined &&
@@ -7424,6 +7441,8 @@ export class Sim {
     private startLanes(song: SongState, def: SongDef, boss: Enemy): void {
         const phaseDef = def.phases[Math.min(song.phase, def.phases.length - 1)];
         const bands = this.map.features?.bands?.length ?? 0;
+        // Her reflection sings in the phases with a canon
+        song.reflection = phaseDef.canon === true;
         for (const lane of ["arena", "voice"] as const) {
             const free = lane === "voice" ? song.voiceFree : song.arenaFree;
             // Under the water (her leash's leap), she has no voice
@@ -7503,7 +7522,9 @@ export class Sim {
             y: boss.y,
         };
         song.phrases.push(phrase);
-        song.reflection = canon;
+        if (canon) {
+            song.reflection = true;
+        }
         const state = boss.bossState!;
         const axis = this.songAxis();
         switch (def.kind) {

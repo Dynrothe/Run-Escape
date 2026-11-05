@@ -266,6 +266,10 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // What it does, for its tooltip
+    hint: string;
+    // A song's Resonance (BossDef.song), as pips round it
+    pips?: { value: number; max: number };
 };
 
 // One player's own numbers for the results screen (a teammate who fell or

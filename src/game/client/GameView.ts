@@ -50,6 +50,7 @@ import {
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
+import { SongView } from "./SongView";
 
 const FROZEN_TINT = 0xa8d8ff;
 // Co-op teammates' names and arrows, like a friend's name in the client, and
@@ -235,7 +236,7 @@ export class GameView {
     // teammate (GameClient sets it)
     viewHero = 0;
 
-    private readonly fight: BossFightView;
+    readonly fight: BossFightView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
 
@@ -270,7 +271,7 @@ export class GameView {
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
         for (const event of events) {
-            this.fight.onEvent(event, now, sim.tick);
+            this.fight.onEvent(event, now, sim.tick, sim.focus);
             switch (event.type) {
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
@@ -947,9 +948,14 @@ export class GameView {
             const moving =
                 Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
             anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
-            // Offset by uid so a crowd doesn't move in lockstep
-            frame = anim.getFrame(tick + enemy.uid * 7);
+            // Offset by uid so a crowd doesn't move in lockstep; a song's boss sways a loop a bar
+            const conducted = moving
+                ? undefined
+                : SongView.conductTick(sim, enemy, alpha, anim.totalTicks);
+            frame = anim.getFrame(conducted ?? tick + enemy.uid * 7);
         }
+        // Under the water at a song's threshold (BossDef.song)
+        sink = Math.max(sink, SongView.sinkOf(sim, enemy, alpha));
         let height =
             this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
             (sink * model.height * enemy.scale) / 128;
@@ -979,7 +985,7 @@ export class GameView {
         // The boss is hit all the time; a full flash would leave him white
         let flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
         if (enemy.boss && !enemy.dead && sim.isExposed(enemy)) {
-            tint = EXPOSED_TINT;
+            tint = def.boss?.look?.exposedTint ?? EXPOSED_TINT;
             flash = Math.max(
                 flash,
                 EXPOSED_FLASH *

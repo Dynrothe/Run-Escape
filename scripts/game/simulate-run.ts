@@ -23,7 +23,8 @@
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
-//                    # half the chances to use the fight's button
+//                    # half the chances to use the fight's button. On a song (the Bell Choir)
+//                    # it tolls up to 150 ms off the beat and misses one beat in six instead
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -36,8 +37,9 @@ import { RUN_LENGTH } from "../../src/game/content/waves";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
-import { behindPillar } from "../../src/game/core/arena";
-import { SimEvent } from "../../src/game/core/entities";
+import { behindPillar, statueMiddle } from "../../src/game/core/arena";
+import { SimEvent, SongNote } from "../../src/game/core/entities";
+import { inShape } from "../../src/game/core/song";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
@@ -504,6 +506,248 @@ function useAbility(sim: Sim): void {
     }
 }
 
+// ---- A song's fight (BossDef.song, the Bell Choir): the bot keeps time ----
+// It tolls on every beat it's in reach of her (a careful one on the beat itself; SLOPPY=1 up to
+// 150 ms either side, and missing one in six), stands still for Silence's rest, steps out of what's
+// about to land on the last count when it can (a Grace) and at once when it can't, rings back a
+// bell it can get to while it hums, and otherwise keeps a step outside her clap, inside its reach.
+// In co-op the guests' presses reach the sim GUEST_DELAY ticks late, carrying the tick they were
+// pressed on (the ability action's at), as they do over the network.
+const GUEST_DELAY = 6;
+type SongBot = { beat: number; pressAt: number; pending: { at: number; due: number }[] };
+const songBots = new WeakMap<Sim, Map<number, SongBot>>();
+let botNoise = 12345;
+function noise(): number {
+    botNoise = (botNoise * 1103515245 + 12345) & 0x7fffffff;
+    return botNoise / 0x7fffffff;
+}
+// The 16 ways it can step
+const WAYS = Array.from({ length: 16 }, (_, i) => ({
+    x: Math.cos((i / 16) * Math.PI * 2),
+    y: Math.sin((i / 16) * Math.PI * 2),
+}));
+
+function songOpen(sim: Sim, x: number, y: number): boolean {
+    const r = 0.36;
+    return [
+        [x, y],
+        [x + r, y],
+        [x - r, y],
+        [x, y + r],
+        [x, y - r],
+    ].every(([px, py]) => !sim.grid.isSolid(Math.floor(px), Math.floor(py)));
+}
+
+// What lands within ticks of now, and isn't over
+function songThreats(sim: Sim, within: number): SongNote[] {
+    const song = sim.song!;
+    return song.notes.filter(
+        (note) => note.landTick + note.hurtTicks > sim.tick && note.landTick - sim.tick <= within,
+    );
+}
+
+function songMove(sim: Sim): { x: number; y: number } {
+    const song = sim.song!;
+    const player = sim.player;
+    const boss = sim.shownBoss;
+    const tpb = song.ticksPerBeat;
+    const speed = (4 / TICKS_PER_SECOND) * (sloppy ? 0.85 : 1);
+    // Still for the rest
+    const rest = song.rest;
+    if (rest && sim.tick >= rest.fromTick - 3) {
+        return { x: 0, y: 0 };
+    }
+    // The Psalm: wait at the edge of its band towards the band that surges first, and step across
+    // into that one as soon as it has (a jump-rope on the beat)
+    const psalm = psalmStep(sim, tpb);
+    if (psalm) {
+        return psalm;
+    }
+    // What's about to land on it: out, on the last count if there's time (careful), at once if not
+    const threats = songThreats(sim, tpb + 12);
+    const hits = (x: number, y: number, list: SongNote[]) =>
+        list.some((note) => inShape(note.shape, x, y, 0.35 + 0.15));
+    const now = threats.filter((note) => hits(player.x, player.y, [note]));
+    if (now.length > 0) {
+        const soonest = Math.min(...now.map((note) => note.landTick)) - sim.tick;
+        let best: { way: { x: number; y: number }; ticks: number } | undefined;
+        for (const way of WAYS) {
+            for (let t = 1; t <= 40; t++) {
+                const x = player.x + way.x * speed * t;
+                const y = player.y + way.y * speed * t;
+                if (!songOpen(sim, x, y)) {
+                    break;
+                }
+                // Clear of everything landing by the time it's there
+                if (
+                    !hits(
+                        x,
+                        y,
+                        threats.filter((note) => note.landTick + note.hurtTicks > sim.tick + t),
+                    )
+                ) {
+                    if (!best || t < best.ticks) {
+                        best = { way, ticks: t };
+                    }
+                    break;
+                }
+            }
+        }
+        if (best) {
+            const lastCount = soonest <= tpb - 1;
+            const spare = soonest - best.ticks;
+            if (sloppy || lastCount || spare < tpb / 2 || spare <= 4) {
+                return best.way;
+            }
+            return { x: 0, y: 0 };
+        }
+    }
+    if (!boss || boss.dead) {
+        return { x: 0, y: 0 };
+    }
+    // A bell humming it can reach: there, to ring it back (a careful one; a sloppy one half the time)
+    const bells = sim.map.features?.bells ?? [];
+    const heroSong = sim.heroes.find((hero) => hero.player === player)?.song;
+    if (heroSong && heroSong.resonance >= 2 && (!sloppy || song.beat % 2 === 0)) {
+        for (let i = 0; i < bells.length; i++) {
+            const bell = song.bells[i];
+            if (bell.rung || song.beat > bell.humTo || bell.strikeTick > sim.tick + tpb) {
+                continue;
+            }
+            const middle = statueMiddle(bells[i]);
+            const away = Math.hypot(middle.x - player.x, middle.y - player.y);
+            const ticksLeft = (bell.humTo - song.beat) * tpb + (song.nextTick - sim.tick);
+            if (away - 4 > speed * ticksLeft) {
+                continue;
+            }
+            if (away > 4.2 && sim.tick >= bell.strikeTick) {
+                const step = { x: (middle.x - player.x) / away, y: (middle.y - player.y) / away };
+                if (!hits(player.x + step.x * speed * 4, player.y + step.y * speed * 4, threats)) {
+                    return step;
+                }
+            }
+            if (away <= 4.2) {
+                return { x: 0, y: 0 };
+            }
+        }
+    }
+    // Between her clap and Toll's reach: just outside 3.85, inside 4.5
+    const dx = boss.x - player.x;
+    const dy = boss.y - player.y;
+    const distance = Math.hypot(dx, dy);
+    const want = 4.1;
+    if (Math.abs(distance - want) < 0.3) {
+        return { x: 0, y: 0 };
+    }
+    const sign = distance > want ? 1 : -1;
+    const step = { x: (dx / distance) * sign, y: (dy / distance) * sign };
+    if (hits(player.x + step.x * speed * 4, player.y + step.y * speed * 4, threats)) {
+        return { x: 0, y: 0 };
+    }
+    return songOpen(sim, player.x + step.x * 0.5, player.y + step.y * 0.5)
+        ? step
+        : { x: -step.y, y: step.x };
+}
+
+// The Psalm's band it's in, if it lands within two beats: towards the edge of it the band that
+// lands a beat before is on, then over into that band once it has
+function psalmStep(sim: Sim, tpb: number): { x: number; y: number } | undefined {
+    const song = sim.song!;
+    const player = sim.player;
+    let mine: SongNote | undefined;
+    for (const note of song.notes) {
+        if (
+            note.shape.kind === "box" &&
+            note.landTick + note.hurtTicks > sim.tick &&
+            note.landTick - sim.tick <= 2 * tpb &&
+            inShape(note.shape, player.x, player.y, 0.35) &&
+            (!mine || note.landTick < mine.landTick)
+        ) {
+            mine = note;
+        }
+    }
+    if (!mine || mine.shape.kind !== "box") {
+        return undefined;
+    }
+    const box = mine.shape;
+    // The band that lands the beat before, beside it
+    const before = song.notes.find(
+        (note) =>
+            note.shape.kind === "box" &&
+            note.landTick === mine!.landTick - tpb &&
+            (note.shape.y0 === box.y1 || note.shape.y1 === box.y0),
+    );
+    const side = before?.shape.kind === "box" ? (before.shape.y0 === box.y1 ? 1 : -1) : 0;
+    if (side === 0) {
+        return undefined;
+    }
+    const landed = before!.landTick + before!.hurtTicks <= sim.tick;
+    const edge = side > 0 ? box.y1 - 0.45 : box.y0 + 0.45;
+    const target = landed ? edge + side * 1.2 : edge;
+    const dy = target - player.y;
+    if (Math.abs(dy) < 0.08) {
+        return { x: 0, y: 0 };
+    }
+    // Along the row to an aisle if a pew's in the way
+    if (!songOpen(sim, player.x, player.y + Math.sign(dy) * 0.5)) {
+        const axis = sim.map.features?.axis ?? player.x;
+        return { x: Math.sign(axis - player.x) || 1, y: 0 };
+    }
+    return { x: 0, y: Math.sign(dy) };
+}
+
+// Toll: on the beat (or near it, sloppy), when it'd land on her or ring a bell back
+function songToll(sim: Sim, heroIndex: number, guest: boolean): void {
+    const song = sim.song!;
+    // Each run's its own
+    let bots = songBots.get(sim);
+    if (!bots) {
+        bots = new Map();
+        songBots.set(sim, bots);
+    }
+    let bot = bots.get(heroIndex);
+    if (!bot) {
+        bot = { beat: -1, pressAt: -1, pending: [] };
+        bots.set(heroIndex, bot);
+    }
+    // A guest's presses arrive late, judged at the tick they were pressed on
+    for (const press of bot.pending.filter((p) => p.due <= sim.tick)) {
+        sim.useAbility(press.at);
+    }
+    bot.pending = bot.pending.filter((p) => p.due > sim.tick);
+    // Plans the next beat's press as it comes up
+    const next = song.beat + 1;
+    if (bot.beat < next && song.nextTick - sim.tick <= 8) {
+        bot.beat = next;
+        const off = sloppy ? Math.round((noise() * 2 - 1) * 7) : 0;
+        bot.pressAt = sloppy && noise() < 1 / 6 ? -1 : song.nextTick + off;
+    }
+    if (sim.tick !== bot.pressAt) {
+        return;
+    }
+    if (sim.abilityTarget() === undefined && !nearHum(sim)) {
+        return;
+    }
+    if (guest) {
+        bot.pending.push({ at: sim.tick, due: sim.tick + GUEST_DELAY });
+    } else {
+        sim.useAbility(sim.tick);
+    }
+}
+
+function nearHum(sim: Sim): boolean {
+    const song = sim.song!;
+    const player = sim.player;
+    const bells = sim.map.features?.bells ?? [];
+    return song.bells.some((bell, i) => {
+        if (bell.rung || song.beat + 1 < bell.humFrom || song.beat > bell.humTo || !bells[i]) {
+            return false;
+        }
+        const middle = statueMiddle(bells[i]);
+        return Math.hypot(middle.x - player.x, middle.y - player.y) <= 4.8;
+    });
+}
+
 // Works out what to press for a shuffled direction, as a person soon does
 function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: number } {
     const curse = sim.curse;
@@ -644,7 +888,9 @@ function runOnce(characterId: string, seed: number) {
         if (sim.tick % 25 === 0) {
             useItems(sim);
         }
-        if (sim.tick % 5 === 0) {
+        if (sim.song) {
+            move = songMove(sim);
+        } else if (sim.tick % 5 === 0) {
             move = fightMove(sim) ?? botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
             if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
@@ -666,7 +912,11 @@ function runOnce(characterId: string, seed: number) {
             // Untouchable, as a late endless round's hits are bigger than any health bar
             sim.player.invulnerable = 1e9;
         }
-        useAbility(sim);
+        if (sim.song) {
+            songToll(sim, 0, false);
+        } else {
+            useAbility(sim);
+        }
         const pressed = uncursed(sim, move);
         sim.step(pressed.x, pressed.y);
         const fighting = sim.shownBoss?.bossState?.phase;
@@ -840,10 +1090,15 @@ function runParty(characterId: string, seed: number) {
                 if (sim.tick % 25 === 0) {
                     useItems(sim);
                 }
-                if (sim.tick % 5 === 0) {
-                    moves[hero.index] = fightMove(sim) ?? botMove(sim);
+                if (sim.song) {
+                    moves[hero.index] = songMove(sim);
+                    songToll(sim, hero.index, hero.index > 0);
+                } else {
+                    if (sim.tick % 5 === 0) {
+                        moves[hero.index] = fightMove(sim) ?? botMove(sim);
+                    }
+                    useAbility(sim);
                 }
-                useAbility(sim);
                 const pressed = uncursed(sim, moves[hero.index]);
                 sim.setInput(hero.index, pressed.x, pressed.y);
             });
@@ -883,6 +1138,20 @@ function runParty(characterId: string, seed: number) {
             " each" +
             (fightTicks > 0 ? ", fight " + (fightTicks / TICKS_PER_SECOND).toFixed(0) + "s" : ""),
     );
+    // A song's (the Bell Choir): what hit the party, and where its phases ended
+    if (sim.song) {
+        const byAttack = new Map<string, number>();
+        for (const hero of sim.heroes) {
+            for (const [name, amount] of Object.entries(hero.damageByAttack)) {
+                byAttack.set(name, (byAttack.get(name) ?? 0) + amount);
+            }
+        }
+        const sorted = [...byAttack.entries()].sort((a, b) => b[1] - a[1]);
+        console.log(
+            `  phase ${(sim.shownBoss?.bossState?.phase?.index ?? 0) + 1}, boss attacks that hit: ` +
+                sorted.map(([k, v]) => `${k} ${v}`).join(", "),
+        );
+    }
 }
 
 for (const characterId of characters) {

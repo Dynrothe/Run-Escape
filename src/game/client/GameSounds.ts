@@ -48,6 +48,16 @@ export function getGameSoundIds(): number[] {
         ids.push(boss?.phases?.threshold?.sound ?? -1);
         ids.push(boss?.guard?.stunSound ?? -1, boss?.guard?.exposeSound ?? -1);
         ids.push(enemy.shot?.sound ?? -1, enemy.shot?.hitSound ?? -1);
+        // A song's (BossDef.song): its phrases, Toll, the tenor and the bells
+        const song = boss?.song;
+        if (song) {
+            for (const phrase of song.phrases) {
+                ids.push(phrase.sound ?? -1, phrase.countSound ?? -1);
+                ids.push(phrase.landSound ?? -1, phrase.hitSound ?? -1);
+            }
+            ids.push(song.toll.sound, song.toll.offSound, song.toll.ringSound);
+            ids.push(song.tenorSound ?? -1, ...(song.bellSounds ?? []));
+        }
     }
     for (const weapon of WEAPONS) {
         ids.push(weapon.sound, weapon.hitSound, weapon.special?.sound ?? -1);
@@ -95,6 +105,12 @@ export class GameSounds {
                     audio.playAt(event.sound, event.x, event.y, px, py, {
                         volume: 0.3,
                         minGap: 60,
+                    });
+                } else if (event.type === "songToll") {
+                    // A teammate's hand bell, quieter, from where they are
+                    audio.playAt(event.sound, event.x, event.y, px, py, {
+                        volume: 0.3,
+                        minGap: 0,
                     });
                 } else if (event.type === "powerUp") {
                     audio.playAt(getPowerUp(event.id).sound, event.x, event.y, px, py, {
@@ -162,6 +178,16 @@ export class GameSounds {
                     break;
                 case "ability":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });
+                    break;
+                // A song's (BossDef.song): its phrases as they begin, and the player's Toll
+                case "songPhrase":
+                    audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.8 });
+                    break;
+                case "songToll":
+                    audio.play(event.sound, {
+                        volume: event.rung !== undefined ? 1 : event.onBeat ? 0.8 : 0.6,
+                        minGap: 0,
+                    });
                     break;
                 case "playerHit": {
                     // A boss attack has its own sound (played when it was used)

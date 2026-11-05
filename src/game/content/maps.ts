@@ -451,7 +451,6 @@ export const MAPS: MapDef[] = [
             weaponLevel: 1,
             ability: BELL_CHOIR_TOLL,
         },
-        brightness: 0.85,
         music: "Song of the Silent Choir",
     },
 ];

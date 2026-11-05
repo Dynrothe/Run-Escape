@@ -115,7 +115,8 @@ describe("Sim", () => {
 
     // Half a minute of play for each of them takes a while
     test("every character's starting weapon kills things", () => {
-        for (const { id } of CHARACTERS) {
+        // (a fight's own with no weapon, the Bellringer, does all its damage with the fight's button)
+        for (const { id } of CHARACTERS.filter((c) => c.startingWeapon)) {
             const sim = createSim(id, 7);
             runFor(sim, 30);
             expect(sim.kills).toBeGreaterThan(0);

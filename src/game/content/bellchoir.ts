@@ -235,6 +235,26 @@ const SONG: SongDef = {
         playerSeq: 6865,
     },
     idleSeq: IDLE_SEQ,
+    // Her own small ripples on the water (2453), out from the tenor every beat
+    ripple: { spotAnim: 2453, fit: 2.5, downbeatFit: 4 },
+    tenorSound: TENOR_SOUND,
+    bellSounds: BELL_NOTES,
+    bellLocId: 55814,
+    choirLooks: ["bellchoir_soul", "bellchoir_soul_gold"],
+    reflectionLook: "bellchoir_reflection",
+};
+
+// Never spawned: the choir and her reflection, drawn by the fight (BossFightView's song)
+const PROP = {
+    walkSeq: -1,
+    attackSeq: -1,
+    deathSeq: -1,
+    hp: 1,
+    damage: 0,
+    speed: 0,
+    xp: 0,
+    knockbackResist: 1,
+    sounds: { attack: -1, hit: -1, death: -1 },
 };
 
 export const BELL_CHOIR_ENEMIES: EnemyDef[] = [
@@ -333,5 +353,24 @@ export const BELL_CHOIR_ENEMIES: EnemyDef[] = [
                 blastMessage: "",
             },
         },
+    },
+    // The Silent Choir: Lost Souls, cyan and gold, standing in the water, never fought
+    { ...PROP, id: "bellchoir_soul", name: "Lost Soul", npcId: 12211, idleSeq: 5538, radius: 0.5 },
+    {
+        ...PROP,
+        id: "bellchoir_soul_gold",
+        name: "Lost Soul",
+        npcId: 12212,
+        idleSeq: 5538,
+        radius: 0.5,
+    },
+    // Her head watching from under the water: the Odd Figure
+    {
+        ...PROP,
+        id: "bellchoir_reflection",
+        name: "Odd Figure",
+        npcId: 12203,
+        idleSeq: 10231,
+        radius: 1.5,
     },
 ];

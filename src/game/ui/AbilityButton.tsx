@@ -26,11 +26,12 @@ export function AbilityButton({
             data-silent
             className={abilityClass(ability, touch)}
             aria-label={ability.name}
-            title={`${ability.name}: from right by him, and twice as hard while his guard's down`}
+            title={ability.hint}
             // Keep focus on the game, so Space doesn't press it again
             onMouseDown={(e) => e.preventDefault()}
-            onPointerDown={touch ? () => client.useAbility() : undefined}
-            onClick={touch ? undefined : () => client.useAbility()}
+            // On the press, not its release: a song's beat is judged by when it's pressed
+            onPointerDown={touch || ability.pips ? () => client.useAbility() : undefined}
+            onClick={touch || ability.pips ? undefined : () => client.useAbility()}
         >
             {!touch && <KeyHint keyLabel="Space" pad="south" className="ui-inv-key" />}
             <ItemIcon objId={ability.iconObjId} size={touch ? 40 : 30} />
@@ -39,6 +40,16 @@ export function AbilityButton({
                 style={{ transform: `scaleY(${1 - ability.charge})` }}
             />
             <span className="ui-ability-name">{ability.name}</span>
+            {ability.pips && (
+                <div className="ui-ability-pips" aria-label={`Resonance ${ability.pips.value}`}>
+                    {Array.from({ length: ability.pips.max }, (_, i) => (
+                        <span
+                            key={i}
+                            className={i < ability.pips!.value ? "ui-ability-pip-on" : undefined}
+                        />
+                    ))}
+                </div>
+            )}
         </button>
     );
 }

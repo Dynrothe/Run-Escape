@@ -13,6 +13,7 @@ import {
 } from "../core/entities";
 import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey, getStatueModelKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
+import { SongView } from "./SongView";
 
 // What a boss with a fight of its own puts in the world (BossDef.phases,
 // BossDef.intro): marks on the ground, bullets, the dark of its entrance. All of
@@ -153,9 +154,15 @@ export class BossFightView {
     // which tick, by loc and tile
     private statueSeqs = new Map<string, { seq: number; tick: number }>();
 
-    constructor(private readonly assets: GameAssets) {}
+    // A song's (BossDef.song)
+    readonly song: SongView;
+
+    constructor(private readonly assets: GameAssets) {
+        this.song = new SongView(assets);
+    }
 
     reset(): void {
+        this.song.reset();
         this.beams = [];
         this.gaze = undefined;
         this.statueSeqs.clear();
@@ -163,7 +170,8 @@ export class BossFightView {
         this.curseEndedAt = -1;
     }
 
-    onEvent(event: SimEvent, now: number, tick: number): void {
+    onEvent(event: SimEvent, now: number, tick: number, focus = 0): void {
+        this.song.onEvent(event, now, focus);
         if (event.type === "totemBlast") {
             const { x, y, toX, toY } = event;
             this.beams.push({ x, y, toX, toY, start: now });
@@ -188,6 +196,7 @@ export class BossFightView {
         this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
         this.drawPlayerMarks(actors, sim, alpha);
+        this.song.submitActors(actors, sim, alpha);
         for (const hazard of sim.hazards) {
             this.drawHazard(actors, sim, hazard);
         }
@@ -521,6 +530,7 @@ export class BossFightView {
         this.drawSquareEdge(overlay, sim, scale);
         this.fadeGaze(overlay, sim, now);
         this.drawReach(overlay, sim, alpha, scale);
+        this.song.drawGround(overlay, sim, alpha, now, scale);
         this.flashQuarters(overlay, sim, alpha);
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;

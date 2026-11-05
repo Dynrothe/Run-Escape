@@ -1095,6 +1095,18 @@ export type SongDef = {
     toll: SongTollDef;
     // Its animations: the threshold's sink and rise are BossPhasesDef.threshold's
     idleSeq?: number;
+    // What keeps the beat in the arena: a ripple out from the tenor (ArenaFeatures.tenor) on
+    // every beat, wider on a downbeat, and none in a rest; the tenor's toll on each downbeat and
+    // each great bell's note as it's struck (by ArenaFeatures.bells' order), heard on the beat
+    ripple?: { spotAnim: number; fit: number; downbeatFit: number };
+    tenorSound?: number;
+    bellSounds?: number[];
+    // What the fight draws in the arena: the bells (a loc, lifted and struck by the view), the
+    // choir (enemies never spawned, by ArenaFeatures.choir's order, round again) and the boss's
+    // reflection in the water (SongPhaseDef.canon, and where it sank at a threshold)
+    bellLocId?: number;
+    choirLooks?: string[];
+    reflectionLook?: string;
 };
 
 // A phase's tempo, and the beats each lane rests after a phrase before its next can begin (on the

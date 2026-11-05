@@ -24,6 +24,8 @@ export type PlayOptions = {
     pan?: number;
     // Milliseconds before the same sound can play again
     minGap?: number;
+    // When on the audio clock (GameAudio.clock) to start it, rather than now
+    when?: number;
 };
 
 function loadSettings(): AudioSettings {
@@ -199,7 +201,7 @@ export class GameAudio {
     }
 
     play(id: number, options: PlayOptions = {}): void {
-        this.playAtTime(id, 0, options);
+        this.playAtTime(id, options.when ?? 0, options);
     }
 
     // The audio clock now, in seconds (AudioContext.currentTime), or undefined before the first

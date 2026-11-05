@@ -43,6 +43,7 @@ const LAKE_UNDERLAY = 45;
 // The cathedral's water rings (animated, 3 by 3): one blocks, the other doesn't
 const SOLID_RING = 48324;
 const RING = 48323;
+const RINGS = 14;
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 type Tile = { x: number; y: number };
@@ -220,10 +221,26 @@ function shapeGround(cathedral: Cathedral): void {
         skipLoc: (loc) =>
             walls.includes(loc) || (loc.id === SOLID_RING && inOctagon(loc.x + 1, loc.y + 1)),
     });
-    // The water's rings in the nave are the ones that can be walked through
+    // The water's rings in the nave are the ones that can be walked through, and more of them
     for (const loc of cut.locs) {
         if (loc.id === SOLID_RING && inOctagon(loc.x + 1, loc.y + 1)) {
             ground.grid.locs.push({ ...loc, id: RING, x: A + loc.x, y: A + loc.y });
+        }
+    }
+    const rng = createRng(4176);
+    for (let i = 0; i < RINGS; i++) {
+        const x = NAVE.x0 + Math.floor(rng() * (NAVE.x1 - NAVE.x0 - 2));
+        const y = NAVE.y0 + Math.floor(rng() * (NAVE.y1 - NAVE.y0 - 2));
+        if (inOctagon(x, y) && inOctagon(x + 2, y + 2)) {
+            const rotation = Math.floor(rng() * 4);
+            ground.grid.locs.push({
+                id: RING,
+                type: LOC_NORMAL,
+                rotation,
+                level: 0,
+                x: A + x,
+                y: A + y,
+            });
         }
     }
     for (const wall of walls) {
@@ -241,7 +258,8 @@ function shapeGround(cathedral: Cathedral): void {
         for (let x = 0; x < MAP_SQUARE_SIZE; x++) {
             const tile = cathedral.at(x, y);
             if (inOctagon(x, y)) {
-                level.overlays[tile] = 0;
+                // Shallow: the lake's own water, walked through
+                level.overlays[tile] = LAKE;
                 level.underlays[tile] = floor || LAKE_UNDERLAY;
                 level.flags[tile] &= ~TILE_BLOCKED;
             } else {

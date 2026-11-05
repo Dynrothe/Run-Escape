@@ -113,6 +113,8 @@ import { getPlayerPose } from "./PlayerPose";
 import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
+import { SongAudio } from "./SongAudio";
+import { SongView } from "./SongView";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -429,6 +431,8 @@ export class GameClient implements GameFrameHandler {
     readonly view: GameView;
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
+    // A song's beat and music (BossDef.song)
+    private readonly songAudio: SongAudio;
     readonly cameraRig = new CameraRig();
 
     sim?: Sim;
@@ -506,6 +510,7 @@ export class GameClient implements GameFrameHandler {
         this.grid = titleGrid;
         this.grids.set(TITLE_MAP.id, titleGrid);
         this.sounds = new GameSounds(audio);
+        this.songAudio = new SongAudio(audio);
         store.set({ audio: audio.settings, display: this.display });
         this.view = new GameView(assets);
         this.minimap = new Minimap(mapViewer);
@@ -2034,6 +2039,8 @@ export class GameClient implements GameFrameHandler {
             alpha,
             this.view.localPlayerPose,
         );
+        this.songAudio.update(sim, sim.tick - 1 + alpha, { x: px, y: py }, deltaTimeMs);
+        this.view.fight.song.muted = !this.audio.audible;
         // Aim at the player's chest, not their feet
         let ground = this.grid.getHeight(px, py) / 128;
         if (sim.map.scaperune) {
@@ -2060,7 +2067,7 @@ export class GameClient implements GameFrameHandler {
                 : undefined;
         // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
         // eased both ways so it never steps
-        const light = getGazeLight(sim);
+        const light = getGazeLight(sim) * SongView.light(sim, this.getAlpha());
         this.gazeLight += (light - this.gazeLight) * (1 - Math.exp(-deltaTimeMs / GAZE_LIGHT_EASE));
         const brightness = (hallBrightness ?? sim.map.brightness ?? 1) * this.gazeLight;
         if (brightness !== this.shownBrightness) {
@@ -2077,12 +2084,21 @@ export class GameClient implements GameFrameHandler {
         }
         const boss = sim.shownBoss;
         const left = sim.abilitySecondsLeft();
+        const song = boss?.def.boss?.song;
+        const heroSong = sim.heroes[sim.focus]?.song;
         return {
             name: ability.name,
             iconObjId: ability.iconObjId,
-            charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+            charge: ability.cooldown > 0 ? Math.round((1 - left / ability.cooldown) * 20) / 20 : 1,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+            hint: song
+                ? `${ability.name} on the beat near her to build Resonance; by a humming bell, to ring it back`
+                : `${ability.name}: from right by him, and twice as hard while his guard's down`,
+            ...(song &&
+                heroSong && {
+                    pips: { value: heroSong.resonance, max: song.toll.maxResonance },
+                }),
         };
     }
 
@@ -2611,7 +2627,7 @@ export class GameClient implements GameFrameHandler {
                         : phase.stage === "hp"
                           ? getPhaseBarFraction(shownBoss, phase.index)
                           : phase.shield / phase.shieldMax;
-                const reach = sim.map.fight?.strikeReach;
+                const reach = sim.song ? sim.tollReach() : sim.map.fight?.strikeReach;
                 const player = sim.player;
                 boss.fight = {
                     phase: phase.index + 1,
@@ -2691,12 +2707,14 @@ export class GameClient implements GameFrameHandler {
         if (force || sharedNumbers !== shownNumbers) {
             this.store.setNumbers(sharedNumbers);
         }
+        // A fight whose adventurer has no weapon (the Bellringer) has no slots to show
+        const unarmed = sim.map.fight !== undefined && sim.weapons.length === 0;
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
             level: sim.level,
-            maxWeapons: sim.maxWeapons,
-            maxPassives: sim.maxPassives,
+            maxWeapons: unarmed ? 0 : sim.maxWeapons,
+            maxPassives: unarmed ? 0 : sim.maxPassives,
             weapons: sim.weapons.map((w) => {
                 const last = w.def.levels.length;
                 const level = w.def.levels[Math.min(w.level, last) - 1];

@@ -1921,9 +1921,13 @@ const Hud = memo(function Hud({
             <XpBar level={hud.level} client={client} />
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} />
-                    <GearSlots gear={hud.gear} />
+                    {hud.maxWeapons > 0 && (
+                        <>
+                            <Slots slots={hud.weapons} max={hud.maxWeapons} />
+                            <Slots slots={hud.passives} max={hud.maxPassives} />
+                            <GearSlots gear={hud.gear} />
+                        </>
+                    )}
                 </div>
                 <RunTimer client={client} />
                 <div className="ui-hud-right">

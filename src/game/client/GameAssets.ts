@@ -19,7 +19,7 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
-import { ENEMIES } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { MAPS } from "../content/maps";
 import { getPassive } from "../content/passives";
@@ -28,7 +28,7 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
+import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, MapDef, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
@@ -192,6 +192,11 @@ function getSpotAnimIds(): number[] {
         addImpact(enemy.boss?.intro?.land);
         addImpact(enemy.boss?.phases?.threshold?.impact);
         addImpact(enemy.boss?.phases?.threshold?.riseImpact);
+        const song = enemy.boss?.song;
+        if (song) {
+            add(...song.phrases.map((phrase) => phrase.spot?.spotAnim));
+            add(song.toll.ringSpot?.spotAnim, song.ripple?.spotAnim);
+        }
         add(enemy.boss?.intro?.spotAnim, enemy.boss?.leash?.spotAnim);
         add(enemy.boss?.phases?.totems?.blastSpotAnim, enemy.boss?.phases?.threshold?.spotAnim);
         add(enemy.shield?.spotAnim, enemy.spawns?.spotAnim, enemy.heals?.spotAnim);
@@ -229,14 +234,36 @@ function getWeaponSeqs(weapons: WeaponDef[]): number[] {
 // Every animation the player does with a weapon, and the emote a co-op
 // reviver performs
 export function getPlayerAttackSeqs(): number[] {
-    return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
+    return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ, ...MAPS.flatMap(getFightSeqs)])];
+}
+
+// What a fight's button has the player do (a song's Toll, ringing the crier bell)
+export function getFightSeqs(map: MapDef): number[] {
+    const seqs: number[] = [];
+    const ability = map.fight?.ability?.playerSeq;
+    if (ability !== undefined) {
+        seqs.push(ability);
+    }
+    for (const event of map.events) {
+        const toll =
+            event.kind === "finalBoss"
+                ? getEnemy(event.enemyId).boss?.song?.toll.playerSeq
+                : undefined;
+        if (toll !== undefined) {
+            seqs.push(toll);
+        }
+    }
+    return seqs;
 }
 
 // The attack animations a hero's bake needs: their weapons', and in co-op the
 // reviver's emote. A new weapon changes the hero's appearanceVersion, which
 // re-bakes them with its swing.
 export function getRunAttackSeqs(sim: Sim, hero = sim.focus): number[] {
-    const seqs = getWeaponSeqs(sim.as(hero, () => sim.weapons.map((weapon) => weapon.def)));
+    const seqs = [
+        ...getWeaponSeqs(sim.as(hero, () => sim.weapons.map((weapon) => weapon.def))),
+        ...getFightSeqs(sim.map),
+    ];
     return sim.heroes.length > 1 ? [...seqs, REVIVE_SEQ] : seqs;
 }
 
@@ -343,6 +370,11 @@ export function getStatueSeqs(enemy: EnemyDef): Map<number, number[]> {
         }
         seqs.set(locId, list);
     };
+    // A song's bells, lifted and struck by the view (BossDef.song)
+    const bellLocId = enemy.boss?.song?.bellLocId;
+    if (bellLocId !== undefined) {
+        add(bellLocId);
+    }
     for (const attack of enemy.boss?.attacks ?? []) {
         const statues = attack.statues;
         if (statues) {
@@ -481,6 +513,9 @@ export class GameAssets {
             enemy.boss?.leash?.jump?.upSeq ?? -1,
             enemy.boss?.phases?.threshold?.seq ?? -1,
             enemy.boss?.phases?.threshold?.riseSeq ?? -1,
+            // A song's phrases (BossDef.song)
+            ...(enemy.boss?.song?.phrases.map((p) => p.seq ?? -1) ?? []),
+            enemy.boss?.song?.idleSeq ?? -1,
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
