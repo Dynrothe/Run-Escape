@@ -14,8 +14,9 @@ const CACHES_ROOT = resolve(process.cwd(), "caches");
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
 
 // Which build this is, for co-op: copies of a run from different builds fall
-// out of step, so a room only takes players on the host's. The commit, or
-// when the server started without one.
+// out of step, so a room only takes players on the host's. The slim cache is
+// made for one too (build.json). The commit, or when the server started
+// without one.
 function buildId(): string {
     try {
         const commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
@@ -26,6 +27,25 @@ function buildId(): string {
     } catch {
         return `${version}-${Date.now().toString(36)}`;
     }
+}
+
+// Worked out once, so build.json and the game can't disagree
+const BUILD_ID = buildId();
+
+// Writes build.json beside index.html, for scripts/cache/slim-cache.ts: a slim
+// cache is made for one build, and the game checks that it's the one it's on
+function buildIdFilePlugin(): Plugin {
+    return {
+        name: "build-id-file",
+        apply: "build",
+        generateBundle() {
+            this.emitFile({
+                type: "asset",
+                fileName: "build.json",
+                source: JSON.stringify({ build: BUILD_ID }),
+            });
+        },
+    };
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -79,7 +99,8 @@ function glslIncludesPlugin(): Plugin {
 function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, ""));
+            // The game asks for caches.json?build=<its build>
+            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -220,10 +241,11 @@ export default defineConfig({
         wasmAssetUrlPlugin(),
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
+        buildIdFilePlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),
-        __BUILD_ID__: JSON.stringify(buildId()),
+        __BUILD_ID__: JSON.stringify(BUILD_ID),
     },
     resolve: {
         // ".web.*" takes precedence so browser-specific variants (e.g. Gzip.web.ts)

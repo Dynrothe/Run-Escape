@@ -10,7 +10,13 @@ import { DownloadProgress } from "../rs/cache/CacheFiles";
 import { formatBytes } from "../util/BytesUtil";
 import { isCoarsePointer } from "../util/DeviceUtil";
 import "./GameApp.css";
-import { GAME_CACHE_NAME, deleteOtherGameCaches, findGameCache } from "./cache";
+import {
+    GAME_CACHE_NAME,
+    deleteOtherGameCaches,
+    findGameCache,
+    getCacheMismatch,
+    shouldReloadForCache,
+} from "./cache";
 import { GameClient } from "./client/GameClient";
 import { GameStore } from "./client/GameStore";
 import { SaveLock } from "./client/SaveLock";
@@ -60,7 +66,7 @@ async function loadViewer(
                 "and Cross-Origin-Embedder-Policy: require-corp (see Hosting in the README).",
         );
     }
-    const cacheList = await fetchCacheList();
+    const cacheList = await fetchCacheList(__BUILD_ID__);
     if (!cacheList) {
         throw new Error("Failed to load the cache list (caches/caches.json).");
     }
@@ -69,6 +75,14 @@ async function loadViewer(
         throw new Error(
             `Cache ${GAME_CACHE_NAME} is missing. Download it with bun run download-caches.`,
         );
+    }
+    const mismatch = getCacheMismatch(cacheInfo, __BUILD_ID__);
+    if (shouldReloadForCache(mismatch)) {
+        window.location.reload();
+        return new Promise<never>(() => {});
+    }
+    if (mismatch) {
+        throw new Error(mismatch);
     }
     const cache = await loadCacheFiles(cacheInfo, signal, onProgress);
     deleteOtherGameCaches(cacheInfo.name).catch(console.error);

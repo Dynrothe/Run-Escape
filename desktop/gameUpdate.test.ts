@@ -11,8 +11,10 @@ import {
     MANIFEST_NAME,
     UpdateCheck,
     checkForUpdate,
+    chunkAssetName,
     gameZipName,
     installUpdate,
+    liteZipName,
     readInstalledGames,
     removeOldGames,
 } from "./gameUpdate";
@@ -26,6 +28,8 @@ let server: Server;
 let base: string;
 let dataDir: string;
 let routes: Record<string, Route>;
+// Every path asked for, in order
+let requested: string[];
 let source: ReleaseSource;
 
 const never = new AbortController().signal;
@@ -107,6 +111,7 @@ const workLeftBehind = () => existsSync(path.join(dataDir, "game-update"));
 
 beforeAll(async () => {
     server = createServer((req, res) => {
+        requested.push(req.url!);
         const route = routes[req.url!.split("?")[0]];
         if (route) {
             route(res);
@@ -126,6 +131,7 @@ afterAll(() => {
 
 beforeEach(() => {
     routes = {};
+    requested = [];
     dataDir = mkdtempSync(path.join(tmpdir(), "game-update-"));
     source = {
         latestReleaseUrl: `${base}/api/latest`,
@@ -395,5 +401,152 @@ describe("removeOldGames", () => {
     test("does nothing before there are updates", async () => {
         await removeOldGames(dataDir, { version: "0.20.0", path: "bundled" });
         expect(existsSync(path.join(dataDir, "game"))).toBe(false);
+    });
+});
+
+describe("split updates", () => {
+    const chunkFile = (data: Buffer) => sha256(data).slice(0, 32) + ".bin";
+
+    // A release of 0.21.0 with these chunks: the whole zip, the lite zip and each chunk
+    async function publishSplit(texts: string[], cachesJson?: string) {
+        const chunks = texts.map((text) => Buffer.from(text));
+        const listed = chunks.map((data) => ({ file: chunkFile(data), size: data.byteLength }));
+        const caches = cachesJson ?? JSON.stringify([{ name: "slim", chunks: listed }]);
+        const lite = await gameZip({ "caches/caches.json": caches });
+        const whole = new JSZip();
+        whole.file("index.html", "<html>new</html>").file("caches/caches.json", caches);
+        listed.forEach(({ file }, i) => whole.file(`caches/chunks/${file}`, chunks[i]));
+        const zip = await whole.generateAsync({ type: "nodebuffer" });
+        const manifest: GameManifest = {
+            ...manifestFor(zip),
+            lite: { sha256: sha256(lite), size: lite.byteLength },
+            chunks: listed,
+        };
+        const assets: [string, Buffer][] = [
+            [MANIFEST_NAME, Buffer.from(JSON.stringify(manifest))],
+            [gameZipName("0.21.0"), zip],
+            [liteZipName("0.21.0"), lite],
+            ...listed.map(({ file }, i): [string, Buffer] => [chunkAssetName(file), chunks[i]]),
+        ];
+        for (const [name, body] of assets) {
+            routes[`/assets/${name}`] = bytes(body);
+        }
+        const release = (names: string[]) =>
+            json({
+                tag_name: "v0.21.0",
+                assets: names.map((name) => ({
+                    name,
+                    browser_download_url: `${base}/assets/${name}`,
+                })),
+            });
+        routes["/api/latest"] = release(assets.map(([name]) => name));
+        return { manifest, chunks, files: listed.map(({ file }) => file), assets, release };
+    }
+
+    // A game folder with these chunks in it
+    function gameWithChunks(version: string, chunks: Record<string, Buffer>): string {
+        const folder = installedGame(version);
+        mkdirSync(path.join(folder, "caches", "chunks"), { recursive: true });
+        for (const [file, data] of Object.entries(chunks)) {
+            writeFileSync(path.join(folder, "caches", "chunks", file), data);
+        }
+        return folder;
+    }
+
+    async function installSplit(reuseFrom: string[]) {
+        const update = await check();
+        if (update.kind !== "update") {
+            throw new Error("No update");
+        }
+        requested = [];
+        const fractions: (number | undefined)[] = [];
+        const folder = await installUpdate(
+            update.manifest,
+            update.zipUrl,
+            source,
+            dataDir,
+            never,
+            (fraction) => fractions.push(fraction),
+            undefined,
+            update.split,
+            reuseFrom,
+        );
+        return { folder, fractions };
+    }
+
+    const readChunk = (folder: string, file: string) =>
+        readFileSync(path.join(folder, "caches", "chunks", file), "utf8");
+
+    test("the check finds the lite zip and every chunk", async () => {
+        const { files } = await publishSplit(["one", "two"]);
+        const update = await check();
+        expect(update.kind === "update" && update.split).toEqual({
+            liteUrl: `${base}/assets/${liteZipName("0.21.0")}`,
+            chunkUrls: Object.fromEntries(
+                files.map((file) => [file, `${base}/assets/${chunkAssetName(file)}`]),
+            ),
+        });
+    });
+
+    test("the check leaves it out when a chunk isn't in the release", async () => {
+        const { files, assets, release } = await publishSplit(["one", "two"]);
+        const names = assets.map(([name]) => name);
+        routes["/api/latest"] = release(names.filter((name) => name !== chunkAssetName(files[1])));
+        const update = await check();
+        expect(update.kind).toBe("update");
+        expect(update.kind === "update" && update.split).toBeUndefined();
+    });
+
+    test("copies the chunks the game has and downloads only the rest", async () => {
+        const { chunks, files } = await publishSplit(["kept", "changed"]);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        const { folder, fractions } = await installSplit([old]);
+
+        expect(requested).toEqual([
+            `/assets/${liteZipName("0.21.0")}`,
+            `/assets/${chunkAssetName(files[1])}`,
+        ]);
+        expect(readChunk(folder.path, files[0])).toBe("kept");
+        expect(readChunk(folder.path, files[1])).toBe("changed");
+        expect(fractions[fractions.length - 1]).toBe(1);
+        expect(workLeftBehind()).toBe(false);
+    });
+
+    test("downloads a chunk the game has a damaged copy of", async () => {
+        const { files } = await publishSplit(["kept", "changed"]);
+        const old = gameWithChunks("0.20.0", {
+            [files[0]]: Buffer.from("damaged"),
+            [files[1]]: Buffer.from("changed"),
+        });
+        const { folder } = await installSplit([old]);
+        expect(requested).toEqual([
+            `/assets/${liteZipName("0.21.0")}`,
+            `/assets/${chunkAssetName(files[0])}`,
+        ]);
+        expect(readChunk(folder.path, files[0])).toBe("kept");
+    });
+
+    test("downloads the whole zip when the game has none of the chunks", async () => {
+        const { files } = await publishSplit(["one", "two"]);
+        const { folder } = await installSplit([installedGame("0.20.0")]);
+        expect(requested).toEqual([`/assets/${gameZipName("0.21.0")}`]);
+        expect(readChunk(folder.path, files[1])).toBe("two");
+    });
+
+    test("leaves the old game alone when a chunk downloads as something else", async () => {
+        const { chunks, files } = await publishSplit(["kept", "changed"]);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        routes[`/assets/${chunkAssetName(files[1])}`] = bytes(Buffer.from("tampered"));
+        await expect(installSplit([old])).rejects.toThrow(files[1]);
+        expect(existsSync(path.join(dataDir, "game", "0.21.0"))).toBe(false);
+        expect(existsSync(path.join(old, "index.html"))).toBe(true);
+        expect(workLeftBehind()).toBe(false);
+    });
+
+    test("rejects a game whose caches.json lists a chunk it hasn't got", async () => {
+        const missing = [{ name: "slim", chunks: [{ file: "f".repeat(32) + ".bin", size: 1 }] }];
+        await publishSplit(["one"], JSON.stringify(missing));
+        await expect(installSplit([])).rejects.toThrow();
+        expect(existsSync(path.join(dataDir, "game", "0.21.0"))).toBe(false);
     });
 });

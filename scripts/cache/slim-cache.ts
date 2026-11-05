@@ -1,6 +1,6 @@
 // Writes a slim copy of the game's cache for hosting: only the groups the game
-// reads, in the same dat2 format, so a first visit downloads a few MB instead
-// of the whole cache.
+// reads, in chunks (src/rs/cache/ChunkedCache.ts), so a first visit downloads a
+// few MB instead of the whole cache, and an update only the chunks that changed.
 //
 // What the game reads is found by loading what it loads, with its own loaders:
 // the renderer's textures, every model it bakes (enemies, spot animations,
@@ -11,11 +11,14 @@
 //
 //   bun run tsx scripts/cache/slim-cache.ts [out dir]
 //
-// The out dir (dist/caches by default, so run it after the build) gets a
-// caches.json and the slim cache, named after what's in it so browsers fetch
-// a changed one. Make it again whenever the content changes.
+// The out dir (dist/caches by default, so run it after the build) gets the
+// chunks in chunks/, each named after its sha256, and a caches.json listing
+// them, with the build it was made for (dist/build.json): the game won't load
+// another build's. The same cache and content always give the same chunks.
+// Make it again after every build.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import {
@@ -67,8 +70,18 @@ import {
 import { CacheFiles } from "../../src/rs/cache/CacheFiles";
 import { CacheIndex } from "../../src/rs/cache/CacheIndex";
 import { CacheInfo } from "../../src/rs/cache/CacheInfo";
+import { detectCacheType } from "../../src/rs/cache/CacheType";
+import {
+    CHUNK_DIR,
+    CHUNK_FILE_PATTERN,
+    CacheGroup,
+    buildCacheFiles,
+    getChunkFileName,
+    isChunk,
+    packChunks,
+    readChunk,
+} from "../../src/rs/cache/ChunkedCache";
 import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
-import { Sector } from "../../src/rs/cache/store/Sector";
 import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
 import {
     EquipSlot,
@@ -83,8 +96,6 @@ import { loadCache, loadCacheInfos } from "./load-util";
 // outside the arena and sees 72 tiles (GameApp's RENDER_DISTANCE), so the
 // renderer asks for at most two squares past the edge.
 const MAP_MARGIN = 2;
-
-const SECTOR_SIZE = Sector.SIZE;
 
 const outDir = (process.argv[2] ?? "dist/caches").replace(/\/?$/, "/");
 
@@ -352,53 +363,48 @@ function getGroupSize(files: CacheFiles, indexId: number, archiveId: number): nu
     return (entry[0] << 16) | (entry[1] << 8) | entry[2];
 }
 
-// Writes the groups the way the client stores them: each one in a chain of
-// sectors in the dat2, its index file entry pointing at the first. Index files
-// keep their length; the groups left out have empty entries.
-function writeSlimFiles(full: CacheFiles, keys: string[]): Map<string, Uint8Array> {
+// The groups the game reads, as they are in the full cache. A group the full
+// cache lists but hasn't got can't be kept: those are returned apart.
+function readGroups(full: CacheFiles, keys: string[]): { groups: CacheGroup[]; absent: string[] } {
     const store = MemoryStore.fromFiles(full);
-    const indexFiles = new Map<number, Buffer>();
-    for (const [name, data] of full.files) {
-        const indexId = getIndexId(name);
-        if (indexId !== undefined) {
-            indexFiles.set(indexId, Buffer.alloc(data.byteLength));
-        }
-    }
-
-    // Sector 0 stays empty: an entry pointing there means no group
-    const sectors: Buffer[] = [Buffer.alloc(SECTOR_SIZE)];
-    for (const [indexId, archiveId] of keys.map(parseKey)) {
-        const data = readGroup.call(store, indexId, archiveId);
-        const indexFile = indexFiles.get(indexId);
-        if (data.length === 0 || !indexFile) {
+    const groups: CacheGroup[] = [];
+    const absent: string[] = [];
+    for (const key of keys) {
+        const [indexId, archiveId] = parseKey(key);
+        if (getGroupSize(full, indexId, archiveId) === 0) {
+            absent.push(key);
             continue;
         }
-        const extended = archiveId > 0xffff;
-        const dataSize = extended ? Sector.EXTENDED_DATA_SIZE : Sector.DATA_SIZE;
-        const count = Math.ceil(data.length / dataSize);
-        const first = sectors.length;
-        indexFile.writeUIntBE(data.length, archiveId * SectorCluster.SIZE, 3);
-        indexFile.writeUIntBE(first, archiveId * SectorCluster.SIZE + 3, 3);
-        const bytes = new Uint8Array(data.buffer, data.byteOffset, data.length);
-        for (let chunk = 0; chunk < count; chunk++) {
-            const sector = Buffer.alloc(SECTOR_SIZE);
-            let offset = extended
-                ? sector.writeInt32BE(archiveId, 0)
-                : sector.writeUInt16BE(archiveId, 0);
-            offset = sector.writeUInt16BE(chunk, offset);
-            offset = sector.writeUIntBE(chunk + 1 < count ? first + chunk + 1 : 0, offset, 3);
-            offset = sector.writeUInt8(indexId, offset);
-            sector.set(bytes.subarray(chunk * dataSize, (chunk + 1) * dataSize), offset);
-            sectors.push(sector);
-        }
+        const data = readGroup.call(store, indexId, archiveId);
+        groups.push({
+            indexId,
+            archiveId,
+            data: new Uint8Array(data.buffer, data.byteOffset, data.length),
+        });
     }
+    return { groups, absent };
+}
 
-    const files = new Map<string, Uint8Array>();
-    files.set(CacheFiles.DAT2_FILE_NAME, Buffer.concat(sectors));
-    for (const [indexId, indexFile] of indexFiles) {
-        files.set(CacheFiles.INDEX_FILE_PREFIX + indexId, indexFile);
+// How many archive ids each index file has room for, by index: the slim cache
+// keeps the lengths, so a group it left out reads as missing, not out of range
+function getIndexSizes(full: CacheFiles): number[] {
+    const indexCount = full.files.get(CacheFiles.META_FILE_NAME)!.byteLength / SectorCluster.SIZE;
+    return Array.from({ length: indexCount }, (_, indexId) => {
+        const indexFile = full.files.get(CacheFiles.INDEX_FILE_PREFIX + indexId);
+        return indexFile ? indexFile.byteLength / SectorCluster.SIZE : 0;
+    });
+}
+
+// The build in dist/build.json (written by bun run build), for an out dir in
+// dist. The game checks it against its own.
+function readBuildId(): string | undefined {
+    const file = path.join(outDir, "..", "build.json");
+    try {
+        const { build } = JSON.parse(fs.readFileSync(file, "utf8"));
+        return typeof build === "string" ? build : undefined;
+    } catch {
+        return undefined;
     }
-    return files;
 }
 
 function formatMb(bytes: number): string {
@@ -481,13 +487,22 @@ async function main(): Promise<void> {
         throw new Error(`Cache ${GAME_CACHE_NAME} not found in caches/caches.json`);
     }
     const full = loadCache(fullInfo);
+    const build = readBuildId();
+    if (build === undefined) {
+        console.warn(
+            `No build.json beside ${outDir}: the game won't check that its cache is its own. ` +
+                "Run bun run build first.",
+        );
+    }
 
     console.log(`Loading what the game loads from ${GAME_CACHE_NAME}...`);
     await loadWhatTheGameLoads(full);
     const metaEntries = full.files.files.get(CacheFiles.META_FILE_NAME)!.byteLength;
     for (let indexId = 0; indexId < metaEntries / SectorCluster.SIZE; indexId++) {
-        // The reference tables, for every index
-        reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
+        // The reference tables, for every index there is
+        if (getGroupSize(full.files, CacheIndex.META_INDEX_ID, indexId) > 0) {
+            reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
+        }
     }
     const keys = [...reads].sort((a, b) => {
         const [indexA, archiveA] = parseKey(a);
@@ -496,44 +511,77 @@ async function main(): Promise<void> {
     });
     printSummary(full.files, keys);
 
-    const files = writeSlimFiles(full.files, keys);
-    const hash = createHash("sha256");
-    for (const name of [...files.keys()].sort()) {
-        hash.update(name).update(files.get(name)!);
+    const { groups, absent } = readGroups(full.files, keys);
+    if (absent.length > 0) {
+        // The loaders went on without them. A download of the same cache with
+        // them would give a different slim cache.
+        console.warn(
+            `${absent.length} groups the game asked for aren't in ${GAME_CACHE_NAME}: ` +
+                absent.slice(0, 20).join(", ") +
+                (absent.length > 20 ? ", ..." : ""),
+        );
     }
-    const name = `${GAME_CACHE_NAME}-slim-${hash.digest("hex").slice(0, 8)}`;
-    let size = 0;
-    for (const data of files.values()) {
-        size += data.byteLength;
-    }
-    const slimInfo: CacheInfo = { ...fullInfo, name, size, slimOf: GAME_CACHE_NAME };
+    const chunks = packChunks(groups);
+    const files = await Promise.all(chunks.map(getChunkFileName));
+    const indexSizes = getIndexSizes(full.files);
+    const xteas: Record<string, number[]> = JSON.parse(
+        fs.readFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, "utf8"),
+    );
+    // Named after what's in it, not the build, so it's the same wherever it's made
+    const hash = createHash("sha256")
+        .update(JSON.stringify({ files, indexSizes, xteas }))
+        .digest("hex");
+    const name = `${GAME_CACHE_NAME}-slim-${hash.slice(0, 8)}`;
+    const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const slimInfo: CacheInfo = {
+        ...fullInfo,
+        name,
+        size,
+        slimOf: GAME_CACHE_NAME,
+        build,
+        indexSizes,
+        xteas,
+        chunks: files.map((file, i) => ({ file, size: chunks[i].byteLength })),
+    };
 
-    const dir = outDir + name + "/";
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    for (const [fileName, data] of files) {
-        fs.writeFileSync(dir + fileName, data);
-    }
-    fs.copyFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, dir + "keys.json");
+    const chunkDir = outDir + CHUNK_DIR;
+    fs.mkdirSync(chunkDir, { recursive: true });
+    files.forEach((file, i) => fs.writeFileSync(chunkDir + file, chunks[i]));
 
     console.log(`Checking ${name}...`);
-    try {
-        await checkSlimCache(full, loadCache(slimInfo, outDir), keys);
-    } catch (e) {
-        fs.rmSync(dir, { recursive: true, force: true });
-        throw e;
+    // From what's on disk, put back together the way the game does
+    const written = files.map((file) => new Uint8Array(fs.readFileSync(chunkDir + file)));
+    for (let i = 0; i < files.length; i++) {
+        if (!(await isChunk(files[i], written[i]))) {
+            throw new Error(`${chunkDir}${files[i]} isn't what was written`);
+        }
     }
+    const slim: LoadedCache = {
+        info: slimInfo,
+        type: detectCacheType(slimInfo),
+        files: buildCacheFiles(written.flatMap(readChunk), indexSizes),
+        xteas: full.xteas,
+    };
+    await checkSlimCache(full, slim, keys);
 
-    // Only the newest slim cache stays
+    // Only this slim cache's chunks stay, and none of the older whole ones
+    for (const entry of fs.readdirSync(chunkDir)) {
+        if (CHUNK_FILE_PATTERN.test(entry) && !files.includes(entry)) {
+            fs.rmSync(chunkDir + entry);
+        }
+    }
     for (const entry of fs.readdirSync(outDir)) {
-        if (entry !== name && entry.startsWith(GAME_CACHE_NAME + "-slim-")) {
+        if (/-slim-[0-9a-f]+$/.test(entry)) {
             fs.rmSync(outDir + entry, { recursive: true, force: true });
         }
     }
     fs.writeFileSync(outDir + "caches.json", JSON.stringify([slimInfo]), "utf8");
 
     const seconds = ((performance.now() - started) / 1000).toFixed(0);
-    console.log(`Wrote ${outDir}${name} (${formatMb(size).trim()}) in ${seconds}s`);
+    console.log(
+        `Wrote ${outDir}caches.json: ${name}, ${files.length} chunks ` +
+            `(${formatMb(size).trim()}), for build ${build ?? "(none)"}, in ${seconds}s`,
+    );
 }
 
 main().catch((e) => {

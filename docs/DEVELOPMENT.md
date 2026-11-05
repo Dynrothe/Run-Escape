@@ -15,39 +15,76 @@ bun run slim-cache
 ```
 
 writes the game to `dist/`, with a slim copy of the cache in `dist/caches/`: only what the game
-reads, about 26 MB instead of 227 MB. Put what's in `dist/` on a web server, at the site's root or
+reads, about 22 MB instead of 227 MB. Put what's in `dist/` on a web server, at the site's root or
 in a folder (asset paths are relative, so https://example.com/game/ works):
 
 ```
 index.html
+build.json
 assets/
 caches/caches.json
-caches/osrs-241_2026-09-30-slim-<hash>/
+caches/chunks/<sha256>.bin
 ```
 
 `bun run slim-cache` loads everything the game loads (every model it bakes, an icon for every
 item, each map's arena and the map squares around it) with the game's own loaders and keeps the
-groups they read. Then it loads it all again from the slim copy and fails if anything is missing.
-It takes a couple of minutes. Run it again after changing the content (a new enemy, item or map),
-or the game stops on a "missing from the cache" error. The slim cache is named after what's in it,
-so players' browsers fetch the new one and drop the old. `bun run preview` serves the build with
-its slim cache, to try it before uploading. The full cache works too, if you'd rather host that.
-The map viewer (`?viewer=1`) needs the full one.
+groups they read. It writes them in chunks (`src/rs/cache/ChunkedCache.ts`), each a range of
+archive ids from one index, named after the first 32 hex digits of its sha256, and lists them in
+`caches.json` with the build they're for (from `dist/build.json`, which the build writes). Then
+it loads it all again from the chunks and fails if anything is missing. It takes a few minutes.
+**Run it after every build**: `bun run build` empties `dist/`. `bun run preview` serves the build
+with its slim cache, to try it before uploading. The full cache works too, if you'd rather host
+that, and the map viewer (`?viewer=1`) needs it.
 
-The server has to send two headers with the page. The game shares the cache with its workers in
-a SharedArrayBuffer, which browsers only allow on a cross-origin isolated page; without them the
-game says so instead of loading:
+- **The same cache and content give the same chunks**, byte for byte, on any machine, and the
+  same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
+  a change to a group renames only its own chunk, and a player who's played before downloads only
+  that one. Changing a span renames that index's chunks.
+- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses. It
+  checks each one it downloads against its name, and after loading drops the ones `caches.json`
+  doesn't list.
+- **A cache made for another build** would stop partway through loading, on a group it hasn't
+  got, so the game checks `caches.json`'s build against its own before it starts. On a mismatch it
+  reloads the page once, as the page may be an old copy, and then says what's wrong rather than
+  loading. That's what a server with an old `caches.json` and a new build shows: run
+  `bun run slim-cache` again.
+
+The chunks and `assets/` are named after what's in them, so they can be kept for good. Everything
+else changes under the same name, so it has to be checked with the server each time:
+
+| Path                                      | `Cache-Control`                       |
+| ----------------------------------------- | ------------------------------------- |
+| `assets/*`, `caches/chunks/*.bin`         | `public, max-age=31536000, immutable` |
+| Everything else, `caches/caches.json` too | `no-cache`                            |
+
+`bun run serve` sends these. The game asks for `caches.json` with `no-cache` and its build in the
+query, so a browser or CDN that keeps it anyway can't give a new page an old one. Upload the
+chunks before `caches.json` and `index.html`, and if you can, leave the old chunks there for a
+while, so a page that started loading before the upload can finish.
+
+The server has to send two more headers with the page. The game shares the cache with its workers
+in a SharedArrayBuffer, which browsers only allow on a cross-origin isolated page; without them
+the game says so instead of loading:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-With nginx, in the game's `location` block:
+With nginx, for a game at the site's root (`add_header` in a `location` replaces the ones outside
+it, so each has all three):
 
 ```
-add_header Cross-Origin-Opener-Policy same-origin always;
-add_header Cross-Origin-Embedder-Policy require-corp always;
+location / {
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cache-Control no-cache always;
+}
+location ~ ^/(assets|caches/chunks)/ {
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+}
 ```
 
 With Apache, in an `.htaccess` beside `index.html` (needs mod_headers):
@@ -55,6 +92,10 @@ With Apache, in an `.htaccess` beside `index.html` (needs mod_headers):
 ```
 Header set Cross-Origin-Opener-Policy "same-origin"
 Header set Cross-Origin-Embedder-Policy "require-corp"
+Header set Cache-Control "no-cache"
+<If "%{REQUEST_URI} =~ m#/(assets|caches/chunks)/#">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</If>
 ```
 
 It needs HTTPS (or localhost) for the browser's cache storage, and a folder's address with its
@@ -300,9 +341,9 @@ bun run desktop         # the app, on this build, with no update check
 bun run desktop:dist    # everything a release carries, in release/
 ```
 
-`desktop:dist` stops if `dist/caches` isn't the slim cache. It needs Node 22.12 or later (Electron
-does), and Electron's binary downloads the first time it's run. Dev runs keep their saves in a
-`Run Escape Dev` folder, so they can't touch a real one.
+`desktop:dist` stops if `dist/caches` isn't the slim cache made for this build. It needs Node
+22.12 or later (Electron does), and Electron's binary downloads the first time it's run. Dev runs
+keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 
 | File                   | What it does                                                      |
 | ---------------------- | ----------------------------------------------------------------- |
@@ -312,7 +353,7 @@ does), and Electron's binary downloads the first time it's run. Dev runs keep th
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
-| `release-files.ts`     | Makes the game zip, the manifest and the release notes            |
+| `release-files.ts`     | Makes the game zips, the chunks, the manifest and the notes       |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
 
 ### Where things are kept
@@ -335,14 +376,15 @@ Nothing listens on a port. `gameServer.ts` answers the game's requests inside th
 it's on purpose:
 
 - **It can't be a custom scheme.** `app://` gets cross-origin isolation and `fetch`, but the Cache
-  API's `put()` refuses anything but http(s) with `Request scheme 'app' is unsupported`, and
-  `CacheFiles.ts` waits on those puts, so the game fails on its first load.
+  API's `put()` refuses anything but http(s) with `Request scheme 'app' is unsupported`, and the
+  game keeps its cache with `put()`.
 - `.invalid` can never resolve, so a request that somehow got out wouldn't reach anyone.
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
-- `CacheFiles.ts` resumes with `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back
-  to what it has, so a server that ignores Range corrupts the cache. `gameServer.ts` clamps the
-  end and answers 206, with a `Content-Length` of what's left.
+- `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has, so a server
+  that ignores Range corrupts the cache. `gameServer.ts` clamps the end and answers 206, with a
+  `Content-Length` of what's left.
 
 Interception only works reliably for one session per process, so don't add a second.
 
@@ -354,7 +396,8 @@ The launcher updates the game's files by itself, not the launcher. At launch:
    a 5 second limit. Drafts aren't returned, so publishing is what lets players have it.
 2. If the release's `game-manifest.json` has a newer version than the game it has, it shows a small
    window, downloads `game-<version>.zip`, checks its sha256, extracts it to a temporary folder and
-   renames that to `game/<version>` in the user data folder. Then it removes older ones.
+   renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
+   can, it downloads less (below).
 3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
    as they are after unzipping a newer launcher.
 
@@ -370,6 +413,18 @@ Downloads start only from this repository's release URLs, over https. GitHub the
 Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
 Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
 checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+
+A release also carries the game in two parts: `game-<version>-lite.zip`, the game zip without
+`caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
+them (`lite`, with its sha256 and size, and `chunks`). A launcher that knows them copies the chunks
+the game it's playing already has, each checked against its name, and downloads the lite zip and
+only the chunks that changed, each checked too. If it has none to copy (a game from before chunks),
+it downloads the whole zip, as one download is quicker than one per chunk. Launchers from before
+this ignore both and download the whole zip, so it didn't need a new `LAUNCHER_VERSION`. Either
+way, a game whose `caches.json` lists a chunk it hasn't got isn't installed.
+
+The game's Cache API copy of the chunks is under `GAME_ORIGIN`, which never changes, so after an
+update the game reads the chunks it had from there, and drops the ones it no longer needs.
 
 ### When the launcher has to change
 
@@ -394,9 +449,10 @@ hand.
 
 It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
 `GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
-`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip` and
-`game-manifest.json`. **Publishing the draft by hand is what releases it to players**, and the tag
-only exists from then on. A version needs its own section in `CHANGELOG.md`, or the build fails.
+`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
+`game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`.
+**Publishing the draft by hand is what releases it to players**, and the tag only exists from then
+on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
 The app isn't signed, so Windows shows a SmartScreen warning the first time it's run (More info,
 then Run anyway). Unzip it first: running it from inside the zip fails.
@@ -1003,7 +1059,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.
 - **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
-  room only takes players on the host's, as different builds fall out of step.
+  room only takes players on the host's, as different builds fall out of step. The slim cache
+  checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
   run, rather than everyone waiting on a copy that can't recover.

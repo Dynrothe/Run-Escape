@@ -98,10 +98,12 @@ function findFile(urlPath) {
     }
 }
 
-// Built files and the slim cache are named after what's in them, so they
-// keep; the page and the notice (edited on the server) are checked each time
+// Built files and the slim cache's chunks are named after what's in them, so
+// they keep. Everything else is checked each time: the page, caches.json (which
+// says which chunks to load) and the notice change under the same name, and so
+// can the full cache when download-caches fills it in.
 function cacheControl(urlPath) {
-    return urlPath.startsWith("/assets/") || /^\/caches\/[^/]+\//.test(urlPath)
+    return urlPath.startsWith("/assets/") || /^\/caches\/chunks\/[0-9a-f]{32}\.bin$/.test(urlPath)
         ? "public, max-age=31536000, immutable"
         : "no-cache";
 }

@@ -131,6 +131,7 @@ jobs:
                   path: |
                       release/Run-Escape-*-win-x64.zip
                       release/game-*.zip
+                      release/cache-*.bin
                       release/game-manifest.json
                       release/notes.md
                   if-no-files-found: error
@@ -156,7 +157,8 @@ jobs:
                   VERSION: ${{ needs.check.outputs.version }}
                   DRAFT_EXISTS: ${{ needs.check.outputs.draft }}
               run: |
-                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/game-manifest.json)
+                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/cache-*.bin
+                      release/game-manifest.json)
                   if [ "$DRAFT_EXISTS" = true ]; then
                       gh release upload "v$VERSION" "${files[@]}" --clobber
                       gh release edit "v$VERSION" --notes-file release/notes.md --target "$GITHUB_SHA"

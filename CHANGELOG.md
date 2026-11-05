@@ -3,6 +3,20 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Smaller game updates, by trippy22: the game's files from the cache come in parts, and an update
+  downloads only the parts that changed, on the website and in the desktop app. The first download
+  is smaller too.
+
+### Fixed
+
+- From this version on, when the website's updated, a copy of the page the browser kept from
+  before reloads itself, rather than stopping partway through loading on a "missing from the
+  cache" error. Fixed by trippy22.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added
