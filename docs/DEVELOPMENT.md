@@ -565,7 +565,7 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       map's fires (`cycleStage`), as an ambient.
     - A map can't play a placed loc's animation on demand (a map square bakes each loc with its
       own animation), so the statues an attack animates are drawn by the fight and left out of
-      the map (`Court.forFight` in `owlsCourt.ts`): `statues` names the loc and its animations, the
+      the map (`Placer.standIn`, which `owlsCourt.ts` uses): `statues` names the loc and its animations, the
       sim's `statueSeq` events say when each starts, and `BossFightView.drawStatues` draws them
       still until then. A loc bake takes `seqs` for that (`getStatueModelKey`).
     - `BossDef.look` gives the shared fight screen its own colours (`edge` and `vignette` can be

@@ -236,6 +236,24 @@ describe("the Owl's Court", () => {
         expect(writeTerrain(again, 0, 0)).toEqual(writeTerrain(grid, 0, 0));
     });
 
+    // view-weight.ts counts them, as the fight draws them: 18 crossbowmen, 2 knights, 4 fire jets
+    it("hands on what the fight draws in the map's place, in grid tiles", () => {
+        expect(map.standIns).toHaveLength(24);
+        expect(map.standIns).toEqual(
+            drawn.map(({ id, x, y, rotation }) => ({
+                id,
+                type: 10,
+                rotation,
+                level: 0,
+                x: base + x,
+                y: base + y,
+            })),
+        );
+        expect(map.standIns!.some((loc) => grid.locs.some((placed) => placed.id === loc.id))).toBe(
+            false,
+        );
+    });
+
     it("stands where the map says, its boss arena the court", () => {
         const arena = getRecipeArena(OWLS_COURT_RECIPE);
         expect(arena).toEqual({ baseX: 83 * 64, baseY: 77 * 64, sizeX: 64, sizeY: 64 });
