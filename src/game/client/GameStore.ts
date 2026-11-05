@@ -170,6 +170,8 @@ export type HudNumbers = {
     tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
     // Akkha's shadows: how many are up, and seconds till they flood
     tombsShadows?: { left: number; seconds: number };
+    // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
+    tombsScabaras?: { solved: number; of: number; target: number; sum: number };
     // Dev server only: god mode's on (GameClient.toggleDevGod)
     devGod?: boolean;
     hp: number;

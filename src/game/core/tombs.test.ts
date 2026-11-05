@@ -1443,3 +1443,314 @@ describe("Akkha", () => {
         expect(sim.tombsAkkha!.stand!.corner).not.toBe(corner);
     });
 });
+
+// The Scabaras room's boards in the open field
+const grid3 = (xs: number[], ys: number[]) =>
+    xs.flatMap((x) => ys.map((y) => ({ x: x + 0.5, y: y + 0.5 })));
+const SCABARAS_DEF = {
+    sequence: grid3([1030, 1032, 1034, 1036], [1050, 1052, 1054]),
+    lights: [
+        [1050, 1048],
+        [1052, 1048],
+        [1054, 1048],
+        [1054, 1050],
+        [1054, 1052],
+        [1052, 1052],
+        [1050, 1052],
+        [1050, 1050],
+    ].map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 })),
+    addition: grid3([1030, 1032, 1034, 1036], [1020, 1022, 1024]),
+    matching: {
+        north: grid3([1050, 1052, 1054], [1020, 1022, 1024]),
+        south: grid3([1050, 1052, 1054], [1010, 1012, 1014]),
+    },
+};
+const TEST_SCABARAS: MapDef = {
+    ...TEST_TOMBS,
+    id: "test_scabaras",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                id: "scabaras",
+                name: "Path of Scabaras",
+                door: { x: 1042.5, y: 1036.5 },
+                room: {
+                    arrive: { x: 1044.5, y: 1036.5 },
+                    puzzle: "scabaras",
+                    entrances: [{ x: 1028.5, y: 1040.5 }],
+                    scabaras: SCABARAS_DEF,
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_SCABARAS.id, TEST_SCABARAS);
+
+describe("the Scabaras room", () => {
+    // Off every board
+    const AWAY = { x: 1044.5, y: 1036.5 };
+    function scabaras(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_SCABARAS.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.tombsPath).toBe("scabaras");
+        stand(sim, AWAY);
+        expect(sim.tombsRoom!.scabaras).toBeDefined();
+        return sim;
+    }
+    const room = (sim: Sim) => sim.tombsRoom!.scabaras!;
+    // On a plate (or anywhere) for a tick, nothing falling meanwhile
+    function stand(sim: Sim, at: { x: number; y: number }): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        if (scabaras) {
+            scabaras.nextRockTick = sim.tick + 1000;
+        }
+        sim.player.invulnerable = 0;
+        sim.player.x = sim.player.prevX = at.x;
+        sim.player.y = sim.player.prevY = at.y;
+        if (sim.state === "chest") {
+            sim.resolveChest("take");
+        }
+        if (sim.state === "levelUp") {
+            sim.choose(0);
+        }
+        sim.step();
+    }
+    // Onto a plate from off every board, and back off
+    function step(sim: Sim, at: { x: number; y: number }): void {
+        stand(sim, AWAY);
+        stand(sim, at);
+        stand(sim, AWAY);
+    }
+    // Till the Sequence's order has been shown
+    function shown(sim: Sim): void {
+        for (let i = 0; i < 30 * TICKS_PER_SECOND; i++) {
+            const sequence = room(sim).sequence;
+            if (sim.tick >= sim["scabarasShowEnd"](sequence)) {
+                return;
+            }
+            sim.player.hp = sim.player.maxHp;
+            stand(sim, AWAY);
+        }
+    }
+    const caskets = (sim: Sim) => sim.pickups.filter((p) => p.kind === "casket").length;
+
+    it("lays out every board as it begins", () => {
+        const sim = scabaras();
+        const scabaras_ = room(sim);
+        expect(scabaras_.sequence.order).toHaveLength(5);
+        expect(new Set(scabaras_.sequence.order).size).toBe(5);
+        expect(scabaras_.lights.every((lit) => lit)).toBe(false);
+        const { target, values } = scabaras_.addition;
+        expect(target).toBeGreaterThanOrEqual(20);
+        expect(target).toBeLessThanOrEqual(45);
+        expect(values.every((v) => v >= 1 && v <= 9)).toBe(true);
+        expect([...scabaras_.matching.north].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(scabaras_.matching.matched.filter((m) => m)).toHaveLength(4);
+        expect(sim.tombsRoom!.wave).toBe(0);
+    });
+
+    it("makes everything harder with the path level", () => {
+        const sim = scabaras(["pathmaster"]);
+        expect(room(sim).sequence.order).toHaveLength(8);
+        expect(room(sim).matching.matched.filter((m) => m)).toHaveLength(1);
+        expect(sim["scabarasRockEvery"]()).toBeLessThan(4.5);
+    });
+
+    describe("Sequence", () => {
+        it("lights its plates one at a time, in its order", () => {
+            const sim = scabaras();
+            const lit: number[] = [];
+            for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
+                const plate = sim.scabarasLitPlate;
+                if (plate !== undefined && lit[lit.length - 1] !== plate) {
+                    lit.push(plate);
+                }
+                stand(sim, AWAY);
+            }
+            expect(lit).toEqual(room(sim).sequence.order);
+        });
+
+        it("is solved by stepping on its plates in order, for a casket and the next wave", () => {
+            const sim = scabaras();
+            shown(sim);
+            const before = caskets(sim);
+            for (const plate of room(sim).sequence.order) {
+                step(sim, SCABARAS_DEF.sequence[plate]);
+            }
+            expect(room(sim).solved).toEqual(["sequence"]);
+            expect(caskets(sim) + (sim.state === "chest" ? 1 : 0)).toBeGreaterThan(before);
+            expect(sim.tombsRoom!.wave).toBe(1);
+        });
+
+        it("does nothing while it's being shown", () => {
+            const sim = scabaras();
+            const order = [...room(sim).sequence.order];
+            const wrong = SCABARAS_DEF.sequence.findIndex((_, i) => i !== order[0]);
+            sim.player.hp = sim.player.maxHp;
+            step(sim, SCABARAS_DEF.sequence[wrong]);
+            expect(sim.player.hp).toBe(sim.player.maxHp);
+            expect(room(sim).sequence.order).toEqual(order);
+        });
+
+        it("brings the roof down on a wrong plate, and shows a new order", () => {
+            const sim = scabaras();
+            shown(sim);
+            const old = room(sim).sequence;
+            const wrong = SCABARAS_DEF.sequence.findIndex((_, i) => i !== old.order[0]);
+            sim.player.hp = sim.player.maxHp;
+            stand(sim, SCABARAS_DEF.sequence[wrong]);
+            expect(sim.player.maxHp - sim.player.hp).toBeGreaterThanOrEqual(
+                Math.round(sim.player.maxHp * 0.25),
+            );
+            expect(room(sim).sequence).not.toBe(old);
+            expect(room(sim).sequence.step).toBe(0);
+            expect(room(sim).shards.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe("Lights out", () => {
+        it("turns a plate and the two beside it", () => {
+            const sim = scabaras();
+            room(sim).lights.fill(true);
+            step(sim, SCABARAS_DEF.lights[0]);
+            expect(room(sim).lights).toEqual([false, false, true, true, true, true, true, false]);
+        });
+
+        it("is solved once all eight are lit", () => {
+            const sim = scabaras();
+            const lights = room(sim).lights;
+            lights.fill(true);
+            lights[2] = lights[3] = lights[4] = false;
+            step(sim, SCABARAS_DEF.lights[3]);
+            expect(room(sim).solved).toEqual(["lights"]);
+        });
+
+        it("has a light go out now and then", () => {
+            const sim = scabaras();
+            room(sim).lights.fill(true);
+            room(sim).lights[0] = false;
+            for (let i = 0; i < 15 * TICKS_PER_SECOND; i++) {
+                sim.player.hp = sim.player.maxHp;
+                stand(sim, AWAY);
+            }
+            expect(room(sim).lights.filter((lit) => !lit).length).toBeGreaterThan(1);
+        });
+    });
+
+    describe("Addition", () => {
+        // Plates that make n, from the board's values
+        function making(values: number[], n: number): number[] | undefined {
+            const find = (from: number, left: number): number[] | undefined => {
+                if (left === 0) {
+                    return [];
+                }
+                for (let i = from; i < values.length; i++) {
+                    if (values[i] <= left) {
+                        const rest = find(i + 1, left - values[i]);
+                        if (rest) {
+                            return [i, ...rest];
+                        }
+                    }
+                }
+                return undefined;
+            };
+            return find(0, n);
+        }
+
+        it("is solved by making the tablet's number", () => {
+            const sim = scabaras();
+            const { values, target } = room(sim).addition;
+            const plates = making(values, target)!;
+            expect(plates).toBeDefined();
+            for (const plate of plates) {
+                step(sim, SCABARAS_DEF.addition[plate]);
+            }
+            expect(room(sim).solved).toEqual(["addition"]);
+            expect(sim.scabarasInfo!.sum).toBe(target);
+        });
+
+        it("brings the roof down past it, and starts over", () => {
+            const sim = scabaras();
+            const addition = room(sim).addition;
+            addition.target = 20;
+            addition.values = addition.values.map(() => 9);
+            step(sim, SCABARAS_DEF.addition[0]);
+            step(sim, SCABARAS_DEF.addition[1]);
+            sim.player.hp = sim.player.maxHp;
+            stand(sim, SCABARAS_DEF.addition[2]);
+            expect(sim.player.hp).toBeLessThan(sim.player.maxHp * 0.8);
+            expect(addition.sum).toBe(0);
+            expect(addition.stepped.some((s) => s)).toBe(false);
+        });
+    });
+
+    describe("Matching", () => {
+        it("won't turn till the other three are solved", () => {
+            const sim = scabaras();
+            step(sim, SCABARAS_DEF.matching.north[0]);
+            expect(room(sim).matching.up).toEqual({});
+        });
+
+        it("keeps a pair that matches, hides one that doesn't, and ends the room", () => {
+            const sim = scabaras();
+            const scabaras_ = room(sim);
+            scabaras_.solved.push("sequence", "lights", "addition");
+            const { north, south } = scabaras_.matching;
+            const tileOf = (board: number[], symbol: number) => board.indexOf(symbol);
+            const left = north.filter((symbol) => !scabaras_.matching.matched[symbol]);
+            // A wrong pair first
+            const a = left[0];
+            const b = left[1];
+            sim.player.hp = sim.player.maxHp;
+            step(sim, SCABARAS_DEF.matching.north[tileOf(north, a)]);
+            stand(sim, SCABARAS_DEF.matching.south[tileOf(south, b)]);
+            expect(sim.player.hp).toBeLessThan(sim.player.maxHp * 0.8);
+            expect(scabaras_.matching.matched[a]).toBe(false);
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                sim.player.hp = sim.player.maxHp;
+                stand(sim, AWAY);
+            }
+            expect(scabaras_.matching.up).toEqual({});
+            // Then every pair
+            for (const symbol of left) {
+                step(sim, SCABARAS_DEF.matching.north[tileOf(north, symbol)]);
+                step(sim, SCABARAS_DEF.matching.south[tileOf(south, symbol)]);
+            }
+            expect(scabaras_.solved).toContain("matching");
+            expect(sim.tombsRoom!.doneTick).toBeDefined();
+        });
+    });
+
+    it("drops rocks on you, which break into shards", () => {
+        const sim = scabaras();
+        room(sim).nextRockTick = sim.tick;
+        sim.player.x = sim.player.prevX = AWAY.x;
+        sim.player.y = sim.player.prevY = AWAY.y;
+        sim.step();
+        const rock = room(sim).rocks[0];
+        expect(rock).toBeDefined();
+        expect(Math.abs(rock.x - AWAY.x)).toBeLessThanOrEqual(2);
+        sim.player.hp = sim.player.maxHp;
+        for (let i = 0; i < 2 * TICKS_PER_SECOND && room(sim).rocks.length > 0; i++) {
+            sim.player.invulnerable = 0;
+            sim.player.x = sim.player.prevX = rock.x;
+            sim.player.y = sim.player.prevY = rock.y;
+            room(sim).nextRockTick = sim.tick + 1000;
+            sim.step();
+        }
+        expect(room(sim).rocks).toHaveLength(0);
+        expect(sim.player.hp).toBeLessThan(sim.player.maxHp);
+    });
+});

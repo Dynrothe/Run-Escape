@@ -88,9 +88,12 @@ import {
     JUNGLE_JAPES,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
+    SCABARAS,
+    SCABARAS_WAVES,
     TOMBS_BOSSES,
     getApmekenTrickle,
     getHetTrickle,
+    getScabarasTrickle,
 } from "../content/tombs";
 import {
     PUMPKIN_CHANCE,
@@ -758,6 +761,36 @@ type TombsRoom = {
     boss?: { uid: number; beatenTick?: number };
     // The Het room's puzzle, once it's begun (Sim.stepHet)
     het?: HetRoom;
+    // The Scabaras room's, once it's begun (Sim.stepScabaras)
+    scabaras?: ScabarasRoom;
+};
+
+type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
+type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
+// The Scabaras room's puzzles (SCABARAS in tombs.ts): which are solved; Sequence's order, when
+// it's shown from and how far through it the party is; Lights out's ring and when a light next
+// goes out; Addition's values, its number, what's been stepped on and what that makes;
+// Matching's symbol on each tile of its two boards, which are matched, the tile turned up on each
+// and when an unmatched pair hides again; the plate each hero's on; the rocks falling and their
+// shards
+export type ScabarasRoom = {
+    solved: ScabarasPuzzle[];
+    sequence: { order: number[]; showFrom: number; step: number };
+    lights: boolean[];
+    nextDarkTick: number;
+    addition: { values: number[]; target: number; stepped: boolean[]; sum: number };
+    matching: {
+        north: number[];
+        south: number[];
+        matched: boolean[];
+        up: { north?: number; south?: number };
+        hideTick: number;
+    };
+    standing: (string | undefined)[];
+    rocks: { x: number; y: number; landTick: number }[];
+    nextRockTick: number;
+    // Harmless till armTick, once they're clear of where the rock came down
+    shards: { x: number; y: number; vx: number; vy: number; life: number; armTick: number }[];
 };
 
 type HetDef = NonNullable<NonNullable<TombsPathDef["room"]>["het"]>;
@@ -4491,7 +4524,13 @@ export class Sim {
             if (!room || !room.started || room.doneTick !== undefined || room.boss) {
                 return [];
             }
-            // The Het room's swarms, or the Apmeken room's baboons
+            // The Scabaras room's scarabs, the Het room's swarms, or the Apmeken room's baboons
+            if (this.tombsPathRoom?.scabaras) {
+                const trickle = getScabarasTrickle(Math.max(0, room.wave));
+                return [
+                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                ];
+            }
             if (this.tombsPathRoom?.het) {
                 const trickle = getHetTrickle(Math.max(0, room.wave));
                 return [
@@ -5266,7 +5305,8 @@ export class Sim {
         const room = this.tombsRoom;
         const spots = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.spots;
         const het = this.tombsPathRoom?.het;
-        if (!room || (!spots && !het) || this.runOver || this.state !== "playing") {
+        const scabaras = this.tombsPathRoom?.scabaras;
+        if (!room || (!spots && !het && !scabaras) || this.runOver || this.state !== "playing") {
             return;
         }
         if (room.boss) {
@@ -5294,6 +5334,8 @@ export class Sim {
                 room.started = true;
                 if (het) {
                     this.startHet(room, het);
+                } else if (scabaras) {
+                    this.startScabaras(room, scabaras);
                 } else {
                     room.nextIssueTick = this.tick + secondsToTicks(this.apmekenIssueEvery());
                     this.nextApmekenWave();
@@ -5305,6 +5347,10 @@ export class Sim {
         this.stepApmekenGroup(room);
         if (het) {
             this.stepHet(room, het);
+            return;
+        }
+        if (scabaras) {
+            this.stepScabaras(room, scabaras);
             return;
         }
         const alive = new Set(this.enemies.filter((e) => !e.dead).map((e) => e.uid));
@@ -5320,6 +5366,470 @@ export class Sim {
             }
         }
         this.stepApmekenIssue(room, spots!);
+    }
+
+    // ---- The Scabaras room ----
+
+    // Begins: every board laid out afresh, the first wave in
+    private startScabaras(room: TombsRoom, def: ScabarasDef): void {
+        const level = this.tombsPathLevel;
+        room.scabaras = {
+            solved: [],
+            sequence: this.newScabarasSequence(def, SCABARAS.showAfter),
+            lights: this.scrambleScabarasLights(def, SCABARAS.scramble + level),
+            nextDarkTick: this.tick + secondsToTicks(this.scabarasDarkenEvery()),
+            addition: this.layOutScabarasAddition(def),
+            matching: this.layOutScabarasMatching(def, level),
+            standing: new Array<string | undefined>(this.heroes.length).fill(undefined),
+            rocks: [],
+            nextRockTick: this.tick + secondsToTicks(this.scabarasRockEvery()),
+            shards: [],
+        };
+        this.nextScabarasWave(room);
+        this.emit({
+            type: "notice",
+            message:
+                "Four puzzles: follow the plates' order (north-east), light the ring (south-east), " +
+                "make the tablet's number (north), then match the symbols (west).",
+        });
+        this.emit({
+            type: "notice",
+            message:
+                "The symbols: " +
+                SCABARAS.symbolNames.map((name, i) => `${name} ${i + 1}`).join(", ") +
+                ".",
+        });
+    }
+
+    private scabarasDarkenEvery(): number {
+        return Math.max(SCABARAS.darkenLeast, SCABARAS.darken - 1.5 * this.tombsPathLevel);
+    }
+
+    private scabarasRockEvery(): number {
+        return Math.max(SCABARAS.rockEveryLeast, SCABARAS.rockEvery - 0.5 * this.tombsPathLevel);
+    }
+
+    // A new order for the Sequence's plates, shown after so many seconds: no plate twice
+    private newScabarasSequence(def: ScabarasDef, after: number): ScabarasRoom["sequence"] {
+        const steps = Math.min(SCABARAS.sequenceMost, SCABARAS.sequenceSteps + this.tombsPathLevel);
+        const plates = def.sequence.map((_, i) => i);
+        const order: number[] = [];
+        for (let i = 0; i < steps && plates.length > 0; i++) {
+            order.push(plates.splice(this.rng.int(plates.length), 1)[0]);
+        }
+        return { order, showFrom: this.tick + secondsToTicks(after), step: 0 };
+    }
+
+    // The ring all lit, then so many of its plates stepped on: never all lit as it starts
+    private scrambleScabarasLights(def: ScabarasDef, presses: number): boolean[] {
+        const count = def.lights.length;
+        for (let attempt = 0; attempt < 20; attempt++) {
+            const lights = new Array<boolean>(count).fill(true);
+            const plates = lights.map((_, i) => i);
+            for (let i = 0; i < Math.min(presses, count); i++) {
+                this.toggleScabarasLight(lights, plates.splice(this.rng.int(plates.length), 1)[0]);
+            }
+            if (lights.some((lit) => !lit)) {
+                return lights;
+            }
+        }
+        const lights = new Array<boolean>(count).fill(true);
+        lights[0] = false;
+        return lights;
+    }
+
+    // A plate on the ring, stepped on: it and the two beside it change
+    private toggleScabarasLight(lights: boolean[], plate: number): void {
+        const count = lights.length;
+        for (const i of [plate - 1, plate, plate + 1]) {
+            const at = (i + count) % count;
+            lights[at] = !lights[at];
+        }
+    }
+
+    // Addition's symbols, and a number some of them make, from targetLeast to targetMost
+    private layOutScabarasAddition(def: ScabarasDef): ScabarasRoom["addition"] {
+        const values = def.addition.map(() => 1 + this.rng.int(9));
+        let target = 0;
+        for (let attempt = 0; attempt < 40; attempt++) {
+            const plates = values.map((_, i) => i);
+            const take = 4 + this.rng.int(3);
+            let sum = 0;
+            for (let i = 0; i < take; i++) {
+                sum += values[plates.splice(this.rng.int(plates.length), 1)[0]];
+            }
+            target = sum;
+            if (sum >= SCABARAS.targetLeast && sum <= SCABARAS.targetMost) {
+                break;
+            }
+        }
+        return { values, target, stepped: values.map(() => false), sum: 0 };
+    }
+
+    // Matching's boards: the nine symbols on each, shuffled apart, and preSolved of them matched
+    private layOutScabarasMatching(def: ScabarasDef, level: number): ScabarasRoom["matching"] {
+        const shuffled = () => {
+            const symbols = def.matching.north.map((_, i) => i);
+            for (let i = symbols.length - 1; i > 0; i--) {
+                const j = this.rng.int(i + 1);
+                [symbols[i], symbols[j]] = [symbols[j], symbols[i]];
+            }
+            return symbols;
+        };
+        const north = shuffled();
+        const south = shuffled();
+        const matched = north.map(() => false);
+        const solved = Math.max(0, SCABARAS.preSolved - level);
+        for (let i = 0; i < solved; i++) {
+            matched[north[i]] = true;
+        }
+        return { north, south, matched, up: {}, hideTick: -1 };
+    }
+
+    private nextScabarasWave(room: TombsRoom): void {
+        room.wave = Math.min(room.wave + 1, SCABARAS_WAVES.length - 1);
+        room.waveTick = this.tick;
+        const ids = [...SCABARAS_WAVES[room.wave]];
+        for (let i = 0; i < this.tombsPathLevel; i++) {
+            ids.push(ids[ids.length - 1]);
+        }
+        room.group = [];
+        room.pending = [...room.pending, ...ids];
+        room.nextOutTick = this.tick;
+    }
+
+    // When the Sequence's order has been shown
+    private scabarasShowEnd(sequence: ScabarasRoom["sequence"]): number {
+        return (
+            sequence.showFrom +
+            sequence.order.length * secondsToTicks(SCABARAS.flash + SCABARAS.gap)
+        );
+    }
+
+    // The Sequence's plate lit now while its order's shown, if any
+    get scabarasLitPlate(): number | undefined {
+        const sequence = this.tombsRoom?.scabaras?.sequence;
+        if (!sequence || this.tick < sequence.showFrom) {
+            return undefined;
+        }
+        const each = secondsToTicks(SCABARAS.flash + SCABARAS.gap);
+        const since = this.tick - sequence.showFrom;
+        const i = Math.floor(since / each);
+        if (i >= sequence.order.length || since - i * each >= secondsToTicks(SCABARAS.flash)) {
+            return undefined;
+        }
+        return sequence.order[i];
+    }
+
+    // The room's puzzles for the HUD: how many solved, and Addition's number and what's made
+    get scabarasInfo(): { solved: number; of: number; target: number; sum: number } | undefined {
+        const scabaras = this.tombsRoom?.scabaras;
+        if (!scabaras || this.tombsRoom?.doneTick !== undefined) {
+            return undefined;
+        }
+        return {
+            solved: scabaras.solved.length,
+            of: 4,
+            target: scabaras.addition.target,
+            sum: scabaras.addition.sum,
+        };
+    }
+
+    private stepScabaras(room: TombsRoom, def: ScabarasDef): void {
+        const scabaras = room.scabaras;
+        if (!scabaras) {
+            return;
+        }
+        this.stepScabarasPlates(room, scabaras, def);
+        if (room.doneTick !== undefined) {
+            return;
+        }
+        // Lights out: a scarab knocks one out now and then
+        if (!scabaras.solved.includes("lights") && this.tick >= scabaras.nextDarkTick) {
+            scabaras.nextDarkTick = this.tick + secondsToTicks(this.scabarasDarkenEvery());
+            const lit = scabaras.lights.flatMap((on, i) => (on ? [i] : []));
+            if (lit.length > 0) {
+                scabaras.lights[lit[this.rng.int(lit.length)]] = false;
+                this.emit({
+                    type: "notice",
+                    message: "A scarab scuttles over the ring: a light goes out!",
+                });
+            }
+        }
+        // Matching's turned-up pair, hidden again
+        const matching = scabaras.matching;
+        if (matching.hideTick !== -1 && this.tick >= matching.hideTick) {
+            matching.hideTick = -1;
+            matching.up = {};
+        }
+        this.stepScabarasRocks(scabaras);
+    }
+
+    // Who's on which plate: stepping on one (from off it) is what works it
+    private stepScabarasPlates(room: TombsRoom, scabaras: ScabarasRoom, def: ScabarasDef): void {
+        const boards: [string, { x: number; y: number }[]][] = [
+            ["s", def.sequence],
+            ["l", def.lights],
+            ["a", def.addition],
+            ["n", def.matching.north],
+            ["m", def.matching.south],
+        ];
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                scabaras.standing[hero.index] = undefined;
+                continue;
+            }
+            const { x, y } = hero.player;
+            let on: string | undefined;
+            for (const [board, plates] of boards) {
+                const i = plates.findIndex(
+                    (p) =>
+                        Math.abs(p.x - x) <= SCABARAS.plateReach &&
+                        Math.abs(p.y - y) <= SCABARAS.plateReach,
+                );
+                if (i !== -1) {
+                    on = board + i;
+                    break;
+                }
+            }
+            if (on === scabaras.standing[hero.index]) {
+                continue;
+            }
+            scabaras.standing[hero.index] = on;
+            if (on) {
+                this.use(hero);
+                this.stepOnScabaras(room, scabaras, def, on[0], Number(on.slice(1)));
+                if (room.doneTick !== undefined) {
+                    break;
+                }
+            }
+        }
+        this.use(current);
+    }
+
+    // A plate stepped on, by the current hero
+    private stepOnScabaras(
+        room: TombsRoom,
+        scabaras: ScabarasRoom,
+        def: ScabarasDef,
+        board: string,
+        plate: number,
+    ): void {
+        const solved = (puzzle: ScabarasPuzzle) => scabaras.solved.includes(puzzle);
+        if (board === "s" && !solved("sequence")) {
+            const sequence = scabaras.sequence;
+            // Nothing while it's being shown, or on a plate already done
+            if (
+                this.tick < this.scabarasShowEnd(sequence) ||
+                sequence.order.indexOf(plate) < sequence.step
+            ) {
+                return;
+            }
+            if (sequence.order[sequence.step] !== plate) {
+                this.scabarasWrong("The plate gives way: the roof comes down on you!");
+                scabaras.sequence = this.newScabarasSequence(def, SCABARAS.retry);
+                return;
+            }
+            sequence.step++;
+            if (sequence.step === sequence.order.length) {
+                this.solveScabaras(room, scabaras, "sequence");
+            }
+            return;
+        }
+        if (board === "l" && !solved("lights")) {
+            this.toggleScabarasLight(scabaras.lights, plate);
+            if (scabaras.lights.every((lit) => lit)) {
+                this.solveScabaras(room, scabaras, "lights");
+            }
+            return;
+        }
+        if (board === "a" && !solved("addition")) {
+            const addition = scabaras.addition;
+            if (addition.stepped[plate]) {
+                return;
+            }
+            addition.stepped[plate] = true;
+            const value = addition.values[plate];
+            const name = SCABARAS.symbolNames[value - 1];
+            addition.sum += value;
+            if (addition.sum > addition.target) {
+                this.scabarasWrong(
+                    `${name} (${value}) makes ${addition.sum}, past ${addition.target}: ` +
+                        "the roof comes down on you!",
+                );
+                addition.stepped.fill(false);
+                addition.sum = 0;
+                return;
+            }
+            this.emit({
+                type: "notice",
+                message: `${name} (${value}): ${addition.sum} of ${addition.target}.`,
+            });
+            if (addition.sum === addition.target) {
+                this.solveScabaras(room, scabaras, "addition");
+            }
+            return;
+        }
+        if ((board === "n" || board === "m") && !solved("matching")) {
+            if (scabaras.solved.length < 3) {
+                this.emit({
+                    type: "notice",
+                    message:
+                        "The tiles won't turn yet: solve the room's other three puzzles first.",
+                });
+                return;
+            }
+            const matching = scabaras.matching;
+            const side = board === "n" ? "north" : "south";
+            if (matching.hideTick !== -1 || matching.matched[matching[side][plate]]) {
+                return;
+            }
+            matching.up[side] = plate;
+            const { north, south } = matching.up;
+            if (north === undefined || south === undefined) {
+                return;
+            }
+            if (matching.north[north] === matching.south[south]) {
+                matching.matched[matching.north[north]] = true;
+                matching.up = {};
+                if (matching.matched.every((m) => m)) {
+                    this.solveScabaras(room, scabaras, "matching");
+                }
+                return;
+            }
+            matching.hideTick = this.tick + secondsToTicks(SCABARAS.reveal);
+            this.scabarasWrong("They don't match: the roof comes down on you!");
+        }
+    }
+
+    // A mistake: a rock on whoever made it, for a share of their hitpoints, breaking into shards
+    private scabarasWrong(message: string): void {
+        const player = this.player;
+        this.emit({ type: "notice", message });
+        this.addEffect(
+            SCABARAS.rockSpotAnim,
+            player.x,
+            player.y,
+            0,
+            secondsToTicks(SCABARAS.rockWarn),
+        );
+        this.damagePlayer(
+            player.maxHp * SCABARAS.wrongShare,
+            "scabaras_scarab",
+            false,
+            undefined,
+            true,
+        );
+        this.scabarasShards(this.tombsRoom!.scabaras!, player.x, player.y);
+    }
+
+    private solveScabaras(room: TombsRoom, scabaras: ScabarasRoom, puzzle: ScabarasPuzzle): void {
+        scabaras.solved.push(puzzle);
+        if (puzzle === "matching") {
+            room.doneTick = this.tick;
+            scabaras.rocks = [];
+            scabaras.shards = [];
+            this.emit({ type: "notice", message: "The last pair's matched! The way on opens." });
+        } else {
+            const left = 3 - scabaras.solved.length;
+            this.emit({
+                type: "notice",
+                message:
+                    left > 0
+                        ? `Solved! ${left} more before the symbols to the west will turn.`
+                        : "Solved! The symbols to the west stir: match them.",
+            });
+        }
+        if (!this.tombsReplaying) {
+            const player = this.player;
+            this.dropCasket(player.x + 0.8, player.y, false);
+        }
+        if (room.doneTick === undefined) {
+            this.nextScabarasWave(room);
+        }
+    }
+
+    // Rocks from the roof on everyone, now and then: where each lands shows as it falls
+    private stepScabarasRocks(scabaras: ScabarasRoom): void {
+        if (this.tick >= scabaras.nextRockTick) {
+            scabaras.nextRockTick = this.tick + secondsToTicks(this.scabarasRockEvery());
+            const warn = secondsToTicks(SCABARAS.rockWarn);
+            for (const hero of this.heroes) {
+                if (!this.isUp(hero)) {
+                    continue;
+                }
+                const x = Math.floor(hero.player.x + this.rng.range(-1.5, 1.5)) + 0.5;
+                const y = Math.floor(hero.player.y + this.rng.range(-1.5, 1.5)) + 0.5;
+                if (!this.grid.contains(x, y) || this.grid.isSolid(x, y)) {
+                    continue;
+                }
+                scabaras.rocks.push({ x, y, landTick: this.tick + warn });
+                this.addEffect(SCABARAS.rockSpotAnim, x, y, 0, warn);
+            }
+        }
+        const damage = SCABARAS.rockDamage * this.tombsRoomScale().damage;
+        scabaras.rocks = scabaras.rocks.filter((rock) => {
+            if (this.tick < rock.landTick) {
+                return true;
+            }
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const reach = SCABARAS.rockRadius + player.radius;
+                if (fm.hypot(player.x - rock.x, player.y - rock.y) <= reach) {
+                    this.damagePlayer(damage, "scabaras_scarab", false);
+                }
+            });
+            this.scabarasShards(scabaras, rock.x, rock.y);
+            return false;
+        });
+        const shardDamage = SCABARAS.shardDamage * this.tombsRoomScale().damage;
+        scabaras.shards = scabaras.shards.filter((shard) => {
+            shard.x += shard.vx;
+            shard.y += shard.vy;
+            shard.life--;
+            if (
+                shard.life <= 0 ||
+                !this.grid.contains(shard.x, shard.y) ||
+                this.grid.isSolid(shard.x, shard.y)
+            ) {
+                return false;
+            }
+            let hit = false;
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const reach = SCABARAS.shardRadius + player.radius;
+                if (
+                    !hit &&
+                    this.tick >= shard.armTick &&
+                    fm.hypot(player.x - shard.x, player.y - shard.y) <= reach
+                ) {
+                    hit = true;
+                    this.damagePlayer(shardDamage, "scabaras_scarab", false);
+                }
+            });
+            return !hit;
+        });
+    }
+
+    // A rock breaking up where it lands: shards out all round
+    private scabarasShards(scabaras: ScabarasRoom, x: number, y: number): void {
+        const count = SCABARAS.shards + this.tombsPathLevel;
+        const speed = SCABARAS.shardSpeed / TICKS_PER_SECOND;
+        const life = Math.ceil(SCABARAS.shardRange / speed);
+        const armTick = this.tick + Math.ceil((SCABARAS.rockRadius + 0.6) / speed);
+        const turn = this.rng.range(0, Math.PI * 2);
+        for (let i = 0; i < count; i++) {
+            const angle = turn + (i * Math.PI * 2) / count;
+            scabaras.shards.push({
+                x: x + fm.cos(angle) * 0.4,
+                y: y + fm.sin(angle) * 0.4,
+                vx: fm.cos(angle) * speed,
+                vy: fm.sin(angle) * speed,
+                life,
+                armTick,
+            });
+        }
     }
 
     // ---- The Het room ----
@@ -5863,6 +6373,7 @@ export class Sim {
             room.pending = [];
             // The Het room's laid out afresh, as OSRS's is after a wipe
             room.het = undefined;
+            room.scabaras = undefined;
         }
         const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({

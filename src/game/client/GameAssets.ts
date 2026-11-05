@@ -34,6 +34,7 @@ import {
     JUNGLE_JAPES,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
+    SCABARAS,
 } from "../content/tombs";
 import { EnemyDef, EnemyOutfit, GearSlot, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -162,6 +163,8 @@ function getSpotAnimIds(): number[] {
     add(SARCOPHAGUS_BLAST.spotAnim);
     // The Het room's beam, along and across, and where it stops
     add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // The Scabaras room's falling roof
+    add(SCABARAS.rockSpotAnim);
     // Akkha's quadrants' elements, which are no attack of his
     add(...AKKHA.elements.map((element) => element.spotAnim));
     for (const enemy of ENEMIES) {
@@ -579,6 +582,17 @@ export class GameAssets {
         objIds.add(JUNGLE_JAPES.objId);
         // Ba-Ba's sarcophagi, open
         locIds.add(SARCOPHAGI.loc);
+        // The Scabaras room's plates, as they stand
+        const { locs: scabaras } = SCABARAS;
+        for (const id of [
+            scabaras.plate,
+            scabaras.lightsPlate,
+            scabaras.hidden,
+            ...scabaras.symbols,
+            ...scabaras.shown,
+        ]) {
+            locIds.add(id);
+        }
         // The Het room's mirrors, clean and dirty
         locIds.add(HET.mirrorLoc);
         locIds.add(HET.dirtyLoc);
@@ -595,6 +609,17 @@ export class GameAssets {
             locId: APMEKEN_BARRIER_LOC,
             animated: true,
         });
+
+        // The Scabaras room's plates' glows
+        for (const id of [
+            SCABARAS.locs.plateLit,
+            SCABARAS.locs.platePressed,
+            SCABARAS.locs.lightsOn,
+            SCABARAS.locs.stepped,
+            SCABARAS.locs.matched,
+        ]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
 
         // Akkha's symbols, glowing
         for (const { symbolLoc } of AKKHA.elements) {

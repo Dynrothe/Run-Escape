@@ -1398,7 +1398,7 @@ export type TombsPathDef = {
         arrive: { x: number; y: number };
         // What it's played as (content/tombs.ts), and the spots its issues come at (Apmeken's
         // pillars and vents: their middles in world tiles, and how close counts as at one)
-        puzzle?: "apmeken" | "het";
+        puzzle?: "apmeken" | "het" | "scabaras";
         spots?: TombsSpotDef[];
         // The Het room's puzzle, in world tiles: where the Caster statue's beam starts (heading
         // south), the Shielded statue it has to reach (a rect), Het's Seal's middle, and the floor
@@ -1408,6 +1408,14 @@ export type TombsPathDef = {
             target: { x0: number; y0: number; x1: number; y1: number };
             seal: { x: number; y: number };
             floor: { x0: number; y0: number; x1: number; y1: number };
+        };
+        // The Scabaras room's boards, each plate's middle in world tiles: Sequence's, Lights out's
+        // ring (in order round it), Addition's, and Matching's two boards (SCABARAS in tombs.ts)
+        scabaras?: {
+            sequence: { x: number; y: number }[];
+            lights: { x: number; y: number }[];
+            addition: { x: number; y: number }[];
+            matching: { north: { x: number; y: number }[]; south: { x: number; y: number }[] };
         };
         // The barrier between the safe corridor and the room (east of it): the party comes in
         // behind it, and the room starts once someone walks through. It's the sim's: a line at

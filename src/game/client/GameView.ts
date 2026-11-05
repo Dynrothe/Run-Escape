@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { AKKHA, HET, JUNGLE_JAPES, SARCOPHAGI } from "../content/tombs";
+import { AKKHA, HET, JUNGLE_JAPES, SARCOPHAGI, SCABARAS } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -561,6 +561,7 @@ export class GameView {
         this.drawSarcophagi(actors, sim);
         this.drawHet(actors, sim);
         this.drawAkkha(actors, sim);
+        this.drawScabaras(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -766,6 +767,84 @@ export class GameView {
                     this.ground(sim, one.x, one.y),
                     one.y,
                     yaw,
+                );
+            }
+        }
+    }
+
+    // The Scabaras room's boards: Sequence's plates (the one it's showing lit, and those done),
+    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (hidden, or
+    // their symbol once turned up or matched), and the roof's shards flying
+    private drawScabaras(actors: ActorRenderer, sim: Sim): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        const def = sim.tombsPathRoom?.scabaras;
+        if (!scabaras || !def) {
+            return;
+        }
+        const locs = SCABARAS.locs;
+        const put = (id: number, x: number, y: number, animated = false, flash = 0) => {
+            const model = this.assets.get("loc:" + id);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const frame = animated ? anim.getFrame(sim.tick, true) : 0;
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, { flash });
+        };
+        const solved = (puzzle: string) => scabaras.solved.some((p) => p === puzzle);
+        const lit = sim.scabarasLitPlate;
+        const sequence = scabaras.sequence;
+        def.sequence.forEach((p, i) => {
+            put(locs.plate, p.x, p.y);
+            const at = sequence.order.indexOf(i);
+            if (i === lit) {
+                put(locs.plateLit, p.x, p.y, true, 0.7);
+            } else if (solved("sequence") || (at !== -1 && at < sequence.step)) {
+                put(locs.platePressed, p.x, p.y, true);
+            }
+        });
+        def.lights.forEach((p, i) => {
+            put(locs.lightsPlate, p.x, p.y);
+            if (scabaras.lights[i]) {
+                put(locs.lightsOn, p.x, p.y, true, 0.4);
+            }
+        });
+        const addition = scabaras.addition;
+        def.addition.forEach((p, i) => {
+            put(locs.symbols[addition.values[i] - 1], p.x, p.y);
+            if (addition.stepped[i] || solved("addition")) {
+                put(locs.stepped, p.x, p.y, true);
+            }
+        });
+        const matching = scabaras.matching;
+        for (const side of ["north", "south"] as const) {
+            def.matching[side].forEach((p, i) => {
+                const symbol = matching[side][i];
+                const matched = matching.matched[symbol];
+                if (matched || matching.up[side] === i) {
+                    put(locs.shown[symbol], p.x, p.y);
+                    if (matched) {
+                        put(locs.matched, p.x, p.y, true);
+                    }
+                } else {
+                    put(locs.hidden, p.x, p.y);
+                }
+            });
+        }
+        const look = getEnemy(SCABARAS.shardLook);
+        const shard = this.assets.get(getEnemyModelKey(look, 0));
+        if (shard) {
+            const anim = shard.getAnim(look.walkSeq);
+            for (const one of scabaras.shards) {
+                actors.draw(
+                    shard,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    one.x,
+                    this.ground(sim, one.x, one.y),
+                    one.y,
+                    yawFromVector(one.vx, one.vy),
+                    { scale: SCABARAS.shardScale },
                 );
             }
         }

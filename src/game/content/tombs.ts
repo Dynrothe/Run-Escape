@@ -1100,3 +1100,158 @@ TOMBS_ENEMIES.push(
     akkhaLook("akkha_orb_frozen", "Frozen Orb", 11803),
     akkhaLook("akkha_unstable_orb", "Unstable Orb", 11804),
 );
+
+// ---- The Scabaras room ----
+
+// Its scarabs (11697, out of the passages in the walls, ranged as in OSRS), with Kephri's
+// swarms and agile scarabs from the Het room
+export const SCABARAS_ENEMIES: EnemyDef[] = [
+    {
+        id: "scabaras_scarab",
+        name: "Scarab",
+        npcId: 11697,
+        idleSeq: 9586,
+        walkSeq: 9584,
+        attackSeq: 9585,
+        deathSeq: 9598,
+        hp: 12,
+        damage: 2,
+        speed: 2,
+        radius: 0.5,
+        xp: 14,
+        shot: {
+            range: 7,
+            interval: 2.4,
+            speed: 8,
+            spotAnim: 2152,
+            impactSpotAnim: 2154,
+            sound: -1,
+        },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+];
+TOMBS_ENEMIES.push(...SCABARAS_ENEMIES);
+
+// Its waves: one as it starts and one for each puzzle solved, with a casket for each
+export const SCABARAS_WAVES: string[][] = [
+    ["scarab_swarm", "scarab_swarm", "scarab_swarm", "scarab_swarm", "scabaras_scarab"],
+    [
+        ...Array<string>(6).fill("scarab_swarm"),
+        "scabaras_scarab",
+        "scabaras_scarab",
+        "agile_scarab",
+    ],
+    [
+        ...Array<string>(6).fill("scarab_swarm"),
+        "scabaras_scarab",
+        "scabaras_scarab",
+        "scabaras_scarab",
+        "agile_scarab",
+        "agile_scarab",
+    ],
+    [
+        ...Array<string>(8).fill("scarab_swarm"),
+        ...Array<string>(4).fill("scabaras_scarab"),
+        "agile_scarab",
+        "agile_scarab",
+        "spitting_scarab",
+    ],
+    [
+        ...Array<string>(8).fill("scarab_swarm"),
+        ...Array<string>(5).fill("scabaras_scarab"),
+        ...Array<string>(3).fill("agile_scarab"),
+        "spitting_scarab",
+        "spitting_scarab",
+    ],
+];
+
+// The scarabs streaming in meanwhile, more with each wave
+export function getScabarasTrickle(wave: number): WaveDef {
+    return {
+        start: 0,
+        spawnRate: 0.4 + wave * 0.1,
+        minAlive: 0,
+        maxAlive: 5 + wave * 2,
+        enemies: [
+            { id: "scarab_swarm", weight: 3 },
+            { id: "scabaras_scarab", weight: 1 + wave },
+            ...(wave >= 2 ? [{ id: "agile_scarab", weight: 1 }] : []),
+        ],
+    };
+}
+
+// The Scabaras room's puzzles, all four to solve (OSRS's solo takes one a side and the last):
+//  - Sequence, Simon says: the plates light up in an order (steps, one more each path level, up
+//    to most), each for flash seconds with gap after, and you step on them in it. A wrong plate
+//    brings the roof down on you, and a new order's shown retry seconds later.
+//  - Lights out: a ring of eight plates, each toggling itself and its two neighbours when stepped
+//    on, scrambled by scramble presses (more with path levels). Light them all. Every darken
+//    seconds (less with path levels) one goes dark again: a scarab's knocked it.
+//  - Addition: symbol plates worth 1 to 9 (Line to Foot), and the Ancient tablet's number to make
+//    exactly by stepping on them, each once. Over it, the roof comes down and they reset.
+//  - Matching, last, once the others are done: two boards of nine hidden symbols, the same nine
+//    on each. Step on one on each board: the same, they stay; not, the roof comes down and they
+//    hide again. preSolved pairs (fewer with path levels) are done as it starts.
+// A mistake's rock takes wrongShare of your hitpoints and breaks into shards. Rocks fall on
+// everyone meanwhile, every rockEvery seconds (less with path levels), for rockDamage within
+// rockRadius once they land (rockWarn after they start, as 302's roof falls), breaking into
+// shards: bullets out all round.
+export const SCABARAS = {
+    sequenceSteps: 5,
+    sequenceMost: 9,
+    flash: 0.6,
+    gap: 0.25,
+    showAfter: 1.5,
+    retry: 2.5,
+    scramble: 3,
+    darken: 14,
+    darkenLeast: 6,
+    targetLeast: 20,
+    targetMost: 45,
+    preSolved: 4,
+    reveal: 1.5,
+    wrongShare: 0.25,
+    rockEvery: 4.5,
+    rockEveryLeast: 1.8,
+    rockWarn: 1.1,
+    rockRadius: 1,
+    rockDamage: 6,
+    shards: 6,
+    shardSpeed: 3.5,
+    shardRange: 6,
+    shardRadius: 0.4,
+    shardDamage: 3,
+    shardLook: "rolling_boulder",
+    shardScale: 0.35,
+    // Tiles from a plate's middle that count as standing on it
+    plateReach: 0.55,
+    rockSpotAnim: 302,
+    locs: {
+        // Sequence: as it stands, lit by the game, stepped on
+        plate: 45340,
+        plateLit: 45341,
+        platePressed: 45342,
+        // Lights out: the plate, and its light
+        lightsPlate: 45344,
+        lightsOn: 45384,
+        // Addition's symbols, Line (1) to Foot (9), and the glow on one stepped on
+        symbols: [45345, 45346, 45347, 45348, 45349, 45350, 45351, 45352, 45353],
+        stepped: 45386,
+        // Matching: a hidden tile, the nine symbols shown, and a matched pair's glow
+        hidden: 45356,
+        shown: [45365, 45366, 45367, 45368, 45369, 45370, 45371, 45372, 45373],
+        matched: 45387,
+        tablet: 45339,
+    },
+    symbolNames: [
+        "Line",
+        "Knives",
+        "Triangle",
+        "Diamond",
+        "Hand",
+        "Bird",
+        "Crook",
+        "Wiggle",
+        "Foot",
+    ],
+};

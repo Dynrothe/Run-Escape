@@ -317,3 +317,25 @@ raid's ranges.
     - **Invocations**: Double Trouble (both specials at once), Keep Back (beside him, his ranged and
       magic bring an unseen melee hit), Stay Vigilant, Feeling Special.
     - Not in yet: Detonate (a party's crosses), and the balance bot doesn't know his fight.
+- **The Scabaras room** (`SCABARAS` in `content/tombs.ts`, `Sim.stepScabaras`): square 55,82 whole,
+  unturned, entered from the east nook behind a barrier at x 59 the sim holds. OSRS spawns its plates
+  as the room starts, so the boards are drawn by the client (`GameView.drawScabaras`) with the cache's
+  own plates, on tiles whose patterned floor decoration the map leaves out. All four puzzles are
+  needed (OSRS's solo takes one a side, then the last), each a casket and the next wave:
+    - **Sequence** (north hall's east room): 12 plates light one at a time (0.6 s each), 5 steps plus
+      one a path level, up to 9. Step on them in order; a wrong plate drops the roof on you and a
+      new order's shown.
+    - **Lights out** (south hall's east room): a ring of 8, each toggling itself and its neighbours,
+      scrambled by 3 presses plus the path level. A scarab knocks a light out every 14 s (less with
+      levels).
+    - **Addition** (north hall's middle room): 12 symbols worth 1 to 9 (Line to Foot) and the
+      tablet's number, 20 to 45, shown on the HUD. Past it, the roof comes down and they reset.
+    - **Matching** (the west room, last): two boards of the same nine hidden symbols either side of
+      the chasm. A pair that matches stays; one that doesn't drops the roof and hides again. 4 are
+      done as it starts, one fewer each path level.
+    - A mistake takes a quarter of your hitpoints, through armour. Meanwhile rocks fall near
+      everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
+      breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
+      stream in from the passages.
+    - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip), and
+      Kephri. The bot doesn't know the room.

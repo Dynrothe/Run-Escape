@@ -194,6 +194,62 @@ const AKKHA_MIDDLE = [13, 20];
 const AKKHA_HALF = 10;
 const AKKHA_LINE = 10;
 
+// The Scabaras room, square 55,82 whole: the entry on the east (45337, local 62,31), the exit on
+// the west (45128, 1,30). Two long halls, north and south, of three rooms each, joined at both ends
+// and parted by walls and a chasm. In the cut's own tiles (y from 5268), unturned: the party's put
+// in the entry's nook, behind a barrier at x 59 the sim holds.
+const SCABARAS: RoomCut = {
+    x: 3520,
+    y: 5268,
+    sizeX: 64,
+    sizeY: 24,
+    plane: 0,
+    cell: [5, 0],
+    arrive: [60, 12],
+};
+const SCABARAS_GATE = { x: 59, y: [10, 11, 12, 13] };
+// Its boards (OSRS spawns its plates as the room starts, so they're not in the map), every other
+// tile so a plate's stepped on by itself: Sequence in the east room of the north hall, Lights out
+// in the east room of the south, Addition in the middle room of the north, and Matching's two
+// boards either side of the west room's chasm, the last
+const SCABARAS_SEQUENCE = [48, 50, 52, 54].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
+// Round the ring, from its south-west corner
+const SCABARAS_LIGHTS = [
+    [49, 4],
+    [51, 4],
+    [53, 4],
+    [53, 6],
+    [53, 8],
+    [51, 8],
+    [49, 8],
+    [49, 6],
+];
+const SCABARAS_ADDITION = [35, 37, 39, 41].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
+const SCABARAS_MATCHING = {
+    north: [5, 7, 9].flatMap((x) => [16, 18, 20].map((y) => [x, y])),
+    south: [5, 7, 9].flatMap((x) => [4, 6, 8].map((y) => [x, y])),
+};
+// Every board's tiles, whose floor decoration (the room's patterned tiles) the plates replace
+const SCABARAS_BOARD = new Set(
+    [
+        ...SCABARAS_SEQUENCE,
+        ...SCABARAS_LIGHTS,
+        ...SCABARAS_ADDITION,
+        ...SCABARAS_MATCHING.north,
+        ...SCABARAS_MATCHING.south,
+    ].map(([x, y]) => x + "," + y),
+);
+// Where its scarabs come in: by the passages in the walls (45343, at 28,29 and 28,35) and the
+// halls' far rooms
+const SCABARAS_ENTRANCES = [
+    [28, 8],
+    [28, 16],
+    [13, 18],
+    [13, 6],
+    [41, 6],
+    [21, 18],
+];
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -210,7 +266,7 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA].map((cut) => {
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS].map((cut) => {
     const at = cellCorner(cut);
     return {
         cut,
@@ -228,6 +284,7 @@ const APMEKEN_ROOM = ROOMS[1];
 const BA_BA_ROOM = ROOMS[2];
 const HET_ROOM = ROOMS[3];
 const AKKHA_ROOM = ROOMS[4];
+const SCABARAS_ROOM = ROOMS[5];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -279,6 +336,26 @@ export const TOA_PLACES = {
                 y0: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y0,
                 x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x1,
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
+            },
+        },
+    },
+    scabaras: {
+        arrive: worldTile(SCABARAS_ROOM.arrive.x, SCABARAS_ROOM.arrive.y),
+        gate: {
+            x: MAP_X * MAP_SQUARE_SIZE + SCABARAS_ROOM.at.x + SCABARAS_GATE.x,
+            locId: APMEKEN_BARRIER_LOC,
+            tiles: SCABARAS_GATE.y.map((y) =>
+                worldTile(SCABARAS_ROOM.at.x + SCABARAS_GATE.x, SCABARAS_ROOM.at.y + y),
+            ),
+        },
+        entrances: SCABARAS_ENTRANCES.map(([x, y]) => scabarasTile(x, y)),
+        puzzle: {
+            sequence: SCABARAS_SEQUENCE.map(([x, y]) => scabarasTile(x, y)),
+            lights: SCABARAS_LIGHTS.map(([x, y]) => scabarasTile(x, y)),
+            addition: SCABARAS_ADDITION.map(([x, y]) => scabarasTile(x, y)),
+            matching: {
+                north: SCABARAS_MATCHING.north.map(([x, y]) => scabarasTile(x, y)),
+                south: SCABARAS_MATCHING.south.map(([x, y]) => scabarasTile(x, y)),
             },
         },
     },
@@ -363,6 +440,11 @@ export const TOA_PLACES = {
     },
 };
 
+// A tile's middle in the Scabaras room, in world tiles
+function scabarasTile(x: number, y: number): { x: number; y: number } {
+    return worldTile(SCABARAS_ROOM.at.x + x, SCABARAS_ROOM.at.y + y);
+}
+
 // A spot in the Apmeken room from its tile in square 59,82, in world tiles
 function apmekenSpot(kind: "pillar" | "vent", x: number, y: number, reach: number) {
     const local = {
@@ -401,6 +483,10 @@ function build(context: BuildContext): TileGrid {
             );
         }
         // Left out, in the cut's own tiles, before it's turned
+        prefab.locs = prefab.locs.filter(
+            (loc) =>
+                !(cut === SCABARAS && loc.type === 22 && SCABARAS_BOARD.has(loc.x + "," + loc.y)),
+        );
         prefab.locs = prefab.locs.filter(
             (loc) =>
                 !(cut === APMEKEN && loc.id === APMEKEN_BARRIER && loc.x === gateX) &&
@@ -559,6 +645,15 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                             line: TOA_PLACES.akkha.line,
                             quadrants: TOA_PLACES.akkha.quadrants,
                         },
+                    },
+                }),
+                ...(id === "scabaras" && {
+                    room: {
+                        arrive: TOA_PLACES.scabaras.arrive,
+                        puzzle: "scabaras" as const,
+                        gate: TOA_PLACES.scabaras.gate,
+                        entrances: TOA_PLACES.scabaras.entrances,
+                        scabaras: TOA_PLACES.scabaras.puzzle,
                     },
                 }),
                 ...(id === "apmeken" && {

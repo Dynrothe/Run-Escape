@@ -2365,13 +2365,23 @@ export class GameClient implements GameFrameHandler {
                               waiting: false,
                               done: sim.tombsRoom.doneTick !== undefined,
                           }
-                        : {
-                              wave: Math.max(0, sim.tombsRoom.wave) + 1,
-                              of: APMEKEN_WAVES.length,
-                              waiting: !sim.tombsRoom.started,
-                              done: sim.tombsRoom.doneTick !== undefined,
-                          }
+                        : sim.tombsPathRoom?.scabaras
+                          ? {
+                                // The Scabaras room counts its puzzles
+                                label: "Puzzles solved",
+                                wave: sim.tombsRoom.scabaras?.solved.length ?? 0,
+                                of: 4,
+                                waiting: !sim.tombsRoom.started,
+                                done: sim.tombsRoom.doneTick !== undefined,
+                            }
+                          : {
+                                wave: Math.max(0, sim.tombsRoom.wave) + 1,
+                                of: APMEKEN_WAVES.length,
+                                waiting: !sim.tombsRoom.started,
+                                done: sim.tombsRoom.doneTick !== undefined,
+                            }
                     : undefined,
+            tombsScabaras: sim.scabarasInfo,
             tombsShadows: sim.akkhaShadows
                 ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
                 : undefined,
