@@ -900,6 +900,15 @@ projectile glows likewise: text and gradients are the slowest things on a 2D can
 fight has a hundred splats. The effects it prunes each frame are pruned in place, and the enemies
 reuse one options object, to keep a phone's garbage collector quiet.
 
+Power-ups on the ground have a countdown pie over them, like RuneLite's
+(`GameView.drawPickupTimers`): it drains clockwise, from green to orange at half the power-up's
+time and red at a quarter. It goes by the sim's ticks, so it stops with the run, and it's gone
+once a drop is attracted (those never expire) or the run's over. From the play camera's height a
+flat item reaches further up the screen than its height does, so the pie sits over the furthest
+the item reaches as it turns, not over its top. The Power-up timers setting
+(`DisplaySettings.pickupTimers`, in Settings and the pause menu, on by default) turns it off;
+`GameClient` hands it to the view each frame.
+
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
 

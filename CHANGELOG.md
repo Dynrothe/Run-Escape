@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
+  to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
+
 ### Changed
 
 - Smaller game updates, by trippy22: the game's files from the cache come in parts, and an update

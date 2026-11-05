@@ -951,6 +951,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ screenShake: !this.display.screenShake });
     }
 
+    togglePickupTimers(): void {
+        this.setDisplay({ pickupTimers: !this.display.pickupTimers });
+    }
+
     toggleAutoPause(): void {
         this.setDisplay({ pauseOnBlur: !this.display.pauseOnBlur });
     }
@@ -2851,6 +2855,7 @@ export class GameClient implements GameFrameHandler {
         overlay.begin(camera);
         const sim = this.sim;
         if (sim) {
+            this.view.pickupTimers = this.display.pickupTimers;
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
                 this.minimap.draw(
