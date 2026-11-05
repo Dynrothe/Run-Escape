@@ -2053,8 +2053,9 @@ export const WARDENS: WardensDef = {
         wake: 4,
         wakeSeq: 9663,
         // Its real hitpoints, which only its core's hits (five times over) take: down three or
-        // four times, with the best of everything
-        hp: 85000,
+        // four times with the best of everything at Expert, many more for a run that's bought
+        // nothing at Entry (the raid level's boss scale does the rest)
+        hp: 50000,
         forms: {
             // Elidinis' wakes open to magic, Tumeken's to ranged
             elidinis: {
@@ -2124,7 +2125,7 @@ export const WARDENS: WardensDef = {
         endMessage: "uses the last of its power to restore",
     },
     three: {
-        hp: 65000,
+        hp: 40000,
         forms: {
             // The Warden that comes back is the one that fell in the first phase, with the
             // phantoms of its own two paths' bosses
@@ -2677,7 +2678,7 @@ TOMBS_ENEMIES.push(
         deathSeq: 9734,
         // Tougher with the path level as a path's boss is (Sim.startWardens), and enough of it
         // that the Wardens get their attacks in: the phase is about them, not a race to break it
-        hp: 15000,
+        hp: 9000,
         damage: 0,
         speed: 0,
         radius: 1.5,

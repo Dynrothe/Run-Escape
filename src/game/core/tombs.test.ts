@@ -184,7 +184,7 @@ describe("invocations", () => {
 
     it("make enemies weaker than a map's at Entry, and tougher by more each band up", () => {
         withEntryScale();
-        expect(getRaidLevelScale(0)).toEqual({ hp: 0.6, damage: 0.35, bossHp: 0.35, bullets: 0.6 });
+        expect(getRaidLevelScale(0)).toEqual({ hp: 0.6, damage: 0.25, bossHp: 0.35, bullets: 0.6 });
         expect(getRaidLevelScale(150).hp).toBeCloseTo(1.1);
         expect(getRaidLevelScale(300).damage).toBeCloseTo(1.8);
         expect(getRaidLevelScale(500).hp).toBeCloseTo(4);

@@ -3,7 +3,7 @@
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
 import { getItem } from "../../src/game/content/items";
-import { CRONDIS } from "../../src/game/content/tombs";
+import { CRONDIS, WARDENS } from "../../src/game/content/tombs";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
 import { FlowField } from "../../src/game/core/world/FlowField";
@@ -879,14 +879,38 @@ const LOOK_NEAR = 7;
 function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) => boolean): Point {
     const player = sim.player;
     const { bullets } = sim;
-    const near: number[] = [];
+    // What's coming: the bullets, and a boss's projectiles (the Wardens' skulls, played forward
+    // on their line: they turn after you, but too slowly to matter in a look this short)
+    const near: {
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        cos: number;
+        sin: number;
+        radius: number;
+        life: number;
+    }[] = [];
+    const close = (x: number, y: number) =>
+        Math.abs(x - player.x) < LOOK_NEAR && Math.abs(y - player.y) < LOOK_NEAR;
     for (let i = 0; i < bullets.count; i++) {
         const slot = bullets.order[i];
-        if (
-            Math.abs(bullets.x[slot] - player.x) < LOOK_NEAR &&
-            Math.abs(bullets.y[slot] - player.y) < LOOK_NEAR
-        ) {
-            near.push(slot);
+        if (close(bullets.x[slot], bullets.y[slot])) {
+            near.push({
+                x: bullets.x[slot],
+                y: bullets.y[slot],
+                vx: bullets.vx[slot],
+                vy: bullets.vy[slot],
+                cos: bullets.turnCos[slot],
+                sin: bullets.turnSin[slot],
+                radius: bullets.radius[slot],
+                life: bullets.life[slot],
+            });
+        }
+    }
+    for (const shot of sim.enemyProjectiles) {
+        if (close(shot.x, shot.y)) {
+            near.push({ ...shot, cos: 1, sin: 0 });
         }
     }
     if (near.length === 0 && !avoid) {
@@ -916,15 +940,13 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
                 }
             }
         }
-        for (const slot of near) {
-            let bx = bullets.x[slot];
-            let by = bullets.y[slot];
-            let vx = bullets.vx[slot];
-            let vy = bullets.vy[slot];
-            const cos = bullets.turnCos[slot];
-            const sin = bullets.turnSin[slot];
-            const reach = bullets.radius[slot] + player.radius + 0.15;
-            const life = bullets.life[slot];
+        for (const shot of near) {
+            let bx = shot.x;
+            let by = shot.y;
+            let vx = shot.vx;
+            let vy = shot.vy;
+            const { cos, sin, life } = shot;
+            const reach = shot.radius + player.radius + 0.15;
             for (let step = 0; step < positions.length; step++) {
                 const t = (step + 1) * LOOK_STEP;
                 if (t > life) {
@@ -1303,10 +1325,36 @@ function wardensMove(sim: Sim): Point | undefined {
         // and a step back out of the orbs' way, still by the obelisk, while it gets them back
         const gap = places.sides.tumeken.gap;
         const blocking = player.hp > player.maxHp * 0.5;
-        const to = blocking ? gap : { x: gap.x, y: gap.y - 2.5 };
-        return Math.hypot(to.x - player.x, to.y - player.y) < 1
-            ? nudge(sim, to.x, to.y)
-            : walkTo(sim, to.x, to.y);
+        // Off a glowing pyramid (they're a checkerboard, so the next square along is clear)
+        const cell = WARDENS.pyramids.cell;
+        const glowing = (x: number, y: number) =>
+            fight.pyramids.some(
+                (p) =>
+                    sim.tick - p.startTick < WARDENS.pyramids.lastHit * 50 &&
+                    x >= p.x - 0.4 &&
+                    x < p.x + cell + 0.4 &&
+                    y >= p.y - 0.4 &&
+                    y < p.y + cell + 0.4,
+            );
+        let to = blocking ? gap : { x: gap.x, y: gap.y - 2.5 };
+        if (glowing(to.x, to.y)) {
+            const clear = [
+                { x: to.x, y: to.y - cell },
+                { x: to.x - cell, y: to.y },
+                { x: to.x + cell, y: to.y },
+                { x: to.x, y: to.y + cell },
+            ].filter(
+                (p) => !glowing(p.x, p.y) && !sim.grid.isSolid(Math.floor(p.x), Math.floor(p.y)),
+            );
+            to = clear[0] ?? to;
+        }
+        return dodging(
+            sim,
+            Math.hypot(to.x - player.x, to.y - player.y) < 1
+                ? nudge(sim, to.x, to.y)
+                : walkTo(sim, to.x, to.y),
+            glowing,
+        );
     }
     // The marks about to land (hurts > 0 within the next second or so), tile by tile
     const soon = sim.tick + 60;
@@ -1328,14 +1376,23 @@ function wardensMove(sim: Sim): Point | undefined {
         const keep = Math.max(1, Math.min(2.5, heroReach(sim) - 0.6));
         let to = target ? { x: target.x, y: target.y - (target.radius + keep) } : places.arrive;
         to = clampTo(to, places.floor);
+        const onAMark = (x: number, y: number) =>
+            marks.some(
+                (m) => Math.floor(m.x) === Math.floor(x) && Math.floor(m.y) === Math.floor(y),
+            );
         if (onMark || marks.length > 0) {
             return safeStep(sim, to, (x, y) =>
                 marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y),
             );
         }
-        return Math.hypot(to.x - player.x, to.y - player.y) < 1
-            ? nudge(sim, to.x, to.y)
-            : walkTo(sim, to.x, to.y);
+        // Its skulls and their storms dodged, off the obelisk's marks as it goes
+        return dodging(
+            sim,
+            Math.hypot(to.x - player.x, to.y - player.y) < 1
+                ? nudge(sim, to.x, to.y)
+                : walkTo(sim, to.x, to.y),
+            onAMark,
+        );
     }
     // The last phase
     const three = fight.three!;
