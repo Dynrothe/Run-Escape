@@ -1791,7 +1791,10 @@ export const CRONDIS = {
     spearHold: 0.5,
     spearDamage: 5,
     cloudEvery: 9,
-    cloudEveryLeast: 4,
+    // No closer than this: a cloud fills its corridor and comes faster than you walk, so a trip
+    // in to the waterfall has to fit between two (meeting them head on, the gap's about half
+    // this), with time to fill
+    cloudEveryLeast: 7,
     cloudSpeed: 3.5,
     cloudBehind: 1.1,
     cloudLength: 3,
