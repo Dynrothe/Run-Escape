@@ -1206,7 +1206,11 @@ export const WEAPONS: WeaponDef[] = [
             spotAnim: 1542,
             effect: { kind: "heal", fraction: 0.3, max: 2 },
         },
-        unlock: { kind: "beatMap", mapId: "theatre_of_blood", hard: true },
+        unlock: {
+            kind: "raidChest",
+            mapId: "theatre_of_blood",
+            trophyId: "holy_scythe_of_vitur_uncharged",
+        },
         levels: levels(
             {
                 damage: 30,
@@ -1565,7 +1569,7 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "veryRare",
         style: "melee",
         bigHits: [0.6],
-        unlock: { kind: "beatMap", mapId: "theatre_of_blood" },
+        unlock: { kind: "raidChest", mapId: "theatre_of_blood", trophyId: "ghrazi_rapier" },
         levels: levels(
             {
                 damage: 24,

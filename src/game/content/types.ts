@@ -486,6 +486,22 @@ export type GroundPatternDef = {
     // as it is, for what can't be scaled up.
     middleSpotAnim?: number;
     grab?: { seconds: number; fit: number; up: { from: number; to: number } };
+    // An exhumed (BossDef.exhumes): standing in it for seconds smothers it, and one still there
+    // when it lingers no longer heals the boss heal of its hitpoints, healSpotAnim flying to it.
+    smother?: { seconds: number; heal: number; healSpotAnim?: number; smotheredSpotAnim?: number };
+};
+
+// A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes,
+// yellows). It picks among them at random, whatever their range, cooldown or enraged, so an
+// attack named here is used as it is (Sotetseg's faster maze, before he's enraged). It lasts
+// seconds at the most.
+export type BossOrdealDef = {
+    at: number[];
+    seconds: number;
+    attacks: string[];
+    interval: number;
+    message: string;
+    endMessage: string;
 };
 
 // A boss's corpse flowers: lines cross near the player, and the quarters but
@@ -634,6 +650,8 @@ export type BossAttackDef = {
     toMiddle?: boolean;
     // Only used once the boss is enraged
     enraged?: boolean;
+    // Only used in its boss's shadow realm, exhumes or yellows (BossDef), never picked otherwise
+    ordeal?: boolean;
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
     // Said over the boss's head when it's used, like OSRS overhead chat
@@ -953,6 +971,8 @@ export type BossDef = {
         hp: number;
         enemyId: string;
         count: number;
+        // Tiles from the boss they come on (2 unless set): far enough to crawl, for healers
+        distance?: number;
         message?: string;
         shout?: string;
     }[];
@@ -976,6 +996,10 @@ export type BossDef = {
     // second when unset): what a bullet hell's worth of petals can do to
     // someone stood in them
     bulletGrace?: number;
+    // The most of each of its hits the player's armour can take off, as a share of the hit (all
+    // of it, down to 1, when unset): the Theatre's bosses, whose many small hits armour would
+    // otherwise turn to 1s
+    armorCap?: number;
     // A final boss: the run goes on this many seconds after it falls, for its
     // death animation to play before the victory screen, with nothing
     // landing on the players meanwhile (the run's time is to the fall)
@@ -983,10 +1007,34 @@ export type BossDef = {
     // On a raid's expert mode, once enraged, it stares one way every `every` seconds, a quarter
     // turn at a time: a weapon's hit from within arc radians of that way does nothing to it and
     // hurts its wielder for damage instead, a hit every half second at most (Xarpus)
-    stare?: { every: number; arc: number; damage: number; message: string };
+    // warning: seconds it shows where it'll stare before it does (0.75); hitEvery: seconds
+    // between its hits back on one player (1)
+    stare?: {
+        every: number;
+        arc: number;
+        damage: number;
+        message: string;
+        warning?: number;
+        hitEvery?: number;
+    };
     // On a raid's expert mode, it changes into the next of these forms every `every` seconds,
-    // keeping its hitpoints (Nylocas Vasilias's colours: each takes one style, EnemyDef.onlyStyle)
-    colours?: { every: number; forms: string[] };
+    // keeping its hitpoints (Nylocas Vasilias's colours: each takes one style, EnemyDef.onlyStyle).
+    // With offStyle it changes on normal too, where any other style does that share of its damage
+    // (none on expert), on top of its prayer (EnemyDef.protects); its own style gets through its
+    // prayer for ownStyle instead (1 unless set).
+    colours?: { every: number; forms: string[]; offStyle?: number; ownStyle?: number };
+    // Sotetseg's shadow realm: at each of these shares of his hitpoints he drags you into it for
+    // seconds, where he can't be hurt and does only these attacks (by name), interval apart
+    shadowRealm?: BossOrdealDef;
+    // Xarpus's exhumeds: at each of these shares of his hitpoints he sinks into his pool, can't be
+    // hurt, and does only these attacks, one of them raising the exhumeds (a ground attack with
+    // GroundPatternDef.smother), until count of them have been smothered, or seconds have gone,
+    // when he rises healed leftHeal of his hitpoints for each one still to go (on top of what each
+    // exhumed that went unsmothered healed him)
+    exhumes?: BossOrdealDef & { count: number; leftHeal: number };
+    // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
+    // throws only these, balls that hit hard unless you're in the pool that comes with each one
+    yellows?: BossOrdealDef;
     // Walks with its guard up, taking awakeDamage of every hit, and every `every` seconds goes
     // down for `seconds`, standing still and taking all of it, then gets up with its `wake` attack
     // (the Pestilent Bloat). seq: its animation while it's down.
@@ -1300,7 +1348,9 @@ export type UnlockTask =
     // Kill this boss in a run on the map
     | { kind: "killBoss"; mapId: string; enemyId: string }
     // Last this many seconds in a run on the map
-    | { kind: "survive"; mapId: string; seconds: number };
+    | { kind: "survive"; mapId: string; seconds: number }
+    // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
+    | { kind: "raidChest"; mapId: string; trophyId: string };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =
@@ -1408,7 +1458,9 @@ export type MapDef = {
     // What hard mode multiplies those by here (see hard.ts for when it's unset).
     // More on the early maps, which a player with everything bought walks
     // through, and less on the late ones, which are hard enough already.
-    hard?: { hp: number; damage: number };
+    // bullets: what its bosses' patterns' bullets a volley are multiplied by, with their gaps kept
+    // as wide (a raid's, and so its expert mode's too)
+    hard?: { hp: number; damage: number; bullets?: number };
     waves: WaveDef[];
     events: RunEventDef[];
     // The countdown before the final boss, and the victory title
@@ -1456,7 +1508,7 @@ export type MapDef = {
 // room, and the last room's boss is the final boss.
 export type RaidDef = {
     rooms: RaidRoomDef[];
-    // Seconds of waves a room has at the least, however long the last boss took (60 when unset)
+    // Seconds of waves a room has at the least (60 when unset)
     minWaveSeconds?: number;
 };
 
@@ -1485,13 +1537,17 @@ export type RaidRoomDef = {
     // Where the hall's teleporter stands, in world tiles: walking up to it offers to skip the
     // rest of the room's waves (Sim's raidTeleports)
     teleporter?: { x: number; y: number };
-    // The run's second the boss comes, as a campaign map's do (or minWaveSeconds into the room,
-    // if that's later). The waves' starts and the events' times are from the room's start.
+    // The run's second the boss comes if no boss before took any time: the room's
+    // waves last the gap between this and the last room's (at least minWaveSeconds), from when
+    // the room starts. The waves' starts and the events' times are from the room's start too.
     at: number;
     waves: WaveDef[];
     events: RunEventDef[];
     boss: string;
     bossHp?: number;
+    // Seconds its boss can take for all of a room's speed points (getRoomPoints): what its fight's
+    // tuned to take a strong player
+    par: number;
     // How its hall looks while its waves are on: drawn this bright (as MapDef.brightness, lower
     // darker), and the screen washed with this colour (multiplied over it, so white is no change)
     hall?: { brightness?: number; wash?: string };

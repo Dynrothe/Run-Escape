@@ -256,21 +256,23 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                 }
                 case "loc": {
                     const locType = state.locTypeLoader.load(request.locId);
+                    // Its normal model, or its only kind (a floor decoration: Xarpus's exhumeds)
+                    const types = locType.types;
+                    const modelType =
+                        types && !types.includes(LocModelType.NORMAL)
+                            ? types[0]
+                            : LocModelType.NORMAL;
                     const getModel: ModelSource = (seqId, frame) => {
                         if (seqId !== -1) {
                             return state.locModelLoader.getModelAnimated(
                                 locType,
-                                LocModelType.NORMAL,
+                                modelType,
                                 0,
                                 seqId,
                                 frame,
                             );
                         }
-                        const model = state.locModelLoader.getModel(
-                            locType,
-                            LocModelType.NORMAL,
-                            0,
-                        );
+                        const model = state.locModelLoader.getModel(locType, modelType, 0);
                         if (model instanceof ModelData) {
                             return model.light(
                                 textureLoader,

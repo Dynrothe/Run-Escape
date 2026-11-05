@@ -23,6 +23,7 @@ import { ENEMIES } from "../content/enemies";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { MAPS } from "../content/maps";
 import { getPassive } from "../content/passives";
+import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
@@ -178,6 +179,8 @@ function getSpotAnimIds(): number[] {
         for (const attack of enemy.boss?.attacks ?? []) {
             add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
             add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
+            // An exhumed's orb as it heals its boss, and its end as it's smothered
+            add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);
             add(...(attack.impactSpotAnims ?? []));
             addImpact(attack.impact);
         }
@@ -449,6 +452,8 @@ export class GameAssets {
     private readonly requestedEnemies = new Set<string>();
     // Counts the times the enemies were dropped: a bake from before is stale
     private enemyBakes = 0;
+    // Pets baked or being baked, by id. They're kept once they are.
+    private readonly petBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -525,6 +530,17 @@ export class GameAssets {
 
     static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
         return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // Pets aren't in every run's bake, as most players haven't found one: they're baked as
+    // they're picked, and for a co-op party, the party's
+    static getPetRequests(pets: readonly PetDef[]): BakeRequest[] {
+        return pets.map((pet) => ({
+            kind: "npc",
+            key: getPetModelKey(pet.id),
+            npcId: pet.npcId,
+            seqIds: [...new Set([pet.idleSeq, pet.walkSeq])],
+        }));
     }
 
     // Requests that would bake the same model, as one: several enemies can be
@@ -672,6 +688,41 @@ export class GameAssets {
 
     async loadBase(onProgress?: (done: number, total: number) => void): Promise<void> {
         await this.bakeInTasks(GameAssets.getBaseRequests(), this.loadBake, onProgress);
+    }
+
+    // Bakes these pets (ids this game doesn't know are left out), unless they're baked already
+    // or on their way. A pet that won't bake is only missing: it's never a reason to stop.
+    loadPets(ids: readonly (string | undefined)[]): Promise<void> {
+        const waits: Promise<void>[] = [];
+        const pets: PetDef[] = [];
+        for (const id of new Set(ids)) {
+            const pet = id === undefined ? undefined : PET_BY_ID.get(id);
+            const baking = pet && this.petBakes.get(pet.id);
+            if (baking) {
+                waits.push(baking);
+            } else if (pet) {
+                pets.push(pet);
+            }
+        }
+        if (pets.length > 0) {
+            const baking = this.bakeInTasks(GameAssets.getPetRequests(pets), this.loadBake).catch(
+                (e) => console.error("Couldn't bake", pets.map((pet) => pet.id).join(", "), e),
+            );
+            for (const pet of pets) {
+                this.petBakes.set(pet.id, baking);
+            }
+            waits.push(baking);
+        }
+        return Promise.all(waits).then(() => undefined);
+    }
+
+    // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
+    getPet(id: string): ActorModel | undefined {
+        const model = this.models.get(getPetModelKey(id));
+        if (!model && !this.petBakes.has(id)) {
+            void this.loadPets([id]);
+        }
+        return model;
     }
 
     hasEnemies(enemies: EnemyDef[]): boolean {

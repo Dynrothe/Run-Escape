@@ -56,8 +56,16 @@ export const OFFLINE: CoopView = {
 // How long to wait for the relay to say it's there
 const AVAILABLE_TIMEOUT_MS = 4000;
 
+// How often to ask for the open rooms, from a relay that doesn't send them as
+// they change (listUpdates in its welcome)
 const LIST_INTERVAL_MS = 5000;
-const PING_INTERVAL_MS = 15_000;
+const PING_INTERVAL_MS = 30_000;
+// Out of a room with nothing done for this long, the connection's closed, so
+// a tab left on the list doesn't keep the relay busy. A minute under the
+// relays' own (IDLE_CONNECTION_MS), which check less often, so this message is
+// the one the player sees.
+export const LOBBY_IDLE_MS = 9 * 60_000;
+const IDLE_TEXT = "Disconnected after a while with nothing happening.";
 
 // A room's connection that drops (a network blip, or the relay restarting)
 // is tried again for this long before the room's given up on. The relay
@@ -176,6 +184,8 @@ export class CoopLobby {
     private lobbyLost = false;
     private listTimer?: number;
     private pingTimer?: number;
+    // When this player last did anything here, for LOBBY_IDLE_MS
+    private activeAt = 0;
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
@@ -200,6 +210,11 @@ export class CoopLobby {
 
     get id(): string | undefined {
         return this.view.you;
+    }
+
+    // Cloudflare transfers the party to a room socket; Node keeps the lobby socket.
+    get relayKind(): "node" | "cloudflare" {
+        return this.roomSocket || this.resuming ? "cloudflare" : "node";
     }
 
     get isHost(): boolean {
@@ -332,6 +347,7 @@ export class CoopLobby {
             socket = new WebSocket(getRoomUrl(code, ticket));
         } catch {
             this.update({ error: "Couldn't reach that room." });
+            this.outOfRoom();
             return;
         }
         this.enteringSocket = socket;
@@ -363,6 +379,7 @@ export class CoopLobby {
             if (socket === this.enteringSocket) {
                 this.enteringSocket = undefined;
                 this.update({ error: "Couldn't reach that room." });
+                this.outOfRoom();
             }
         };
     }
@@ -492,16 +509,23 @@ export class CoopLobby {
         this.stopResuming();
         this.resume = undefined;
         this.update({ room: undefined, error });
-        this.refresh();
         this.onClosed?.();
         this.outOfRoom();
     }
 
-    // Out of a room: the lobby's connection again, if it dropped meanwhile
+    // Out of a room, or not into one: back to the open rooms, which a relay
+    // that sends them as they change (listUpdates) stops sending on a create
+    // or join, until it's asked again. Every way out comes through here. The
+    // lobby's connection again, if it dropped meanwhile (its welcome asks).
     private outOfRoom(): void {
+        if (this.view.room) {
+            return;
+        }
         if (this.lobbyLost) {
             this.lobbyLost = false;
             void this.connect();
+        } else {
+            this.refresh();
         }
     }
 
@@ -529,16 +553,16 @@ export class CoopLobby {
                     available: true,
                     anyMap: message.anyMap === true,
                 });
+                this.activeAt = Date.now();
                 this.refresh();
-                this.listTimer = window.setInterval(() => {
-                    if (!this.view.room) {
-                        this.refresh();
-                    }
-                }, LIST_INTERVAL_MS);
-                this.pingTimer = window.setInterval(
-                    () => this.send({ t: "ping" }),
-                    PING_INTERVAL_MS,
-                );
+                if (message.listUpdates !== true) {
+                    this.listTimer = window.setInterval(() => {
+                        if (!this.view.room) {
+                            this.refresh();
+                        }
+                    }, LIST_INTERVAL_MS);
+                }
+                this.pingTimer = window.setInterval(() => this.tick(), PING_INTERVAL_MS);
                 break;
             case "named":
                 this.update({ name: message.name });
@@ -564,7 +588,11 @@ export class CoopLobby {
             case "gone":
                 this.resume = undefined;
                 this.update({ room: undefined, error: GONE_TEXT[message.reason] || undefined });
-                this.refresh();
+                // A room on its own connection closes it next, which asks
+                // (outOfRoom)
+                if (!this.roomSocket) {
+                    this.refresh();
+                }
                 this.onGone?.(message.reason);
                 break;
             case "error":
@@ -609,13 +637,36 @@ export class CoopLobby {
         return available;
     }
 
+    // Pings, or closes the connection if this player's left it be
+    private tick(): void {
+        const now = Date.now();
+        // Not this.entering, which a refused join (or the Node relay, which
+        // sends no goto) leaves set
+        if (this.view.room || this.enteringSocket) {
+            // In a room's not idle: the time starts again on leaving
+            this.activeAt = now;
+        } else if (now - this.activeAt > LOBBY_IDLE_MS) {
+            this.close();
+            this.update({ error: IDLE_TEXT });
+            return;
+        }
+        this.send({ t: "ping" });
+    }
+
     // The open rooms again: this page of them (the one shown, by default)
     refresh(page = this.view.roomsPage): void {
         this.send({ t: "list", page: Math.max(0, page) });
     }
 
+    // Another page, picked by the player, which is doing something here
+    showPage(page: number): void {
+        this.activeAt = Date.now();
+        this.refresh(page);
+    }
+
     // Asks the relay for another name
     rename(): void {
+        this.activeAt = Date.now();
         this.send({ t: "rename" });
     }
 
@@ -628,6 +679,7 @@ export class CoopLobby {
     }
 
     create(open: boolean, mapId: string, endless: boolean, hard: boolean): void {
+        this.activeAt = Date.now();
         this.update({ error: undefined });
         const message: ClientMessage = {
             t: "create",
@@ -646,6 +698,7 @@ export class CoopLobby {
         if (!clean) {
             return;
         }
+        this.activeAt = Date.now();
         this.update({ error: undefined });
         const message: ClientMessage = { t: "join", code: clean, me: this.joinAs() };
         this.entering = message;
@@ -714,8 +767,9 @@ export function makeLoadout(
     metaStats: Record<string, number>,
     unlockedItems: string[],
     armoury: Record<string, number>,
+    pet?: string,
 ): Loadout {
     // Only what's been bought, so it stays small
     const bought = Object.fromEntries(Object.entries(metaStats).filter(([, value]) => value !== 0));
-    return { metaStats: bought, unlockedItems, armoury };
+    return { metaStats: bought, unlockedItems, armoury, ...(pet && { pet }) };
 }

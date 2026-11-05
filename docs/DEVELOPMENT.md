@@ -120,8 +120,9 @@ Docker, leave `HOST` alone inside the container and publish the port on the host
 from its private network.
 
 The relay takes 800 connections in all, so give it room with `LimitNOFILE` if you raise that. A
-connection in no room that's done nothing but ping for 10 minutes is closed (browsing the list
-counts as doing something: a player waiting for a room), as is a room left alone for half an hour.
+connection in no room that's done nothing but ping, or ask for the same page of rooms again, for
+10 minutes is closed: a tab left open on the list. The game closes its own after 9 minutes out of
+a room with nothing done (`LOBBY_IDLE_MS`, a minute early so its own message is the one shown), and a room left alone for half an hour is closed too.
 
 Headers from anyone else are ignored, so they can't be made up to get round the limits. Behind a
 proxy with `PROXY` unset, the relay says so once. `TRUSTED_PROXIES` (`"10.1.2.3,10.9.0.0/16"`)
@@ -262,15 +263,21 @@ only controls the game/relay listener and cannot make metrics listen publicly.
 Metrics contain aggregate numbers only, with no player names, addresses or room codes. The public
 `/coop` availability response contains only `{"coop":true}`, so it doesn't expose aggregate counts.
 
+**Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
+end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
+`VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
+shows in a build that has a collector. See the
+[collector setup, daily analytics and leaderboard](../server/analytics/README.md).
+
 ## Desktop
 
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`, and the app lets only that address out: `protocol.handle` in `main.ts` answers
-every other https request itself, and WebSockets, which don't go through it, are kept to the relay
-by the `Content-Security-Policy` header `gameServer.ts` sends (`connect-src`). Without it there's
-no Multiplayer.
+has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
+set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
+`gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 
 The launcher only gets it in a new download, so players on an older one keep playing without
 Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.
@@ -644,21 +651,81 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 ### Raids
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
-where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due (`RaidRoomDef.at`,
-a run second, as a campaign boss's), then the party's moved into its boss room (`startRaidBoss`,
-`moveParty`), and once the boss is down the room's scored (`scoreRaidRoom`), each player gets the
-supply chest (`openNextRaidShop`, an event offer paid in raid points) and the next room starts.
-The last room's boss is the final boss, and its chest (`openRaidChest`) goes on the result.
-Raid wins are kept by the save like a campaign map's; hard opens after one, endless never does, and
-expert mode (`SimOptions.expert`, solo only for now) after a hard one. A hall's teleporter
-(`stepTeleporter`) asks before skipping to its boss, `SimOptions.raidTeleports` times a raid, in
-the halls `SimOptions.raidPortals` says (`getRaidPortals`: rooms whose boss the save has a kill of,
-in any form). The game draws the portal (`raidTeleporter`), as it isn't in the map. Raid bosses'
-rings, spreads and walls start `MELEE_POCKET` tiles out (`BulletPatternDef.from`), and their
-hits are lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`).
+where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due, then the party's
+moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is down the room's scored
+(`scoreRaidRoom`), each player gets the supply chest (`openNextRaidShop`, an event offer paid in
+raid points) and the next room starts. The last room's boss is the final boss, and its chest
+(`openRaidChest`) goes on the result. Raid wins are kept by the save like a campaign map's; hard
+opens after one, endless never does, and expert mode (`SimOptions.expert`, solo only for now) after
+a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
+`SimOptions.raidTeleports` times a raid, in the halls `SimOptions.raidPortals` says
+(`getRaidPortals`: rooms whose boss the save has a kill of, in any form). The game draws the portal
+(`raidTeleporter`), as it isn't in the map. A room runs on a clock of its own, from
+`raidRoomStartTick` (what its waves and events go by), and its boss comes at `raidBossDueTick`: the
+gap between its `RaidRoomDef.at` and the last room's later, or at once when the portal's taken. So a
+quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
+hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
+boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' hits are
+lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in `theatre.ts`),
+and their bullets can hit again after `BULLET_GRACE` rather than a second. Every one has an attack
+for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a ground mark under it), and
+`oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatternDef.from`, so there's
+no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the slams
+are as wide, so there's no ring round a still boss to hit it from untouched. Each has something for
+a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on them. Each boss
+has a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints:
+the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's naps, Nylocas
+Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with the prayer on
+top for missiles and magic; its own gets through the prayer for `ownStyle`), Sotetseg's
+`shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an exhumed by
+`stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`, `tob_`
+ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss calls. A
+summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's healers
+all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all of them
+within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of another
+style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass none and go
+for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias turns
+(needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back to
+the walkable try furthest from the boss, never off the map; an ordeal waits while its boss's expert
+projectile is in the air, the boss shielded meanwhile so the wait can't take it past a phase, and
+throwing no more of expert's own; and a stare is shown `BossDef.stare.warning` before it turns
+(`STARE_WARNING_SECONDS` unless set): the boss faces where it'll stare, and the notice names the
+side. Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`, looked up in
+`damagePlayer`, so it holds for a stomp, a pool or a stare too; a ground mark keeps its boss's id
+for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` times their bullets
+(`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
+width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
+spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
+clears, not the bot's: it dies to the Maiden.
 
-`?raidtest` (dev server only) puts a raid's rooms two minutes apart and every level up's pick at
-its max; `?raidtest=short` does only the first.
+`?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
+up's pick at its max; `?raidtest=short` does only the first.
+
+### Pets
+
+A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
+never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
+`GameClient.update`, and `GameView` only draws it (on the menus, `GameClient.submitActors` stands
+it beside the character). So a pet can't change a run, and co-op's copies agree without it.
+
+- **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
+  is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks
+  with the map's collision, and stands still when a wall keeps it from its spot, rather than
+  walking on the spot. Past `PET_LEASH` it's put back beside its player, moved out from where they
+  stand so it's never put in a wall.
+- **Its speed** is its player's (`walkSpeed` in `core/PlayerMovement.ts`, sled and boots and all)
+  and a bit more. `walkToward` there is the step it shares with thralls.
+- **Co-op:** a player's pet goes in their `Loadout` as `pet`, which the relays pass on whole, so it
+  needed no relay change. A pet id a game doesn't know is left out.
+- **Baking:** most players haven't found one, so pets aren't in `getBaseRequests`.
+  `GameAssets.getPet` bakes one the first time it's drawn, and `travelTo` bakes the party's with
+  the map. `slim-cache.ts` keeps every one (`getPetRequests`).
+- **The Pet row** (`PetRow`, under the adventurers) is one line on a phone held sideways, its name
+  hidden and its tiles swiped, so the adventurers above it keep their room.
+- **A new pet** needs a trophy that drops it and an entry in `PETS` with the follower NPC's id and
+  animations. The cache has two NPCs for each pet: `scripts/cache/find-npcs.ts` marks the one
+  that's the follower (it's the one with the Metamorphosis option). The other one looks different
+  for some pets.
 
 ### What gets drawn
 
@@ -807,6 +874,7 @@ scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death an
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
+scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
@@ -869,6 +937,17 @@ without closing it needs a step too, or its buttons do nothing for those 10 seco
 host turns away counts as an answer too, so the client checks what the sim would refuse before
 sending it (a reroll with none left, during a hilt choice, or an event's option that's sold or too
 dear), or a refused action would hold up the real one.
+
+Auto alch and Auto equip are local `DisplaySettings`, off by default, so never apply them in `Sim`:
+`GameClient.autoAnswerChest` sends the casket's usual action through `act`, as a click would, and
+Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip` (the stats as upgraded, none lower
+and at least one higher, give or take float rounding), not the rarity-based `shouldWear`, and never
+replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
+remembers which casket it was). In co-op the casket stays hidden, though the menu still opens,
+until the host's frame brings the answer back. One that's lost or turned away would leave nothing
+to click, so `resendAutoChest` offers it to `CoopRun.act` each update that brought frames, which
+sends it again once `DECISION_RESEND_MS` is up. Not while no frames come: a reconnecting
+`CoopLobby` holds what's sent, and every answer it held would go to a casket, the next ones too.
 
 Guests predict their own **displayed** movement in `client/coop/MovementPrediction.ts`. The
 `movePrediction` display setting (Settings and the pause menu) is on by default, and
@@ -1053,8 +1132,15 @@ changes at most once a second. The Node relay sends no token, so with it a dropp
 still ends a guest's run.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
-longest), worked out once after each change rather than for every request; the menu asks for its
-page every 5 seconds, and again when joining fails (a room that filled up or started meanwhile).
+longest), worked out once after each change rather than for every request. Both relays send it
+again to everyone looking at it when it changes (within a second, and only if their page did), and
+say so with `listUpdates` in their welcome; the menu then asks only for another page, when joining
+fails, and whenever it's back on the list, out of a room or turned away from one (`outOfRoom` in
+`CoopLobby.ts`): the Cloudflare lobby stops sending it on a create or join until it's asked again.
+It asks every 5 seconds of a relay without `listUpdates`, so either can be deployed first. On
+Cloudflare every request costs, so think twice before adding a timer that sends something: incoming
+messages and calls between objects are billed (see Cost in `server/cloudflare/README.md`), and what
+the relay sends out is free.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own, on each room member, and on a room in the list for its host. The Cloudflare
@@ -1081,11 +1167,21 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `client/GameTouch.ts` is the stick, with no DOM. `GameInput.getMoveVector` reads it when no key
   is down, so the sim gets the same input a keyboard gives: length 0 or 1.
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
-  on top. Its buttons act on `pointerdown`, because a browser won't fire `click` for a second finger
-  while the thumb's down.
+  on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
+  `click` for a second finger while the thumb's down. `ui/InventoryItem.tsx` shares the bag buttons
+  with the desktop HUD: hover or hold for 500 ms to read the same `ItemView.lines` as the casket.
+  Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
+  further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
+  The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
+  clicks still use the item.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
+  A panel whose contents can grow (an error line, a row of pages) has to fit or scroll there: the
+  desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
+  safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
+  scroll a part inside, so their buttons stay in view. The co-op room browser scrolls as a whole
+  (`overflow-y: auto`), since only its worst case doesn't fit.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),
@@ -1097,10 +1193,16 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   worker, so it still needs a connection. The icons in `public/icons/` are whole multiples of
   `favicon.png`, to keep its pixels square.
 - `client/saveFile.ts` exports a save. Installed on iOS it uses the share sheet, since a download
-  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download.
+  there opens a sheet too small to use when held sideways. Everywhere else it's a plain download,
+  of a file typed `application/octet-stream` (still named `.json`): typed as JSON, a player's
+  older iPhone opened it as a page in Safari, with no way to save it (which iOS, nobody knows; the
+  game needs WebGL2, so it's at least 15, where download links work). The link lasts a minute,
+  since iOS asks before it downloads.
 
 To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, and CDP's
 `Input.dispatchTouchEvent` sends real multi-touch. Mouse clicks don't test any of this.
+Keep the CDP session open for the whole gesture; `touchEnd` lists the fingers being lifted,
+not the ones still touching the screen.
 
 ### Controllers
 
@@ -1108,8 +1210,14 @@ To test it, Playwright's `isMobile` and `hasTouch` turn on `pointer: coarse`, an
 `GameClient.update`). It's a web standard, so the desktop app (Electron) gets it too, with nothing
 of its own.
 
-- **Which pad.** One at a time: whichever was pressed last. A pad's only noticed once something on it
-  is pressed (browsers hide pads until then), so "connected" shows on the first press.
+- **Which pad.** One at a time: whichever was pressed last, once the one in use has been let go for
+  `HAND_OVER_MS`. A pad's only noticed once something on it is pressed (browsers hide pads until
+  then), so "connected" shows on the first press, and that press counts; the press that takes a
+  second pad over doesn't. One controller can show as two: DS4Windows adds an Xbox pad beside the
+  PlayStation one, unless it's set to hide it. The two change a frame or so apart, either one
+  first, so taking up the one ahead at once would lose the press and swap them back and forth. A
+  pad held the same way for `RESTING_MS` (a stuck button, a throttle resting at its end, something
+  on the stick) neither keeps another from taking over nor takes over itself.
 - **Its buttons** are only trusted when the browser reports `mapping: "standard"`, where button 0 is
   the bottom face button whoever made it. Any other pad gets the left stick and nothing else, rather
   than buttons that might be anything. `identifyPad` reads the maker from the id (Chrome's
@@ -1128,8 +1236,11 @@ of its own.
 - **Hints.** `ui/PadHint.tsx`'s `KeyHint` shows a key, or the pad's button while one's in use. The
   numbered choices have none (the d-pad picks them). `:root[data-input="pad"]` shows the highlight.
   The icons are Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) (CC0, its licence
-  alongside), in `public/input-prompts/<make>/<button>.svg`, named by `PadButton`. Only the buttons
-  for the three makes are copied in, not the whole pack.
+  alongside), in `ui/input-prompts/<make>/<button>.svg`, named by `PadButton`. Only the buttons
+  for the three makes are copied in, not the whole pack. They're in the bundle as data URLs
+  (`PAD_ICONS`, from Vite's `?inline`), not files served beside it: the desktop app's launcher 1.0.0
+  serves `.svg` with no image type, which an `<img>` won't draw, and players keep the launcher they
+  have.
 - **What each button does** is listed by `PadControls` (`ui/PadHint.tsx`) in the pause menu and
   Settings while a pad's in use, and the title's hint shows its buttons. Change it with `RUN_KEYS`
   or `MENU_KEYS`.
@@ -1173,27 +1284,36 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades`, `upgradesSpent` and optional `upgradeRefunds` lists of paid rank prices. Each page can
-allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
+`upgrades`, `upgradesSpent` and an optional `upgradeOrder`: the skill id each rank was bought for,
+oldest first. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
 outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
 change another class's ranks or remaining budget. Armoury purchases still spend unreserved coins.
 Save format 11 converts the former sum of page investments into a maximum reservation, restoring
-the difference to `coins` once. Export/import retains this budget and every page's paid rank prices.
+the difference to `coins` once. Export/import retains this budget and every page's purchase order.
 Save format 10 moves the old shared allocation and its investment into Melee without duplicating either;
-Ranged and Magic start empty. Export and import preserve all three pages and their refund records.
+Ranged and Magic start empty. Export and import preserve all three pages and their purchase orders.
 Solo and co-op loadouts use the actual adventurer's style, including maps with a forced adventurer;
 changing a co-op adventurer or room map refreshes the transmitted loadout.
 The arrow button on bought cards (the client's back-arrow sprite,
-`REFUND_SPRITE`) refunds the last price in that page's skill list, through
-`GameClient.persist()`. It is separate from the purchase button and has a larger hit area on coarse
-pointers. Desktop right-clicking does the same; coarse-pointer context menus never refund.
-Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover, without
-blocking the desktop right-click shortcut or the refund button.
-Older allocations have only `upgradesSpent`: their first purchase or partial refund allocates that
-balance across the existing ranks in proportion to base prices, preserving the total exactly.
-Migration checks the lists against the ranks and total spent; invalid lists use the same fallback.
-Refund all clears only the selected class's ranks and price records.
+`REFUND_SPRITE`) takes the most recently bought rank of that skill out of the order, through
+`GameClient.persist()`. It gives back what that saves at today's prices: the rank's own price and
+what it added to every rank bought after it. It never gives back more than the page's
+`upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
+cost even when prices have changed since. A saved order is kept whatever the prices, so changing a
+skill's cost needs no migration. The button is separate from the purchase button and has a larger
+hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointer context menus
+never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
+without blocking the desktop right-click shortcut or the refund button.
+A page with ranks but no order can't refund single ranks: its arrow buttons are disabled and
+greyed, and the Skills screen says to use Refund all, which starts a new order. That notice
+(`.ui-shop-notice`) stays on phones, where `Mobile.css` hides the screen's subtitle. Pages saved before
+the order was kept have the price paid for each rank instead (`upgradeRefunds`, which only migration
+reads). A price says how many ranks were bought before it, so migration rebuilds the order when the
+prices make one unbroken run that replays to exactly the same prices. A page that refunded single
+ranks the old way leaves gaps and gets none. Never guess an order.
+Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
+the page has ranks, even with no spending recorded.
 
 ### Notice
 

@@ -24,6 +24,7 @@ go stale. Add anything that cost you time to work out.
 | The app's main process and update code                 | `desktop/`                                                             |
 | The release workflow                                   | `.github/workflows/release.yml`                                        |
 | The checks on a pull request                           | `.github/workflows/check.yml`                                          |
+| What review looks for, before you open a pull request  | `docs/PR-REVIEW.md`                                                    |
 | What's in the game, map by map                         | `docs/GAMEPLAY.md`                                                     |
 | Getting it running, controls, cache version            | `README.md`                                                            |
 | What changed in each version                           | `CHANGELOG.md`                                                         |
@@ -41,6 +42,7 @@ go stale. Add anything that cost you time to work out.
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
+| Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
@@ -58,6 +60,7 @@ go stale. Add anything that cost you time to work out.
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
+| Run stats: what a finished run reports, its collector  | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
@@ -153,6 +156,7 @@ After a content change, also run the checks that apply:
 ```sh
 npx tsx scripts/cache/check-items.ts          # casket items are the items they're named after
 npx tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
+npx tsx scripts/cache/sprites.ts check        # passives' interface sprites are in the cache
 npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
 ```
 
@@ -216,10 +220,14 @@ desktop build.
   New shop upgrades, ids and optional fields don't need one. Write the save only through
   `GameClient.persist()`: it doesn't write while another tab has `SaveLock` or the save is from a
   newer game. Never rename the lock, `run-escape-save`, any more than the keys.
-  Skills live in `skillPages` by combat style, with separate ranks, spending and refund records;
+  Skills live in `skillPages` by combat style, with separate ranks, spending and purchase order;
   each page can allocate `coins + max(page.upgradesSpent)`. Only the maximum investment is reserved;
   use `getSkillCoins(save, style)` for a page's balance. Always pass the intended style to skill
   operations and run loadouts.
+  A single rank's refund gives back what taking it out of `upgradeOrder` saves at today's prices,
+  never more than `upgradesSpent`, and a page's last rank gives back the rest. A page without an
+  order (one migration couldn't rebuild exactly from its old prices) needs Refund all first: never
+  guess an order.
 - **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
   on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
   `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.

@@ -1,5 +1,5 @@
 import { GameStore } from "../GameStore";
-import { CoopLobby, RESUME_WINDOW_MS } from "./CoopLobby";
+import { CoopLobby, LOBBY_IDLE_MS, RESUME_WINDOW_MS } from "./CoopLobby";
 
 // A WebSocket that's open at once and keeps what's sent, for driving the
 // lobby as a relay would
@@ -250,9 +250,118 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
+    // A relay that sends the list as it changes stops on a create or join,
+    // until it's asked again
+    const lists = (relay: FakeSocket) => relay.sent.filter((m) => m.t === "list").length;
+
+    it("asks for the open rooms again when it can't get into a room", async () => {
+        const { lobby, relay } = await connected();
+        lobby.join("ABCDEFGH");
+        relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
+        const before = lists(relay);
+        // Turned away without a word (a used ticket, or too slow to get in)
+        FakeSocket.all[1].close();
+        expect(lobby.room).toBeUndefined();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
+    it("asks for the open rooms again, once, on leaving a room", async () => {
+        const { lobby, relay, room } = await inRoom();
+        const before = lists(relay);
+        lobby.leave();
+        room.receive({ t: "gone", reason: "left" });
+        room.close();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
+    it("asks for the open rooms again on leaving a room it was coming back to", async () => {
+        const { lobby, relay, room } = await inRoom();
+        room.close();
+        const before = lists(relay);
+        // The room never hears, so never says "gone"
+        lobby.leave();
+        expect(lobby.room).toBeUndefined();
+        expect(lists(relay)).toBe(before + 1);
+    });
+
     it("ignores a goto it didn't ask for", async () => {
         const { relay } = await connected();
         relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
         expect(FakeSocket.all).toHaveLength(1);
+    });
+});
+
+describe("the lobby's timers", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        FakeSocket.all = [];
+        vi.stubGlobal("WebSocket", FakeSocket);
+        vi.stubGlobal("window", {
+            location: { href: "https://example.com/game/" },
+            setInterval: (f: () => void, ms: number) => setInterval(f, ms),
+            clearInterval: (id: number) => clearInterval(id),
+            setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+            clearTimeout: (id: number) => clearTimeout(id),
+        });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+    });
+
+    async function welcomed(welcome: object) {
+        const lobby = makeLobby();
+        const connecting = lobby.connect();
+        const relay = FakeSocket.all[0];
+        await vi.advanceTimersByTimeAsync(0);
+        relay.receive({ t: "welcome", id: "p1", name: "Steady Chicken", ...welcome });
+        await connecting;
+        const lists = () => relay.sent.filter((m) => m.t === "list").length;
+        return { lobby, relay, lists };
+    }
+
+    it("asks for the list only of a relay that doesn't send it", async () => {
+        const pushing = await welcomed({ listUpdates: true });
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(pushing.lists()).toBe(1);
+
+        FakeSocket.all = [];
+        const older = await welcomed({});
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(older.lists()).toBeGreaterThan(10);
+    });
+
+    it("lets go of a list nobody's touched, but not of a room", async () => {
+        const { lobby, relay } = await welcomed({ listUpdates: true });
+        await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS - 60_000);
+        // Looking at another page is doing something
+        lobby.showPage(1);
+        await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS - 60_000);
+        expect(relay.readyState).toBe(FakeSocket.OPEN);
+        await vi.advanceTimersByTimeAsync(2 * 60_000);
+        expect(relay.readyState).toBe(FakeSocket.CLOSED);
+
+        // In a room for longer, then out: the time starts on leaving
+        FakeSocket.all = [];
+        const again = await welcomed({ listUpdates: true });
+        again.lobby.create(true, "lumbridge", false, false);
+        again.relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
+        await vi.advanceTimersByTimeAsync(0);
+        FakeSocket.all[1].receive({ t: "room", room: ROOM, you: "p1" });
+        await vi.advanceTimersByTimeAsync(2 * LOBBY_IDLE_MS);
+        again.lobby.leave();
+        await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS - 60_000);
+        expect(again.relay.readyState).toBe(FakeSocket.OPEN);
+        // Pinged all the while
+        expect(again.relay.sent.filter((m) => m.t === "ping").length).toBeGreaterThan(40);
+    });
+
+    it("still lets go after a join the relay turned down", async () => {
+        const { lobby, relay } = await welcomed({ listUpdates: true });
+        lobby.join("ZZZZZZZZ");
+        relay.receive({ t: "error", message: "There's no room ZZZZZZZZ." });
+        await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS + 60_000);
+        expect(relay.readyState).toBe(FakeSocket.CLOSED);
     });
 });

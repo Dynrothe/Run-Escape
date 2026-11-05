@@ -259,6 +259,12 @@
         min-width: 44px;
     }
 
+    /* No taller than the icon beside it, so the details don't jump between
+       adventurers with the button and those without */
+    .ui-favourite {
+        min-height: 36px;
+    }
+
     .ui-volume {
         height: 32px;
     }
@@ -472,6 +478,35 @@
         overflow-y: auto;
     }
 
+    /* The pet on one line, its tiles scrolling sideways, so the adventurers keep their room. The
+       one picked is the tile lit up. */
+    .ui-pet-row {
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        padding: 0 2px;
+    }
+
+    .ui-pet-name {
+        display: none;
+    }
+
+    /* Swiped, with no scrollbar: one would make the row a third taller */
+    .ui-pet-tiles {
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow-x: auto;
+        touch-action: pan-x;
+        scrollbar-width: none;
+    }
+
+    .ui-pet-tiles::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ui-pet-tile {
+        flex-shrink: 0;
+    }
+
     .ui-map-pages {
         flex: 1 1 0;
     }
@@ -509,10 +544,15 @@
         font-size: 18px;
     }
 
-    /* Skills */
+    /* Skills: the subtitle goes, but not why the refund arrows are greyed */
 
-    .ui-shop > .ui-subtle {
+    .ui-shop > .ui-subtle:not(.ui-shop-notice) {
         display: none;
+    }
+
+    .ui-shop-notice {
+        flex-shrink: 0;
+        font-size: 14px;
     }
 
     .ui-shop-grid {
@@ -863,9 +903,26 @@
     }
 }
 
-/* Co-op's lobby: the party tighter, and one empty place showing rather than
-   all of them, so the host's map list has room below */
+/* Co-op's room browser and lobby */
 @media (pointer: coarse) and (max-height: 520px) {
+    /* The room browser as tall as the screen, its list of rooms giving up
+       height first, and the panel scrolling past that (a page row and an
+       error or two), so Back stays in reach */
+    .ui-coop {
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+        overflow-y: auto;
+    }
+
+    .ui-coop-heading {
+        margin: 8px 0 4px;
+    }
+
+    .ui-coop-rooms {
+        min-height: 44px;
+    }
+
+    /* The lobby: the party tighter, and one empty place showing rather than
+       all of them, so the host's map list has room below */
     .ui-coop-member {
         min-height: 30px;
         padding: 1px 6px;

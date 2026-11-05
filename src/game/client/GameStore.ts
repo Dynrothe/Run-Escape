@@ -3,8 +3,8 @@ import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
-import { NewerSave, SaveData, UnreadableSave } from "../core/save";
-import { DisplaySettings } from "./DisplaySettings";
+import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
@@ -439,7 +439,7 @@ export class GameStore {
             save,
             saveBlockClosed: false,
             unreadableSaves: [],
-            characterId: save.unlockedCharacters[0] ?? "warrior",
+            characterId: getStartingCharacter(save),
             mapId: "lumbridge",
             endless: false,
             hard: false,
@@ -452,17 +452,7 @@ export class GameStore {
             toasts: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
-            display: {
-                menuSpin: true,
-                screenShake: true,
-                pauseOnBlur: true,
-                questTracker: true,
-                damagePanel: false,
-                autoAlch: false,
-                movePrediction: true,
-                coopFlag: true,
-                frameRate: "auto",
-            },
+            display: getDefaultDisplaySettings(),
         };
     }
 

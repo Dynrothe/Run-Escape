@@ -14,10 +14,14 @@ export type DisplaySettings = {
     damagePanel: boolean;
     // Caskets are high alched as they're opened, with no casket screen
     autoAlch: boolean;
+    // Equip only unambiguous casket upgrades, never replacing a set piece
+    autoEquip: boolean;
     // Joining a co-op game, your own movement shows before the host confirms it
     movePrediction: boolean;
     // Other co-op players see your country's flag, where the relay knows it
     coopFlag: boolean;
+    // A finished run's anonymous stats go to the build's collector, if it has one (RunAnalytics)
+    runStats: boolean;
     // Frames a second at most (frameCap)
     frameRate: FrameRate;
 };
@@ -48,7 +52,7 @@ const SETTINGS_KEY = "rune-survivors-display";
 const PREDICTION_ON_BY_DEFAULT = "movePredictionDefaultOn";
 
 // The menu camera stands still, and nothing shakes it, for anyone who's asked for less motion
-function getDefaults(): DisplaySettings {
+export function getDefaultDisplaySettings(): DisplaySettings {
     let reducedMotion = false;
     try {
         reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -60,14 +64,16 @@ function getDefaults(): DisplaySettings {
         questTracker: true,
         damagePanel: false,
         autoAlch: false,
+        autoEquip: false,
         movePrediction: true,
         coopFlag: true,
+        runStats: true,
         frameRate: "auto",
     };
 }
 
 export function loadDisplaySettings(): DisplaySettings {
-    const settings = getDefaults();
+    const settings = getDefaultDisplaySettings();
     try {
         const json = window.localStorage.getItem(SETTINGS_KEY);
         if (json) {
@@ -90,6 +96,9 @@ export function loadDisplaySettings(): DisplaySettings {
             if (typeof data.autoAlch === "boolean") {
                 settings.autoAlch = data.autoAlch;
             }
+            if (typeof data.autoEquip === "boolean") {
+                settings.autoEquip = data.autoEquip;
+            }
             if (
                 typeof data.movePrediction === "boolean" &&
                 (data.movePrediction || data[PREDICTION_ON_BY_DEFAULT] === true)
@@ -98,6 +107,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.coopFlag === "boolean") {
                 settings.coopFlag = data.coopFlag;
+            }
+            if (typeof data.runStats === "boolean") {
+                settings.runStats = data.runStats;
             }
             // Saved before there was a choice: auto
             if (FRAME_RATES.includes(data.frameRate)) {
