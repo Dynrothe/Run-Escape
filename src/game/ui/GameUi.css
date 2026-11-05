@@ -1403,6 +1403,74 @@
     color: #e0b0ff;
 }
 
+/* The Tombs of Amascut's board on the result screen: the raid level, invocations, times, points */
+.ui-tombs-board {
+    margin: 6px auto 4px;
+    padding: 8px 12px;
+    max-width: 620px;
+    border: 1px solid #6b5a3a;
+    background: rgba(0, 0, 0, 0.25);
+    text-align: center;
+}
+
+.ui-tombs-board-level {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-tombs-board-invocations {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    margin: 4px 0;
+}
+
+.ui-tombs-board-columns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 18px;
+}
+
+.ui-tombs-board-table {
+    border-collapse: collapse;
+    font-size: 15px;
+}
+
+.ui-tombs-board-table th {
+    color: var(--ui-orange);
+    font-weight: normal;
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td {
+    color: var(--ui-yellow);
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td + td,
+.ui-tombs-board-table th + th {
+    text-align: right;
+}
+
+.ui-tombs-board-total td {
+    border-top: 1px solid #6b5a3a;
+    color: #fff;
+}
+
+.ui-tombs-board-you td {
+    color: #fff;
+}
+
 /* A raid's points, under its room, and what the supply chest charges */
 .ui-raid-points,
 .ui-raid-price {

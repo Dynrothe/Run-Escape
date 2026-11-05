@@ -97,6 +97,7 @@ import {
     SCABARAS,
     SCABARAS_WAVES,
     TOMBS_BOSSES,
+    TOMBS_POINTS,
     WARDENS,
     WARDENS_WINDMILL,
     getApmekenTrickle,
@@ -632,6 +633,18 @@ export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
 // (The Tombs of Amascut's goes by its raid level, `level`, and has no points.)
 export type RaidChest = { points: number; chance: number; found: string[]; level?: number };
 
+// The Tombs of Amascut's summary on the result screen, as OSRS's raid board has it: the raid
+// level and what made it, each path's time and the Wardens', the party's wipes, and each
+// player's points and deaths
+export type TombsSummary = {
+    level: number;
+    invocations: string[];
+    paths: { id: string; name: string; seconds: number }[];
+    wardensSeconds?: number;
+    wipes: number;
+    party: { name: string; points: number; deaths: number; chance: number; you: boolean }[];
+};
+
 export type RunResult = {
     mapId: string;
     endless: boolean;
@@ -640,6 +653,8 @@ export type RunResult = {
     expert: boolean;
     // A raid's chest, once it's beaten
     raidChest?: RaidChest;
+    // The Tombs of Amascut's board
+    tombs?: TombsSummary;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -691,6 +706,9 @@ export type Hero = {
     staredUntil?: number;
     // What came out of a raid's chest at the end, for the result screen
     raidChest?: RaidChest;
+    // The Tombs of Amascut's points (TOMBS_POINTS), and times they went down there
+    tombsPoints: number;
+    tombsDowns: number;
     name: string;
     characterId: string;
     // Permanent bonuses from their shop, their map tasks' items, and their
@@ -1257,6 +1275,8 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // Each path taken, when it was entered and how long it took, for the result's board
+    private tombsTimes: { id: string; startTick: number; seconds?: number }[] = [];
     // Jungle Japes's banana peels, in a path boss's fight
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
     // Akkha's fight, while he's up
@@ -1734,6 +1754,8 @@ export class Sim {
             raidPoints: 0,
             raidDamageAtStart: 0,
             raidPointsEarned: 0,
+            tombsPoints: 0,
+            tombsDowns: 0,
             healed: 0,
             highestHit: 0,
             weaponSince: {},
@@ -1995,6 +2017,7 @@ export class Sim {
             hard: this.hard,
             expert: this.expert,
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
+            ...(this.map.tombs && { tombs: this.tombsSummary() }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -4806,6 +4829,7 @@ export class Sim {
     private enterTombsPath(id: string, arrive: { x: number; y: number }): void {
         const path = this.map.tombs!.paths.find((p) => p.id === id)!;
         this.tombsPath = id;
+        this.tombsTimes.push({ id, startTick: this.tick });
         this.tombsDoors.clear();
         this.gatherHall();
         this.moveParty(arrive);
@@ -4986,6 +5010,14 @@ export class Sim {
         this.enemyProjectiles = [];
         this.gatherHall();
         this.moveParty(boss.arrive);
+        // The puzzle's done: its points to everyone still in the raid
+        if (!room.boss) {
+            for (const hero of this.heroes) {
+                if (!hero.left) {
+                    hero.tombsPoints += TOMBS_POINTS.room;
+                }
+            }
+        }
         room.boss = { uid: -1, beatenTick: undefined };
         this.emit({
             type: "notice",
@@ -9072,6 +9104,12 @@ export class Sim {
         if (this.tombsPath && !this.tombsPathsDone.includes(this.tombsPath)) {
             this.tombsPathsDone.push(this.tombsPath);
         }
+        const time = this.tombsTimes.find(
+            (t) => t.id === this.tombsPath && t.seconds === undefined,
+        );
+        if (time) {
+            time.seconds = (this.tick - time.startTick) / TICKS_PER_SECOND;
+        }
         this.tombsPath = undefined;
         this.tombsRoom = undefined;
         for (const enemy of this.enemies) {
@@ -9513,11 +9551,10 @@ export class Sim {
                 : [],
         );
         const purples = open.filter(({ from }) => from.weight !== undefined);
-        const [min, max] = PURPLE_CHANCE;
-        const chance = purples.length > 0 ? min + ((max - min) * Math.min(level, 500)) / 500 : 0;
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
+            const chance = purples.length > 0 ? this.tombsChance(hero) : 0;
             const found: TrophyDef[] = [];
             const purple =
                 purples.length > 0 && this.rng.chance(chance)
@@ -9532,7 +9569,12 @@ export class Sim {
                     found.push(trophy);
                 }
             }
-            hero.raidChest = { points: 0, chance, found: found.map((t) => t.id), level };
+            hero.raidChest = {
+                points: Math.round(hero.tombsPoints),
+                chance,
+                found: found.map((t) => t.id),
+                level,
+            };
             this.emit(
                 {
                     type: "notice",
@@ -9546,6 +9588,63 @@ export class Sim {
             );
         }
         this.use(current);
+    }
+
+    // A hero's chance of a purple from the Tombs' chest: the raid level's (PURPLE_CHANCE's least
+    // at 0, its most at 500), all of it with a whole raid's points, less with fewer
+    private tombsChance(hero: Hero): number {
+        const [min, max] = PURPLE_CHANCE;
+        const level = min + ((max - min) * Math.min(this.raidLevel, 500)) / 500;
+        return level * Math.min(1, hero.tombsPoints / TOMBS_POINTS.full);
+    }
+
+    // What a Tombs boss's whole hitpoints are worth in points (TOMBS_POINTS), none for the rest
+    private tombsWorth(enemy: Enemy): number {
+        if (!this.map.tombs) {
+            return 0;
+        }
+        const wardens = this.tombsWardens;
+        if (wardens) {
+            if (enemy.uid === wardens.obeliskUid) {
+                return TOMBS_POINTS.obelisk;
+            }
+            if (enemy.uid === wardens.two?.wardenUid || enemy.uid === wardens.two?.kneel?.coreUid) {
+                return TOMBS_POINTS.wardenTwo;
+            }
+            return enemy.uid === wardens.three?.wardenUid ? TOMBS_POINTS.wardenThree : 0;
+        }
+        return enemy.uid === this.tombsRoom?.boss?.uid ? TOMBS_POINTS.boss : 0;
+    }
+
+    // The Tombs' board for the result screen
+    private tombsSummary(): TombsSummary | undefined {
+        const tombs = this.map.tombs;
+        if (!tombs) {
+            return undefined;
+        }
+        const wardens = this.tombsWardens;
+        const end = this.fellTick >= 0 ? this.fellTick : this.tick;
+        return {
+            level: this.raidLevel,
+            invocations: cleanInvocations(this.invocations),
+            paths: this.tombsTimes.flatMap((time) => {
+                const path = tombs.paths.find((p) => p.id === time.id);
+                return path && time.seconds !== undefined
+                    ? [{ id: time.id, name: path.name, seconds: time.seconds }]
+                    : [];
+            }),
+            ...(wardens && {
+                wardensSeconds: (end - wardens.startTick) / TICKS_PER_SECOND,
+            }),
+            wipes: this.tombsDeaths,
+            party: this.heroes.map((hero) => ({
+                name: hero.name,
+                points: Math.round(hero.tombsPoints),
+                deaths: hero.tombsDowns,
+                chance: hero.raidChest?.chance ?? this.tombsChance(hero),
+                you: hero === this.hero,
+            })),
+        };
     }
 
     get raidPoints(): number {
@@ -13743,6 +13842,11 @@ export class Sim {
         player.deathTick = this.tick;
         this.hero.down = true;
         this.hero.outTick = this.tick;
+        // OSRS's: a death in the Tombs costs a fifth of your points
+        if (this.map.tombs) {
+            this.hero.tombsDowns++;
+            this.hero.tombsPoints *= 1 - TOMBS_POINTS.deathLoss;
+        }
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
                 this.failTombsRoom();
@@ -13930,6 +14034,13 @@ export class Sim {
         // All a hit can get at is its shield, in a fight with totems
         const shielded = phase !== undefined && phase.stage !== "hp";
         let shown = damage;
+        // The Tombs' points go by the boss's hitpoints taken (a core's off its Warden)
+        const worth = this.tombsWorth(enemy);
+        const pointsTo =
+            worth > 0 && two && enemy.uid === two.kneel?.coreUid
+                ? this.enemies.find((e) => e.uid === two.wardenUid)
+                : enemy;
+        const hpBefore = pointsTo?.hp ?? 0;
         if (shielded) {
             phase.shield -= damage;
         } else if (two && (enemy.uid === two.wardenUid || enemy.uid === two.kneel?.coreUid)) {
@@ -13940,6 +14051,12 @@ export class Sim {
             enemy.hp -= damage;
         }
         enemy.flash = 5;
+        if (worth > 0 && pointsTo) {
+            const taken = Math.max(0, hpBefore - Math.max(0, pointsTo.hp));
+            // Shared out by damage in co-op: a fair share of each boss is its whole worth
+            const party = this.heroes.filter((hero) => !hero.left).length;
+            this.hero.tombsPoints += (taken / pointsTo.maxHp) * worth * party;
+        }
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;
         this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += shown;

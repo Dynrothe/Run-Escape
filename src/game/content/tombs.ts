@@ -2804,3 +2804,17 @@ TOMBS_ENEMIES.push(
     zebakLook("zebak_boulder", "Boulder", 11737, -1),
     zebakLook("zebak_wave", "Wave", 11738, 7877),
 );
+
+// The Tombs' points, each player's own, for the chest (Sim.tombsChance): a puzzle room's done
+// for everyone in the raid, a boss's whole hitpoints for each (shared by damage in co-op, a fair
+// share its whole worth), and a death costs a fifth of what you've got, as OSRS's does. A whole
+// raid's worth is `full`, which gives the raid level's whole chance of a purple.
+export const TOMBS_POINTS = {
+    room: 500,
+    boss: 1000,
+    obelisk: 500,
+    wardenTwo: 1000,
+    wardenThree: 1500,
+    deathLoss: 0.2,
+    full: 4 * (500 + 1000) + 500 + 1000 + 1500,
+};

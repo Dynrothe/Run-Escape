@@ -63,7 +63,7 @@ import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import type { RaidChest } from "../core/Sim";
+import type { RaidChest, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
@@ -1170,7 +1170,7 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
             </div>
             <div className="ui-subtle">
                 {chest.level !== undefined
-                    ? `Raid level ${chest.level} (${getRaidBand(chest.level)})`
+                    ? `${chest.points.toLocaleString("en-GB")} points at raid level ${chest.level}`
                     : `${chest.points.toLocaleString("en-GB")} raid points`}
                 : a {Math.round(chest.chance * 100)}% chance of a unique
             </div>
@@ -1185,6 +1185,98 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                 </div>
             ) : (
                 <div className="ui-subtle">No unique this time.</div>
+            )}
+        </div>
+    );
+}
+
+// The Tombs of Amascut's board at the end, as OSRS's raid summary has it: the raid level and the
+// invocations that made it, each path's time and the Wardens', and the party's points and deaths
+function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
+    const band = getRaidBand(tombs.level);
+    const total =
+        tombs.paths.reduce((sum, path) => sum + path.seconds, 0) + (tombs.wardensSeconds ?? 0);
+    const party = tombs.party.reduce((sum, player) => sum + player.points, 0);
+    return (
+        <div className="ui-tombs-board">
+            <div className="ui-tombs-board-level">
+                <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
+                <span>
+                    Raid level <b>{tombs.level}</b> ({band})
+                </span>
+            </div>
+            {tombs.invocations.length > 0 && (
+                <div className="ui-tombs-board-invocations" aria-label="Invocations">
+                    {tombs.invocations.map((id) => {
+                        const invocation = INVOCATION_BY_ID.get(id);
+                        return invocation ? (
+                            <span key={id} title={invocation.name}>
+                                <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
+                            </span>
+                        ) : null;
+                    })}
+                </div>
+            )}
+            <div className="ui-tombs-board-columns">
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Room</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.paths.map((path) => (
+                            <tr key={path.id}>
+                                <td>{path.name}</td>
+                                <td>{formatTime(path.seconds)}</td>
+                            </tr>
+                        ))}
+                        {tombs.wardensSeconds !== undefined && (
+                            <tr>
+                                <td>The Wardens</td>
+                                <td>{formatTime(tombs.wardensSeconds)}</td>
+                            </tr>
+                        )}
+                        <tr className="ui-tombs-board-total">
+                            <td>Total</td>
+                            <td>{formatTime(total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Points</th>
+                            <th>Deaths</th>
+                            <th>Purple</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.party.map((player, i) => (
+                            <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
+                                <td>{player.name || "You"}</td>
+                                <td>{player.points.toLocaleString("en-GB")}</td>
+                                <td>{player.deaths}</td>
+                                <td>{Math.round(player.chance * 100)}%</td>
+                            </tr>
+                        ))}
+                        {tombs.party.length > 1 && (
+                            <tr className="ui-tombs-board-total">
+                                <td>Party</td>
+                                <td>{party.toLocaleString("en-GB")}</td>
+                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
+                                <td />
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            {tombs.wipes > 0 && (
+                <div className="ui-subtle">
+                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
+                </div>
             )}
         </div>
     );
@@ -2996,6 +3088,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         {getMap(result.mapId).name}!
                     </p>
                 )}
+                {result?.tombs && <TombsBoardView tombs={result.tombs} />}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">

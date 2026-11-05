@@ -12,7 +12,14 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
-import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES, WARDENS } from "../content/tombs";
+import {
+    APMEKEN,
+    APMEKEN_WAVES,
+    CRONDIS,
+    TOMBS_BOSSES,
+    TOMBS_POINTS,
+    WARDENS,
+} from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { createWardensFloor } from "../content/wardensFloor";
@@ -2787,6 +2794,13 @@ describe("the Wardens' second and last phases", () => {
         step(sim, 6);
         expect(sim.state).toBe("victory");
         expect(sim.getResult().raidChest).toBeDefined();
+        // The board: the Wardens' time, and points for the Wardens' hitpoints taken
+        const board = sim.getResult().tombs!;
+        expect(board.level).toBe(0);
+        expect(board.wardensSeconds).toBeGreaterThan(0);
+        expect(board.party).toHaveLength(1);
+        expect(board.party[0].you).toBe(true);
+        expect(board.party[0].points).toBeGreaterThanOrEqual(TOMBS_POINTS.wardenThree);
         // The fight's on the run's clock, not left out as the Nexus is
         expect(sim.seconds).toBeGreaterThan(WARDENS.two.toLast);
     });
@@ -2796,6 +2810,8 @@ describe("the Tombs' chest", () => {
     // The chest opened as the last Warden falls, at this raid level, so many times over
     const open = (invocations: string[], times: number) => {
         const sim = tombs(invocations);
+        // A whole raid's points
+        sim.heroes[0].tombsPoints = TOMBS_POINTS.full;
         const found: string[] = [];
         for (let i = 0; i < times; i++) {
             sim.trophies.clear();
@@ -2804,6 +2820,22 @@ describe("the Tombs' chest", () => {
         }
         return { sim, found };
     };
+
+    it("goes by each player's points: all the raid level's chance with a whole raid's, a fifth off for a death", () => {
+        const sim = tombs(INVOCATIONS.map((i) => i.id));
+        const hero = sim.heroes[0];
+        hero.tombsPoints = TOMBS_POINTS.full;
+        const whole = sim["tombsChance"](hero);
+        expect(whole).toBeGreaterThan(0.3);
+        hero.tombsPoints = TOMBS_POINTS.full / 2;
+        expect(sim["tombsChance"](hero)).toBeCloseTo(whole / 2);
+        sim.player.hp = 1;
+        sim["revivesLeft"] = 0;
+        sim["tombsPath"] = sim.map.tombs!.paths[0].id;
+        sim["playerDied"]();
+        expect(hero.tombsDowns).toBe(1);
+        expect(hero.tombsPoints).toBeCloseTo((TOMBS_POINTS.full / 2) * 0.8);
+    });
 
     it("has no purple under raid level 50, and only the fang or the Lightbearer under 150", () => {
         const { sim, found } = open([], 200);
