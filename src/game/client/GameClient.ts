@@ -26,6 +26,7 @@ import { formatPassiveValue, getPassive } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
+import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
@@ -34,7 +35,7 @@ import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { getWeapon } from "../content/weapons";
+import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
@@ -67,6 +68,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
+import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -75,7 +77,15 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameAssets, getOfferedAttackSeqs, getRunAppearance, getRunAttackSeqs } from "./GameAssets";
+import {
+    GameAssets,
+    PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
+    getEnemyModelKey,
+    getOfferedAttackSeqs,
+    getRunAppearance,
+    getRunAttackSeqs,
+} from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
@@ -166,11 +176,18 @@ const RUN_DISTANCE = 18;
 // How long the camera takes to follow the ground up a slope on a dev map, in ms: without this,
 // it lurches at every crease in tall ground
 const CAMERA_GROUND_EASE = 110;
-// In a raid's boss room the camera leans this much of the way towards where the boss stands, up
-// to so many tiles, so a big boss isn't under the HUD at the top; and how long that takes, in ms
+// For a boss that asks for it (BossLookDef.lean), the camera leans this much of the way towards
+// where it stands, up to so many tiles, so a big boss isn't under the HUD at the top; and how long
+// that takes, in ms (the ease is a raid boss room's too). A raid's boss rooms lean only as far
+// as they need (RAID_LEAN_MAX): players there would rather it stayed on them.
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
+// In a raid's boss room the camera stays on the player, as in the halls, leaning north only as
+// far as keeps the boss and its overhead prayer below the boss bar (a big boss on a phone's short
+// screen most of all), and only when that's no more than this many tiles: a boss further off
+// isn't leant towards
+const RAID_LEAN_MAX = 4;
 // How much brighter a gaze lights the arena at its height (getGazeLight)
 const GAZE_LIGHT = 0.6;
 // Ms the light takes to catch up with that, roughly
@@ -259,6 +276,28 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
     };
 }
 
+// A raid whose bosses all pray against a weapon's style (the Theatre's, against ranged and
+// magic): what its card says it loses against them
+function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
+    const weaponId =
+        choice.kind === "evolve" || choice.kind === "hilt"
+            ? choice.into
+            : choice.kind === "newWeapon" || choice.kind === "weaponLevel"
+              ? choice.weaponId
+              : undefined;
+    if (!weaponId) {
+        return undefined;
+    }
+    const style = getWeaponStyle(getWeapon(weaponId));
+    const share = getRaidBossShare(sim.map, style, sim.expert);
+    if (share === undefined) {
+        return undefined;
+    }
+    // Nylocas Vasilias takes her colour's style better, so it's most of the Theatre's bosses
+    const bosses = raidHasColours(sim.map) ? "most bosses" : "bosses";
+    return `-${Math.round((1 - share) * 100)}% damage to ${bosses}: they pray against ${style}`;
+}
+
 function getChoiceViews(sim: Sim): ChoiceView[] {
     const style = getCharacter(sim.characterId).style;
     return sim.choices.map((choice, index) => {
@@ -278,6 +317,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
             banished: sim.isBanishedChoice(index),
+            bossPenalty: getBossPenalty(sim, choice),
         };
     });
 }
@@ -450,8 +490,13 @@ export class GameClient implements GameFrameHandler {
     private coopBarBoss: Enemy | undefined;
     // Where the camera thinks the ground is, on a dev map
     private cameraGround: number | undefined;
-    // How far the camera's leaning towards a raid boss (BOSS_LEAN)
+    // How far the camera's leaning towards a boss that asks for it (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
+    // Where a raid boss's head was on the screen (getRaidRoomLean), and the boss bar's bottom
+    private readonly leanPoint: ScreenPoint = { x: 0, y: 0, visible: false };
+    private bossBarBottom?: { y: number; at: number };
+    // How far north of the player last frame's camera was, all told (its lean and any shake)
+    private cameraOffsetY = 0;
     // How lit a gaze has the arena now (getGazeLight, eased)
     private gazeLight = 1;
     // The camera's shake: how hard (0 to 1), and since when (ms)
@@ -459,6 +504,8 @@ export class GameClient implements GameFrameHandler {
     private shownDps = 0;
     // The world's brightness as last set: a raid hall can draw darker than its map
     private shownBrightness = 1;
+    // The raid hall's colour wash as last set (RaidRoomDef.hall)
+    private shownWash: string | undefined;
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
     // Each hero's look, as last baked
@@ -1385,6 +1432,8 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean = { x: 0, y: 0 };
         this.renderer.setBrightness(map.brightness ?? 1);
         this.shownBrightness = map.brightness ?? 1;
+        this.renderer.setWash(undefined);
+        this.shownWash = undefined;
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
         if (music) {
@@ -1757,6 +1806,8 @@ export class GameClient implements GameFrameHandler {
         this.renderer.setSmoothTerrain(false);
         this.renderer.setBrightness(1);
         this.shownBrightness = 1;
+        this.renderer.setWash(undefined);
+        this.shownWash = undefined;
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2046,7 +2097,7 @@ export class GameClient implements GameFrameHandler {
             ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
             this.cameraGround = ground;
         }
-        const lean = this.getBossLean(sim, px, py);
+        const lean = this.getRaidRoomLean(sim, now) ?? this.getBossLean(sim, px, py);
         const ease = 1 - Math.exp(-deltaTimeMs / BOSS_LEAN_EASE);
         this.cameraLean.x += (lean.x - this.cameraLean.x) * ease;
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
@@ -2058,11 +2109,18 @@ export class GameClient implements GameFrameHandler {
             ground - 0.6,
             py + this.cameraLean.y + pan.y + shake.y,
         );
-        // A raid hall can be drawn darker than the map (RaidRoomDef.hall)
-        const hallBrightness =
+        this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        // A raid hall can be drawn darker than the map, and washed with a colour
+        // (RaidRoomDef.hall)
+        const hall =
             sim.map.raid && sim.raidStage === "waves"
-                ? sim.map.raid.rooms[sim.raidRoom].hall?.brightness
+                ? sim.map.raid.rooms[sim.raidRoom].hall
                 : undefined;
+        const hallBrightness = hall?.brightness;
+        if (hall?.wash !== this.shownWash) {
+            this.shownWash = hall?.wash;
+            this.renderer.setWash(hall?.wash);
+        }
         // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
         // eased both ways so it never steps
         const light = getGazeLight(sim);
@@ -2140,13 +2198,56 @@ export class GameClient implements GameFrameHandler {
         return { x: (at.x - px) * away, y: (at.y - py) * away };
     }
 
-    // Towards where a raid room's boss stands, while it's being fought, or a boss that asks for
-    // it (BossLookDef.lean), wherever it is
-    private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
-        const room = sim.map.raid?.rooms[sim.raidRoom];
+    // In a raid's boss room, while its boss is up: north just far enough that its head, and its
+    // overhead prayer, are below the boss bar (up to RAID_LEAN_MAX), measured on last frame's
+    // camera. Undefined anywhere else.
+    private getRaidRoomLean(sim: Sim, now: number): { x: number; y: number } | undefined {
         const boss = sim.shownBoss;
-        const leaning = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
-        const at = room && sim.raidStage === "boss" ? room.bossAt : leaning;
+        if (!sim.map.raid || sim.raidStage !== "boss" || !boss || boss.dead || sim.intro) {
+            return undefined;
+        }
+        const overlay = this.overlay;
+        if (overlay.height === 0) {
+            return { x: 0, y: 0 };
+        }
+        // Where its overhead prayer's drawn from (BossFightView.drawOverheads), and the icon's top
+        const model = this.assets.get(getEnemyModelKey(boss.def, boss.variant));
+        const top =
+            this.grid.getHeight(boss.x, boss.y) / 128 -
+            ((model?.height ?? 128) * boss.scale) / 128 -
+            OVERHEAD_GAP;
+        const icon = this.assets.getSprite(PRAYER_HEADICON_SPRITE, PRAYER_HEADICON_FRAME_IDS[0]);
+        const iconHeight = (icon?.height ?? 25) * OVERHEAD_SCALE * overlay.uiScale;
+        const head = overlay.project(boss.x, top, boss.y, this.leanPoint).y - iconHeight;
+        // How far up the screen a tile further north moves it
+        const perTile =
+            head + iconHeight - overlay.project(boss.x, top, boss.y + 1, this.leanPoint).y;
+        if (!(perTile > 0)) {
+            return { x: 0, y: this.cameraLean.y };
+        }
+        // Leaning north moves everything down the screen by perTile a tile. Last frame's camera
+        // was off by all of cameraOffsetY (its lean, and a shake), so the lean wanted is that and
+        // what's short of it.
+        const lean = this.cameraOffsetY + (this.getBossBarBottom(now) - head) / perTile;
+        return { x: 0, y: lean > RAID_LEAN_MAX ? 0 : Math.max(0, lean) };
+    }
+
+    // The boss bar's bottom edge in the overlay's pixels, looked up now and then (a layout read)
+    private getBossBarBottom(now: number): number {
+        if (!this.bossBarBottom || now - this.bossBarBottom.at > 500) {
+            const bar = document.querySelector(".ui-boss-bar")?.getBoundingClientRect();
+            const overlay = this.overlay;
+            const scale = overlay.height / Math.max(1, overlay.canvas.offsetHeight);
+            const canvasTop = overlay.canvas.getBoundingClientRect().top;
+            this.bossBarBottom = { y: bar ? (bar.bottom - canvasTop) * scale : 0, at: now };
+        }
+        return this.bossBarBottom.y;
+    }
+
+    // Towards a boss that asks for it (BossLookDef.lean), wherever it is
+    private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
+        const boss = sim.shownBoss;
+        const at = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
         if (!at) {
             return { x: 0, y: 0 };
         }
@@ -2707,10 +2808,6 @@ export class GameClient implements GameFrameHandler {
             // Whole seconds, as they're shown, so standing still changes nothing
             bossIn: Math.ceil(sim.timeLeftForBoss),
             raidRoom: sim.map.raid && {
-                wash:
-                    sim.raidStage === "waves"
-                        ? sim.map.raid.rooms[sim.raidRoom].hall?.wash
-                        : undefined,
                 number: sim.raidRoom + 1,
                 count: sim.map.raid.rooms.length,
                 name: sim.map.raid.rooms[sim.raidRoom].name,

@@ -35,6 +35,12 @@ export class Overlay {
         this.ctx.clearRect(0, 0, width, height);
     }
 
+    // How much bigger what's drawn over the world is than its pixels (a hitsplat, an overhead),
+    // for the screen's height
+    get uiScale(): number {
+        return Math.max(this.height / 900, 0.75);
+    }
+
     // World position (x/z tiles, y tiles with up negative) to canvas pixels.
     project(x: number, y: number, z: number, out: ScreenPoint): ScreenPoint {
         const camera = this.camera;

@@ -6,7 +6,11 @@
 import fs from "fs";
 import path from "path";
 
-import { getGameSpriteIds } from "../../src/game/client/GameAssets";
+import {
+    PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
+    getGameSpriteIds,
+} from "../../src/game/client/GameAssets";
 import { PASSIVES } from "../../src/game/content/passives";
 import { SpriteImage, decodeSpriteImage } from "../../src/mapviewer/worker/SpriteDataLoader";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
@@ -29,7 +33,7 @@ function loadSprite(id: number): SpriteImage {
     try {
         return decodeSpriteImage(spriteIndex, id);
     } catch {
-        return { id, width: 0, height: 0, pixels: new Int32Array(0) };
+        return { id, frame: 0, width: 0, height: 0, pixels: new Int32Array(0) };
     }
 }
 
@@ -98,11 +102,20 @@ switch (command) {
                 missing++;
             }
         }
+        // The overhead prayers' frames, drawn over bosses that pray
+        for (const frame of PRAYER_HEADICON_FRAME_IDS) {
+            const sprite = decodeSpriteImage(spriteIndex, PRAYER_HEADICON_SPRITE, frame);
+            const drawn = sprite.pixels.some((argb) => argb >>> 24 !== 0);
+            console.log(`overhead prayer frame ${frame}: ${describe(sprite)}`);
+            if (!drawn) {
+                missing++;
+            }
+        }
         if (missing > 0) {
             console.log(`${missing} of the game's sprites are missing or blank`);
             process.exitCode = 1;
         } else {
-            console.log("Every sprite the game shows is in the cache");
+            console.log("Every sprite the game shows is in the cache, overhead prayers too");
         }
         break;
     }

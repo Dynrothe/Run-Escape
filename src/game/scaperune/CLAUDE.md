@@ -525,6 +525,8 @@ bun run tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaper
 bun run tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2
 # triangles per camera view (PHONE=1 for a phone's)
 bun run tsx scripts/scaperune/view-weight.ts scaperune_oasis
+# faces in one plane, which z-fight
+bun run tsx scripts/scaperune/check-coplanar.ts scaperune_oasis
 # will a cut hold waves?
 bun run tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off
 DEV_MAPS=1 MAP=scaperune_oasis bun run tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
@@ -660,6 +662,14 @@ hand-made map with no `detail`, and only checks a road's grade or a landmark's g
   `0xFF00FF`, which draws nothing) or has no floor at all. In the world that ground is under something else, so a cut brought
   in a hole. Tiles drawn from level 1, under a bridge, or covered by floor decoration aren't counted. `overview.ts` hatches the
   hidden overlay black and grey.
+- `N open tiles are floor decoration over a hidden floor`: the tiles are drawn, but the hairline seams between two of them
+  show what's under them, which is the renderer's black, and they glitter as the camera moves. The Owl's Court's walkways
+  did. Put a plain overlay of the decoration's own colour under them (theirs is 141); the decoration draws over it. The
+  Theatre's Bloat and Verzik rooms have 704 such tiles, as cut.
+- `X and Y have faces in one plane, which z-fight` (`coplanar.ts`), ours first, then `as cut from the real place` for what a
+  stamp brought as the real world has it. It doesn't fail a map, since some dev maps had a few before it was checked
+  (Vardhelm's city towers on their walls, Ysmar's big props, overlapping falls and floes), but a new map should have none:
+  `CHECK=1 check-coplanar.ts <map>` fails on any of ours. See [Traps](#traps).
 - `N warnings from the catalogue:`, on a shipped map: the ban list minus its `allowLocs`, kit pieces, blood and foam. A
   shipped map went out looked at in the game, so each is a question, not a bug.
 - `N tiles have two solid locs on them`, on a shipped map (`findSolidOverlaps` in `placer.ts`): usually a placement helper
@@ -1450,6 +1460,12 @@ expect(placer.describeShortfalls()).toEqual([]); // or read placer.report() per 
   instead of someone counting by eye.
 - **A loc off a whole tile throws** (`Ground.place`, `Placer.dress` and `writeLocs`), rather than the map file quietly moving
   it: `x / 2` of an odd width is the usual cause. Use `Math.floor`.
+- **What a boss fight animates is a stand-in** (`placer.standIn(id, x, y, { rotation, walkThrough, kind })`). A map square
+  bakes each loc with its own animation only, so a placed statue can't be told to aim or throw on cue; the fight draws it
+  instead (`BossAttackDef.statues`). A stand-in's tiles are taken and blocked (open if `walkThrough`) as though it stood
+  there, but it's left out of the map and listed in `placer.standIns`. Hand them on as the map's `standIns`, so
+  `view-weight.ts` counts their triangles: the Owl's Court's 24 (crossbowmen, knights, fire jets) take its heaviest phone
+  view from 38k to 60k, which a count without them never showed.
 
 The Sanctuary and Hallowed Night still use their own copies: moving them onto `Placer` would re-roll their dressing.
 
@@ -1480,14 +1496,35 @@ region that isn't a rectangle of open ground: the court, a bridge and a terrace 
 rims and dais in it blocked first, so `maxSealed: 0` says nothing open was cut off.
 
 **Walkways over a void, as the Hallowed Sepulchre is built** (`owlsCourt.ts`, Justiciar Zachariah's arena): every walkway
-tile is the hidden overlay (359) under a type 22 stone tile, and the void has no floor at all, so it draws the renderer's
-black. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
+tile is a type 22 stone tile over a plain overlay of the stones' own dark blue-grey (141), and the void has no floor at all,
+so it draws the renderer's black. The Sepulchre's own floor under its tiles is the hidden overlay (359), which showed the
+black through the seams between the tiles: `check-maps.ts` warns of that now. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
 where only a corner touches), and its tall wall 38924 under every edge the camera can see. The cache stands that wall on the
-level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and it hangs from the
-edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
+level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and 4 units (its cap
+would be in the floor's plane otherwise) and it hangs from the edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
 each is flat at its height and the lips stand level. The camera's always over the court, so west faces west of it and east
 faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
 1 and east at 3.
+
+#### A boss fight's arena
+
+What the Owl's Court (`owlsCourt.ts`, `docs/design/justiciar-zachariah.md`) learnt, for the next arena:
+
+- **The fight reads the arena off the map.** Export everything it reads in arena tiles (`OWLS_COURT`: the boss's square, his
+  rise, the start, pillars, crossbow lanes, knights, fire rows, the dais), and have the content turn that into the `MapDef`'s
+  `features`. The fight never hard-codes a tile. Each of them is a `points` entry too, so a lane's end in a wall throws in
+  `assertReachable`, not in a playtest.
+- **He comes in where the player isn't running past him.** He descends in the court's middle and the player starts by its
+  south edge, 11 tiles off, inside his 16-tile leash. The intro holds the camera on him and pans back to the player
+  (`BossIntroDef.pan`), and the player faces him while held (`faces`). The first layout started the player on the terrace
+  with him at the bridge's head, and they ran past him to reach the court.
+- **Don't paint a mechanic on the floor.** The court first laid its lightning's 3 by 3 checker as rugs, and it read as a board
+  game. The floor's plain stone with one runner up the aisle; the strike's own glow marks the cells it's about to hit.
+- **What it animates is a stand-in** (`Placer.standIn`, above), and counts on the phone like anything else. A crossbowman
+  statue is 1,434 triangles, so three lanes a side; the lightning is his own cast, not a pair of priest statues, which would
+  have been about 1,500 triangles more on the heaviest view. Run `PHONE=1 view-weight.ts` with the stand-ins in.
+- **What the cache can't do is the fight's to draw.** Nothing in the cache casts a pillar's shadow, so the gaze's safe ground
+  is a colour overlay the fight draws (the design doc's section 9). Keep that for what has to be read exactly.
 
 ### How big a map can be
 
@@ -1538,6 +1575,14 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   need the sea sunk first, or a river's lowest point isn't known.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
   first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
+- **Faces in one plane z-fight.** Two up-facing faces at the same height that overlap flicker as the camera moves, whatever
+  their priorities: the renderer's depth bias (`main.vert.glsl`, 0.0007 of a tile a priority step) doesn't keep them apart.
+  The Owl's Court had three: its hanging wall's cap at the floor's height, a wizard statue's plate flat on the floor, and the
+  great owls' plinth, whose steps every 2 units met the raised edge of a stone tile 6 up. `check-coplanar.ts` (and
+  `check-maps.ts`) finds them from the scene as the renderer builds it. Lift the loc a unit or a few in `LocOverrides.ts`
+  (`height`), an odd number for steps that go up in 2s, or sink a cap that a lip hides.
+- **Floor decoration over the hidden overlay shows the void.** Tiled type 22 floors leave hairline seams, and with nothing
+  under them the seams are black and glitter. Give them a plain overlay of their own colour underneath.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
   `createRng` and `createNoise`. If you add a call to `rng()` early on, every later roll changes, and
   so does the map. Anything new goes on a seed of its own.

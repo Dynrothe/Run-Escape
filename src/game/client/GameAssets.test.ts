@@ -22,6 +22,8 @@ import {
     GAME_VIEW_SPRITES,
     GameAssets,
     HINT_ARROW_SPRITE,
+    PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
@@ -30,6 +32,7 @@ import {
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
+    getPrayerHeadicon,
     getRunAttackSeqs,
     getShieldedModelKey,
     getStatueModelKey,
@@ -408,18 +411,28 @@ describe("power-ups in the cache", () => {
 
 describe("sprites", () => {
     test("the slim cache keeps every sprite the game view loads", async () => {
-        const asked: number[][] = [];
+        const asked: { spriteIds: number[]; frames?: number[] }[] = [];
         const workerPool = {
-            queueLoad: async (_loader: unknown, input: { spriteIds: number[] }) => {
-                asked.push(input.spriteIds);
+            queueLoad: async (
+                _loader: unknown,
+                input: { spriteIds: number[]; frames?: number[] },
+            ) => {
+                asked.push(input);
                 return [];
             },
         };
         const assets = new GameAssets(workerPool as never, undefined as never, undefined as never);
         await assets.loadSprites();
-        expect(asked).toEqual([[...GAME_VIEW_SPRITES]]);
+        // The game view's first frames, then each overhead prayer's frame
+        const headicons = PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE);
+        expect(asked).toEqual([
+            {
+                spriteIds: [...GAME_VIEW_SPRITES, ...headicons],
+                frames: [...GAME_VIEW_SPRITES.map(() => 0), ...PRAYER_HEADICON_FRAME_IDS],
+            },
+        ]);
         expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
-        expect(getGameSpriteIds()).toEqual(expect.arrayContaining([...GAME_VIEW_SPRITES]));
+        expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
     });
 
     test("the slim cache keeps every passive's icon", () => {
@@ -430,5 +443,40 @@ describe("sprites", () => {
             }
         }
         expect(new Set(ids).size).toBe(ids.length);
+    });
+});
+
+describe("a boss's overhead prayer", () => {
+    test("has a frame for each style and pair, whichever way round, that the client loads", () => {
+        // A pair's the same frame whichever way round it's listed, and not either one's own
+        const pair = getPrayerHeadicon(["ranged", "magic"]);
+        expect(pair).toBeDefined();
+        expect(getPrayerHeadicon(["magic", "ranged"])).toBe(pair);
+        expect(pair).not.toBe(getPrayerHeadicon(["ranged"]));
+        expect(pair).not.toBe(getPrayerHeadicon(["magic"]));
+        // Every frame it can give is one the client loads (and sprites.ts check finds drawn)
+        const asked = [
+            ["melee"],
+            ["ranged"],
+            ["magic"],
+            ["ranged", "magic"],
+            ["melee", "magic"],
+            ["melee", "ranged"],
+        ];
+        for (const styles of asked) {
+            expect(getPrayerHeadicon(styles)).toBeDefined();
+            expect(PRAYER_HEADICON_FRAME_IDS).toContain(getPrayerHeadicon(styles));
+        }
+    });
+
+    test("is the frame sprite 440 draws that prayer, or pair, in", () => {
+        // Pinned from the cache (sprites.ts png 440): a swapped pair would show green Nylocas
+        // Vasilias the wrong prayers, and sprites.ts check only finds a frame drawn
+        expect(getPrayerHeadicon(["melee"])).toBe(0);
+        expect(getPrayerHeadicon(["ranged"])).toBe(1);
+        expect(getPrayerHeadicon(["magic"])).toBe(2);
+        expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
+        expect(getPrayerHeadicon(["melee", "ranged"])).toBe(7);
+        expect(getPrayerHeadicon(["melee", "magic"])).toBe(8);
     });
 });

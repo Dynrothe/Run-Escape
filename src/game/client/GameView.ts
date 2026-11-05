@@ -1004,7 +1004,7 @@ export class GameView {
     drawOverlay(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
         const now = performance.now();
-        const scale = Math.max(overlay.height / 900, 0.75);
+        const scale = overlay.uiScale;
 
         this.enemiesByUid.clear();
         for (const enemy of sim.enemies) {

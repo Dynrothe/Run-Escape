@@ -116,6 +116,24 @@ export const HITSPLAT_SPRITES = { damage: 1359, poison: 1360, block: 1358 } as c
 // The game's hint arrow (headicons_hint), the yellow one that bobs over what
 // you're pointed at
 export const HINT_ARROW_SPRITE = 441;
+// The overhead prayers (headicons), a frame each: what a boss prays against shows over its head
+export const PRAYER_HEADICON_SPRITE = 440;
+// Their frames: Protect from Melee, Missiles, Magic, then the pairs and all three, as bosses use
+const PRAYER_HEADICON_FRAMES: Record<string, number> = {
+    melee: 0,
+    ranged: 1,
+    magic: 2,
+    "magic,ranged": 6,
+    "melee,ranged": 7,
+    "magic,melee": 8,
+    "magic,melee,ranged": 9,
+};
+export const PRAYER_HEADICON_FRAME_IDS = [...new Set(Object.values(PRAYER_HEADICON_FRAMES))];
+
+// The overhead prayer frame for praying against these styles, if there's one
+export function getPrayerHeadicon(styles: readonly string[]): number | undefined {
+    return PRAYER_HEADICON_FRAMES[[...styles].sort().join(",")];
+}
 
 // The sprites the game view draws, which loadSprites loads as the game starts
 export const GAME_VIEW_SPRITES: readonly number[] = [
@@ -124,12 +142,14 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, the skills' refund button, co-op's flags (every frame comes with the
-// first) and the passives with a sprite for an icon. The slim cache keeps
-// these and no others, so a sprite the game shows has to be in here.
+// tabs, the skills' refund button, co-op's flags and the overhead prayers
+// (every frame comes with the first) and the passives with a sprite for an
+// icon. The slim cache keeps these and no others, so a sprite the game shows
+// has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
+        PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
         REFUND_SPRITE,
         FLAG_SPRITE,
@@ -463,7 +483,8 @@ export function lookHas(
 export class GameAssets {
     readonly models = new Map<string, ActorModel>();
     // Cache sprites by id, for the 2D overlay
-    readonly sprites = new Map<number, HTMLCanvasElement>();
+    // By sprite and frame ("id:frame")
+    readonly sprites = new Map<string, HTMLCanvasElement>();
 
     private readonly players: PlayerBake[] = [];
     // Looks being baked, by appearance key: players who look alike (all the
@@ -875,17 +896,22 @@ export class GameAssets {
         return tasks.sort((a, b) => animations(b) - animations(a));
     }
 
-    // The game view's sprites, for getSprite. Only these: the slim cache has
-    // what getGameSpriteIds lists.
+    // The game view's sprites and the overhead prayers' frames, for getSprite.
+    // Only these: the slim cache has what getGameSpriteIds lists.
     async loadSprites(): Promise<void> {
+        const spriteIds = [
+            ...GAME_VIEW_SPRITES,
+            ...PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE),
+        ];
+        const frames = [...GAME_VIEW_SPRITES.map(() => 0), ...PRAYER_HEADICON_FRAME_IDS];
         const images = await this.workerPool.queueLoad<
             SpriteDataInput,
             SpriteImage[],
             SpriteDataLoader
-        >(new SpriteDataLoader(), { spriteIds: [...GAME_VIEW_SPRITES] });
+        >(new SpriteDataLoader(), { spriteIds, frames });
         for (const image of images) {
             if (image.width > 0 && image.height > 0) {
-                this.sprites.set(image.id, toCanvas(image));
+                this.sprites.set(image.id + ":" + image.frame, toCanvas(image));
             }
         }
     }
@@ -895,8 +921,8 @@ export class GameAssets {
     }
 
     // Undefined when the cache has no such sprite
-    getSprite(id: number): HTMLCanvasElement | undefined {
-        return this.sprites.get(id);
+    getSprite(id: number, frame = 0): HTMLCanvasElement | undefined {
+        return this.sprites.get(id + ":" + frame);
     }
 
     private getPlayerBake(slot: number): PlayerBake {

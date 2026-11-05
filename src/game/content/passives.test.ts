@@ -14,6 +14,8 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("passive icons", () =>
             ["--import", "tsx", "scripts/cache/sprites.ts", "check"],
             { encoding: "utf8", timeout: 60000 },
         );
-        expect(stdout).toContain("Every sprite the game shows is in the cache");
+        expect(stdout).toContain(
+            "Every sprite the game shows is in the cache, overhead prayers too",
+        );
     }, 70000);
 });

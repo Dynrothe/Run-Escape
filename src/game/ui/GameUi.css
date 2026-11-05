@@ -1167,14 +1167,6 @@
     color: var(--ui-white);
 }
 
-/* A raid hall's colour over the world (RaidRoomDef.hall), under the HUD */
-.ui-hall-wash {
-    position: fixed;
-    inset: 0;
-    mix-blend-mode: multiply;
-    pointer-events: none;
-}
-
 .ui-hud-top {
     position: absolute;
     top: 24px;
@@ -2020,6 +2012,11 @@
 }
 
 .ui-choice-stat-down {
+    color: #ff5a5a;
+}
+
+/* A weapon whose style a raid's bosses pray against: what it loses against them */
+.ui-card-penalty {
     color: #ff5a5a;
 }
 

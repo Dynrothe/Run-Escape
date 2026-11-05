@@ -9,7 +9,8 @@
 // nothing you can walk on is hidden from the camera. And that places keep to the flow: nothing on
 // a wall or in front of a gate, and no roads or fences where they don't belong (clashes.ts). And
 // the four rules for the ground: fields are level, roads can be walked, water's flat but at a
-// fall, and falls are seated in their faces. Fails if not.
+// fall, and falls are seated in their faces. Fails if not. It warns of faces of two locs in one
+// plane, which z-fight (coplanar.ts).
 //
 //   bun run tsx scripts/scaperune/check-maps.ts
 //   ONLY=volcanoes bun run tsx scripts/scaperune/check-maps.ts    # the maps whose names match
@@ -41,6 +42,7 @@ import {
     getCollisionFlags,
     getStepGrid,
 } from "../../src/game/scaperune/collision";
+import { describeCoplanar, findMapCoplanar } from "../../src/game/scaperune/coplanar";
 import { FALL_MODELS, FALL_ROWS } from "../../src/game/scaperune/falls";
 import {
     MAP_SQUARE_SIZE,
@@ -1306,6 +1308,11 @@ function checkMap(
     };
     const roadHeights = checkRoadHeights(map);
     const hidden = countHiddenTiles(map.grid, grid, origin, gridRect);
+    // Faces in one plane, which z-fight: warned of, ours first. Some dev maps went out with a few
+    // before this was checked, so it doesn't fail one; check-coplanar.ts with CHECK=1 does
+    const coplanar = findMapCoplanar(sceneBuilder, recipe, map.grid).found.sort(
+        (a, b) => Number(a.stamped) - Number(b.stamped),
+    );
     // A shipped map is warned, not failed: it went out looked at in the game
     const catalogue = checkCatalogue(map, recipe.allowLocs);
     const problems = [
@@ -1342,20 +1349,22 @@ function checkMap(
     for (const problem of problems.slice(0, Number(process.env.SHOW ?? 16))) {
         console.log(`  ${problem}`);
     }
-    const hiddenFloor = describeHiddenFloor(
+    for (const warning of describeHiddenFloor(
         map.grid,
         context.locs,
         sceneBuilder.overlayTypeLoader,
         gridRect,
-    );
-    if (hiddenFloor) {
-        console.log(`  ${hiddenFloor}`);
+    )) {
+        console.log(`  ${warning}`);
     }
     // Solid locs on each other: a warning on a shipped map, as moving one re-rolls its dressing
     const overlaps =
         shipped && describeSolidOverlaps(map.grid, findSolidOverlaps(map.grid, context.locs));
     if (overlaps) {
         console.log(`  warning: ${overlaps}`);
+    }
+    for (const warning of describeCoplanar(coplanar).slice(0, 4)) {
+        console.log(`  warning: ${warning}`);
     }
     if (shipped && catalogue.length > 0) {
         console.log(`  ${catalogue.length} warnings from the catalogue:`);

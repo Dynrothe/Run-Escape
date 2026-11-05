@@ -1,6 +1,6 @@
 import type { Ground } from "./Ground";
 import { getLocBlocking, getLocSize, isOnGroundLevel } from "./collision";
-import type { TileGrid } from "./format";
+import { PlacedLoc, TILE_BLOCKED, TileGrid } from "./format";
 import { LOC_NORMAL } from "./mapBuild";
 import type { Rng } from "./noise";
 import type { LocInfo } from "./recipe";
@@ -21,8 +21,14 @@ import type { LocInfo } from "./recipe";
 // round a prefab.
 
 // Why a placement was refused: off the grid, on something solid, on something walked through, on
-// a building, or the name of the zone it fell in
-export type Refusal = "off the grid" | "occupied" | "dressed" | "building" | (string & {});
+// a building, on a tile already blocked (a stand-in), or the name of the zone it fell in
+export type Refusal =
+    | "off the grid"
+    | "occupied"
+    | "dressed"
+    | "building"
+    | "blocked"
+    | (string & {});
 
 export type PlacementCount = {
     requested: number;
@@ -57,6 +63,8 @@ export class Placer {
     readonly ground: Ground;
     // Tiles something that's walked through stands on: one to a tile
     readonly dressed: Uint8Array;
+    // What the game draws in the map's place (standIn), in grid tiles, in the order put down
+    readonly standIns: PlacedLoc[] = [];
     private readonly rng: Rng;
     private readonly locs?: PlacerOptions["locs"];
     private readonly sizes = new Map<number, [number, number]>();
@@ -130,6 +138,49 @@ export class Placer {
         const type = options.type ?? LOC_NORMAL;
         if (!refusal) {
             this.ground.place({ id, type, rotation, level: 0, x, y }, across, deep);
+        }
+        return this.count(options.kind ?? String(id), refusal);
+    }
+
+    // Something the game draws in the map's place: a boss fight's statues that it animates
+    // (BossAttackDef.statues). A map square bakes each loc with its own animation only, so a placed
+    // loc can't be told to aim, throw or blaze; the Owl's Court's crossbowmen, knights and fire jets
+    // are drawn by BossFightView instead. Its tiles are taken as though it stood there, and blocked
+    // unless walkThrough, but nothing goes in the map: it's in standIns, which the map hands on
+    // (GeneratedMap.standIns) so view-weight.ts counts its triangles. It must stand on open ground.
+    standIn(
+        id: number,
+        x: number,
+        y: number,
+        options: Omit<PlaceOptions, "gap" | "type"> & { walkThrough?: boolean } = {},
+    ): boolean {
+        if (!Number.isInteger(x) || !Number.isInteger(y)) {
+            throw new Error(`Loc ${id} placed off a whole tile, at ${x},${y}`);
+        }
+        const { rotation = 0, allow } = options;
+        const [across, deep] = this.getSize(id, rotation);
+        const { ground } = this;
+        let refusal: Refusal | undefined;
+        for (let ty = y; ty < y + deep && !refusal; ty++) {
+            for (let tx = x; tx < x + across && !refusal; tx++) {
+                refusal = this.getSolidRefusal(tx, ty, allow);
+                if (!refusal && ground.level0.flags[ground.tile(tx, ty)] & TILE_BLOCKED) {
+                    refusal = "blocked";
+                }
+            }
+        }
+        if (!refusal) {
+            for (let ty = y; ty < y + deep; ty++) {
+                for (let tx = x; tx < x + across; tx++) {
+                    const i = ground.tile(tx, ty);
+                    ground.reserved[i] = 1;
+                    ground.occupied[i] = 1;
+                    if (!options.walkThrough) {
+                        ground.level0.flags[i] |= TILE_BLOCKED;
+                    }
+                }
+            }
+            this.standIns.push({ id, type: LOC_NORMAL, rotation, level: 0, x, y });
         }
         return this.count(options.kind ?? String(id), refusal);
     }
