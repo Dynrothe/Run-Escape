@@ -13,7 +13,7 @@ the version in the corner).
   from close by. With its own track, Blade of Forgotten Justice.
   - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
     him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
-    for a few seconds after).
+    for a few seconds after, as he'll tell you).
   - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
     a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
     early still lands.

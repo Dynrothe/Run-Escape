@@ -485,7 +485,7 @@ version and how to run it.
     - **Justiciar Zachariah**: the Justiciar of the Owl, whose court is his weapon. Only
       Saradomin Strike hurts him, and only from close by: out of its reach the boss bar says so,
       and a faint ring shows how far it reaches. Three phases on his hitpoints, no shield and no
-      totems: at 85% and 45% he kneels a moment, untouchable, and rises into the next, and the
+      totems: at 74% and 39% he kneels a moment, untouchable, and rises into the next, and the
       court wakes a little more. His own: a **Lunge**, a strip two wide and seven long the way he
       faced, which carries him down it (step off it; behind and beside him are safe), twice in a
       row from the second phase; his **Shock wave**, a blue wave along

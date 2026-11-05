@@ -38,7 +38,8 @@ otherwise:
 
 - **The attack patterns**: his lunge, shock wave and ice, the crossbow rows, the checker
   lightning, the knights' swords, the gaze and the bridge's fire, and the phase 3 combos.
-- **The pacing**: an attack every 1.5 s (times the phase's tempo), the double lunge from phase 2,
+- **The pacing**: an attack every 1.3 s (1.5 till round 8, at his word: "speed up the attack
+  speed slightly"; times the phase's tempo), the double lunge from phase 2,
   and the crossbow volleys every 4, 3.6 and 3.2 s by phase.
 - **The effects** (section 7): the stomp rings, the dust, the lunge's trail, Smite's light, the
   faint flashes and the camera shake.
@@ -69,16 +70,16 @@ aim 8682 and fire 8684, throw 8667 and catch 8668, extend 8661, blaze 8662 and r
 
 ## 3. The fight
 
-Hitpoints 4,200 (the event's). His own attacks reach 16 tiles; past that he kneels and comes
+Hitpoints 4,800 (the event's). His own attacks reach 16 tiles; past that he kneels and comes
 down by you (his descent, 7964), throwing up dust and cracking the floor where he lands.
 
 | Phase | Hitpoints | Status              | Adds                                                                              |
 | ----- | --------- | ------------------- | --------------------------------------------------------------------------------- |
-| 1     | 100-85%   | The trial begins    | Lunge, Shock wave, Ice barrage; crossbow rows every 4 s                           |
-| 2     | 85-45%    | The Sepulchre wakes | Lightning (its opener), Lunges, the knight's sword; rows every 3.6 s; bridge fire |
-| 3     | 45-0%     | The verdict         | The Owl's gaze (its opener), the combos, both knights; rows every 3.2 s           |
+| 1     | 100-74%   | The trial begins    | Lunge, Shock wave, Ice barrage; crossbow rows every 4 s                           |
+| 2     | 74-39%    | The Sepulchre wakes | Lightning (its opener), Lunges, the knight's sword; rows every 3.6 s; bridge fire |
+| 3     | 39-0%     | The verdict         | The Owl's gaze (its opener), the combos, both knights; rows every 3.2 s           |
 
-He starts an attack every 1.5 s, times the phase's tempo (1, 0.9, 0.8). At each threshold he
+He starts an attack every 1.3 s, times the phase's tempo (1, 0.9, 0.8). At each threshold he
 kneels (7965) for 2.4 s, untouchable and doing nothing, and rises (7962) into the next phase.
 What a hit took past a threshold is lost, so no phase is skipped.
 
@@ -322,6 +323,31 @@ The light eases in over the windup and back out after it lands (smoothstep, then
 brightness eased towards it), and the shadows fade in with it and out over 0.4 s after. None of
 it flashes or moves, so it's the same with Screen shake off or less motion asked for. It's all
 the 2D overlay: no triangles or draw calls added to the 3D view.
+
+### Round 8
+
+Dynny: "When he fails to stun on pillar dash, make him say 'Not this time!'", "the phase 1 is way
+too short" and "speed up the attack speed slightly".
+
+1. A lunge into a pillar while he can't be stunned (round 6's 8 s) has him shout "Not this time!"
+   as he shrugs it off (`guard.resistShout`).
+2. Phase 1 was 15% of 4,200 (630): the careful bot through it in 22-25 s, the sloppy one in
+   25-31 s. Now hitpoints are 4,800 and phase 1 is the first 26% (1,248), phase 2 the next 35%
+   (1,680, as before) and phase 3 the last 39% (1,872, as before). Phases at 74% and 39%.
+3. He starts an attack every 1.3 s, from 1.5, times the phase's tempo as before. The windups are
+   unchanged.
+
+`GOD=1`, seeds 1 to 3, before round 8 and after:
+
+|                                    | Phase 1          | Phase 2          | Phase 3           | Whole fight       |
+| ---------------------------------- | ---------------- | ---------------- | ----------------- | ----------------- |
+| The careful bot, smiting           | 22-25 s → 30-37 s | 49-56 s → 50-57 s | 64-90 s → 62-82 s | 2:17-2:49 → 2:31-2:49 |
+| The sloppy bot, smiting half       | 25-31 s → 43-46 s | 74-98 s → 37-62 s | 80-86 s → 74-101 s | 3:04-3:34 → 2:42-3:25 |
+| The sloppy bot, never smiting      | 48-56 s → 70-74 s | 90-133 s → 105-135 s | 155-176 s → 136-179 s | 5:03-6:04 → 5:10-6:27 |
+
+The faster attacks mean more misses to punish, so phases 2 and 3 come out about as long as
+before or shorter for the same hitpoints. A decent player who smites should take 40-50 s over
+phase 1, about the sloppy bot's.
 
 With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 24-27 s and the
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
