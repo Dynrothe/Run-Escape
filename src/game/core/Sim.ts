@@ -788,6 +788,11 @@ export class Sim {
     // When the next trick or treat pumpkin can drop
     private nextPumpkinTick = 0;
     coins = 0;
+    // Party income before purchases or theft. Returning stolen coins isn't new income.
+    coinsGained = 0;
+    // Co-op: the run ended because its last hero standing left rather than fell. A party that
+    // lost someone earlier and then fell still ended in a death.
+    endedByLeaving = false;
     casketsOpened = 0;
     readonly bossKills: { enemyId: string; seconds: number }[] = [];
     // What's dealing damage now, for damageBySource: set before each source
@@ -1467,6 +1472,11 @@ export class Sim {
         return def.flies ? (this.flightGrid ??= new FlightGrid(this.grid)) : this.grid;
     }
 
+    private gainCoins(amount: number): void {
+        this.coins += amount;
+        this.coinsGained += amount;
+    }
+
     // Run time; stops when the run ends, though ticks carry on for animations
     get seconds(): number {
         return (this.endTick >= 0 ? this.endTick : this.tick) / TICKS_PER_SECOND;
@@ -1948,7 +1958,7 @@ export class Sim {
                 break;
             }
             case "coins":
-                this.coins += choice.amount;
+                this.gainCoins(choice.amount);
                 break;
             case "food":
                 this.heal(choice.amount);
@@ -2012,7 +2022,7 @@ export class Sim {
         if (action === "alch") {
             this.declineSetPiece(item.id);
             const coins = this.alchValue(item.id, chest.upgrades);
-            this.coins += coins;
+            this.gainCoins(coins);
             this.emit({ type: "alch", itemId: item.id, coins });
             return;
         }
@@ -2043,7 +2053,7 @@ export class Sim {
         const replacedId = this.gear[item.slot];
         const replacedUpgrades = this.gearUpgrades[item.slot] ?? 0;
         const coins = replacedId ? this.alchValue(replacedId, replacedUpgrades) : 0;
-        this.coins += coins;
+        this.gainCoins(coins);
         this.gear[item.slot] = item.id;
         this.gearUpgrades[item.slot] = upgrades;
         this.updateStats();
@@ -2254,6 +2264,7 @@ export class Sim {
         }
         this.rescaleParty();
         if (!this.heroes.some((other) => this.isUp(other))) {
+            this.endedByLeaving = true;
             this.endRun("dead");
         } else if (theirTurn && this.raidShopQueue.length > 0) {
             // The supply chest goes on to whoever's next
@@ -4492,7 +4503,7 @@ export class Sim {
             inRaid.reduce((sum, hero) => sum + scores[hero.index], 0) / Math.max(1, inRaid.length);
         const scale = this.expert ? EXPERT_RAID_COINS : this.hard ? HARD_RAID_COINS : 1;
         const coins = Math.round(average * RAID_COINS_PER_POINT * scale);
-        this.coins += coins;
+        this.gainCoins(coins);
         for (const hero of this.heroes) {
             this.use(hero);
             const points = scores[hero.index];
@@ -9337,7 +9348,7 @@ export class Sim {
                 this.heal(player.maxHp * does.fraction);
                 break;
             case "coins":
-                this.coins += Math.round(does.coins * (1 + this.stats.greed) * this.coinScale);
+                this.gainCoins(Math.round(does.coins * (1 + this.stats.greed) * this.coinScale));
                 break;
             case "buff":
                 this.addBuff(does.itemId, does.stats, does.seconds, false);
@@ -9622,7 +9633,7 @@ export class Sim {
                 this.xp += pickup.value * (1 + this.stats.growth);
                 break;
             case "coins":
-                this.coins += Math.round(pickup.value * (1 + this.stats.greed) * this.coinScale);
+                this.gainCoins(Math.round(pickup.value * (1 + this.stats.greed) * this.coinScale));
                 break;
             case "food":
                 this.heal(pickup.value);
@@ -10403,7 +10414,7 @@ export class Sim {
         const coins = Math.round(
             (min + this.rng.int(max - min + 1)) * (1 + this.stats.greed) * this.coinScale,
         );
-        this.coins += coins;
+        this.gainCoins(coins);
         this.casketsOpened++;
         this.hero.casketsOpened++;
         const { itemId, upgradedFrom } = this.rollChestItem(tier);

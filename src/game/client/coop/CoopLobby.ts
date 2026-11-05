@@ -212,6 +212,11 @@ export class CoopLobby {
         return this.view.you;
     }
 
+    // Cloudflare transfers the party to a room socket; Node keeps the lobby socket.
+    get relayKind(): "node" | "cloudflare" {
+        return this.roomSocket || this.resuming ? "cloudflare" : "node";
+    }
+
     get isHost(): boolean {
         return this.view.room !== undefined && this.view.room.hostId === this.view.you;
     }

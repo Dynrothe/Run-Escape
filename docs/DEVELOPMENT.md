@@ -263,15 +263,21 @@ only controls the game/relay listener and cannot make metrics listen publicly.
 Metrics contain aggregate numbers only, with no player names, addresses or room codes. The public
 `/coop` availability response contains only `{"coop":true}`, so it doesn't expose aggregate counts.
 
+**Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
+end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
+`VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
+shows in a build that has a collector. See the
+[collector setup, daily analytics and leaderboard](../server/analytics/README.md).
+
 ## Desktop
 
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`, and the app lets only that address out: `protocol.handle` in `main.ts` answers
-every other https request itself, and WebSockets, which don't go through it, are kept to the relay
-by the `Content-Security-Policy` header `gameServer.ts` sends (`connect-src`). Without it there's
-no Multiplayer.
+has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
+set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
+`gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 
 The launcher only gets it in a new download, so players on an older one keep playing without
 Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.

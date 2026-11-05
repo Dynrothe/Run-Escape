@@ -23,6 +23,9 @@ the version in the corner).
   starts on them every time you open it.
 - Item descriptions, by Deivid Smarzaro: hover over an item in your bag, or hold it on a phone,
   to read what it does without using it.
+- Run stats, by trippy22: when a run ends, the game sends its map, mode, adventurers and result,
+  with nothing that says who played, to help balance the game. Turn it off with Share run stats
+  in Settings.
 
 ### Changed
 
