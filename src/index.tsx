@@ -31,6 +31,9 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("bgti
 // loaded when asked for: importing it starts its own render workers.
 const showViewer = new URLSearchParams(window.location.search).has("viewer");
 const MapViewerApp = lazy(() => import("./mapviewer/MapViewerApp"));
+// The Bell Choir's beat and music on their own, for checking a phone's sound (?beatlab)
+const showBeatLab = new URLSearchParams(window.location.search).has("beatlab");
+const BeatLab = lazy(() => import("./game/dev/BeatLab"));
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(
@@ -38,6 +41,10 @@ root.render(
     showViewer ? (
         <Suspense>
             <MapViewerApp />
+        </Suspense>
+    ) : showBeatLab ? (
+        <Suspense>
+            <BeatLab />
         </Suspense>
     ) : (
         <GameApp />

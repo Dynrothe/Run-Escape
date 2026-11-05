@@ -64,6 +64,7 @@ export class GameAudio {
     private voices = 0;
     // The recording looping now, streamed rather than decoded up front
     private music?: { url: string; element: HTMLAudioElement };
+    private musicDuck = 1;
 
     constructor() {
         window.addEventListener("pointerdown", this.unlock);
@@ -128,7 +129,7 @@ export class GameAudio {
             this.master.gain.value = this.settings.muted ? 0 : this.settings.volume;
         }
         if (this.music) {
-            this.music.element.volume = this.settings.music * MUSIC_VOLUME;
+            this.music.element.volume = this.settings.music * MUSIC_VOLUME * this.musicDuck;
             this.music.element.muted = this.settings.muted;
         }
     }
@@ -141,9 +142,23 @@ export class GameAudio {
             const element = new Audio(url);
             element.loop = true;
             this.music = { url, element };
+            this.musicDuck = 1;
             this.applyVolume();
         }
         this.music.element.play().catch((e) => console.warn("No music", e));
+    }
+
+    // The recording playing now, for keeping it in time with a fight's beat (BeatAudio.MusicSync)
+    get musicElement(): HTMLAudioElement | undefined {
+        return this.music?.element;
+    }
+
+    // How loud the music is, before the settings: 1 normally, less while a fight ducks it
+    setMusicDuck(duck: number): void {
+        this.musicDuck = Math.min(Math.max(duck, 0), 1);
+        if (this.music) {
+            this.music.element.volume = this.settings.music * MUSIC_VOLUME * this.musicDuck;
+        }
     }
 
     stopMusic(): void {
@@ -184,6 +199,39 @@ export class GameAudio {
     }
 
     play(id: number, options: PlayOptions = {}): void {
+        this.playAtTime(id, 0, options);
+    }
+
+    // The audio clock now, in seconds (AudioContext.currentTime), or undefined before the first
+    // press has made one: what playAtTime's when is on
+    get clock(): number | undefined {
+        const context = this.context;
+        return context && context.state === "running" ? context.currentTime : undefined;
+    }
+
+    // Seconds from a sound being started to its being heard, as far as the browser says:
+    // outputLatency where it's reported (Chrome, Firefox), else baseLatency, else 0
+    get outputLatency(): number {
+        const context = this.context as (AudioContext & { outputLatency?: number }) | undefined;
+        if (!context) {
+            return 0;
+        }
+        const output = context.outputLatency;
+        if (typeof output === "number" && Number.isFinite(output) && output > 0) {
+            return output;
+        }
+        const base = context.baseLatency;
+        return typeof base === "number" && Number.isFinite(base) ? base : 0;
+    }
+
+    // Whether the sound effects can be heard at all: unmuted, turned up, and the audio running
+    get audible(): boolean {
+        return this.clock !== undefined && !this.settings.muted && this.settings.volume > 0;
+    }
+
+    // A sound started at an exact time on the audio clock (clock): sample accurate, with no frame's
+    // jitter, for a beat that's known ahead (BeatAudio). when 0, or in the past, is now.
+    playAtTime(id: number, when: number, options: PlayOptions = {}): void {
         const context = this.context;
         const master = this.master;
         if (
@@ -198,7 +246,8 @@ export class GameAudio {
         }
         const now = performance.now();
         const last = this.lastPlayed.get(id) ?? -Infinity;
-        if (now - last < (options.minGap ?? 50)) {
+        // Scheduled sounds are each meant: only what's played now is kept apart
+        if (when <= 0 && now - last < (options.minGap ?? 50)) {
             return;
         }
         const buffer = this.getBuffer(id);
@@ -226,7 +275,7 @@ export class GameAudio {
             source.disconnect();
             node.disconnect();
         };
-        source.start();
+        source.start(Math.max(0, when));
     }
 
     // A sound at a world position, quieter and panned by where it is from the
