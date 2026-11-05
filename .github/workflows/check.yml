@@ -30,7 +30,8 @@ jobs:
                   bun-version-file: package.json
 
             - run: bun install --frozen-lockfile
-            - run: bun install --cwd server/cloudflare --frozen-lockfile
+            # Only that its lockfile matches: its tests run under the root's vitest
+            - run: bun install --cwd server/cloudflare --frozen-lockfile --lockfile-only
 
             - run: bun run tsc --noEmit -p .
 

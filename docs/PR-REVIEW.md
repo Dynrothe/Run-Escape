@@ -25,8 +25,9 @@ All of these are in `CLAUDE.md`'s "After every change":
 - `bun run test` and `bun run tsc --noEmit -p .`.
 - **Prettier on the files you changed**: run `bun run prettier --write <files>` from the repository
   so it uses the project config. Don't format the whole repository, and exclude `CHANGELOG.md`
-  (see below). An editor's formatter can reformat unrelated lines. On Windows, use `bun run prettier --check --end-of-line auto` to
-  distinguish formatting changes from CRLF line endings.
+  (see below). An editor's formatter can reformat unrelated lines. On Windows, use
+  `bun run prettier --check --end-of-line auto` to distinguish formatting changes from CRLF line
+  endings.
 - **A simulation** if the change can affect gameplay or balance, with before and after numbers.
 - **A frame's cost** before and after, for anything drawn or run every tick (see Performance).
 - **The browser** for anything on screen, **and a phone** for anything new on screen (Touch
