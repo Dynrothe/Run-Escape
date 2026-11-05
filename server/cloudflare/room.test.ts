@@ -11,12 +11,17 @@ let gone: string[];
 let sockets: Socket[];
 // When the room's alarm goes off
 let alarmAt: number | undefined;
+// How many of the next setAlarm calls fail
+let alarmFails: number;
 
 // A hibernatable connection, as the room sees one
 class Socket {
     sent: any[] = [];
     // The codes the room's closed it with
     closes: number[] = [];
+    // Listed by getWebSockets: still so once the room's closed it, until
+    // the other end answers (playerCloses), which a dead one never does
+    connected = true;
     private attachment: any;
     constructor(private readonly who: string) {}
     serializeAttachment(value: unknown) {
@@ -63,6 +68,10 @@ async function loadRoom(): Promise<any> {
                 saved = structuredClone(value);
             },
             setAlarm: async (at: number) => {
+                if (alarmFails > 0) {
+                    alarmFails--;
+                    throw new Error("storage");
+                }
                 alarmAt = at;
             },
             deleteAll: async () => {
@@ -70,7 +79,7 @@ async function loadRoom(): Promise<any> {
             },
         },
         acceptWebSocket: (socket: Socket) => sockets.push(socket),
-        getWebSockets: () => sockets.filter((socket) => socket.closes.length === 0),
+        getWebSockets: () => sockets.filter((socket) => socket.connected),
         setWebSocketAutoResponse: () => {},
         blockConcurrencyWhile: (load: () => Promise<unknown>) => (ready = ready.then(load)),
     };
@@ -109,6 +118,33 @@ function say(room: any, member: any, message: object) {
     return room.webSocketMessage(member.socket, JSON.stringify(message));
 }
 
+// The player's game closing its connection
+function playerCloses(room: any, socket: Socket, code: number) {
+    socket.connected = false;
+    return room.webSocketClose(socket, code);
+}
+
+// A player's game coming back on a new connection
+function resume(room: any, token: string, socket: Socket) {
+    vi.stubGlobal(
+        "WebSocketPair",
+        class {
+            0 = new Socket("game");
+            1 = socket;
+        },
+    );
+    vi.stubGlobal("Response", class {});
+    room.resume(token);
+}
+
+// Cloudflare restarting it, which drops every connection
+function restart() {
+    for (const socket of sockets) {
+        socket.connected = false;
+    }
+    return loadRoom();
+}
+
 const me = { characterId: "warrior", build: "a" };
 
 async function party() {
@@ -128,6 +164,7 @@ describe("Cloudflare co-op room", () => {
         log = [];
         sockets = [];
         alarmAt = undefined;
+        alarmFails = 0;
         saved = undefined;
         writes = 0;
         listings = [];
@@ -240,13 +277,13 @@ describe("Cloudflare co-op room", () => {
     it("answers a player's game closing its connection", async () => {
         const { room, host, guest } = await party();
         const guestSocket = guest.socket;
-        await room.webSocketClose(guestSocket, 1001);
+        await playerCloses(room, guestSocket, 1001);
         expect(guestSocket.closes).toEqual([1001]);
         // Still held for their game to come back
         expect(room.room.members).toContain(guest);
         // No code given, which can't be sent back
         const hostSocket = host.socket;
-        await room.webSocketClose(hostSocket, 1005);
+        await playerCloses(room, hostSocket, 1005);
         expect(hostSocket.closes).toEqual([1000]);
     });
 
@@ -255,7 +292,7 @@ describe("Cloudflare co-op room", () => {
         say(room, guest, { t: "me", ready: true });
         say(room, host, { t: "start", game: {} });
         say(room, host, { t: "down", f: 1 });
-        await room.webSocketClose(guest.socket, 1001);
+        await playerCloses(room, guest.socket, 1001);
         expect(vi.getTimerCount()).toBe(0);
         expect(alarmAt).toBeDefined();
     });
@@ -271,18 +308,36 @@ describe("Cloudflare co-op room", () => {
         expect(guest.socket.sent.at(-1).t).toBe("down");
         await say(again, again.room.members[1], { t: "up", i: 1 });
         expect(host.socket.sent.at(-1)).toMatchObject({ t: "up", from: "guest" });
-        // Says it's there straight away, then each minute
+        // Says it's there when it was due, a minute after it was made, and
+        // not again for being made again
         const told = listings.length;
-        await wait(again, 0);
+        await wait(again, 54_000);
+        expect(listings.length).toBe(told);
+        await wait(again, 2000);
         expect(listings.length).toBe(told + 1);
         await wait(again, 60_000);
         expect(listings.length).toBe(told + 2);
         expect(again.room.members).toHaveLength(2);
     });
 
+    it("keeps its heartbeat when it was due, however often it's made again", async () => {
+        const { room } = await party();
+        await wait(room, 1000);
+        const told = listings.length;
+        // Made again every 20 seconds, for a minute and a half
+        let again = room;
+        for (let i = 0; i < 4; i++) {
+            await wait(again, 20_000);
+            again = await loadRoom();
+        }
+        await wait(again, 10_000);
+        // Once at 60 seconds, as it would have
+        expect(listings.length).toBe(told + 1);
+    });
+
     it("lets go of someone who doesn't come back, though it's out of memory meanwhile", async () => {
         const { room, guest } = await party();
-        await room.webSocketClose(guest.socket, 1001);
+        await playerCloses(room, guest.socket, 1001);
         expect(saved.members[1].awayAt).toBeDefined();
         await wait(room, 10_000);
         // Made again by its alarm: their 15 seconds go on from when they went
@@ -295,17 +350,9 @@ describe("Cloudflare co-op room", () => {
 
     it("forgets someone was away once they're back", async () => {
         const { room, guest } = await party();
-        await room.webSocketClose(guest.socket, 1001);
+        await playerCloses(room, guest.socket, 1001);
         await wait(room, 3000);
-        vi.stubGlobal(
-            "WebSocketPair",
-            class {
-                0 = new Socket("game");
-                1 = new Socket("guest");
-            },
-        );
-        vi.stubGlobal("Response", class {});
-        room.resume(guest.token);
+        resume(room, guest.token, new Socket("guest"));
         expect(guest.socket.sent.at(-1).t).toBe("room");
         expect(saved.members[1].awayAt).toBeUndefined();
         const again = await loadRoom();
@@ -325,5 +372,72 @@ describe("Cloudflare co-op room", () => {
         expect(socket.closes).toEqual([]);
         await wait(again, 2000);
         expect(socket.closes).toEqual([1008]);
+    });
+
+    it("isn't let go as idle when Cloudflare restarts it late in a long run", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        // 35 minutes of a busy run, with nobody joining, leaving or dropping
+        for (let i = 0; i < 35 * 12; i++) {
+            say(room, host, { t: "down", f: i });
+            say(room, guest, { t: "up", i });
+            await wait(room, 5000);
+        }
+        const again = await restart();
+        const back = new Socket("host");
+        resume(again, host.token, back);
+        await wait(again, 1000);
+        expect(again.room?.started).toBe(true);
+        expect(back.sent.map((m: any) => m.t)).not.toContain("gone");
+    });
+
+    it("doesn't take a connection it's closed for its player's, once it's made again", async () => {
+        const { room, guest } = await party();
+        // Their game comes back while the old connection's open but dead
+        const old = guest.socket;
+        const back = new Socket("guest");
+        resume(room, guest.token, back);
+        expect(old.closes).toEqual([1000]);
+        await wait(room, 15_000);
+        // Cloudflare lists it still (and first), as the far end never answers
+        expect(old.connected).toBe(true);
+        const again = await loadRoom();
+        const member = again.room.members.find((m: any) => m.id === "guest");
+        expect(member.socket).toBe(back);
+        expect(back.closes).toEqual([]);
+        await say(again, member, { t: "rename" });
+        expect(back.sent.map((m: any) => m.t)).toContain("named");
+    });
+
+    it("keeps its code for a connection still to make the room, once it's made again", async () => {
+        const room = await loadRoom();
+        room.code = "ABCDEFGH";
+        const host = enter(room, "host", "create");
+        room.awaitEntry(host, 10_000);
+        const socket = host.socket;
+        await wait(room, 3000);
+        const again = await loadRoom();
+        await again.webSocketMessage(socket, JSON.stringify({ t: "create", me }));
+        expect(again.room.code).toBe("ABCDEFGH");
+        expect(listings.at(-1).code).toBe("ABCDEFGH");
+    });
+
+    it("sets its alarm again after it couldn't", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const room = await loadRoom();
+        room.code = "ABCDEFGH";
+        alarmFails = 1;
+        const pending = enter(room, "guest", "join");
+        room.awaitEntry(pending, 10_000);
+        const socket = pending.socket;
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(alarmAt).toBeUndefined();
+        // The next message sets it
+        await say(room, pending, { t: "me" });
+        expect(alarmAt).toBeDefined();
+        await wait(room, 10_000);
+        expect(socket.closes).toEqual([1008]);
+        warn.mockRestore();
     });
 });

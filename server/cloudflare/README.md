@@ -25,8 +25,13 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   through its one alarm, with `later()`. After 10 seconds with nothing to do (a room sitting on
   its menu, never mid-run), Cloudflare can take it out of memory and keep its connections open.
   The next message or alarm makes it again, from its storage and what each socket carries
-  (`remember()`): who it's for and when the room was last used. A dropped player's time away is
-  saved, so it doesn't start again each time the room's made. Pings are answered without waking it.
+  (`remember()`): who it's for, the room's code, and when the next heartbeat's due, so being made
+  again neither puts the heartbeat off nor sends an extra one. A dropped player's time away is
+  saved, so it doesn't start again each time the room's made. The heartbeat saves when the room
+  was last used, which a run's messages don't, or a room made again after a restart would look
+  idle since its run started. A connection the room closes is forgotten first, since Cloudflare
+  lists it until the other end answers. Pings are answered without waking it, so they're outside
+  a connection's rate limit.
 - To make or join a room, the lobby checks the relay's limits and answers with a `goto`: the room's
   code and a one-time ticket, good for 30 seconds. The game opens the room's own connection with
   it and sends its `create` or `join` there. Everything said in a room (`me`, `start`, `up`, `down`
@@ -178,26 +183,33 @@ Measured on a deployed relay, a two-player run sends a room about 29 messages a 
 frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
 four is around 37 a second. That's about 5,300 requests for each hour a two-player room is open,
 and 6,700 for four. Before rooms hibernated, they were also billed 450 GB-s an hour (every second
-at 128 MB), which was most of the bill. Now duration is only the time spent handling messages, a few
-GB-s an hour, so requests are what's left: measure it on the dashboard (Durable Objects, Duration)
-after a change to how a room handles messages.
+at 128 MB), which was most of the bill. By Cloudflare's pricing, an idle object that can hibernate
+isn't billed for duration, so a room's should now be only the time it spends handling messages,
+leaving requests as most of the bill. That's still to be measured on a deployed relay: check the
+dashboard (Durable Objects, Duration) after deploying, and after a change to how a room handles
+messages. The estimates below assume it holds.
 
-- **Free plan**: 100,000 requests a day, about 15 to 19 hours of rooms a day. Past a limit, co-op
-  fails until the next day, so it's for testing rather than for players.
+- **Free plan**: 100,000 requests and 13,000 GB-s a day, about 15 to 19 hours of rooms a day by
+  requests. Past a limit, co-op fails until the next day, so it's for testing rather than for
+  players.
 - **Workers Paid ($5 a month)**: 1 million requests and 400,000 GB-s a month included, then
-  $0.15 a million requests and $12.50 a million GB-s. About $1 a month more for every 1,000
+  $0.15 a million requests and $12.50 a million GB-s. That's about $1 a month more for every 1,000
   room-hours past the first 150 or so, so 100 players in rooms around the clock (about 20,000
-  room-hours a month) comes to roughly $25.
+  room-hours a month) would come to roughly $25.
 
 Check [Cloudflare's pricing](https://developers.cloudflare.com/durable-objects/platform/pricing)
 for the current numbers. Usage is under Workers & Pages, `run-escape-coop`, Metrics, in the
 dashboard.
 
 **Against abuse.** Workers Paid has no spending cap, so the relay keeps what one connection can cost
-bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (an open
-socket keeps a room in storage and its alarm going), a room's saved to storage at most once a second however often its
-host changes settings (joins, leaves and a run starting or ending are saved at once), and rooms are capped per address and in all, as on the Node relay. Before
-pointing a paid account at players, also:
+bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (nothing
+else would close it: the lobby forgets a room that never got made), a room's saved to storage at
+most once a second however often its host changes settings (joins, leaves and a run starting or
+ending are saved at once, and the heartbeat once a minute during a run), and rooms are capped per
+address and in all, as on the Node relay. Pings are the exception: answered without waking the
+lobby or a room, they never reach a connection's rate limit, and Cloudflare doesn't say whether
+it counts them as requests (20 to one, like other messages), so a connection flooding pings may
+be billed for as long as it's open. Before pointing a paid account at players, also:
 
 - set a billing notification (Manage account, Notifications), and
 - add a rate limiting rule (Security, WAF) on `/coop/room/` for each IP, about 60 requests a

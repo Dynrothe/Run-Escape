@@ -80,7 +80,10 @@ export class Room extends DurableObject {
         this.alarmAt = undefined;
         // Each member's own keys in due
         this.serial = 0;
-        // The game's keep-alive, answered without waking the room
+        // The room's lastActive as last saved (the heartbeat saves it again)
+        this.savedActive = undefined;
+        // The game's keep-alive, answered without waking the room, so
+        // outside its RateLimit (see Cost from strangers in PR-REVIEW.md)
         ctx.setWebSocketAutoResponse(
             new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'),
         );
@@ -120,6 +123,10 @@ export class Room extends DurableObject {
     }
 
     async webSocketMessage(ws, data) {
+        // An alarm that couldn't be set (armAlarm), tried again
+        if (this.alarmAt === undefined) {
+            this.armAlarm();
+        }
         const member = this.sockets.get(ws);
         if (member?.socket === ws) {
             this.receive(member, data);
@@ -176,8 +183,8 @@ export class Room extends DurableObject {
     }
 
     // What a connection carries through the room being out of memory: who
-    // it's for, and when the room was last in use (which is only saved now
-    // and then)
+    // it's for, the room's code (which isn't saved until it's made), and
+    // when the next heartbeat's due
     remember(member) {
         try {
             member.socket?.serializeAttachment({
@@ -189,10 +196,29 @@ export class Room extends DurableObject {
                 roomName: member.roomName,
                 at: member.at,
                 token: member.token,
-                lastActive: this.room?.lastActive,
+                code: this.code,
+                beatAt: this.due.get("heartbeat")?.at,
             });
         } catch {
             // Closed
+        }
+    }
+
+    // Closes a connection the room's done with. Cloudflare can still list it
+    // until the other end answers, which a dead one never does, so it's
+    // forgotten first: a room made again meanwhile mustn't take it for its
+    // player's.
+    shut(socket, code) {
+        this.sockets.delete(socket);
+        try {
+            socket.serializeAttachment(null);
+        } catch {
+            // Closed
+        }
+        try {
+            socket.close(code);
+        } catch {
+            // Already closed
         }
     }
 
@@ -222,12 +248,7 @@ export class Room extends DurableObject {
         this.attach(member, server);
         member.limit = new RateLimit();
         if (old) {
-            this.sockets.delete(old);
-            try {
-                old.close(1000);
-            } catch {
-                // Already closed
-            }
+            this.shut(old, 1000);
         }
         // So the room made again doesn't hold their place a second time
         if (wasAway) {
@@ -290,7 +311,13 @@ export class Room extends DurableObject {
         }
         if (next !== Infinity && (this.alarmAt === undefined || next < this.alarmAt)) {
             this.alarmAt = next;
-            this.ctx.storage.setAlarm(next).catch(() => {});
+            this.ctx.storage.setAlarm(next).catch((e) => {
+                // Not set: the next message or wait sets it
+                if (this.alarmAt === next) {
+                    this.alarmAt = undefined;
+                }
+                console.warn("Co-op room: couldn't set its alarm:", e);
+            });
         }
     }
 
@@ -327,6 +354,7 @@ export class Room extends DurableObject {
         const { members, kicked, alarmSet, ...fields } = saved;
         const room = { ...fields, members: [] };
         this.room = room;
+        this.savedActive = room.lastActive;
         for (const memberFields of members) {
             room.members.push(this.newMember(memberFields));
         }
@@ -338,8 +366,26 @@ export class Room extends DurableObject {
     reconnect() {
         const now = Date.now();
         const room = this.room;
-        for (const ws of this.ctx.getWebSockets()) {
-            const seen = ws.deserializeAttachment();
+        const open = this.ctx.getWebSockets().map((ws) => [ws, ws.deserializeAttachment()]);
+        // Read before attach() writes them again
+        let beatAt;
+        for (const [, seen] of open) {
+            if (!this.code && seen?.code) {
+                this.code = seen.code;
+            }
+            // The latest: one still to make or join the room isn't told
+            // each beat
+            if (seen?.beatAt > (beatAt ?? 0)) {
+                beatAt = seen.beatAt;
+            }
+        }
+        if (room) {
+            // When it was due, not put off a minute by each time the room's
+            // made again, nor said each time (after a restart, with no
+            // connections left to say when, now)
+            this.startHeartbeat(room, (beatAt ?? now) - now);
+        }
+        for (const [ws, seen] of open) {
             const member = seen?.token
                 ? room?.members.find((m) => m.token === seen.token && !m.socket)
                 : undefined;
@@ -347,19 +393,12 @@ export class Room extends DurableObject {
                 this.attach(member, ws);
             } else if (seen && !seen.token) {
                 // Still to make or join the room
-                const { token, lastActive, ...fields } = seen;
-                const pending = this.newMember(fields);
+                const { id, name, address, country, kind, roomName, at } = seen;
+                const pending = this.newMember({ id, name, address, country, kind, roomName, at });
                 this.attach(pending, ws);
                 this.awaitEntry(pending, (seen.at ?? now) + ENTER_MS - now);
             } else {
-                try {
-                    ws.close(1000);
-                } catch {
-                    // Already closed
-                }
-            }
-            if (room && seen?.lastActive > room.lastActive) {
-                room.lastActive = seen.lastActive;
+                this.shut(ws, 1000);
             }
         }
         if (!room) {
@@ -370,9 +409,6 @@ export class Room extends DurableObject {
                 this.holdPlace(member, member.awayAt ?? now);
             }
         }
-        // The heartbeat due when it went could be any time in the next
-        // minute: said now, so a room that's quiet for longer still says it
-        this.startHeartbeat(room, 0);
     }
 
     // Saves the room and tells the lobby, now or, if that was done in the
@@ -407,6 +443,7 @@ export class Room extends DurableObject {
             return;
         }
         const { members, updateWaiting, saveWaiting, told, ...fields } = room;
+        this.savedActive = room.lastActive;
         this.ctx.storage
             .put("room", {
                 ...fields,
@@ -472,11 +509,8 @@ export class Room extends DurableObject {
             this.cancel(`away:${member.serial}`);
             const socket = member.socket;
             member.socket = undefined;
-            this.sockets.delete(socket);
-            try {
-                socket?.close(code);
-            } catch {
-                // Already closed
+            if (socket) {
+                this.shut(socket, code);
             }
         }
     }
@@ -841,7 +875,6 @@ export class Room extends DurableObject {
         this.setMember(client, message.me ?? {});
         client.ready = false;
         client.token = randomToken();
-        this.remember(client);
         const now = Date.now();
         this.room = {
             code: this.code,
@@ -857,6 +890,7 @@ export class Room extends DurableObject {
             lastActive: now,
         };
         this.startHeartbeat(this.room);
+        this.remember(client);
         this.persist(true);
         this.broadcastRoom();
     }
@@ -871,11 +905,17 @@ export class Room extends DurableObject {
                 return;
             }
             this.tellLobby(true);
-            // For the room made again after it's been out of memory
+            // Mid-run nothing else saves it, and a room made again after a
+            // restart would otherwise look idle since the run started
+            if (room.lastActive !== this.savedActive) {
+                this.save();
+            }
+            this.later("heartbeat", ROOM_HEARTBEAT_MS, beat);
+            // When the next one's due, for the room made again after it's
+            // been out of memory
             for (const member of room.members) {
                 this.remember(member);
             }
-            this.later("heartbeat", ROOM_HEARTBEAT_MS, beat);
         };
         this.later("heartbeat", first, beat);
     }

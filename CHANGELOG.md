@@ -10,6 +10,8 @@ the version in the corner).
 - Smaller game updates, by trippy22: the game's files from the cache come in parts, and an update
   downloads only the parts that changed, on the website and in the desktop app. The first download
   is smaller too.
+- Co-op rooms cost much less to keep running, by trippy22: they sleep between messages on the
+  relay, which changes nothing in play.
 
 ### Fixed
 

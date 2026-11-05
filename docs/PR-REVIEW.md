@@ -139,12 +139,17 @@ never crash or desync another player, or cost the maintainer money.
 - **The lobby and the rooms hibernate**, and anything kept in memory goes with it. Each wake runs
   the constructor again, so code there that touches stored state runs far more often than it looks.
   A room that's quiet for 10 seconds can be made again from storage and its sockets' attachments,
-  so anything it has to remember past that goes in one or the other.
+  so anything it has to remember past that goes in one or the other. A restart leaves only
+  storage, so something kept only in memory or attachments (like when the room was last used,
+  mid-run) has to be saved now and then too.
+- **A closed socket can still be listed** by `getWebSockets()` until the other end answers, which
+  a dead connection never does. A room forgets one before closing it (`shut()`), or being made
+  again can give its player the dead one.
 - **A pending timer keeps it awake**, and billed, which can undo a change meant to cut cost. A room
   waits only with `later()`, on its one alarm, never `setTimeout` or `setInterval`
   (`room.test.ts` checks).
 - **Pings are answered without waking it**, so an idle check never runs for a connection that only
-  pings.
+  pings, and they never reach its rate limit.
 - **Cost from strangers.** Anything an unauthenticated request can start (a Durable Object per
   room address, a call into the lobby) needs a limit or a documented rate limiting rule.
 - `wrangler` needs Node 22. Where it won't run, test the lobby and room with vitest.
