@@ -73,10 +73,36 @@ describe("hidden floor", () => {
             drawn: true,
         });
         // Nothing blocks without collision flags, so 6 counts too
-        expect(describeHiddenFloor(grid, locs, overlayTypes)).toBe(
+        expect(describeHiddenFloor(grid, locs, overlayTypes)).toEqual([
             "warning: 3 open tiles draw no floor (hidden overlay or none), at 1,0 6,0 7,0",
-        );
+            "warning: 1 open tiles are floor decoration over a hidden floor, so the void shows " +
+                "in the seams between them: put a plain overlay of their colour under them",
+        ]);
         grid.levels[0].overlays.fill(GRASS);
-        expect(describeHiddenFloor(grid, locs, overlayTypes)).toBeUndefined();
+        expect(describeHiddenFloor(grid, locs, overlayTypes)).toEqual([]);
+    });
+
+    // The Owl's Court's walkways were the hidden floor under stone tiles: drawn, but with the
+    // black showing through the hairlines between the tiles
+    it("warns about floor decoration over a hidden floor, and not over a plain one", () => {
+        const grid = createTileGrid(3, 1);
+        grid.levels[0].overlays.fill(HIDDEN);
+        for (let x = 0; x < 3; x++) {
+            grid.locs.push({ id: 9, type: 22, rotation: 0, level: 0, x, y: 0 });
+        }
+        const locs = () => ({
+            name: "stone",
+            sizeX: 1,
+            sizeY: 1,
+            clipType: 0,
+            blocksProjectile: false,
+            drawn: true,
+        });
+        expect(describeHiddenFloor(grid, locs, overlayTypes)).toEqual([
+            "warning: 3 open tiles are floor decoration over a hidden floor, so the void shows " +
+                "in the seams between them: put a plain overlay of their colour under them",
+        ]);
+        grid.levels[0].overlays.fill(GRASS);
+        expect(describeHiddenFloor(grid, locs, overlayTypes)).toEqual([]);
     });
 });

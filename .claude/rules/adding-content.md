@@ -65,7 +65,7 @@ the same amount on more stats. `iconSpriteId` shows an interface sprite instead 
 (a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
 with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
 one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
-there, and `slim-cache.ts` keeps them.
+there, and the overhead prayers' frames, and `slim-cache.ts` keeps them.
 
 ## Stat
 
@@ -224,12 +224,13 @@ which exports where everything is. `waves` and `events` on the `MapDef` are ever
 bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a file of their own
 (`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays as
 it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`, `stare`,
-`expert` on an attack) and do nothing off a raid's expert mode, but `colours.offStyle` brings a
-boss's colours to normal too. A boss's own mechanic can be a while it can't be hurt: `shadowRealm`
-or `yellows` (for so many seconds) or `exhumes` (until so many of its smother ground marks are stood
-on, or its time's up), each at shares of its hitpoints, doing only the attacks they name meanwhile
-(`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used only then. The balance bot has to know
-how to play a new one (`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
+`expert` on an attack, `shot.expertKeep`, `expertOwnStyle`) and do nothing off a raid's expert mode,
+but `colours.offStyle` brings a boss's colours to normal too. A boss's own mechanic can be a while
+it can't be hurt: `shadowRealm` or `yellows` (for so many seconds) or `exhumes` (until so many of
+its smother ground marks are stood on, or its time's up), each at shares of its hitpoints, doing
+only the attacks they name meanwhile (`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used
+only then. The balance bot has to know how to play a new one (`fightMove` in `simulate-run.ts`), or
+its sims can't win the fight.
 
 ## Pet
 
@@ -239,6 +240,11 @@ animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: u
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
 offered once found, with nothing else to add. Pets never go in the sim: see Pets in
 `docs/DEVELOPMENT.md`.
+
+A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
+under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`
+names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) whose boss brings
+in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't.
 
 ## Adventurer
 

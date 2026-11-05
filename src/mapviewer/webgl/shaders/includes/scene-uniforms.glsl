@@ -13,4 +13,6 @@ uniform SceneUniforms {
     float u_isNewTextureAnim;
     // World tiles (x0, y0, x1, y1) to keep clear: the world fades into the sky past them
     vec4 u_playArea;
+    // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
+    vec4 u_wash;
 };

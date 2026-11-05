@@ -144,6 +144,34 @@ WHERE play_type = 'singleplayer' AND endless = 0 AND outcome IN ('completed', 'f
 GROUP BY characters, map_id, mode;
 ```
 
+## Export and look through it
+
+`npx wrangler d1 export run-escape-analytics --remote --output runs-2026-11-05.sql -c ../analytics/wrangler.toml`
+writes the whole database, schema and rows, as SQL. `--table daily_stats` (repeatable) limits it
+to some tables and `--no-schema` leaves out the `CREATE` statements; without `runs`, the viewer
+below has no party composition, leaderboard or single runs to show. An export
+[holds up the database's other requests](https://developers.cloudflare.com/d1/best-practices/import-export-data/)
+while it runs. Raw runs expire after `RAW_RETENTION_DAYS`, so keep an export at least that often
+to look back further.
+
+To look through exports offline, start the viewer from the repository:
+
+```sh
+node server/analytics/viewer/serve.mjs
+```
+
+open `http://localhost:8790`, and drop export files on the page (or use Add exports). It loads
+files in `server/analytics/exports/` when it starts, which git ignores, and takes files or
+folders on the command line too; `--port` changes the port. Nothing leaves your computer and
+nothing needs installing: it uses Node's built-in `node:sqlite`, in Node 22.5 or newer.
+
+It shows runs per day, outcomes and win rate by map, difficulty and party, endless survival and,
+from raw runs, win rate by adventurer and starting party, the leaderboard and the latest runs,
+all filtered by day, map, mode and the rest. A table browser and a read-only SQL console with CSV
+download cover anything else. Files load in name order, a later row replacing an earlier one
+with the same key, so a folder of daily exports reaches past retention. Only the statements an
+export contains run from a file, so a file someone sent you can't do more than add rows.
+
 ## Anonymous leaderboard
 
 `GET /v1/leaderboard?day=2026-11-04&map=barrows&version=0.25.0&play=multiplayer&party_size=3&mode=hard&endless=false&limit=20`

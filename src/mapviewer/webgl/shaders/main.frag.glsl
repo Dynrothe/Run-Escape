@@ -28,5 +28,6 @@ void main() {
     }
 #endif
     fragColor = mix(fragColor, u_skyColor, v_fogAmount);
+    fragColor.rgb *= u_wash.rgb;
     interactId = v_interactId;
 }

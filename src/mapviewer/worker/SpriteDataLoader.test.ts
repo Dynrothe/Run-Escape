@@ -1,4 +1,4 @@
-import { loadSpriteImage } from "./SpriteDataLoader";
+import { SpriteDataLoader } from "./SpriteDataLoader";
 
 // A one-sprite cache file the way the client stores them: pixel data, then the
 // palette, then the sizes and offsets, then the sprite count
@@ -35,31 +35,52 @@ function twoFrames(): Int8Array {
     return Int8Array.from(bytes, (b) => (b > 127 ? b - 256 : b));
 }
 
-function load(data: Int8Array, frame?: number) {
-    const state = {
-        cacheSystem: { getIndex: () => ({ getFile: () => ({ data }) }) },
-    } as any;
-    return loadSpriteImage(state, 1359, frame);
+// Through the worker's loader: these frames of sprite 1359, and how often its file was read
+async function loadFrames(data: Int8Array, frames: number[]) {
+    let reads = 0;
+    const getFile = () => {
+        reads++;
+        return { data };
+    };
+    const state = { cacheSystem: { getIndex: () => ({ getFile }) } } as any;
+    const result = await new SpriteDataLoader().load(state, {
+        spriteIds: frames.map(() => 1359),
+        frames,
+    });
+    return { images: result.data, reads };
+}
+
+async function load(data: Int8Array, frame = 0) {
+    return (await loadFrames(data, [frame])).images[0];
 }
 
 describe("sprites", () => {
-    test("row by row, palette index 0 see-through", () => {
-        const sprite = load(spriteFile(0, [1, 0, 2, 1]));
+    test("row by row, palette index 0 see-through", async () => {
+        const sprite = await load(spriteFile(0, [1, 0, 2, 1]));
         expect([sprite.width, sprite.height]).toEqual([3, 2]);
         expect(Array.from(sprite.pixels, (p) => p >>> 0)).toEqual([
             0, 0xffff0000, 0, 0, 0xff00ff00, 0xffff0000,
         ]);
     });
 
-    test("any frame of a sprite, and nothing for one it hasn't got", () => {
-        expect(load(twoFrames()).pixels[0] >>> 0).toBe(0xffff0000);
-        expect(load(twoFrames(), 1).pixels[0] >>> 0).toBe(0xff00ff00);
-        expect(load(twoFrames(), 2).width).toBe(0);
+    test("any frame of a sprite, and nothing for one it hasn't got", async () => {
+        expect((await load(twoFrames())).pixels[0] >>> 0).toBe(0xffff0000);
+        expect((await load(twoFrames(), 1)).pixels[0] >>> 0).toBe(0xff00ff00);
+        expect((await load(twoFrames(), 2)).width).toBe(0);
     });
 
-    test("column by column, with an alpha channel", () => {
+    test("several frames of one sprite from one read of its file, each with its frame", async () => {
+        const { images, reads } = await loadFrames(twoFrames(), [1, 0]);
+        expect(reads).toBe(1);
+        expect(images.map((image) => [image.frame, image.pixels[0] >>> 0])).toEqual([
+            [1, 0xff00ff00],
+            [0, 0xffff0000],
+        ]);
+    });
+
+    test("column by column, with an alpha channel", async () => {
         // Columns: (1, 2) then (0, 1); alphas the same way
-        const sprite = load(spriteFile(3, [1, 2, 0, 1], [255, 128, 0, 64]));
+        const sprite = await load(spriteFile(3, [1, 2, 0, 1], [255, 128, 0, 64]));
         expect(Array.from(sprite.pixels, (p) => p >>> 0)).toEqual([
             0, 0xffff0000, 0, 0, 0x8000ff00, 0x40ff0000,
         ]);

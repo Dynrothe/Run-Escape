@@ -62,7 +62,7 @@ go stale. Add anything that cost you time to work out.
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
-| Run stats: what a finished run reports, its collector  | `client/RunAnalytics.ts`, `server/analytics/`                          |
+| Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
@@ -166,7 +166,7 @@ After a content change, also run the checks that apply:
 ```sh
 npx tsx scripts/cache/check-items.ts          # casket items are the items they're named after
 npx tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
-npx tsx scripts/cache/sprites.ts check        # passives' interface sprites are in the cache
+npx tsx scripts/cache/sprites.ts check        # passives' sprites and overhead prayers are there
 npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
 ```
 

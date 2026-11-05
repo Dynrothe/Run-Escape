@@ -2,20 +2,24 @@ import { useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
+import {
+    COMBAT_TAB,
+    REWARD_TABS,
+    RewardEntry,
+    getRewards,
+    rewardTabName,
+} from "../content/collectionLog";
 import { EVOLUTIONS, EvolutionDef } from "../content/evolutions";
 import { RARITIES } from "../content/rarity";
-import { TROPHIES } from "../content/trophies";
-import { describeUnlockTask } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { getWeapon } from "../content/weapons";
-import { SaveData } from "../core/save";
 import { Coins } from "./Coins";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 
 // Every evolution, after the client's Collection log. What it takes is always
-// shown; what it makes stays ??? until it's been made in a run. Another tab
-// has the Halloween map's rewards, ??? until they're found, and another Combat
+// shown; what it makes stays ??? until it's been made in a run. Then a tab for
+// each map with trophies to find (content/collectionLog.ts), ??? until they're
+// found: the weapons it brings in, then its trophies; and one for Combat
 // Achievements' tier rewards.
 
 type Props = { ui: UiSnapshot; client: GameClient };
@@ -24,9 +28,14 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const made = EVOLUTIONS.filter((e) => save.evolutionsMade.includes(e.into.id)).length;
     const [shown, setShown] = useState(EVOLUTIONS[0]);
-    const [tab, setTab] = useState<"evolutions" | "rewards" | "combat">("evolutions");
-    const rewards = tab === "combat" ? getCombatRewards(save) : getHalloweenRewards(save);
+    // "evolutions", or a reward map's id
+    const [tab, setTab] = useState("evolutions");
+    const rewards = tab === "evolutions" ? [] : getRewards(save, tab);
     const [reward, setReward] = useState(0);
+    const open = (id: string) => {
+        setTab(id);
+        setReward(0);
+    };
     const found = rewards.filter((r) => r.found).length;
     return (
         <div className="ui-fill ui-center">
@@ -35,28 +44,19 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                 <div className="ui-log-tabs">
                     <button
                         className={"ui-log-tab" + (tab === "evolutions" ? " ui-log-selected" : "")}
-                        onClick={() => setTab("evolutions")}
+                        onClick={() => open("evolutions")}
                     >
                         Evolutions
                     </button>
-                    <button
-                        className={"ui-log-tab" + (tab === "rewards" ? " ui-log-selected" : "")}
-                        onClick={() => {
-                            setTab("rewards");
-                            setReward(0);
-                        }}
-                    >
-                        Hallowed Night
-                    </button>
-                    <button
-                        className={"ui-log-tab" + (tab === "combat" ? " ui-log-selected" : "")}
-                        onClick={() => {
-                            setTab("combat");
-                            setReward(0);
-                        }}
-                    >
-                        Combat Achievements
-                    </button>
+                    {REWARD_TABS.map((id) => (
+                        <button
+                            key={id}
+                            className={"ui-log-tab" + (tab === id ? " ui-log-selected" : "")}
+                            onClick={() => open(id)}
+                        >
+                            {rewardTabName(id)}
+                        </button>
+                    ))}
                 </div>
                 {tab === "evolutions" ? (
                     <>
@@ -82,9 +82,9 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                 ) : (
                     <>
                         <p className="ui-subtle">
-                            {tab === "combat"
+                            {tab === COMBAT_TAB
                                 ? "Each tier's reward, for Combat Achievements' points."
-                                : "What the Hallowed Night has to find."}
+                                : `${rewardTabName(tab)}: what there is to find.`}
                         </p>
                         <div className="ui-log-list">
                             {rewards.map((entry, i) => (
@@ -116,43 +116,6 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             </div>
         </div>
     );
-}
-
-type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
-
-// The weapons The Nightmare brings in, then the trophies
-function getHalloweenRewards(save: SaveData): RewardEntry[] {
-    const weapons = ["inquisitors_mace", "volatile_nightmare_staff"].map((id) => {
-        const weapon = getWeapon(id);
-        return {
-            id,
-            name: weapon.name,
-            objId: weapon.iconObjId,
-            how: `${describeUnlockTask(weapon.unlock!)} to bring it in.`,
-            found: save.unlockedItems.includes(id),
-        };
-    });
-    const trophies = TROPHIES.filter((t) => t.from.kind !== "combatTier").map(
-        ({ id, name, objId, how }) => ({
-            id,
-            name,
-            objId,
-            how,
-            found: save.trophies.includes(id),
-        }),
-    );
-    return [...weapons, ...trophies];
-}
-
-// Ghommal's hilts, a tier each
-function getCombatRewards(save: SaveData): RewardEntry[] {
-    return TROPHIES.filter((t) => t.from.kind === "combatTier").map(({ id, name, objId, how }) => ({
-        id,
-        name,
-        objId,
-        how,
-        found: save.trophies.includes(id),
-    }));
 }
 
 function RewardCard({

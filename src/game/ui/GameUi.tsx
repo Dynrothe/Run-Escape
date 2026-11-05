@@ -1927,7 +1927,6 @@ const Hud = memo(function Hud({
 }): JSX.Element {
     return (
         <>
-            <HallWash client={client} />
             <XpBar level={hud.level} client={client} />
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
@@ -1988,12 +1987,6 @@ function KillsAndCoins({ client }: { client: GameClient }): JSX.Element {
             <Coins amount={coins} />
         </>
     );
-}
-
-// A raid hall's colour wash, while its waves are on
-function HallWash({ client }: { client: GameClient }): JSX.Element | null {
-    const wash = useHudNumber(client, (n) => n.raidRoom?.wash);
-    return wash ? <div className="ui-hall-wash" style={{ backgroundColor: wash }} /> : null;
 }
 
 // A raid's room, of how many, and the raid points the player has
@@ -2247,6 +2240,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                     )}
                                     {choice.stats && choice.stats.length > 0 && (
                                         <ChoiceStats stats={choice.stats} />
+                                    )}
+                                    {choice.bossPenalty && (
+                                        <div className="ui-card-penalty">{choice.bossPenalty}</div>
                                     )}
                                 </div>
                                 {choice.rarity && (

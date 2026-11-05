@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Run Stats Viewer</title>
+        <style>
+            :root {
+                color-scheme: light;
+                --page: #f9f9f7;
+                --surface: #fcfcfb;
+                --ink: #0b0b0b;
+                --ink-2: #52514e;
+                --muted: #898781;
+                --grid: #e1e0d9;
+                --axis: #c3c2b7;
+                --border: rgba(11, 11, 11, 0.1);
+                --wash: rgba(11, 11, 11, 0.04);
+                --accent: #2a78d6;
+                --completed: #2a78d6;
+                --failed: #eb6834;
+                --abandoned: #1baf7a;
+                --disconnected: #eda100;
+                --bad: #d03b3b;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root:not([data-theme="light"]) {
+                    color-scheme: dark;
+                    --page: #0d0d0d;
+                    --surface: #1a1a19;
+                    --ink: #f0efec;
+                    --ink-2: #c3c2b7;
+                    --grid: #2c2c2a;
+                    --axis: #383835;
+                    --border: rgba(255, 255, 255, 0.1);
+                    --wash: rgba(255, 255, 255, 0.05);
+                    --accent: #3987e5;
+                    --completed: #3987e5;
+                    --failed: #d95926;
+                    --abandoned: #199e70;
+                    --disconnected: #c98500;
+                }
+            }
+            :root[data-theme="dark"] {
+                color-scheme: dark;
+                --page: #0d0d0d;
+                --surface: #1a1a19;
+                --ink: #f0efec;
+                --ink-2: #c3c2b7;
+                --grid: #2c2c2a;
+                --axis: #383835;
+                --border: rgba(255, 255, 255, 0.1);
+                --wash: rgba(255, 255, 255, 0.05);
+                --accent: #3987e5;
+                --completed: #3987e5;
+                --failed: #d95926;
+                --abandoned: #199e70;
+                --disconnected: #c98500;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background: var(--page);
+                color: var(--ink);
+                font:
+                    14px/1.45 system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    sans-serif;
+            }
+            header,
+            main {
+                max-width: 1180px;
+                margin: 0 auto;
+                padding: 0 16px;
+            }
+            header {
+                padding-top: 20px;
+            }
+            h1 {
+                font-size: 20px;
+                margin: 0;
+            }
+            h2 {
+                font-size: 16px;
+                margin: 0 0 2px;
+            }
+            .sub {
+                color: var(--ink-2);
+                margin: 2px 0 0;
+                font-size: 13px;
+            }
+            nav {
+                display: flex;
+                gap: 14px;
+                flex-wrap: wrap;
+                margin: 12px 0 0;
+                font-size: 13px;
+            }
+            nav a {
+                color: var(--ink-2);
+                text-decoration: none;
+            }
+            nav a:hover {
+                color: var(--ink);
+            }
+            .filters {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: end;
+                padding: 10px 0;
+                margin-top: 10px;
+                background: var(--page);
+                border-bottom: 1px solid var(--border);
+            }
+            .filters label {
+                display: grid;
+                gap: 2px;
+                font-size: 12px;
+                color: var(--muted);
+            }
+            select,
+            input,
+            textarea,
+            button {
+                font: inherit;
+                color: var(--ink);
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 5px 8px;
+            }
+            button {
+                cursor: pointer;
+            }
+            button:hover {
+                background: var(--wash);
+            }
+            button.primary {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+            section.card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 16px;
+                margin: 16px 0;
+            }
+            .note {
+                color: var(--ink-2);
+                font-size: 13px;
+                margin: 0 0 12px;
+            }
+            .tiles {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 12px;
+            }
+            .tile {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 12px 14px;
+            }
+            .tile .label {
+                color: var(--ink-2);
+                font-size: 13px;
+            }
+            .tile .value {
+                font-size: 26px;
+                font-weight: 600;
+                margin-top: 2px;
+            }
+            .tile .detail {
+                color: var(--muted);
+                font-size: 12px;
+            }
+            .legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 14px;
+                font-size: 13px;
+                color: var(--ink-2);
+                margin: 8px 0;
+            }
+            .legend span::before {
+                content: "";
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 3px;
+                margin-right: 6px;
+                vertical-align: -1px;
+                background: var(--c);
+            }
+            .scroll {
+                overflow-x: auto;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                font-size: 13px;
+            }
+            th,
+            td {
+                text-align: left;
+                padding: 6px 10px;
+                border-bottom: 1px solid var(--grid);
+                white-space: nowrap;
+            }
+            th {
+                color: var(--ink-2);
+                font-weight: 600;
+                position: sticky;
+                top: 0;
+                background: var(--surface);
+            }
+            td.n,
+            th.n {
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            th.sortable {
+                cursor: pointer;
+                user-select: none;
+            }
+            th.sortable:hover {
+                color: var(--ink);
+            }
+            tbody tr:hover td {
+                background: var(--wash);
+            }
+            .seg {
+                display: flex;
+                gap: 2px;
+                height: 8px;
+                min-width: 140px;
+            }
+            .seg i {
+                display: block;
+                height: 100%;
+                border-radius: 4px;
+                background: var(--c);
+            }
+            .matrix td.cell {
+                text-align: center;
+                font-variant-numeric: tabular-nums;
+                border: 2px solid var(--surface);
+                border-radius: 6px;
+            }
+            .empty {
+                color: var(--muted);
+            }
+            .grid2 {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+                gap: 16px;
+            }
+            svg text {
+                fill: var(--muted);
+                font-size: 11px;
+                font-variant-numeric: tabular-nums;
+            }
+            #tip {
+                position: fixed;
+                pointer-events: none;
+                z-index: 20;
+                display: none;
+                background: var(--surface);
+                color: var(--ink);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 8px 10px;
+                font-size: 12px;
+                white-space: pre;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+                font-variant-numeric: tabular-nums;
+            }
+            textarea {
+                width: 100%;
+                min-height: 120px;
+                font-family: ui-monospace, Consolas, monospace;
+                font-size: 13px;
+            }
+            .row {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                align-items: center;
+                margin: 8px 0;
+            }
+            .error {
+                color: var(--bad);
+                white-space: pre-wrap;
+            }
+            code {
+                font-family: ui-monospace, Consolas, monospace;
+                font-size: 12px;
+                background: var(--wash);
+                padding: 1px 4px;
+                border-radius: 4px;
+            }
+            .maxh {
+                max-height: 480px;
+                overflow: auto;
+            }
+            body.empty main > :not(#empty),
+            body.empty nav {
+                display: none;
+            }
+            #empty {
+                display: none;
+                text-align: center;
+                padding: 48px 16px;
+            }
+            body.empty #empty {
+                display: block;
+            }
+            #drop {
+                position: fixed;
+                inset: 0;
+                z-index: 30;
+                display: none;
+                place-items: center;
+                background: color-mix(in srgb, var(--page) 85%, transparent);
+                border: 3px dashed var(--accent);
+                font-size: 18px;
+                font-weight: 600;
+            }
+            body.dragging #drop {
+                display: grid;
+            }
+            /* Wrapped onto several rows, a sticky filter bar would cover a phone's screen */
+            @media (max-width: 600px) {
+                .filters {
+                    position: static;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>Run stats</h1>
+            <p class="sub" id="loaded">Loading…</p>
+            <div class="row">
+                <button class="primary" id="addFiles">Add exports</button
+                ><button id="clearFiles">Clear</button
+                ><span class="note" id="loadInfo" style="margin: 0"
+                    >Or drop <code>.sql</code> files anywhere on the page.</span
+                >
+                <input type="file" id="filePick" accept=".sql" multiple hidden />
+            </div>
+            <nav>
+                <a href="#overview">Overview</a><a href="#maps">Maps</a
+                ><a href="#groups">Party and version</a> <a href="#endless">Endless</a
+                ><a href="#runs">Individual runs</a><a href="#tables">Tables</a
+                ><a href="#sql">SQL</a>
+            </nav>
+        </header>
+        <main>
+            <section class="card" id="empty">
+                <h2>No exports loaded</h2>
+                <p class="note">
+                    Drop <code>wrangler d1 export</code> files here, or choose them with Add
+                    exports. Files in <code>server/analytics/exports/</code> load when the viewer
+                    starts.
+                </p>
+                <p>
+                    <code
+                        >npx wrangler d1 export run-escape-analytics --remote --output runs.sql -c
+                        ../analytics/wrangler.toml</code
+                    >
+                </p>
+            </section>
+
+            <div class="filters" id="filters"></div>
+
+            <div id="overview" class="tiles" style="margin-top: 16px"></div>
+
+            <section class="card">
+                <h2>Runs per day</h2>
+                <p class="note">
+                    Each run by how it ended. Days are the UTC day the collector received the
+                    report.
+                </p>
+                <div class="legend" id="outcomeLegend"></div>
+                <div id="perDay"></div>
+            </section>
+
+            <section class="card" id="maps">
+                <h2>By map</h2>
+                <p class="note">
+                    Win rate is completed ÷ (completed + failed) over finite runs; abandoned and
+                    disconnected runs don't count either way. Times and DPS are per run, over all
+                    outcomes.
+                </p>
+                <div class="scroll" id="mapTable"></div>
+            </section>
+
+            <section class="card">
+                <h2>Win rate by map and difficulty</h2>
+                <p class="note">
+                    Finite runs only. The small number is how many decided runs the rate rests on,
+                    so a 100% from one run reads as one run.
+                </p>
+                <div class="scroll" id="matrix"></div>
+            </section>
+
+            <section class="card" id="groups">
+                <div class="grid2">
+                    <div>
+                        <h2>By party</h2>
+                        <p class="note">Starting party size.</p>
+                        <div class="scroll" id="partyTable"></div>
+                    </div>
+                    <div>
+                        <h2>By version and relay</h2>
+                        <p class="note">Relay is none for solo runs.</p>
+                        <div class="scroll" id="versionTable"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="endless">
+                <h2>Endless survival</h2>
+                <p class="note">Average time survived per endless run, by map and difficulty.</p>
+                <div id="endlessChart"></div>
+            </section>
+
+            <section class="card" id="runs">
+                <h2>Individual runs</h2>
+                <div id="runsBody"></div>
+            </section>
+
+            <section class="card" id="tables">
+                <h2>Tables</h2>
+                <div class="row">
+                    <select id="tablePick"></select
+                    ><span class="note" id="tableInfo" style="margin: 0"></span>
+                </div>
+                <div class="scroll maxh" id="tableView"></div>
+                <div class="row">
+                    <button id="prevPage">Previous</button><button id="nextPage">Next</button>
+                </div>
+            </section>
+
+            <section class="card" id="sql">
+                <h2>SQL</h2>
+                <p class="note">
+                    Read-only SQLite over everything loaded. Ctrl+Enter runs it. The filters above
+                    don't apply here.
+                </p>
+                <div class="row" id="examples"></div>
+                <textarea id="sqlText" spellcheck="false"></textarea>
+                <div class="row">
+                    <button class="primary" id="runSql">Run</button
+                    ><button id="csv">Download CSV</button
+                    ><span class="note" id="sqlInfo" style="margin: 0"></span>
+                </div>
+                <div class="scroll maxh" id="sqlResult"></div>
+            </section>
+        </main>
+        <div id="tip"></div>
+        <div id="drop">Drop exports to add them</div>
+        <script>
+            const OUTCOMES = [
+                { key: "completed", label: "Completed" },
+                { key: "failed", label: "Failed" },
+                { key: "abandoned", label: "Abandoned" },
+                { key: "disconnected", label: "Disconnected" },
+            ];
+            const RAMP = [
+                "#cde2fb",
+                "#b7d3f6",
+                "#9ec5f4",
+                "#86b6ef",
+                "#6da7ec",
+                "#5598e7",
+                "#3987e5",
+                "#2a78d6",
+                "#256abf",
+                "#1c5cab",
+                "#184f95",
+                "#104281",
+                "#0d366b",
+            ];
+            const FILTERS = [
+                { key: "from", label: "From", column: "day", op: ">=", values: "day" },
+                { key: "to", label: "To", column: "day", op: "<=", values: "day" },
+                { key: "play", label: "Play", column: "play_type", values: "play_type" },
+                { key: "relay", label: "Relay", column: "relay", values: "relay" },
+                { key: "map", label: "Map", column: "map_id", values: "map_id" },
+                { key: "mode", label: "Difficulty", column: "mode", values: "mode" },
+                { key: "party", label: "Party", column: "party_size", values: "party_size" },
+                { key: "endless", label: "Endless", column: "endless", values: "endless" },
+                { key: "version", label: "Version", column: "version", values: "version" },
+            ];
+            const state = {};
+            let meta;
+            let hasRuns = false;
+
+            const $ = (id) => document.getElementById(id);
+            const esc = (v) =>
+                String(v ?? "").replace(
+                    /[&<>"]/g,
+                    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+                );
+            const nice = (id) =>
+                String(id)
+                    .replace(/_/g, " ")
+                    .replace(/^./, (c) => c.toUpperCase());
+            const int = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+            const compact = new Intl.NumberFormat("en-US", {
+                notation: "compact",
+                maximumFractionDigits: 1,
+            });
+            const num = (v) =>
+                v == null ? "—" : Math.abs(v) >= 100000 ? compact.format(v) : int.format(v);
+            const pct = (a, b) => (b ? `${Math.round((100 * a) / b)}%` : "—");
+            function time(s) {
+                if (s == null || !isFinite(s)) return "—";
+                s = Math.round(s);
+                const h = Math.floor(s / 3600),
+                    m = Math.floor((s % 3600) / 60),
+                    r = s % 60;
+                return h ? `${h}h ${m}m` : `${m}:${String(r).padStart(2, "0")}`;
+            }
+            const dayLabel = (d) =>
+                new Date(d + "T00:00:00Z").toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    timeZone: "UTC",
+                });
+
+            async function query(sql, params = []) {
+                return post("/api/query", { sql, params });
+            }
+            async function post(path, body) {
+                const response = await fetch(path, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                return result;
+            }
+            const rows = async (sql, params) => (await query(sql, params)).rows;
+
+            function where(extra = []) {
+                const clauses = [],
+                    params = [];
+                for (const f of FILTERS) {
+                    const v = state[f.key];
+                    if (v === undefined || v === "") continue;
+                    clauses.push(`${f.column} ${f.op || "="} ?`);
+                    params.push(f.key === "party" || f.key === "endless" ? Number(v) : v);
+                }
+                clauses.push(...extra);
+                return { sql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+            }
+
+            // Shared hover layer: any element with data-tip shows it
+            const tip = $("tip");
+            document.addEventListener("mousemove", (e) => {
+                const target = e.target.closest?.("[data-tip]");
+                if (!target) {
+                    tip.style.display = "none";
+                    return;
+                }
+                tip.textContent = target.dataset.tip;
+                tip.style.display = "block";
+                const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+                const y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+                tip.style.left = `${x}px`;
+                tip.style.top = `${y}px`;
+            });
+
+            function table(columns, data, { numeric = [], render = {} } = {}) {
+                if (!data.length) return `<p class="empty">No rows for these filters.</p>`;
+                const head = columns
+                    .map(
+                        (c) =>
+                            `<th class="${numeric.includes(c.key) ? "n" : ""}">${esc(c.label)}</th>`,
+                    )
+                    .join("");
+                const body = data
+                    .map(
+                        (row) =>
+                            `<tr>${columns
+                                .map((c) => {
+                                    const cell = render[c.key]
+                                        ? render[c.key](row)
+                                        : esc(row[c.key]);
+                                    return `<td class="${numeric.includes(c.key) ? "n" : ""}">${cell}</td>`;
+                                })
+                                .join("")}</tr>`,
+                    )
+                    .join("");
+                return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+            }
+
+            function segmented(row) {
+                const total = OUTCOMES.reduce((s, o) => s + (row[o.key] || 0), 0);
+                const parts = OUTCOMES.filter((o) => row[o.key] > 0)
+                    .map((o) => `<i style="--c:var(--${o.key});flex:${row[o.key]}"></i>`)
+                    .join("");
+                const label = OUTCOMES.map(
+                    (o) => `${o.label}: ${row[o.key] || 0} (${pct(row[o.key] || 0, total)})`,
+                ).join("\n");
+                return `<div class="seg" data-tip="${esc(label)}" aria-label="${esc(label)}">${parts}</div>`;
+            }
+
+            function niceMax(v) {
+                if (v <= 0) return 1;
+                const p = 10 ** Math.floor(Math.log10(v));
+                for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+                return 10 * p;
+            }
+            // Rect with a 4px rounded top and a square bottom
+            function topRounded(x, y, w, h, r = 4) {
+                r = Math.min(r, h, w / 2);
+                return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+            }
+
+            function stackedColumns(el, days, byDay) {
+                const width = Math.max(320, el.clientWidth),
+                    height = 230;
+                const m = { l: 40, r: 8, t: 10, b: 26 };
+                const pw = width - m.l - m.r,
+                    ph = height - m.t - m.b;
+                const totals = days.map((d) =>
+                    OUTCOMES.reduce((s, o) => s + (byDay[d]?.[o.key] || 0), 0),
+                );
+                const max = niceMax(Math.max(...totals, 1));
+                const band = pw / Math.max(days.length, 1);
+                const bw = Math.min(24, band * 0.6);
+                const y = (v) => m.t + ph - (v / max) * ph;
+                let svg = "";
+                for (let i = 0; i <= 4; i++) {
+                    const v = (max / 4) * i,
+                        yy = y(v);
+                    svg += `<line x1="${m.l}" x2="${width - m.r}" y1="${yy}" y2="${yy}" stroke="var(${i ? "--grid" : "--axis"})"/>`;
+                    svg += `<text x="${m.l - 6}" y="${yy + 4}" text-anchor="end">${num(v)}</text>`;
+                }
+                const every = Math.ceil(days.length / Math.max(1, Math.floor(pw / 60)));
+                days.forEach((d, i) => {
+                    const cx = m.l + band * i + band / 2;
+                    let base = 0;
+                    const present = OUTCOMES.filter((o) => byDay[d]?.[o.key] > 0);
+                    present.forEach((o, k) => {
+                        const v = byDay[d][o.key];
+                        const top = y(base + v),
+                            bottom = y(base);
+                        const h = Math.max(0, bottom - top - (base > 0 ? 2 : 0));
+                        const path =
+                            k === present.length - 1
+                                ? topRounded(cx - bw / 2, top, bw, h)
+                                : `M${cx - bw / 2},${top}h${bw}v${h}h${-bw}Z`;
+                        svg += `<path d="${path}" fill="var(--${o.key})"/>`;
+                        base += v;
+                    });
+                    if (i % every === 0)
+                        svg += `<text x="${cx}" y="${height - 8}" text-anchor="middle">${dayLabel(d)}</text>`;
+                    const text =
+                        `${d}  ${totals[i]} runs\n` +
+                        OUTCOMES.map((o) => `${o.label}: ${byDay[d]?.[o.key] || 0}`).join("\n");
+                    svg += `<rect x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ph}" fill="transparent" data-tip="${esc(text)}"/>`;
+                });
+                el.innerHTML = days.length
+                    ? `<svg width="${width}" height="${height}" role="img" aria-label="Runs per day by outcome">${svg}</svg>`
+                    : `<p class="empty">No rows for these filters.</p>`;
+            }
+
+            function horizontalBars(el, data, label, value, format, tipText) {
+                if (!data.length) {
+                    el.innerHTML = `<p class="empty">No endless runs for these filters.</p>`;
+                    return;
+                }
+                const width = Math.max(320, el.clientWidth),
+                    row = 30;
+                const labelW = 170,
+                    valueW = 70,
+                    pw = width - labelW - valueW;
+                const max = Math.max(...data.map(value), 1);
+                let svg = "";
+                data.forEach((d, i) => {
+                    const yy = i * row,
+                        w = Math.max(2, (value(d) / max) * pw);
+                    svg += `<text x="0" y="${yy + 19}" style="fill:var(--ink-2);font-size:12px">${esc(label(d))}</text>`;
+                    svg += `<path d="M${labelW},${yy + 7}h${w - 4}q4,0 4,4v8q0,4 -4,4h${-(w - 4)}Z" fill="var(--accent)"/>`;
+                    svg += `<text x="${labelW + w + 6}" y="${yy + 19}" style="fill:var(--ink);font-size:12px">${format(value(d))}</text>`;
+                    svg += `<rect x="0" y="${yy}" width="${width}" height="${row}" fill="transparent" data-tip="${esc(tipText(d))}"/>`;
+                });
+                el.innerHTML = `<svg width="${width}" height="${data.length * row}" role="img" aria-label="Endless survival">${svg}</svg>`;
+            }
+
+            const OUTCOME_SUMS = OUTCOMES.map(
+                (o) => `SUM(CASE WHEN outcome = '${o.key}' THEN runs ELSE 0 END) AS ${o.key}`,
+            ).join(", ");
+            const DECIDED = `SUM(CASE WHEN endless = 0 AND outcome = 'completed' THEN runs ELSE 0 END) AS wins,
+    SUM(CASE WHEN endless = 0 AND outcome IN ('completed', 'failed') THEN runs ELSE 0 END) AS decided`;
+
+            async function render() {
+                const w = where();
+                const [totals] = await rows(
+                    `SELECT SUM(runs) AS runs, ${DECIDED},
+        SUM(duration_seconds) / SUM(runs) AS avg_duration,
+        SUM(damage_dealt) / NULLIF(SUM(duration_seconds), 0) AS dps,
+        MAX(highest_hit) AS top_hit, SUM(kills) AS kills, SUM(coins) AS coins, SUM(caskets) AS caskets,
+        COUNT(DISTINCT map_id) AS maps, MIN(day) AS first, MAX(day) AS last
+        FROM daily_stats ${w.sql}`,
+                    w.params,
+                );
+                const tiles = [
+                    [
+                        "Runs",
+                        num(totals.runs || 0),
+                        totals.first
+                            ? `${dayLabel(totals.first)} – ${dayLabel(totals.last)}, ${totals.maps} ${totals.maps === 1 ? "map" : "maps"}`
+                            : "No runs",
+                    ],
+                    [
+                        "Win rate",
+                        pct(totals.wins, totals.decided),
+                        `${num(totals.wins || 0)} of ${num(totals.decided || 0)} decided finite runs`,
+                    ],
+                    ["Average run", time(totals.avg_duration), "Simulation time, every outcome"],
+                    ["Party DPS", num(totals.dps), "Damage over run time"],
+                    ["Highest hit", num(totals.top_hit), "Any single hit"],
+                    [
+                        "Kills",
+                        num(totals.kills),
+                        `${num(totals.coins)} coins, ${num(totals.caskets)} caskets`,
+                    ],
+                ];
+                $("overview").innerHTML = tiles
+                    .map(
+                        ([l, v, d]) =>
+                            `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="detail">${esc(d)}</div></div>`,
+                    )
+                    .join("");
+
+                const perDay = await rows(
+                    `SELECT day, outcome, SUM(runs) AS n FROM daily_stats ${w.sql} GROUP BY day, outcome ORDER BY day`,
+                    w.params,
+                );
+                const byDay = {};
+                for (const r of perDay) (byDay[r.day] ??= {})[r.outcome] = r.n;
+                stackedColumns($("perDay"), Object.keys(byDay), byDay);
+
+                const maps = await rows(
+                    `SELECT map_id, SUM(runs) AS runs, ${OUTCOME_SUMS}, ${DECIDED},
+        SUM(duration_seconds) / SUM(runs) AS avg_duration,
+        SUM(damage_dealt) / NULLIF(SUM(duration_seconds), 0) AS dps,
+        SUM(kills) * 1.0 / SUM(runs) AS kills, SUM(coins) * 1.0 / SUM(runs) AS coins, MAX(highest_hit) AS top_hit
+        FROM daily_stats ${w.sql} GROUP BY map_id ORDER BY runs DESC, map_id`,
+                    w.params,
+                );
+                $("mapTable").innerHTML = table(
+                    [
+                        { key: "map_id", label: "Map" },
+                        { key: "runs", label: "Runs" },
+                        { key: "split", label: "Outcomes" },
+                        { key: "win", label: "Win rate" },
+                        { key: "avg_duration", label: "Avg run" },
+                        { key: "dps", label: "DPS" },
+                        { key: "kills", label: "Kills / run" },
+                        { key: "coins", label: "Coins / run" },
+                        { key: "top_hit", label: "Top hit" },
+                    ],
+                    maps,
+                    {
+                        numeric: [
+                            "runs",
+                            "win",
+                            "avg_duration",
+                            "dps",
+                            "kills",
+                            "coins",
+                            "top_hit",
+                        ],
+                        render: {
+                            map_id: (r) => esc(nice(r.map_id)),
+                            split: segmented,
+                            win: (r) =>
+                                `<span title="${r.wins} of ${r.decided}">${pct(r.wins, r.decided)}</span>`,
+                            avg_duration: (r) => time(r.avg_duration),
+                            dps: (r) => num(r.dps),
+                            kills: (r) => num(r.kills),
+                            coins: (r) => num(r.coins),
+                            top_hit: (r) => num(r.top_hit),
+                        },
+                    },
+                );
+
+                const cells = await rows(
+                    `SELECT map_id, mode, ${DECIDED} FROM daily_stats ${where(["endless = 0"]).sql} GROUP BY map_id, mode`,
+                    where(["endless = 0"]).params,
+                );
+                const modeOrder = ["normal", "hard", "expert"];
+                const modes = [...new Set(cells.map((c) => c.mode))].sort(
+                    (a, b) =>
+                        (modeOrder.indexOf(a) + 1 || 99) - (modeOrder.indexOf(b) + 1 || 99) ||
+                        a.localeCompare(b),
+                );
+                const mapIds = [...new Set(cells.map((c) => c.map_id))].sort();
+                const lookup = Object.fromEntries(cells.map((c) => [`${c.map_id}|${c.mode}`, c]));
+                $("matrix").innerHTML = mapIds.length
+                    ? `<table class="matrix"><thead><tr><th>Map</th>${modes.map((m) => `<th style="text-align:center">${esc(nice(m))}</th>`).join("")}</tr></thead><tbody>${mapIds
+                          .map(
+                              (map) =>
+                                  `<tr><td>${esc(nice(map))}</td>${modes
+                                      .map((mode) => {
+                                          const c = lookup[`${map}|${mode}`];
+                                          if (!c || !c.decided)
+                                              return `<td class="cell empty">—</td>`;
+                                          const rate = c.wins / c.decided,
+                                              step = Math.round(rate * (RAMP.length - 1));
+                                          const ink = step >= 6 ? "#ffffff" : "#0b0b0b";
+                                          return `<td class="cell" style="background:${RAMP[step]};color:${ink}" data-tip="${esc(`${nice(map)}, ${mode}\n${c.wins} won of ${c.decided} decided`)}">${pct(c.wins, c.decided)} <small style="opacity:.75">${c.decided}</small></td>`;
+                                      })
+                                      .join("")}</tr>`,
+                          )
+                          .join("")}</tbody></table>`
+                    : `<p class="empty">No finite runs for these filters.</p>`;
+
+                const groupCols = (first) => [
+                    first,
+                    { key: "runs", label: "Runs" },
+                    { key: "split", label: "Outcomes" },
+                    { key: "win", label: "Win rate" },
+                    { key: "avg_duration", label: "Avg run" },
+                ];
+                const groupRender = {
+                    split: segmented,
+                    win: (r) => pct(r.wins, r.decided),
+                    avg_duration: (r) => time(r.avg_duration),
+                };
+                const party = await rows(
+                    `SELECT play_type, party_size, SUM(runs) AS runs, ${OUTCOME_SUMS}, ${DECIDED}, SUM(duration_seconds) / SUM(runs) AS avg_duration
+        FROM daily_stats ${w.sql} GROUP BY play_type, party_size ORDER BY play_type DESC, party_size`,
+                    w.params,
+                );
+                $("partyTable").innerHTML = table(
+                    groupCols({ key: "group", label: "Party" }),
+                    party,
+                    {
+                        numeric: ["runs", "win", "avg_duration"],
+                        render: {
+                            ...groupRender,
+                            group: (r) =>
+                                r.play_type === "singleplayer" ? "Solo" : `${r.party_size} players`,
+                        },
+                    },
+                );
+                const versions = await rows(
+                    `SELECT version, relay, SUM(runs) AS runs, ${OUTCOME_SUMS}, ${DECIDED}, SUM(duration_seconds) / SUM(runs) AS avg_duration
+        FROM daily_stats ${w.sql} GROUP BY version, relay ORDER BY version DESC, relay`,
+                    w.params,
+                );
+                $("versionTable").innerHTML = table(
+                    groupCols({ key: "group", label: "Version, relay" }),
+                    versions,
+                    {
+                        numeric: ["runs", "win", "avg_duration"],
+                        render: {
+                            ...groupRender,
+                            group: (r) => `${esc(r.version)}, ${esc(r.relay)}`,
+                        },
+                    },
+                );
+
+                const ew = where(["endless = 1"]);
+                const endless = await rows(
+                    `SELECT map_id, mode, SUM(runs) AS runs, SUM(duration_seconds) / SUM(runs) AS survival, SUM(kills) * 1.0 / SUM(runs) AS kills
+        FROM daily_stats ${ew.sql} GROUP BY map_id, mode ORDER BY survival DESC`,
+                    ew.params,
+                );
+                horizontalBars(
+                    $("endlessChart"),
+                    endless,
+                    (d) => `${nice(d.map_id)}, ${d.mode}`,
+                    (d) => d.survival,
+                    time,
+                    (d) =>
+                        `${nice(d.map_id)}, ${d.mode}\n${d.runs} runs, ${time(d.survival)} average\n${num(d.kills)} kills a run`,
+                );
+
+                await renderRuns();
+            }
+
+            async function renderRuns() {
+                const body = $("runsBody");
+                if (!hasRuns) {
+                    body.innerHTML = `<p class="note">These dumps have no raw <code>runs</code> rows, so party composition, leaderboards and per-run detail aren't here. Export the whole database to get them:</p>
+            <p><code>npx wrangler d1 export run-escape-analytics --remote --output runs-${new Date().toISOString().slice(0, 10)}.sql -c ../analytics/wrangler.toml</code></p>
+            <p class="note">Raw runs are deleted after <code>RAW_RETENTION_DAYS</code>, so export at least that often to keep them.</p>`;
+                    return;
+                }
+                const w = where();
+                const fw = where(["endless = 0"]);
+                const adventurers = await rows(
+                    `SELECT a.value AS adventurer, COUNT(*) AS runs,
+        SUM(outcome = 'completed') AS wins, SUM(outcome IN ('completed', 'failed')) AS decided,
+        AVG(duration_seconds) AS avg_duration
+        FROM runs, json_each('["' || REPLACE(characters, ',', '","') || '"]') AS a
+        ${fw.sql} GROUP BY a.value ORDER BY runs DESC`,
+                    fw.params,
+                );
+                const parties = await rows(
+                    `SELECT characters, COUNT(*) AS runs, SUM(outcome = 'completed') AS wins,
+        SUM(outcome IN ('completed', 'failed')) AS decided, AVG(duration_seconds) AS avg_duration
+        FROM runs ${fw.sql} GROUP BY characters ORDER BY runs DESC LIMIT 40`,
+                    fw.params,
+                );
+                const fastest = await rows(
+                    `SELECT day, map_id, mode, play_type, party_size, characters, endless, duration_seconds, round, kills, dps, version
+        FROM runs ${where(["eligible = 1"]).sql} ORDER BY endless, leaderboard_score DESC LIMIT 25`,
+                    where(["eligible = 1"]).params,
+                );
+                const recent = await rows(
+                    `SELECT received_at, map_id, mode, play_type, party_size, characters, endless, outcome, duration_seconds, round, level, kills, dps, highest_hit, version, build
+        FROM runs ${w.sql} ORDER BY received_at DESC LIMIT 100`,
+                    w.params,
+                );
+                const winCols = [
+                    { key: "runs", label: "Runs" },
+                    { key: "win", label: "Win rate" },
+                    { key: "avg_duration", label: "Avg run" },
+                ];
+                const winRender = {
+                    win: (r) =>
+                        `<span title="${r.wins} of ${r.decided}">${pct(r.wins, r.decided)}</span>`,
+                    avg_duration: (r) => time(r.avg_duration),
+                };
+                const nums = [
+                    "runs",
+                    "win",
+                    "avg_duration",
+                    "duration_seconds",
+                    "round",
+                    "level",
+                    "kills",
+                    "dps",
+                    "highest_hit",
+                    "party_size",
+                ];
+                const runRender = {
+                    map_id: (r) => esc(nice(r.map_id)),
+                    duration_seconds: (r) => time(r.duration_seconds),
+                    dps: (r) => num(r.dps),
+                    kills: (r) => num(r.kills),
+                    highest_hit: (r) => num(r.highest_hit),
+                    endless: (r) => (r.endless ? "Endless" : "Finite"),
+                    characters: (r) => esc(r.characters.split(",").map(nice).join(", ")),
+                    received_at: (r) =>
+                        esc(new Date(r.received_at).toISOString().replace("T", " ").slice(0, 16)),
+                };
+                body.innerHTML = `<p class="note">Finite runs only for the win rates. Filters apply.</p>
+        <div class="grid2">
+            <div><h2>By adventurer</h2><p class="note">Every run an adventurer started in.</p><div class="scroll maxh">${table([{ key: "adventurer", label: "Adventurer" }, ...winCols], adventurers, { numeric: nums, render: { ...winRender, adventurer: (r) => esc(nice(r.adventurer)) } })}</div></div>
+            <div><h2>By starting party</h2><p class="note">The 40 most played.</p><div class="scroll maxh">${table([{ key: "characters", label: "Party" }, ...winCols], parties, { numeric: nums, render: { ...winRender, characters: runRender.characters } })}</div></div>
+        </div>
+        <h2 style="margin-top:16px">Leaderboard</h2><p class="note">Fastest finite wins, then longest endless runs, among runs the leaderboard ranks.</p>
+        <div class="scroll maxh">${table(
+            [
+                "day",
+                "map_id",
+                "mode",
+                "play_type",
+                "party_size",
+                "characters",
+                "endless",
+                "duration_seconds",
+                "round",
+                "kills",
+                "dps",
+                "version",
+            ].map((k) => ({ key: k, label: nice(k) })),
+            fastest,
+            { numeric: nums, render: runRender },
+        )}</div>
+        <h2 style="margin-top:16px">Latest runs</h2><p class="note">The 100 most recently received.</p>
+        <div class="scroll maxh">${table(
+            [
+                "received_at",
+                "map_id",
+                "mode",
+                "play_type",
+                "party_size",
+                "characters",
+                "endless",
+                "outcome",
+                "duration_seconds",
+                "round",
+                "level",
+                "kills",
+                "dps",
+                "highest_hit",
+                "version",
+                "build",
+            ].map((k) => ({ key: k, label: nice(k) })),
+            recent,
+            { numeric: nums, render: runRender },
+        )}</div>`;
+            }
+
+            // Table browser
+            const browse = { table: "", order: "", desc: false, offset: 0 };
+            async function renderTable() {
+                const info = meta.tables.find((t) => t.name === browse.table);
+                if (!info) return;
+                const order = browse.order
+                    ? `ORDER BY "${browse.order}" ${browse.desc ? "DESC" : "ASC"}`
+                    : "";
+                const result = await query(
+                    `SELECT * FROM "${browse.table}" ${order} LIMIT 100 OFFSET ${browse.offset}`,
+                );
+                $("tableInfo").textContent =
+                    `${info.rows} rows; showing ${info.rows ? browse.offset + 1 : 0}–${Math.min(browse.offset + 100, info.rows)}. Click a column to sort.`;
+                $("tableView").innerHTML = resultTable(result, true);
+                $("prevPage").disabled = browse.offset === 0;
+                $("nextPage").disabled = browse.offset + 100 >= info.rows;
+            }
+            function resultTable({ columns, rows: data }, sortable = false) {
+                if (!columns.length) return `<p class="empty">No rows.</p>`;
+                const numeric = columns.filter(
+                    (c) => data.length && typeof data[0][c] === "number",
+                );
+                return `<table><thead><tr>${columns.map((c) => `<th class="${numeric.includes(c) ? "n" : ""} ${sortable ? "sortable" : ""}" data-col="${esc(c)}">${esc(c)}${sortable && browse.order === c ? (browse.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>
+        <tbody>${data.map((r) => `<tr>${columns.map((c) => `<td class="${numeric.includes(c) ? "n" : ""}">${esc(typeof r[c] === "number" && !Number.isInteger(r[c]) ? r[c].toFixed(2) : r[c])}</td>`).join("")}</tr>`).join("") || `<tr><td class="empty" colspan="${columns.length}">No rows.</td></tr>`}</tbody></table>`;
+            }
+            $("tableView").addEventListener("click", (e) => {
+                const col = e.target.closest("th")?.dataset.col;
+                if (!col) return;
+                browse.desc = browse.order === col ? !browse.desc : false;
+                browse.order = col;
+                browse.offset = 0;
+                renderTable();
+            });
+            $("tablePick").addEventListener("change", (e) => {
+                Object.assign(browse, { table: e.target.value, order: "", offset: 0 });
+                renderTable();
+            });
+            $("prevPage").onclick = () => {
+                browse.offset = Math.max(0, browse.offset - 100);
+                renderTable();
+            };
+            $("nextPage").onclick = () => {
+                browse.offset += 100;
+                renderTable();
+            };
+
+            // SQL console
+            const EXAMPLES = {
+                "Win rate by map": `SELECT map_id, mode,
+  SUM(CASE WHEN outcome = 'completed' THEN runs END) AS wins,
+  SUM(CASE WHEN outcome IN ('completed', 'failed') THEN runs END) AS decided,
+  ROUND(100.0 * SUM(CASE WHEN outcome = 'completed' THEN runs END)
+    / SUM(CASE WHEN outcome IN ('completed', 'failed') THEN runs END), 1) AS win_pct
+FROM daily_stats
+WHERE endless = 0
+GROUP BY map_id, mode
+ORDER BY decided DESC;`,
+                "Runs per day": `SELECT day, play_type, SUM(runs) AS runs
+FROM daily_stats GROUP BY day, play_type ORDER BY day;`,
+                "Average round by map": `SELECT map_id, mode, endless, SUM(runs) AS runs,
+  ROUND(SUM(duration_seconds) / SUM(runs)) AS avg_seconds,
+  ROUND(SUM(kills) * 1.0 / SUM(runs)) AS kills_per_run
+FROM daily_stats GROUP BY map_id, mode, endless ORDER BY runs DESC;`,
+                "Adventurer win rate (raw runs)": `SELECT a.value AS adventurer, COUNT(*) AS runs,
+  ROUND(100.0 * SUM(outcome = 'completed') / SUM(outcome IN ('completed', 'failed')), 1) AS win_pct
+FROM runs, json_each('["' || REPLACE(characters, ',', '","') || '"]') AS a
+WHERE endless = 0
+GROUP BY a.value ORDER BY runs DESC;`,
+            };
+            let lastResult;
+            async function runSql() {
+                $("sqlInfo").textContent = "Running…";
+                try {
+                    lastResult = await query($("sqlText").value);
+                    $("sqlInfo").textContent =
+                        `${lastResult.rows.length}${lastResult.truncated ? "+ (first 5,000)" : ""} rows in ${lastResult.ms.toFixed(1)} ms`;
+                    $("sqlResult").innerHTML = resultTable(lastResult);
+                } catch (error) {
+                    lastResult = undefined;
+                    $("sqlInfo").textContent = "";
+                    $("sqlResult").innerHTML = `<p class="error">${esc(error.message)}</p>`;
+                }
+            }
+            $("runSql").onclick = runSql;
+            $("sqlText").addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    runSql();
+                }
+            });
+            $("csv").onclick = () => {
+                if (!lastResult) return;
+                const cell = (v) =>
+                    v == null
+                        ? ""
+                        : /[",\n]/.test(String(v))
+                          ? `"${String(v).replace(/"/g, '""')}"`
+                          : String(v);
+                const text = [
+                    lastResult.columns.join(","),
+                    ...lastResult.rows.map((r) =>
+                        lastResult.columns.map((c) => cell(r[c])).join(","),
+                    ),
+                ].join("\n");
+                const link = Object.assign(document.createElement("a"), {
+                    href: URL.createObjectURL(new Blob([text], { type: "text/csv" })),
+                    download: "query.csv",
+                });
+                link.click();
+                URL.revokeObjectURL(link.href);
+            };
+            $("examples").innerHTML = Object.keys(EXAMPLES)
+                .map((k) => `<button data-example="${esc(k)}">${esc(k)}</button>`)
+                .join("");
+            $("examples").addEventListener("click", (e) => {
+                const key = e.target.dataset.example;
+                if (key) {
+                    $("sqlText").value = EXAMPLES[key];
+                    runSql();
+                }
+            });
+
+            async function load() {
+                meta = await (await fetch("/api/meta")).json();
+                const visible = meta.tables.filter(
+                    (t) => !t.name.startsWith("_cf") && t.name !== "d1_migrations",
+                );
+                const count = (name) => meta.tables.find((t) => t.name === name)?.rows || 0;
+                hasRuns = count("runs") > 0;
+                document.body.classList.toggle("empty", !count("daily_stats") && !hasRuns);
+                $("loaded").textContent = meta.files.length
+                    ? `${meta.files.join(", ")}: ${visible.map((t) => `${t.name} ${t.rows} rows`).join(", ")}`
+                    : "Nothing loaded yet";
+
+                const values = {};
+                for (const f of FILTERS) {
+                    values[f.values] ??= (
+                        await rows(`SELECT DISTINCT ${f.values} AS v FROM daily_stats ORDER BY v`)
+                    ).map((r) => r.v);
+                }
+                const label = (f, v) =>
+                    f.key === "endless"
+                        ? v
+                            ? "Endless"
+                            : "Finite"
+                        : f.key === "party"
+                          ? String(v)
+                          : f.key === "from" || f.key === "to"
+                            ? v
+                            : nice(v);
+                for (const k in state) delete state[k];
+                $("filters").innerHTML =
+                    FILTERS.map(
+                        (f) =>
+                            `<label>${f.label}<select data-key="${f.key}"><option value="">${f.key === "from" ? "First day" : f.key === "to" ? "Last day" : "All"}</option>${values[f.values].map((v) => `<option value="${esc(v)}">${esc(label(f, v))}</option>`).join("")}</select></label>`,
+                    ).join("") + `<button id="reset">Reset</button>`;
+                $("reset").onclick = () => {
+                    for (const k in state) delete state[k];
+                    $("filters")
+                        .querySelectorAll("select")
+                        .forEach((s) => (s.value = ""));
+                    render();
+                };
+
+                $("tablePick").innerHTML = visible
+                    .map((t) => `<option>${esc(t.name)}</option>`)
+                    .join("");
+                Object.assign(browse, { order: "", offset: 0 });
+                browse.table = visible.find((t) => t.name === "daily_stats")
+                    ? "daily_stats"
+                    : visible[0]?.name;
+                $("tablePick").value = browse.table;
+                await Promise.all([render(), renderTable()]);
+            }
+
+            async function addFiles(fileList) {
+                const files = [...fileList].filter((f) => f.name.endsWith(".sql"));
+                if (!files.length) return;
+                $("loadInfo").textContent = `Loading ${files.map((f) => f.name).join(", ")}…`;
+                try {
+                    const named = await Promise.all(
+                        files.map(async (f) => ({ name: f.name, sql: await f.text() })),
+                    );
+                    named.sort((a, b) => a.name.localeCompare(b.name));
+                    await post("/api/load", { files: named });
+                    $("loadInfo").textContent =
+                        `Added ${files.length} file${files.length === 1 ? "" : "s"}.`;
+                    await load();
+                } catch (error) {
+                    $("loadInfo").innerHTML = `<span class="error">${esc(error.message)}</span>`;
+                }
+            }
+            $("addFiles").onclick = () => $("filePick").click();
+            $("filePick").onchange = (e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+            };
+            $("clearFiles").onclick = async () => {
+                await post("/api/clear", {});
+                $("loadInfo").textContent = "Cleared.";
+                await load();
+            };
+            let dragDepth = 0;
+            addEventListener("dragenter", (e) => {
+                if (!e.dataTransfer?.types.includes("Files")) return;
+                dragDepth++;
+                document.body.classList.add("dragging");
+            });
+            addEventListener("dragleave", () => {
+                if (--dragDepth <= 0) {
+                    dragDepth = 0;
+                    document.body.classList.remove("dragging");
+                }
+            });
+            addEventListener("dragover", (e) => e.preventDefault());
+            addEventListener("drop", (e) => {
+                e.preventDefault();
+                dragDepth = 0;
+                document.body.classList.remove("dragging");
+                addFiles(e.dataTransfer.files);
+            });
+
+            $("outcomeLegend").innerHTML = OUTCOMES.map(
+                (o) => `<span style="--c:var(--${o.key})">${o.label}</span>`,
+            ).join("");
+            $("filters").addEventListener("change", (e) => {
+                state[e.target.dataset.key] = e.target.value;
+                render();
+            });
+            $("sqlText").value = EXAMPLES["Win rate by map"];
+            let resize;
+            addEventListener("resize", () => {
+                clearTimeout(resize);
+                resize = setTimeout(render, 150);
+            });
+            load().catch((error) => {
+                $("loaded").innerHTML = `<span class="error">${esc(error.message)}</span>`;
+            });
+        </script>
+    </body>
+</html>

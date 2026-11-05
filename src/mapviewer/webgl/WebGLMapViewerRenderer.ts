@@ -185,6 +185,8 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     // World tiles (x0, y0, x1, y1) past which the world fades into the sky.
     // Unbounded unless set.
     playArea: vec4 = vec4.fromValues(-1e6, -1e6, 1e6, 1e6);
+    // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
+    wash: vec4 = vec4.fromValues(1, 1, 1, 1);
     // World tiles (x0, y0, x1, y1) of the world that map squares keep, see
     // SdMapLoaderInput.keepArea. Unset keeps it all.
     keepArea?: vec4;
@@ -307,6 +309,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             PicoGL.FLOAT, // float u_colorBanding;
             PicoGL.FLOAT, // float u_isNewTextureAnim;
             PicoGL.FLOAT_VEC4, // vec4 u_playArea;
+            PicoGL.FLOAT_VEC4, // vec4 u_wash;
         ]);
 
         this.initFramebuffers();
@@ -985,6 +988,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             .set(9, this.colorBanding as any)
             .set(10, this.mapViewer.isNewTextureAnim as any)
             .set(11, this.playArea as Float32Array)
+            .set(12, this.wash as Float32Array)
             .update();
 
         const currInteractions = this.interactions[frameCount % this.interactions.length];

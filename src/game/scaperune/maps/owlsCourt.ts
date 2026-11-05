@@ -288,30 +288,25 @@ class Court {
         return this.placer.dress(id, A + x, A + y, { type: LOC_NORMAL, kind });
     }
 
-    // Something the fight draws and animates in its place (BossAttackDef.statues): its tiles are
-    // taken and blocked as though it stood there, but its model's left out of the map, so the
-    // fight's is the only one. It must be on open walkway.
-    forFight([id, sizeX, sizeY]: Solid, x: number, y: number, rotation: number): void {
-        const [across, deep] = rotation & 1 ? [sizeY, sizeX] : [sizeX, sizeY];
-        const { ground } = this;
-        for (let ty = y; ty < y + deep; ty++) {
-            for (let tx = x; tx < x + across; tx++) {
-                const tile = this.at(tx, ty);
-                if (this.kindAt(tx, ty) !== WALKWAY || ground.reserved[tile]) {
-                    throw new Error(`Owl's Court: no room for the fight's ${id} at ${tx},${ty}`);
-                }
-                ground.reserved[tile] = 1;
-                ground.occupied[tile] = 1;
-                if (!WALK_THROUGH.includes(id)) {
-                    ground.level0.flags[tile] |= TILE_BLOCKED;
-                }
-            }
+    // Something the fight draws and animates in its place (BossAttackDef.statues, Placer.standIn):
+    // its tiles are taken and blocked as though it stood there, but its model's left out of the
+    // map, so the fight's is the only one. It must be on open walkway.
+    forFight([id]: Solid, x: number, y: number, rotation: number, kind: string): void {
+        const walkThrough = WALK_THROUGH.includes(id);
+        if (!this.placer.standIn(id, A + x, A + y, { rotation, walkThrough, kind })) {
+            throw new Error(`Owl's Court: no room for the fight's ${id} at ${x},${y}`);
         }
-        this.drawn.push({ id, x, y, rotation });
     }
 
-    // What forFight left out
-    readonly drawn: FightDrawn[] = [];
+    // What forFight left out, in arena tiles
+    get drawn(): FightDrawn[] {
+        return this.placer.standIns.map(({ id, x, y, rotation }) => ({
+            id,
+            x: x - A,
+            y: y - A,
+            rotation,
+        }));
+    }
 }
 
 // A loc the fight draws in the map's place (Court.forFight), in arena tiles
@@ -476,7 +471,7 @@ function placeCourt(court: Court): void {
         for (const statue of bolt.statues) {
             // Facing across the court: rotation 3 faces east, 1 west. The fight draws them, as
             // they aim and fire.
-            court.forFight(CROSSBOWMAN, statue.x, statue.y, statue.rotation);
+            court.forFight(CROSSBOWMAN, statue.x, statue.y, statue.rotation, "crossbowmen");
         }
         // A torch behind each lane's middle statue, on the rim's outer side
         court.solid(TORCH, bolt.dir === 1 ? WEST_RIM.x0 : EAST_RIM.x1, bolt.y, 0, "rim torches");
@@ -495,7 +490,7 @@ function placeCourt(court: Court): void {
     court.solid(GREAT_OWL, EAST_RIM.x0, COURT.y1 - 1, OWL_SOUTH, "great owls");
     // The fight draws them too, as they throw their swords
     for (const knight of OWLS_COURT.knights) {
-        court.forFight(KNIGHT, knight.x, knight.y, knight.rotation);
+        court.forFight(KNIGHT, knight.x, knight.y, knight.rotation, "knights");
     }
 }
 
@@ -514,7 +509,7 @@ function placeBridge(court: Court): void {
         }
     }
     for (const fire of OWLS_COURT.fires) {
-        court.forFight(FIRE, fire.x0, fire.y, fire.rotation);
+        court.forFight(FIRE, fire.x0, fire.y, fire.rotation, "fire jets");
     }
 }
 
@@ -749,6 +744,7 @@ export function buildOwlsCourt(context: BuildContext): {
         caves: [],
         falls: [],
         waterfalls: [],
+        standIns: court.placer.standIns,
     };
     return { map, placer: court.placer, drawn: court.drawn };
 }
