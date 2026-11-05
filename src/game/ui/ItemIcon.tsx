@@ -272,6 +272,44 @@ type Props = {
     count?: number;
 };
 
+// An interface sprite on its own, without an item-model fallback.
+export function SpriteIcon({
+    spriteId,
+    size = 32,
+}: {
+    spriteId: number;
+    size?: number;
+}): JSX.Element {
+    const cached = () => iconCache.getFrame(spriteId, 0);
+    const [loaded, setLoaded] = useState(() => ({ spriteId, url: cached() }));
+    const url = loaded.spriteId === spriteId ? loaded.url : cached();
+    useEffect(() => {
+        let cancelled = false;
+        iconCache.requestFrame(spriteId, 0, (url) => {
+            if (!cancelled) {
+                setLoaded({ spriteId, url });
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [spriteId]);
+    const smooth = size * pixelRatio < ICON_HEIGHT;
+    return url ? (
+        <img
+            className={smooth ? "ui-icon ui-icon-smooth" : "ui-icon"}
+            src={url}
+            width={size}
+            height={size}
+            style={{ objectFit: "contain" }}
+            alt=""
+            draggable={false}
+        />
+    ) : (
+        <span className="ui-icon" style={{ width: size, height: size, display: "inline-block" }} />
+    );
+}
+
 export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.Element {
     const stack = objId === 995 ? coinStackCount(count) : 1;
     const sprite =

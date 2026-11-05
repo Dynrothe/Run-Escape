@@ -31,6 +31,7 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
@@ -76,7 +77,7 @@ import { DescriptionButton } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
-import { ItemIcon } from "./ItemIcon";
+import { ItemIcon, SpriteIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
@@ -1876,7 +1877,7 @@ const GearSlots = memo(function GearSlots({
                     itemId={slot.item?.id}
                     disabled={!slot.item || disabled}
                     aria-label={slot.item?.name ?? `${slot.name} (empty)`}
-                    className="ui-slot ui-gear-slot"
+                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
                     description={
                         slot.item && (
@@ -1901,7 +1902,10 @@ const GearSlots = memo(function GearSlots({
                     {slot.item ? (
                         <ItemIcon objId={slot.item.objId} size={22} />
                     ) : (
-                        <span className="ui-gear-empty">{slot.name[0]}</span>
+                        <SpriteIcon
+                            spriteId={GEAR_SLOT_BY_ID.get(slot.slot)!.iconSpriteId}
+                            size={22}
+                        />
                     )}
                 </DescriptionButton>
             ))}

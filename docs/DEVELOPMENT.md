@@ -642,7 +642,7 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon, CountryFlag (a co-op player's flag), CoopScreen (the rooms, the
+            offer), ItemIcon (item models and standalone SpriteIcon sprites), CountryFlag (a co-op player's flag), CoopScreen (the rooms, the
             lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
@@ -659,6 +659,11 @@ src/mapviewer/worker/        RegionDataLoader (collision and heights for the who
 src/rs/audio/               the client's sound effect synth: instruments, envelopes, filters
 src/rs/model/player/         player models from identity kits and worn items
 ```
+
+Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.iconSpriteId` in
+`content/items.ts`), drawn through `SpriteIcon` in `ui/ItemIcon.tsx`. They are included in
+`client/GameAssets.ts`'s `getGameSpriteIds`, so sprite validation and the deployment's slim cache
+cover them too. Equipped slots still show their item's model; small phones still hide the gear row.
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 opcodes, the map loader can take extra map squares as plain data

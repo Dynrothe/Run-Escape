@@ -9,6 +9,10 @@ the version in the corner).
 
 - Hover or hold weapons, passives, worn equipment and Armoury pieces to read their descriptions, including future Armoury upgrades.
 
+### Changed
+
+- Empty worn-equipment slots use OSRS's equipment silhouettes instead of letters.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

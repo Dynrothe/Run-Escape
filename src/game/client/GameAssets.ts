@@ -21,7 +21,7 @@ import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
-import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { MAPS } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
@@ -142,15 +142,16 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, the skills' refund button, co-op's flags and the overhead prayers
-// (every frame comes with the first) and the passives with a sprite for an
-// icon. The slim cache keeps these and no others, so a sprite the game shows
+// tabs, empty equipment slots, the skills' refund button, co-op's flags and the
+// overhead prayers (every frame comes with the first) and the passives with a
+// sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
         ...PASSIVES.flatMap((passive) =>

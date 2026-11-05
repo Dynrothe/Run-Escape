@@ -5,9 +5,10 @@ import { GameClient } from "../client/GameClient";
 import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine } from "../content/armoury";
-import { CASKET_GEAR, getGear } from "../content/items";
+import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
+import { iconCache } from "./ItemIcon";
 
 function slot(id: string, level: number): SlotView {
     return { id, name: id, level, maxLevel: 8, iconObjId: 1, detail: "", rarityColor: "#fff" };
@@ -62,9 +63,58 @@ function renderHud() {
     return { store, view };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+});
 
 describe("the run's HUD", () => {
+    test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {
+        vi.spyOn(iconCache, "getFrame").mockImplementation(
+            (id) => `data:image/png;base64,slot${id}`,
+        );
+        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        vi.spyOn(iconCache, "get").mockImplementation(() => "data:image/png;base64,equipped");
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        const { store } = renderHud();
+        const emptyGear = GEAR_SLOTS.map(({ id, name }) => ({ slot: id, name }));
+        act(() => store.set({ hud: { ...hud([]), gear: emptyGear } }));
+        for (const slot of GEAR_SLOTS) {
+            const button = screen.getByRole("button", { name: `${slot.name} (empty)` });
+            expect(button).toBeDisabled();
+            expect(button).toHaveClass("ui-gear-slot-empty");
+            expect(button.textContent).toBe("");
+            expect(button.querySelector("img")).toHaveAttribute(
+                "src",
+                `data:image/png;base64,slot${slot.iconSpriteId}`,
+            );
+            expect(button.querySelector("img")).toHaveAttribute("alt", "");
+        }
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+        const item = getItemView(CASKET_GEAR[0]);
+        act(() =>
+            store.set({
+                hud: {
+                    ...hud([]),
+                    gear: emptyGear.map((slot) =>
+                        slot.slot === CASKET_GEAR[0].slot ? { ...slot, item } : slot,
+                    ),
+                },
+            }),
+        );
+        const equipped = screen.getByRole("button", { name: item.name });
+        expect(equipped).toBeEnabled();
+        expect(equipped).not.toHaveClass("ui-gear-slot-empty");
+        expect(equipped.querySelector("img")).toHaveAttribute(
+            "src",
+            "data:image/png;base64,equipped",
+        );
+        act(() => store.set({ hud: { ...hud([]), gear: emptyGear } }));
+        expect(
+            screen.getByRole("button", { name: "Head (empty)" }).querySelector("img"),
+        ).toHaveAttribute("src", "data:image/png;base64,slot156");
+    });
+
     test("shows its numbers as they change, apart from the rest of the UI", () => {
         const { store, view } = renderHud();
         const timer = () => view.container.querySelector(".ui-timer")!.textContent;
