@@ -28,11 +28,11 @@ export type PartyScale = {
     caskets: number;
 };
 
-// One casket opened gives every player who's up an item of their own (Sim.collect), and a
-// bigger party kills more, so ordinary kills drop fewer: 1 / (1 + CASKETS_PER_PLAYER for each
-// player past the first), x0.69 for two, x0.53 for three and x0.43 for four. That leaves each
-// player about as many items as solo (they were +30% with two and +60% with four). Elites' and
-// bosses' caskets already match solo, so they're left alone.
+// A casket gives every player who's up an item of their own (Sim.openCasket), and a bigger
+// party's bigger crowd brings more kills, so ordinary kills drop fewer: 1 / (1 + this for each
+// player past the first). That leaves each player about as many items as solo, and the party
+// about as many casket coins. Elites' and bosses' caskets drop one a kill, as solo, so they're
+// left alone.
 const CASKETS_PER_PLAYER = 0.45;
 
 // Each player past the first adds this much of each (the experience, takes

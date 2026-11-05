@@ -10918,7 +10918,7 @@ export class Sim {
                 this.heal(pickup.value);
                 break;
             case "casket":
-                this.openCaskets(pickup.tier ?? "medium");
+                this.openCasket(pickup.tier ?? "medium");
                 break;
             case "powerUp":
                 this.usePowerUp(getPowerUp(pickup.powerUp ?? ""));
@@ -11686,41 +11686,32 @@ export class Sim {
         this.checkLevelUp();
     }
 
-    // A casket picked up: in co-op, every player who's up gets an item of their own (rolled on
-    // their luck and gear), the one who picked it up first. Its coins are the party's, so they're
-    // paid once, and it's one casket for the run's quests. A player who's down misses out: they
-    // couldn't choose.
-    private openCaskets(tier: CasketTier): void {
-        const current = this.hero;
-        this.openCasket(tier);
-        if (this.heroes.length === 1) {
-            return;
-        }
-        const coins = current.chests[current.chests.length - 1].coins;
+    // A casket picked up: its coins and one item. The coins are the party's, so they're paid
+    // once, and it's one casket for the run's quests and the picker's on the results screen. In
+    // co-op every player who's up gets an item of their own, the picker first; a player who's down
+    // misses out.
+    openCasket(tier: CasketTier): void {
+        const [min, max] = CASKETS[tier].coins;
+        const coins = Math.round(
+            (min + this.rng.int(max - min + 1)) * (1 + this.stats.greed) * this.coinScale,
+        );
+        this.gainCoins(coins);
+        this.casketsOpened++;
+        this.hero.casketsOpened++;
+        const picker = this.hero;
+        this.offerCasketItem(tier, coins);
         for (const hero of this.heroes) {
-            if (hero !== current && this.isUp(hero)) {
+            if (hero !== picker && this.isUp(hero)) {
                 this.use(hero);
-                this.openCasket(tier, coins);
+                this.offerCasketItem(tier, coins);
             }
         }
-        this.use(current);
+        this.use(picker);
     }
 
-    // A casket always has some coins and one item; the run waits while the player decides what
-    // to do with the item. partyCoins: a teammate's from the same pickup, whose coins (paid
-    // already) it shows.
-    openCasket(tier: CasketTier, partyCoins?: number): void {
-        const [min, max] = CASKETS[tier].coins;
-        const coins =
-            partyCoins ??
-            Math.round(
-                (min + this.rng.int(max - min + 1)) * (1 + this.stats.greed) * this.coinScale,
-            );
-        if (partyCoins === undefined) {
-            this.gainCoins(coins);
-            this.casketsOpened++;
-        }
-        this.hero.casketsOpened++;
+    // The current player's item from a casket, rolled on their luck, gear and banishes, with the
+    // casket's coins to show; the run waits while they decide what to do with it
+    private offerCasketItem(tier: CasketTier, coins: number): void {
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
