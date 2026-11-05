@@ -112,6 +112,7 @@ version and how to run it.
     | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
     | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
     | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Bellringer          | Magic       | None (a hand bell)     | 20% faster, 20% more hitpoints, heals 10 a minute | The Bell Choir only (everyone plays them there)      |
 
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
@@ -188,7 +189,8 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, the Bell
+  Choir), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
@@ -250,7 +252,8 @@ version and how to run it.
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
   mask or a Scythe inside, for the Collection log. Those do nothing in a run.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
-  Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
+  Verzik with its looks from expert clears, the Dark squirrel from Justiciar Zachariah, and the
+  Wisp from the Whisperer) can be
   taken along, picked under the adventurers. It
   follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
   in co-op the party sees each other's.
@@ -337,6 +340,14 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
+    - **The Bell Choir** (a boss fight, open once Justiciar Zachariah's beaten): the Whisperer and
+      the Silent Choir in the sunken cathedral under Ice Mountain, its broken walls standing in
+      the Lassar Undercity's lake and its nave shallow water. The tenor bell hangs in the north
+      doorway, four great bells stand in the corners, three rows of sunken pews cross the south
+      half, and the choir's Lost Souls stand by the walls. No waves, no picks, no items, and no
+      weapon: you play the Bellringer with a hand bell, to Song of the Silent Choir, which keeps
+      time with the fight. It can't be endless; it has a hard mode once it's beaten. Beating her
+      finds the Wisp, a pet, 1 time in 10, and every time on hard mode.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -536,6 +547,26 @@ version and how to run it.
       guard's down; a press a moment early is held till it can go off. His lightning hurts only within the
       swirl on each cell, and never him, and the knights' swords fly right across the court. A boss fight has no
       items, so no item bar, and its results have Retry.
+    - **The Whisperer** (the Bell Choir): the fight is a song. A beat runs all of it, four beats
+      to the bar, at 120 beats a minute, then 136, then 150; the water ripples out from the tenor
+      on every beat, the choir sways, and the music speeds up with her. Every warning on the
+      ground fills a step a beat, a quarter, a half, three quarters, then the hit, so when it
+      lands can be read with the sound off. **Toll** (Space, a controller's A, or the round button)
+      on the beat within four and a half tiles of her: 6, and a **Resonance**, then 2 more for each
+      (up to 8, shown on the button). Off the beat your Resonance halves, and a hit takes 2. When a
+      great bell's struck it hums for two beats: Toll beside it and you **ring it back**, 40 and 15
+      for each Resonance, which puts her out of tune (she glows pale and takes double) for a bar.
+      **Grace**: step out of an attack on its last count and you get 2 Resonance and a longer
+      reach for a bar. Her voice: **the Clap** round her on beat 4 (in the requiem a second, on
+      the "and", over a ring outside it), **Echo** (a mark where you stand each beat, splashing a
+      bar later; later on the half-beat after), and **Harmony** (the line between two of the
+      choir). The arena's: **Change ringing** (each bell lifts on its beat and strikes round
+      itself a bar later; shuffled, then in pairs), **the Psalm** (a surge down the nave a band a
+      beat: step back across into the band that's just surged; in the requiem from both ends), and
+      **Silence** (the choir counts three and beat 4 is a rest: anyone who moves in it is struck).
+      In the requiem her reflection in the water repeats her voice a bar later, mirrored across
+      the nave. At 74% and 37% she sinks, the nave goes quiet a bar, the tenor counts in the new
+      tempo and she rises on the downbeat. 4,500 hitpoints, each phase its own bar.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

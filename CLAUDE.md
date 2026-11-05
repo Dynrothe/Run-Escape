@@ -41,6 +41,9 @@ go stale. Add anything that cost you time to work out.
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| The Bell Choir, the sunken cathedral (and its arena)   | `src/game/content/bellchoir.ts`, `scaperune/maps/sunkenCathedral.ts`   |
+| A fight on a beat: its clock, phrases, Toll and Grace  | `core/song.ts`, `Sim.stepSong`; its design `docs/design/the-bell-choir.md` |
+| A song's sound and music on the beat; the beat lab     | `client/SongAudio.ts`, `client/BeatAudio.ts`, `?beatlab` (`dev/BeatLab.tsx`) |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |

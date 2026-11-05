@@ -3,6 +3,21 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- The Bell Choir, a new boss fight on the Bosses tab, open once Justiciar Zachariah is beaten:
+  the Whisperer and the Silent Choir in the sunken cathedral under Ice Mountain, and the fight is
+  a song. Every attack lands on the beat, and the tempo quickens each phase. You play the
+  Bellringer, with no weapon but a hand bell. With its own track, Song of the Silent Choir, which
+  keeps time with the fight and speeds up with her.
+  - Toll (Space, a controller's A, or the button on a touch screen) on the beat near her to build
+    Resonance, and ring back a great bell while it hums to spend it and put her out of tune.
+  - Step out of an attack on its last count for a Grace: more Resonance and a longer reach.
+  - Every warning fills a step a beat, so it can be played with the sound off.
+  - A pet, the Wisp: 1 in 10 for beating her, and always on hard mode.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added

@@ -600,6 +600,48 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       `Effect.yaw`), and a `bossImpact` event that `GameClient` shakes the camera by (off with
       the Screen shake setting, `DisplaySettings.screenShake`, and by default for reduced
       motion) and `GameView` flashes the screen by, faintly.
+- **Songs** (the Bell Choir, `content/bellchoir.ts`, design in `docs/design/the-bell-choir.md`):
+  a boss with `BossDef.song` (`SongDef`) is fought to a beat. Its `attacks` go unused; `stepBoss`
+  only leashes it, and `Sim.stepSong` does the rest. Pure arithmetic the view shares is in
+  `core/song.ts`; the state is `Sim.song` (`SongState`, `entities.ts`).
+    - **The beat clock** starts with the boss's entrance (`startSong`, from `startIntro`), so
+      beat 0 is the music's first beat: four beats to the bar, each phase's `ticksPerBeat`, a new
+      tempo only on a downbeat (`SongState.tempoAt`). `songBeat` emits `songBeat` and keeps the
+      last few beats' ticks (`recent`) for judging a press from a moment ago.
+    - **Phrases** begin on a downbeat, one in each lane (`phraseLane`: the boss's voice, the
+      arena's), each lane resting `SongPhaseDef.rest` beats after (×`HARD_BOSS_INTERVAL`, rounded
+      down, on hard) and then to the next downbeat (`startLanes`, `phraseBeats`). `startPhrase`
+      lays out what each lands as (`SongNote`: a shape, the tick it shows, the beats it counts in,
+      the tick it lands and how long it hurts); an echo lays a mark a beat (`layEcho`). Kinds:
+      `clap` (`double`), `echo` (`offbeat`), `bells` (`order`), `psalm` (`both`), `silence`
+      (`SongState.rest`, `stepRest`) and `harmony` (`lines`, `harmonyChoices`). A phase with
+      `canon` copies its voice's phrases a bar later mirrored about `ArenaFeatures.axis`
+      (`mirrorShape`). Every shape hits what's drawn: `inShape`, the player's radius included.
+    - **Grace** (`stepNotes`): whoever's in a part as its last beat begins (`note.inside`) and
+      isn't hit as it lands gets `toll.grace` once a phrase (`SongPhrase.graced`).
+    - **Toll** is `useAbility(at)` on a song (`Sim.toll`): judged on the beat at `at` (the
+      `ability` action's, the tick it was pressed on, clamped to `lookBack` ticks back), a
+      second press in a window ignored, off the beat halving Resonance (`HeroSong`, on `Hero`).
+      A humming bell in reach is rung back (`ringBack`), dropping the boss's guard
+      (`BossDef.guard`, `dropGuard`) for `discordBars`, once a round. A hit costs `hitCost`
+      (`damagePlayer`). `tollReach` is what the reach ring and `abilityTarget` go by.
+    - **A threshold** is a key change (`songKeyChange`, from `passThreshold`): the rest of the
+      bar at the old tempo (and the next, if under half a bar's left), a bar counted in at the
+      new one (`BossPhase.riseTick`), and up on the downbeat.
+    - **The client**: `SongView` (in `BossFightView`) draws the bells (`SongDef.bellLocId`,
+      baked as a statue), the choir and the reflection (`choirLooks`, `reflectionLook`: enemies
+      never spawned), each note's warning filling a step a beat, the humming bells' zones and
+      Toll's reach, sinks the boss at a threshold and sways its idle a loop a bar; `GameClient`
+      brightens the scene a little on each downbeat (`SongView.light`). `SongAudio` starts the
+      tenor, the bells' notes and each part's sound on the audio clock as the picture shows them
+      (`GameAudio.playAtTime`, `PlayOptions.when`, `outputLatency`), and keeps the music on the
+      beat with `BeatAudio.MusicSync` (the track's position is the beats × half a second; the
+      rate is the tempo's, the pitch held where the browser can; nudged up to 3%, jumping past
+      250 ms), ducking it for a rest and a key change's quiet bar. `?beatlab` (`dev/BeatLab.tsx`)
+      plays the beat and the music at the three tempos with a tap test, for checking a phone.
+    - The bot (`simulate-run.ts`) tolls on the beat (`SLOPPY=1`: up to 150 ms off, one in six
+      missed), stands still in a rest, steps out on the last count, rings back a bell it can
+      reach, and in co-op sends the guests' presses `GUEST_DELAY` ticks late with their `at`.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before

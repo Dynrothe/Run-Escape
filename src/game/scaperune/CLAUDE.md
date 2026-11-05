@@ -1468,6 +1468,14 @@ each is flat at its height and the lips stand level. The camera's always over th
 faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
 1 and east at 3.
 
+**A real place made bigger** (`sunkenCathedral.ts`, the Bell Choir's arena): the sunken cathedral is cut whole from
+map square 41,99, but its nave was too small for four 4×4 bells and the pews, so each of its wall pieces is moved out
+from the nave's middle by `WIDEN` (its own footprint's middle, scaled) and the octagon inside them is relaid with the
+lake's overlay, walkable. Its water rings that block (48324) are swapped for the ones that don't (48323) inside the
+nave. The lake's tiles come blocked from the cache, and the stamp copies tile flags, so the nave's tiles are cleared of
+`TILE_BLOCKED` by hand. `buildSunkenCathedral(context, { noSeal, bare })` builds it unsealed and without its furnishings,
+for printing what's open while laying it out.
+
 ### How big a map can be
 
 Measured in Node on this VM, on a forest-bound meadow with default settings otherwise, through `preview.ts`:
