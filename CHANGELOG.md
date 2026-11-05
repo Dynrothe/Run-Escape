@@ -15,6 +15,15 @@ the version in the corner).
 
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
+- The Theatre of Blood's Nylocas are slower, so you can run from them. Changed by Okaeri.
+
+### Fixed
+
+- Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
+  you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
+  by Okaeri.
+- The results screen says Expert for a Theatre of Blood run on expert mode, not Hard. Fixed by
+  Okaeri.
 
 ## 0.27.0 - 2026-11-05
 
