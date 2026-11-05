@@ -353,6 +353,28 @@ With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
 45-53 s and 4:48-5:14.
 
+### Round 9
+
+Dynny: a pet, the dark acorn or the dark squirrel, "1/10 for normal mode, 100% in hard mode".
+
+1. The **Dark acorn** (obj 24733, `find-objs`) is a trophy (`trophies.ts`): 1 in 10 for killing
+   him, certain on hard mode (`TrophySource.hardChance`, read by `Sim.rollBossTrophies`). Dying
+   to him rolls nothing; a fight map rolls only its trophies, and only on the kill. It's in the
+   Collection log's Hallowed Night page with the rest, and `slim-cache` keeps it (it walks every
+   trophy's `objId`).
+2. The **dark squirrel** (npcs 9637, 9638) isn't used: the game has no followers, and every
+   trophy is an object in the Collection log, so the acorn stands for it.
+3. **Hard mode** is the map's own, unchanged: open once he's beaten, 1.3 times his hitpoints and
+   damage, and every boss's attacks 15% closer together on hard (`HARD_BOSS_INTERVAL`). The
+   windups and the court's tells are the same. Combat Achievements' "on hard" tasks (Beyond
+   Reproach, Flawless Verdict) go by `sim.hard`, so they count there.
+
+On hard, seeds 1 to 3: the careful bot `GOD=1` wins in 3:00-3:36 (phase 1 40-48 s), the sloppy
+one in 3:50-4:16 (45-58 s), and the sloppy one never smiting in 7:00-7:26. Mortal, the careful bot
+dies in 14-23 s and the sloppy one in 17 s to 1:09, both mostly to his Flurry (24 to 28 hits);
+on normal the careful one won one of three. Hard is for players who've learnt him: the bot
+doesn't.
+
 ## 7. What it looks like when he hits (impacts)
 
 `BossAttackDef.impact` (an `ImpactDef`) puts the cache's own effects where a blow lands, each

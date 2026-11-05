@@ -324,7 +324,8 @@ version and how to run it.
       and a bridge of fire south to a lily terrace where you start. No waves, no picks, no items:
       you play the Saradominist with Saradomin Strike, which only reaches him from about eight
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
-      can't be endless; it has a hard mode once it's beaten.
+      can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark acorn for
+      the Collection log 1 time in 10, and every time on hard mode.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and at the next five minute
