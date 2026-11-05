@@ -55,7 +55,6 @@ import type { RaidChest } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
-    canRefundSkillPage,
     getNextUpgradeCost,
     getSkillCoins,
     importSave,
@@ -1547,18 +1546,11 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
-    const singleRefunds = canRefundSkillPage(page);
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>Skills</h2>
                 <p className="ui-subtle">Coins found in runs train your skills for good.</p>
-                {!singleRefunds && (
-                    <p className="ui-subtle ui-shop-notice">
-                        This class's purchase order wasn't saved, so single ranks can't be refunded.
-                        Use Refund all once to start keeping it.
-                    </p>
-                )}
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
@@ -1607,7 +1599,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     }
                                     aria-disabled={!affordable}
                                     title={
-                                        rank > 0 && !isCoarsePointer && singleRefunds
+                                        rank > 0 && !isCoarsePointer
                                             ? "Right-click to refund one rank"
                                             : undefined
                                     }
@@ -1619,7 +1611,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     onContextMenu={(event) => {
                                         if (rank > 0) {
                                             event.preventDefault();
-                                            if (!isCoarsePointer && singleRefunds) {
+                                            if (!isCoarsePointer) {
                                                 client.refundUpgrade(upgrade.id, style);
                                             }
                                         }
@@ -1643,12 +1635,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     <button
                                         className="ui-shop-refund"
                                         aria-label={`Refund one ${upgrade.name} rank`}
-                                        disabled={!singleRefunds}
-                                        title={
-                                            singleRefunds
-                                                ? `Refund one ${upgrade.name} rank`
-                                                : "Use Refund all first"
-                                        }
+                                        title={`Refund one ${upgrade.name} rank`}
                                         onClick={() => client.refundUpgrade(upgrade.id, style)}
                                     >
                                         <span className="ui-shop-refund-icon" aria-hidden="true">

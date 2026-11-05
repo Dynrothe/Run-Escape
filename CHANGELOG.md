@@ -22,6 +22,8 @@ the version in the corner).
   cache" error. Fixed by trippy22.
 - In Phosani's Nightmare, the yellow arrow over her Parasitic eggs now shows on the website and in
   the desktop app. It was missing from their copy of the game's files.
+- Skills cost the same whatever order you buy them in, and any class page can refund single
+  ranks. Fixed by trippy22.
 
 ## 0.26.0 - 2026-11-05
 

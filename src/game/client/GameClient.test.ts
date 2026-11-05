@@ -919,7 +919,7 @@ describe("saving", () => {
         expect(saved).toEqual([]);
     });
 
-    test("refunding an early skill persists later purchases' lower prices", () => {
+    test("refunding an early skill saves what the page costs without it", () => {
         expect.hasAssertions();
         const { client, store, saved } = createSaving(true);
         client.save.coins = 50000;
@@ -930,22 +930,9 @@ describe("saving", () => {
         expect(client.save.skillPages.melee).toEqual({
             upgrades: { smithing: 1 },
             upgradesSpent: 10000,
-            upgradeOrder: ["smithing"],
         });
         expect(saved).toEqual([client.save]);
         expect(store.getSnapshot().save).toEqual(client.save);
-    });
-
-    test("a single-rank refund on a page with no order changes and saves nothing", () => {
-        expect.hasAssertions();
-        const { client, saved } = createSaving(true);
-        client.save.coins = 10000;
-        buyUpgrade(client.save, "strength");
-        delete client.save.skillPages.melee.upgradeOrder;
-        const before = structuredClone(client.save);
-        client.refundUpgrade("strength");
-        expect(client.save).toEqual(before);
-        expect(saved).toEqual([]);
     });
 
     test("nothing's saved while another tab has the game", () => {
