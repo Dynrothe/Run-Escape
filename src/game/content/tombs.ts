@@ -2015,6 +2015,8 @@ export const WARDENS: WardensDef = {
         blockDamage: 2,
     },
     charge: {
+        // Each starts this far charged, so the first attacks come early
+        start: 50,
         full: 125,
         perSecond: 2 / 0.6,
         perOrb: 4,
@@ -2052,8 +2054,9 @@ TOMBS_ENEMIES.push(
         walkSeq: 9720,
         attackSeq: 9721,
         deathSeq: 9734,
-        // As a path's boss, and tougher with the path level as they are (Sim.startWardens)
-        hp: 6000,
+        // Tougher with the path level as a path's boss is (Sim.startWardens), and enough of it
+        // that the Wardens get their attacks in: the phase is about them, not a race to break it
+        hp: 15000,
         damage: 0,
         speed: 0,
         radius: 1.5,

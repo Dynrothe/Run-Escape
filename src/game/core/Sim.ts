@@ -5739,7 +5739,7 @@ export class Sim {
             startTick: this.tick,
             obeliskUid: obelisk.uid,
             wardens: { elidinis: elidinis.uid, tumeken: tumeken.uid },
-            charge: { elidinis: 0, tumeken: 0 },
+            charge: { elidinis: WARDENS.charge.start, tumeken: WARDENS.charge.start },
             pausedUntil: { elidinis: 0, tumeken: 0 },
             next: { elidinis: "pyramids", tumeken: "pyramids" },
             troughs: { elidinis: order(), tumeken: order() },

@@ -402,7 +402,9 @@ raid's ranges.
   overlay over the plane under it, which OSRS draws: that plane's floor colours, its pieces on the
   floor, and its tall pieces under the raised border, sunk to it (`LocOverrides`). On the dev server
   the Nexus has a button straight to it with the best of everything (`Sim.devToWardens`).
-    - The obelisk (11751, the boss bar) is what's fought, as tough as a path's boss after every path.
+    - The obelisk (11751, the boss bar) is what's fought, tougher with the path level as a path's
+      boss is, and with enough hitpoints that the Wardens get their attacks in. They start 50 of 125
+      charged, so the first attack comes about 9 s in.
     - Orbs (11769) leave it each side every 1.2 s, a tile every 0.6 s for 8, down one of three
       troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). A
       player on a side's gap or spawn tile stops that side, for a little damage each orb.

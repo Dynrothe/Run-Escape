@@ -2481,7 +2481,9 @@ describe("the Wardens' first phase", () => {
         const fight = sim.tombsWardens!;
         const tumekenGap = sim.map.tombs!.wardens!.sides.tumeken.gap;
         const hp = sim.player.hp;
-        step(sim, 20, () => stand(sim, tumekenGap));
+        // From empty, short of either filling
+        fight.charge.elidinis = fight.charge.tumeken = 0;
+        step(sim, 18, () => stand(sim, tumekenGap));
         // Elidinis' orbs got there, Tumeken's never left
         expect(fight.charge.elidinis).toBeGreaterThan(
             fight.charge.tumeken + WARDENS.charge.perOrb * 3,

@@ -1832,6 +1832,7 @@ export type WardensDef = {
         blockDamage: number;
     };
     charge: {
+        start: number;
         full: number;
         perSecond: number;
         perOrb: number;
