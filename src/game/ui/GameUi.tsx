@@ -2848,7 +2848,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {result.hard && (
                                         <tr>
                                             <td>Difficulty</td>
-                                            <td>Hard</td>
+                                            <td>{result.expert ? "Expert" : "Hard"}</td>
                                         </tr>
                                     )}
                                     {result.endless && (

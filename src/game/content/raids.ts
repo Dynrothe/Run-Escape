@@ -237,21 +237,21 @@ const TOB_ROOMS: RaidRoomDef[] = [
             name: "Nylocas Vasilias",
             waves: roomWaves(2, [
                 [
-                    { id: "nylocas_ischyros", weight: 3 },
+                    { id: "tob_nylocas_ischyros", weight: 3 },
                     { id: "tob_nylocas_toxobolos", weight: 1 },
                 ],
                 [
-                    { id: "nylocas_ischyros", weight: 2 },
+                    { id: "tob_nylocas_ischyros", weight: 2 },
                     { id: "tob_nylocas_toxobolos", weight: 2 },
                     { id: "tob_nylocas_hagios", weight: 2 },
                 ],
                 [
-                    { id: "big_nylocas_ischyros", weight: 1 },
+                    { id: "tob_big_nylocas_ischyros", weight: 1 },
                     { id: "tob_nylocas_toxobolos", weight: 2 },
                     { id: "tob_nylocas_hagios", weight: 2 },
                 ],
             ]),
-            events: roomEvents("big_nylocas_ischyros", "nylocas_ischyros", 40),
+            events: roomEvents("tob_big_nylocas_ischyros", "tob_nylocas_ischyros", 40),
             // Meiyerditch is dark stone: brighter than the rest, or its alleys are lost
             hall: { brightness: 1.1 },
             boss: "nylocas_vasilias",
@@ -322,7 +322,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(5, [
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_ischyros", weight: 2 },
+                    { id: "tob_big_nylocas_ischyros", weight: 2 },
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
@@ -332,12 +332,12 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_ischyros", weight: 1 },
+                    { id: "tob_big_nylocas_ischyros", weight: 1 },
                     { id: "tob_big_nylocas_toxobolos", weight: 1 },
                     { id: "tob_big_nylocas_hagios", weight: 1 },
                 ],
             ]),
-            events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),
+            events: roomEvents("vyrewatch_sentinel", "tob_nylocas_ischyros", 60),
             boss: "tob_verzik_vitur",
             // Seconds for all its speed points (late, her three forms)
             par: 150,

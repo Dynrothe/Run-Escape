@@ -9,7 +9,7 @@ import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types
 import { describeUnlockTask } from "../content/unlocks";
 import { getWeapon } from "../content/weapons";
 import { yawFromVector } from "./PlayerMovement";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm } from "./fmath";
 import {
     createSave,
@@ -372,6 +372,28 @@ const TEST_BOSS_IDS = [
     "tob_verzik_vitur_risen",
     "tob_verzik_vitur_spider",
 ];
+
+describe("the Theatre's Nylocas", () => {
+    it("are slower than a player can run, the campaign's as they were", () => {
+        const player = PLAYER_SPEED * TICKS_PER_SECOND;
+        const raid = getMap("theatre_of_blood");
+        const ids = new Set(
+            raid.raid!.rooms.flatMap((room) =>
+                room.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
+            ),
+        );
+        // The three that chase you (the Matomenos crawl to the Maiden, slower still)
+        const nylocas = [...ids].filter((id) => /ischyros|toxobolos|hagios/.test(id));
+        expect(nylocas.length).toBeGreaterThan(0);
+        for (const id of nylocas) {
+            expect(id.startsWith("tob_"), id).toBe(true);
+            expect(getEnemy(id).speed, id).toBeLessThan(player * 0.7);
+        }
+        expect(getEnemy("tob_nylocas_ischyros").speed).toBeLessThan(
+            getEnemy("nylocas_ischyros").speed,
+        );
+    });
+});
 
 describe("the Theatre's bullet shapes", () => {
     // One volley of a boss's attack, from its own spot
