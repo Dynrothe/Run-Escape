@@ -158,7 +158,7 @@ After a content change, also run the checks that apply:
 ```sh
 bun run tsx scripts/cache/check-items.ts          # casket items are the items they're named after
 bun run tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
-bun run tsx scripts/cache/sprites.ts check        # passives' interface sprites are in the cache
+bun run tsx scripts/cache/sprites.ts check        # the game's interface sprites are in the cache
 bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
 ```
 

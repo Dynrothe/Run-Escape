@@ -961,7 +961,7 @@ scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death an
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
-scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
+scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
                                          SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
