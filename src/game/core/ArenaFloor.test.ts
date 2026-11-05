@@ -262,6 +262,35 @@ describe("its whole shape, known as it starts", () => {
         run(10 * T, 5 * T + 1);
         expect(floor.cueAt.every((at) => at === -1)).toBe(true);
     });
+
+    test("each tile's shown as its pattern says, or as the floor does", () => {
+        const { floor, run } = makeFloor({
+            ...floorWith({ kind: "side", side: "east", rowSeconds: 0.1, cue: "bold" }, [
+                { at: 1.5, pattern: { kind: "side", side: "west", rowSeconds: 0.1 } },
+            ]),
+            cue: "subtle",
+        });
+        run(1.5 * T);
+        expect(floor.cueBold[SIZE_X - 1]).toBe(1);
+        expect(floor.cueBold[0]).toBe(0);
+        // Unset on the floor too, it's subtle
+        const plain = makeFloor({
+            ...floorWith({ kind: "side", side: "east", rowSeconds: 0.1 }),
+            cue: undefined,
+        });
+        plain.run(T);
+        expect(plain.floor.cueBold.every((bold) => bold === 0)).toBe(true);
+    });
+
+    test("the Wardens' floor shows its both-halves slams bold, and the rest subtle", () => {
+        const def = createWardensFloor(RECT);
+        expect(def.cue).toBe("subtle");
+        const bold = def.script.filter((beat) => beat.pattern.cue === "bold");
+        expect(bold.length).toBeGreaterThan(0);
+        for (const beat of bold) {
+            expect(beat.pattern).toMatchObject({ kind: "side", side: "both" });
+        }
+    });
 });
 
 describe("falling away", () => {

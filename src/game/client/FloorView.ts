@@ -5,6 +5,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import type { FloorCue } from "../content/types";
 import { ArenaFloor, RESTORE_SECONDS } from "../core/ArenaFloor";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { GameAssets, getFloorPieceKey } from "./GameAssets";
@@ -89,23 +90,63 @@ const GLOW_DEPTH = 0.05;
 const GLOW_FROM = 0.35;
 const GLOW_SPREAD = 0.14;
 // The same light on the tiles themselves, along their edges (ActorDrawOptions.edge), as if it
-// caught their sides and bled up over them: every tile a pattern will raise or drop has it from
-// the moment the pattern starts (ArenaFloor.cueAt), so its whole shape, and the safe tiles left
-// out of it, show at once, however far off its last rows are. It's low and narrow until the
-// tile's own warning, breathing slowly with the floor, and the tile's a little darker; through
-// the warning it builds to full and wide, as the light under it does. A tile no pattern will
-// touch has none and doesn't move.
-// Low: how strong and how far in (of the way to the middle), coming up over CUE_FADE seconds as
-// the pattern starts, breathing by CUE_BREATH at CUE_RATE times a second
-const CUE_EDGE = 0.5;
-const CUE_WIDTH = 0.3;
+// caught their sides: every tile a pattern will raise or drop has it from the moment the pattern
+// starts (ArenaFloor.cueAt), so its whole shape, and the safe tiles left out of it, show at once,
+// however far off its last rows are. It's low until the tile's own warning, and the tile's a
+// shade darker; through the warning it builds to full, as the light under it does. A tile no
+// pattern will touch has none and doesn't move. How much of it there is is the pattern's cue
+// (FloorCue, ArenaFloor.cueBold):
+// - early, earlyWidth: the low light, how strong and how far in (of the way to the middle)
+// - breath: how much it breathes, slowly, the whole floor together
+// - tint: how dark a marked tile is
+// - tremor: how hard a marked tile trembles before its own warning (of the warning's hardest)
+// - full, fullWidth: the light as the tile goes, and while its slab's up
+type CueStyle = {
+    early: number;
+    earlyWidth: number;
+    breath: number;
+    tint: number;
+    tremor: number;
+    full: number;
+    fullWidth: number;
+};
+const CUE_STYLES: Record<FloorCue, CueStyle> = {
+    // The floor still reads as stone: a thin warm line in a marked tile's seams and the faintest
+    // tremor, and in its last second the seams light up, as the light under it shows through them
+    subtle: {
+        early: 0.3,
+        earlyWidth: 0.1,
+        breath: 0,
+        tint: 0xd8d8d8,
+        tremor: 0.06,
+        full: 0.9,
+        fullWidth: 0.24,
+    },
+    // The whole shape lit gold, bleeding in over the tiles and breathing, then wide and bright
+    bold: {
+        early: 0.5,
+        earlyWidth: 0.3,
+        breath: 0.2,
+        tint: 0xc0c0c0,
+        tremor: 0,
+        full: 1,
+        fullWidth: 0.6,
+    },
+};
+// The low light comes up over CUE_FADE seconds as the pattern starts, and breathes CUE_RATE times
+// a second
 const CUE_FADE = 0.2;
-const CUE_BREATH = 0.2;
 const CUE_RATE = 1.5;
-const CUE_TINT = 0xc0c0c0;
-// Full, as it goes
-const EDGE_FULL = 1;
-const EDGE_WIDTH = 0.6;
+// Dev only: ?floorcue=bold or ?floorcue=subtle shows every pattern that way, to compare
+const CUE_OVERRIDE = cueOverride();
+
+function cueOverride(): FloorCue | undefined {
+    if (!import.meta.env?.DEV || typeof window === "undefined") {
+        return undefined;
+    }
+    const cue = new URLSearchParams(window.location.search).get("floorcue");
+    return cue === "bold" || cue === "subtle" ? cue : undefined;
+}
 // What's under the floor (FloorDef.under), on a grid symmetric about the floor's middle: pillars
 // every PILLAR_EVERY tiles both ways, with beams between them along those rows and columns, and
 // the wall going down all round. Only what could show through a hole is drawn: what's within
@@ -122,6 +163,8 @@ const SKY_SCALE = 2;
 const SKY_DEPTH = 7;
 const SKY_TINT = 0x5a3810;
 const SKY_LIGHT = 0.3;
+
+const STILL = { lift: 0, turn: 0 };
 
 function smooth(t: number): number {
     const c = Math.min(1, Math.max(0, t));
@@ -180,7 +223,7 @@ export class FloorView {
         const options = this.options;
         const glow = def.glow;
         // The low light's slow breath, the whole floor's together
-        const breath = 1 + CUE_BREATH * Math.sin(seconds * CUE_RATE * Math.PI * 2);
+        const breath = Math.sin(seconds * CUE_RATE * Math.PI * 2);
         for (let i = 0; i < floor.riseAt.length; i++) {
             const col = i % floor.sizeX;
             const row = Math.floor(i / floor.sizeX);
@@ -190,6 +233,7 @@ export class FloorView {
             const phase = this.phase(i);
             // Which share of the tiles this one's in, for effects only some of them have
             const share = col + 2 * row;
+            const style = this.style(floor, i);
             this.reset();
             const dropAt = floor.dropAt[i];
             const restoreAt = floor.restoreAt[i];
@@ -227,8 +271,8 @@ export class FloorView {
                 const t = Math.min(1, (now - dropWarnAt) / Math.max(1, dropAt - dropWarnAt));
                 const tremor = this.tremor(seconds, phase, SAG_TREMOR * (0.4 + 0.6 * t), 0);
                 const sag = t * t * SAG_DEPTH;
-                options.tint = this.darken(t);
-                this.edgeLight(glow, t);
+                options.tint = this.darken(style, t);
+                this.edgeLight(glow, style, t);
                 this.drawTile(
                     actors,
                     slab,
@@ -248,8 +292,8 @@ export class FloorView {
             // To fall later in its pattern (a later row): marked, and still
             const cueAt = floor.cueAt[i];
             if (dropWarnAt !== -1) {
-                this.cue(glow, now, cueAt, breath);
-                this.drawTile(actors, slab, rising, x, ground, y, 0, edged);
+                const lift = this.cue(glow, style, now, cueAt, breath, seconds, phase);
+                this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
             // Coming up: the slab's own animation, tipped the way it's travelling, and dust
@@ -259,7 +303,7 @@ export class FloorView {
                 // Its light full while it's up and hurting, fading as it settles
                 const up = (tick - roseAt) / RISE_TICKS;
                 const lit = Math.min(1, 4 * (1 - up));
-                this.edgeLight(glow, lit);
+                this.edgeLight(glow, style, lit);
                 actors.draw(slab, rising, frame, x, ground, y, TIP_YAW[floor.riseDir[i]], options);
                 this.reset();
                 if (edged) {
@@ -281,43 +325,60 @@ export class FloorView {
                 const t = Math.min(1, (now - warnAt) / Math.max(1, floor.riseAt[i] - warnAt));
                 const strength = TREMOR_START + (1 - TREMOR_START) * t * t;
                 const tremor = this.tremor(seconds, phase, strength, t * TREMOR_LIFT);
-                options.tint = CUE_TINT;
-                this.edgeLight(glow, t);
+                options.tint = style.tint;
+                this.edgeLight(glow, style, t);
                 this.drawTile(actors, slab, rising, x, ground + tremor.lift, y, tremor.turn, edged);
                 this.drawGlow(actors, slab, rising, x, ground, y, t, glow);
                 continue;
             }
-            // To rise later in its pattern: marked, and still
+            // To rise later in its pattern: marked
             if (warnAt !== -1) {
-                this.cue(glow, now, cueAt, breath);
+                const lift = this.cue(glow, style, now, cueAt, breath, seconds, phase);
+                this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
+                continue;
             }
             this.drawTile(actors, slab, rising, x, ground, y, 0, edged);
         }
         this.drawUnder(actors, sim, floor, slab, rising, tick);
     }
 
-    // The low light on a tile marked by a pattern that's started, before its own warning
-    private cue(glow: number | undefined, now: number, cueAt: number, breath: number): void {
+    // How a tile's marked: its pattern's cue, unless the dev override says otherwise
+    private style(floor: ArenaFloor, i: number): CueStyle {
+        return CUE_STYLES[CUE_OVERRIDE ?? (floor.cueBold[i] ? "bold" : "subtle")];
+    }
+
+    // The low light on a tile marked by a pattern that's started, before its own warning, and how
+    // it trembles (breath from -1 to 1)
+    private cue(
+        glow: number | undefined,
+        style: CueStyle,
+        now: number,
+        cueAt: number,
+        breath: number,
+        seconds: number,
+        phase: number,
+    ): { lift: number; turn: number } {
         if (glow === undefined || cueAt === -1) {
-            return;
+            return STILL;
         }
         const k = smooth((now - cueAt) / (CUE_FADE * TICKS_PER_SECOND));
         const options = this.options;
-        options.edge = CUE_EDGE * k * breath;
-        options.edgeWidth = CUE_WIDTH;
+        options.edge = style.early * k * (1 + style.breath * breath);
+        options.edgeWidth = style.earlyWidth;
         options.edgeColor = glow;
-        options.tint = this.shade(CUE_TINT, k);
+        options.tint = this.shade(style.tint, k);
+        return style.tremor > 0 ? this.tremor(seconds, phase, style.tremor * k, 0) : STILL;
     }
 
     // The light on a tile's edges through its warning (t from 0 to 1 as it goes), or while it's up
-    private edgeLight(glow: number | undefined, t: number): void {
+    private edgeLight(glow: number | undefined, style: CueStyle, t: number): void {
         if (glow === undefined) {
             return;
         }
         const options = this.options;
         const k = t * t;
-        options.edge = CUE_EDGE + (EDGE_FULL - CUE_EDGE) * k;
-        options.edgeWidth = CUE_WIDTH + (EDGE_WIDTH - CUE_WIDTH) * k;
+        options.edge = style.early + (style.full - style.early) * k;
+        options.edgeWidth = style.earlyWidth + (style.fullWidth - style.earlyWidth) * k;
         options.edgeColor = glow;
     }
 
@@ -692,8 +753,8 @@ export class FloorView {
     }
 
     // From a marked tile's shade to a sinking one's
-    private darken(t: number): number {
-        return this.shade(SAG_TINT, t, CUE_TINT);
+    private darken(style: CueStyle, t: number): number {
+        return this.shade(SAG_TINT, t, style.tint);
     }
 
     // A grey (by its blue) t of the way to another, from white

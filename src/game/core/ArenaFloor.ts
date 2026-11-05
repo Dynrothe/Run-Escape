@@ -39,6 +39,8 @@ export class ArenaFloor {
     // warning (a wave's far rows), so the client can show a pattern's whole shape as it starts.
     // Cleared as it rises, or as a fallen tile's back.
     readonly cueAt: Int32Array;
+    // How it's shown from then: 1 bold, 0 subtle (FloorCue, the pattern's or the floor's)
+    readonly cueBold: Uint8Array;
     // Rows fallen from the back so far
     rowsDropped = 0;
     private loopStart = 0;
@@ -50,6 +52,8 @@ export class ArenaFloor {
     private readonly hurtTo: number;
     private readonly dropWarn: number;
     private readonly restoreTicks: number;
+    // Whether the pattern starting now is shown bold
+    private bold = false;
 
     constructor(
         readonly def: FloorDef,
@@ -72,6 +76,7 @@ export class ArenaFloor {
         this.restoreAt = new Int32Array(count).fill(NONE);
         this.restoredAt = new Int32Array(count).fill(NONE);
         this.cueAt = new Int32Array(count).fill(NONE);
+        this.cueBold = new Uint8Array(count);
         this.slamWarn = this.ticks(def.slam.warn);
         this.hurtFrom = this.ticks(def.slam.hurt[0]);
         this.hurtTo = this.ticks(def.slam.hurt[1]);
@@ -175,6 +180,7 @@ export class ArenaFloor {
     ): void {
         const { sizeX, sizeY } = this;
         const middle = Math.floor(sizeX / 2);
+        this.bold = (pattern.cue ?? this.def.cue ?? "subtle") === "bold";
         // The first warning's now, so the first tile rises a warning from now
         const first = tick + this.slamWarn;
         switch (pattern.kind) {
@@ -312,6 +318,7 @@ export class ArenaFloor {
         this.warnAt[i] = at - this.slamWarn;
         this.riseDir[i] = dir;
         this.cueAt[i] = known;
+        this.cueBold[i] = this.bold ? 1 : 0;
     }
 
     // A tile falls, warned from a tick (known from its pattern's start): no slab rises on it from
@@ -326,6 +333,7 @@ export class ArenaFloor {
         this.riseAt[i] = NONE;
         this.warnAt[i] = NONE;
         this.cueAt[i] = known;
+        this.cueBold[i] = this.bold ? 1 : 0;
     }
 
     // Whether a tile's known to rise or fall, from its pattern's start until it rises or is back:

@@ -49,6 +49,9 @@ const ripple = (
     ringSeconds: number,
     radius: number,
 ): FloorPatternDef => ({ kind: "ripple", at, spokes, ringSeconds, radius });
+// The both-halves slam is the signature one, shown bold from its start (FloorCue): the rest are
+// subtle, the floor's own
+const bold = (pattern: FloorPatternDef): FloorPatternDef => ({ ...pattern, cue: "bold" });
 const dropRows = (rows: number): FloorPatternDef => ({ kind: "dropRows", rows, rowSeconds: 0.4 });
 const holes = (count: number): FloorPatternDef => ({ kind: "holes", count });
 
@@ -66,7 +69,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(9, side("west", 0.15)),
     beat(15, side("east", 0.15)),
     beat(21, side("west", 0.15)),
-    beat(27, side("both", 0.15)),
+    beat(27, bold(side("both", 0.15))),
     beat(34, sweep(0.15, 3)),
     beat(41, dropRows(3), "The floor crumbles away behind you!"),
     // A little faster, and ripples
@@ -74,7 +77,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(51, side("east", 0.12)),
     beat(55, side("west", 0.12)),
     beat(59, ripple("middle", "diagonal", 0.14, 12)),
-    beat(65, side("both", 0.12)),
+    beat(65, bold(side("both", 0.12))),
     beat(70, sweep(0.12)),
     beat(75, dropRows(3)),
     beat(76, holes(3)),
@@ -82,7 +85,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(80, side("west", 0.1), "The floor quickens!"),
     beat(83.5, side("east", 0.1)),
     beat(87, ripple("player", "diagonal", 0.13, 8)),
-    beat(91, side("both", 0.1)),
+    beat(91, bold(side("both", 0.1))),
     beat(94.5, sweep(0.1)),
     beat(99, holes(4)),
     beat(100, ripple("player", "cross", 0.12, 10)),
@@ -90,14 +93,14 @@ const SCRIPT: FloorBeatDef[] = [
     // As fast as it gets
     beat(108, side("east", 0.08), "The floor is breaking apart!"),
     beat(110.5, side("west", 0.08)),
-    beat(113, side("both", 0.08)),
+    beat(113, bold(side("both", 0.08))),
     beat(116, ripple("player", "cross", 0.1, 10)),
     beat(119, sweep(0.08)),
     beat(122, holes(4)),
     beat(123, side("west", 0.08)),
     beat(125.5, side("east", 0.08)),
     beat(128, ripple("player", "diagonal", 0.1, 10)),
-    beat(131, side("both", 0.08)),
+    beat(131, bold(side("both", 0.08))),
     beat(134, sweep(0.08)),
     beat(139, { kind: "restore", rowSeconds: 0.08 }, "The floor knits itself back together."),
 ];
@@ -131,6 +134,7 @@ export function createWardensFloor(rect: FloorDef["rect"]): FloorDef {
         },
         under: { pillar: UNDER_PILLAR, beam: UNDER_BEAM, wall: UNDER_WALL },
         glow: GLOW,
+        cue: "subtle",
         shake: { slam: 0.1, drop: 0.25 },
         script: SCRIPT,
         loopSeconds: 144,

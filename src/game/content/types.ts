@@ -1552,6 +1552,9 @@ export type FloorDef = {
     under?: { pillar: number; beam: number; wall: number };
     // The light under the floor, in its cracks as tiles tremble and far below (0xRRGGBB)
     glow?: number;
+    // How a pattern shows every tile it'll hit from the moment it starts, unless it says
+    // otherwise (FloorCue; subtle when unset)
+    cue?: FloorCue;
     // A slab coming up this near a player shakes the camera this much, and a tile going from under
     // or beside them this much (ImpactDef.shake; Settings can turn it off)
     shake?: { slam: number; drop: number };
@@ -1574,7 +1577,17 @@ export type FloorBeatDef = {
 // diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
 // holes: single tiles fall away at random, never next to another hole or the floor's edge.
 // restore: everything that's fallen comes back up, front first.
-export type FloorPatternDef =
+// How a pattern shows the tiles it'll hit from the moment it starts, so where's safe can be read
+// before the wave gets there (client/FloorView.ts). Either way each tile's last second before it
+// rises or falls is a strong warning: the tremor and the light through its seams.
+// subtle: the floor still reads as stone. Marked tiles are a shade darker, with a thin warm line
+// in their seams and the faintest tremor; the safe shape is there if you look for it.
+// bold: the pattern's whole shape lit at once. Marked tiles' edges glow gold, bleeding in over
+// them and breathing slowly, building to a wide bright glow; for a signature attack whose
+// telegraph is the point.
+export type FloorCue = "subtle" | "bold";
+
+export type FloorPatternDef = (
     | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
     | { kind: "sweep"; rowSeconds: number; gap: number }
     | {
@@ -1586,7 +1599,11 @@ export type FloorPatternDef =
       }
     | { kind: "dropRows"; rows: number; rowSeconds: number }
     | { kind: "holes"; count: number }
-    | { kind: "restore"; rowSeconds: number };
+    | { kind: "restore"; rowSeconds: number }
+) & {
+    // Its own cue (FloorCue), over the floor's
+    cue?: FloorCue;
+};
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into
 // its boss's room, which nobody leaves while the boss is up. Killing it takes them on to the next
