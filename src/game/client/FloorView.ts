@@ -7,18 +7,21 @@ import {
 } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { ArenaFloor, RESTORE_SECONDS } from "../core/ArenaFloor";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { GameAssets } from "./GameAssets";
+import { GameAssets, getFloorPieceKey } from "./GameAssets";
 
 // The floor a map draws itself (MapDef.floor, core/ArenaFloor.ts): every tile is the rising slab's
 // model at rest, so each can move on its own, and the map leaves the floor under it hidden (a
-// bridge over an even, empty pit, scaperune/maps/wardensFloor.ts), so a tile that's fallen opens
-// onto the dark. The warnings are the tiles' own movement and nothing else, no colour: a tile
-// about to rise trembles, harder as it comes, rattling up off its bed and twisting as the slab
-// does when it goes (the cache has the slab's rise, seqs 9697 to 9700, but no tremor of its own);
-// one about to fall trembles the same way and sags, darkening as it sinks, grit crumbling off it.
-// A rising tile is the slab's own animation, tipped the way its wave travels, throwing up dust; a
-// falling one tumbles away into the dark with chips of rock and a puff of dust. Wherever a tile's
-// beside a hole, its thickness shows: more of the slab under it, darker as it goes down.
+// bridge over an empty pit, scaperune/maps/wardensFloor.ts), so a tile that's fallen opens onto
+// what's drawn here under the floor. The warnings are the tiles' own movement and the light under
+// them: a tile about to rise trembles, harder as it comes, rattling up off its bed and twisting as
+// the slab does when it goes (the cache has the slab's rise, seqs 9697 to 9700, but no tremor of
+// its own), and the floor's gold light under it shows through the seams that opens, brighter and
+// wider as the moment nears; one about to fall trembles the same way and sags, darkening as it
+// sinks, grit crumbling off it. A rising tile is the slab's own animation, tipped the way its wave
+// travels, over its light at full, throwing up dust; a falling one tumbles away with chips of
+// rock and a puff of dust. Under the floor is one structure on a grid (FloorDef.under): pillars,
+// beams, the wall down the edge and a dim glow far below, so every hole looks into the same place;
+// and wherever a tile's beside a hole, its thickness shows.
 //
 // The effects (FloorDef.effects) are worked out from the floor's arrays and the clock alone, so
 // there's nothing to keep, and they're spread over a share of the tiles so a whole row coming up
@@ -67,13 +70,38 @@ const FALL_DUST_SHARE = 2;
 // A tile beside a hole has its thickness drawn: the slab again under it, each one a slab's
 // thickness lower and darker, down into the dark
 const SLAB_THICKNESS = 0.13;
-const EDGE_TINTS = [0xffffff, 0xc8c8c8, 0x969696, 0x6a6a6a, 0x444444, 0x242424];
+const EDGE_TINTS = [0xffffff, 0xb0b0b0, 0x686868, 0x303030];
 const NEIGHBOURS: [dx: number, dy: number][] = [
     [1, 0],
     [-1, 0],
     [0, 1],
     [0, -1],
 ];
+
+// The light under a tile that's about to rise or fall (FloorDef.glow): the slab again just under
+// it, glowing in the floor's light, so it shows only through the seams the tremor opens. It's
+// faint as the warning starts and full when the tile goes, and a little wider than the tile, so
+// it shows round all four sides and no further. A rising slab has it full under it while it's up:
+// the moment it hurts.
+const GLOW_DEPTH = 0.05;
+const GLOW_FROM = 0.35;
+const GLOW_SPREAD = 0.14;
+// What's under the floor (FloorDef.under), on a grid symmetric about the floor's middle: pillars
+// every PILLAR_EVERY tiles both ways, with beams between them along those rows and columns, and
+// the wall going down all round. Only what could show through a hole is drawn: what's within
+// UNDER_REACH tiles of one.
+const PILLAR_EVERY = 6;
+const UNDER_REACH = 2;
+// How much of each level down is lit, as it falls away into the dark: the beams and the wall's
+// top, the pillars and the wall's next piece down, and the glow at the bottom
+const UNDER_TINTS = [0x9a9a9a, 0x5c5c5c];
+const PILLAR_TINT = 0x7a7a7a;
+// The glow far below: slabs SKY_SCALE tiles a side, only ever under the floor, this far down, in
+// this dim amber (the floor's light, deep down), this strongly
+const SKY_SCALE = 2;
+const SKY_DEPTH = 7;
+const SKY_TINT = 0x5a3810;
+const SKY_LIGHT = 0.3;
 
 function smooth(t: number): number {
     const c = Math.min(1, Math.max(0, t));
@@ -88,7 +116,9 @@ function frac(v: number): number {
 type Effect = { model: ActorModel; anim: ActorAnim };
 
 export class FloorView {
-    private readonly options: ActorDrawOptions = { alpha: 1, tint: NO_TINT, scale: 1 };
+    private readonly options: ActorDrawOptions = { alpha: 1, tint: NO_TINT, scale: 1, flash: 0 };
+    private goneMask?: Uint8Array;
+    private nearMask?: Uint8Array;
 
     constructor(private readonly assets: GameAssets) {}
 
@@ -177,6 +207,7 @@ export class FloorView {
                     tremor.turn,
                     edged,
                 );
+                this.drawGlow(actors, slab, rising, x, ground + sag, y, t, def.glow);
                 if (rock && t > GRIT_FROM && share % GRIT_SHARE === 0) {
                     this.drawGrit(actors, rock, x, y, ground + sag, seconds, phase);
                 }
@@ -190,6 +221,18 @@ export class FloorView {
                 if (edged) {
                     this.drawThickness(actors, slab, rising, x, ground, y, 0);
                 }
+                // Full while it's up and hurting, fading as it settles
+                const up = (tick - roseAt) / RISE_TICKS;
+                this.drawGlow(
+                    actors,
+                    slab,
+                    rising,
+                    x,
+                    ground,
+                    y,
+                    Math.min(1, 4 * (1 - up)),
+                    def.glow,
+                );
             }
             if (dust && roseAt !== -1 && share % DUST_SHARE === 0) {
                 this.reset();
@@ -206,16 +249,223 @@ export class FloorView {
                 const strength = TREMOR_START + (1 - TREMOR_START) * t * t;
                 const tremor = this.tremor(seconds, phase, strength, t * TREMOR_LIFT);
                 this.drawTile(actors, slab, rising, x, ground + tremor.lift, y, tremor.turn, edged);
+                this.drawGlow(actors, slab, rising, x, ground, y, t, def.glow);
                 continue;
             }
             this.drawTile(actors, slab, rising, x, ground, y, 0, edged);
         }
+        this.drawUnder(actors, sim, floor, slab, rising, tick);
+    }
+
+    // The light under a tile about to go, t from 0 as the warning starts to 1 as it goes
+    private drawGlow(
+        actors: ActorRenderer,
+        slab: ActorModel,
+        anim: ActorAnim,
+        x: number,
+        height: number,
+        y: number,
+        t: number,
+        glow: number | undefined,
+    ): void {
+        if (glow === undefined || t <= 0) {
+            return;
+        }
+        const options = this.options;
+        const { tint, scale } = options;
+        options.tint = glow;
+        options.flash = -(GLOW_FROM + (1 - GLOW_FROM) * t);
+        options.scale = 1 + GLOW_SPREAD * t;
+        actors.draw(slab, anim, 0, x, height + GLOW_DEPTH, y, 0, options);
+        options.tint = tint;
+        options.scale = scale;
+        options.flash = 0;
+    }
+
+    // What's under the floor, where a hole could show it: the same grid of pillars and beams
+    // everywhere, the wall going down round the edge, and the glow far below, so every hole,
+    // whatever its size, looks into the same place
+    private drawUnder(
+        actors: ActorRenderer,
+        sim: Sim,
+        floor: ArenaFloor,
+        slab: ActorModel,
+        slabAnim: ActorAnim,
+        tick: number,
+    ): void {
+        const under = floor.def.under;
+        const { sizeX, sizeY } = floor;
+        const near = this.near(floor, tick);
+        if (!near) {
+            return;
+        }
+        const pillar = under && this.assets.get(getFloorPieceKey(under.pillar));
+        const beam = under && this.assets.get(getFloorPieceKey(under.beam));
+        const wall = under && this.assets.get(getFloorPieceKey(under.wall));
+        const options = this.options;
+        // The grid's lines, symmetric about the middle
+        const midX = Math.floor(sizeX / 2);
+        const midY = Math.floor(sizeY / 2);
+        const onLine = (v: number, mid: number) =>
+            (((v - mid) % PILLAR_EVERY) + PILLAR_EVERY) % PILLAR_EVERY === PILLAR_EVERY / 2;
+        for (let i = 0; i < near.length; i++) {
+            if (!near[i]) {
+                continue;
+            }
+            const col = i % sizeX;
+            const row = Math.floor(i / sizeX);
+            const x = floor.x0 + col + 0.5;
+            const y = floor.y0 + row + 0.5;
+            const top = sim.grid.getHeight(x, y) / 128 + SLAB_THICKNESS;
+            const lineX = onLine(col, midX);
+            const lineY = onLine(row, midY);
+            this.reset();
+            if (beam) {
+                const anim = beam.anims[0];
+                const height = beam.height / 128;
+                options.tint = UNDER_TINTS[0];
+                // A wall sits on its tile's edge: these put it through the tile's middle
+                if (lineX) {
+                    actors.draw(beam, anim, 0, x + 0.5, top + height, y, 1024, options);
+                }
+                if (lineY) {
+                    actors.draw(beam, anim, 0, x, top + height, y - 0.5, 1536, options);
+                }
+            }
+            if (pillar && lineX && lineY) {
+                options.tint = PILLAR_TINT;
+                actors.draw(
+                    pillar,
+                    pillar.anims[0],
+                    0,
+                    x,
+                    top + pillar.height / 128,
+                    y,
+                    0,
+                    options,
+                );
+            }
+            // The wall down the floor's edge, two pieces deep, on the sides the camera sees
+            if (wall) {
+                const anim = wall.anims[0];
+                const height = wall.height / 128;
+                for (const [rotation, edge] of [
+                    [0, col === 0],
+                    [1, row === sizeY - 1],
+                    [2, col === sizeX - 1],
+                ] as const) {
+                    if (!edge) {
+                        continue;
+                    }
+                    UNDER_TINTS.forEach((tint, k) => {
+                        options.tint = tint;
+                        const yaw = ((rotation + 2) & 3) * 512;
+                        actors.draw(wall, anim, 0, x, top + height * (k + 1), y, yaw, options);
+                    });
+                }
+            }
+        }
+        // The glow far below, in pieces, wherever there's a hole near, and never past the floor's
+        // edge: an odd row or column's last piece overlaps the one before, in the same plane and
+        // colour
+        this.reset();
+        options.tint = SKY_TINT;
+        options.flash = -SKY_LIGHT;
+        options.scale = SKY_SCALE;
+        const half = SKY_SCALE / 2;
+        const ground = sim.grid.getHeight(floor.x0 + 0.5, floor.y0 + 0.5) / 128;
+        for (let sy = 0; sy < sizeY; sy += SKY_SCALE) {
+            for (let sx = 0; sx < sizeX; sx += SKY_SCALE) {
+                const cx = Math.min(sx + half, sizeX - half);
+                const cy = Math.min(sy + half, sizeY - half);
+                if (!this.nearArea(near, sizeX, sizeY, cx, cy, half)) {
+                    continue;
+                }
+                actors.draw(
+                    slab,
+                    slabAnim,
+                    0,
+                    floor.x0 + cx,
+                    ground + SKY_DEPTH,
+                    floor.y0 + cy,
+                    0,
+                    options,
+                );
+            }
+        }
+        options.flash = 0;
+        this.reset();
+    }
+
+    // Tiles within UNDER_REACH of a hole, or nothing if there's no hole
+    private near(floor: ArenaFloor, tick: number): Uint8Array | undefined {
+        const { sizeX, sizeY } = floor;
+        let any = false;
+        const gone = (this.goneMask ??= new Uint8Array(sizeX * sizeY));
+        for (let i = 0; i < gone.length; i++) {
+            gone[i] = floor.isGone(i, tick) ? 1 : 0;
+            any ||= gone[i] === 1;
+        }
+        if (!any) {
+            return undefined;
+        }
+        const near = (this.nearMask ??= new Uint8Array(sizeX * sizeY));
+        near.fill(0);
+        for (let i = 0; i < gone.length; i++) {
+            if (!gone[i]) {
+                continue;
+            }
+            const col = i % sizeX;
+            const row = Math.floor(i / sizeX);
+            for (
+                let y = Math.max(0, row - UNDER_REACH);
+                y <= Math.min(sizeY - 1, row + UNDER_REACH);
+                y++
+            ) {
+                for (
+                    let x = Math.max(0, col - UNDER_REACH);
+                    x <= Math.min(sizeX - 1, col + UNDER_REACH);
+                    x++
+                ) {
+                    near[x + y * sizeX] = 1;
+                }
+            }
+        }
+        return near;
+    }
+
+    // Whether any tile within reach of a point (floor tiles) is near a hole
+    private nearArea(
+        near: Uint8Array,
+        sizeX: number,
+        sizeY: number,
+        cx: number,
+        cy: number,
+        reach: number,
+    ): boolean {
+        for (
+            let y = Math.max(0, Math.floor(cy - reach));
+            y <= Math.min(sizeY - 1, cy + reach);
+            y++
+        ) {
+            for (
+                let x = Math.max(0, Math.floor(cx - reach));
+                x <= Math.min(sizeX - 1, cx + reach);
+                x++
+            ) {
+                if (near[x + y * sizeX]) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private reset(): void {
         this.options.alpha = 1;
         this.options.tint = NO_TINT;
         this.options.scale = 1;
+        this.options.flash = 0;
     }
 
     // How far up (negative) and round a trembling tile is now: a rattle up off its bed, never

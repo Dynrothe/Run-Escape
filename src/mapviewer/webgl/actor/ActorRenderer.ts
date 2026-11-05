@@ -93,6 +93,7 @@ export class ActorModel {
 
 export type ActorDrawOptions = {
     scale?: number;
+    // 0 to 1, towards white; negative, towards the tint's own colour (a glow)
     flash?: number;
     tint?: number;
     alpha?: number;

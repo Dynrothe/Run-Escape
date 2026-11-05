@@ -24,7 +24,8 @@ uniform int u_instanceOffset;
 
 // 2 texels per instance:
 //  0: world x (tiles), world y (tiles, up is negative), world z (tiles), yaw (0-2047)
-//  1: scale, flash (0-1), tint (0xRRGGBB, 0xFFFFFF = none), alpha
+//  1: scale, flash (0-1, or -1-0 to glow in the tint's colour), tint (0xRRGGBB, 0xFFFFFF = none),
+//     alpha
 uniform highp sampler2D u_actorData;
 
 layout(location = 0) in uvec3 a_vertex;
@@ -82,7 +83,10 @@ void main() {
 
     vec3 tintColor = vec3(float((tint >> 16) & 0xFF), float((tint >> 8) & 0xFF), float(tint & 0xFF)) / 255.0;
     v_color = vertex.color;
-    v_color.rgb = mix(v_color.rgb * tintColor, vec3(1.0), flash);
+    // A flash goes to white; a negative one goes to the tint's own colour, lit or not, so a
+    // model can glow (the light under the Wardens' floor, client/FloorView.ts)
+    vec3 flashColor = flash < 0.0 ? tintColor : vec3(1.0);
+    v_color.rgb = mix(v_color.rgb * tintColor, flashColor, abs(flash));
     v_color.a *= alpha;
 
     vec4 localPos = vec4(vertex.pos * scale, 1.0) * rotationY(data0.w * RS_TO_RADIANS);

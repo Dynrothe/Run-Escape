@@ -1546,6 +1546,12 @@ export type FloorDef = {
     // What it throws up, all spot animations (client/FloorView.ts): dust as a slab comes up and
     // as a tile goes, and a chip of rock (crumbling off a tile about to go, and falling with it)
     effects?: { dust: number; fallDust: number; rock: number };
+    // What's under the floor, seen through its holes (locs, drawn by client/FloorView.ts on a
+    // regular grid): pillars holding it up, beams between them, and the arena's wall going down
+    // round its edge, over a glow far below
+    under?: { pillar: number; beam: number; wall: number };
+    // The light under the floor, in its cracks as tiles tremble and far below (0xRRGGBB)
+    glow?: number;
     // A slab coming up this near a player shakes the camera this much, and a tile going from under
     // or beside them this much (ImpactDef.shake; Settings can turn it off)
     shake?: { slam: number; drop: number };

@@ -331,6 +331,11 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// A piece of what's under a floor (FloorDef.under)
+export function getFloorPieceKey(locId: number): string {
+    return "floorpiece:" + locId;
+}
+
 // The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
 export function getStatueModelKey(locId: number): string {
     return "statue:" + locId;
@@ -590,6 +595,12 @@ export class GameAssets {
         const requests: BakeRequest[] = [];
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
+        }
+        // What's under a floor (a dev map's, as its slabs are)
+        for (const map of ALL_MAPS) {
+            for (const locId of Object.values(map.floor?.under ?? {})) {
+                requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
+            }
         }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {
             requests.push({ kind: "obj", key: "pickup:" + kind, objId, count: 1 });

@@ -25,6 +25,13 @@ const FALL_SOUND = 6572;
 const SLAB_DUST = 2699;
 const FALL_DUST = 2184;
 const ROCK_CHIP = 2210;
+// Under the floor, all the Tombs' own: the room's gold-banded pillar (2 by 2, 4.4 tiles tall), the
+// wall of its upper level as beams, and the engraved wall the room's walled with, round the edge
+const UNDER_PILLAR = 45582;
+const UNDER_BEAM = 45085;
+const UNDER_WALL = 45120;
+// The Tombs' gold, as the light under the floor
+const GLOW = 0xffb040;
 
 const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
     kind: "side",
@@ -122,6 +129,8 @@ export function createWardensFloor(rect: FloorDef["rect"]): FloorDef {
             fallDust: FALL_DUST,
             rock: ROCK_CHIP,
         },
+        under: { pillar: UNDER_PILLAR, beam: UNDER_BEAM, wall: UNDER_WALL },
+        glow: GLOW,
         shake: { slam: 0.1, drop: 0.25 },
         script: SCRIPT,
         loopSeconds: 144,
