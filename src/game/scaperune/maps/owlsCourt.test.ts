@@ -236,6 +236,24 @@ describe("the Owl's Court", () => {
         expect(writeTerrain(again, 0, 0)).toEqual(writeTerrain(grid, 0, 0));
     });
 
+    // view-weight.ts counts them, as the fight draws them: 18 crossbowmen, 2 knights, 4 fire jets
+    it("hands on what the fight draws in the map's place, in grid tiles", () => {
+        expect(map.standIns).toHaveLength(24);
+        expect(map.standIns).toEqual(
+            drawn.map(({ id, x, y, rotation }) => ({
+                id,
+                type: 10,
+                rotation,
+                level: 0,
+                x: base + x,
+                y: base + y,
+            })),
+        );
+        expect(map.standIns!.some((loc) => grid.locs.some((placed) => placed.id === loc.id))).toBe(
+            false,
+        );
+    });
+
     it("stands where the map says, its boss arena the court", () => {
         const arena = getRecipeArena(OWLS_COURT_RECIPE);
         expect(arena).toEqual({ baseX: 83 * 64, baseY: 77 * 64, sizeX: 64, sizeY: 64 });
@@ -257,5 +275,17 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("the Owl's Court's loc
             { encoding: "utf8", timeout: 120000 },
         );
         expect(stdout).toContain("The Owl's Court's loc table matches the cache");
+    }, 130000);
+
+    // Its hanging wall's cap, a wizard statue's plate and the great owls' plinths each z-fought
+    // the floor till LocOverrides.ts lifted them
+    it("draws no two faces in one plane", async () => {
+        const { stdout } = await promisify(execFile)(
+            process.execPath,
+            ["--import", "tsx", "scripts/scaperune/check-coplanar.ts", "zachariah"],
+            { encoding: "utf8", timeout: 120000, env: { ...process.env, CHECK: "1" } },
+        );
+        expect(stdout).toContain("zachariah: ");
+        expect(stdout).toContain(" 0 pairs in one plane");
     }, 130000);
 });

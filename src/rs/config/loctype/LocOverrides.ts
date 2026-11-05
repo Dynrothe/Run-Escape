@@ -38,4 +38,8 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // A Sepulchre wizard statue (the Owl's Court's bridge): the plate in front of it is flat on the
     // floor, so it z-fought the floor tile under it; 2 units up it doesn't
     [38417, { height: 2 }],
+    // The Sepulchre's great owl (the Owl's Court's rims and dais): its plinth's steps are every 2
+    // units up from the floor, one in a plane with the raised edge of the stone tile under it
+    // (38198, 6 units up), so they z-fought (check-coplanar.ts). An odd lift keeps every step off it.
+    [38542, { height: 1 }],
 ]);
