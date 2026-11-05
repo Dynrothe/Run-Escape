@@ -497,18 +497,21 @@ function crondisFall(sim: Sim, def: PathRoom): Point {
         const fall = places.falls[lane.fall];
         const walkIn = Math.hypot(fall.fill.x - player.x, fall.fill.y - player.y) / speed;
         const dry = Math.max(0, crondis.dryUntil[lane.fall] / 50 - now - walkIn);
-        // The last band's still over the fall, or the next comes before it'd be filled and away
+        // A band's over the fall from CLOUD_BEHIND after it's let go till its back's past (half a
+        // second later): filling starts once it's gone by, and ends far enough ahead of the next
+        // (three quarters of a second) that it never catches up
+        const arrive = now + walkIn;
         const recent = crondis.clouds.some(
-            (cloud) => cloud.lane === i && now - cloud.startTick / 50 < CLOUD_BEHIND + 0.8,
+            (cloud) => cloud.lane === i && arrive - cloud.startTick / 50 < CLOUD_BEHIND + 0.6,
         );
-        const release = crondis.nextCloudTick[i] / 50 - now - walkIn;
-        const soon = release < FILL_SECONDS + 0.7;
-        const cloudWait = recent ? 1 : soon ? release + CLOUD_BEHIND + 0.8 : 0;
+        const nextRelease = crondis.nextCloudTick[i] / 50;
+        const soon = arrive + FILL_SECONDS > nextRelease + CLOUD_BEHIND - 0.75;
+        const cloudWait = recent ? 0.6 : soon ? nextRelease + CLOUD_BEHIND + 0.6 - arrive : 0;
         const wait = walkIn + Math.max(dry, cloudWait);
         const toPalm = lane.fromLow ? 1 : -1;
         const at =
             dry > 0 || recent || soon
-                ? { x: fall.fill.x, y: fall.fill.y + toPalm * 2.4 }
+                ? { x: fall.fill.x, y: fall.fill.y + toPalm * 1.8 }
                 : fall.fill;
         if (!best || wait < best.wait) {
             best = { at, wait };
@@ -545,14 +548,16 @@ function spearDodge(sim: Sim, def: PathRoom, to: Point): Point | undefined {
     if (!rows) {
         return undefined;
     }
+    const dy = Math.sign(to.y - player.y) || 1;
     if (sides.size === 1 && lane) {
-        // The half it isn't thrusting across, carrying on along the corridor
+        // The half it isn't thrusting across, carrying on along the corridor as it goes over
         const x = sides.has("low") ? lane.high - 1.5 : lane.low + 1.5;
-        const dy = Math.sign(to.y - player.y);
-        return nudge(sim, x, player.y + dy * (Math.abs(player.x - x) < 0.3 ? 1 : 0.2));
+        return nudge(sim, x, player.y + dy * 1.2);
     }
-    // Both halves: out of their rows, whichever way's nearer
-    const y = player.y > (rows.y0 + rows.y1) / 2 ? rows.y1 + 1.4 : rows.y0 - 1.4;
+    // Both halves: out of their rows the way it's going, unless that edge is much further
+    const ahead = dy > 0 ? rows.y1 + 1.4 : rows.y0 - 1.4;
+    const behind = dy > 0 ? rows.y0 - 1.4 : rows.y1 + 1.4;
+    const y = Math.abs(ahead - player.y) <= Math.abs(behind - player.y) + 1 ? ahead : behind;
     return nudge(sim, player.x, y);
 }
 
@@ -594,6 +599,15 @@ function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point 
         }
     }
     if (boss.bossState?.ordeal) {
+        // Each row's one cracked boulder is the way through: in its lane, the weapons break it as
+        // it comes; edging north to her altar between rows ends her stones sooner
+        const cracked = sim.enemies
+            .filter((e) => !e.dead && e.def.id === "cracked_boulder" && e.y > player.y - 0.5)
+            .sort((a, b) => a.y - b.y)[0];
+        if (cracked) {
+            const near = cracked.y - player.y < 5;
+            return walkAvoiding(sim, cracked.x, player.y + (near ? 0 : 1.5), avoid, 0);
+        }
         // Her altar, by the west side
         const side =
             Math.abs(player.x - pit.x0) < Math.abs(player.x - pit.x1) ? pit.x0 - 3 : pit.x1 + 3;

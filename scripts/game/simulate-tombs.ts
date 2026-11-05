@@ -357,9 +357,24 @@ function runOnce(seed: number): Outcome {
         hits,
         notes: [
             ...watch.notes(sim),
+            ...attackNotes(sim),
             ...(roomArg === "raid" || roomArg === "wardens" ? boardNotes(sim) : []),
         ],
     };
+}
+
+// Which boss attacks did the damage, every hero's together
+function attackNotes(sim: Sim): string[] {
+    const byAttack = new Map<string, number>();
+    for (const hero of sim.heroes) {
+        for (const [name, amount] of Object.entries(hero.damageByAttack)) {
+            byAttack.set(name, (byAttack.get(name) ?? 0) + amount);
+        }
+    }
+    const top = [...byAttack.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return top.length > 0
+        ? [`boss attacks: ${top.map(([k, v]) => `${k} ${Math.round(v)}`).join(", ")}`]
+        : [];
 }
 
 // The result screen's board, for a raid or the Wardens
