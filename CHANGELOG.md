@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- In co-op, the boss health bar follows the living boss closest to your player. Fixed by braiansmarzaro.
+
 ## 0.25.0 - 2026-11-05
 
 ### Added

@@ -38,7 +38,7 @@ import { getWeapon } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
-import { SimEvent, WeaponState } from "../core/entities";
+import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
 import {
@@ -2402,7 +2402,33 @@ export class GameClient implements GameFrameHandler {
         const thisLevel = sim.xpForThisLevel;
         const nextLevel = sim.xpForNextLevel;
         let boss: HudNumbers["boss"];
-        const shownBoss = sim.shownBoss;
+        let shownBoss: Enemy | undefined;
+        if (sim.heroes.length > 1) {
+            const player = sim.heroes[sim.focus].player;
+            let nearest = Infinity;
+            let fallen: Enemy | undefined;
+            for (const enemy of sim.enemies) {
+                if (!enemy.boss) {
+                    continue;
+                }
+                if (enemy.dead) {
+                    if (enemy.finalBoss && !sim.endless) {
+                        fallen = enemy;
+                    }
+                    continue;
+                }
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const distance = dx * dx + dy * dy;
+                if (distance < nearest) {
+                    nearest = distance;
+                    shownBoss = enemy;
+                }
+            }
+            shownBoss ??= fallen;
+        } else {
+            shownBoss = sim.shownBoss;
+        }
         if (shownBoss) {
             const phase = shownBoss.bossState?.phase;
             const parasite = sim.parasite;

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -62,6 +63,7 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
         shownDpsTick: 0,
         damageMeter: new DamageMeter(),
         lastHudUpdate: 0,
+        coopPlayerIds: sim.heroes.map((hero) => `hero-${hero.index}`),
         display: {
             ...getDefaultDisplaySettings(),
             menuSpin: false,
@@ -160,6 +162,101 @@ function displayOf(client: GameClient): DisplaySettings {
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
+
+    test.each([
+        [0, "boss"],
+        [1, "boss"],
+        [0, "finalBoss"],
+        [1, "finalBoss"],
+    ] as const)("co-op hero %i sees the nearest living %s", (focus, type) => {
+        const sim = createSim(focus);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        sim.heroes[0].player.x = 1020.5;
+        sim.heroes[1].player.x = 1050.5;
+        const bosses = [1022.5, 1048.5].map((x) =>
+            sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
+        );
+        bosses[0].hp = bosses[0].maxHp / 4;
+        bosses[1].hp = (bosses[1].maxHp * 3) / 4;
+        const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        const other = 1 - focus;
+        sim.player.x = bosses[other].x;
+        sim.player.y = bosses[other].y;
+        // A regular enemy even closer must not take the boss bar.
+        sim.spawnEnemy(getEnemy("goblin"), "normal", { x: sim.player.x, y: sim.player.y });
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(other));
+
+        // Distance includes both axes, and is reconsidered as bosses move.
+        bosses[other].y += 40;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+        bosses[other].y = sim.player.y;
+        bosses[other].dead = true;
+        bosses[other].hp = 0;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        bosses[focus].dead = true;
+        bosses[focus].hp = 0;
+        updateHud(client);
+        if (type === "finalBoss") {
+            expect(store.getNumbers()!.boss).toMatchObject({
+                name: bosses[focus].def.name,
+                fraction: 0,
+                enraged: false,
+            });
+        } else {
+            expect(store.getNumbers()!.boss).toBeUndefined();
+        }
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
+
+    test("co-op chooses the closest boss even when a final boss is farther away", () => {
+        const sim = createSim(1);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        expect(sim.shownBoss).toBe(finalBoss);
+    });
+
+    test("solo keeps the final boss's priority over a nearer boss", () => {
+        const sim = createSim();
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        });
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(finalBoss.def.name);
+    });
+
+    test("co-op without bosses has no boss bar", () => {
+        const sim = createSim(1);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toBeUndefined();
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
 
     test("keeps what hasn't changed the same object, so its parts don't draw again", () => {
         vi.stubGlobal("window", { localStorage: { setItem() {} } });
