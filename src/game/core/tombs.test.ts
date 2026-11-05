@@ -220,6 +220,17 @@ describe("invocations", () => {
 });
 
 describe("the Tombs of Amascut", () => {
+    it("never scale a 1-hitpoint thing down to none at Entry", () => {
+        withEntryScale();
+        const sim = tombs([]);
+        const phantom = sim.spawnEnemy(getEnemy("zebaks_phantom"), "boss", {
+            x: 1040.5,
+            y: 1040.5,
+        })!;
+        expect(phantom.maxHp).toBe(1);
+        expect(phantom.hp).toBe(1);
+    });
+
     it("go by the raid level in place of hard mode", () => {
         withEntryScale();
         const plain = tombs([], true);

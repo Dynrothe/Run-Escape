@@ -3485,8 +3485,9 @@ export class Sim {
             prevY: pos.y,
             vx: 0,
             vy: 0,
-            hp: Math.round(hp),
-            maxHp: Math.round(hp),
+            // A scale under one (the Tombs' at Entry) never leaves a 1-hitpoint thing with none
+            hp: Math.max(1, Math.round(hp)),
+            maxHp: Math.max(1, Math.round(hp)),
             damage: Math.round(def.damage * hitScale),
             speed: (def.speed * (type === "elite" ? 0.85 : 1)) / TICKS_PER_SECOND,
             radius: def.radius,
