@@ -2,7 +2,9 @@
 // boss, and the Wardens, as a person who knows the raid plays it. It only moves (weapons fire on
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
+import { getItem } from "../../src/game/content/items";
 import { CRONDIS } from "../../src/game/content/tombs";
+import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
 import { FlowField } from "../../src/game/core/world/FlowField";
 
@@ -128,7 +130,7 @@ export function tombsMove(sim: Sim): Point | undefined {
         return wardensMove(sim);
     }
     if (sim.tombsPath === undefined) {
-        return nexusMove(sim);
+        return casketMove(sim) ?? nexusMove(sim);
     }
     const path = tombs.paths.find((p) => p.id === sim.tombsPath);
     const room = sim.tombsRoom;
@@ -137,7 +139,8 @@ export function tombsMove(sim: Sim): Point | undefined {
         return undefined;
     }
     if (room.boss && def.boss) {
-        return bossMove(sim, def.boss, room.boss.uid);
+        const quiet = room.boss.uid === -1 || room.boss.beatenTick !== undefined;
+        return (quiet ? casketMove(sim) : undefined) ?? bossMove(sim, def.boss, room.boss.uid);
     }
     // Through the barrier into the room: a few tiles past its line, away from the safe corridor
     if (!room.started && def.gate) {
@@ -145,6 +148,71 @@ export function tombsMove(sim: Sim): Point | undefined {
         return walkTo(sim, def.gate.x + into, def.arrive.y);
     }
     return puzzleMove(sim, def);
+}
+
+// Wears gear unless what's worn is better (counting sets, like the casket's
+// advice), keeps utility items when they fit
+export function chestAction(sim: Sim): ChestAction {
+    const chest = sim.chest!;
+    const item = getItem(chest.itemId);
+    if (item.kind === "utility") {
+        return sim.canStash(item.id) ? "take" : "use";
+    }
+    return shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades) ? "take" : "alch";
+}
+
+// Eats when hurt, throws chinchompas into crowds, drinks antidotes when
+// poisoned or drained, uses everything else straight away
+export function useItems(sim: Sim): void {
+    const player = sim.player;
+    let near = 0;
+    for (const enemy of sim.enemies) {
+        if (!enemy.dead && Math.hypot(enemy.x - player.x, enemy.y - player.y) < 5) {
+            near++;
+        }
+    }
+    sim.inventory.forEach((slot, index) => {
+        const item = slot && getItem(slot.itemId);
+        if (!item || item.kind !== "utility") {
+            return;
+        }
+        const use = item.use.kind;
+        if (
+            (use === "heal" && player.hp < player.maxHp * 0.5) ||
+            (use === "blast" && near >= 15) ||
+            (use === "cure" && (player.poisonEnd !== -1 || sim.debuffs.length > 0)) ||
+            use === "buff" ||
+            use === "bones" ||
+            use === "xp"
+        ) {
+            sim.useItem(index);
+        }
+    });
+}
+
+// A casket on the floor near enough, at a moment there's nothing else to do (in the Nexus, or a
+// boss's arena before it's up or once it's down): caskets aren't pulled in as bones are, so a
+// person walks over to one
+const CASKET_REACH = 12;
+
+function casketMove(sim: Sim): Point | undefined {
+    const player = sim.player;
+    let best: Point | undefined;
+    let bestDistance = CASKET_REACH;
+    for (const pickup of sim.pickups) {
+        if (
+            pickup.kind !== "casket" ||
+            sim.grid.isSolid(Math.floor(pickup.x), Math.floor(pickup.y))
+        ) {
+            continue;
+        }
+        const distance = Math.hypot(pickup.x - player.x, pickup.y - player.y);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = pickup;
+        }
+    }
+    return best && walkTo(sim, best.x, best.y);
 }
 
 // The Nexus: the next path's door, then the way to the Wardens
@@ -1231,10 +1299,14 @@ function wardensMove(sim: Sim): Point | undefined {
     const places = sim.map.tombs!.wardens!;
     const player = sim.player;
     if (fight.phase === 1) {
+        // Blocking Tumeken's side while it's hitpoints to spare (each orb blocked hurts a little),
+        // and a step back out of the orbs' way, still by the obelisk, while it gets them back
         const gap = places.sides.tumeken.gap;
-        return Math.hypot(gap.x - player.x, gap.y - player.y) < 1
-            ? nudge(sim, gap.x, gap.y)
-            : walkTo(sim, gap.x, gap.y);
+        const blocking = player.hp > player.maxHp * 0.5;
+        const to = blocking ? gap : { x: gap.x, y: gap.y - 2.5 };
+        return Math.hypot(to.x - player.x, to.y - player.y) < 1
+            ? nudge(sim, to.x, to.y)
+            : walkTo(sim, to.x, to.y);
     }
     // The marks about to land (hurts > 0 within the next second or so), tile by tile
     const soon = sim.tick + 60;
@@ -1252,7 +1324,9 @@ function wardensMove(sim: Sim): Point | undefined {
                 : undefined;
         const warden = sim.enemies.find((e) => e.uid === two.wardenUid);
         const target = core && !core.dead ? core : warden;
-        let to = target ? { x: target.x, y: target.y - (target.radius + 2.5) } : places.arrive;
+        // As near as the weapons need (a melee hero right up to it), no nearer than that
+        const keep = Math.max(1, Math.min(2.5, heroReach(sim) - 0.6));
+        let to = target ? { x: target.x, y: target.y - (target.radius + keep) } : places.arrive;
         to = clampTo(to, places.floor);
         if (onMark || marks.length > 0) {
             return safeStep(sim, to, (x, y) =>

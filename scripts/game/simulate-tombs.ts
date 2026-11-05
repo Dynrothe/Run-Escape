@@ -33,7 +33,15 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { loadRegionData } from "./collision-snapshot";
-import { DEFAULT_PATH_ORDER, TombsLog, kite, setPathOrder, tombsMove } from "./tombsBot";
+import {
+    DEFAULT_PATH_ORDER,
+    TombsLog,
+    chestAction,
+    kite,
+    setPathOrder,
+    tombsMove,
+    useItems,
+} from "./tombsBot";
 
 const PUZZLES: Record<string, string> = {
     apmeken: "apmeken",
@@ -446,7 +454,9 @@ function runOnce(seed: number): Outcome {
                 `reached in ${clock((sim.tick - start) / TICKS_PER_SECOND)} after ` +
                     `${sim.tombsDeaths} wipes, at level ` +
                     sim.heroes.map((hero) => sim.as(hero.index, () => sim.level)).join("/") +
-                    ` (${sim.weapons.map((w) => `${w.def.id} ${w.level}`).join(", ")})`,
+                    ` (${sim.weapons.map((w) => `${w.def.id} ${w.level}`).join(", ")}), ` +
+                    `${sim.player.maxHp} hp, wearing ${Object.values(sim.gear).join(", ") || "nothing"}, ` +
+                    `carrying ${sim.inventory.filter(Boolean).length}`,
             );
             start = sim.tick;
             limit = start + minutes * 60 * TICKS_PER_SECOND;
@@ -471,7 +481,8 @@ function runOnce(seed: number): Outcome {
                             );
                         sim.choose(ranked[0].index);
                     } else if (sim.state === "chest") {
-                        sim.resolveChest("take");
+                        // Wears it if it's better, keeps food and the like, as simulate-run's bot
+                        sim.resolveChest(chestAction(sim));
                     } else {
                         // The Helpful Spirit: the dearest supply it can afford, as simulate-run's
                         // bot buys
@@ -508,6 +519,8 @@ function runOnce(seed: number): Outcome {
             }
             sim.as(hero.index, () => {
                 // Where tombsBot has nothing to say (a boss it doesn't know yet), away from what's close
+                // Eats when hurt, and uses what it's carrying, as a person does
+                useItems(sim);
                 moves[hero.index] = tombsMove(sim) ?? kite(sim, sim.player, 4);
                 sim.setInput(hero.index, moves[hero.index].x, moves[hero.index].y);
             });

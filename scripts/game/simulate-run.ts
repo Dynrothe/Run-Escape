@@ -31,13 +31,12 @@ import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
 import { INVOCATIONS } from "../../src/game/content/invocations";
-import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
+import { CASKET_GEAR, getGear } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
-import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
@@ -45,7 +44,7 @@ import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
-import { TombsLog, tombsMove } from "./tombsBot";
+import { TombsLog, chestAction, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
 // The Tombs' invocations
@@ -131,51 +130,11 @@ function choiceScore(choice: UpgradeChoice): number {
     return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15;
 }
 
-// Wears gear unless what's worn is better (counting sets, like the casket's
-// advice), keeps utility items when they fit
-function chestAction(sim: Sim): ChestAction {
-    const chest = sim.chest!;
-    const item = getItem(chest.itemId);
-    if (item.kind === "utility") {
-        return sim.canStash(item.id) ? "take" : "use";
-    }
-    return shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades) ? "take" : "alch";
-}
-
 // Runs a set was started in (a piece worn), and finished in (its bonus), for
 // the summary at the end
 const setsStarted = new Map<string, number>();
 const setsFinished = new Map<string, number>();
 let runs = 0;
-
-// Eats when hurt, throws chinchompas into crowds, drinks antidotes when
-// poisoned or drained, uses everything else straight away
-function useItems(sim: Sim): void {
-    const player = sim.player;
-    let near = 0;
-    for (const enemy of sim.enemies) {
-        if (!enemy.dead && Math.hypot(enemy.x - player.x, enemy.y - player.y) < 5) {
-            near++;
-        }
-    }
-    sim.inventory.forEach((slot, index) => {
-        const item = slot && getItem(slot.itemId);
-        if (!item || item.kind !== "utility") {
-            return;
-        }
-        const use = item.use.kind;
-        if (
-            (use === "heal" && player.hp < player.maxHp * 0.5) ||
-            (use === "blast" && near >= 15) ||
-            (use === "cure" && (player.poisonEnd !== -1 || sim.debuffs.length > 0)) ||
-            use === "buff" ||
-            use === "bones" ||
-            use === "xp"
-        ) {
-            sim.useItem(index);
-        }
-    });
-}
 
 // Steers away from nearby enemies (closer counts more) and towards bones when
 // nothing is close; slides along walls by trying a few nearby directions.

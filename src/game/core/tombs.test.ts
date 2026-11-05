@@ -2536,6 +2536,40 @@ describe("Zebak", () => {
     });
 });
 
+describe("a wipe on the Wardens", () => {
+    function wiped(invocations: string[]): Sim {
+        const sim = tombs(invocations);
+        sim.heroes[0].weapons = [];
+        expect(sim.devToWardens()).toBe(true);
+        sim.heroes[0].weapons = [];
+        const first = sim.tombsWardens;
+        sim.step();
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](sim.player.maxHp * 10, "wardens_obelisk", false, undefined, true);
+        sim.step();
+        expect(sim.tombsWardens).not.toBe(first);
+        return sim;
+    }
+
+    it("brings their fight back from the start, everyone up, as OSRS's does", () => {
+        const sim = wiped([]);
+        expect(sim.runOver).toBe(false);
+        expect(sim.tombsDeaths).toBe(1);
+        expect(sim.tombsWardens!.phase).toBe(1);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+    });
+
+    it("ends the raid once an Attempts invocation's deaths are spent", () => {
+        const sim = tombs(["hardcore_run"]);
+        sim.heroes[0].weapons = [];
+        expect(sim.devToWardens()).toBe(true);
+        sim.step();
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](sim.player.maxHp * 10, "wardens_obelisk", false, undefined, true);
+        expect(sim.runOver).toBe(true);
+    });
+});
+
 describe("the Wardens' first phase", () => {
     // In their room (the dev skip), the obelisk kept whole unless a test breaks it
     function atWardens() {

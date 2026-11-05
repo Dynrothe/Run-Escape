@@ -1167,7 +1167,8 @@ export class Sim {
     readonly map: MapDef;
     readonly rng: Rng;
     // A floor that rises and falls away (MapDef.floor)
-    readonly floor: ArenaFloor | undefined;
+    // Laid afresh when the party wipes on the Wardens (failWardens)
+    floor: ArenaFloor | undefined;
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
@@ -1292,6 +1293,8 @@ export class Sim {
     private tombsSpiritDue = false;
     // Each path taken, when it was entered and how long it took, for the result's board
     private tombsTimes: { id: string; startTick: number; seconds?: number }[] = [];
+    // When the party first came to the Wardens, for the board's time (wipes and all)
+    private wardensFromTick = -1;
     // Jungle Japes's banana peels, in a path boss's fight
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
     // Akkha's fight, while he's up
@@ -3468,7 +3471,7 @@ export class Sim {
         // A Tombs path's boss: tougher with its path level, for a party that's been round more
         // of the raid first (TOMBS_BOSSES)
         if (this.tombsRoom && boss) {
-            const level = this.tombsPathLevel;
+            const level = this.tombsPathWeight;
             hp *= 1 + TOMBS_BOSSES.levelHp * level;
             hitScale *= 1 + TOMBS_BOSSES.levelDamage * level;
         }
@@ -4958,6 +4961,14 @@ export class Sim {
 
     // The Tombs' path levels, from the invocations (Pathseeker 1 to Pathmaster 3), with each path
     // the raid's done before this one adding one, so the rooms grow with the raid
+    // The path level as what scales by it smoothly (hitpoints, damage, how often things come)
+    // feels it: a third or so at Entry, where a run's bought nothing and every path it's done
+    // makes the next tougher, in full from Normal (the raid level's damage) up. What it counts
+    // (more waves, longer orders, more decoys) goes by tombsPathLevel itself.
+    get tombsPathWeight(): number {
+        return this.tombsPathLevel * Math.min(1, this.hardScale.damage);
+    }
+
     get tombsPathLevel(): number {
         const level = this.invocations.includes("pathmaster")
             ? 3
@@ -5001,8 +5012,11 @@ export class Sim {
     // What a Tombs room's enemies are multiplied by: more with each of its waves (so it ends far
     // harder than it starts, as a run levels up in it) and with each path level
     private tombsRoomScale(): { hp: number; damage: number } {
-        const wave = Math.max(0, this.tombsRoom?.wave ?? 0);
-        const level = this.tombsPathLevel;
+        // The puzzle's waves are done with once its boss is up: its adds and hazards go by the
+        // path level alone, not by how far the room got
+        const room = this.tombsRoom;
+        const wave = room?.boss ? 0 : Math.max(0, room?.wave ?? 0);
+        const level = this.tombsPathWeight;
         return {
             hp: 1 + APMEKEN.waveHp * wave + APMEKEN.levelHp * level,
             damage: 1 + APMEKEN.waveDamage * wave + APMEKEN.levelDamage * level,
@@ -5010,7 +5024,7 @@ export class Sim {
     }
 
     private apmekenIssueEvery(): number {
-        return Math.max(4, APMEKEN.issueEvery - this.tombsPathLevel);
+        return Math.max(4, APMEKEN.issueEvery - this.tombsPathWeight);
     }
 
     // The waves the director spawns by: the Apmeken room's stream while it's on, a raid room's, or
@@ -5030,7 +5044,7 @@ export class Sim {
                 return [
                     {
                         ...trickle,
-                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) * crowd,
+                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight) * crowd,
                         maxAlive: Math.max(2, Math.round(trickle.maxAlive * crowd)),
                     },
                 ];
@@ -5038,13 +5052,19 @@ export class Sim {
             if (this.tombsPathRoom?.scabaras) {
                 const trickle = getScabarasTrickle(Math.max(0, room.wave));
                 return [
-                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                    {
+                        ...trickle,
+                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight),
+                    },
                 ];
             }
             if (this.tombsPathRoom?.het) {
                 const trickle = getHetTrickle(Math.max(0, room.wave));
                 return [
-                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                    {
+                        ...trickle,
+                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight),
+                    },
                 ];
             }
             return [this.apmekenTrickle(room.wave)];
@@ -5054,7 +5074,7 @@ export class Sim {
 
     private apmekenTrickle(wave: number): WaveDef {
         const trickle = getApmekenTrickle(wave);
-        const quicker = 1 + 0.15 * this.tombsPathLevel;
+        const quicker = 1 + 0.15 * this.tombsPathWeight;
         return { ...trickle, spawnRate: trickle.spawnRate * quicker };
     }
 
@@ -5737,7 +5757,7 @@ export class Sim {
         if (this.tick < fight.stand.nextTick) {
             return;
         }
-        const every = Math.max(stand.least, stand.every - 0.05 * this.tombsPathLevel);
+        const every = Math.max(stand.least, stand.every - 0.05 * this.tombsPathWeight);
         fight.stand.nextTick = this.tick + secondsToTicks(every);
         this.fireUnstableOrb(boss, stand);
     }
@@ -5905,6 +5925,9 @@ export class Sim {
 
     // Into the Wardens' room, the whole party, with what's on the floor
     private enterWardens(): void {
+        if (this.wardensFromTick < 0) {
+            this.wardensFromTick = this.tick;
+        }
         this.tombsDoors.clear();
         this.gatherHall();
         this.moveParty(this.map.tombs!.wardens!.arrive);
@@ -5931,7 +5954,7 @@ export class Sim {
             places.obelisk,
             obeliskDef.hp *
                 this.map.difficulty.hp *
-                (1 + TOMBS_BOSSES.levelHp * this.tombsPathLevel),
+                (1 + TOMBS_BOSSES.levelHp * this.tombsPathWeight),
         );
         const elidinis = this.spawnEnemy(
             getEnemy(WARDENS.wardens.elidinis.enemyId),
@@ -6325,7 +6348,7 @@ export class Sim {
 
     // What the Wardens' fights are multiplied by: as a path's boss would be after every path
     private wardensHp(): number {
-        return this.map.difficulty.hp * (1 + TOMBS_BOSSES.levelHp * this.tombsPathLevel);
+        return this.map.difficulty.hp * (1 + TOMBS_BOSSES.levelHp * this.tombsPathWeight);
     }
 
     // The second phase, each tick: the Warden waking, then its shield and core, and the obelisk's
@@ -7708,7 +7731,7 @@ export class Sim {
     }
 
     private kephriDungEvery(def: KephriDef): number {
-        return Math.max(def.dung.least, def.dung.every - this.tombsPathLevel);
+        return Math.max(def.dung.least, def.dung.every - this.tombsPathWeight);
     }
 
     // Flies round these heroes: they're thrown back once the tell's done
@@ -7834,7 +7857,7 @@ export class Sim {
             }
             let charge = fight.arcane.get(enemy.uid);
             const chargeTicks = secondsToTicks(
-                Math.max(3, arcane.charge - 0.5 * this.tombsPathLevel),
+                Math.max(3, arcane.charge - 0.5 * this.tombsPathWeight),
             );
             if (!charge) {
                 charge = { startTick: this.tick, hpAt: enemy.hp, spot: 0 };
@@ -7893,7 +7916,7 @@ export class Sim {
         const goal =
             CRONDIS.goal +
             CRONDIS.perHero * (this.heroes.length - 1) +
-            CRONDIS.perLevel * this.tombsPathLevel;
+            Math.round(CRONDIS.perLevel * this.tombsPathWeight);
         if (palm) {
             palm.noDrops = true;
             palm.maxHp = goal;
@@ -7927,7 +7950,7 @@ export class Sim {
     }
 
     private crondisCloudEvery(): number {
-        return Math.max(CRONDIS.cloudEveryLeast, CRONDIS.cloudEvery - 1.2 * this.tombsPathLevel);
+        return Math.max(CRONDIS.cloudEveryLeast, CRONDIS.cloudEvery - 1.2 * this.tombsPathWeight);
     }
 
     private nextCrondisWave(room: TombsRoom): void {
@@ -8230,11 +8253,11 @@ export class Sim {
     }
 
     private scabarasDarkenEvery(): number {
-        return Math.max(SCABARAS.darkenLeast, SCABARAS.darken - 1.5 * this.tombsPathLevel);
+        return Math.max(SCABARAS.darkenLeast, SCABARAS.darken - 1.5 * this.tombsPathWeight);
     }
 
     private scabarasRockEvery(): number {
-        return Math.max(SCABARAS.rockEveryLeast, SCABARAS.rockEvery - 0.5 * this.tombsPathLevel);
+        return Math.max(SCABARAS.rockEveryLeast, SCABARAS.rockEvery - 0.5 * this.tombsPathWeight);
     }
 
     // A new order for the Sequence's plates, shown after so many seconds: no plate twice
@@ -8941,7 +8964,10 @@ export class Sim {
         const level = this.tombsPathLevel;
         const floor = def.floor;
         if (this.tick >= het.nextOrbTick) {
-            const every = Math.max(HET.orbEveryLeast, HET.orbEvery - HET.orbQuicker * level);
+            const every = Math.max(
+                HET.orbEveryLeast,
+                HET.orbEvery - HET.orbQuicker * this.tombsPathWeight,
+            );
             het.nextOrbTick = this.tick + secondsToTicks(every);
             const speed = (HET.orbSpeed + HET.orbFaster * level) / TICKS_PER_SECOND;
             // Stacked from path level 2: one place, more than one orb
@@ -9053,7 +9079,7 @@ export class Sim {
             });
             return;
         }
-        const deadline = Math.max(5, APMEKEN.deadline - 1.5 * this.tombsPathLevel);
+        const deadline = Math.max(5, APMEKEN.deadline - 1.5 * this.tombsPathWeight);
         if (this.tick - issue.startTick < secondsToTicks(deadline)) {
             return;
         }
@@ -9160,29 +9186,7 @@ export class Sim {
     // they'd beaten come again for nothing.
     private failTombsRoom(): void {
         const path = this.map.tombs!.paths.find((p) => p.id === this.tombsPath)!;
-        this.tombsDeaths++;
-        for (const enemy of this.enemies) {
-            if (!enemy.dead) {
-                this.vanish(enemy);
-            }
-        }
-        this.clearBossAttacks();
-        this.enemyProjectiles = [];
-        const current = this.hero;
-        for (const hero of this.heroes) {
-            this.use(hero);
-            const player = this.player;
-            hero.down = false;
-            hero.revive = undefined;
-            player.hp = player.maxHp;
-            player.deathTick = -1;
-            player.poisonEnd = -1;
-            player.poisonDamage = 0;
-            player.invulnerable = 3 * TICKS_PER_SECOND;
-            this.debuffs = [];
-        }
-        this.use(current);
-        this.rescaleParty();
+        this.wipeTombsParty();
         const room = this.tombsRoom;
         const bossDef = path.room?.boss;
         if (room?.boss && bossDef) {
@@ -9214,6 +9218,52 @@ export class Sim {
             message:
                 "Oh dear, you are dead! You're back in the safe corridor: walk through the barrier " +
                 "to start the room again. The waves you'd beaten give nothing this time." +
+                (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
+        });
+    }
+
+    // A wipe in the Tombs: what's out is gone, and everyone's back up on full hitpoints. What
+    // they've got they keep (their levels, weapons, gear); what they used is gone.
+    private wipeTombsParty(): void {
+        this.tombsDeaths++;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        this.clearBossAttacks();
+        this.enemyProjectiles = [];
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            this.use(hero);
+            const player = this.player;
+            hero.down = false;
+            hero.revive = undefined;
+            player.hp = player.maxHp;
+            player.deathTick = -1;
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+            player.invulnerable = 3 * TICKS_PER_SECOND;
+            this.debuffs = [];
+        }
+        this.use(current);
+        this.rescaleParty();
+    }
+
+    // Everyone down on the Wardens: their fight from the start, as OSRS's is after a wipe, the
+    // last phase's floor laid again
+    private failWardens(): void {
+        this.wipeTombsParty();
+        this.tombsWardens = undefined;
+        if (this.map.floor) {
+            this.floor = new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND);
+        }
+        this.enterWardens();
+        const left = this.tombsDeathsAllowed - this.tombsDeaths;
+        this.emit({
+            type: "notice",
+            message:
+                "Oh dear, you are dead! The Wardens are back where they started." +
                 (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
         });
     }
@@ -9812,7 +9862,7 @@ export class Sim {
                     : [];
             }),
             ...(wardens && {
-                wardensSeconds: (end - wardens.startTick) / TICKS_PER_SECOND,
+                wardensSeconds: (end - this.wardensFromTick) / TICKS_PER_SECOND,
             }),
             wipes: this.tombsDeaths,
             ...(limit && {
@@ -9871,8 +9921,13 @@ export class Sim {
             }
             const angle = (i * 2.399) % (Math.PI * 2);
             const distance = 1.5 + (i % 5) * 0.5;
-            pickup.x = to.x + fm.cos(angle) * distance;
-            pickup.y = to.y + fm.sin(angle) * distance;
+            // Somewhere it can be walked to (a casket isn't pulled in, so one in a wall is lost)
+            const spot = this.walkableSpot(
+                to.x + fm.cos(angle) * distance,
+                to.y + fm.sin(angle) * distance,
+            );
+            pickup.x = spot.x;
+            pickup.y = spot.y;
             pickup.pileUid = 0;
             if (pickup.kind !== "casket" && pickup.kind !== "powerUp") {
                 pickup.attracted = true;
@@ -14065,6 +14120,10 @@ export class Sim {
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
                 this.failTombsRoom();
+                return;
+            }
+            if (this.tombsWardens && this.tombsDeaths < this.tombsDeathsAllowed) {
+                this.failWardens();
                 return;
             }
             this.endRun("dead");
