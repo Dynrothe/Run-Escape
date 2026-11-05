@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Skills cost the same whatever order you buy them in, and any class page can refund single ranks.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added

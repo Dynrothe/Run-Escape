@@ -1286,35 +1286,32 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades`, `upgradesSpent` and an optional `upgradeOrder`: the skill id each rank was bought for,
-oldest first. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
+`upgrades` and `upgradesSpent`, what was paid for them. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
 outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
 change another class's ranks or remaining budget. Armoury purchases still spend unreserved coins.
 Save format 11 converts the former sum of page investments into a maximum reservation, restoring
-the difference to `coins` once. Export/import retains this budget and every page's purchase order.
+the difference to `coins` once. Export/import retains this budget.
 Save format 10 moves the old shared allocation and its investment into Melee without duplicating either;
-Ranged and Magic start empty. Export and import preserve all three pages and their purchase orders.
+Ranged and Magic start empty. Export and import preserve all three pages.
 Solo and co-op loadouts use the actual adventurer's style, including maps with a forced adventurer;
 changing a co-op adventurer or room map refreshes the transmitted loadout.
+Prices come from `getPageCost` in `content/shop.ts`: what a page's ranks cost in all. It goes only
+by the ranks, never the order they were bought in, so buying the same ranks in any order costs the
+same. A rank's price is what it adds to the page (`getUpgradeCost`): each rank of a skill costs more
+than the last, and every rank on the page makes them all a bit dearer.
 The arrow button on bought cards (the client's back-arrow sprite,
-`REFUND_SPRITE`) takes the most recently bought rank of that skill out of the order, through
-`GameClient.persist()`. It gives back what that saves at today's prices: the rank's own price and
-what it added to every rank bought after it. It never gives back more than the page's
+`REFUND_SPRITE`) takes one rank of that skill off the page, through `GameClient.persist()`. It gives
+back what that rank adds to the page at today's prices. It never gives back more than the page's
 `upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
-cost even when prices have changed since. A saved order is kept whatever the prices, so changing a
-skill's cost needs no migration. The button is separate from the purchase button and has a larger
+cost even when prices have changed since, and changing a skill's cost needs no migration. The button is separate from the purchase button and has a larger
 hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointer context menus
 never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
 without blocking the desktop right-click shortcut or the refund button.
-A page with ranks but no order can't refund single ranks: its arrow buttons are disabled and
-greyed, and the Skills screen says to use Refund all, which starts a new order. That notice
-(`.ui-shop-notice`) stays on phones, where `Mobile.css` hides the screen's subtitle. Pages saved before
-the order was kept have the price paid for each rank instead (`upgradeRefunds`, which only migration
-reads). A price says how many ranks were bought before it, so migration rebuilds the order when the
-prices make one unbroken run that replays to exactly the same prices. A page that refunded single
-ranks the old way leaves gaps and gets none. Never guess an order.
-Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
+Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
+(`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
+single ranks, whatever game bought them.
+Refund all clears only the selected class's ranks and spending. It's there whenever
 the page has ranks, even with no spending recorded.
 
 ### Notice
