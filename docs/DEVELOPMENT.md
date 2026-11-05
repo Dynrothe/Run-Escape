@@ -942,6 +942,14 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
                                                         how damage keeps up with the rounds)
+scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
+                                                        on one room, boss or the whole raid
+                                                        (DEV_MAPS=1; ROOM=apmeken, het, scabaras,
+                                                        crondis, baba, akkha, kephri, zebak,
+                                                        wardens or raid; LEVEL=2 the path level;
+                                                        INVOCATIONS=a,b or all; PARTY=2; KIT=max
+                                                        the dev kit; MINUTES; VERBOSE=1), with
+                                                        each puzzle room's own account
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and

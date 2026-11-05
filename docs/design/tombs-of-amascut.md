@@ -155,8 +155,11 @@ the purple chance. Bands: Entry under 150, Normal under 300, Expert from there.
 | Each boss      | OSRS's own: Boulderdash's boulders twice as fast, and so on    |
 
 The raid level's scaling works now, for every invocation (the sim's `hardScale` is the raid
-level's there). What else each does comes with its part of the raid (`comes` on each, shown on the
-board as "Not in yet"). The other bosses' invocations go in with their bosses.
+level's there), and so does what each does besides: the board's "Not in yet" (`comes`) is gone from
+all of them. The time limits (Walk for It to Sprint for It) are on the run's clock, which stops in
+the Nexus: past it, the chest goes by a raid level lower by the drop (`TOMBS_TIME_LIMITS`), and the
+board says so. The Helpful Spirit's three leave two thirds, a third and almost none of its supplies
+(`TOMBS_SPIRIT_SHARE`), and Dehydration none that heal.
 
 ## 8. Loot
 
@@ -215,7 +218,11 @@ Each a pull request, merged with the raid still a dev map:
 3. Ba-Ba.
 4. Het and Akkha, Scabaras and Kephri, Crondis and Zebak, a room then its boss each time.
 5. The Wardens.
-6. The Helpful Spirit, the chest and its loot (section 8), and moving it to the Raids tab.
+6. The Helpful Spirit, the chest and its points, the bot and the Tombs' sim.
+
+As it went (decided November 2026): everything to 6 went into one pull request, still a dev map,
+for other contributors to play and suggest changes before it goes live. Then: what the uniques
+unlock (section 8), and moving it to the Raids tab.
 
 ## 10. What the cache has
 
@@ -316,7 +323,7 @@ raid's ranges.
       his hitpoints there, or after a while.
     - **Invocations**: Double Trouble (both specials at once), Keep Back (beside him, his ranged and
       magic bring an unseen melee hit), Stay Vigilant, Feeling Special.
-    - Not in yet: Detonate (a party's crosses), and the balance bot doesn't know his fight.
+    - Not in yet: Detonate (a party's crosses).
 - **The Scabaras room** (`SCABARAS` in `content/tombs.ts`, `Sim.stepScabaras`): square 55,82 whole,
   unturned, entered from the east nook behind a barrier at x 59 the sim holds. OSRS spawns its plates
   as the room starts, so the boards are drawn by the client (`GameView.drawScabaras`) with the cache's
@@ -337,8 +344,10 @@ raid's ranges.
       everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
       stream in from the passages.
-    - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip), and
-      the bot doesn't know the room.
+    - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip).
+    - Matching's room, west, is walled off in OSRS by barriers (45135, 45375 to 45379) that open
+      once the other three are solved. Cut with the room they never opened, so nobody could finish
+      it: they're left out, and its tiles won't turn till then anyway.
 - **Kephri** (`KEPHRI` in `content/tombs.ts`, `Sim.stepKephri`), the Scabaras path's boss, after its
   room. Her arena is square 55,84's floor, cut without the teleport crystal's room past its chasm and
   turned a quarter clockwise, so you walk in from the south and she sits at the north. She never moves.
@@ -361,7 +370,7 @@ raid's ranges.
     - **Invocations**: Lively Larvae (two more dark eggs), More Overlords, Blowing Mud (two
       thrown back), Medic! (swarms between her shield's breaks too, at half speed), Aerial
       Assault (bigger, harder fireballs).
-    - Not in yet: her phantom (the Wardens'), and the bot doesn't know her fight.
+    - Her phantom's the Wardens' (phase three).
 - **The Crondis room** (`CRONDIS` in `content/tombs.ts`, `Sim.stepCrondis`): square 61,82 from local
   x 10, turned half round so it's entered from the east behind its barrier. Grow the Palm of
   Resourcefulness (11700 to 11704, a stage a quarter, never hurt, its bar its growth) with 300 water,
@@ -378,7 +387,6 @@ raid's ranges.
     - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
       (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
       growth, never below the stage it's reached.
-    - The bot doesn't know the room.
 - **Zebak** (`ZEBAK` in `content/tombs.ts`, `Sim.stepZebak`), the Crondis path's boss: the great
   crocodile (11730) lying in the water north of his island, never moving. His attacks are a pot
   that splits into red orbs, a rock that splinters, and acid sprayed. At 85, 70, 55 and 40% a
@@ -396,7 +404,10 @@ raid's ranges.
     - **Invocations**: Not Just a Head (blood clouds up the steps after you, wasting as they come,
       healing him if they reach you), Arterial Spray (they heal more), Blood Thinners (three at a
       time), Upset Stomach (wider acid, less water from a jug).
-    - Not in yet: his phantom (the Wardens'), and the bot doesn't know his fight.
+    - His island is a deck a level up in OSRS, behind invisible walls (38848, 2639), and cut with
+      the room it was a piece of its own nobody could walk onto: its east edge's walls go and its
+      edge is floor (`ZEBAK_EDGE`). A roar or wave that wipes the party doesn't throw it from where
+      the room starts over.
 - **The Wardens, phase one** (`WARDENS` in `content/tombs.ts`, `Sim.stepWardens`): their room, square
   59,80 on plane 1, turned half round so you come in from the south. Its floor is mostly the hidden
   overlay over the plane under it, which OSRS draws: that plane's floor colours, its pieces on the
@@ -455,8 +466,65 @@ raid's ranges.
       Aerial Assault) with Elidinis'. They can't be hit, and quicken once it's enraged.
     - At 5% it enrages: heals 20%, Amascut opens her mouth (11768), a row of the floor tears away
       from the back every 10.8 s, and lightning walks the floor, each bolt's shadow (1446) 1.8 s
-      before it strikes (2197). Its death ends the raid: there's no chest yet.
+      before it strikes (2197). Its death ends the raid, and the chest's opened (below).
     - Invocations: Ancient Haste, Acceleration (the Warden attacks and the obelisk opens sooner),
       Penetration (the obelisk's specials hit harder), Overclocked, Overclocked 2 and Insanity.
-    - Not in: Divine Projectile (it's about prayer, which the run hasn't got), the bot doesn't know
-      the fight, and the chest after it.
+    - Not in: Divine Projectile (it's about prayer, which the run hasn't got).
+- **The way to the Wardens** (`TombsDef.wardensDoor`): the Nexus's north end, as OSRS's is, open
+  once every path's done (it says so before); the dev button still skips there with the best kit.
+- **The Helpful Spirit** (`TOMBS_SPIRIT`, `TOMBS_SUPPLIES`): after the second path and again the
+  fourth, back in the Nexus, each player's turn at its supplies (OSRS's own: Nectar, Silk dressing,
+  Ambrosia, Tears of Elidinis, Liquid adrenaline, Smelling salts, a Blessed crystal scarab), bought
+  with raid points as the Theatre's supply chest's are. What's spent is whole points earned
+  alongside the chest's (`Hero.tombsGross`): spending doesn't lower the chest's chance.
+- **Points, the chest and the board** (`TOMBS_POINTS`, `Sim.openTombsChest`, `TombsSummary`):
+  each player's points are a puzzle room done (500, everyone in the raid) and each boss's
+  hitpoints taken (a path boss 1000, the obelisk 500, the Warden 1000 then 1500), shared by damage
+  in co-op so a fair share is the whole, and a death costs a fifth, as OSRS's does. A purple's
+  chance is the raid level's (PURPLE_CHANCE's least at 0, its most at 500) times the share of a
+  whole raid's points (9000), none under raid level 50, only the fang and Lightbearer under 150.
+  Tumeken's guardian (a pet), the Thread and the four jewels are rolls of their own from their
+  raid levels, and the invocation board shows each from where it comes. The result screen's board
+  is OSRS's raid summary: the raid level and its invocations, each path's time and the Wardens',
+  the time limit, and each player's points, deaths and purple chance.
+- **What the uniques unlock** (section 8's plan) isn't in yet: they're Collection log trophies,
+  kept out of the log while the raid's a dev map.
+
+## 12. The bot, and the Tombs' own sim
+
+The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on
+this map. It only moves, reading the sim as it likes, and imports nothing of Node's or the DOM's, so
+the dev console can drive the real game with it (`await import("/scripts/game/tombsBot.ts")`, then
+`tombsMove(game.sim)` each tick).
+
+- **The Nexus**: each path's door in turn (the open tile nearest a door set in a wall), then the way
+  to the Wardens. **A room**: through its barrier, then its puzzle; **a boss**: past its line.
+- **Apmeken**: stands at each issue till it's fixed, and fights round the room's middle.
+- **Het**: finds the mirrors' turns with the sim's own tracer, walks into each wrong one once
+  (round the others, which it'd turn brushing past), and fights by the seal.
+- **Scabaras**: the Sequence in order once shown, the fewest Lights out presses, the Addition's
+  exact plates, then Matching, every plate reached round the others.
+- **Crondis**: water fetched empty-handed (a band only spills what you carry), filled once a band's
+  gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
+  half.
+- **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover; Akkha's spared quadrant and
+  his dead shadows' quadrants; Kephri near enough; Zebak's island near him, behind a boulder for
+  the roar and in a wave's gap; and it sidesteps bullets, boss blasts and swings.
+- **The Wardens**: phase one blocking Tumeken's side by the obelisk; phase two by the Warden or
+  its core, off the obelisk's marks; phase three at the floor's north end in the column the next
+  slam leaves alone, on its siphons, off its lightning.
+- **Co-op**: one player works a puzzle two would undo between them (mirrors, plates) and the rest
+  fight beside them, clear of it; each carries their own water.
+
+`scripts/game/simulate-tombs.ts` is the raid's own sim: one puzzle room, one boss, the Wardens or
+the whole raid (`ROOM`), over seeds, path levels (`LEVEL`), invocations, co-op parties (`PARTY`) and
+kits (`KIT=max`, the dev kit). Each puzzle room has its own account, which no other part of the game
+has: Apmeken's issues fixed and missed, Het's mirror turns, beam pulses and seal openings,
+Scabaras's boards and wrong steps, Crondis's fills, trips, spills and growth; and every run says what
+hurt it, by source and by boss attack. Run it with `DEV_MAPS=1`.
+
+What it showed (November 2026, the max dev kit): the whole raid won every time solo and in parties
+of 2 and 4 (14 to 21 minutes), and each puzzle room and boss on its own at the base level. At
+Normal invocations (raid level 120) it's through most rooms but Zebak and the Wardens still take
+some raids; at Expert (345) the bosses beat it, and at 600 Ba-Ba's boulders do. That's the bot's
+play as much as the raid: it dodges, it doesn't plan.

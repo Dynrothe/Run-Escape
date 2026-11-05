@@ -69,6 +69,7 @@ go stale. Add anything that cost you time to work out.
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
 | The Tombs of Amascut (in development, a dev map)       | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
+| The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 
@@ -152,6 +153,11 @@ PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts ""
   the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
   else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
   recipes.
+
+The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts` (`DEV_MAPS=1`): a puzzle
+room, a boss, the Wardens or the whole raid (`ROOM=scabaras`, `ROOM=zebak`, `ROOM=raid`), with what
+each puzzle room came to (mirrors turned, boards, trips and spills) and what hurt. Run it after any
+change to the raid, at a path level or two (`LEVEL=2`), with invocations and with `PARTY=2`.
 
 After a content change, also run the checks that apply:
 

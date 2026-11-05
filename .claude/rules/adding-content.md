@@ -244,6 +244,10 @@ The Tombs of Amascut is being built a room or a boss at a time, as a dev map
 (`scaperune/maps/tombsOfAmascut.ts`), to the plan in `docs/design/tombs-of-amascut.md`: keep it
 off the Raids tab until it's finished. A new invocation goes in `INVOCATIONS`
 (`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
+A new room or boss, or a mechanic in one, needs the Tombs' bot to know it (`scripts/game/tombsBot.ts`:
+the puzzle's steps, where to stand, what to step round), and its sim run on it
+(`scripts/game/simulate-tombs.ts`, `ROOM=` the room), solo and with `PARTY=2`: in co-op one player
+works a puzzle two would undo between them.
 
 ## Adventurer
 
