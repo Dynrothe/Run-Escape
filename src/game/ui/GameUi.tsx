@@ -1892,7 +1892,11 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
             {buffs.map((buff) => (
                 <div
                     key={buff.id}
-                    className={buff.harmful ? "ui-buff ui-buff-harmful" : "ui-buff"}
+                    className={
+                        "ui-buff" +
+                        (buff.harmful ? " ui-buff-harmful" : "") +
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                    }
                     title={buff.name}
                 >
                     <ItemIcon objId={buff.objId} size={24} />

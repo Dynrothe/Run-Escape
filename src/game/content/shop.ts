@@ -1,7 +1,5 @@
 import { ShopUpgradeDef } from "./types";
 
-export const RING_OF_LIFE_OBJ = 2570;
-
 // Permanent upgrades bought with banked coins, themed as skills.
 export const SHOP_UPGRADES: ShopUpgradeDef[] = [
     {
@@ -160,6 +158,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         perRank: 1,
         maxRank: 1,
         baseCost: 10000,
+        objId: 2570,
     },
     {
         id: "woodcutting",

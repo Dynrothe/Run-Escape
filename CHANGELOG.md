@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Added
 
-- Ring of life, by @braiansmarzaro: stays visible beside your active effects until it saves you.
+- Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
+  it saves you, and the Pyromancer's own revive shows as a phoenix.
 
 ## 0.27.0 - 2026-11-05
 

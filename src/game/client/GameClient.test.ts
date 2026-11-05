@@ -226,6 +226,68 @@ describe("the HUD", () => {
         },
     );
 
+    // The Pyromancer's own revive is theirs, not a ring of life, and goes first
+    test.each([0, 1])("shows the Pyromancer's phoenix apart from %s ring of life", (rings) => {
+        const metaStats = emptyStats();
+        metaStats.revival = rings;
+        const party = ["warrior", "pyromancer"].map((characterId) => ({
+            name: characterId,
+            characterId,
+            metaStats,
+        }));
+        const row = ".".repeat(72);
+        const sim = new Sim({
+            grid: makeGrid(Array(72).fill(row), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "pyromancer",
+            metaStats,
+            seed: 5,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party,
+            focus: 1,
+        });
+        const { client, store } = createClient(sim, false);
+        const handleEvents = (
+            client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }
+        ).handleEvents;
+        const shown = () => store.getNumbers()!.buffs.map((buff) => buff.name);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        const die = (hero: number) => {
+            sim["as"](hero, () => {
+                sim.player.invulnerable = 0;
+                sim["damagePlayer"](99999, "goblin", false);
+            });
+            handleEvents.call(client, sim, sim.takeEvents());
+            updateHud(client, true);
+        };
+        updateHud(client, true);
+        expect(shown()).toEqual(rings ? ["Phoenix", "Ring of life"] : ["Phoenix"]);
+        die(1);
+        expect(shown()).toEqual(rings ? ["Ring of life"] : []);
+        if (rings) {
+            die(1);
+            expect(shown()).toEqual([]);
+        }
+        // A teammate's toast names theirs, and the warrior's ring isn't the HUD's
+        sim.heroes[0].revivesLeft = 1;
+        die(0);
+        expect(shown()).toEqual([]);
+        expect(toasts()).toEqual([
+            "Your phoenix saves you!",
+            ...(rings ? ["Your ring of life saves you!"] : []),
+            "warrior's ring of life saves them!",
+        ]);
+    });
+
+    test("every adventurer with a revive of their own has a look for it", () => {
+        for (const character of CHARACTERS) {
+            if (character.bonus.revival) {
+                expect(character.reviveLook, character.id).toBeDefined();
+            }
+        }
+    });
+
     test.each([
         [0, "boss"],
         [1, "boss"],

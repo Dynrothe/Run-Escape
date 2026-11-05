@@ -27,7 +27,7 @@ import { PASSIVES } from "../../src/game/content/passives";
 import { PETS } from "../../src/game/content/pets";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
-import { RING_OF_LIFE_OBJ, SHOP_UPGRADES } from "../../src/game/content/shop";
+import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
@@ -170,7 +170,6 @@ function getWornObjs(): [EquipSlot, number][] {
 function getContentObjIds(): number[] {
     const ids = new Set<number>([
         COLLECTION_LOG_OBJ,
-        RING_OF_LIFE_OBJ,
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
     ]);
