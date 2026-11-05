@@ -958,23 +958,28 @@
 
 /* As wide as the window allows, so every skill fits in a few rows and the
    page needs no scrolling. On a window too small for that only the skills
-   scroll, and the tabs and buttons stay in view. */
+   scroll, and the tabs and buttons stay in view; the whole panel scrolls only
+   when even they don't fit (a very short window, or the browser zoomed right
+   in). dvh, as a tablet's browser bars take some of 100vh. */
 .ui-shop {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
     width: min(1180px, calc(94vw / var(--ui-scale)));
     max-height: calc((100vh - 24px) / var(--ui-scale));
-    overflow: hidden;
+    max-height: calc((100dvh - 24px) / var(--ui-scale));
+    overflow-y: auto;
 }
 
 .ui-shop > :not(.ui-shop-grid) {
     flex-shrink: 0;
 }
 
+/* 4px, as a flex column's margins don't collapse into the 10px above */
 .ui-shop-tabs {
     justify-content: flex-start;
     gap: 8px;
+    margin-top: 4px;
     margin-bottom: 8px;
 }
 
@@ -993,11 +998,16 @@
     transform: translateY(1px);
 }
 
+/* It scrolls, so it clips what's outside it: the padding is room for a
+   controller's highlight around the cards at its edges (3px out, 3px wide),
+   and the margin keeps the cards where they'd be without it */
 .ui-shop-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 8px;
-    min-height: 0;
+    padding: 6px;
+    margin: -6px;
+    scroll-padding: 6px;
     overflow-y: auto;
 }
 

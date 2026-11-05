@@ -1404,9 +1404,12 @@ ranks the old way leaves gaps and gets none. Never guess an order.
 Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
 the page has ranks, even with no spending recorded.
 The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
-and the page needs no scrolling on any window at least as tall as the UI's layout (and on
-tablets). The cards scroll inside the panel only on a window too short for that, such as a
-phone held sideways, where the tabs and buttons stay in view. On a touch screen the refund
+and the page needs no scrolling on a window at least about 1000x720 in the UI's own pixels (a
+bigger window draws the UI bigger, so it fits the same way) and on tablets. A narrower window
+(960x720 has five columns) or a shorter one, such as a phone held sideways, scrolls only the
+cards, so the tabs and buttons stay in view; the whole panel scrolls only when even those don't
+fit. The cards' grid scrolls, so it clips what's outside it: its 6px padding (and `scroll-padding`)
+is room for a controller's highlight around the cards at its edges. On a touch screen the refund
 button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
 skill adds a card, so check the page still fits at 1024x768 and 1280x720.
 
