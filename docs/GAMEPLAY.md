@@ -66,8 +66,8 @@ version and how to run it.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
   recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
-  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah): the weapons it
-  brings in, then its trophies.
+  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah, Phosani's
+  Nightmare): the weapons it brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -372,11 +372,11 @@ version and how to run it.
     - **Beaten on hard**: **expert mode**: hard mode with more of the real raid. The Nylocas only
       take their own style (grey melee, green ranged, blue magic), Nylocas Vasilias's colours too,
       so it takes all three styles (weapons don't aim at one they can't hurt; the blue ones come in
-      close enough for a magic aura, and the other Nylocas take more from their own colour), the
-      Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he turns faces
-      where he'll stare and says which side, and hurts whoever hits him from in front, and Verzik's
-      spider throws a ball that kills anyone outside its glowing circle. Twice the coins, and one of
-      Lil' Zik's looks each clear.
+      close enough for a magic aura, and the waves' Nylocas take three times as much from their own
+      colour), the Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he
+      turns faces where he'll stare and says which side, and hurts whoever hits him from in front,
+      and Verzik's spider throws a ball that kills anyone outside its glowing circle. Twice the
+      coins, and one of Lil' Zik's looks each clear.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.
