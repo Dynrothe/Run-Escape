@@ -190,6 +190,21 @@ describe("fetchChunks", () => {
         expect(site.requested).toContain(BASE + first.file);
     });
 
+    test("fetches again a stored chunk that's damaged but the right length", async () => {
+        const cache = new FakeCache();
+        const site = await served(sampleGroups());
+        const [first] = site.list;
+        const damaged = site.chunks[0].slice();
+        damaged[damaged.length - 1] ^= 0xff;
+        cache.entries.set(BASE + first.file, damaged);
+        const got = await fetchChunks(BASE, site.list, cache as unknown as Cache, {
+            fetcher: site.fetcher,
+        });
+        expect(got[0]).toEqual(site.chunks[0]);
+        expect(site.requested).toContain(BASE + first.file);
+        expect(cache.entries.get(BASE + first.file)).toEqual(site.chunks[0]);
+    });
+
     test("tries once more past the browser's cache, then refuses a file that isn't its name", async () => {
         const cache = new FakeCache();
         const site = await served(sampleGroups());

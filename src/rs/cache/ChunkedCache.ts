@@ -221,8 +221,9 @@ export async function fetchChunks(
         chunks.map(async ({ file, size }) => {
             const response = await cache.match(baseUrl + file);
             const bytes = response && new Uint8Array(await response.arrayBuffer());
-            // Each one was checked before it was put, so only a cut-off one could be wrong
-            return bytes?.byteLength === size ? bytes : undefined;
+            // Each one was checked before it was put, but a damaged copy would fail every load
+            // from then on, and hashing them all takes milliseconds
+            return bytes?.byteLength === size && (await isChunk(file, bytes)) ? bytes : undefined;
         }),
     );
     const result: Uint8Array[] = [];

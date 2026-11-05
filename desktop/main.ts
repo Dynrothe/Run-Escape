@@ -130,6 +130,7 @@ async function updateGame(splash: BrowserWindow, current: GameFolder): Promise<v
                 undefined,
                 check.split,
                 [current.path],
+                (e) => void log(`The split update failed, so it's the whole zip: ${e}`),
             );
             await log(`Updated to ${version}`);
         }

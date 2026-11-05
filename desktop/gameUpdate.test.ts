@@ -453,29 +453,34 @@ describe("split updates", () => {
         return folder;
     }
 
-    async function installSplit(reuseFrom: string[]) {
+    async function installSplit(reuseFrom: string[], signal = never) {
         const update = await check();
         if (update.kind !== "update") {
             throw new Error("No update");
         }
         requested = [];
         const fractions: (number | undefined)[] = [];
+        const failures: unknown[] = [];
         const folder = await installUpdate(
             update.manifest,
             update.zipUrl,
             source,
             dataDir,
-            never,
+            signal,
             (fraction) => fractions.push(fraction),
             undefined,
             update.split,
             reuseFrom,
+            (e) => failures.push(e),
         );
-        return { folder, fractions };
+        return { folder, fractions, failures };
     }
 
     const readChunk = (folder: string, file: string) =>
         readFileSync(path.join(folder, "caches", "chunks", file), "utf8");
+
+    const rising = (fractions: (number | undefined)[]) =>
+        fractions.every((fraction, i) => i === 0 || fraction! >= fractions[i - 1]!);
 
     test("the check finds the lite zip and every chunk", async () => {
         const { files } = await publishSplit(["one", "two"]);
@@ -498,32 +503,57 @@ describe("split updates", () => {
     });
 
     test("copies the chunks the game has and downloads only the rest", async () => {
-        const { chunks, files } = await publishSplit(["kept", "changed"]);
+        const { chunks, files } = await publishSplit(["kept from the old game", "changed"]);
         const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
-        const { folder, fractions } = await installSplit([old]);
+        const { folder, fractions, failures } = await installSplit([old]);
 
         expect(requested).toEqual([
             `/assets/${liteZipName("0.21.0")}`,
             `/assets/${chunkAssetName(files[1])}`,
         ]);
-        expect(readChunk(folder.path, files[0])).toBe("kept");
+        expect(readChunk(folder.path, files[0])).toBe("kept from the old game");
         expect(readChunk(folder.path, files[1])).toBe("changed");
+        expect(rising(fractions)).toBe(true);
         expect(fractions[fractions.length - 1]).toBe(1);
+        expect(failures).toEqual([]);
         expect(workLeftBehind()).toBe(false);
     });
 
     test("downloads a chunk the game has a damaged copy of", async () => {
-        const { files } = await publishSplit(["kept", "changed"]);
+        const { chunks, files } = await publishSplit(["small", "the same in the old game"]);
         const old = gameWithChunks("0.20.0", {
             [files[0]]: Buffer.from("damaged"),
-            [files[1]]: Buffer.from("changed"),
+            [files[1]]: chunks[1],
         });
         const { folder } = await installSplit([old]);
         expect(requested).toEqual([
             `/assets/${liteZipName("0.21.0")}`,
             `/assets/${chunkAssetName(files[0])}`,
         ]);
-        expect(readChunk(folder.path, files[0])).toBe("kept");
+        expect(readChunk(folder.path, files[0])).toBe("small");
+    });
+
+    test("downloads the chunks a few at a time", async () => {
+        const texts = ["the old game has this one, the biggest", "1", "2", "3", "4", "5", "6"];
+        const { chunks, files } = await publishSplit(texts);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        let downloading = 0;
+        let most = 0;
+        files.slice(1).forEach((file, i) => {
+            routes[`/assets/${chunkAssetName(file)}`] = (res) => {
+                most = Math.max(most, ++downloading);
+                setTimeout(() => {
+                    downloading--;
+                    bytes(chunks[i + 1])(res);
+                }, 30);
+            };
+        });
+        const { folder, fractions } = await installSplit([old]);
+        expect(most).toBeGreaterThan(1);
+        expect(most).toBeLessThanOrEqual(4);
+        expect(files.map((file) => readChunk(folder.path, file))).toEqual(texts);
+        expect(rising(fractions)).toBe(true);
+        expect(fractions[fractions.length - 1]).toBe(1);
     });
 
     test("downloads the whole zip when the game has none of the chunks", async () => {
@@ -533,13 +563,47 @@ describe("split updates", () => {
         expect(readChunk(folder.path, files[1])).toBe("two");
     });
 
-    test("leaves the old game alone when a chunk downloads as something else", async () => {
-        const { chunks, files } = await publishSplit(["kept", "changed"]);
+    test("downloads the whole zip when most of the chunks have changed", async () => {
+        const { chunks, files } = await publishSplit(["kept", "changed, and much bigger"]);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        const { folder } = await installSplit([old]);
+        expect(requested).toEqual([`/assets/${gameZipName("0.21.0")}`]);
+        expect(readChunk(folder.path, files[1])).toBe("changed, and much bigger");
+    });
+
+    test("downloads the whole zip when a chunk downloads as something else", async () => {
+        const { chunks, files } = await publishSplit(["kept from the old game", "changed"]);
         const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
         routes[`/assets/${chunkAssetName(files[1])}`] = bytes(Buffer.from("tampered"));
-        await expect(installSplit([old])).rejects.toThrow(files[1]);
+        const { folder, failures } = await installSplit([old]);
+        expect(requested[requested.length - 1]).toBe(`/assets/${gameZipName("0.21.0")}`);
+        expect(readChunk(folder.path, files[1])).toBe("changed");
+        expect(String(failures)).toContain(files[1]);
+        expect(workLeftBehind()).toBe(false);
+    });
+
+    test("leaves the old game alone when the split update and the whole zip both fail", async () => {
+        const { chunks, files } = await publishSplit(["kept from the old game", "changed"]);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        routes[`/assets/${chunkAssetName(files[1])}`] = bytes(Buffer.from("tampered"));
+        routes[`/assets/${gameZipName("0.21.0")}`] = bytes(Buffer.from("not a zip"));
+        await expect(installSplit([old])).rejects.toThrow();
         expect(existsSync(path.join(dataDir, "game", "0.21.0"))).toBe(false);
         expect(existsSync(path.join(old, "index.html"))).toBe(true);
+        expect(workLeftBehind()).toBe(false);
+    });
+
+    test("doesn't fall back to the whole zip when cancelled", async () => {
+        const { chunks, files } = await publishSplit(["kept from the old game", "changed"]);
+        const old = gameWithChunks("0.20.0", { [files[0]]: chunks[0] });
+        const cancel = new AbortController();
+        routes[`/assets/${chunkAssetName(files[1])}`] = (res) => {
+            cancel.abort(new Error("Cancelled"));
+            bytes(chunks[1])(res);
+        };
+        await expect(installSplit([old], cancel.signal)).rejects.toThrow("Cancelled");
+        expect(requested).not.toContain(`/assets/${gameZipName("0.21.0")}`);
+        expect(existsSync(path.join(dataDir, "game", "0.21.0"))).toBe(false);
         expect(workLeftBehind()).toBe(false);
     });
 
