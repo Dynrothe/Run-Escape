@@ -221,7 +221,10 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
+  after 30 seconds. A RuneLite-style circle above each one drains from green to orange to red
+  as that time runs out; it disappears when a Magnet pulls the drop towards you, since attracted
+  drops no longer expire.
+  Their damage keeps up with the enemies' hitpoints, and the same one never
   drops twice in a row. The shop's Runecraft upgrade makes them drop 15% more often for each rank,
   up to three.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.

@@ -7,6 +7,16 @@ The [README](../README.md) covers getting it running.
 Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
 its `yallist`, and the dev server fails with `Yallist is not a constructor`.
 
+## Dropped-item timers
+
+`GameView` draws countdown circles only over expiring ground power-ups. They follow simulation
+ticks (including pauses), not wall-clock time, and disappear once the drop is attracted.
+Ordinary loot has no expiry and no timer.
+
+These are small RuneLite-style progress pies drawn on the overlay, not cache artwork. The fill
+drains clockwise from full, changing from green to orange with half its lifetime remaining, then
+red at a quarter. The border uses the same colour. No additional cache assets are needed.
+
 ## Hosting
 
 ```

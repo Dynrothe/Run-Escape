@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Power-up timers, by braiansmarzaro: dropped power-ups show a shrinking RuneLite-style circle, turning from green to orange to red before they disappear.
+
 ### Changed
 
 - Smaller game updates, by trippy22: the game's files from the cache come in parts, and an update

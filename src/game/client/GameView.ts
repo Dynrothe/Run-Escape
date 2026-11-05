@@ -1015,6 +1015,7 @@ export class GameView {
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
+        this.drawPickupTimers(overlay, sim, alpha, scale);
 
         // Health bars over hurt elites, and over whatever asks for one from the
         // start (Phosani's eggs, against their time); with hundreds of enemies
@@ -1053,6 +1054,58 @@ export class GameView {
         this.drawShouts(overlay, sim, alpha, now, scale);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
+    }
+
+    private drawPickupTimers(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const ctx = overlay.ctx;
+        const radius = 11 * scale;
+        const lifetime = POWER_UP_LIFETIME * TICKS_PER_SECOND;
+        const tick = sim.tick - 1 + alpha;
+        for (const pickup of sim.pickups) {
+            // Attracted drops no longer expire; ordinary loot never does.
+            if (
+                pickup.kind !== "powerUp" ||
+                pickup.attracted ||
+                pickup.disguise ||
+                pickup.value < 0
+            ) {
+                continue;
+            }
+            const remaining = Math.min(1, Math.max(0, 1 - (tick - pickup.spawnTick) / lifetime));
+            if (remaining === 0) {
+                continue;
+            }
+            const model = this.assets.get(getPickupModelKey(pickup));
+            const modelScale = model?.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            const height =
+                this.ground(sim, x, y) -
+                ((model?.height ?? 32) * modelScale) / 128 -
+                POWER_UP_BOB * (1 + Math.sin((sim.tick + pickup.uid * 13) / 8));
+            const p = overlay.project(x, height, y, this.screen);
+            if (!p.visible) {
+                continue;
+            }
+            const cx = Math.round(p.x);
+            const cy = Math.round(p.y - radius - 4 * scale);
+            const color = remaining <= 0.25 ? "#ff0000" : remaining <= 0.5 ? "#ffc800" : "#00ff00";
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = scale;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, -Math.PI / 2 + (1 - remaining) * Math.PI * 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+        }
     }
 
     // A power-up's flash: the whole screen, fading out
