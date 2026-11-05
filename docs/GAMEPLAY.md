@@ -689,7 +689,11 @@ version and how to run it.
   Ghommal's hilt 1 to 6, for the Collection log. Kill counts add up over solo runs. Co-op runs,
   the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
   endless rounds they'd already done, without the coins. The screen has an overview of the tiers
-  and every task, with filters by tier, type and map.
+  and every task, with filters by tier, type and map. Some take more than one run: wins with a
+  melee, a ranged and a magic adventurer. One of the Theatre of Blood's takes all its perfect room
+  tasks in the same run. Pin up to five tasks there: in a run, the pinned ones the map has get a
+  row under the quests, which turns red with a toast saying what did it ("hit by Lunge") once
+  they're spoilt. The pause menu lists every task the run is following, and how each is going.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).

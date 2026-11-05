@@ -1961,11 +1961,16 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         const done = this.combat.observe(sim, events);
-        // A pinned one spoilt: what did it, so it's known for next time
-        for (const { task, reason } of this.combat.takeFailed()) {
-            if (this.save.combatPinned?.includes(task.id)) {
-                this.store.toast(`Combat task failed: ${task.name} (${reason}).`, 5000);
-            }
+        // Pinned ones spoilt, in one toast: what did it, so it's known for next time
+        const failed = this.combat
+            .takeFailed()
+            .filter(({ task }) => this.save.combatPinned?.includes(task.id));
+        if (failed.length > 0) {
+            const what = failed.map(({ task, reason }) => `${task.name} (${reason})`);
+            this.store.toast(
+                `Combat task${failed.length === 1 ? "" : "s"} failed: ${joinNames(what)}.`,
+                5000,
+            );
         }
         if (done.length === 0) {
             return;

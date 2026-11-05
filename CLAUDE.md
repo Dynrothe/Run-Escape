@@ -81,7 +81,10 @@ from outside it, and must never write to either: the run's hash has to come out 
 ones too, so every `sim.takeEvents()` has to go straight into it. Actions between ticks emit
 events as well: a Smite can kill Zachariah, or move him on a phase, there and then. Every task has
 to be doable on every run, by playing well: see Combat task in `.claude/rules/adding-content.md`
-for what that rules out.
+for what that rules out. `CombatTracker.statuses` says where each task has got (under way, done,
+or failed and why), for the HUD's rows of pinned tasks (`SaveData.combatPinned`) and the pause
+menu. A spoilt pinned task gets a toast (`takeFailed`). A failure names the attack that did it,
+from `playerHit`'s `attack`.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in
@@ -136,6 +139,7 @@ ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 HARD=1 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts wizard 3    # hard mode
 WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # co-op
+CA=1 MAP=lumbridge META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts wizard 3  # Combat Achievements
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real

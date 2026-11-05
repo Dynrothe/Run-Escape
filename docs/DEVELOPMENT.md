@@ -428,7 +428,8 @@ src/game/
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
     CombatTracker.ts  follows a solo run's Combat Achievements from outside the sim: it reads the
-                      sim and each tick's events, and never writes to them
+                      sim and each tick's events, and never writes to them; says where each task
+                      has got (under way, done, or failed and why) for the HUD and pause menu
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count), and LocalSaveStore (the
@@ -912,7 +913,10 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
-                                                        how damage keeps up with the rounds)
+                                                        how damage keeps up with the rounds;
+                                                        CA=1 which Combat Achievements each run
+                                                        did, what spoilt the rest, and each
+                                                        boss's time from arrival to kill)
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and
@@ -1332,6 +1336,10 @@ save from before it gets the kill counts, wins and endless rounds its records sh
 coins; later saves never look at those records for them, since co-op runs add to them and co-op
 doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
 only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
+Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
+run earn: `task:style` for each combat style a beat-with-each task has been won with. The
+optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
+were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it.
 
 ### Notice
 

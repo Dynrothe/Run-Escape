@@ -11,6 +11,9 @@ the version in the corner).
   Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
 - Saves get the Combat Achievements their kill counts, wins and endless rounds had already done,
   without the coins.
+- Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
+  says what spoilt one. The pause menu shows how every task the run is following is going.
+- Three more Combat Achievements: Jack of All Styles, Perfect Maiden and Theatre Perfectionist.
 
 ## 0.26.1 - 2026-11-05
 

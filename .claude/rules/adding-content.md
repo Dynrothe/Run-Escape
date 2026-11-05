@@ -267,6 +267,16 @@ thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`
 - Goals that need nothing new from the sim are checked in `core/CombatTracker.ts`, which only reads
   the sim and its events. A goal that can't be seen from those needs a new event: an `emit` that
   only reads state is hash-neutral, and `runHash.test.ts` must stay as it is.
+- A goal that can be spoilt sets the watch's `reason` as it's spoilt ("hit by Lunge"): the HUD's
+  pinned rows, the pause menu and a pinned task's toast show it. A boss's attacks name themselves
+  on `playerHit` (`attack`); a crowd's hit, a stomp or a pool doesn't, and says who landed it.
+  A new goal that counts its way there gives its progress in `progressOf`.
+- `allOf` is several tasks' goals met in the same run, whether they were done before or not
+  (Theatre Perfectionist), on its parts' map. `beatWithEach` counts over runs, one style at a time,
+  through `RunSummary.combatProgress`, the keys the tracker saw a run earn.
+- `CA=1` on `scripts/game/simulate-run.ts` reports which tasks the bot's runs did, what spoilt the
+  rest, and each boss's time from its arrival to its kill. The bot can't dodge, so go by those times
+  for a speed task, not by whether it did the perfect ones.
 - Only kill counts, map wins and endless rounds are retroactive: `applyRetroCombatTasks` in
   `save.ts` gives old saves those once, at the version 12 migration, without coins.
 - Co-op runs never count, so there's no party field and no co-op task.
