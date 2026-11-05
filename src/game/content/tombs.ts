@@ -402,7 +402,9 @@ TOMBS_ENEMIES.push(BA_BA);
 // A path's boss, by its path level (Sim.tombsPathLevel: paths done, and Pathseeker and on): its
 // hitpoints and damage go up by these shares a level, so one left till last holds up to a party
 // that's levelled through the rest of the raid
-export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
+// (gently, as OSRS's do: the raid level's scale does the heavy lifting, and Pathmaster with Walk
+// the Path takes the last path to level 9)
+export const TOMBS_BOSSES = { levelHp: 0.12, levelDamage: 0.05 };
 
 // The levels a puzzle room's worth as it's done, on top of its waves' experience (Sim.enterTombsBoss)
 export const TOMBS_PUZZLE_LEVELS = 2;
@@ -524,8 +526,8 @@ export const APMEKEN = {
     // and get this much tougher with each wave, and with each path level
     waveHp: 0.15,
     waveDamage: 0.08,
-    levelHp: 0.5,
-    levelDamage: 0.3,
+    levelHp: 0.15,
+    levelDamage: 0.08,
 };
 
 // ---- The Het room ----
