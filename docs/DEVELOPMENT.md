@@ -1286,8 +1286,9 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades` and `upgradesSpent`, what was paid for them. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
-outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
+`upgrades` and `upgradesSpent`, what was paid for them. Each page can allocate the full budget:
+`coins + max(upgradesSpent)`. `coins` is the unreserved bank available outside Skills, while
+`getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
 change another class's ranks or remaining budget. Armoury purchases still spend unreserved coins.
 Save format 11 converts the former sum of page investments into a maximum reservation, restoring
@@ -1304,10 +1305,11 @@ The arrow button on bought cards (the client's back-arrow sprite,
 `REFUND_SPRITE`) takes one rank of that skill off the page, through `GameClient.persist()`. It gives
 back what that rank adds to the page at today's prices. It never gives back more than the page's
 `upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
-cost even when prices have changed since, and changing a skill's cost needs no migration. The button is separate from the purchase button and has a larger
-hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointer context menus
-never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
-without blocking the desktop right-click shortcut or the refund button.
+cost even when prices have changed since, and changing a skill's cost needs no migration. The
+button is separate from the purchase button and has a larger hit area on coarse pointers. Desktop
+right-clicking does the same; coarse-pointer context menus never refund. Unavailable purchases use
+`aria-disabled` and keep their disabled appearance on hover, without blocking the desktop
+right-click shortcut or the refund button.
 Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
 (`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
 single ranks, whatever game bought them.

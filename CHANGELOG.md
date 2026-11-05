@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Fixed
 
-- Skills cost the same whatever order you buy them in, and any class page can refund single ranks.
+- Skills cost the same whatever order you buy them in, and any class page can refund single
+  ranks. Fixed by trippy22.
 
 ## 0.26.0 - 2026-11-05
 

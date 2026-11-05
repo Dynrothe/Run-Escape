@@ -390,7 +390,7 @@ describe("save", () => {
             const save = createSave();
             save.coins = 1e6;
             for (const id of order) {
-                buyUpgrade(save, id);
+                expect(buyUpgrade(save, id)).toBe(true);
             }
             totals.add(save.skillPages.melee.upgradesSpent);
         }
