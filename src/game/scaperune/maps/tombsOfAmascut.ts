@@ -2,8 +2,10 @@ import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
+import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
 import { BuildContext, MapRecipe } from "../recipe";
+import { BROKEN_PIT, digFloorPit } from "./wardensFloor";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
 // walled off in the dark. The Nexus is the hub, with a door to each of the four paths. In
@@ -346,6 +348,58 @@ const ZEBAK_STEPS = [
     [35, 30],
 ];
 
+// The Wardens' room, square 59,80 on plane 1 (brought down): a floor 23 by 25 (world 3797 to
+// 3819, 5142 to 5166) with the obelisk on its plinth in the middle (3807 to 3809, 5153 to 5155) and
+// a Warden in a sealed alcove either side, Elidinis' on the west (3792 to 3796, 5152 to 5156) and
+// Tumeken's on the east (3820 to 3824), each on its charging circle (45605). Turned half round, so
+// you come in from the south (OSRS's party comes in from the north): a tile (x, y) of the cut lies
+// at (41 - x, 27 - y), and Elidinis' Warden is on the east.
+const WARDENS: RoomCut = {
+    x: 3788,
+    y: 5140,
+    sizeX: 42,
+    sizeY: 28,
+    plane: 1,
+    cell: [3, 1],
+    arrive: [21, 3],
+    turns: 2,
+};
+// (turned) The obelisk's middle; each Warden's middle; each side's orb spawn tile (next to the
+// obelisk) and gap tile, which a player stands on to block that side, and the column the troughs
+// end at, by the Warden; the three troughs' rows (the middle, and two tiles either side); the floor
+const WARDENS_OBELISK = [21.5, 13.5];
+const WARDENS_ELIDINIS = [35.5, 13.5];
+const WARDENS_TUMEKEN = [7.5, 13.5];
+const WARDENS_SIDES = {
+    elidinis: { spawn: [24, 13], gap: [23, 13], end: 32 },
+    tumeken: { spawn: [18, 13], gap: [19, 13], end: 10 },
+};
+const WARDENS_TROUGHS = [11, 13, 15];
+const WARDENS_FLOOR = { x0: 10, y0: 1, x1: 32, y1: 25 };
+// The charging circles under the Wardens (45605, filled through 45606 to 45626), which the game
+// draws as they fill: out of the map
+const WARDENS_CHARGING = 45605;
+
+// The Wardens' last phase: the same room again, unturned (the Warden at the north, as OSRS has it,
+// slamming the floor away from it) and cut further north for it to stand over the floor, whose
+// tiles the game draws as slabs that rise and fall (MapDef.floor, as maps/wardensFloor.ts has it):
+// a bridge over a pit
+const WARDENS_LAST: RoomCut = {
+    x: 3788,
+    y: 5140,
+    sizeX: 42,
+    sizeY: 34,
+    plane: 1,
+    cell: [4, 1],
+    arrive: [20, 7],
+};
+// (its own tiles) The floor the game moves, and where the Warden stands, north of it
+const WARDENS_LAST_FLOOR = { x0: 9, y0: 2, x1: 31, y1: 26 };
+const WARDENS_LAST_AT = [20.5, 30.5];
+// The floor's height in its cell, a bridge over a pit nine tiles down
+const WARDENS_LAST_HEIGHT = 200;
+const WARDENS_LAST_PIT = 56;
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -372,6 +426,8 @@ const ROOMS = [
     KEPHRI_ARENA,
     CRONDIS,
     ZEBAK_ARENA,
+    WARDENS,
+    WARDENS_LAST,
 ].map((cut) => {
     const at = cellCorner(cut);
     return {
@@ -394,6 +450,8 @@ const SCABARAS_ROOM = ROOMS[5];
 const KEPHRI_ROOM = ROOMS[6];
 const CRONDIS_ROOM = ROOMS[7];
 const ZEBAK_ROOM = ROOMS[8];
+const WARDENS_ROOM = ROOMS[9];
+const WARDENS_LAST_ROOM = ROOMS[10];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -447,6 +505,28 @@ export const TOA_PLACES = {
                 x1: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_FLOOR.x1,
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
             },
+        },
+    },
+    // The Wardens: their room (the first two phases), and the same room again for the last, with
+    // its floor
+    wardens: {
+        arrive: worldTile(WARDENS_ROOM.arrive.x, WARDENS_ROOM.arrive.y),
+        obelisk: wardensPoint(WARDENS_OBELISK[0], WARDENS_OBELISK[1]),
+        elidinis: wardensPoint(WARDENS_ELIDINIS[0], WARDENS_ELIDINIS[1]),
+        tumeken: wardensPoint(WARDENS_TUMEKEN[0], WARDENS_TUMEKEN[1]),
+        sides: {
+            elidinis: wardensSide(WARDENS_SIDES.elidinis),
+            tumeken: wardensSide(WARDENS_SIDES.tumeken),
+        },
+        troughs: WARDENS_TROUGHS.map((y) => MAP_Y * MAP_SQUARE_SIZE + WARDENS_ROOM.at.y + y + 0.5),
+        floor: worldRect(WARDENS_ROOM.at, WARDENS_FLOOR),
+        last: {
+            arrive: worldTile(WARDENS_LAST_ROOM.arrive.x, WARDENS_LAST_ROOM.arrive.y),
+            at: {
+                x: MAP_X * MAP_SQUARE_SIZE + WARDENS_LAST_ROOM.at.x + WARDENS_LAST_AT[0],
+                y: MAP_Y * MAP_SQUARE_SIZE + WARDENS_LAST_ROOM.at.y + WARDENS_LAST_AT[1],
+            },
+            floor: worldRect(WARDENS_LAST_ROOM.at, WARDENS_LAST_FLOOR),
         },
     },
     zebak: {
@@ -606,6 +686,36 @@ export const TOA_PLACES = {
     },
 };
 
+type Point = { x: number; y: number };
+
+// A point in the Wardens' room, turned, in world tiles
+function wardensPoint(x: number, y: number): Point {
+    return {
+        x: MAP_X * MAP_SQUARE_SIZE + WARDENS_ROOM.at.x + x,
+        y: MAP_Y * MAP_SQUARE_SIZE + WARDENS_ROOM.at.y + y,
+    };
+}
+
+// A side of the Wardens' obelisk: its orb spawn tile's and gap tile's middles, and the x its
+// troughs end at, in world tiles
+function wardensSide(side: { spawn: number[]; gap: number[]; end: number }) {
+    return {
+        spawn: worldTile(WARDENS_ROOM.at.x + side.spawn[0], WARDENS_ROOM.at.y + side.spawn[1]),
+        gap: worldTile(WARDENS_ROOM.at.x + side.gap[0], WARDENS_ROOM.at.y + side.gap[1]),
+        end: MAP_X * MAP_SQUARE_SIZE + WARDENS_ROOM.at.x + side.end + 0.5,
+    };
+}
+
+// A rectangle of a room's tiles, both ends in, in world tiles
+function worldRect(at: Point, rect: { x0: number; y0: number; x1: number; y1: number }) {
+    return {
+        x0: MAP_X * MAP_SQUARE_SIZE + at.x + rect.x0,
+        y0: MAP_Y * MAP_SQUARE_SIZE + at.y + rect.y0,
+        x1: MAP_X * MAP_SQUARE_SIZE + at.x + rect.x1,
+        y1: MAP_Y * MAP_SQUARE_SIZE + at.y + rect.y1,
+    };
+}
+
 // A point in the Crondis room, turned, in world tiles
 function crondisPoint(x: number, y: number): { x: number; y: number } {
     return {
@@ -640,6 +750,21 @@ function build(context: BuildContext): TileGrid {
             ground.setHeight(x, y, FLOOR_HEIGHT);
         }
     }
+    // The Wardens' last room stands high, its floor a bridge over a pit
+    const last = WARDENS_LAST_ROOM;
+    const lastFloor = {
+        x0: last.at.x + WARDENS_LAST_FLOOR.x0,
+        y0: last.at.y + WARDENS_LAST_FLOOR.y0,
+        x1: last.at.x + WARDENS_LAST_FLOOR.x1,
+        y1: last.at.y + WARDENS_LAST_FLOOR.y1,
+    };
+    const inLastFloor = (x: number, y: number) =>
+        x >= lastFloor.x0 && x <= lastFloor.x1 && y >= lastFloor.y0 && y <= lastFloor.y1;
+    for (let y = last.rect.y0; y <= last.rect.y1 + 1; y++) {
+        for (let x = last.rect.x0; x <= last.rect.x1 + 1; x++) {
+            ground.setHeight(x, y, WARDENS_LAST_HEIGHT);
+        }
+    }
     for (const room of ROOMS) {
         const { cut } = room;
         // The Apmeken room's east barrier is the sim's (APMEKEN, above)
@@ -667,6 +792,19 @@ function build(context: BuildContext): TileGrid {
                 !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
                 !(cut === CRONDIS && loc.id === APMEKEN_BARRIER && loc.x === CRONDIS_GATE.x) &&
                 !(cut === CRONDIS && loc.id === CRONDIS_WATERFALL) &&
+                !(cut === WARDENS && loc.id === WARDENS_CHARGING) &&
+                // The last room's floor is the game's: its decoration and the broken pit in its
+                // middle go (it's whole to begin with), and so do the charging circles
+                !(
+                    cut === WARDENS_LAST &&
+                    (loc.id === WARDENS_CHARGING ||
+                        (loc.level === 0 &&
+                            (loc.type === LOC_FLOOR_DECORATION || loc.id === BROKEN_PIT) &&
+                            loc.x >= WARDENS_LAST_FLOOR.x0 &&
+                            loc.x <= WARDENS_LAST_FLOOR.x1 &&
+                            loc.y >= WARDENS_LAST_FLOOR.y0 &&
+                            loc.y <= WARDENS_LAST_FLOOR.y1))
+                ) &&
                 !(
                     cut === AKKHA_ARENA &&
                     (loc.id === AKKHA_BARRIER ||
@@ -708,9 +846,19 @@ function build(context: BuildContext): TileGrid {
                 floor: "all",
                 feather: 0,
                 flatten: true,
-                height: FLOOR_HEIGHT,
+                height: cut === WARDENS_LAST ? WARDENS_LAST_HEIGHT : FLOOR_HEIGHT,
             },
         );
+        if (cut === WARDENS_LAST) {
+            digFloorPit(
+                ground,
+                { x: lastFloor.x0, y: lastFloor.y0 },
+                { x: lastFloor.x1, y: lastFloor.y1 },
+                WARDENS_LAST_HEIGHT,
+                WARDENS_LAST_PIT,
+                inLastFloor,
+            );
+        }
         // The Crondis room's waterfalls, out of the map to be drawn: still solid
         if (cut === CRONDIS) {
             for (const { at } of CRONDIS_FALLS) {
