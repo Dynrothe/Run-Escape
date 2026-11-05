@@ -212,9 +212,8 @@ export function getPageCost(upgrades: Record<string, number>): number {
         if (!upgrade) {
             continue;
         }
-        for (let r = 0; r < rank; r++) {
-            base += upgrade.baseCost * (r + 1);
-        }
+        // Its ranks at base price: baseCost, then twice that, and so on
+        base += (upgrade.baseCost * rank * (rank + 1)) / 2;
         ranks += rank;
     }
     return ranks === 0 ? 0 : Math.round(base * (1 + 0.05 * (ranks - 1)));

@@ -574,10 +574,12 @@ version and how to run it.
   the selected class can still spend. Refunding one page never creates extra gold or changes the others.
   A run uses its adventurer's class page, including in co-op. Existing shared skills move to Melee;
   the other pages start empty. All three pages are kept when exporting and importing a save.
-  Every rank makes the others a bit dearer, but the same skills cost the same whatever order
-  they're bought in.
+  The same skills cost the same whatever order they're bought in, but each rank on a page adds a
+  little to the price of everything on it, so a cheap skill can cost several times its own price
+  once dear ones are bought.
   Click or tap a bought skill's arrow button to refund one rank, even when maxed. It gives back what
-  that rank adds to the page, which is its own price and what it makes the others cost.
+  that rank adds to the page, which is its own price and what it makes the others cost. Skills
+  bought at older prices give back their share of what was paid.
   On desktop, right-clicking its card does the same; touch long presses do not refund.
   **Refund all** returns the selected page's remaining investment and resets only that class's skills.
   **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.

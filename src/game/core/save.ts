@@ -383,9 +383,12 @@ export function buyUpgrade(
     return true;
 }
 
-// Takes back one rank of the skill for what it adds to the page's cost today.
-// Never more than the page has spent, and its last rank gives back the rest,
-// so a page returns exactly what it cost.
+// Takes back one rank of the skill for its share of what the page paid: what
+// it adds to the page's cost today, times what the page paid over that cost.
+// The two are the same unless prices have changed since, and then each rank
+// gives back its part of the difference rather than one rank all of it, or
+// nothing. The last rank gives back the rest, so a page returns exactly what
+// it cost.
 export function refundUpgrade(
     save: SaveData,
     upgradeId: string,
@@ -404,8 +407,10 @@ export function refundUpgrade(
     if (Object.keys(upgrades).length === 0) {
         save.skillPages[style] = createSkillPage();
     } else {
-        const saved = getPageCost(page.upgrades) - getPageCost(upgrades);
-        page.upgradesSpent -= Math.min(saved, page.upgradesSpent);
+        const cost = getPageCost(page.upgrades);
+        const saved = cost - getPageCost(upgrades);
+        const refund = cost > 0 ? Math.round((saved * page.upgradesSpent) / cost) : 0;
+        page.upgradesSpent -= Math.min(refund, page.upgradesSpent);
         page.upgrades = upgrades;
     }
     save.coins += reserved - getMaxSkillSpending(save);

@@ -201,8 +201,8 @@ The game has to run on phones. Measure rather than guess, and put the numbers in
   matches today's prices loses every player's data at the next price change.
 - **No dead ends.** Check that every state a save can be in has a way out in the UI.
 - **Rebuild what can be rebuilt** from what's saved, rather than making every existing player reset.
-- `SAVE_VERSION` and a step in `migrateSave` when `SaveData` changes shape, and writes only through
-  `GameClient.persist()`.
+- `SAVE_VERSION` and a step in `migrateSave` when `SaveData` changes shape (not for a new optional
+  field, or for dropping one that loading ignores), and writes only through `GameClient.persist()`.
 
 ### Content from the cache
 

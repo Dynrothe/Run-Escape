@@ -219,17 +219,19 @@ desktop build.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
-  New shop upgrades, ids and optional fields don't need one. Write the save only through
-  `GameClient.persist()`: it doesn't write while another tab has `SaveLock` or the save is from a
-  newer game. Never rename the lock, `run-escape-save`, any more than the keys.
+  New shop upgrades, ids and optional fields don't need one, and nor does dropping an optional
+  field that loading ignores. Write the save only through `GameClient.persist()`: it doesn't write
+  while another tab has `SaveLock` or the save is from a newer game. Never rename the lock,
+  `run-escape-save`, any more than the keys.
   Skills live in `skillPages` by combat style, with separate ranks and spending;
   each page can allocate `coins + max(page.upgradesSpent)`. Only the maximum investment is reserved;
   use `getSkillCoins(save, style)` for a page's balance. Always pass the intended style to skill
   operations and run loadouts.
   Prices come from `getPageCost` in `content/shop.ts`, which goes only by a page's ranks, so the
   same ranks cost the same in any order: a rank's price is what it adds to the page. Keep it that
-  way (no price that depends on what was bought before). A single rank's refund gives back what it
-  adds today, never more than `upgradesSpent`, and a page's last rank gives back the rest.
+  way (no price that depends on what was bought before). A single rank's refund gives back its
+  share of `upgradesSpent`: what it adds today, times `upgradesSpent` over `getPageCost` (the two
+  differ only on a page bought at other prices). A page's last rank gives back the rest.
 - **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
   on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
   `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.

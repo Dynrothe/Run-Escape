@@ -14,6 +14,9 @@ the version in the corner).
   relay, which changes nothing in play.
 - The Skills page, by trippy22: every skill fits on the screen at once, without a scroll bar,
   on most computers and tablets.
+- Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
+  pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
+  more once dearer ones are bought.
 
 ### Fixed
 
@@ -22,8 +25,8 @@ the version in the corner).
   cache" error. Fixed by trippy22.
 - In Phosani's Nightmare, the yellow arrow over her Parasitic eggs now shows on the website and in
   the desktop app. It was missing from their copy of the game's files.
-- Skills cost the same whatever order you buy them in, and any class page can refund single
-  ranks. Fixed by trippy22.
+- Any class page can refund single skill ranks, including the ones that needed Refund all first.
+  Fixed by trippy22.
 
 ## 0.26.0 - 2026-11-05
 

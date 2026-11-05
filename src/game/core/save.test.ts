@@ -4,6 +4,7 @@ import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
 import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
+import { SHOP_UPGRADES } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { LOCKABLE_ITEMS } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
@@ -177,9 +178,10 @@ describe("save", () => {
         refundUpgrades(loaded, "ranged");
         refundUpgrades(loaded, "magic");
         expect(loaded.coins).toBe(39600);
-        // Ring of life adds more than the page paid in all, so it gives back the lot
+        // Ring of life adds 10,510 of the 10,710 the page costs today, and gives
+        // back that share of the 10,400 it paid
         expect(refundUpgrade(loaded, "ring_of_life", "melee")).toBe(true);
-        expect(loaded.coins).toBe(50000);
+        expect(loaded.coins).toBe(39600 + 10206);
         refundUpgrades(loaded, "melee");
         expect(loaded.coins).toBe(50000);
     });
@@ -440,9 +442,9 @@ describe("save", () => {
     );
 
     test.each([
-        ["fell", 12000],
-        ["rose", 500],
-    ])("a page bought before prices %s gives back exactly what was paid", (_, paid) => {
+        ["fell", 12000, 796],
+        ["rose", 500, 33],
+    ])("a page bought before prices %s gives back exactly what was paid", (_, paid, share) => {
         expect.hasAssertions();
         const save = migrateSave({
             ...createSave(),
@@ -452,14 +454,16 @@ describe("save", () => {
             },
         });
         expect(refundUpgrade(save, "strength")).toBe(true);
-        // Today Strength adds 710 to a page with Smithing
-        expect(save.skillPages.melee.upgradesSpent).toBe(Math.max(paid - 710, 0));
+        // Today Strength adds 710 of the 10,710 the page costs, and gives back
+        // that share of what it paid
+        expect(save.coins).toBe(50000 - paid + share);
+        expect(save.skillPages.melee.upgradesSpent).toBe(paid - share);
         expect(refundUpgrade(save, "smithing")).toBe(true);
         expect(save.coins).toBe(50000);
         expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
     });
 
-    test("legacy saves refund single ranks without giving back more than they paid", () => {
+    test("a page that paid less than today's prices leaves no rank free", () => {
         expect.hasAssertions();
         const save = migrateSave({
             ...createSave(),
@@ -469,13 +473,38 @@ describe("save", () => {
             upgradesSpent: 10460,
         });
         expect(save.coins + save.skillPages.melee.upgradesSpent).toBe(50000);
+        // Ring of life adds 11,020 of the 11,440 the page costs today
         expect(refundUpgrade(save, "ring_of_life")).toBe(true);
-        expect(save.coins).toBe(50000);
-        expect(save.skillPages.melee.upgradesSpent).toBe(0);
+        expect(save.coins).toBe(39540 + 10076);
+        expect(save.skillPages.melee.upgradesSpent).toBe(384);
+        // Strength adds 220 of the 420 left
         expect(refundUpgrade(save, "strength")).toBe(true);
+        expect(save.skillPages.melee.upgradesSpent).toBe(183);
         expect(refundUpgrade(save, "hitpoints")).toBe(true);
         expect(save.coins).toBe(50000);
         expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
+    });
+
+    test("a page that paid more than today's prices gives some of it back with each rank", () => {
+        expect.hasAssertions();
+        // Every skill maxed in the Skills screen's order, at the old prices
+        const upgrades = Object.fromEntries(SHOP_UPGRADES.map((u) => [u.id, u.maxRank]));
+        const save = migrateSave({
+            ...createSave(),
+            coins: 0,
+            skillPages: { melee: { upgrades, upgradesSpent: 648680 } },
+        });
+        // Ring of life adds 45,560 of the 484,800 the page costs today
+        expect(refundUpgrade(save, "ring_of_life")).toBe(true);
+        expect(save.coins).toBe(60961);
+        for (const upgrade of SHOP_UPGRADES) {
+            while (save.skillPages.melee.upgrades[upgrade.id]) {
+                const coins = save.coins;
+                expect(refundUpgrade(save, upgrade.id)).toBe(true);
+                expect(save.coins).toBeGreaterThan(coins);
+            }
+        }
+        expect(save.coins).toBe(648680);
     });
 
     test.each([

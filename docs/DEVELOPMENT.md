@@ -1387,12 +1387,17 @@ changing a co-op adventurer or room map refreshes the transmitted loadout.
 Prices come from `getPageCost` in `content/shop.ts`: what a page's ranks cost in all. It goes only
 by the ranks, never the order they were bought in, so buying the same ranks in any order costs the
 same. A rank's price is what it adds to the page (`getUpgradeCost`): each rank of a skill costs more
-than the last, and every rank on the page makes them all a bit dearer.
+than the last, and every rank on the page adds a little to the price of the whole page. That part
+falls on whatever's bought next, so a cheap skill costs several times its own price once dear ones
+are on the page. Any price that ignores the order works that way, as long as ranks make each other
+dearer.
 The arrow button on bought cards (the client's back-arrow sprite,
 `REFUND_SPRITE`) takes one rank of that skill off the page, through `GameClient.persist()`. It gives
-back what that rank adds to the page at today's prices. It never gives back more than the page's
-`upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
-cost even when prices have changed since, and changing a skill's cost needs no migration. The
+back that rank's share of the page's `upgradesSpent`: what it adds to the page at today's prices,
+times `upgradesSpent` over `getPageCost`. The two are the same unless prices have changed since the
+page was bought. Then each rank gives back its part of the difference, rather than one rank giving
+back all of it, or nothing and leaving the rest free. The page's last rank gives back the rest, so
+a page returns exactly what it cost, and changing a skill's cost needs no migration. The
 button is separate from the purchase button and has a larger hit area on coarse pointers. Desktop
 right-clicking does the same; coarse-pointer context menus never refund. Unavailable purchases use
 `aria-disabled` and keep their disabled appearance on hover, without blocking the desktop
