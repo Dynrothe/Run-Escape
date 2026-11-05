@@ -6749,6 +6749,9 @@ export class Sim {
             stunned = false;
             seconds = Math.min(seconds, boss.def.boss!.guard!.stun);
             this.showImpact(guard.resisted, boss.x, boss.y, undefined, boss.uid);
+            if (guard.resistShout) {
+                this.emit({ type: "bossShout", enemyUid: boss.uid, text: guard.resistShout });
+            }
         }
         const end = this.tick + secondsToTicks(seconds);
         const wasOpen = this.isExposed(boss);

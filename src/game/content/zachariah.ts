@@ -85,7 +85,7 @@ const lane = (i: number) => [i * 3, i * 3 + 1, i * 3 + 2];
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Saradominist's Saradomin Strike's level,
 // and how near him they have to be for it to reach him, in tiles from his middle
-export const ZACHARIAH_HITPOINTS = 4200;
+export const ZACHARIAH_HITPOINTS = 4800;
 export const ZACHARIAH_STRIKE_LEVEL = 7;
 export const ZACHARIAH_STRIKE_REACH = 8.5;
 
@@ -457,7 +457,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
         sounds: { attack: -1, hit: -1, death: -1 },
         spawnMessage: "Justiciar Zachariah descends!",
         boss: {
-            attackInterval: 1.5,
+            attackInterval: 1.3,
             keepDistance: 2.5,
             enrage: { message: "" },
             bulletGrace: 0.6,
@@ -519,6 +519,7 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
                 // shrugs it off.
                 stunGrace: 8,
                 resisted: { spots: [{ spotAnim: BLUE_IMPACT, fit: 1.8 }] },
+                resistShout: "Not this time!",
                 stuck: {
                     spots: [
                         { spotAnim: STOMP, fit: 2 },
@@ -530,12 +531,12 @@ export const ZACHARIAH_ENEMIES: EnemyDef[] = [
             phases: {
                 phases: [
                     {
-                        until: 0.85,
+                        until: 0.74,
                         status: "The trial begins",
                         ambients: [{ attack: "Crossbow rows", interval: 4, delay: 1.5 }],
                     },
                     {
-                        until: 0.45,
+                        until: 0.39,
                         status: "The Sepulchre wakes",
                         message: "The Sepulchre wakes!",
                         opener: "Lightning",

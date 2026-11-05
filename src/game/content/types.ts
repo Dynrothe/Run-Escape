@@ -787,6 +787,8 @@ export type BossGuardDef = {
     // only drops its guard, and it shrugs it off with resisted round it
     stunGrace?: number;
     resisted?: ImpactDef;
+    // Said over it as it shrugs one off
+    resistShout?: string;
 };
 
 // A big entrance: the player can't be hit, the screen goes dark, and everything

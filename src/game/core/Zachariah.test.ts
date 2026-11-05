@@ -742,6 +742,26 @@ describe("fighting back", () => {
         expect(attackNamed("Lightning").turns).toBeUndefined();
     });
 
+    test('a pillar while he can\'t be stunned: he shrugs it off with "Not this time!"', () => {
+        const { sim, boss } = fight({ x: 26, y: 31 });
+        boss.bossState!.stunGraceEnd = sim.tick + 10 * TICKS_PER_SECOND;
+        place(sim, at(26, 28));
+        use(sim, boss, "Lunge");
+        place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+        const shouts: string[] = [];
+        for (let i = 0; i < 1.4 * TICKS_PER_SECOND; i++) {
+            run(sim, 0.02);
+            for (const event of sim.takeEvents()) {
+                if (event.type === "bossShout") {
+                    shouts.push(event.text);
+                }
+            }
+        }
+        expect(sim.isStunned(boss)).toBe(false);
+        expect(sim.isExposed(boss)).toBe(true);
+        expect(shouts).toContain(zachariah().boss!.guard!.resistShout);
+    });
+
     test("standing behind a pillar can't keep him stuck: not stunned again for a while", () => {
         const sim = createSim();
         const boss = startFight(sim);
