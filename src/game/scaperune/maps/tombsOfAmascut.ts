@@ -379,6 +379,10 @@ const WARDENS_FLOOR = { x0: 10, y0: 1, x1: 32, y1: 25 };
 // The charging circles under the Wardens (45605, filled through 45606 to 45626), which the game
 // draws as they fill: out of the map
 const WARDENS_CHARGING = 45605;
+// Its floor: the room's own tiles are the hidden overlay, drawing nothing, over flat stone slabs on
+// the plane under it, which is what OSRS shows. Brought up to the room's plane, flush with its
+// floor, and walked over (LocOverrides)
+export const WARDENS_FLOOR_SLABS = [45601, 45643, 45644, 45645];
 
 // The Wardens' last phase: the same room again, unturned (the Warden at the north, as OSRS has it,
 // slamming the floor away from it) and cut further north for it to stand over the floor, whose
@@ -771,6 +775,16 @@ function build(context: BuildContext): TileGrid {
         const gateX = 59 * MAP_SQUARE_SIZE - APMEKEN.x + APMEKEN_GATE.x;
         const cutOut = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY);
         const prefab = bringDown(cutOut, cut.plane);
+        // The Wardens' room has its ceiling on the level over it, which drew over the floor once
+        // it came down: only the room's own level stays
+        if (cut === WARDENS || cut === WARDENS_LAST) {
+            for (const level of prefab.levels.slice(1)) {
+                level.underlays.fill(0);
+                level.overlays.fill(0);
+                level.flags.fill(0);
+            }
+            prefab.locs = prefab.locs.filter((loc) => loc.level === 0);
+        }
         // Akkha's floor is stone pieces on the plane below, up to it: brought along, sunk to the
         // ground (LocOverrides)
         if (cut === AKKHA_ARENA) {
@@ -819,6 +833,14 @@ function build(context: BuildContext): TileGrid {
                         (loc.id === 85 && loc.x === 12 && loc.y >= 11 && loc.y <= 13))
                 ),
         );
+        // The Wardens' room's floor, from the plane under it
+        if (cut === WARDENS) {
+            prefab.locs.push(
+                ...cutOut.locs.filter(
+                    (loc) => loc.level === 0 && WARDENS_FLOOR_SLABS.includes(loc.id),
+                ),
+            );
+        }
         // The gap into Akkha's arena, which OSRS takes you over: floor, as his own
         if (cut === AKKHA_ARENA) {
             const floor = prefab.levels[0];
@@ -963,6 +985,7 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         fun: undefined,
         tombs: {
             nexus: TOA_PLACES.nexus.arrive,
+            wardens: { arrive: TOA_PLACES.wardens.arrive },
             paths: (Object.keys(PATH_NAMES) as ToaPathId[]).map((id) => ({
                 id,
                 name: PATH_NAMES[id],

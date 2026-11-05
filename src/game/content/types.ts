@@ -1777,6 +1777,8 @@ export type TombsDef = {
     // brings it back to
     nexus: { x: number; y: number };
     paths: TombsPathDef[];
+    // The Wardens, once all four paths are done (in development): where the party's brought in
+    wardens?: { arrive: { x: number; y: number } };
 };
 
 // A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to, and

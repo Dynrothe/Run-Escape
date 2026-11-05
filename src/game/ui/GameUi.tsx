@@ -2101,6 +2101,7 @@ const Hud = memo(function Hud({
                     <TombsCrondisInfo client={client} />
                     <TombsRoarInfo client={client} />
                     <DevGodButton client={client} />
+                    <DevWardensButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2187,6 +2188,19 @@ function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
             onClick={() => client.toggleDevGod()}
         >
             God mode (dev): {on ? "on" : "off"}
+        </button>
+    );
+}
+
+// Dev server only: straight to the Wardens with the best of everything, for testing them
+function DevWardensButton({ client }: { client: GameClient }): JSX.Element | null {
+    const shown = useHudNumber(client, (n) => n.devWardens);
+    if (!import.meta.env.DEV || !shown) {
+        return null;
+    }
+    return (
+        <button className="ui-button ui-button-small" onClick={() => client.devToWardens()}>
+            Wardens, max kit (dev)
         </button>
     );
 }

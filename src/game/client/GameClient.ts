@@ -634,6 +634,14 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Dev only: to the Wardens with the best of everything (Sim.devToWardens)
+    devToWardens(): void {
+        if (import.meta.env.DEV && !this.coopRun) {
+            this.sim?.devToWardens();
+            this.updateHud(true);
+        }
+    }
+
     // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
     devSkipToTombsBoss(): void {
         if (import.meta.env.DEV && !this.coopRun) {
@@ -2741,6 +2749,8 @@ export class GameClient implements GameFrameHandler {
                 ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
                 : undefined,
             devGod: import.meta.env.DEV ? sim.devGod : undefined,
+            devWardens:
+                import.meta.env.DEV && sim.map.tombs?.wardens !== undefined && !sim.tombsPath,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,

@@ -1,4 +1,4 @@
-import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
+import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { WeaponDamageBalance } from "../content/balance";
 import { getCharacter } from "../content/characters";
 import {
@@ -78,6 +78,7 @@ import {
 } from "../content/randomEvents";
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
+import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
 import {
     APMEKEN,
@@ -998,6 +999,31 @@ type HetRoom = {
 
 // Dev only: what Sim.devSkipToTombsBoss hands over, to do some damage with
 const DEV_BOSS_WEAPON = "corrupted_twisted_bow";
+// Dev only: what Sim.devToWardens fits the party with, all at their last level: weapons of all
+// three styles (the Warden's prayers leave one of magic and ranged open, and flip), the prayers
+// and passives that keep you up, and the best piece for every slot (Torva for its hitpoints)
+const DEV_WARDENS_KIT = {
+    weapons: [
+        "corrupted_twisted_bow",
+        "corrupted_tumekens_shadow",
+        "holy_sanguinesti_staff",
+        "sanguine_scythe",
+        "ice_barrage",
+        "dark_bow",
+    ],
+    passives: ["piety", "rigour", "augury", "protect_melee", "rapid_heal", "vengeance"],
+    gear: [
+        "torva_full_helm",
+        "infernal_cape",
+        "amulet_of_rancour",
+        "torva_platebody",
+        "elysian_spirit_shield",
+        "torva_platelegs",
+        "zaryte_vambraces",
+        "primordial_boots",
+        "magus_ring",
+    ],
+};
 // Tiles past its line someone has to be for a Tombs boss to rise: clear of the gap at its foot
 const TOMBS_BOSS_RISE = 1.5;
 // Tiles south of Ba-Ba's altar that count as back up to her, ending her boulders
@@ -5564,6 +5590,64 @@ export class Sim {
             this.weaponSince[DEV_BOSS_WEAPON] ??= this.tick;
             this.appearanceVersion++;
         }
+        return true;
+    }
+
+    // Dev only: past all four paths to the Wardens' room, with the best of everything: the
+    // shop's every upgrade (its weapon and passive slots too), DEV_WARDENS_KIT at its last level,
+    // each piece as far as the Armoury takes it, on full hitpoints. False if there's nowhere to go.
+    devToWardens(): boolean {
+        const tombs = this.map.tombs;
+        if (!tombs?.wardens || this.tombsPath !== undefined) {
+            return false;
+        }
+        for (const path of tombs.paths) {
+            if (!this.tombsPathsDone.includes(path.id)) {
+                this.tombsPathsDone.push(path.id);
+            }
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            this.use(hero);
+            for (const upgrade of SHOP_UPGRADES) {
+                hero.metaStats[upgrade.stat] = upgrade.perRank * upgrade.maxRank;
+            }
+            this.weapons.length = 0;
+            for (const id of DEV_WARDENS_KIT.weapons) {
+                const def = getWeapon(id);
+                this.weapons.push({
+                    def,
+                    level: def.levels.length,
+                    cooldown: TICKS_PER_SECOND,
+                    bonus: 0,
+                    uses: 0,
+                });
+                this.weaponSince[id] ??= this.tick;
+            }
+            this.passives.length = 0;
+            for (const id of DEV_WARDENS_KIT.passives) {
+                const def = getPassive(id);
+                this.passives.push({
+                    id,
+                    level: def.maxLevel,
+                    value: getPassiveGain(def, "veryRare") * def.maxLevel,
+                });
+            }
+            for (const id of DEV_WARDENS_KIT.gear) {
+                this.equip(id, getUpgradeLine(id).length - 1);
+            }
+            this.updateStats();
+            this.player.hp = this.player.maxHp;
+            this.appearanceVersion++;
+        }
+        this.use(current);
+        this.tombsDoors.clear();
+        this.gatherHall();
+        this.moveParty(tombs.wardens.arrive);
+        this.emit({
+            type: "notice",
+            message: "The Wardens (dev): every path done, best of everything.",
+        });
         return true;
     }
 

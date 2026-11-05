@@ -15,6 +15,15 @@ export type LocOverride = {
     height?: number;
 };
 
+// The Wardens' room's floor (the Tombs of Amascut): flat stone slabs on the plane under the room's,
+// which draws nothing, brought up to it (maps/tombsOfAmascut.ts). The floor's own tiles say what's
+// walkable, so they block nothing
+const WARDENS_FLOOR: [number, LocOverride][] = [
+    ...[45643, 45644, 45645].map((id): [number, LocOverride] => [id, { solid: false }]),
+    // A block whose top is the floor, 0.8 of a tile up from the plane under it: sunk by that
+    [45601, { solid: false, height: -104 }],
+];
+
 // Akkha's arena's floor (the Tombs of Amascut): in the cache its stone pieces stand on the plane
 // under the arena's, up to its floor. With that plane brought down to the ground they're sunk to
 // it, their tops just over it, and block nothing (the floor's own tiles say what's walkable): the
@@ -32,6 +41,7 @@ const AKKHA_FLOOR: [number, LocOverride][] = [
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     ...AKKHA_FLOOR,
+    ...WARDENS_FLOOR,
     // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5
     // here, for a field that didn't all ripen at once
     [46263, { models: [2591], size: 320, solid: true }],

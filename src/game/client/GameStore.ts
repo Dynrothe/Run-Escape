@@ -178,6 +178,8 @@ export type HudNumbers = {
     tombsRoar?: number;
     // Dev server only: god mode's on (GameClient.toggleDevGod)
     devGod?: boolean;
+    // Dev only: in the Tombs' Nexus (or the Wardens' room), so the Wardens can be skipped to
+    devWardens?: boolean;
     hp: number;
     maxHp: number;
     // The hitpoints bar turns green, like the client's orb
