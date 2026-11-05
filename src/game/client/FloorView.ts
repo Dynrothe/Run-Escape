@@ -96,14 +96,22 @@ const GLOW_SPREAD = 0.14;
 // shade darker; through the warning it builds to full, as the light under it does. A tile no
 // pattern will touch has none and doesn't move. How much of it there is is the pattern's cue
 // (FloorCue, ArenaFloor.cueBold):
-// - early, earlyWidth: the low light, how strong and how far in (of the way to the middle)
+// - early, earlyWidth: the low light, how strong and how far in (of the way to the middle), as
+//   the tile's own warning starts
+// - horizon: if set, the low light builds over this many seconds before the tile's own warning
+//   (easing in, the square of how near it is), from faint, and its tremor with it from
+//   faintTremor; so a wave's tiles fade from its front, where they're about to go, out to the
+//   last to go, and a ripple's out from its middle. If not, it's early all along.
 // - breath: how much it breathes, slowly, the whole floor together
-// - tint: how dark a marked tile is
-// - tremor: how hard a marked tile trembles before its own warning (of the warning's hardest)
+// - tint: how dark a marked tile is, by its warning
+// - tremor: how hard a marked tile trembles by its own warning (of the warning's hardest)
 // - full, fullWidth: the light as the tile goes, and while its slab's up
 type CueStyle = {
     early: number;
     earlyWidth: number;
+    horizon: number;
+    faint: number;
+    faintTremor: number;
     breath: number;
     tint: number;
     tremor: number;
@@ -111,14 +119,18 @@ type CueStyle = {
     fullWidth: number;
 };
 const CUE_STYLES: Record<FloorCue, CueStyle> = {
-    // The floor still reads as stone: a thin warm line in a marked tile's seams and the faintest
-    // tremor, and in its last second the seams light up, as the light under it shows through them
+    // The floor still reads as stone, straining where it's about to go: a thin warm line in a
+    // marked tile's seams and a slight rattle, faint far off and stronger as its moment nears, and
+    // in its last second the seams light up, as the light under it shows through them
     subtle: {
-        early: 0.3,
+        early: 0.4,
         earlyWidth: 0.1,
+        horizon: 2,
+        faint: 0.08,
+        faintTremor: 0.06,
         breath: 0,
         tint: 0xd8d8d8,
-        tremor: 0.06,
+        tremor: 0.3,
         full: 0.9,
         fullWidth: 0.24,
     },
@@ -126,6 +138,9 @@ const CUE_STYLES: Record<FloorCue, CueStyle> = {
     bold: {
         early: 0.5,
         earlyWidth: 0.3,
+        horizon: 0,
+        faint: 0.5,
+        faintTremor: 0,
         breath: 0.2,
         tint: 0xc0c0c0,
         tremor: 0,
@@ -292,7 +307,7 @@ export class FloorView {
             // To fall later in its pattern (a later row): marked, and still
             const cueAt = floor.cueAt[i];
             if (dropWarnAt !== -1) {
-                const lift = this.cue(glow, style, now, cueAt, breath, seconds, phase);
+                const lift = this.cue(glow, style, now, cueAt, dropWarnAt, breath, seconds, phase);
                 this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
@@ -333,7 +348,7 @@ export class FloorView {
             }
             // To rise later in its pattern: marked
             if (warnAt !== -1) {
-                const lift = this.cue(glow, style, now, cueAt, breath, seconds, phase);
+                const lift = this.cue(glow, style, now, cueAt, warnAt, breath, seconds, phase);
                 this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
@@ -347,13 +362,14 @@ export class FloorView {
         return CUE_STYLES[CUE_OVERRIDE ?? (floor.cueBold[i] ? "bold" : "subtle")];
     }
 
-    // The low light on a tile marked by a pattern that's started, before its own warning, and how
-    // it trembles (breath from -1 to 1)
+    // The low light on a tile marked by a pattern that's started, before its own warning (from
+    // warnAt), and how it trembles (breath from -1 to 1)
     private cue(
         glow: number | undefined,
         style: CueStyle,
         now: number,
         cueAt: number,
+        warnAt: number,
         breath: number,
         seconds: number,
         phase: number,
@@ -362,12 +378,23 @@ export class FloorView {
             return STILL;
         }
         const k = smooth((now - cueAt) / (CUE_FADE * TICKS_PER_SECOND));
+        // How near its warning is, eased in, over the style's horizon
+        let near = 1;
+        if (style.horizon > 0) {
+            const ahead = Math.min(
+                1,
+                Math.max(0, (warnAt - now) / (style.horizon * TICKS_PER_SECOND)),
+            );
+            near = (1 - ahead) * (1 - ahead);
+        }
         const options = this.options;
-        options.edge = style.early * k * (1 + style.breath * breath);
+        const edge = style.faint + (style.early - style.faint) * near;
+        options.edge = edge * k * (1 + style.breath * breath);
         options.edgeWidth = style.earlyWidth;
         options.edgeColor = glow;
-        options.tint = this.shade(style.tint, k);
-        return style.tremor > 0 ? this.tremor(seconds, phase, style.tremor * k, 0) : STILL;
+        options.tint = this.shade(style.tint, k * (style.horizon > 0 ? 0.35 + 0.65 * near : 1));
+        const tremor = style.faintTremor + (style.tremor - style.faintTremor) * near;
+        return tremor > 0 ? this.tremor(seconds, phase, tremor * k, 0) : STILL;
     }
 
     // The light on a tile's edges through its warning (t from 0 to 1 as it goes), or while it's up
