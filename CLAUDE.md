@@ -61,6 +61,7 @@ go stale. Add anything that cost you time to work out.
 | Weapon attack benchmark                                | `scripts/game/measure-weapon-dps.ts`                                   |
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
+| The relays' checks on a run's frames                   | `server/coop-checks.mjs`                                               |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |

@@ -133,6 +133,9 @@ never crash or desync another player, or cost the maintainer money.
 - **Resends and abuse.** Who can trigger a broadcast, how often, and how big? An unthrottled resend
   can get the host disconnected and end the run for everyone. A throttle that folds every ask into
   one can let a single bad ask block the honest ones.
+- **The relays check the host's frames** (`server/coop-checks.mjs`). A change to what goes in them,
+  or to when the host sends a guest's moves or decides for them, has to agree with it there, or
+  honest hosts get caught. Its tests hold its copies of `cleanMove` and `cleanAction` to the game's.
 
 ### Cloudflare's relay
 

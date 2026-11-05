@@ -21,6 +21,7 @@
 // frames a guest missed meanwhile (see CoopRun).
 import { DurableObject } from "cloudflare:workers";
 
+import { RunWatch, endsCaughtRuns, heroIdsOf } from "../../coop-checks.mjs";
 import { playerName } from "../../name-gen.mjs";
 import {
     IDLE_MS,
@@ -67,6 +68,10 @@ export class Room extends DurableObject {
     constructor(ctx, env) {
         super(ctx, env);
         this.anyMap = isAnyMapOn(env);
+        this.endsCaught = endsCaughtRuns(env);
+        // The run's checks (coop-checks.mjs), made again from room.heroIds
+        // after a restart
+        this.watch = undefined;
         this.lobby = lobbyStub(env);
         this.code = "";
         // The room, once it's made, until it's empty or closed
@@ -823,6 +828,8 @@ export class Room extends DurableObject {
                         return;
                     }
                     room.started = true;
+                    room.heroIds = heroIdsOf(message.game, MAX_PARTY);
+                    this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
                     }
@@ -836,6 +843,8 @@ export class Room extends DurableObject {
             case "end":
                 if (isHost && room.started) {
                     room.started = false;
+                    room.heroIds = undefined;
+                    this.watch = undefined;
                     this.persist(true);
                     this.broadcastRoom();
                 }
@@ -851,6 +860,9 @@ export class Room extends DurableObject {
                             host,
                             `${text.slice(0, end)},"from":${JSON.stringify(client.id)}}`,
                         );
+                        if (host.socket) {
+                            this.runWatch()?.up(client.id, message.d);
+                        }
                     }
                 }
                 return;
@@ -861,9 +873,40 @@ export class Room extends DurableObject {
                             this.sendText(member, text);
                         }
                     }
+                    const watch = this.runWatch();
+                    watch?.down(message.d);
+                    if (watch?.end) {
+                        // Which ends the run for everyone, as the host leaving does
+                        this.closeSocket(client, 1008);
+                        this.dropped(client);
+                    }
                 }
                 return;
         }
+    }
+
+    newWatch(room, resumed) {
+        const code = this.code;
+        const watch = new RunWatch(room.heroIds, room.hostId, {
+            resumed,
+            report: (kind, detail) =>
+                console.warn(`Co-op run check: ${kind} in room ${code}`, detail),
+            caught: (kind) => {
+                console.warn(`Co-op run check: room ${code}'s host caught (${kind})`);
+                watch.end = this.endsCaught;
+            },
+        });
+        return watch;
+    }
+
+    // The run's checks, made again for a run already going (one started before
+    // the room kept its heroes isn't checked)
+    runWatch() {
+        const room = this.room;
+        if (!this.watch && room?.started && Array.isArray(room.heroIds)) {
+            this.watch = this.newWatch(room, true);
+        }
+        return this.watch;
     }
 
     create(client, message) {

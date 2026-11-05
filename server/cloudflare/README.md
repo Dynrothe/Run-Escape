@@ -156,8 +156,10 @@ and drops the connection, so it ends abnormally instead of cleanly. A connection
 phone locking, a lost signal) has no close to answer, and still ends abnormally.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
-they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
-the same numbers as `coop-relay.mjs`.
+they haven't unlocked, as on the Node relay. `MULTIPLAYER_RUN_CHECKS = "end"` ends a run whose host
+the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged, which
+`bun run wrangler tail` shows. The other limits are at the top of `src/shared.mjs`, the same
+numbers as `coop-relay.mjs`.
 
 **Taking it down**: `bun run wrangler delete run-escape-coop`.
 

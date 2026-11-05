@@ -481,6 +481,41 @@ describe("co-op relay", () => {
         expect((await host.next("left")).id).toBe(room.members[1].id);
     });
 
+    it("logs a host's frames the run checks catch, and ends the run only when set to", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            for (const endCaughtRuns of [false, true]) {
+                await restart({ endCaughtRuns });
+                warn.mockClear();
+                const { host, guests } = await party(1);
+                const { room } = await host.room();
+                const heroes = room.members.map((m: any) => ({ id: m.id }));
+                host.send({ t: "start", game: { heroes } });
+                await guests[0].next("start");
+                // Moves the guest never sent
+                for (let frame = 1; frame <= 3; frame++) {
+                    host.send({
+                        t: "down",
+                        d: { upTo: frame, events: [{ frame, hero: 1, move: [127, 0] }] },
+                    });
+                    await guests[0].next("down");
+                }
+                expect(warn).toHaveBeenCalledWith(
+                    expect.stringMatching(/^Co-op run check: move in room /),
+                    expect.objectContaining({ hero: 1 }),
+                );
+                if (endCaughtRuns) {
+                    expect((await guests[0].next("gone")).reason).toBe("hostLeft");
+                } else {
+                    host.send({ t: "down", d: { upTo: 4, events: [] } });
+                    expect((await guests[0].next("down")).d.upTo).toBe(4);
+                }
+            }
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it("takes big messages in one piece", async () => {
         const { host, guests } = await party(1);
         const loadout = { items: "x".repeat(70_000) };
@@ -621,6 +656,11 @@ describe("co-op relay", () => {
                 coop_runs_started_total: 0,
                 coop_players_connected_peak: 0,
                 coop_rooms_peak: 0,
+                coop_run_check_ahead_total: 0,
+                coop_run_check_move_total: 0,
+                coop_run_check_action_total: 0,
+                coop_run_check_auto_total: 0,
+                coop_run_check_hosts_caught_total: 0,
                 coop_connections_limit: 800,
                 coop_rooms_limit: 500,
             });
@@ -630,13 +670,7 @@ describe("co-op relay", () => {
             // HELP, TYPE and the sample for each
             expect(lines).toHaveLength(Object.keys(values).length * 3);
             for (const name of Object.keys(values)) {
-                const type = [
-                    "coop_connections_total",
-                    "coop_rooms_created_total",
-                    "coop_runs_started_total",
-                ].includes(name)
-                    ? "counter"
-                    : "gauge";
+                const type = name.endsWith("_total") ? "counter" : "gauge";
                 const sampleLine = lines.indexOf(`${name} ${values[name]}`);
                 expect(lines[sampleLine - 1]).toBe(`# TYPE ${name} ${type}`);
                 expect(lines[sampleLine - 2]).toMatch(new RegExp(`^# HELP ${name} .+$`));
