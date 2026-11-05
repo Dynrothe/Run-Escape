@@ -87,6 +87,9 @@ const CRACK_TILT = 22;
 // a slab's thickness at a time, from this shade to this
 const PLINTH_TOP = 0xd8d8d8;
 const PLINTH_BOTTOM = 0x8c8c8c;
+// A sunken tile's darker, this much a tile down, and at most this much
+const SUNKEN_SHADE = 0.7;
+const SUNKEN_MOST = 0.45;
 // Above this, a raised tile hides what's behind it as the world does (ActorDrawOptions.early)
 const RAISED_HIDES = 0.2;
 // Dust as a slab comes up: on one tile in DUST_SHARE, played once, this big
@@ -425,6 +428,10 @@ export class FloorView {
                 roll += CRACK_TILT * hits * Math.sin(phase * Math.PI * 2);
             }
             const sink = hits > 0 && !stages ? CRACK_SINK * hits : 0;
+            // Sunken, in the shade of what's round it
+            if (lift < 0) {
+                tint = mulTint(this.shade(0, Math.min(SUNKEN_MOST, -lift * SUNKEN_SHADE)), tint);
+            }
             const along = ramp === FLOOR_NORTH || ramp === FLOOR_SOUTH;
             this.tile = {
                 w: (w / across) * (ramp !== RAMP_NONE && !along ? stretch : 1),
