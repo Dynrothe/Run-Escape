@@ -1,6 +1,11 @@
 import { ARMOURY_COSTS } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
-import { COMBAT_TASK_BY_ID, getCombatPoints, getTierThresholds } from "../content/combatTasks";
+import {
+    COMBAT_TASK_BY_ID,
+    MAX_COMBAT_PINS,
+    getCombatPoints,
+    getTierThresholds,
+} from "../content/combatTasks";
 import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
 import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
@@ -36,6 +41,7 @@ import {
     recordRun,
     refundUpgrade,
     refundUpgrades,
+    toggleCombatPin,
 } from "./save";
 
 // The game's version, as far as these tests go
@@ -1399,6 +1405,103 @@ describe("Combat Achievements", () => {
         recordRun(save, run("lumbridge", { combatTasks: easy }));
         expect(save.trophies).toContain("ghommals_hilt_1");
         expect(migrateSave(save).trophies).toContain("ghommals_hilt_1");
+    });
+    test("each style a campaign map's won with adds up, and the last pays", () => {
+        const save = createSave();
+        const won = (style: string) =>
+            recordRun(
+                save,
+                run("lumbridge", {
+                    victory: true,
+                    combatTasks: [],
+                    // And keys no task has, which go
+                    combatProgress: [
+                        `jack_of_all_styles:${style}`,
+                        "jack_of_all_styles:lumbridge",
+                        "bite_proof:melee",
+                    ],
+                }),
+            );
+        won("melee");
+        won("melee");
+        expect(save.combatProgress).toEqual({ "jack_of_all_styles:melee": 1 });
+        expect(getCombatProgress(save, COMBAT_TASK_BY_ID.get("jack_of_all_styles")!)).toEqual({
+            done: 1,
+            of: 3,
+        });
+        won("ranged");
+        const coins = save.coins;
+        won("magic");
+        expect(save.combatTasks).toContain("jack_of_all_styles");
+        expect(save.combatProgress).toEqual({});
+        expect(save.coins - coins).toBe(250);
+        // A style's kept as it's loaded, and what's no style goes
+        const loaded = migrateSave({
+            ...createSave(),
+            combatProgress: { "jack_of_all_styles:melee": 1, "jack_of_all_styles:lumbridge": 1 },
+        });
+        expect(loaded.combatProgress).toEqual({ "jack_of_all_styles:melee": 1 });
+    });
+
+    test("pins: a task still to do, so many at most, and gone once it's done", () => {
+        const save = createSave();
+        save.combatTasks.push("first_blood");
+        expect(toggleCombatPin(save, "first_blood")).toBe(false);
+        expect(toggleCombatPin(save, "not_a_task")).toBe(false);
+        expect(save.combatPinned).toBeUndefined();
+        const ids = ["bite_proof", "wise_guy", "objection", "purist", "unbound", "checkmate"];
+        expect(ids.map((id) => toggleCombatPin(save, id))).toEqual([
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+        ]);
+        expect(save.combatPinned).toHaveLength(MAX_COMBAT_PINS);
+        // Unpinned, and then there's room
+        expect(toggleCombatPin(save, "wise_guy")).toBe(false);
+        expect(toggleCombatPin(save, "checkmate")).toBe(true);
+        expect(save.combatPinned).toEqual([
+            "bite_proof",
+            "objection",
+            "purist",
+            "unbound",
+            "checkmate",
+        ]);
+        recordRun(save, run("lumbridge", { combatTasks: ["bite_proof"] }));
+        expect(save.combatPinned).not.toContain("bite_proof");
+        for (const id of [...save.combatPinned!]) {
+            toggleCombatPin(save, id);
+        }
+        expect(save.combatPinned).toBeUndefined();
+    });
+
+    test("pins load in their order, without one done, unknown or twice", () => {
+        const save = migrateSave({
+            ...createSave(),
+            combatTasks: ["bite_proof"],
+            combatPinned: [
+                "wise_guy",
+                "bite_proof",
+                "not_a_task",
+                7,
+                "wise_guy",
+                "objection",
+                "purist",
+                "unbound",
+                "checkmate",
+                "first_blood",
+            ],
+        });
+        expect(save.combatPinned).toEqual([
+            "wise_guy",
+            "objection",
+            "purist",
+            "unbound",
+            "checkmate",
+        ]);
+        expect(migrateSave({ ...createSave(), combatPinned: "x" }).combatPinned).toBeUndefined();
     });
 });
 

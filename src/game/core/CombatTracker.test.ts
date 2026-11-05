@@ -64,11 +64,12 @@ const killed = (enemyId: string): SimEvent => ({
     boss: true,
     ...at,
 });
-const hit = (enemyId: string): SimEvent => ({
+const hit = (enemyId: string, attack?: string): SimEvent => ({
     type: "playerHit",
     amount: 3,
     enemyId,
     elite: false,
+    attack,
 });
 const stage = (enemyId: string, phase: number, s: "hp" | "finale" = "hp"): SimEvent => ({
     type: "bossStage",
@@ -432,6 +433,197 @@ describe("the rest", () => {
         ).toEqual(["stand_and_deliver"]);
         sim.heroes[0].evolutionsMade.push("a", "b", "c");
         expect(ids(tracker.observe(sim, []))).toEqual(["evolutionary"]);
+    });
+});
+
+describe("where each task's got, for the HUD and pause menu", () => {
+    const status = (tracker: CombatTracker, sim: Sim, id: string) =>
+        tracker.statuses(sim).find((s) => s.task.id === id)!;
+
+    test("a hit spoils Bite-Proof by name, once: it's failed, and said so once", () => {
+        const sim = createSim("lumbridge");
+        const tracker = track(sim);
+        expect(status(tracker, sim, "bite_proof").state).toBe("on");
+        tracker.observe(sim, [spawned("count_draynor")]);
+        tracker.observe(sim, [hit("count_draynor")]);
+        expect(status(tracker, sim, "bite_proof")).toMatchObject({
+            state: "failed",
+            reason: "hit by Count Draynor",
+        });
+        expect(tracker.takeFailed()).toEqual([
+            { task: expect.objectContaining({ id: "bite_proof" }), reason: "hit by Count Draynor" },
+        ]);
+        tracker.observe(sim, [hit("count_draynor")]);
+        expect(tracker.takeFailed()).toEqual([]);
+    });
+
+    test("an attack avoided by name says which landed (playerHit's attack)", () => {
+        const sim = createSim("zachariah");
+        const tracker = track(sim);
+        tracker.observe(sim, [spawned("justiciar_zachariah")]);
+        sim.heroes[0].damageByAttack["Lunges"] = 4;
+        tracker.observe(sim, [hit("justiciar_zachariah", "Lunges")]);
+        expect(status(tracker, sim, "objection")).toMatchObject({
+            state: "failed",
+            reason: "hit by Lunges",
+        });
+        expect(status(tracker, sim, "unbound").state).toBe("on");
+    });
+
+    test("a boss that comes again (an endless round) can be done again", () => {
+        const sim = createSim("lumbridge", { endless: true });
+        const tracker = track(sim);
+        tracker.observe(sim, [spawned("count_draynor")]);
+        tracker.observe(sim, [hit("count_draynor")]);
+        tracker.observe(sim, [killed("count_draynor")]);
+        expect(status(tracker, sim, "bite_proof").state).toBe("failed");
+        tracker.observe(sim, [spawned("count_draynor")]);
+        expect(status(tracker, sim, "bite_proof").state).toBe("on");
+        expect(ids(tracker.observe(sim, [killed("count_draynor")]))).toContain("bite_proof");
+        expect(status(tracker, sim, "bite_proof").state).toBe("done");
+    });
+
+    test("a win's rules fail as they're broken, not only once it's won", () => {
+        const sim = createSim("lumbridge");
+        const tracker = track(sim);
+        sim.heroes[0].weapons.push({ ...sim.heroes[0].weapons[0] });
+        sim.heroes[0].skips = 1;
+        tracker.observe(sim, []);
+        expect(status(tracker, sim, "one_track_mind")).toMatchObject({
+            state: "failed",
+            reason: "took a second weapon",
+        });
+        expect(status(tracker, sim, "no_take_backs")).toMatchObject({
+            state: "failed",
+            reason: "rerolled, skipped or banished",
+        });
+        expect(status(tracker, sim, "purist").state).toBe("on");
+        expect(ids(tracker.takeFailed().map((f) => f.task)).sort()).toEqual([
+            "no_take_backs",
+            "one_track_mind",
+        ]);
+    });
+
+    test("counts show how far they've got: Smites, kills", () => {
+        const zach = createSim("zachariah");
+        const tracker = track(zach);
+        tracker.observe(zach, [
+            {
+                type: "ability",
+                abilityId: "smite",
+                enemyId: "justiciar_zachariah",
+                sound: -1,
+                opened: true,
+                ...at,
+            },
+        ]);
+        expect(status(tracker, zach, "contempt_of_court").progress).toEqual({ done: 1, of: 3 });
+        expect(status(tracker, zach, "objection").progress).toBeUndefined();
+
+        const save = createSave();
+        save.combatProgress.recurring_nightmare = 2;
+        const phosani = createSim("phosani");
+        const nightmare = track(phosani, save);
+        phosani.enemyKills.phosanis_nightmare = 1;
+        expect(status(nightmare, phosani, "recurring_nightmare").progress).toEqual({
+            done: 3,
+            of: 5,
+        });
+    });
+});
+
+describe("Jack of All Styles, over runs", () => {
+    test("a campaign win earns its adventurer's style, and the last style does it", () => {
+        const sim = createSim("lumbridge");
+        const tracker = track(sim);
+        sim.state = "victory";
+        expect(ids(tracker.observe(sim, []))).not.toContain("jack_of_all_styles");
+        expect(tracker.earned).toEqual(["jack_of_all_styles:melee"]);
+        expect(
+            tracker.statuses(sim).find((s) => s.task.id === "jack_of_all_styles")!.progress,
+        ).toEqual({ done: 1, of: 3 });
+
+        const save = createSave();
+        save.combatProgress["jack_of_all_styles:ranged"] = 1;
+        save.combatProgress["jack_of_all_styles:magic"] = 1;
+        const last = createSim("barrows");
+        const lastTracker = track(last, save);
+        last.state = "victory";
+        expect(ids(lastTracker.observe(last, []))).toContain("jack_of_all_styles");
+    });
+
+    test("not from a loss, an endless run or a boss fight", () => {
+        const lost = createSim("lumbridge");
+        const tracker = track(lost);
+        lost.state = "dead";
+        tracker.observe(lost, []);
+        expect(tracker.earned).toEqual([]);
+        expect(ids(track(createSim("lumbridge", { endless: true })).tasks)).not.toContain(
+            "jack_of_all_styles",
+        );
+        expect(ids(track(createSim("zachariah")).tasks)).not.toContain("jack_of_all_styles");
+    });
+});
+
+describe("the Theatre's perfect tasks", () => {
+    function hurt(sim: Sim, attack: string, amount: number): void {
+        const hero = sim.heroes[0];
+        hero.damageTaken += amount;
+        hero.damageByAttack[attack] = (hero.damageByAttack[attack] ?? 0) + amount;
+    }
+
+    // A room's boss arriving and dying, hurt by this attack of its on the way if given
+    function room(sim: Sim, tracker: CombatTracker, bossId: string, attack?: string): string[] {
+        tracker.observe(sim, [spawned(bossId)]);
+        if (attack) {
+            hurt(sim, attack, 3);
+            tracker.observe(sim, [hit(bossId, attack)]);
+        }
+        return ids(tracker.observe(sim, [killed(bossId)]));
+    }
+
+    test("Perfect Maiden: her kill with no damage at all, from anything", () => {
+        const sim = createSim("theatre_of_blood");
+        expect(room(sim, track(sim), "maiden_of_sugadinti")).toContain("perfect_maiden");
+
+        const bitten = createSim("theatre_of_blood");
+        const tracker = track(bitten);
+        tracker.observe(bitten, [spawned("maiden_of_sugadinti")]);
+        bitten.heroes[0].damageTaken += 1;
+        tracker.observe(bitten, [hit("blood_spawn")]);
+        expect(tracker.statuses(bitten).find((s) => s.task.id === "perfect_maiden")!.reason).toBe(
+            "hit by Blood spawn",
+        );
+        expect(ids(tracker.observe(bitten, [killed("maiden_of_sugadinti")]))).not.toContain(
+            "perfect_maiden",
+        );
+    });
+
+    test("Theatre Perfectionist: each of them in one run, done before or not, and the win", () => {
+        const save = createSave();
+        // Done in earlier runs, but they count again here
+        save.combatTasks.push("rain_check", "dry_feet");
+        const sim = createSim("theatre_of_blood");
+        const tracker = track(sim, save);
+        expect(ids(tracker.tasks)).not.toContain("rain_check");
+        room(sim, tracker, "maiden_of_sugadinti");
+        room(sim, tracker, "tob_pestilent_bloat");
+        room(sim, tracker, "tob_sotetseg");
+        room(sim, tracker, "xarpus");
+        const perfectionist = () =>
+            tracker.statuses(sim).find((s) => s.task.id === "theatre_perfectionist")!;
+        expect(perfectionist().progress).toEqual({ done: 4, of: 5 });
+        expect(room(sim, tracker, "tob_verzik_vitur")).not.toContain("theatre_perfectionist");
+        sim.state = "victory";
+        expect(ids(tracker.observe(sim, []))).toContain("theatre_perfectionist");
+
+        const hurtOnce = createSim("theatre_of_blood");
+        const spoilt = track(hurtOnce);
+        room(hurtOnce, spoilt, "maiden_of_sugadinti");
+        room(hurtOnce, spoilt, "tob_pestilent_bloat", "Falling flesh");
+        expect(
+            spoilt.statuses(hurtOnce).find((s) => s.task.id === "theatre_perfectionist"),
+        ).toMatchObject({ state: "failed", reason: "Rain Check: hit by Falling flesh" });
     });
 });
 

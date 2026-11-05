@@ -38,6 +38,9 @@ export const COMBAT_TASK_TYPES: Record<CombatTaskType, string> = {
     stamina: "Stamina",
 };
 
+// How many tasks can be pinned at once: their rows on the HUD, and a word when one's spoilt
+export const MAX_COMBAT_PINS = 5;
+
 // Speed tasks' times, in seconds. Guesses for now, to be set from playtests.
 export const COMBAT_SPEED_SECONDS = {
     wiseOldMan: 60,
@@ -105,6 +108,14 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         tier: "medium",
         type: "mechanical",
         goal: { kind: "evolve", count: 3 },
+    },
+    {
+        id: "jack_of_all_styles",
+        name: "Jack of All Styles",
+        description: "Beat a campaign map with a melee, a ranged and a magic adventurer.",
+        tier: "medium",
+        type: "killCount",
+        goal: { kind: "beatWithEach", maps: "campaign", styles: ["melee", "ranged", "magic"] },
     },
     {
         id: "hardened",
@@ -562,6 +573,15 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: { kind: "win", maps: [TOB], rules: { noSupplies: true } },
     },
     {
+        id: "perfect_maiden",
+        name: "Perfect Maiden",
+        description: "Kill the Maiden of Sugadinti in the Theatre without taking any damage.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOB,
+        goal: { kind: "kill", bossIds: ["maiden_of_sugadinti"], without: ["damage"] },
+    },
+    {
         id: "rain_check",
         name: "Rain Check",
         description: "Kill the Pestilent Bloat in the Theatre without being hit by falling flesh.",
@@ -610,6 +630,21 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
             without: [
                 { attacks: ["Green balls", "Green balls close in", "Green ball", "Doom ball"] },
             ],
+        },
+    },
+    {
+        id: "theatre_perfectionist",
+        name: "Theatre Perfectionist",
+        description:
+            "Beat the Theatre of Blood doing Perfect Maiden, Rain Check, Mazemaster, Dry Feet and " +
+            "Green Light, all in the same run.",
+        tier: "grandmaster",
+        type: "perfection",
+        mapId: TOB,
+        goal: {
+            kind: "allOf",
+            taskIds: ["perfect_maiden", "rain_check", "mazemaster", "dry_feet", "green_light"],
+            win: true,
         },
     },
     {
@@ -699,6 +734,7 @@ export function canTrackOn(task: CombatTaskDef, map: MapDef): boolean {
     const goal = task.goal;
     switch (goal.kind) {
         case "beatMap":
+        case "beatWithEach":
         case "win":
             return getGoalMaps(goal.maps).includes(map.id);
         case "killCount": {
@@ -717,5 +753,9 @@ export function canTrackOn(task: CombatTaskDef, map: MapDef): boolean {
 
 // Whether a goal is counted over every run so far, rather than done in one
 export function isMultiRunGoal(goal: CombatGoal): boolean {
-    return goal.kind === "killCount" || (goal.kind === "beatMap" && goal.all === true);
+    return (
+        goal.kind === "killCount" ||
+        goal.kind === "beatWithEach" ||
+        (goal.kind === "beatMap" && goal.all === true)
+    );
 }

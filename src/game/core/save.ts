@@ -8,6 +8,7 @@ import { CHARACTERS } from "../content/characters";
 import {
     COMBAT_TASKS,
     COMBAT_TASK_BY_ID,
+    MAX_COMBAT_PINS,
     getCombatPoints,
     getGoalMaps,
     getTaskTier,
@@ -127,6 +128,9 @@ export type SaveData = {
     // map a beat-them-all task has had beaten
     combatTasks: string[];
     combatProgress: Record<string, number>;
+    // Combat Achievements pinned on their screen, still to do, in the order they were pinned: a
+    // run shows the ones it follows on the HUD, and says when one's spoilt
+    combatPinned?: string[];
 };
 
 // The round reached, and how long the run lasted
@@ -329,6 +333,22 @@ export function migrateSave(raw: unknown): SaveData {
     if ((data.version ?? 0) < 12) {
         applyRetroCombatTasks(save);
     }
+    if (Array.isArray(data.combatPinned)) {
+        const pinned: string[] = [];
+        for (const id of data.combatPinned) {
+            if (
+                COMBAT_TASK_BY_ID.has(id) &&
+                !save.combatTasks.includes(id) &&
+                !pinned.includes(id) &&
+                pinned.length < MAX_COMBAT_PINS
+            ) {
+                pinned.push(id);
+            }
+        }
+        if (pinned.length > 0) {
+            save.combatPinned = pinned;
+        }
+    }
     grantCombatRewards(save);
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
@@ -352,6 +372,9 @@ function getProgressMax(key: string): number {
         return goal.count;
     }
     if (goal?.kind === "beatMap" && goal.all && getGoalMaps(goal.maps).includes(mapId)) {
+        return 1;
+    }
+    if (goal?.kind === "beatWithEach" && (goal.styles as string[]).includes(mapId)) {
         return 1;
     }
     return 0;
@@ -428,6 +451,12 @@ export function getCombatProgress(
             of: maps.length,
         };
     }
+    if (goal.kind === "beatWithEach") {
+        return {
+            done: goal.styles.filter((style) => save.combatProgress[`${task.id}:${style}`]).length,
+            of: goal.styles.length,
+        };
+    }
     return undefined;
 }
 
@@ -450,6 +479,30 @@ function completeCombatProgress(save: SaveData): CombatTaskDef[] {
         }
     }
     return done;
+}
+
+// Pins a task still to do, or unpins one that's pinned. Returns whether it's pinned now: not once
+// MAX_COMBAT_PINS are.
+export function toggleCombatPin(save: SaveData, id: string): boolean {
+    const pinned = save.combatPinned ?? [];
+    if (pinned.includes(id)) {
+        const rest = pinned.filter((each) => each !== id);
+        if (rest.length > 0) {
+            save.combatPinned = rest;
+        } else {
+            delete save.combatPinned;
+        }
+        return false;
+    }
+    if (
+        !COMBAT_TASK_BY_ID.has(id) ||
+        save.combatTasks.includes(id) ||
+        pinned.length >= MAX_COMBAT_PINS
+    ) {
+        return false;
+    }
+    save.combatPinned = [...pinned, id];
+    return true;
 }
 
 // The tier rewards the points have earned and the save hasn't got. Returns their trophy ids.
@@ -497,6 +550,12 @@ function bankCombatTasks(save: SaveData, run: RunSummary): CombatTaskDef[] {
             save.combatProgress[`${task.id}:${run.mapId}`] = 1;
         }
     }
+    // What the tracker saw it do towards the ones over more runs (each style won with)
+    for (const key of run.combatProgress ?? []) {
+        if (getProgressMax(key) > 0 && !save.combatTasks.includes(key.split(":")[0])) {
+            save.combatProgress[key] = 1;
+        }
+    }
     for (const id of run.combatTasks) {
         const task = COMBAT_TASK_BY_ID.get(id);
         if (task && !save.combatTasks.includes(id)) {
@@ -505,6 +564,13 @@ function bankCombatTasks(save: SaveData, run: RunSummary): CombatTaskDef[] {
         }
     }
     banked.push(...completeCombatProgress(save));
+    // Done, so no longer pinned
+    if (save.combatPinned) {
+        save.combatPinned = save.combatPinned.filter((id) => !save.combatTasks.includes(id));
+        if (save.combatPinned.length === 0) {
+            delete save.combatPinned;
+        }
+    }
     for (const task of banked) {
         const coins = getTaskTier(task).coins;
         save.coins += coins;
@@ -765,9 +831,11 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
-    // A solo run Combat Achievements followed (core/CombatTracker.ts): the ones it did. Left
-    // out of co-op runs and of runs that don't count, which bank none.
+    // A solo run Combat Achievements followed (core/CombatTracker.ts): the ones it did, and the
+    // combatProgress keys it earned that the rest of this doesn't show (the style a map was beaten
+    // with). Left out of co-op runs and of runs that don't count, which bank none.
     combatTasks?: string[];
+    combatProgress?: string[];
 };
 
 // Banks the run, and pays out the quests it finished. Returns those quests.

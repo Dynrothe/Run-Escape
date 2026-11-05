@@ -1431,6 +1431,12 @@ export type CombatGoal =
           hard?: boolean;
           expert?: boolean;
       }
+    // Over every solo run: a map of these beaten with an adventurer of each of these styles
+    | {
+          kind: "beatWithEach";
+          maps: string[] | "campaign" | { campaignFrom: string };
+          styles: CombatStyle[];
+      }
     | { kind: "killCount"; enemyIds: string[]; count: number }
     | { kind: "endlessRound"; round: number; hard?: boolean }
     // In one run: a phased boss reaching this phase (counted from 1)
@@ -1481,7 +1487,10 @@ export type CombatGoal =
     | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean }
     // In one run, the fight's button (MapDef.fight.ability) landed count times; opened: only
     // while the boss's guard was down (BossDef.guard)
-    | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean };
+    | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean }
+    // In one run, each of these tasks' goals met, whether they were done before or not (none of
+    // them another allOf); win: and the map beaten
+    | { kind: "allOf"; taskIds: string[]; win?: boolean };
 
 export type CombatTaskDef = {
     // Never renamed: it's in saves

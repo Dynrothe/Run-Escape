@@ -1,5 +1,6 @@
 import {
     COMBAT_TASKS,
+    COMBAT_TASK_BY_ID,
     COMBAT_TIERS,
     canTrackOn,
     getCombatPoints,
@@ -54,7 +55,7 @@ describe("Combat Achievements' tasks", () => {
                 expect(ENEMY_BY_ID.has(id), `${task.id}: ${id}`).toBe(true);
             }
             const goal = task.goal;
-            if (goal.kind === "beatMap" || goal.kind === "win") {
+            if (goal.kind === "beatMap" || goal.kind === "win" || goal.kind === "beatWithEach") {
                 const maps = getGoalMaps(goal.maps);
                 expect(maps.length, task.id).toBeGreaterThan(0);
                 for (const id of maps) {
@@ -164,6 +165,37 @@ describe("Combat Achievements' tasks", () => {
                 const due = [...map.events.map((e) => e.enemyId), ...events];
                 for (const id of bosses) {
                     expect(due, `${task.id}: ${id}`).toContain(id);
+                }
+            }
+        }
+    });
+
+    // One made of others counts them all in one run, so they're on its map, and none is made of
+    // others itself (the tracker watches each one's goal for it)
+    test("made of others name tasks on the same map, none of them made of others", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind !== "allOf") {
+                continue;
+            }
+            expect(task.mapId, task.id).toBeDefined();
+            expect(goal.taskIds.length, task.id).toBeGreaterThan(1);
+            for (const id of goal.taskIds) {
+                const part = COMBAT_TASK_BY_ID.get(id);
+                expect(part, `${task.id}: ${id}`).toBeDefined();
+                expect(part!.mapId, `${task.id}: ${id}`).toBe(task.mapId);
+                expect(part!.goal.kind, `${task.id}: ${id}`).not.toBe("allOf");
+            }
+        }
+    });
+
+    test("count styles each a style there is, once", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind === "beatWithEach") {
+                expect(new Set(goal.styles).size, task.id).toBe(goal.styles.length);
+                for (const style of goal.styles) {
+                    expect(["melee", "ranged", "magic"], task.id).toContain(style);
                 }
             }
         }

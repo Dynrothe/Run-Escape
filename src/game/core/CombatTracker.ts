@@ -1,10 +1,13 @@
-import { COMBAT_TASKS, canTrackOn, getGoalMaps } from "../content/combatTasks";
+import { getCharacter } from "../content/characters";
+import { COMBAT_TASKS, COMBAT_TASK_BY_ID, canTrackOn, getGoalMaps } from "../content/combatTasks";
+import { ENEMY_BY_ID } from "../content/enemies";
+import { formatTime, joinNames } from "../content/format";
 import { isDevMap, isFunMap } from "../content/maps";
-import { CombatGoal, CombatTaskDef } from "../content/types";
+import { CombatGoal, CombatStyle, CombatTaskDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { fm } from "./fmath";
-import { SaveData, getCombatProgress } from "./save";
+import { QuestProgress, SaveData, getCombatProgress } from "./save";
 
 // Follows a solo run for its Combat Achievements (content/combatTasks.ts). It only watches: it
 // reads the sim and the events each tick or action drains, and never writes to either, so the
@@ -18,6 +21,9 @@ type Watch = {
     done: boolean;
     // Given up on for the rest of the run (a rule broken)
     failed: boolean;
+    // Why it can't be done now: for the rest of the run (failed), or until its boss comes again
+    // (an endless run's next round). Undefined while it still can be.
+    reason?: string;
     // A boss's window (kill, stayInReach): open from its arrival (or last stand) to its kill
     open: boolean;
     openTick: number;
@@ -30,14 +36,27 @@ type Watch = {
     // stayInReach: the tick they went out of reach, -1 while in it. A tick, not a count of looks,
     // as it's looked at between ticks too (a casket, an item, the fight's button).
     outSince: number;
-    // killEachWithin: arrival ticks, and the ones killed in time; killTogether: kill ticks;
-    // killBeforeNext: the bosses killed
+    // killEachWithin: arrival ticks, the ones killed in time, and the ones that weren't (until
+    // they arrive again); killTogether: kill ticks; killBeforeNext: the bosses killed
     arrived?: Map<string, number>;
     inTime?: Set<string>;
+    late?: Set<string>;
     kills?: number[];
     killed?: Set<string>;
-    // guardDown: how many times so far
+    // guardDown, abilityHits: how many times so far
     count?: number;
+    // allOf: its tasks' own watches
+    parts?: Watch[];
+};
+
+// Where a task the run follows has got: still to do, done this run, or out of reach (reason says
+// why), with how far it's come for one that counts (kills, Smites, maps)
+export type CombatTaskState = "on" | "done" | "failed";
+export type CombatTaskStatus = {
+    task: CombatTaskDef;
+    state: CombatTaskState;
+    reason?: string;
+    progress?: QuestProgress;
 };
 
 const NO_TASKS: readonly CombatTaskDef[] = [];
@@ -45,10 +64,17 @@ const NO_TASKS: readonly CombatTaskDef[] = [];
 export class CombatTracker {
     private readonly watches: Watch[];
     private readonly doneIds: string[] = [];
+    // Progress this run made on tasks over more runs that the save can't see from the run's
+    // summary (combatProgress keys: each style a map was beaten with)
+    private readonly earnedKeys: string[] = [];
+    // Tasks that went out of reach since takeFailed last looked
+    private failedNow: Watch[] = [];
     private over = false;
     private readonly teleportsAtStart: number;
     // What the run started with, for noUpgrades
     private readonly upgraded: boolean;
+    // The adventurer's combat style, for beatWithEach
+    private readonly style: CombatStyle;
 
     // The tracker for a run, or none for one Combat Achievements don't follow: co-op, the fun and
     // dev maps, and the raid test (?raidtest)
@@ -73,29 +99,28 @@ export class CombatTracker {
         this.upgraded =
             Object.values(hero.metaStats).some((value) => value !== 0) ||
             Object.values(hero.armoury ?? {}).some((times) => times > 0);
+        this.style = getCharacter(hero.characterId).style;
         this.watches = COMBAT_TASKS.filter(
             (task) =>
                 !save.combatTasks.includes(task.id) &&
                 canTrackOn(task, sim.map) &&
                 this.canDoInRun(task.goal, sim),
-        ).map((task) => ({
-            task,
-            done: false,
-            failed: false,
-            open: false,
-            openTick: 0,
-            damageAtOpen: 0,
-            attacksAtOpen: 0,
-            outSince: -1,
-        }));
+        ).map((task) => startWatch(task));
         // A boss there before the first tick (nothing yet, but cheap to be sure of)
         for (const watch of this.watches) {
-            const goal = watch.task.goal;
-            if ((goal.kind === "kill" && goal.from === undefined) || goal.kind === "stayInReach") {
-                const ids = goal.kind === "kill" ? goal.bossIds : [goal.bossId];
-                const boss = sim.enemies.find((e) => e.boss && !e.dead && ids.includes(e.def.id));
-                if (boss) {
-                    this.openWindow(watch, sim, boss);
+            for (const each of [watch, ...(watch.parts ?? [])]) {
+                const goal = each.task.goal;
+                if (
+                    (goal.kind === "kill" && goal.from === undefined) ||
+                    goal.kind === "stayInReach"
+                ) {
+                    const ids = goal.kind === "kill" ? goal.bossIds : [goal.bossId];
+                    const boss = sim.enemies.find(
+                        (e) => e.boss && !e.dead && ids.includes(e.def.id),
+                    );
+                    if (boss) {
+                        this.openWindow(each, sim, boss);
+                    }
                 }
             }
         }
@@ -109,6 +134,39 @@ export class CombatTracker {
     // The ids of the tasks done so far this run, in order
     get done(): readonly string[] {
         return this.doneIds;
+    }
+
+    // The progress this run made that its summary doesn't show (RunSummary.combatProgress)
+    get earned(): readonly string[] {
+        return this.earnedKeys;
+    }
+
+    // Where each task the run follows has got, in the list's order
+    statuses(sim: Sim): CombatTaskStatus[] {
+        return this.watches.map((watch) => {
+            const state = watch.done
+                ? "done"
+                : watch.failed || watch.reason !== undefined
+                  ? "failed"
+                  : "on";
+            const progress = this.progressOf(watch, sim);
+            return {
+                task: watch.task,
+                state,
+                ...(state === "failed" && { reason: watch.reason }),
+                ...(progress && { progress }),
+            };
+        });
+    }
+
+    // The tasks that have gone out of reach since the last call, and why
+    takeFailed(): { task: CombatTaskDef; reason: string }[] {
+        if (this.failedNow.length === 0) {
+            return [];
+        }
+        const failed = this.failedNow.map((w) => ({ task: w.task, reason: w.reason ?? "" }));
+        this.failedNow = [];
+        return failed;
     }
 
     // Whether this run can do it at all, by its mode
@@ -128,10 +186,23 @@ export class CombatTracker {
                     getGoalMaps(goal.maps).includes(sim.map.id) &&
                     (!goal.rules?.noUpgrades || !this.upgraded)
                 );
+            case "beatWithEach":
+                return (
+                    !sim.endless &&
+                    getGoalMaps(goal.maps).includes(sim.map.id) &&
+                    goal.styles.includes(this.style)
+                );
             case "endlessRound":
                 return sim.endless && (!goal.hard || sim.hard);
             case "stayInReach":
                 return sim.map.fight?.strikeReach !== undefined;
+            case "allOf":
+                return (
+                    (!goal.win || !sim.endless) &&
+                    goal.taskIds.every((id) =>
+                        this.canDoInRun(COMBAT_TASK_BY_ID.get(id)!.goal, sim),
+                    )
+                );
             default:
                 return true;
         }
@@ -148,10 +219,14 @@ export class CombatTracker {
             if (watch.done || watch.failed) {
                 continue;
             }
+            const before = watch.reason;
             if (this.check(watch, sim, events)) {
                 watch.done = true;
+                watch.reason = undefined;
                 this.doneIds.push(watch.task.id);
                 (newly ??= []).push(watch.task);
+            } else if (watch.reason !== undefined && before === undefined) {
+                this.failedNow.push(watch);
             }
         }
         // Nothing more counts once it's won or lost, though the sim ticks on for its animations
@@ -176,6 +251,21 @@ export class CombatTracker {
                 return getGoalMaps(goal.maps).every(
                     (id) => id === sim.map.id || this.save.combatProgress[`${watch.task.id}:${id}`],
                 );
+            case "beatWithEach": {
+                if (sim.state !== "victory") {
+                    return false;
+                }
+                // This adventurer's style, and every other one won with before
+                const key = `${watch.task.id}:${this.style}`;
+                if (!this.earnedKeys.includes(key)) {
+                    this.earnedKeys.push(key);
+                }
+                return goal.styles.every(
+                    (style) =>
+                        style === this.style ||
+                        this.save.combatProgress[`${watch.task.id}:${style}`],
+                );
+            }
             case "killCount": {
                 if (!events.some((e) => e.type === "kill" && goal.enemyIds.includes(e.enemyId))) {
                     return false;
@@ -197,16 +287,29 @@ export class CombatTracker {
             case "killEachWithin": {
                 const arrived = (watch.arrived ??= new Map());
                 const inTime = (watch.inTime ??= new Set());
+                const late = (watch.late ??= new Set());
+                const limit = goal.seconds * TICKS_PER_SECOND;
                 for (const e of events) {
                     if (e.type === "bossSpawned" && goal.bossIds.includes(e.enemyId)) {
                         arrived.set(e.enemyId, sim.tick);
+                        late.delete(e.enemyId);
                     } else if (e.type === "kill" && goal.bossIds.includes(e.enemyId)) {
                         const at = arrived.get(e.enemyId);
-                        if (at !== undefined && sim.tick - at <= goal.seconds * TICKS_PER_SECOND) {
+                        if (at !== undefined && sim.tick - at <= limit) {
                             inTime.add(e.enemyId);
                         }
                     }
                 }
+                // Up too long, or killed too late, and not in time before
+                for (const [id, at] of arrived) {
+                    if (!inTime.has(id) && sim.tick - at > limit) {
+                        late.add(id);
+                    }
+                }
+                watch.reason =
+                    late.size > 0
+                        ? `${joinNames([...late].map(enemyName))} took over ${formatTime(goal.seconds)}`
+                        : undefined;
                 return inTime.size === goal.bossIds.length;
             }
             case "killBeforeNext": {
@@ -220,6 +323,7 @@ export class CombatTracker {
                         const i = bosses.indexOf(e.enemyId);
                         if (i > 0 && !killed.has(bosses[i - 1])) {
                             watch.failed = true;
+                            watch.reason = `${enemyName(e.enemyId)} rose before ${enemyName(bosses[i - 1])} was down`;
                             return false;
                         }
                     }
@@ -241,28 +345,15 @@ export class CombatTracker {
                 );
             }
             case "win": {
-                if (
-                    goal.hpAbove !== undefined &&
-                    hero.player.hp < hero.player.maxHp * goal.hpAbove
-                ) {
+                // Each rule only ever gets broken for good, so it's checked as it goes, for the
+                // HUD, and once more as the run's won
+                const broke = this.whatBroke(goal, sim, events);
+                if (broke) {
                     watch.failed = true;
+                    watch.reason = broke;
                     return false;
                 }
-                if (
-                    goal.rules?.noGear &&
-                    events.some((e) => e.type === "equip" && this.isMine(e, sim))
-                ) {
-                    watch.failed = true;
-                    return false;
-                }
-                if (
-                    goal.rules?.noSleepwalkers &&
-                    events.some((e) => e.type === "bossAbsorbBlast" && e.absorbed > 0)
-                ) {
-                    watch.failed = true;
-                    return false;
-                }
-                return sim.state === "victory" && this.keptTo(goal, sim);
+                return sim.state === "victory";
             }
             case "evolve":
                 return hero.evolutionsMade.length >= goal.count;
@@ -298,39 +389,76 @@ export class CombatTracker {
                     }
                 }
                 return (watch.count ?? 0) >= goal.count;
+            case "allOf": {
+                const parts = watch.parts!;
+                for (const part of parts) {
+                    if (!part.done && !part.failed && this.check(part, sim, events)) {
+                        part.done = true;
+                        part.reason = undefined;
+                    }
+                }
+                // One of them out of reach puts the whole out of reach, as long as it is
+                const spoilt = parts.find((p) => !p.done && (p.failed || p.reason !== undefined));
+                if (spoilt) {
+                    watch.failed = spoilt.failed;
+                    watch.reason = `${spoilt.task.name}: ${spoilt.reason}`;
+                    return false;
+                }
+                watch.reason = undefined;
+                return parts.every((p) => p.done) && (!goal.win || sim.state === "victory");
+            }
         }
     }
 
-    // A won run's end: what it kept to
-    private keptTo(goal: Extract<CombatGoal, { kind: "win" }>, sim: Sim): boolean {
+    // What's broken a win's rules, hitpoints or time so far, if anything
+    private whatBroke(
+        goal: Extract<CombatGoal, { kind: "win" }>,
+        sim: Sim,
+        events: readonly SimEvent[],
+    ): string | undefined {
         const hero = sim.heroes[sim.focus];
         const rules = goal.rules ?? {};
+        if (goal.hpAbove !== undefined && hero.player.hp < hero.player.maxHp * goal.hpAbove) {
+            return `fell below ${Math.round(goal.hpAbove * 100)}% hitpoints`;
+        }
+        if (rules.noGear && events.some((e) => e.type === "equip" && this.isMine(e, sim))) {
+            return "put on casket gear";
+        }
+        if (
+            rules.noSleepwalkers &&
+            events.some((e) => e.type === "bossAbsorbBlast" && e.absorbed > 0)
+        ) {
+            return "a sleepwalker reached her";
+        }
         if (goal.within !== undefined && sim.seconds >= goal.within) {
-            return false;
+            return `over ${formatTime(goal.within)}`;
         }
         if (goal.damage !== undefined && countedDamage(hero, goal.except) > goal.damage) {
-            return false;
+            return goal.damage === 0
+                ? (lastHit(events, sim) ?? "took damage")
+                : `took over ${goal.damage} damage`;
         }
         if (rules.oneWeapon && hero.weapons.length > 1) {
-            return false;
+            return "took a second weapon";
         }
         if (rules.noPassives && hero.passives.length > 0) {
-            return false;
+            return "took a passive";
         }
-        if (rules.noTakeBacks) {
-            const stats = sim.getRunStats();
-            const banished = hero.banished.size + hero.banishedItems.size + hero.banishedSets.size;
-            if (stats.rerollsUsed > 0 || stats.skips > 0 || banished > 0) {
-                return false;
-            }
+        if (
+            rules.noTakeBacks &&
+            (hero.rerollsLeft < hero.rerollsAtStart ||
+                hero.skips > 0 ||
+                hero.banished.size + hero.banishedItems.size + hero.banishedSets.size > 0)
+        ) {
+            return "rerolled, skipped or banished";
         }
         if (rules.noTeleports && sim.raidTeleportsLeft !== this.teleportsAtStart) {
-            return false;
+            return "used a teleporter";
         }
         if (rules.noSupplies && hero.raidPoints !== hero.raidPointsEarned) {
-            return false;
+            return "spent raid points";
         }
-        return true;
+        return undefined;
     }
 
     private checkKill(
@@ -340,7 +468,6 @@ export class CombatTracker {
         events: readonly SimEvent[],
     ): boolean {
         const hero = sim.heroes[sim.focus];
-        const without = goal.without ?? [];
         for (const e of events) {
             if (!watch.open) {
                 const opens =
@@ -357,47 +484,48 @@ export class CombatTracker {
             if (!this.isMine(e, sim)) {
                 continue;
             }
-            const broke =
-                (e.type === "playerHit" &&
-                    without.includes("hits") &&
-                    goal.bossIds.includes(e.enemyId)) ||
-                (e.type === "bossAbsorbBlast" &&
-                    e.absorbed > 0 &&
-                    without.includes("sleepwalkers")) ||
-                (e.type === "enemyHealed" &&
-                    without.includes("heals") &&
-                    goal.bossIds.includes(e.enemyId));
+            const broke = whatSpoils(e, goal);
             if (broke) {
                 watch.open = false;
+                watch.reason = broke;
                 continue;
             }
             if (e.type === "kill" && goal.bossIds.includes(e.enemyId)) {
                 watch.open = false;
-                if (this.windowClean(watch, goal, hero) && this.inTime(watch, goal, sim)) {
+                const why =
+                    this.whatSpoilt(watch, goal, hero, sim, events) ??
+                    this.lateness(watch, goal, sim);
+                if (!why) {
                     return true;
                 }
+                watch.reason = why;
             }
         }
         // What's polled rather than evented: anything that ends it early (it opens again when the
         // boss next arrives, in an endless run's next round)
-        if (
-            watch.open &&
-            (!this.windowClean(watch, goal, hero) || !this.inTime(watch, goal, sim))
-        ) {
-            watch.open = false;
+        if (watch.open) {
+            const why =
+                this.whatSpoilt(watch, goal, hero, sim, events) ?? this.lateness(watch, goal, sim);
+            if (why) {
+                watch.open = false;
+                watch.reason = why;
+            }
         }
         return false;
     }
 
-    private windowClean(
+    // What's spoilt the window by what it's taken so far, if anything
+    private whatSpoilt(
         watch: Watch,
         goal: Extract<CombatGoal, { kind: "kill" }>,
         hero: Hero,
-    ): boolean {
+        sim: Sim,
+        events: readonly SimEvent[],
+    ): string | undefined {
         const counted = countedDamage(hero, goal.except);
         for (const avoid of goal.without ?? []) {
             if (avoid === "damage" && counted > watch.damageAtOpen) {
-                return false;
+                return lastHit(events, sim) ?? "took damage";
             }
             // Polled: whatever hurt them between one look and the next while the curse was on
             if (avoid === "hurtCursed") {
@@ -406,23 +534,32 @@ export class CombatTracker {
                 } else if (watch.curseBase === undefined) {
                     watch.curseBase = counted;
                 } else if (counted > watch.curseBase) {
-                    return false;
+                    return "hurt while cursed";
                 }
             }
             if (
                 typeof avoid === "object" &&
                 sumAttacks(hero.damageByAttack, avoid.attacks) > watch.attacksAtOpen
             ) {
-                return false;
+                // Its hit's in these events: only a boss's attacks are counted by name, and
+                // they're evented as they land
+                return (
+                    lastHit(events, sim, avoid.attacks) ?? `hit by ${avoid.attacks.join(" or ")}`
+                );
             }
         }
-        return true;
+        return undefined;
     }
 
-    private inTime(watch: Watch, goal: Extract<CombatGoal, { kind: "kill" }>, sim: Sim): boolean {
-        return (
-            goal.within === undefined || sim.tick - watch.openTick <= goal.within * TICKS_PER_SECOND
-        );
+    private lateness(
+        watch: Watch,
+        goal: Extract<CombatGoal, { kind: "kill" }>,
+        sim: Sim,
+    ): string | undefined {
+        return goal.within !== undefined &&
+            sim.tick - watch.openTick > goal.within * TICKS_PER_SECOND
+            ? `not down within ${formatTime(goal.within)}`
+            : undefined;
     }
 
     private checkReach(
@@ -460,6 +597,7 @@ export class CombatTracker {
             watch.outSince = sim.tick;
         } else if (sim.tick - watch.outSince >= goal.seconds * TICKS_PER_SECOND) {
             watch.failed = true;
+            watch.reason = `out of reach for ${goal.seconds} seconds`;
         }
         return false;
     }
@@ -469,6 +607,7 @@ export class CombatTracker {
         const goal = watch.task.goal;
         watch.open = true;
         watch.openTick = sim.tick;
+        watch.reason = undefined;
         watch.damageAtOpen = countedDamage(hero, goal.kind === "kill" ? goal.except : undefined);
         watch.outSince = -1;
         watch.curseBase = undefined;
@@ -482,10 +621,102 @@ export class CombatTracker {
         }
     }
 
+    // How far a task's got, for one that counts its way there
+    private progressOf(watch: Watch, sim: Sim): QuestProgress | undefined {
+        const goal = watch.task.goal;
+        const hero = sim.heroes[sim.focus];
+        const upTo = (done: number, of: number) => ({ done: Math.min(done, of), of });
+        switch (goal.kind) {
+            case "killCount":
+                return getCombatProgress(this.save, watch.task, sim.enemyKills);
+            case "beatMap":
+                return goal.all ? getCombatProgress(this.save, watch.task) : undefined;
+            case "beatWithEach": {
+                const id = watch.task.id;
+                const won = goal.styles.filter(
+                    (style) =>
+                        this.save.combatProgress[`${id}:${style}`] ||
+                        this.earnedKeys.includes(`${id}:${style}`),
+                );
+                return upTo(won.length, goal.styles.length);
+            }
+            case "endlessRound":
+                return upTo(sim.round, goal.round);
+            case "evolve":
+                return upTo(hero.evolutionsMade.length, goal.count);
+            case "killEachWithin":
+                return upTo(watch.inTime?.size ?? 0, goal.bossIds.length);
+            case "guardDown":
+            case "abilityHits":
+                return upTo(watch.count ?? 0, goal.count);
+            case "allOf":
+                return upTo(watch.parts!.filter((p) => p.done).length, watch.parts!.length);
+            default:
+                return undefined;
+        }
+    }
+
     // A personal event that's this player's (all of them, on your own)
     private isMine(event: SimEvent, sim: Sim): boolean {
         return event.hero === undefined || event.hero === sim.focus;
     }
+}
+
+function startWatch(task: CombatTaskDef): Watch {
+    const goal = task.goal;
+    return {
+        task,
+        done: false,
+        failed: false,
+        open: false,
+        openTick: 0,
+        damageAtOpen: 0,
+        attacksAtOpen: 0,
+        outSince: -1,
+        ...(goal.kind === "allOf" && {
+            parts: goal.taskIds.map((id) => startWatch(COMBAT_TASK_BY_ID.get(id)!)),
+        }),
+    };
+}
+
+// What an event spoils a kill's window with, if anything: a hit from the boss, a sleepwalker
+// reaching it, a healer healing it
+function whatSpoils(e: SimEvent, goal: Extract<CombatGoal, { kind: "kill" }>): string | undefined {
+    const without = goal.without ?? [];
+    if (e.type === "playerHit" && without.includes("hits") && goal.bossIds.includes(e.enemyId)) {
+        return `hit by ${e.attack ?? enemyName(e.enemyId)}`;
+    }
+    if (e.type === "bossAbsorbBlast" && e.absorbed > 0 && without.includes("sleepwalkers")) {
+        return "a sleepwalker reached her";
+    }
+    if (e.type === "enemyHealed" && without.includes("heals") && goal.bossIds.includes(e.enemyId)) {
+        return `${enemyName(e.enemyId)} was healed`;
+    }
+    return undefined;
+}
+
+// The last hit on this player in these events (only from these attacks, if given), as "hit by"
+// its attack or whoever landed it
+function lastHit(
+    events: readonly SimEvent[],
+    sim: Sim,
+    attacks?: readonly string[],
+): string | undefined {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const e = events[i];
+        if (
+            e.type === "playerHit" &&
+            (e.hero === undefined || e.hero === sim.focus) &&
+            (!attacks || (e.attack !== undefined && attacks.includes(e.attack)))
+        ) {
+            return `hit by ${e.attack ?? enemyName(e.enemyId)}`;
+        }
+    }
+    return undefined;
+}
+
+function enemyName(id: string): string {
+    return ENEMY_BY_ID.get(id)?.name ?? id;
 }
 
 // What they've taken, less what these attacks did: what a damage goal counts
