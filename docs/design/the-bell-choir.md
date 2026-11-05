@@ -20,11 +20,11 @@ player hurts her only by keeping time:
   struck it.
 - **Step out of an attack on its last count** for a small buff (**Grace**).
 
-| | Zachariah | The Bell Choir |
-| --- | --- | --- |
-| Clock | Cooldowns × phase tempo | A beat clock: everything counted in bars and beats |
-| Offence | Auto strike in reach + Smite | Toll on the beat, ring back a bell, Grace for an on-beat dodge |
-| Sound | Music under the fight | Music locked to the beat (it speeds up with her), bells as the metronome; fully playable muted |
+|         | Zachariah                    | The Bell Choir                                                                                 |
+| ------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| Clock   | Cooldowns × phase tempo      | A beat clock: everything counted in bars and beats                                             |
+| Offence | Auto strike in reach + Smite | Toll on the beat, ring back a bell, Grace for an on-beat dodge                                 |
+| Sound   | Music under the fight        | Music locked to the beat (it speeds up with her), bells as the metronome; fully playable muted |
 
 ## Where, and who
 
@@ -75,29 +75,29 @@ player hurts her only by keeping time:
 
 ## Fighting back
 
-| | Number |
-| --- | --- |
-| Toll on the beat within 4.5 of her middle | 6 + 2 × Resonance, then +1 Resonance (max 8): 6 to 22 a beat |
-| On the beat, out of reach | rings, nothing else |
-| Off the beat | Resonance halves |
-| Hit | −2 Resonance |
-| Ring back (Toll within 4.5 + radius of a bell's middle, the 2 beats after it's struck) | 40 + 15 × Resonance (40 to 160), Resonance to 0 |
-| Discord (out of tune) | double damage for a bar, once a round of the bells |
-| Grace | +2 Resonance, Toll's reach 6.5 for a bar |
+|                                                                                        | Number                                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Toll on the beat within 4.5 of her middle                                              | 6 + 2 × Resonance, then +1 Resonance (max 8): 6 to 22 a beat |
+| On the beat, out of reach                                                              | rings, nothing else                                          |
+| Off the beat                                                                           | Resonance halves                                             |
+| Hit                                                                                    | −2 Resonance                                                 |
+| Ring back (Toll within 4.5 + radius of a bell's middle, the 2 beats after it's struck) | 40 + 15 × Resonance (40 to 160), Resonance to 0              |
+| Discord (out of tune)                                                                  | double damage for a bar, once a round of the bells           |
+| Grace                                                                                  | +2 Resonance, Toll's reach 6.5 for a bar                     |
 
 ## Her attacks
 
-| Attack | Phases | Damage | Lands | Warning (ticks P1/P2/P3) | To be clear |
-| --- | --- | --- | --- | --- | --- |
-| The Clap: r 3.5 round her | 1, 2 | 7 | beat 4 | 75 / 66 / – | 2.0 tiles from her edge |
-| Double clap: + ring 3.5–5.5 | 3 | 7 + 5 | beat 4, and its "and" | 60 (+10) | 0.7 back in, or beyond 5.85 |
-| Echo: r 1 mark where you stood, each beat of a bar | 1 | 4 each | a bar later | 100 | 1.35 tiles |
-| Echo (syncopated) | 2, 3 | 4 each | a bar and a half beat later | 88 / 80 (+½) | 1.35 tiles |
-| Change ringing: r 4.5 round each bell | 1 (in order), 2 (shuffled), 3 (in pairs) | 6 | a bar after its lift | 100 / 88 / 80 | 2.5 tiles from the bell |
-| The Psalm: a band a beat, north to south | 2 (3 from both ends) | 6 | 3 ticks a band | 44 / 40 | 0.7 back across |
-| Silence: moving > 0.15 in the rest | 2, 3 | 8 | beat 4 + 4 ticks to the next beat | 66 / 60 | stop |
-| Harmony: a strip 1.5 wide between two of the choir | 2 (3: two lines) | 7 | the next downbeat | 88 / 80 | 1.1 tiles |
-| Canon: her voice's phrases again a bar later, mirrored about the nave's axis | 3 | | | | |
+| Attack                                                                       | Phases                                   | Damage | Lands                             | Warning (ticks P1/P2/P3) | To be clear                 |
+| ---------------------------------------------------------------------------- | ---------------------------------------- | ------ | --------------------------------- | ------------------------ | --------------------------- |
+| The Clap: r 3.5 round her                                                    | 1, 2                                     | 7      | beat 4                            | 75 / 66 / –              | 2.0 tiles from her edge     |
+| Double clap: + ring 3.5–5.5                                                  | 3                                        | 7 + 5  | beat 4, and its "and"             | 60 (+10)                 | 0.7 back in, or beyond 5.85 |
+| Echo: r 1 mark where you stood, each beat of a bar                           | 1                                        | 4 each | a bar later                       | 100                      | 1.35 tiles                  |
+| Echo (syncopated)                                                            | 2, 3                                     | 4 each | a bar and a half beat later       | 88 / 80 (+½)             | 1.35 tiles                  |
+| Change ringing: r 4.5 round each bell                                        | 1 (in order), 2 (shuffled), 3 (in pairs) | 6      | a bar after its lift              | 100 / 88 / 80            | 2.5 tiles from the bell     |
+| The Psalm: a band a beat, north to south                                     | 2 (3 from both ends)                     | 6      | 3 ticks a band                    | 44 / 40                  | 0.7 back across             |
+| Silence: moving > 0.15 in the rest                                           | 2, 3                                     | 8      | beat 4 + 4 ticks to the next beat | 66 / 60                  | stop                        |
+| Harmony: a strip 1.5 wide between two of the choir                           | 2 (3: two lines)                         | 7      | the next downbeat                 | 88 / 80                  | 1.1 tiles                   |
+| Canon: her voice's phrases again a bar later, mirrored about the nave's axis | 3                                        |        |                                   |                          |                             |
 
 The Psalm's bands are the nave's 35 rows in nine (3 or 4 rows each), with nothing between them.
 
@@ -117,14 +117,14 @@ Choir (4,500 coins). It opens once Justiciar Zachariah's beaten.
 
 ## Bot numbers (simulate-run.ts, 3 seeds; the bot keeps perfect time unless sloppy)
 
-| | Phase 1 | Phase 2 | Phase 3 | Result |
-| --- | --- | --- | --- | --- |
-| Careful, normal | 31–32 s | 35–42 s | 35–37 s | 3/3 won, 1:40–1:46 |
-| Sloppy, normal (±150 ms, 1 beat in 6 missed, slower) | 40–56 s | 58–64 s | 29–57 s | 2/3 won, 2:32–2:51 |
-| Careful, hard | 37–38 s | 45–51 s | 29–49 s | 1/3 won, 2:09 |
-| Sloppy, hard | 49–64 s | 67–76 s | died | 0/3 |
-| Party of 2 (guests' presses 6 ticks late) | | | | 1/3 on the map, 3/3 on `FLAT=1`, about 1:55 |
-| Party of 4 | | | | 0/3: reaches the Requiem in about 80 s |
+|                                                      | Phase 1 | Phase 2 | Phase 3 | Result                                      |
+| ---------------------------------------------------- | ------- | ------- | ------- | ------------------------------------------- |
+| Careful, normal                                      | 31–32 s | 35–42 s | 35–37 s | 3/3 won, 1:40–1:46                          |
+| Sloppy, normal (±150 ms, 1 beat in 6 missed, slower) | 40–56 s | 58–64 s | 29–57 s | 2/3 won, 2:32–2:51                          |
+| Careful, hard                                        | 37–38 s | 45–51 s | 29–49 s | 1/3 won, 2:09                               |
+| Sloppy, hard                                         | 49–64 s | 67–76 s | died    | 0/3                                         |
+| Party of 2 (guests' presses 6 ticks late)            |         |         |         | 1/3 on the map, 3/3 on `FLAT=1`, about 1:55 |
+| Party of 4                                           |         |         |         | 0/3: reaches the Requiem in about 80 s      |
 
 The bot can't read the room as a person does; most of what hits it is the Psalm from both ends
 and the double clap. The careful bot is on every beat in reach: a good player will be about a
