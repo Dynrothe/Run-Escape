@@ -1,11 +1,14 @@
 import {
     createAsciiFloor,
+    createFireAndIce,
     createMosaicFloor,
+    createPlatesAndPhases,
     createSepulchreCircle,
     createSlabIslands,
     createStoneHall,
+    createTerraces,
 } from "../../content/floorDemos";
-import type { FloorDef } from "../../content/types";
+import type { FloorDef, WaveDef } from "../../content/types";
 import { createWardensFloor } from "../../content/wardensFloor";
 import { Ground } from "../Ground";
 import { SealRegion, assertReachable, sealFrom } from "../collision";
@@ -166,10 +169,26 @@ type FloorRoom = {
     description: string;
     // The floor, for its box in world tiles (the room's floor, 23 by 25 tiles)
     floor: (rect: FloorDef["rect"]) => FloorDef;
+    // What comes at you (none when unset: only the floor)
+    waves?: WaveDef[];
 };
 
+// A few small things to shoot, for a demo whose floor does something to shots
+const FEW_ENEMIES: WaveDef[] = [
+    {
+        start: 0,
+        enemies: [
+            { id: "chicken", weight: 2 },
+            { id: "goblin", weight: 1 },
+        ],
+        spawnRate: 0.6,
+        minAlive: 5,
+        maxAlive: 10,
+    },
+];
+
 // The room with a floor of its own in it
-function floorRoom({ id, mapX, mapY, name, description, floor }: FloorRoom): MapRecipe {
+function floorRoom({ id, mapX, mapY, name, description, floor, waves }: FloorRoom): MapRecipe {
     return {
         id,
         mapX,
@@ -187,7 +206,7 @@ function floorRoom({ id, mapX, mapY, name, description, floor }: FloorRoom): Map
             description,
             // Tumeken's shadow
             iconObjId: 27275,
-            waves: [],
+            waves: waves ?? [],
             floor: floor({
                 x0: mapX * MAP_SQUARE_SIZE + SW.x,
                 y0: mapY * MAP_SQUARE_SIZE + SW.y,
@@ -261,5 +280,36 @@ export const FLOOR_DEMOS: MapRecipe[] = [
         description:
             "A floor demo: grey stone slabs and bands of brick, with pillars standing in the floor.",
         floor: createStoneHall,
+    }),
+    floorRoom({
+        id: "scaperune_floor_effects",
+        mapX: 81,
+        mapY: 86,
+        name: "Floor demo: fire and ice",
+        description:
+            "A floor demo: lava that burns, ice you slide on, mud, speed plates and healing " +
+            "glyphs, and a floor that rebuilds itself.",
+        floor: createFireAndIce,
+    }),
+    floorRoom({
+        id: "scaperune_floor_plates",
+        mapX: 78,
+        mapY: 89,
+        name: "Floor demo: plates and phases",
+        description:
+            "A floor demo: pressure plates that spring traps, a border that melts to lava now " +
+            "and then, and cracked bricks that show their damage.",
+        floor: createPlatesAndPhases,
+    }),
+    floorRoom({
+        id: "scaperune_floor_terraces",
+        mapX: 81,
+        mapY: 89,
+        name: "Floor demo: terraces",
+        description:
+            "A floor demo: raised and sunken tiles with ramps, and pillars that stop shots and " +
+            "hide you, with a few chickens and goblins to shoot.",
+        floor: createTerraces,
+        waves: FEW_ENEMIES,
     }),
 ];

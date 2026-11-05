@@ -761,7 +761,7 @@ wrong (posts, trunks, the egg sac): only the game shows those.
 A map can have a floor the game draws and moves itself, tile by tile (`MapDef.floor`, a `FloorDef` in
 `content/types.ts`): slabs rise under the player in waves and tiles fall away into a pit, as in the Wardens' third
 phase. `core/ArenaFloor.ts` runs it, `core/floorLayout.ts` lays it out and `client/FloorView.ts` draws it. The
-dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itself and four demos
+dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itself and eight demos
 (`content/floorDemos.ts`).
 
 **The room.** The floor's box is a bridge (`TILE_BRIDGE` on level 1) of the hidden overlay over a dug-out pit, so
@@ -836,6 +836,7 @@ bright tiles a stronger, hotter one, and a recoloured slab a quieter one.
 | The Tombs' gold glyph plates      | `pressurePlate`, `glyphPlate`                                             |
 | A decal                           | `rune`                                                                    |
 | Pillars                           | `stonePillar`, `tombsPillar` (2 by 2)                                     |
+| Tiles that do something (effects) | `lava`, `ice`, `mud`, `sand`, `healGlyph` (a decal), `speedPlate`         |
 
 Most of the cache's 1 by 1 floor models are see-through overlays or invisible hitboxes:
 
@@ -891,9 +892,8 @@ floor's skin to stand on (`under`). A 2 by 2 one is a slab:
 ```
 
 - **Movement:** it blocks it, and the floor counts it as no way through, so holes never cut the floor round it.
-- **Shots:** nothing in this game stops shots at objects, so it doesn't block them.
-- **Camera:** it's drawn as an actor, not part of the world, so it can hide a player standing just north of it,
-  without the silhouette the world's walls give.
+- **Shots and sight:** it stops shots, and blocks targeting (see Pillars stop shots, below).
+- **Camera:** whoever's behind it shows as a silhouette, as behind a wall.
 
 **Slabs** (`slab: [x, y]` on a rule): tiles that rise and fall as one piece.
 
@@ -919,11 +919,130 @@ tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
 **Cues** (`cue` on a pattern or the floor): `subtle` (the default) or `bold`. Both show every tile a pattern will
 hit from the moment it starts.
 
-**Checks.** `core/floorLayout.test.ts` lays out and plays each demo for a loop and a half. Its checks:
+**Tiles that do something** (`effect` on a tiles rule, or a skin's own `effect`; `"none"` takes a skin's away):
+
+| Effect  | On a player                                          | On an enemy           | Ready-made skin             |
+| ------- | ---------------------------------------------------- | --------------------- | --------------------------- |
+| `burn`  | 4% of their hitpoints every 0.5 s, with no grace     | 3 damage every 0.5 s  | `lava` (glows, `glow: 0.3`) |
+| `heal`  | 3% of their hitpoints every 0.5 s                    | nothing               | `healGlyph` (a decal)       |
+| `haste` | 40% faster                                           | 40% faster            | `speedPlate`                |
+| `slow`  | 45% slower                                           | 45% slower            | `mud`, `sand`               |
+| `ice`   | they keep their momentum, steering 6% of it a tick   | nothing               | `ice`                       |
+
+Tune them with `tileEffects` (`burn: { damage, every, enemyDamage }`, `heal: { amount, every }`, `haste`, `slow`,
+`ice: { grip }`). Flying enemies don't burn. A skin's `glow` (0 to 1) lights it all over in its `tint`'s colour, for lava.
+
+```ts
+skins: [FLOOR_SKINS.greySlab, FLOOR_SKINS.lava, FLOOR_SKINS.ice, { ...FLOOR_SKINS.healGlyph, under: 0 }],
+tiles: [
+    { where: { kind: "rect", x0: 16, y0: 2, x1: 22, y1: 22 }, skin: 1 },
+    { where: { kind: "rect", x0: 0, y0: 0, x1: 5, y1: 24 }, skin: 2 },
+    { where: { kind: "rect", x0: 11, y0: 22, x1: 11, y1: 22 }, skin: 3, type: "safe" },
+],
+```
+
+Ice and plates change the movement rule the sim and a co-op guest's prediction share (`core/PlayerMovement.ts`), but
+the guest's prediction doesn't know about them, so it corrects itself there.
+
+**A floor that rebuilds itself** (`rebuild: { after, warn, rise }`): a fallen tile comes back `after` seconds after it
+falls. For its last `warn` seconds (1) it comes up out of the dark, lit from under and turning back over the way it
+fell, then rises into place over `rise` seconds (0.8). It waits for floor beside it, so it never comes back cut off,
+and the flow field is worked out again. A rule's `rebuild` is seconds for its tiles, or 0 for never.
+
+```ts
+rebuild: { after: 6 },
+tiles: [{ where: { kind: "border" }, rebuild: 0 }],
+```
+
+**Pressure plates** (`triggers`, and `trigger` on a tiles rule): a player stepping onto the tile sets it off, then it
+rests for `cooldown` seconds (5). `once` sets it off only once. `armed: false` starts it disarmed. It's lit while it's
+ready and sinks while it's stood on. What it does is a list of actions. Groups are named tiles (`group` on a
+rule), and `patterns` names patterns.
+
+```ts
+tiles: [
+    { where: { kind: "rect", x0: 11, y0: 5, x1: 11, y1: 5 }, skin: 2, type: "solid", trigger: "trap" },
+    { where: { kind: "rect", x0: 8, y0: 7, x1: 14, y1: 9 }, group: "jaws" },
+],
+triggers: { trap: { actions: [{ kind: "slam", group: "jaws" }], cooldown: 4, message: "Click!" } },
+```
+
+**Actions** (`FloorActionDef`), each with an optional `delay` in seconds:
+
+| Action      | What it does                                                    |
+| ----------- | --------------------------------------------------------------- |
+| `pattern`   | starts a pattern, or one of `patterns` by name                  |
+| `drop`      | a group falls, warned as a fall is (never cutting the floor in two) |
+| `raise`     | a group's fallen tiles come back                                |
+| `slam`      | a group rises, a warning from now: a trap                       |
+| `dropUnder` | the tile under whoever it's aimed at falls                      |
+| `arm`       | arms a trigger, or disarms it (`armed: false`)                  |
+| `phase`     | goes to one of the floor's `phases`                             |
+
+A beat in the script can be an action instead of a pattern: `{ at: 30, action: { kind: "phase", phase: "molten" } }`.
+
+**Phases** (`phases`): another script with its own loop, from the moment it starts, and skins swapped on every tile
+(`skins: [[from, to]]`, by index), their effects going with them. To swap only part of the floor, give that part a
+copy of its skin.
+
+**Bosses act on the floor** through `Sim.floorAct(action, at?)` (aimed at the floor's target when `at` is left out),
+or `floor` on a `BossAttackDef`, done as the attack starts, aimed at the player it's after:
+
+```ts
+{ name: "Crack", kind: "blast", ..., floor: { kind: "dropUnder", delay: 0.5 } },
+```
+
+**Pillars stop shots.** A `pillar` tile stops the player's shots and enemies' where they meet it (orbiting ones go
+round), weapons don't pick a target behind one, and an enemy with a shot doesn't fire through one. Only a floor's
+pillars do this, and only on its map: a floor with none costs nothing. (Boss bullet patterns have their own
+`pillars`, the map's `features.pillars`, worked out as they're fired.)
+
+**What's behind a pillar** shows as a silhouette, as behind the world's walls: pillars and raised tiles are drawn
+before the silhouettes (`ActorDrawOptions.early`).
+
+**Materials** (a skin's `material`, `FLOOR_MATERIALS` in `content/floorSkins.ts`): a spot animation and a sound as it
+rises, as it falls and as a fragile one cracks (rises nearer giving way). They take the place of the floor's own
+dust and sounds on that skin, on the same share of the tiles. `stone`, `brick`, `ice` and `lava`; which sound suits
+which is a guess (none of them is a floor's in OSRS but the Wardens').
+
+```ts
+skins: [{ ...FLOOR_SKINS.brickPaving, material: FLOOR_MATERIALS.brick }],
+```
+
+**Damage you can see.** A fragile tile that's risen is darker, sunk a little and askew, more each time, until it gives
+way. A skin's `stages` are skins to draw instead after one rise, two and so on.
+
+**Height** (`height` on a rule, in tiles; below 0 is sunken) and **ramps** (`ramp: "north"` and so on, the way up):
+a ramp goes from the tile behind it to the one ahead, and its sides are ledges. Wherever heights differ there's a ledge,
+a wall on the grid (`ArenaGrid.addLedge`), so nobody walks up or down it but by a ramp. What's faked: it's all one
+plane. Players and enemies are drawn at the height they're on (`ArenaFloor.liftAt`), but shots, hits and reach
+don't know about height, and a flying enemy crosses ledges. A raised tile's sides are the tile again under itself.
+
+```ts
+tiles: [
+    { where: { kind: "rect", x0: 7, y0: 13, x1: 15, y1: 20 }, height: 0.5 },
+    { where: { kind: "rect", x0: 11, y0: 12, x1: 11, y1: 12 }, ramp: "north" },
+],
+```
+
+**Tiles at rest are cheap.** A 1 by 1 tile at rest with floor at rest on all four sides at its height is drawn as its
+top alone (a bake of the skin with only its upward faces near the top, `ModelBakeRequest.topOnly`), as nothing round
+it can show its sides. They're still instanced, one draw a skin. Glyphs, plates, decals, ramps and cracked tiles are
+always drawn whole.
+
+**The floor preview** (dev server only): `http://localhost:5173/?floorpreview`. Pick a floor, or paste one as JSON
+(the Wardens' numbers fill what's left out, and skins can be `FLOOR_SKINS` names) or an ascii map. It draws the tiles
+from above and plays the script with the player at the start on a timeline you can scrub, and lists what
+`core/floorLint.ts` finds: pieces cut off, tiles behind ledges, see-through skins, level ramps, triggers on no tile,
+and a rough phone triangle count against 69k.
+
+**Checks.** `core/floorLayout.test.ts` lays out and plays each demo for a loop and a half, and
+`core/floorFeatures.test.ts` lints each one. Their checks:
 
 - the start is on the floor;
 - the floor is never cut in two;
-- the ascii rows are the box's width.
+- the ascii rows are the box's width;
+- everything can be reached from the start, and the rough phone count is in budget.
 
 A new floor's map should get the same.
 
