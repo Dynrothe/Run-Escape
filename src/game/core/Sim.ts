@@ -714,8 +714,10 @@ export type Hero = {
     staredUntil?: number;
     // What came out of a raid's chest at the end, for the result screen
     raidChest?: RaidChest;
-    // The Tombs of Amascut's points (TOMBS_POINTS), and times they went down there
+    // The Tombs of Amascut's points (TOMBS_POINTS), and times they went down there; and every
+    // boss point earned, deaths or not, which the Helpful Spirit's are counted out of
     tombsPoints: number;
+    tombsGross: number;
     tombsDowns: number;
     name: string;
     characterId: string;
@@ -1765,6 +1767,7 @@ export class Sim {
             raidDamageAtStart: 0,
             raidPointsEarned: 0,
             tombsPoints: 0,
+            tombsGross: 0,
             tombsDowns: 0,
             healed: 0,
             highestHit: 0,
@@ -14158,7 +14161,10 @@ export class Sim {
             const party = this.heroes.filter((hero) => !hero.left).length;
             const points = (taken / pointsTo.maxHp) * worth * party;
             this.hero.tombsPoints += points;
-            this.hero.raidPoints += points;
+            // What's to spend is whole points, as the Theatre's are: the whole ones this crossed
+            const gross = this.hero.tombsGross;
+            this.hero.tombsGross += points;
+            this.hero.raidPoints += Math.floor(this.hero.tombsGross) - Math.floor(gross);
         }
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;

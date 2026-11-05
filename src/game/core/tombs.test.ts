@@ -2836,6 +2836,9 @@ describe("the Wardens' second and last phases", () => {
         expect(board.party).toHaveLength(1);
         expect(board.party[0].you).toBe(true);
         expect(board.party[0].points).toBeGreaterThanOrEqual(TOMBS_POINTS.wardenThree);
+        // And the points to spend at the Helpful Spirit are whole
+        expect(sim.raidPoints).toBeGreaterThan(0);
+        expect(Number.isInteger(sim.raidPoints)).toBe(true);
         // The fight's on the run's clock, not left out as the Nexus is
         expect(sim.seconds).toBeGreaterThan(WARDENS.two.toLast);
     });
