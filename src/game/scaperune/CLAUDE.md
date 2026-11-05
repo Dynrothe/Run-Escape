@@ -1468,6 +1468,11 @@ each is flat at its height and the lips stand level. The camera's always over th
 faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
 1 and east at 3.
 
+**A floor the game draws itself** (`wardensFloor.ts`, a dev map trying out `MapDef.floor`): the Wardens' room in the Tombs
+of Amascut, cut whole with `plane: 1`, with its own floor swapped for the hidden overlay and its floor decoration and middle pit
+left out. `client/FloorView.ts` draws every tile of it as a slab (the rising slab's model at rest), so each can rise or fall
+on its own and a fallen one shows the void's black. Nothing under the slabs is drawn, so there's nothing for them to z-fight.
+
 ### How big a map can be
 
 Measured in Node on this VM, on a forest-bound meadow with default settings otherwise, through `preview.ts`:

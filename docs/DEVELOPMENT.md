@@ -703,6 +703,26 @@ clears, not the bot's: it dies to the Maiden.
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
 
+### A floor that fights back (prototype)
+
+`MapDef.floor` (`FloorDef`) makes a rectangle of the floor move: slabs rise under the player in
+waves, and tiles fall away. It's a prototype of the Wardens' third phase in the Tombs of Amascut, on
+one dev map, `scaperune_wardens_floor` (Dev maps on the dev server: the real room, cut from the
+cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.ts`).
+
+- `core/ArenaFloor.ts` runs the script: each pattern works out every tile's warning and rise (or
+  fall) when it starts, into per-tile arrays the client draws from. `Sim.stepFloor` hurts whoever's
+  middle is on a tile while its slab's up, and a tile that's fallen puts whoever was on it on the
+  nearest tile that isn't going (`Hero.drag`, frozen meanwhile), hurt.
+- A fallen tile is blocked floor on the grid (`ArenaGrid.dropTile`): `Steps` is worked out again
+  round it and `ArenaGrid.version` goes up, so each hero's flow field is worked out again too.
+  Flying enemies cross holes. Grids are kept between runs, so `ArenaFloor` puts every tile back as
+  a run starts.
+- `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
+  hidden floor, so each can move on its own and a fallen one leaves the void. The warnings are the
+  tiles themselves: shaking and catching the light before a rise, shaking, sagging and darkening
+  before a fall. Hits are a share of the player's hitpoints, so any adventurer can try it.
+
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim

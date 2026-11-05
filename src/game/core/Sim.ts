@@ -125,6 +125,7 @@ import {
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
+import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
@@ -493,6 +494,9 @@ const SPLIT_RANGE = 6;
 const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
+// What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
+export const FLOOR_SOURCE = "floor";
+
 // The events that are one hero's own, which co-op tags with who: what they
 // did, what happened to them, what they picked up
 const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
@@ -724,6 +728,8 @@ export type Hero = {
     // Bullets pass through them until this tick, so a mistake costs one of
     // them rather than the whole of a volley
     bulletGraceEnd: number;
+    // The floor (MapDef.floor) can't hit them again until this tick
+    floorGraceEnd: number;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -763,6 +769,8 @@ export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
     readonly rng: Rng;
+    // A floor that rises and falls away (MapDef.floor)
+    readonly floor: ArenaFloor | undefined;
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
@@ -1166,6 +1174,9 @@ export class Sim {
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
         this.rng = new Rng(options.seed);
+        this.floor = this.map.floor
+            ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
+            : undefined;
         // Building it takes a while, so it's done here, with the map, rather
         // than on the tick the first flier turns up (getFlight still can)
         if (hasFliers(this.map)) {
@@ -1326,6 +1337,7 @@ export class Sim {
             drowsyEndTick: 0,
             drowsyInterval: 1,
             bulletGraceEnd: 0,
+            floorGraceEnd: 0,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -1507,7 +1519,11 @@ export class Sim {
                 }
             }
         }
-        if (tileX !== this.flowField.targetX || tileY !== this.flowField.targetY) {
+        if (
+            tileX !== this.flowField.targetX ||
+            tileY !== this.flowField.targetY ||
+            this.grid.version !== this.flowField.gridVersion
+        ) {
             this.flowField.update(this.grid, tileX, tileY);
             if (this.flightGrid) {
                 this.hero.flightField?.update(this.flightGrid, tileX, tileY);
@@ -2413,6 +2429,7 @@ export class Sim {
         this.stepPools();
         this.stepEnemyProjectiles();
         this.stepBossFight();
+        this.stepFloor();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -6139,6 +6156,109 @@ export class Sim {
             return;
         }
         this.stepParasite();
+    }
+
+    // The floor (MapDef.floor): its patterns, a slab that's up hitting whoever's on it, and a
+    // tile that's fallen putting whoever was on it on the nearest tile that isn't going, hurt.
+    // What's drawn is what's hit: a slab hurts only while it's up, and only the tile it's on, by
+    // where the player's middle is.
+    private stepFloor(): void {
+        const floor = this.floor;
+        if (!floor) {
+            return;
+        }
+        const def = floor.def;
+        const { rose, fell, messages } = floor.step(this.tick, () => {
+            const target =
+                this.heroes.length > 1
+                    ? this.nearestHero(floor.x0 + floor.sizeX / 2, floor.y0 + floor.sizeY / 2)
+                    : this.hero;
+            return target.player;
+        });
+        for (const message of messages) {
+            this.emit({ type: "notice", message });
+        }
+        // A sound where the tiles going this tick are, in the middle of them
+        for (const [tiles, sound] of [
+            [rose, def.slam.sound],
+            [fell, def.drop.sound],
+        ] as const) {
+            if (tiles.length > 0) {
+                let x = 0;
+                let y = 0;
+                for (let i = 0; i < tiles.length; i += 2) {
+                    x += tiles[i] + 0.5;
+                    y += tiles[i + 1] + 0.5;
+                }
+                const count = tiles.length / 2;
+                this.emit({ type: "impact", sound, x: x / count, y: y / count });
+            }
+        }
+        if (fell.length > 0) {
+            // Enemies on a tile that's gone go to the nearest that isn't
+            for (const enemy of this.enemies) {
+                if (!enemy.dead && this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))) {
+                    const to = this.findFloorSpot(enemy.x, enemy.y, enemy.radius);
+                    enemy.x = to.x;
+                    enemy.y = to.y;
+                }
+            }
+            const current = this.hero;
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.updateFlowField();
+                }
+            }
+            this.use(current);
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const tileX = Math.floor(player.x);
+            const tileY = Math.floor(player.y);
+            const shoved = this.hero.drag !== undefined && this.tick < this.hero.drag.endTick;
+            if (this.grid.isDropped(tileX, tileY) && !shoved) {
+                const to = this.findFloorSpot(player.x, player.y, player.radius);
+                const ticks = Math.max(1, secondsToTicks(def.drop.shove));
+                this.hero.drag = {
+                    fromX: player.x,
+                    fromY: player.y,
+                    toX: to.x,
+                    toY: to.y,
+                    startTick: this.tick,
+                    endTick: this.tick + ticks,
+                    holdEnd: this.tick + ticks,
+                };
+                player.frozen = Math.max(player.frozen, ticks);
+                this.hitByFloor(def.drop.damage, def.drop.sound, true);
+            } else if (!shoved && floor.isHurting(tileX, tileY, this.tick)) {
+                this.hitByFloor(def.slam.damage, def.slam.sound, false);
+            }
+        });
+    }
+
+    // A share of the player's hitpoints, armour or not; a fall always lands, a slab not again
+    // until the grace is up
+    private hitByFloor(share: number, sound: number, fall: boolean): void {
+        const hero = this.hero;
+        if (!fall && this.tick < hero.floorGraceEnd) {
+            return;
+        }
+        hero.floorGraceEnd = this.tick + secondsToTicks(this.map.floor!.slam.grace);
+        const damage = Math.max(1, Math.round(hero.player.maxHp * share));
+        this.damagePlayer(damage, FLOOR_SOURCE, false, sound, true);
+    }
+
+    // The nearest tile middle a circle can stand on with the floor whole under it and not going
+    private findFloorSpot(x: number, y: number, radius: number): { x: number; y: number } {
+        const floor = this.floor!;
+        return findFreeSpot(
+            this.grid,
+            x,
+            y,
+            radius,
+            (tileX, tileY) => !floor.isFalling(tileX, tileY, this.tick),
+        );
     }
 
     private stepHold(): void {

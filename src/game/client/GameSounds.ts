@@ -1,6 +1,6 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
-import { MAPS } from "../content/maps";
+import { ALL_MAPS, MAPS } from "../content/maps";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
@@ -63,6 +63,9 @@ export function getGameSoundIds(): number[] {
     }
     for (const map of MAPS) {
         ids.push(map.fight?.ability?.sound ?? -1);
+    }
+    for (const map of ALL_MAPS) {
+        ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
     }
     ids.push(VISITOR_SOUND);
     for (const { effect } of RANDOM_EVENTS) {
