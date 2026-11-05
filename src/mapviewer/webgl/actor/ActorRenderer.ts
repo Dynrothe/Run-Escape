@@ -12,7 +12,7 @@ import { Frustum } from "../../Frustum";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
-const TEXELS_PER_INSTANCE = 3;
+const TEXELS_PER_INSTANCE = 4;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 
 // Tiles added to an actor's reach before it's culled, for the depth nudge in its
@@ -107,6 +107,12 @@ export type ActorDrawOptions = {
     edge?: number;
     edgeWidth?: number;
     edgeColor?: number;
+    // Stretched along x and z (a floor's slab of several tiles), and tipped over about x and z
+    // before it's turned (RS angle units), from its origin
+    stretchX?: number;
+    stretchZ?: number;
+    pitch?: number;
+    roll?: number;
 };
 
 class InstanceList {
@@ -140,6 +146,10 @@ class InstanceList {
         edge: number,
         edgeWidth: number,
         edgeColor: number,
+        stretchX: number,
+        stretchZ: number,
+        pitch: number,
+        roll: number,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -166,6 +176,10 @@ class InstanceList {
         data[o + 9] = edgeWidth;
         data[o + 10] = edgeColor;
         data[o + 11] = 0;
+        data[o + 12] = stretchX;
+        data[o + 13] = stretchZ;
+        data[o + 14] = pitch;
+        data[o + 15] = roll;
     }
 
     grow(capacity: number): void {
@@ -446,8 +460,11 @@ export class ActorRenderer {
         options?: ActorDrawOptions,
     ): void {
         const scale = options?.scale ?? 1;
+        const stretchX = options?.stretchX ?? 1;
+        const stretchZ = options?.stretchZ ?? 1;
         if (this.frustum) {
-            const biggest = scale * Math.max(options?.outline ?? 1, 1);
+            const biggest =
+                scale * Math.max(options?.outline ?? 1, 1) * Math.max(stretchX, stretchZ, 1);
             const reach = (model.reach * biggest) / 128 + CULL_MARGIN;
             if (!this.frustum.intersectsSphere(x, y, z, reach)) {
                 return;
@@ -474,6 +491,10 @@ export class ActorRenderer {
             edge,
             edgeWidth,
             edgeColor,
+            stretchX,
+            stretchZ,
+            options?.pitch ?? 0,
+            options?.roll ?? 0,
         );
         if (options?.silhouette) {
             segment.silhouettes.push(
@@ -488,6 +509,10 @@ export class ActorRenderer {
                 NO_TINT,
                 1,
                 0,
+                0,
+                0,
+                1,
+                1,
                 0,
                 0,
             );
@@ -506,6 +531,10 @@ export class ActorRenderer {
                 NO_TINT,
                 1,
                 0,
+                0,
+                0,
+                1,
+                1,
                 0,
                 0,
             );

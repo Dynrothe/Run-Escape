@@ -56,7 +56,23 @@ export type LocBakeRequest = {
     seqs?: number[];
 };
 
+// A model made into a floor's tile (the game's FloorSkinDef): a spot animation's model (with its
+// animation unless still), a loc's or a model id's, with colours and textures swapped after the
+// cache's own swaps, and scaled
+export type ModelBakeRequest = {
+    kind: "model";
+    key: string;
+    spotAnimId?: number;
+    locId?: number;
+    modelId?: number;
+    recolor?: [from: number, to: number][];
+    retexture?: [from: number, to: number][];
+    scale?: number;
+    still?: boolean;
+};
+
 export type BakeRequest =
+    | ModelBakeRequest
     | NpcBakeRequest
     | PlayerBakeRequest
     | SpotAnimBakeRequest

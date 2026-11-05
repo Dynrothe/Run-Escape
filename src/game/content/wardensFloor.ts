@@ -14,7 +14,7 @@ import type { FloorBeatDef, FloorDef, FloorPatternDef } from "./types";
 
 // The slab rising: 1 by 1 tile, up about half a tile and back in 0.36 s (seq 9697, 0.6 s with
 // its rest). 2221 to 2223 are the same slab tipping other ways; FloorView turns this one instead.
-const RISING_SLAB = 2220;
+export const RISING_SLAB = 2220;
 // The slab tumbling (seq 9722, 1 s), for a tile that falls away
 const FALLING_SLAB = 2228;
 // toa_pos_p3_rocks_hit and toa_amp_rocks_fall_02 (the OSRS Wiki's sound ids)
@@ -33,17 +33,17 @@ const UNDER_WALL = 45120;
 // The Tombs' gold, as the light under the floor
 const GLOW = 0xffb040;
 
-const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
+export const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
     kind: "side",
     side,
     rowSeconds,
 });
-const sweep = (rowSeconds: number, gap = 2): FloorPatternDef => ({
+export const sweep = (rowSeconds: number, gap = 2): FloorPatternDef => ({
     kind: "sweep",
     rowSeconds,
     gap,
 });
-const ripple = (
+export const ripple = (
     at: "player" | "middle",
     spokes: "cross" | "diagonal",
     ringSeconds: number,
@@ -51,11 +51,15 @@ const ripple = (
 ): FloorPatternDef => ({ kind: "ripple", at, spokes, ringSeconds, radius });
 // The both-halves slam is the signature one, shown bold from its start (FloorCue): the rest are
 // subtle, the floor's own
-const bold = (pattern: FloorPatternDef): FloorPatternDef => ({ ...pattern, cue: "bold" });
-const dropRows = (rows: number): FloorPatternDef => ({ kind: "dropRows", rows, rowSeconds: 0.4 });
-const holes = (count: number): FloorPatternDef => ({ kind: "holes", count });
+export const bold = (pattern: FloorPatternDef): FloorPatternDef => ({ ...pattern, cue: "bold" });
+export const dropRows = (rows: number): FloorPatternDef => ({
+    kind: "dropRows",
+    rows,
+    rowSeconds: 0.4,
+});
+export const holes = (count: number): FloorPatternDef => ({ kind: "holes", count });
 
-const beat = (at: number, pattern: FloorPatternDef, message?: string): FloorBeatDef => ({
+export const beat = (at: number, pattern: FloorPatternDef, message?: string): FloorBeatDef => ({
     at,
     pattern,
     message,

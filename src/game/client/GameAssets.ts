@@ -28,7 +28,14 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
+import {
+    EnemyDef,
+    EnemyOutfit,
+    FloorSkinDef,
+    GearSlot,
+    ImpactDef,
+    WeaponDef,
+} from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
@@ -336,6 +343,28 @@ export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
 }
 
+// A floor's tile skin (FloorDef.skins): what it's baked from is all there is to it
+export function getFloorSkinKey(skin: FloorSkinDef): string {
+    const { spotAnim, loc, model, recolor, retexture, scale } = skin;
+    return "floorskin:" + JSON.stringify([spotAnim, loc, model, recolor, retexture, scale]);
+}
+
+function getFloorSkinRequest(skin: FloorSkinDef): BakeRequest {
+    return {
+        kind: "model",
+        key: getFloorSkinKey(skin),
+        spotAnimId: skin.spotAnim,
+        locId: skin.loc,
+        modelId: skin.model,
+        recolor: skin.recolor,
+        retexture: skin.retexture,
+        scale: skin.scale,
+        // A spot animation's baked with its own animation even when it rises in code: its first
+        // frame is it at rest (the Wardens' slab's model unposed is nowhere near)
+        still: skin.spotAnim === undefined,
+    };
+}
+
 // The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
 export function getStatueModelKey(locId: number): string {
     return "statue:" + locId;
@@ -408,6 +437,8 @@ function getRequestBody(request: BakeRequest): string {
             return `spotanim:${request.spotAnimId}`;
         case "obj":
             return `obj:${request.objId}:${request.count}`;
+        case "model":
+            return request.key;
         case "loc":
             // A statue's (seqs) isn't plain scenery
             return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
@@ -600,6 +631,9 @@ export class GameAssets {
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
+            }
+            for (const skin of map.floor?.skins ?? []) {
+                requests.push(getFloorSkinRequest(skin));
             }
         }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {

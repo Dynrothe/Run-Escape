@@ -1654,6 +1654,9 @@ export type FloorSkinDef = {
     fall?: "tumble" | "code";
     // A steady light along its edges while nothing's coming (0xRRGGBB): a glyph's glow
     light?: number;
+    // Another skin (its index) drawn under this one, for a model that's only a decal (a rune
+    // that lies on a floor)
+    under?: number;
 };
 
 // What a tile does. normal: rises and falls. solid: never rises or falls. reinforced: rises,

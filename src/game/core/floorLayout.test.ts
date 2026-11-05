@@ -1,5 +1,6 @@
 import { FloorDef, FloorPatternDef, FloorShapeDef } from "../content/types";
 import { createWardensFloor } from "../content/wardensFloor";
+import { FLOOR_DEMOS, FLOOR_START } from "../scaperune/maps/wardensFloor";
 import { ArenaFloor } from "./ArenaFloor";
 import { Rng } from "./Rng";
 import { TICKS_PER_SECOND } from "./Sim";
@@ -342,4 +343,29 @@ test("the Wardens' floor plays exactly as it did before floors had shapes", () =
         }
     }
     expect(h).toBe(1994081359);
+});
+
+describe("the demo floors", () => {
+    for (const recipe of FLOOR_DEMOS) {
+        test(`${recipe.id} starts you on it, whole, and plays a loop and more without cutting it in two`, () => {
+            const def = recipe.mapDef!.floor!;
+            const floor = new ArenaFloor({ ...def, rect: RECT }, field(), new Rng(3), T);
+            const { x, y } = FLOOR_START;
+            expect(floor.layout.mask[tile(x, y)]).toBe(1);
+            for (const row of def.ascii ?? []) {
+                expect(row.length).toBe(SIZE_X);
+            }
+            expect(floor.wouldSplit([])).toBe(false);
+            let player = { x: RECT.x0 + x + 0.5, y: RECT.y0 + y + 0.5 };
+            for (let tick = 0; tick < def.loopSeconds * 1.5 * T; tick++) {
+                floor.step(tick, () => player);
+                if (tick % 97 === 0) {
+                    player = { x: RECT.x0 + 2 + (tick % 19), y: RECT.y0 + 3 + (tick % 17) };
+                }
+                if (tick % 25 === 0) {
+                    expect(floor.wouldSplit([])).toBe(false);
+                }
+            }
+        });
+    }
 });

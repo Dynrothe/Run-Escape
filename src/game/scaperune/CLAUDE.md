@@ -756,6 +756,146 @@ wrong (posts, trunks, the egg sac): only the game shows those.
 
 `LocInfo` doesn't carry contouring or a model's reach, so nothing in the generator can check them. Only these scripts know.
 
+## Floors that fight back
+
+A map can have a floor the game draws and moves itself, tile by tile (`MapDef.floor`, a `FloorDef` in
+`content/types.ts`): slabs rise under the player in waves and tiles fall away into a pit, as in the Wardens' third
+phase. `core/ArenaFloor.ts` runs it, `core/floorLayout.ts` lays it out and `client/FloorView.ts` draws it. The
+dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itself and four demos
+(`content/floorDemos.ts`).
+
+**The room.** The floor's box is a bridge (`TILE_BRIDGE` on level 1) of the hidden overlay over a dug-out pit, so
+nothing of the map is drawn there and a fallen tile opens onto the dark. `maps/wardensFloor.ts` does this for the
+Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own.
+
+**A minimal floor** is the Wardens' numbers with a script of your own. Everything else has a default: the whole
+box is floor, of the Wardens' slab, all normal tiles:
+
+```ts
+floor: {
+    ...createWardensFloor(rect),
+    script: [beat(3, side("east", 0.15)), beat(9, sweep(0.12, 3)), beat(15, holes(3))],
+    loopSeconds: 20,
+},
+```
+
+Floor tiles are counted from the box's south-west corner, x east and y north. North is the front: waves travel
+away from it, and rows fall from the south.
+
+**Its shape** (`shape`, `FloorShapeDef`): `rect`, `ellipse` (a circle when `rx` and `ry` match), `ring` (round,
+or `square`), `diamond`, `cross`, and `union` and `minus` of them. A middle (`cx`, `cy`) can be in half tiles,
+and is the box's middle when it isn't given. What isn't floor is the pit from the start: blocked, and never there.
+
+```ts
+shape: { kind: "minus", from: { kind: "ellipse", rx: 11, ry: 11 }, cut: { kind: "ellipse", rx: 3, ry: 3 } },
+```
+
+**By hand** (`ascii`): a row a string, the north row first. `.` and space are no floor, and every other
+character is floor. Characters also name tiles for the rules below (`{ kind: "chars", chars: "f" }`). With a
+`shape` too, the floor is where both say.
+
+```ts
+ascii: [
+    "..#####..",
+    ".##*#*##.",
+    "###fff###",
+],
+```
+
+**Skins** (`skins`, `FloorSkinDef`): what tiles look like. Each skin is one of these:
+
+- a spot animation's model (`spotAnim`), which rises with its own animation (`rise: "anim"`);
+- a loc's model (`loc`);
+- a model id (`model`).
+
+Every skin can also have:
+
+- `recolor` and `retexture`, as `[from, to]` pairs after the cache's own swaps;
+- `scale`, `height`, `tint`;
+- `light`, a steady glow in its seams at rest (for glyphs).
+
+Anything without its own rise animation rises in code (`rise: "code"`): lifted, its leading edge tipped up the
+way the wave goes, then settled back. A tile falls the same way in code (`fall: "code"`). Only the Wardens' 1 by
+1 slab tumbles (`fall: "tumble"`, `drop.spotAnim`).
+
+A skin should be one tile across and centred, like a floor decoration. The edge light of the cues assumes it.
+To find candidates, scan for loc models about 1 by 1 and flat. Then check their faces' alpha: many are see-through
+overlays or invisible hitboxes, such as the Tombs' "Tile" (45356, about 70% see-through) and "Frozen platform"
+(54539, invisible). Opaque ones that work:
+
+- "Pressure plate" (45340 to 45353, gold glyphs on stone);
+- "Tile" (38822);
+- "Floor tile" (34874).
+
+A decal such as "Inactive Rune" (56393) needs a skin under it (`under`).
+
+```ts
+skins: [
+    { spotAnim: 2220, recolor: [[43904, 37278], [38156, 37300]] },
+    { loc: 56393, light: 0x9fdcff },
+],
+```
+
+**Tile rules** (`tiles`, `FloorTileRuleDef`): every rule that covers a tile applies in order, so a later rule
+wins. A rule has:
+
+- `where`: one of the shapes above, or `all`, `checker` (`size`, `odd`), `border` (`width`, from the floor's
+  edge or any hole in it), `stripes` (`axis`, `every`, `width`, `offset`), or `chars`;
+- `share`: only that fraction of the tiles, picked by the floor's `seed`, so the same seed always gives the same
+  floor;
+- what it sets: `skin` (an index, or weighted `[{ skin, weight }]`), `type`, `turn` (0 to 3, or `"random"`) and
+  `slab`.
+
+```ts
+tiles: [
+    { skin: 0, turn: "random" },
+    { where: { kind: "checker" }, skin: [{ skin: 1, weight: 3 }, { skin: 2, weight: 1 }] },
+    { where: { kind: "border" }, skin: 3, type: "reinforced" },
+],
+```
+
+**Tile types** (`FloorTileType`):
+
+| Type         | Rises | Falls | Note                                                                                                                       |
+| ------------ | ----- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
+| `normal`     | yes   | yes   |                                                                                                                            |
+| `reinforced` | yes   | no    |                                                                                                                            |
+| `fragile`    | yes   | yes   | Its fall is warned for half as long (`drop.fragile.warn`), and it falls by itself after rising twice (`drop.fragile.hits`) |
+| `solid`      | no    | no    |                                                                                                                            |
+| `safe`       | no    | no    | The same as `solid`, for the spots a floor promises are safe (give them a glyph skin)                                      |
+
+**Slabs** (`slab: [x, y]` on a rule): tiles that rise and fall as one piece.
+
+- They're laid from the south-west wherever a whole one fits in what the rule covers and isn't in a slab already.
+- A slab rises when its first tile would, hurts on every tile while it's up, and falls whole.
+- It's one model stretched over its tiles, so it costs a phone what one tile does.
+- A slab that isn't square only turns end over end.
+
+```ts
+tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
+```
+
+**The patterns on any shape.**
+
+- `side`, `sweep` and `ripple` go by the floor's own extent and middle.
+- A sweep's gap is always on floor: the nearest place it fits in that row. A row with no room for it stays down.
+- `dropRows` falls from the floor's own back row, and `keepRows` counts from there.
+- `holes` are only ever inside the edge.
+- Solid, safe and reinforced tiles are left out of whatever they don't do.
+- **Islands:** holes, falling rows and fragile tiles never cut the floor in two, so nobody's stranded. Set
+  `drop.islands` to allow it.
+
+**Cues** (`cue` on a pattern or the floor): `subtle` (the default) or `bold`. Both show every tile a pattern will
+hit from the moment it starts.
+
+**Checks.** `core/floorLayout.test.ts` lays out and plays each demo for a loop and a half. Its checks:
+
+- the start is on the floor;
+- the floor is never cut in two;
+- the ascii rows are the box's width.
+
+A new floor's map should get the same.
+
 ## What the engine can't do yet
 
 Don't spend a round on these.

@@ -5,10 +5,10 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
-import type { FloorCue } from "../content/types";
+import type { FloorCue, FloorSkinDef } from "../content/types";
 import { ArenaFloor, RESTORE_SECONDS } from "../core/ArenaFloor";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { GameAssets, getFloorPieceKey } from "./GameAssets";
+import { GameAssets, getFloorPieceKey, getFloorSkinKey } from "./GameAssets";
 
 // The floor a map draws itself (MapDef.floor, core/ArenaFloor.ts): every tile is the rising slab's
 // model at rest, so each can move on its own, and the map leaves the floor under it hidden (a
@@ -181,6 +181,41 @@ const SKY_LIGHT = 0.3;
 
 const STILL = { lift: 0, turn: 0 };
 
+// A floor with no skins of its own: the slam's slab, rising with its own animation and tumbling
+// away as the drop's
+const DEFAULT_SKIN: FloorSkinDef = { rise: "anim", fall: "tumble" };
+// A tile coming up in code (FloorSkinDef.rise "code"): up RISE_LIFT tiles over the first RISE_UP
+// of its rise, held to RISE_HOLD, and settled back; its leading edge tipped up RISE_TIP (RS angle
+// units) at the top
+const RISE_LIFT = 0.45;
+const RISE_UP = 0.15;
+const RISE_HOLD = 0.7;
+const RISE_TIP = 110;
+// A tile falling in code turns over this far (RS angle units) as it goes
+const FALL_TURN = 700;
+// A decal's lifted this far (tiles) over the skin under it (FloorSkinDef.under)
+const DECAL_LIFT = 0.012;
+// A glyph's steady light at rest (FloorSkinDef.light): how strong, and how far in
+const GLYPH_LIGHT = 0.55;
+const GLYPH_WIDTH = 0.35;
+// The way each of ArenaFloor's FLOOR_NORTH and on goes, along x and z
+const DIRECTIONS: [number, number][] = [
+    [0, 1],
+    [1, 0],
+    [0, -1],
+    [-1, 0],
+];
+
+// Two tints together
+function mulTint(a: number, b: number): number {
+    if (b === NO_TINT) {
+        return a;
+    }
+    const c = (shift: number) =>
+        Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255) << shift;
+    return c(16) | c(8) | c(0);
+}
+
 function smooth(t: number): number {
     const c = Math.min(1, Math.max(0, t));
     return c * c * (3 - 2 * c);
@@ -202,6 +237,21 @@ export class FloorView {
         edge: 0,
         edgeWidth: 0,
         edgeColor: NO_TINT,
+        stretchX: 1,
+        stretchZ: 1,
+        pitch: 0,
+        roll: 0,
+    };
+    // The tile, or slab, being drawn: its size, tint, model at rest and turn
+    private tile!: {
+        w: number;
+        h: number;
+        tint: number;
+        model: ActorModel;
+        anim: ActorAnim;
+        turn: number;
+        // A skin drawn under it (FloorSkinDef.under)
+        under?: ActorModel;
     };
     private goneMask?: Uint8Array;
     private nearMask?: Uint8Array;
@@ -239,24 +289,48 @@ export class FloorView {
         const glow = def.glow;
         // The low light's slow breath, the whole floor's together
         const breath = Math.sin(seconds * CUE_RATE * Math.PI * 2);
+        const layout = floor.layout;
+        // Each skin's model (FloorDef.skins), or the slam's own slab
+        const skinDefs = def.skins ?? [DEFAULT_SKIN];
+        const models = def.skins
+            ? def.skins.map((skin) => this.assets.get(getFloorSkinKey(skin)) ?? slab)
+            : [slab];
         for (let i = 0; i < floor.riseAt.length; i++) {
+            // What isn't floor is the pit's; a slab's drawn from its south-west tile, as one
+            if (!layout.mask[i] || layout.anchor[i] !== i) {
+                continue;
+            }
             const col = i % floor.sizeX;
             const row = Math.floor(i / floor.sizeX);
-            const x = floor.x0 + col + 0.5;
-            const y = floor.y0 + row + 0.5;
-            const ground = sim.grid.getHeight(x, y) / 128;
+            const w = layout.slabX[i];
+            const h = layout.slabY[i];
+            const x = floor.x0 + col + w / 2;
+            const y = floor.y0 + row + h / 2;
+            const skin = skinDefs[layout.skin[i]] ?? DEFAULT_SKIN;
+            const model = models[layout.skin[i]] ?? slab;
+            const rest = model.anims[0];
+            const turn = layout.turn[i] * 512;
+            const ground = sim.grid.getHeight(x, y) / 128 - (skin.height ?? 0);
             const phase = this.phase(i);
             // Which share of the tiles this one's in, for effects only some of them have
             const share = col + 2 * row;
             const style = this.style(floor, i);
-            this.reset();
+            // Its own rise, or one in code (FloorSkinDef.rise); the slam's tumble as it falls, or
+            // one in code
+            const animated =
+                (skin.rise ?? (skin.spotAnim !== undefined ? "anim" : "code")) === "anim";
+            const tumbles =
+                w === 1 && h === 1 && (skin.fall ?? (def.skins ? "code" : "tumble")) === "tumble";
+            const under = skin.under !== undefined ? models[skin.under] : undefined;
+            this.tile = { w, h, tint: skin.tint ?? NO_TINT, model, anim: rest, turn, under };
+            this.resetTile();
             const dropAt = floor.dropAt[i];
             const restoreAt = floor.restoreAt[i];
             // Coming back up out of the dark
             if (restoreAt !== -1 && tick >= restoreAt) {
                 const t = smooth((now - restoreAt) / restoreTicks);
                 options.alpha = Math.min(1, t * 2);
-                actors.draw(slab, rising, 0, x, ground + (1 - t) * RESTORE_DEPTH, y, 0, options);
+                actors.draw(model, rest, 0, x, ground + (1 - t) * RESTORE_DEPTH, y, turn, options);
                 continue;
             }
             // Gone: tumbling down into the dark with its chips
@@ -266,9 +340,17 @@ export class FloorView {
                     const t = since / fallTicks;
                     const fade = t < FADE_FROM ? 1 : 1 - (t - FADE_FROM) / (1 - FADE_FROM);
                     options.alpha = fade;
-                    const frame = falling.getFrame(tick - dropAt, false);
                     const depth = t * t * FALL_DEPTH;
-                    actors.draw(tumble, falling, frame, x, ground + depth, y, 0, options);
+                    if (tumbles) {
+                        const frame = falling.getFrame(tick - dropAt, false);
+                        actors.draw(tumble, falling, frame, x, ground + depth, y, 0, options);
+                    } else {
+                        // Turning over as it drops, a way of its own
+                        const over = t * FALL_TURN;
+                        options.pitch = over * Math.cos(phase * Math.PI * 2);
+                        options.roll = over * Math.sin(phase * Math.PI * 2);
+                        actors.draw(model, rest, 0, x, ground + depth, y, turn, options);
+                    }
                     if (rock) {
                         this.drawChips(actors, rock, x, y, ground, t, fade, phase, tick - dropAt);
                     }
@@ -279,25 +361,16 @@ export class FloorView {
                 }
                 continue;
             }
-            const edged = this.besideHole(floor, col, row, tick);
+            const edged = this.besideHole(floor, col, row, w, h, tick);
             // About to fall: trembling and sagging, darker as it sinks, and grit crumbling off it
             const dropWarnAt = floor.dropWarnAt[i];
             if (dropWarnAt !== -1 && tick >= dropWarnAt) {
                 const t = Math.min(1, (now - dropWarnAt) / Math.max(1, dropAt - dropWarnAt));
                 const tremor = this.tremor(seconds, phase, SAG_TREMOR * (0.4 + 0.6 * t), 0);
                 const sag = t * t * SAG_DEPTH;
-                options.tint = this.darken(style, t);
+                options.tint = mulTint(this.darken(style, t), this.tile.tint);
                 this.edgeLight(glow, style, t);
-                this.drawTile(
-                    actors,
-                    slab,
-                    rising,
-                    x,
-                    ground + sag + tremor.lift,
-                    y,
-                    tremor.turn,
-                    edged,
-                );
+                this.drawTile(actors, x, ground + sag + tremor.lift, y, tremor.turn, edged);
                 this.drawGlow(actors, slab, rising, x, ground + sag, y, t, glow);
                 if (rock && t > GRIT_FROM && share % GRIT_SHARE === 0) {
                     this.drawGrit(actors, rock, x, y, ground + sag, seconds, phase);
@@ -308,51 +381,64 @@ export class FloorView {
             const cueAt = floor.cueAt[i];
             if (dropWarnAt !== -1) {
                 const lift = this.cue(glow, style, now, cueAt, dropWarnAt, breath, seconds, phase);
-                this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
+                this.drawTile(actors, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
-            // Coming up: the slab's own animation, tipped the way it's travelling, and dust
+            // Coming up: the slab's own animation, tipped the way it's travelling, or lifted and
+            // tipped in code; and dust
             const roseAt = floor.roseAt[i];
             if (roseAt !== -1 && tick - roseAt < RISE_TICKS) {
-                const frame = rising.getFrame(tick - roseAt, false);
                 // Its light full while it's up and hurting, fading as it settles
                 const up = (tick - roseAt) / RISE_TICKS;
                 const lit = Math.min(1, 4 * (1 - up));
                 this.edgeLight(glow, style, lit);
-                actors.draw(slab, rising, frame, x, ground, y, TIP_YAW[floor.riseDir[i]], options);
-                this.reset();
+                const dir = floor.riseDir[i];
+                if (animated) {
+                    const frame = rest.getFrame(tick - roseAt, false);
+                    actors.draw(model, rest, frame, x, ground, y, TIP_YAW[dir], options);
+                } else {
+                    const lift = this.codeRise((now - roseAt) / RISE_TICKS, dir, turn);
+                    actors.draw(model, rest, 0, x, ground - lift, y, turn, options);
+                }
+                this.resetTile();
                 if (edged) {
-                    this.drawThickness(actors, slab, rising, x, ground, y, 0);
+                    this.drawThickness(actors, x, ground, y, turn);
                 }
                 this.drawGlow(actors, slab, rising, x, ground, y, lit, glow);
             }
             if (dust && roseAt !== -1 && share % DUST_SHARE === 0) {
                 this.reset();
-                this.drawOnce(actors, dust, x, ground, y, tick - roseAt, phase, DUST_SCALE);
+                this.drawOnce(actors, dust, x, ground, y, tick - roseAt, phase, DUST_SCALE * w);
             }
             if (roseAt !== -1 && tick - roseAt < RISE_TICKS) {
                 continue;
             }
             // About to come up: trembling, harder as it comes
             const warnAt = floor.warnAt[i];
-            this.reset();
+            this.resetTile();
             if (warnAt !== -1 && tick >= warnAt) {
                 const t = Math.min(1, (now - warnAt) / Math.max(1, floor.riseAt[i] - warnAt));
                 const strength = TREMOR_START + (1 - TREMOR_START) * t * t;
                 const tremor = this.tremor(seconds, phase, strength, t * TREMOR_LIFT);
-                options.tint = style.tint;
+                options.tint = mulTint(style.tint, this.tile.tint);
                 this.edgeLight(glow, style, t);
-                this.drawTile(actors, slab, rising, x, ground + tremor.lift, y, tremor.turn, edged);
+                this.drawTile(actors, x, ground + tremor.lift, y, tremor.turn, edged);
                 this.drawGlow(actors, slab, rising, x, ground, y, t, glow);
                 continue;
             }
             // To rise later in its pattern: marked
             if (warnAt !== -1) {
                 const lift = this.cue(glow, style, now, cueAt, warnAt, breath, seconds, phase);
-                this.drawTile(actors, slab, rising, x, ground + lift.lift, y, lift.turn, edged);
+                this.drawTile(actors, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
-            this.drawTile(actors, slab, rising, x, ground, y, 0, edged);
+            // At rest, a glyph's steady light in its seams (FloorSkinDef.light)
+            if (skin.light !== undefined) {
+                options.edge = GLYPH_LIGHT;
+                options.edgeWidth = GLYPH_WIDTH;
+                options.edgeColor = skin.light;
+            }
+            this.drawTile(actors, x, ground, y, 0, edged);
         }
         this.drawUnder(actors, sim, floor, slab, rising, tick);
     }
@@ -392,7 +478,10 @@ export class FloorView {
         options.edge = edge * k * (1 + style.breath * breath);
         options.edgeWidth = style.earlyWidth;
         options.edgeColor = glow;
-        options.tint = this.shade(style.tint, k * (style.horizon > 0 ? 0.35 + 0.65 * near : 1));
+        options.tint = mulTint(
+            this.shade(style.tint, k * (style.horizon > 0 ? 0.35 + 0.65 * near : 1)),
+            this.tile.tint,
+        );
         const tremor = style.faintTremor + (style.tremor - style.faintTremor) * near;
         return tremor > 0 ? this.tremor(seconds, phase, tremor * k, 0) : STILL;
     }
@@ -557,7 +646,8 @@ export class FloorView {
         let any = false;
         const gone = (this.goneMask ??= new Uint8Array(sizeX * sizeY));
         for (let i = 0; i < gone.length; i++) {
-            gone[i] = floor.isGone(i, tick) ? 1 : 0;
+            // A hole, not where there was never floor: the structure shows through holes only
+            gone[i] = floor.layout.mask[i] && floor.isGone(i, tick) ? 1 : 0;
             any ||= gone[i] === 1;
         }
         if (!any) {
@@ -615,12 +705,40 @@ export class FloorView {
         return false;
     }
 
-    private reset(): void {
+    private reset(stretchX = 1, stretchZ = 1): void {
         this.options.alpha = 1;
         this.options.tint = NO_TINT;
         this.options.scale = 1;
         this.options.flash = 0;
         this.options.edge = 0;
+        this.options.stretchX = stretchX;
+        this.options.stretchZ = stretchZ;
+        this.options.pitch = 0;
+        this.options.roll = 0;
+    }
+
+    // As reset, for the tile or slab being drawn: its size and tint
+    private resetTile(): void {
+        this.reset(this.tile.w, this.tile.h);
+        this.options.tint = this.tile.tint;
+    }
+
+    // A tile coming up in code (FloorSkinDef.rise "code"), u from 0 to 1 as it does: how far
+    // it's up, in tiles, with it tipped the way the wave's going (dir, ArenaFloor's FLOOR_NORTH
+    // and on) however it's turned
+    private codeRise(u: number, dir: number, turn: number): number {
+        const up =
+            u < RISE_UP ? smooth(u / RISE_UP) : 1 - smooth((u - RISE_HOLD) / (1 - RISE_HOLD));
+        const lift = RISE_LIFT * Math.max(0, Math.min(1, up));
+        // The way it's going, in the world, then in the model before it's turned
+        const [wx, wz] = DIRECTIONS[dir];
+        const a = (turn / 2048) * Math.PI * 2;
+        const mx = wx * Math.cos(a) - wz * Math.sin(a);
+        const mz = wx * Math.sin(a) + wz * Math.cos(a);
+        const tip = (RISE_TIP * lift) / RISE_LIFT;
+        this.options.pitch = tip * mz;
+        this.options.roll = -tip * mx;
+        return lift;
     }
 
     // How far up (negative) and round a trembling tile is now: a rattle up off its bed, never
@@ -639,50 +757,68 @@ export class FloorView {
         };
     }
 
-    // A tile at rest or moving, with its thickness under it if it's beside a hole
+    // The tile or slab being drawn, at rest or moving (yaw on top of its turn), with its thickness
+    // under it if it's beside a hole
     private drawTile(
         actors: ActorRenderer,
-        slab: ActorModel,
-        anim: ActorAnim,
         x: number,
         height: number,
         y: number,
         yaw: number,
         edged: boolean,
     ): void {
-        actors.draw(slab, anim, 0, x, height, y, yaw, this.options);
+        const { model, anim, turn, under } = this.tile;
+        // A decal over its skin is lifted off it, so they don't fight
+        if (under) {
+            actors.draw(under, under.anims[0], 0, x, height, y, turn + yaw, this.options);
+        }
+        const lift = under ? DECAL_LIFT : 0;
+        actors.draw(model, anim, 0, x, height - lift, y, turn + yaw, this.options);
         if (edged) {
-            this.drawThickness(actors, slab, anim, x, height, y, yaw);
+            this.drawThickness(actors, x, height, y, turn + yaw);
         }
     }
 
-    // The slab again under a tile, a slab's thickness at a time, darker each, so a hole's edge
+    // The tile again under itself, a slab's thickness at a time, darker each, so a hole's edge
     // shows the floor's cut edge going down into the dark
     private drawThickness(
         actors: ActorRenderer,
-        slab: ActorModel,
-        anim: ActorAnim,
         x: number,
         height: number,
         y: number,
         yaw: number,
     ): void {
+        const model = this.tile.under ?? this.tile.model;
+        const anim = model.anims[0];
         const { tint, edge } = this.options;
         this.options.edge = 0;
         EDGE_TINTS.forEach((edgeTint, k) => {
-            this.options.tint = edgeTint;
-            actors.draw(slab, anim, 0, x, height + SLAB_THICKNESS * (k + 1), y, yaw, this.options);
+            this.options.tint = mulTint(edgeTint, this.tile.tint);
+            actors.draw(model, anim, 0, x, height + SLAB_THICKNESS * (k + 1), y, yaw, this.options);
         });
         this.options.tint = tint;
         this.options.edge = edge;
     }
 
-    // Whether a tile's beside one that's fallen (and not back), along a side
-    private besideHole(floor: ArenaFloor, col: number, row: number, tick: number): boolean {
-        for (const [dx, dy] of NEIGHBOURS) {
-            const beside = floor.index(floor.x0 + col + dx, floor.y0 + row + dy);
-            if (beside >= 0 && floor.isGone(beside, tick)) {
-                return true;
+    // Whether a tile or slab's beside one that's fallen (and not back), or no floor, along a side
+    private besideHole(
+        floor: ArenaFloor,
+        col: number,
+        row: number,
+        w: number,
+        h: number,
+        tick: number,
+    ): boolean {
+        for (let dy = -1; dy <= h; dy++) {
+            for (let dx = -1; dx <= w; dx++) {
+                const side = (dx === -1 || dx === w) !== (dy === -1 || dy === h);
+                if (!side) {
+                    continue;
+                }
+                const beside = floor.index(floor.x0 + col + dx, floor.y0 + row + dy);
+                if (beside >= 0 && floor.isGone(beside, tick)) {
+                    return true;
+                }
             }
         }
         return false;

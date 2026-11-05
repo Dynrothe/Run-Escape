@@ -22,12 +22,13 @@ uniform highp isampler2D u_textureMaterials;
 // First instance of this draw call in the actor data texture
 uniform int u_instanceOffset;
 
-// 3 texels per instance:
+// 4 texels per instance:
 //  0: world x (tiles), world y (tiles, up is negative), world z (tiles), yaw (0-2047)
 //  1: scale, flash (0-1, or -1-0 to glow in the tint's colour), tint (0xRRGGBB, 0xFFFFFF = none),
 //     alpha
 //  2: edge light (0-1), how far in it reaches (0-1 of the way to the middle), its colour
 //     (0xRRGGBB), unused
+//  3: stretch along x and z, tip about x and z (0-2047), before the yaw
 uniform highp sampler2D u_actorData;
 
 layout(location = 0) in uvec3 a_vertex;
@@ -43,6 +44,7 @@ flat out vec4 v_interactId;
 out vec2 v_edgePos;
 flat out vec4 v_edge;
 flat out float v_edgeWidth;
+flat out vec2 v_edgeStretch;
 
 #include "../shaders/includes/branchless-logic.glsl";
 #include "../shaders/includes/hsl-to-rgb.glsl";
@@ -79,10 +81,11 @@ void main() {
     v_alphaCutOff = material.alphaCutOff;
 
     // Without multi draw, a run of instances of one frame is one instanced draw
-    int dataIndex = (DRAW_ID + gl_InstanceID + u_instanceOffset) * 3;
+    int dataIndex = (DRAW_ID + gl_InstanceID + u_instanceOffset) * 4;
     vec4 data0 = fetchActorData(dataIndex);
     vec4 data1 = fetchActorData(dataIndex + 1);
     vec4 data2 = fetchActorData(dataIndex + 2);
+    vec4 data3 = fetchActorData(dataIndex + 3);
 
     float scale = data1.x;
     float flash = data1.y;
@@ -104,8 +107,15 @@ void main() {
     );
     v_edgeWidth = max(data2.y, 0.001);
     v_edgePos = vertex.pos.xz / 64.0;
+    v_edgeStretch = data3.xy;
 
-    vec4 localPos = vec4(vertex.pos * scale, 1.0) * rotationY(data0.w * RS_TO_RADIANS);
+    vec3 pos = vertex.pos * scale * vec3(data3.x, 1.0, data3.y);
+    // Tipped over about x, then z (y is down)
+    float pitch = data3.z * RS_TO_RADIANS;
+    float roll = data3.w * RS_TO_RADIANS;
+    pos = vec3(pos.x, pos.y * cos(pitch) - pos.z * sin(pitch), pos.y * sin(pitch) + pos.z * cos(pitch));
+    pos = vec3(pos.x * cos(roll) - pos.y * sin(roll), pos.x * sin(roll) + pos.y * cos(roll), pos.z);
+    vec4 localPos = vec4(pos, 1.0) * rotationY(data0.w * RS_TO_RADIANS);
     vec4 worldPos = vec4(localPos.xyz / 128.0 + data0.xyz, 1.0);
 
     float dist = -sdRoundedBox(

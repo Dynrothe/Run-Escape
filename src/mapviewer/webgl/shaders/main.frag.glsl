@@ -18,6 +18,7 @@ flat in vec4 v_interactId;
 in vec2 v_edgePos;
 flat in vec4 v_edge;
 flat in float v_edgeWidth;
+flat in vec2 v_edgeStretch;
 #endif
 
 layout(location = 0) out vec4 fragColor;
@@ -36,8 +37,10 @@ void main() {
     // Light along a tile-sized actor's edges, strongest at the edge and fading in towards the
     // middle (the Wardens' floor's light from under its tiles)
     if (v_edge.a > 0.0) {
-        float fromMiddle = max(abs(v_edgePos.x), abs(v_edgePos.y));
-        float light = smoothstep(1.0 - v_edgeWidth, 1.0, fromMiddle);
+        // How far in from its nearest edge, in half tiles (a stretched slab's edge light is as
+        // wide as a tile's)
+        vec2 fromEdge = (1.0 - abs(v_edgePos)) * v_edgeStretch;
+        float light = 1.0 - smoothstep(0.0, v_edgeWidth, min(fromEdge.x, fromEdge.y));
         fragColor.rgb = mix(fragColor.rgb, v_edge.rgb, v_edge.a * light * light);
     }
 #endif

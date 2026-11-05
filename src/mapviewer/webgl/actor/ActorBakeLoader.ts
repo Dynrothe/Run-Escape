@@ -3,6 +3,7 @@ import { LocModelType } from "../../../rs/config/loctype/LocModelType";
 import { NpcModelLoader } from "../../../rs/config/npctype/NpcModelLoader";
 import { NpcType } from "../../../rs/config/npctype/NpcType";
 import { SpotAnimModelLoader } from "../../../rs/config/spotanimtype/SpotAnimModelLoader";
+import { SpotAnimType } from "../../../rs/config/spotanimtype/SpotAnimType";
 import {
     SpotAnimTypeLoader,
     createSpotAnimTypeLoader,
@@ -20,6 +21,7 @@ import {
     ActorBakeResult,
     BakedAnim,
     BakedSet,
+    ModelBakeRequest,
     NPC_IDLE_SEQ,
     NPC_WALK_SEQ,
 } from "./ActorBakeTypes";
@@ -199,6 +201,74 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
         return this.extra;
     }
 
+    // A floor tile's model (ModelBakeRequest) as a spot animation of its own, under an id no
+    // real one has (its loader keeps models by id), so the spot animation path recolours, lights
+    // and scales it
+    private floorSpotAnim(
+        state: WorkerState,
+        spotAnims: { load(id: number): SpotAnimType },
+        request: ModelBakeRequest,
+    ): SpotAnimType | undefined {
+        const id = -1 - this.floorModels++;
+        let spotAnim: SpotAnimType;
+        let recolorFrom: number[] = [];
+        let recolorTo: number[] = [];
+        let retextureFrom: number[] = [];
+        let retextureTo: number[] = [];
+        if (request.spotAnimId !== undefined) {
+            const base = spotAnims.load(request.spotAnimId);
+            spotAnim = Object.assign(Object.create(SpotAnimType.prototype), base);
+            recolorFrom = base.recolorFrom ?? [];
+            recolorTo = base.recolorTo ?? [];
+            retextureFrom = base.retextureFrom ?? [];
+            retextureTo = base.retextureTo ?? [];
+        } else {
+            spotAnim = Object.assign(Object.create(SpotAnimType.prototype), {
+                sequenceId: -1,
+                widthScale: 128,
+                heightScale: 128,
+                orientation: 0,
+                ambient: 0,
+                contrast: 0,
+            });
+            if (request.locId !== undefined) {
+                const loc = state.locTypeLoader.load(request.locId);
+                const modelId = loc.models?.[0]?.[0];
+                if (modelId === undefined) {
+                    return undefined;
+                }
+                spotAnim.modelId = modelId;
+                spotAnim.ambient = loc.ambient;
+                spotAnim.contrast = loc.contrast;
+                recolorFrom = loc.recolorFrom ?? [];
+                recolorTo = loc.recolorTo ?? [];
+                retextureFrom = loc.retextureFrom ?? [];
+                retextureTo = loc.retextureTo ?? [];
+            } else if (request.modelId !== undefined) {
+                spotAnim.modelId = request.modelId;
+            } else {
+                return undefined;
+            }
+        }
+        const scale = request.scale ?? 1;
+        (spotAnim as { id: number }).id = id;
+        spotAnim.recolorFrom = [...recolorFrom, ...(request.recolor ?? []).map(([from]) => from)];
+        spotAnim.recolorTo = [...recolorTo, ...(request.recolor ?? []).map(([, to]) => to)];
+        spotAnim.retextureFrom = [
+            ...retextureFrom,
+            ...(request.retexture ?? []).map(([from]) => from),
+        ];
+        spotAnim.retextureTo = [...retextureTo, ...(request.retexture ?? []).map(([, to]) => to)];
+        spotAnim.widthScale = Math.round(spotAnim.widthScale * scale);
+        spotAnim.heightScale = Math.round(spotAnim.heightScale * scale);
+        if (request.still) {
+            spotAnim.sequenceId = -1;
+        }
+        return spotAnim;
+    }
+
+    private floorModels = 0;
+
     init(): void {}
 
     async load(
@@ -246,6 +316,17 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     sets.push(
                         bakeSet(state, segments, request.key, getModel, [spotAnim.sequenceId]),
                     );
+                    break;
+                }
+                case "model": {
+                    const spotAnim = this.floorSpotAnim(state, extra.spotAnimTypeLoader, request);
+                    if (!spotAnim) {
+                        break;
+                    }
+                    const getModel: ModelSource = (_seqId, frame) =>
+                        extra.spotAnimModelLoader.getModel(spotAnim, frame);
+                    const seqIds = spotAnim.sequenceId !== -1 ? [spotAnim.sequenceId] : [];
+                    sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
                     break;
                 }
                 case "obj": {
