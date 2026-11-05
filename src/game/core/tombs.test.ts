@@ -1,9 +1,10 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import {
     INVOCATIONS,
     INVOCATION_GROUPS,
+    RAID_LEVEL_SCALE,
     TOMBS_UNIQUES,
     cleanInvocations,
     getRaidBand,
@@ -27,6 +28,22 @@ import { createWardensFloor } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
+
+// These are tests of the mechanics, at full strength: raid level 0 scaled as Normal is (1 across).
+// Entry's own scale, lighter on purpose, has tests of its own (withEntryScale).
+const ENTRY_SCALE = { ...RAID_LEVEL_SCALE[0] };
+const FULL_STRENGTH = { level: 0, hp: 1, damage: 1, bossHp: 1, bullets: 1 };
+beforeEach(() => {
+    RAID_LEVEL_SCALE[0] = { ...FULL_STRENGTH };
+});
+afterEach(() => {
+    RAID_LEVEL_SCALE[0] = { ...ENTRY_SCALE };
+});
+
+// Raid level 0 as the game has it: Entry's scale
+function withEntryScale(): void {
+    RAID_LEVEL_SCALE[0] = { ...ENTRY_SCALE };
+}
 
 function field(): string[] {
     return Array.from({ length: 72 }, (_, y) =>
@@ -165,12 +182,18 @@ describe("invocations", () => {
         ]);
     });
 
-    it("make enemies 2% tougher every 5 levels, their damage to 150% more", () => {
-        expect(getRaidLevelScale(0)).toEqual({ hp: 1, damage: 1 });
-        expect(getRaidLevelScale(9).hp).toBeCloseTo(1.02);
-        expect(getRaidLevelScale(150).hp).toBeCloseTo(1.6);
-        expect(getRaidLevelScale(500).hp).toBeCloseTo(3);
-        expect(getRaidLevelScale(500).damage).toBeCloseTo(2.5);
+    it("make enemies weaker than a map's at Entry, and tougher by more each band up", () => {
+        withEntryScale();
+        expect(getRaidLevelScale(0)).toEqual({ hp: 0.6, damage: 0.35, bossHp: 0.35, bullets: 0.6 });
+        expect(getRaidLevelScale(150).hp).toBeCloseTo(1.1);
+        expect(getRaidLevelScale(300).damage).toBeCloseTo(1.8);
+        expect(getRaidLevelScale(500).hp).toBeCloseTo(4);
+        // Past the last point at its rate
+        expect(getRaidLevelScale(600).hp).toBeGreaterThan(4);
+        // Each band's step up bigger than the last's
+        const step = (a: number, b: number) => getRaidLevelScale(b).hp - getRaidLevelScale(a).hp;
+        expect(step(150, 300)).toBeGreaterThan(step(0, 150));
+        expect(step(300, 450)).toBeGreaterThan(step(150, 300));
     });
 
     it("show each unique from its raid level, as OSRS's chest has them", () => {
@@ -198,6 +221,7 @@ describe("invocations", () => {
 
 describe("the Tombs of Amascut", () => {
     it("go by the raid level in place of hard mode", () => {
+        withEntryScale();
         const plain = tombs([], true);
         expect(plain.hard).toBe(false);
         expect(plain.raidLevel).toBe(0);
@@ -206,7 +230,9 @@ describe("the Tombs of Amascut", () => {
         const goblin = getEnemy("goblin");
         const easy = plain.spawnEnemy(goblin, "normal")!;
         const hard = tough.spawnEnemy(goblin, "normal")!;
-        expect(hard.maxHp / easy.maxHp).toBeCloseTo(getRaidLevelScale(105).hp, 1);
+        // A goblin's few hitpoints are rounded, so near enough
+        const ratio = getRaidLevelScale(105).hp / getRaidLevelScale(0).hp;
+        expect(Math.abs(hard.maxHp / easy.maxHp - ratio)).toBeLessThan(0.1);
         expect(hard.damageScale).toBeGreaterThan(easy.damageScale);
     });
 

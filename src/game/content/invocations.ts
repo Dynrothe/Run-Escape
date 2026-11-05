@@ -505,13 +505,36 @@ export function getRaidBand(level: number): RaidBand {
     return level < 150 ? "Entry" : level < 300 ? "Normal" : "Expert";
 }
 
-// Every 5 levels make enemies 2% tougher, as OSRS's do: their hitpoints all the way, their
-// damage up to 150% more
-const PER_FIVE_LEVELS = 0.02;
-const MAX_DAMAGE = 2.5;
+// What the raid level makes enemies' hitpoints and damage, through these points (and on past the
+// last at its rate). Entry's for a run started with nothing bought: slow, but there to be won.
+// Normal wants the shop's upgrades and better gear; Expert more of both; past it, the best of
+// everything, each band harder than the last by more. Between points the scale grows by the same
+// share each level, so it climbs quicker the higher it goes. Bosses' hitpoints (bossHp) go further
+// both ways: a run that's bought nothing does little damage, and the best of everything a lot.
+// bullets is how many a boss's patterns and shards fire (as hard mode's are, Sim.volleyShape).
+export type RaidLevelScale = { hp: number; damage: number; bossHp: number; bullets: number };
 
-export function getRaidLevelScale(level: number): { hp: number; damage: number } {
-    const steps = Math.floor(Math.max(0, level) / 5);
-    const scale = 1 + steps * PER_FIVE_LEVELS;
-    return { hp: scale, damage: Math.min(scale, MAX_DAMAGE) };
+export const RAID_LEVEL_SCALE: ({ level: number } & RaidLevelScale)[] = [
+    { level: 0, hp: 0.6, damage: 0.35, bossHp: 0.35, bullets: 0.6 },
+    { level: 150, hp: 1.1, damage: 1, bossHp: 1, bullets: 1 },
+    { level: 300, hp: 2, damage: 1.8, bossHp: 2, bullets: 1.15 },
+    { level: 500, hp: 4, damage: 3.2, bossHp: 4, bullets: 1.35 },
+];
+
+export function getRaidLevelScale(level: number): RaidLevelScale {
+    const points = RAID_LEVEL_SCALE;
+    const at = Math.max(0, level);
+    let i = 0;
+    while (i < points.length - 2 && at > points[i + 1].level) {
+        i++;
+    }
+    const a = points[i];
+    const b = points[i + 1];
+    const t = (at - a.level) / (b.level - a.level);
+    return {
+        hp: a.hp * Math.pow(b.hp / a.hp, t),
+        damage: a.damage * Math.pow(b.damage / a.damage, t),
+        bossHp: a.bossHp * Math.pow(b.bossHp / a.bossHp, t),
+        bullets: a.bullets * Math.pow(b.bullets / a.bullets, t),
+    };
 }

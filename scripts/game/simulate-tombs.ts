@@ -10,7 +10,13 @@
 //   ROOM=     apmeken het scabaras crondis (puzzle rooms), baba akkha kephri zebak (bosses),
 //             wardens, raid (the default: Nexus to chest)
 //   LEVEL=2   the path level: as many other paths done first (0 to 3)
-//   INVOCATIONS=walk_for_it,insanity   or INVOCATIONS=all
+//   PATHS=het,crondis   the order the paths are taken in (the raid's, or the ones before a room's)
+//   Without KIT=max, a boss or a room with LEVEL paths before it is reached by playing the raid
+//   up to it from the Nexus, so the adventurer has the levels and gear they'd really have
+//   (LEADIN=0 jumps straight there, at level one)
+//   INVOCATIONS=walk_for_it,insanity   or INVOCATIONS=all, or INVOCATIONS=level:300 (a raid level
+//             made up as people tend to: the bosses' own first, then the rest; never Attempts
+//             or a time limit, so the sim's tries are endless)
 //   PARTY=2   a co-op party, each played by the bot
 //   KIT=max   the dev kit (every weapon style, the best gear) rather than the adventurer's start
 //   META=max ARMOURY=max   as simulate-run.ts
@@ -18,7 +24,7 @@
 //   VERBOSE=1    the run's log as it goes (tombsBot's TombsLog)
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
-import { INVOCATIONS } from "../../src/game/content/invocations";
+import { INVOCATIONS, cleanInvocations, getRaidLevel } from "../../src/game/content/invocations";
 import { CASKET_GEAR } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
@@ -27,7 +33,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { loadRegionData } from "./collision-snapshot";
-import { TombsLog, kite, tombsMove } from "./tombsBot";
+import { DEFAULT_PATH_ORDER, TombsLog, kite, setPathOrder, tombsMove } from "./tombsBot";
 
 const PUZZLES: Record<string, string> = {
     apmeken: "apmeken",
@@ -41,7 +47,12 @@ const BOSSES: Record<string, string> = {
     kephri: "scabaras",
     zebak: "crondis",
 };
-const PATH_ORDER = ["apmeken", "het", "scabaras", "crondis"];
+const PATH_ORDER = process.env.PATHS
+    ? [
+          ...process.env.PATHS.split(","),
+          ...DEFAULT_PATH_ORDER.filter((id) => !process.env.PATHS!.split(",").includes(id)),
+      ]
+    : DEFAULT_PATH_ORDER;
 
 const [characterArg, seedsArg] = process.argv.slice(2);
 const characterId = characterArg || "warrior";
@@ -52,13 +63,74 @@ const partySize = parseInt(process.env.PARTY ?? "1");
 const kit = process.env.KIT === "max";
 const verbose = process.env.VERBOSE === "1";
 const minutes = parseFloat(process.env.MINUTES ?? (roomArg === "raid" ? "90" : "15"));
+// The order a raid level's made up in for INVOCATIONS=level:N
+const LADDER = [
+    "jungle_japes",
+    "lively_larvae",
+    "blood_thinners",
+    "mind_the_gap",
+    "gotta_have_faith",
+    "keep_back",
+    "blowing_mud",
+    "arterial_spray",
+    "aerial_assault",
+    "need_some_help",
+    "quiet_prayers",
+    "shaking_things_up",
+    "boulderdash",
+    "stay_vigilant",
+    "more_overlords",
+    "not_just_a_head",
+    "upset_stomach",
+    "medic",
+    "pathseeker",
+    "double_trouble",
+    "feeling_special",
+    "ancient_haste",
+    "acceleration",
+    "penetration",
+    "overclocked",
+    "overclocked_2",
+    "need_less_help",
+    "deadly_prayers",
+    "on_a_diet",
+    "pathfinder",
+    "no_help_needed",
+    "overly_draining",
+    "dehydration",
+    "pathmaster",
+    "walk_the_path",
+    "insanity",
+];
+
+function invocationsForLevel(target: number): string[] {
+    let picked: string[] = [];
+    for (const id of LADDER) {
+        if (getRaidLevel(picked) >= target) {
+            break;
+        }
+        picked = cleanInvocations([...picked, id]);
+    }
+    return picked;
+}
+
+const invocationsArg = process.env.INVOCATIONS ?? "";
 const invocations =
-    process.env.INVOCATIONS === "all"
+    invocationsArg === "all"
         ? INVOCATIONS.map((i) => i.id)
-        : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
+        : invocationsArg.startsWith("level:")
+          ? invocationsForLevel(parseInt(invocationsArg.slice(6)))
+          : invocationsArg.split(",").filter(Boolean);
 if (roomArg !== "raid" && roomArg !== "wardens" && !PUZZLES[roomArg] && !BOSSES[roomArg]) {
     throw new Error(`ROOM=${roomArg}: not a room (${Object.keys({ ...PUZZLES, ...BOSSES })})`);
 }
+// Played up to from the Nexus (the levels a run really has by then), or jumped to
+const leadIn =
+    !kit &&
+    process.env.LEADIN !== "0" &&
+    (BOSSES[roomArg] !== undefined ||
+        roomArg === "wardens" ||
+        (PUZZLES[roomArg] !== undefined && level > 0));
 if (!CHARACTERS.some((c) => c.id === characterId)) {
     throw new Error(`No adventurer ${characterId}`);
 }
@@ -130,10 +202,15 @@ function setUp(sim: Sim): void {
     if (kit) {
         sim.devWardensKit();
     }
+    setPathOrder(PATH_ORDER);
     if (roomArg === "raid") {
         return;
     }
     const tombs = map.tombs!;
+    if (roomArg === "wardens" && leadIn) {
+        // The whole raid up to them
+        return;
+    }
     if (roomArg === "wardens") {
         sim.tombsPathsDone.push(...tombs.paths.map((p) => p.id));
         sim["enterWardens"]();
@@ -141,6 +218,11 @@ function setUp(sim: Sim): void {
     }
     const pathId = PUZZLES[roomArg] ?? BOSSES[roomArg];
     const others = PATH_ORDER.filter((id) => id !== pathId).slice(0, level);
+    if (leadIn) {
+        // The paths before it, then its own
+        setPathOrder([...others, pathId]);
+        return;
+    }
     sim.tombsPathsDone.push(...others);
     const path = tombs.paths.find((p) => p.id === pathId)!;
     sim["enterTombsPath"](path.id, path.room!.arrive);
@@ -156,6 +238,18 @@ function setUp(sim: Sim): void {
     }
 }
 
+// Whether a lead-in's got to the room asked for (a boss's fight, or a puzzle room)
+function reached(sim: Sim): boolean {
+    if (roomArg === "wardens") {
+        return sim.tombsWardens !== undefined;
+    }
+    const pathId = PUZZLES[roomArg] ?? BOSSES[roomArg];
+    if (sim.tombsPath !== pathId || !sim.tombsRoom) {
+        return false;
+    }
+    return BOSSES[roomArg] ? sim.tombsRoom.boss !== undefined : sim.tombsRoom.started;
+}
+
 // Whether the room asked for is done
 function isDone(sim: Sim): boolean {
     if (roomArg === "raid" || roomArg === "wardens") {
@@ -166,6 +260,42 @@ function isDone(sim: Sim): boolean {
         return room?.doneTick !== undefined || room?.boss !== undefined;
     }
     return room?.boss?.beatenTick !== undefined || sim.tombsPath === undefined;
+}
+
+// A boss fight's account: how far down each try got it (the least of its hitpoints left, as a
+// share), so a fight that's lost tells whether it was the damage or the dodging
+class BossWatch {
+    private uid = -1;
+    private least = 1;
+    tries: number[] = [];
+
+    step(sim: Sim): void {
+        const uid = sim.tombsRoom?.boss?.uid ?? -1;
+        if (uid !== this.uid) {
+            if (this.uid >= 0) {
+                this.tries.push(this.least);
+            }
+            this.uid = uid;
+            this.least = 1;
+        }
+        const boss = sim.enemies.find((e) => e.uid === uid);
+        if (boss && !boss.dead && boss.maxHp > 0) {
+            this.least = Math.min(this.least, boss.hp / boss.maxHp);
+        }
+    }
+
+    notes(): string[] {
+        const tries = [...this.tries, ...(this.uid >= 0 ? [this.least] : [])].filter((t) => t < 1);
+        if (tries.length === 0) {
+            return [];
+        }
+        const best = Math.min(...tries);
+        const mean = tries.reduce((a, b) => a + b, 0) / tries.length;
+        return [
+            `boss tries ${tries.length}: best ${Math.round(best * 100)}% left, ` +
+                `mean ${Math.round(mean * 100)}% left`,
+        ];
+    }
 }
 
 // Each puzzle's own account, kept as the run goes
@@ -297,13 +427,37 @@ function runOnce(seed: number): Outcome {
     setUp(sim);
     const log = verbose ? new TombsLog() : undefined;
     const watch = new PuzzleWatch();
+    const bossWatch = new BossWatch();
     const hits = new Map<string, number>();
-    const start = sim.tick;
-    const limit = start + minutes * 60 * TICKS_PER_SECOND;
-    const wipesBefore = sim.tombsDeaths;
-    let downs = 0;
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
-    while (sim.tick < limit && !sim.runOver && !isDone(sim)) {
+    let start = sim.tick;
+    let limit = start + minutes * 60 * TICKS_PER_SECOND;
+    let wipesBefore = sim.tombsDeaths;
+    let leading = leadIn;
+    const leadNotes: string[] = [];
+    if (leading) {
+        limit = start + 90 * 60 * TICKS_PER_SECOND;
+    }
+    let downs = 0;
+    while (sim.tick < limit && !sim.runOver && (leading || !isDone(sim))) {
+        if (leading && sim.state === "playing" && reached(sim)) {
+            leading = false;
+            leadNotes.push(
+                `reached in ${clock((sim.tick - start) / TICKS_PER_SECOND)} after ` +
+                    `${sim.tombsDeaths} wipes, at level ` +
+                    sim.heroes.map((hero) => sim.as(hero.index, () => sim.level)).join("/") +
+                    ` (${sim.weapons.map((w) => `${w.def.id} ${w.level}`).join(", ")})`,
+            );
+            start = sim.tick;
+            limit = start + minutes * 60 * TICKS_PER_SECOND;
+            wipesBefore = sim.tombsDeaths;
+            hits.clear();
+            downs = 0;
+            for (const hero of sim.heroes) {
+                hero.damageTaken = 0;
+                hero.damageByAttack = {};
+            }
+        }
         if (sim.state !== "playing") {
             for (const hero of sim.waitingOn) {
                 sim.as(hero.index, () => {
@@ -345,6 +499,9 @@ function runOnce(seed: number): Outcome {
         }
         log?.step(sim);
         watch.step(sim);
+        if (!leading) {
+            bossWatch.step(sim);
+        }
         for (const hero of sim.heroes) {
             if (hero.down || hero.left) {
                 continue;
@@ -365,7 +522,10 @@ function runOnce(seed: number): Outcome {
         }
     }
     log?.report(sim);
-    const done = isDone(sim);
+    if (leading) {
+        leadNotes.push(`never got there (${sim.tombsPathsDone.join(", ") || "no paths"} done)`);
+    }
+    const done = !leading && isDone(sim);
     return {
         done,
         seconds: (sim.tick - start) / TICKS_PER_SECOND,
@@ -374,7 +534,9 @@ function runOnce(seed: number): Outcome {
         taken: sim.heroes.reduce((sum, hero) => sum + hero.damageTaken, 0),
         hits,
         notes: [
+            ...leadNotes,
             ...watch.notes(sim),
+            ...bossWatch.notes(),
             ...attackNotes(sim),
             ...(roomArg === "raid" || roomArg === "wardens" ? boardNotes(sim) : []),
         ],

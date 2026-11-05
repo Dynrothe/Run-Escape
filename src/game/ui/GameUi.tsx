@@ -930,6 +930,12 @@ function InvocationsButton({ ui, onOpen }: { ui: UiSnapshot; onOpen: () => void 
 // it the reward potential (the raid level, its band's Amascut and what the chest can hold). Pointing
 // at an icon says what it is below; clicking turns it on or off, and one of a group that allows only
 // one takes the last off.
+// A scale as a change: 0.6 is "-40%", 1.1 "+10%"
+function signedPercent(scale: number): string {
+    const percent = Math.round((scale - 1) * 100);
+    return `${percent >= 0 ? "+" : ""}${percent}%`;
+}
+
 function InvocationBoard({
     ui,
     client,
@@ -992,8 +998,8 @@ function InvocationBoard({
                             />
                         </div>
                         <div className="ui-invocations-scale">
-                            Enemies +{Math.round((scale.hp - 1) * 100)}% hitpoints, +
-                            {Math.round((scale.damage - 1) * 100)}% damage
+                            Enemies {signedPercent(scale.hp)} hitpoints,{" "}
+                            {signedPercent(scale.damage)} damage
                         </div>
                         <div className="ui-invocations-uniques">
                             {TOMBS_UNIQUES.map((unique) => {

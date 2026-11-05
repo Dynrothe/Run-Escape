@@ -99,6 +99,8 @@ import {
     SCABARAS_WAVES,
     TOMBS_BOSSES,
     TOMBS_POINTS,
+    TOMBS_PUZZLE_LEVELS,
+    TOMBS_BOSS_FOOD,
     TOMBS_SPIRIT,
     TOMBS_SPIRIT_SHARE,
     TOMBS_SUPPLIES,
@@ -1329,7 +1331,9 @@ export class Sim {
     // Co-op's bigger, tougher crowds (content/coop.ts), all 1 on your own
     private partyScale: PartyScale;
     // What hard mode multiplies enemies' hitpoints and damage by (1 outside it)
-    private readonly hardScale: { hp: number; damage: number };
+    // Enemies' hitpoints and damage by hard mode or the raid level, and a boss's hitpoints (the
+    // raid level's own for the Tombs' bosses)
+    private readonly hardScale: { hp: number; damage: number; bossHp: number };
     // A boss pattern's bullets a volley on hard mode, times its own (MapDef.hard bullets)
     private readonly bulletScale: number;
     // What each bone's worth for the party: its scale's experience, made up
@@ -1635,9 +1639,13 @@ export class Sim {
         this.hardScale = this.map.tombs
             ? getRaidLevelScale(this.raidLevel)
             : this.hard
-              ? getHardScale(this.map)
-              : { hp: 1, damage: 1 };
-        this.bulletScale = this.hard ? (this.map.hard?.bullets ?? 1) : 1;
+              ? { ...getHardScale(this.map), bossHp: getHardScale(this.map).hp }
+              : { hp: 1, damage: 1, bossHp: 1 };
+        this.bulletScale = this.map.tombs
+            ? getRaidLevelScale(this.raidLevel).bullets
+            : this.hard
+              ? (this.map.hard?.bullets ?? 1)
+              : 1;
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -3424,7 +3432,7 @@ export class Sim {
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp *
-            this.hardScale.hp *
+            (boss ? this.hardScale.bossHp : this.hardScale.hp) *
             (boss ? this.partyScale.bossHp : this.partyScale.hp);
         // What its hits are multiplied by: its touch, a boss's attacks, its
         // explosion (and in co-op, harder for each player)
@@ -3854,7 +3862,9 @@ export class Sim {
                 const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
                 let foe: Enemy | undefined;
                 this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
-                    if (other === enemy) {
+                    // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
+                    // one starts on her altar, under her)
+                    if (other === enemy || other.rolls) {
                         return;
                     }
                     const ox = enemy.x - other.x;
@@ -4955,6 +4965,32 @@ export class Sim {
         return level + this.tombsPathsDone.length * (this.invoked("walk_the_path") ? 2 : 1);
     }
 
+    // The chance a Tombs boss's adds (her baboons, his swarms) drop food, on top of the usual: a
+    // fair one at Entry, where a run's bought nothing to heal with, none from Expert up
+    private tombsBossFood(): number {
+        const fight = this.tombsRoom?.boss;
+        if (!this.map.tombs || !fight || fight.uid === -1) {
+            return 0;
+        }
+        return TOMBS_BOSS_FOOD.chance * Math.max(0, 1 - this.raidLevel / TOMBS_BOSS_FOOD.untilLevel);
+    }
+
+    // A hit that takes a share of your hitpoints (a flood, a roar, an avalanche): as it is from
+    // Normal up, less at Entry as the raid level's damage is (down to half), so a run that's bought
+    // nothing isn't undone by one slip. Anywhere but the Tombs, as it is.
+    private tombsShare(share: number): number {
+        if (!this.map.tombs) {
+            return share;
+        }
+        return share * Math.min(1, Math.max(0.5, this.hardScale.damage));
+    }
+
+    // What a Tombs room's hazards hurt by (a trap, a beam, a falling rock, a boss's wave or acid):
+    // the room's scale, and the raid level's as its enemies' hits are
+    private tombsHazardScale(): number {
+        return this.tombsRoomScale().damage * this.hardScale.damage;
+    }
+
     // What a Tombs room's enemies are multiplied by: more with each of its waves (so it ends far
     // harder than it starts, as a run levels up in it) and with each path level
     private tombsRoomScale(): { hp: number; damage: number } {
@@ -4980,9 +5016,16 @@ export class Sim {
             }
             // The Scabaras room's scarabs, the Het room's swarms, or the Apmeken room's baboons
             if (this.tombsPathRoom?.crondis) {
+                // Its crocodiles are pressure, not experience: fewer below Normal, as the bosses'
+                // bullets are (bulletScale)
                 const trickle = getCrondisTrickle(Math.max(0, room.wave));
+                const crowd = Math.min(1, this.bulletScale);
                 return [
-                    { ...trickle, spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) },
+                    {
+                        ...trickle,
+                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathLevel) * crowd,
+                        maxAlive: Math.max(2, Math.round(trickle.maxAlive * crowd)),
+                    },
                 ];
             }
             if (this.tombsPathRoom?.scabaras) {
@@ -5046,9 +5089,11 @@ export class Sim {
     }
 
     // Into the path's boss's arena, its room beaten: the boss rises once someone walks in
+    // skipped: the dev's way past the puzzle (devSkipToTombsBoss), which earns no levels
     private enterTombsBoss(
         room: TombsRoom,
         boss: NonNullable<NonNullable<TombsPathDef["room"]>["boss"]>,
+        skipped = false,
     ): void {
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
@@ -5058,14 +5103,22 @@ export class Sim {
         this.enemyProjectiles = [];
         this.gatherHall();
         this.moveParty(boss.arrive);
-        // The puzzle's done: its points to everyone still in the raid
+        // The puzzle's done: its points to everyone still in the raid, and its levels (a puzzle's
+        // short, and its boss is fought with what the run has by then)
         if (!room.boss) {
+            const current = this.hero;
             for (const hero of this.heroes) {
                 if (!hero.left) {
                     hero.tombsPoints += TOMBS_POINTS.room;
                     hero.raidPoints += TOMBS_POINTS.room;
+                    if (!skipped) {
+                        this.use(hero);
+                        this.xp +=
+                            (this.xpForNextLevel - this.xpForThisLevel) * TOMBS_PUZZLE_LEVELS;
+                    }
                 }
             }
+            this.use(current);
         }
         room.boss = { uid: -1, beatenTick: undefined };
         this.emit({
@@ -5335,7 +5388,7 @@ export class Sim {
             return;
         }
         const player = this.player;
-        const amount = share ? Math.round(player.maxHp * damage) : damage;
+        const amount = share ? Math.round(player.maxHp * this.tombsShare(damage)) : damage;
         this.damagePlayer(amount, boss.def.id, false, undefined, share);
         if (!this.runOver && !this.reviving) {
             this.akkhaElement(def, boss);
@@ -5764,7 +5817,7 @@ export class Sim {
         if (!boss) {
             return true;
         }
-        this.enterTombsBoss(room, boss);
+        this.enterTombsBoss(room, boss, true);
         // Something to do some damage with, weapon slots or not
         if (!this.weapons.some((w) => w.def.id === DEV_BOSS_WEAPON)) {
             this.weapons.push({
@@ -5954,7 +6007,7 @@ export class Sim {
                     if (this.isUp(this.hero) && (near(spawn) || near(gap))) {
                         blocked = true;
                         this.damagePlayer(
-                            WARDENS.orbs.blockDamage * this.tombsRoomScale().damage,
+                            WARDENS.orbs.blockDamage * this.tombsHazardScale(),
                             WARDENS.obeliskId,
                             false,
                         );
@@ -6043,7 +6096,7 @@ export class Sim {
                         y < pyramid.y + pyramids.cell
                     ) {
                         this.damagePlayer(
-                            pyramids.damage * this.tombsRoomScale().damage,
+                            pyramids.damage * this.tombsHazardScale(),
                             WARDENS.wardens[pyramid.side].enemyId,
                             false,
                         );
@@ -6225,7 +6278,7 @@ export class Sim {
                     ) {
                         hit |= bit;
                         this.damagePlayer(
-                            Math.max(1, Math.round(player.maxHp * mark.hurts)),
+                            Math.max(1, Math.round(player.maxHp * this.tombsShare(mark.hurts))),
                             mark.by,
                             false,
                             undefined,
@@ -6250,7 +6303,7 @@ export class Sim {
                 this.use(hero);
                 const player = this.player;
                 this.damagePlayer(
-                    player.maxHp * WARDENS.wardens[shot.side].shotShare,
+                    player.maxHp * this.tombsShare(WARDENS.wardens[shot.side].shotShare),
                     WARDENS.wardens[shot.side].enemyId,
                     false,
                     undefined,
@@ -7259,7 +7312,7 @@ export class Sim {
             }
             this.use(hero);
             this.damagePlayer(
-                player.maxHp * def.roar.share * def.roar.hits,
+                player.maxHp * this.tombsShare(def.roar.share) * def.roar.hits,
                 boss.def.id,
                 false,
                 undefined,
@@ -7303,7 +7356,7 @@ export class Sim {
         island: { x0: number; y0: number; x1: number; y1: number },
     ): void {
         const speed = def.waves.speed / TICKS_PER_SECOND;
-        const damage = def.waves.damage * this.tombsRoomScale().damage;
+        const damage = def.waves.damage * this.tombsHazardScale();
         fight.waves = fight.waves.filter((wave) => {
             if (this.tick < wave.startTick) {
                 return true;
@@ -7330,7 +7383,7 @@ export class Sim {
     // Standing in his acid: hurt every so often, more the longer you stand there, and poisoned
     private stepZebakAcid(fight: ZebakFight, def: ZebakDef): void {
         const every = secondsToTicks(0.6);
-        const scale = this.tombsRoomScale().damage;
+        const scale = this.tombsHazardScale();
         const current = this.hero;
         for (const hero of this.heroes) {
             const player = hero.player;
@@ -7691,7 +7744,7 @@ export class Sim {
         const heroes = fight.dung.heroes;
         fight.dung = undefined;
         const current = this.hero;
-        const damage = def.dung.damage * this.tombsRoomScale().damage;
+        const damage = def.dung.damage * this.tombsHazardScale();
         for (const index of heroes) {
             const hero = this.heroes[index];
             if (!hero || !this.isUp(hero)) {
@@ -7748,7 +7801,7 @@ export class Sim {
             if (this.tick < egg.hatchTick - 1) {
                 continue;
             }
-            const damage = eggs.damage * this.tombsRoomScale().damage;
+            const damage = eggs.damage * this.tombsHazardScale();
             this.forEachHeroInReach(() => {
                 const player = this.player;
                 if (
@@ -8015,7 +8068,7 @@ export class Sim {
             spears.nextTick =
                 this.tick + secondsToTicks(rest ? CRONDIS.spearRest : CRONDIS.spearStep);
         });
-        const damage = CRONDIS.spearDamage * this.tombsRoomScale().damage;
+        const damage = CRONDIS.spearDamage * this.tombsHazardScale();
         crondis.thrusts = crondis.thrusts.filter((thrust) => {
             const age = this.tick - thrust.startTick;
             if (age >= tell + hold) {
@@ -8063,7 +8116,7 @@ export class Sim {
                 crondis.clouds.push({ lane: i, startTick: this.tick, hit: [] });
             }
         });
-        const damage = CRONDIS.cloudDamage * this.tombsRoomScale().damage;
+        const damage = CRONDIS.cloudDamage * this.tombsHazardScale();
         crondis.clouds = crondis.clouds.filter((cloud) => {
             const lane = def.lanes[cloud.lane];
             const { dark } = this.crondisCloud(def, cloud);
@@ -8483,7 +8536,7 @@ export class Sim {
             secondsToTicks(SCABARAS.rockWarn),
         );
         this.damagePlayer(
-            player.maxHp * SCABARAS.wrongShare,
+            player.maxHp * this.tombsShare(SCABARAS.wrongShare),
             "scabaras_scarab",
             false,
             undefined,
@@ -8536,7 +8589,7 @@ export class Sim {
                 this.addEffect(SCABARAS.rockSpotAnim, x, y, 0, warn);
             }
         }
-        const damage = SCABARAS.rockDamage * this.tombsRoomScale().damage;
+        const damage = SCABARAS.rockDamage * this.tombsHazardScale();
         scabaras.rocks = scabaras.rocks.filter((rock) => {
             if (this.tick < rock.landTick) {
                 return true;
@@ -8551,7 +8604,7 @@ export class Sim {
             this.scabarasShards(scabaras, rock.x, rock.y);
             return false;
         });
-        const shardDamage = SCABARAS.shardDamage * this.tombsRoomScale().damage;
+        const shardDamage = SCABARAS.shardDamage * this.tombsHazardScale();
         scabaras.shards = scabaras.shards.filter((shard) => {
             shard.x += shard.vx;
             shard.y += shard.vy;
@@ -8825,7 +8878,11 @@ export class Sim {
         this.forEachHeroInReach(() => {
             const player = this.player;
             if (near(player.x, player.y, 0.5)) {
-                this.damagePlayer(HET.beamDamage * scale.damage, "hets_seal", false);
+                this.damagePlayer(
+                    HET.beamDamage * scale.damage * this.hardScale.damage,
+                    "hets_seal",
+                    false,
+                );
             }
         });
         this.damageSource = "other";
@@ -8906,7 +8963,7 @@ export class Sim {
                 );
             }
         }
-        const damage = HET.orbDamage * this.tombsRoomScale().damage;
+        const damage = HET.orbDamage * this.tombsHazardScale();
         het.orbs = het.orbs.filter((orb) => {
             orb.x += orb.vx;
             orb.y += orb.vy;
@@ -11016,8 +11073,12 @@ export class Sim {
         const damage =
             (this.getBossDamage(enemy, attack) * shards.damage) / Math.max(1, attack.damage);
         const turn = this.rng.range(0, Math.PI * 2);
-        for (let i = 0; i < shards.count; i++) {
-            const angle = turn + (i * Math.PI * 2) / shards.count;
+        // The Tombs' go by the raid level (bulletScale)
+        const count = this.map.tombs
+            ? Math.max(3, Math.round(shards.count * this.bulletScale))
+            : shards.count;
+        for (let i = 0; i < count; i++) {
+            const angle = turn + (i * Math.PI * 2) / count;
             this.bullets.add(
                 x + fm.cos(angle) * 0.4,
                 y + fm.sin(angle) * 0.4,
@@ -13272,7 +13333,7 @@ export class Sim {
             if (safe) {
                 return;
             }
-            this.bossHit(enemy.def.id, enemy, attack, player.maxHp * cover.share);
+            this.bossHit(enemy.def.id, enemy, attack, player.maxHp * this.tombsShare(cover.share));
         });
     }
 
@@ -13897,8 +13958,14 @@ export class Sim {
                 this.addEffect(FREEZE_SPOTANIM, player.x, player.y, 0, ticks);
                 break;
             case "poison":
-                // A new dose starts the clock again, at the stronger damage
-                player.poisonDamage = Math.max(player.poisonDamage, effect.damage);
+                // A new dose starts the clock again, at the stronger damage (in the Tombs, as the
+                // raid level makes enemies' hits)
+                player.poisonDamage = Math.max(
+                    player.poisonDamage,
+                    this.map.tombs
+                        ? Math.max(1, Math.round(effect.damage * this.hardScale.damage))
+                        : effect.damage,
+                );
                 player.poisonEnd = this.tick + ticks;
                 break;
             case "debuff":
@@ -14290,6 +14357,15 @@ export class Sim {
 
         if (!byEnemy && !enemy.noDrops) {
             this.dropLoot(enemy);
+        } else if (
+            !byEnemy &&
+            !enemy.boss &&
+            !this.invoked("on_a_diet") &&
+            this.tombsBossFood() > 0 &&
+            this.rng.chance(this.tombsBossFood())
+        ) {
+            // A Tombs boss's adds drop nothing else, but now and then food (tombsBossFood)
+            this.dropPickup("food", enemy.x, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
         if (!enemy.boss && !enemy.rolls) {
             this.dropTombsPeel(enemy);

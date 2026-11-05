@@ -404,6 +404,13 @@ TOMBS_ENEMIES.push(BA_BA);
 // that's levelled through the rest of the raid
 export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
 
+// The levels a puzzle room's worth as it's done, on top of its waves' experience (Sim.enterTombsBoss)
+export const TOMBS_PUZZLE_LEVELS = 2;
+
+// A boss's adds drop food this often at raid level 0, less the higher it goes, none from untilLevel
+// (Sim.tombsBossFood): Entry's for a run that's bought nothing to heal with
+export const TOMBS_BOSS_FOOD = { chance: 0.06, untilLevel: 300 };
+
 // Jungle Japes: each of Ba-Ba's baboons drops a banana peel as it dies, there for `seconds`.
 // Stepping within `radius` of one roots you for `stun` seconds. Drawn as the Banana (1963).
 // Ba-Ba's sarcophagi: a baboon that reaches one (within reach tiles) spends `prying` seconds
@@ -1096,7 +1103,7 @@ TOMBS_ENEMIES.push(
         walkSeq: AKKHA_WALK,
         attackSeq: 9788,
         deathSeq: AKKHA_DEATH,
-        hp: 900,
+        hp: 150,
         damage: 0,
         speed: 0,
         radius: 1.3,

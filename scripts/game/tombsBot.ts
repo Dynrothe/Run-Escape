@@ -2,14 +2,21 @@
 // boss, and the Wardens, as a person who knows the raid plays it. It only moves (weapons fire on
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
-import type { Sim } from "../../src/game/core/Sim";
+import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
 import { FlowField } from "../../src/game/core/world/FlowField";
+import { CRONDIS } from "../../src/game/content/tombs";
 
 type Point = { x: number; y: number };
 
-// The order the bot takes the paths in, and the flow field it walks by (a window this many tiles
-// across round its target, which holds any one room)
-const PATH_ORDER = ["apmeken", "het", "scabaras", "crondis"];
+// The order the bot takes the paths in (as a person picks theirs: setPathOrder), and the flow
+// field it walks by (a window this many tiles across round its target, which holds any one room)
+export const DEFAULT_PATH_ORDER = ["apmeken", "het", "scabaras", "crondis"];
+let PATH_ORDER = DEFAULT_PATH_ORDER;
+
+// The order the bot takes the paths in from now on; any left out come after, in the default's
+export function setPathOrder(order: string[]): void {
+    PATH_ORDER = [...order, ...DEFAULT_PATH_ORDER.filter((id) => !order.includes(id))];
+}
 const FIELD_SIZE = 128;
 
 const fields = new WeakMap<Sim, FlowField>();
@@ -180,6 +187,7 @@ function openNear(sim: Sim, spot: Point, reach: number, from: Point): Point {
 }
 
 type PathRoom = NonNullable<NonNullable<Sim["map"]["tombs"]>["paths"][number]["room"]>;
+type CrondisPlaces = NonNullable<PathRoom["crondis"]>;
 type PathBoss = NonNullable<PathRoom["boss"]>;
 
 // How hard to push towards a point close by, so the bot stops on it rather than past it (input
@@ -438,9 +446,7 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (!next) {
             return { x: 0, y: 0 };
         }
-        return on === `l${next.i}`
-            ? stepOff(sim, next.plate)
-            : stepOn(sim, next.plate, boards);
+        return on === `l${next.i}` ? stepOff(sim, next.plate) : stepOn(sim, next.plate, boards);
     }
     // Addition: plates that make up exactly what's left
     const add = scab.addition;
@@ -529,14 +535,137 @@ function crondisMove(sim: Sim, def: PathRoom): Point {
     } else {
         to = crondisFall(sim, def);
     }
-    const dodge = spearDodge(sim, def, to);
-    if (dodge) {
-        return dodge;
-    }
-    return Math.hypot(to.x - player.x, to.y - player.y) < 1.2
-        ? nudge(sim, to.x, to.y)
-        : walkTo(sim, to.x, to.y);
+    // A crocodile at its heels: a bite spills the water. Weapons that reach keep away from it, to
+    // the palm's side, while they see to it (they're slower than you); a melee hero carrying
+    // nothing stands and swings
+    const biting = sim.enemies.some(
+        (e) =>
+            !e.dead &&
+            e.def.id === "crondis_crocodile" &&
+            Math.hypot(e.x - player.x, e.y - player.y) < CROC_NEAR,
+    );
+    const melee = heroReach(sim) < 4;
+    const carrying = crondis.water[hero] > 0;
+    const move = biting
+        ? melee && !carrying
+            ? { x: 0, y: 0 }
+            : kite(sim, places.palm, CROC_NEAR)
+        : Math.hypot(to.x - player.x, to.y - player.y) < 1.2
+          ? nudge(sim, to.x, to.y)
+          : walkTo(sim, to.x, to.y);
+    return clearOfSpears(sim, places, move);
 }
+
+// How near a crocodile comes before the bot backs off from it
+const CROC_NEAR = 3.5;
+
+// How far ahead the bot plays the spears forward (ticks, in steps of SPEAR_STEP)
+const SPEAR_LOOK = 60;
+const SPEAR_STEP = 2;
+
+// The move (the one wanted if no spear it'd walk into is coming, or the nearest way to it that's
+// clear: sixteen headings and standing still) that every thrust about to come misses. The
+// statues keep time, so what's coming is known: each corridor's next pair, side and when, on down
+// the corridor and round again after its rest.
+function clearOfSpears(sim: Sim, places: CrondisPlaces, want: Point): Point {
+    const crondis = sim.tombsRoom!.crondis!;
+    const tell = Math.round(CRONDIS.spearTell * 50);
+    const hold = Math.round(CRONDIS.spearHold * 50);
+    const step = Math.round(CRONDIS.spearStep * 50);
+    const rest = Math.round(CRONDIS.spearRest * 50);
+    const now = sim.tick;
+    const end = now + SPEAR_LOOK;
+    // Every thrust out at some point from now till the end of the look: its tiles, and when
+    const coming: { area: { x0: number; x1: number; y0: number; y1: number }; from: number }[] =
+        [];
+    const add = (thrust: Parameters<Sim["crondisSpearArea"]>[1]) => {
+        const from = thrust.startTick + tell;
+        if (from + hold > now && from < end) {
+            coming.push({ area: sim.crondisSpearArea(places, thrust), from });
+        }
+    };
+    for (const thrust of crondis.thrusts) {
+        add(thrust);
+    }
+    places.lanes.forEach((lane, i) => {
+        const pairs = Math.floor((lane.y1 - lane.y0 + 1) / 2);
+        let tick = crondis.spears[i].nextTick;
+        let pair = crondis.spears[i].pair;
+        while (tick < end) {
+            const side = (pair + i) % 2 === 0 ? "low" : "high";
+            add({ lane: i, pair, side, startTick: tick, hit: [] });
+            pair++;
+            if (pair >= pairs) {
+                pair = 0;
+                tick += rest;
+            } else {
+                tick += step;
+            }
+        }
+    });
+    if (coming.length === 0) {
+        return want;
+    }
+    const player = sim.player;
+    const speed = PLAYER_SPEED * (1 + (sim.stats.moveSpeed ?? 0));
+    const margin = 0.2;
+    const cost = (dir: Point): number => {
+        let px = player.x;
+        let py = player.y;
+        const caught = new Set<number>();
+        let total = 0;
+        for (let t = 0; t <= SPEAR_LOOK; t += SPEAR_STEP) {
+            if (t > 0) {
+                const nx = px + dir.x * speed * SPEAR_STEP;
+                const ny = py + dir.y * speed * SPEAR_STEP;
+                if (!sim.grid.isSolid(Math.floor(nx), Math.floor(ny))) {
+                    px = nx;
+                    py = ny;
+                }
+            }
+            const at = now + t;
+            coming.forEach((thrust, k) => {
+                if (
+                    !caught.has(k) &&
+                    at >= thrust.from &&
+                    at < thrust.from + hold &&
+                    px >= thrust.area.x0 - margin &&
+                    px <= thrust.area.x1 + margin &&
+                    py >= thrust.area.y0 - margin &&
+                    py <= thrust.area.y1 + margin
+                ) {
+                    caught.add(k);
+                    // Sooner is worse: there's less time to do anything else about it
+                    total += 1 + (SPEAR_LOOK - t) / SPEAR_LOOK;
+                }
+            });
+        }
+        return total;
+    };
+    const wantCost = cost(want);
+    if (wantCost === 0) {
+        return want;
+    }
+    let best = want;
+    let bestScore = wantCost * 10;
+    for (const dir of HEADINGS) {
+        const score = cost(dir) * 10 + (1 - (dir.x * want.x + dir.y * want.y)) * 0.3;
+        if (score < bestScore) {
+            bestScore = score;
+            best = dir;
+        }
+    }
+    return best;
+}
+
+// Standing still, and sixteen ways round
+const HEADINGS: Point[] = [
+    { x: 0, y: 0 },
+    ...Array.from({ length: 16 }, (_, i) => ({
+        x: Math.cos((i / 16) * Math.PI * 2),
+        y: Math.sin((i / 16) * Math.PI * 2),
+    })),
+];
 
 // Tiles a second the bot walks
 function walkPerSecond(sim: Sim): number {
@@ -580,55 +709,14 @@ function crondisFall(sim: Sim, def: PathRoom): Point {
     return best!.at;
 }
 
-// A spear thrusting, or about to, across rows the bot's in or going into: to the corridor's other
-// half, or, with both halves out, back out of those rows
-function spearDodge(sim: Sim, def: PathRoom, to: Point): Point | undefined {
-    const crondis = sim.tombsRoom!.crondis!;
-    const places = def.crondis!;
-    const player = sim.player;
-    const sides = new Set<string>();
-    let rows: { y0: number; y1: number } | undefined;
-    let lane: (typeof places.lanes)[number] | undefined;
-    for (const thrust of crondis.thrusts) {
-        if (sim.tick - thrust.startTick >= 50) {
-            continue;
-        }
-        const area = sim.crondisSpearArea(places, thrust);
-        if (
-            player.x >= area.x0 - 1 &&
-            player.x <= area.x1 + 1 &&
-            player.y >= area.y0 - 1.2 &&
-            player.y <= area.y1 + 1.2
-        ) {
-            sides.add(thrust.side);
-            rows = area;
-            lane = places.lanes[thrust.lane];
-        }
-    }
-    if (!rows) {
-        return undefined;
-    }
-    const dy = Math.sign(to.y - player.y) || 1;
-    if (sides.size === 1 && lane) {
-        // The half it isn't thrusting across, carrying on along the corridor as it goes over
-        const x = sides.has("low") ? lane.high - 1.5 : lane.low + 1.5;
-        return nudge(sim, x, player.y + dy * 1.2);
-    }
-    // Both halves: out of their rows the way it's going, unless that edge is much further
-    const ahead = dy > 0 ? rows.y1 + 1.4 : rows.y0 - 1.4;
-    const behind = dy > 0 ? rows.y0 - 1.4 : rows.y1 + 1.4;
-    const y = Math.abs(ahead - player.y) <= Math.abs(behind - player.y) + 1 ? ahead : behind;
-    return nudge(sim, player.x, y);
-}
-
 // Bullets about to reach the bot, sidestepped (the nearer, the more), as the run sim's DODGE does;
 // undefined with nothing coming
-export function dodge(sim: Sim): Point | undefined {
+export function dodge(sim: Sim, withBullets = true): Point | undefined {
     const player = sim.player;
     let awayX = 0;
     let awayY = 0;
     const { bullets } = sim;
-    for (let i = 0; i < bullets.count; i++) {
+    for (let i = 0; i < (withBullets ? bullets.count : 0); i++) {
         const slot = bullets.order[i];
         const dx = player.x - bullets.x[slot];
         const dy = player.y - bullets.y[slot];
@@ -698,16 +786,114 @@ export function dodge(sim: Sim): Point | undefined {
     return length > 0 ? { x: awayX / length, y: awayY / length } : undefined;
 }
 
-// A move with a sidestep from what's coming mixed in, if anything is
+// A move with a sidestep from what's coming mixed in, if anything is: out from under a boss's
+// blast, swing or ground mark, then whichever way (that, or round it) the bullets miss
 function dodging(sim: Sim, move: Point): Point {
-    const away = dodge(sim);
-    if (!away) {
-        return move;
+    const away = dodge(sim, false);
+    let want = move;
+    if (away) {
+        const x = move.x * 0.35 + away.x;
+        const y = move.y * 0.35 + away.y;
+        const length = Math.hypot(x, y) || 1;
+        want = { x: x / length, y: y / length };
     }
-    const x = move.x * 0.35 + away.x;
-    const y = move.y * 0.35 + away.y;
-    const length = Math.hypot(x, y) || 1;
-    return { x: x / length, y: y / length };
+    return clearOfBullets(sim, want);
+}
+
+// How far ahead the bot looks for bullets (ticks, in steps of LOOK_STEP), and how near one has to
+// be to count
+const LOOK_TICKS = 30;
+const LOOK_STEP = 3;
+const LOOK_NEAR = 7;
+
+// The move (the one wanted if nothing it'd walk into is coming, or the nearest way to it that's
+// clear: sixteen headings and standing still) that the bullets about now miss, played forward:
+// each bullet on its line (and its turn), the bot at its speed, stopped by walls
+function clearOfBullets(sim: Sim, want: Point): Point {
+    const player = sim.player;
+    const { bullets } = sim;
+    const near: number[] = [];
+    for (let i = 0; i < bullets.count; i++) {
+        const slot = bullets.order[i];
+        if (
+            Math.abs(bullets.x[slot] - player.x) < LOOK_NEAR &&
+            Math.abs(bullets.y[slot] - player.y) < LOOK_NEAR
+        ) {
+            near.push(slot);
+        }
+    }
+    if (near.length === 0) {
+        return want;
+    }
+    const speed = PLAYER_SPEED * (1 + (sim.stats.moveSpeed ?? 0));
+    const cost = (dir: Point): number => {
+        let total = 0;
+        let px = player.x;
+        let py = player.y;
+        const positions: Point[] = [];
+        for (let t = LOOK_STEP; t <= LOOK_TICKS; t += LOOK_STEP) {
+            const nx = px + dir.x * speed * LOOK_STEP;
+            const ny = py + dir.y * speed * LOOK_STEP;
+            if (!sim.grid.isSolid(Math.floor(nx), Math.floor(ny))) {
+                px = nx;
+                py = ny;
+            }
+            positions.push({ x: px, y: py });
+        }
+        for (const slot of near) {
+            let bx = bullets.x[slot];
+            let by = bullets.y[slot];
+            let vx = bullets.vx[slot];
+            let vy = bullets.vy[slot];
+            const cos = bullets.turnCos[slot];
+            const sin = bullets.turnSin[slot];
+            const reach = bullets.radius[slot] + player.radius + 0.15;
+            const life = bullets.life[slot];
+            for (let step = 0; step < positions.length; step++) {
+                const t = (step + 1) * LOOK_STEP;
+                if (t > life) {
+                    break;
+                }
+                for (let k = 0; k < LOOK_STEP; k++) {
+                    if (cos !== 1) {
+                        const nvx = vx * cos - vy * sin;
+                        vy = vx * sin + vy * cos;
+                        vx = nvx;
+                    }
+                    bx += vx;
+                    by += vy;
+                }
+                const dx = positions[step].x - bx;
+                const dy = positions[step].y - by;
+                if (dx * dx + dy * dy <= reach * reach) {
+                    // Sooner is worse: there's less time to do anything else about it
+                    total += 1 + (LOOK_TICKS - t) / LOOK_TICKS;
+                    break;
+                }
+            }
+        }
+        return total;
+    };
+    const wantCost = cost(want);
+    if (wantCost === 0) {
+        return want;
+    }
+    let best = want;
+    let bestScore = wantCost * 10;
+    const headings: Point[] = [{ x: 0, y: 0 }];
+    for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        headings.push({ x: Math.cos(angle), y: Math.sin(angle) });
+    }
+    for (const dir of headings) {
+        // The fewest hits, then the nearest to where it wanted to go
+        const score = cost(dir) * 10 + (1 - (dir.x * want.x + dir.y * want.y)) * 0.3;
+        if (score < bestScore) {
+            bestScore = score;
+            best = dir;
+        }
+    }
+    return best;
 }
 
 function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
@@ -722,21 +908,75 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
     if (sim.tombsZebak) {
         const roaring = sim.tombsZebak.roar !== undefined;
         const move = zebakMove(sim, def, boss);
-        return roaring ? move : dodging(sim, move);
+        return roaring ? move : dodging(sim, foodMove(sim) ?? move);
     }
     if (sim.tombsAkkha) {
         const remembering = sim.tombsAkkha.memory !== undefined;
         const move = akkhaMove(sim, def, boss);
-        return remembering ? move : dodging(sim, move);
+        return remembering ? move : dodging(sim, foodMove(sim) ?? move);
     }
     if (def.boulders) {
         const move = babaMove(sim, def, boss);
         // In cover while her avalanche winds up, whatever's coming
         const avalanche = boss.bossState?.windup?.attack.takeCover !== undefined;
-        return boss.bossState?.ordeal || avalanche ? move : dodging(sim, move);
+        return boss.bossState?.ordeal || avalanche ? move : dodging(sim, foodMove(sim) ?? move);
     }
-    // Kephri, and anything else: near enough for every weapon, off what's close
+    if (sim.tombsKephri) {
+        return dodging(sim, foodMove(sim) ?? kephriMove(sim, boss));
+    }
+    // Anything else: near enough for every weapon, off what's close
     return dodging(sim, kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5));
+}
+
+// Food dropped near enough, when the bot's hurt enough to want it (as a person goes for it)
+function foodMove(sim: Sim): Point | undefined {
+    const player = sim.player;
+    if (player.hp > player.maxHp * 0.65) {
+        return undefined;
+    }
+    let best: Point | undefined;
+    let bestDistance = 8;
+    for (const pickup of sim.pickups) {
+        if (pickup.kind !== "food") {
+            continue;
+        }
+        const distance = Math.hypot(pickup.x - player.x, pickup.y - player.y);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = pickup;
+        }
+    }
+    return best && walkTo(sim, best.x, best.y);
+}
+
+// Kephri's overlords, killed first: the spitter shoots and poisons for as long as it's up, the
+// soldier heals her, and none of her shield comes back till they're dead
+const KEPHRI_OVERLORDS = ["kephri_spitting", "kephri_soldier", "kephri_arcane"];
+
+// Kephri: her overlords while they're up, as near as the weapons need (the soldier's slashes kept
+// at arm's length if they reach further); otherwise near enough for every weapon, off what's close
+function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
+    const player = sim.player;
+    const overlord = sim.enemies
+        .filter((e) => !e.dead && KEPHRI_OVERLORDS.includes(e.def.id))
+        .sort(
+            (a, b) =>
+                KEPHRI_OVERLORDS.indexOf(a.def.id) - KEPHRI_OVERLORDS.indexOf(b.def.id) ||
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                    Math.hypot(b.x - player.x, b.y - player.y),
+        )[0];
+    if (!overlord) {
+        return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5);
+    }
+    const reach = heroReach(sim);
+    const keep = overlord.radius + Math.max(1, Math.min(4, reach - 0.6));
+    const dx = player.x - overlord.x;
+    const dy = player.y - overlord.y;
+    const away = Math.hypot(dx, dy) || 1;
+    const to = { x: overlord.x + (dx / away) * keep, y: overlord.y + (dy / away) * keep };
+    return Math.hypot(to.x - player.x, to.y - player.y) < 1
+        ? nudge(sim, to.x, to.y)
+        : walkTo(sim, to.x, to.y);
 }
 
 // Ba-Ba: up to her altar while her stones roll (round the edges, where the gap isn't), beside a
@@ -835,8 +1075,71 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
             return go({ x: (live.x + q.middle.x) / 2, y: (live.y + q.middle.y) / 2 });
         }
     }
-    // Out of his spear's reach, near enough for the rest
-    return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 5) }, 2.5);
+    // Out of his spear's reach, near enough for the rest: round him on the floor, not backed
+    // into a wall (straight south of him is the way in, where a wipe puts you)
+    // As far as his spear reaches when the hero's weapons reach that far; otherwise as near as
+    // they need (dodging (bossMove) steps out of a thrust as it winds up)
+    const spot = ringSpot(
+        sim,
+        boss,
+        boss.radius + Math.min(6, Math.max(1.2, heroReach(sim) - 0.5)),
+        q,
+    );
+    return walkAvoiding(sim, spot.x, spot.y, orbs, 0);
+}
+
+// How far the hero's weapons reach, the furthest of them: a slash's or sweep's reach, an aura's
+// or orbit's ring, and about this far for what's thrown, shot or cast
+const THROWN_REACH = 7;
+
+export function heroReach(sim: Sim): number {
+    let reach = 0;
+    for (const weapon of sim.weapons) {
+        const level = weapon.def.levels[Math.max(0, weapon.level - 1)];
+        const kind = weapon.def.kind;
+        reach = Math.max(
+            reach,
+            kind === "slash" || kind === "sweep" || kind === "aura" || kind === "orbit"
+                ? (level?.area ?? 1)
+                : THROWN_REACH,
+        );
+    }
+    return reach;
+}
+
+// The open spot this far from a boss, inside its arena's square, nearest the player: where to
+// stand clear of its reach without being pinned against a wall
+function ringSpot(
+    sim: Sim,
+    boss: Point,
+    distance: number,
+    square: { middle: Point; half: number },
+): Point {
+    const player = sim.player;
+    const inner = square.half - 1;
+    let best: Point | undefined;
+    let bestScore = Infinity;
+    for (let i = 0; i < 24; i++) {
+        const angle = (i / 24) * Math.PI * 2;
+        const spot = {
+            x: boss.x + Math.cos(angle) * distance,
+            y: boss.y + Math.sin(angle) * distance,
+        };
+        if (
+            Math.abs(spot.x - square.middle.x) > inner ||
+            Math.abs(spot.y - square.middle.y) > inner ||
+            sim.grid.isSolid(Math.floor(spot.x), Math.floor(spot.y))
+        ) {
+            continue;
+        }
+        const score = Math.hypot(spot.x - player.x, spot.y - player.y);
+        if (score < bestScore) {
+            bestScore = score;
+            best = spot;
+        }
+    }
+    // Nowhere far enough inside: the square's middle, the furthest from every wall
+    return best ?? square.middle;
 }
 
 // Zebak: on his island near enough for weapons to reach him; south of a boulder on the line
@@ -886,9 +1189,21 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
             return go({ x: (wave.gapX0 + wave.gapX1) / 2 + 0.5, y: player.y });
         }
     }
-    // As near him as the island goes
-    const anchor = { x: boss.x, y: Math.min(island.y1 - 1, boss.y - boss.radius - 3) };
-    return go(anchor);
+    // As near him as the weapons need, as far as the island goes, and along its edge to a spot no
+    // boulder's on
+    const reach = Math.max(1, Math.min(3, heroReach(sim) - 0.6));
+    const y = Math.min(island.y1 - 3, boss.y - boss.radius - reach);
+    const clear = (x: number) =>
+        !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
+        !boulders.some((b) => Math.hypot(b.x - x, b.y - y) < b.radius + player.radius + 0.4);
+    const within = boss.radius + heroReach(sim) - 0.3;
+    for (const dx of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
+        const x = boss.x + dx;
+        if (Math.hypot(dx, boss.y - y) <= Math.max(within, boss.y - y) && clear(x)) {
+            return go({ x, y });
+        }
+    }
+    return go({ x: boss.x, y });
 }
 
 // The Wardens. The first phase from a side's gap (beside the obelisk, so every weapon reaches it,

@@ -341,9 +341,10 @@ const ZEBAK_ARENA: RoomCut = {
     arrive: [24, 13],
     turns: 1,
 };
-// (turned) Where he lies, the line past which (north) he rises, the island's floor, and the two
-// Rock steps' tops, where his blood clouds come in
-const ZEBAK_AT = [24, 48];
+// (turned) Where he lies (in the water at the island's north edge, near enough that a bronze
+// scimitar reaches him from it), the line past which (north) he rises, the island's floor, and the
+// two Rock steps' tops, where his blood clouds come in
+const ZEBAK_AT = [24, 43];
 const ZEBAK_LINE = 15;
 const ZEBAK_ISLAND = { x0: 14, y0: 19, x1: 34, y1: 40 };
 // (unturned) The island's east edge, towards the way in: its two blocked columns, and the
@@ -1049,8 +1050,9 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             "invocations' raid level in place of hard mode.",
         // Osmumten's fang
         iconObjId: 26219,
-        // As the Theatre of Blood's, before the raid level's on top
-        difficulty: { hp: 3.75, damage: 2.7 },
+        // As a first map's: the raid level's scale (getRaidLevelScale) makes it what it is, from
+        // Entry for a run that's bought nothing up past Expert
+        difficulty: { hp: 1, damage: 1 },
         waves: [],
         events: [],
         finalBossWarning: "",
