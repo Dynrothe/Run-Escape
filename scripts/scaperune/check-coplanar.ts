@@ -3,9 +3,9 @@
 // pair of locs that meet in one plane, with where. Pairs cut whole from a real place (both locs
 // stamped) are the real world's own, and only printed. check-maps.ts runs the same check.
 //
-//   npx tsx scripts/scaperune/check-coplanar.ts                  # every shipped map
-//   npx tsx scripts/scaperune/check-coplanar.ts zachariah scaperune_town
-//   CHECK=1 npx tsx scripts/scaperune/check-coplanar.ts          # fails on any pair we placed
+//   bun run tsx scripts/scaperune/check-coplanar.ts              # every shipped map
+//   bun run tsx scripts/scaperune/check-coplanar.ts zachariah scaperune_town
+//   CHECK=1 bun run tsx scripts/scaperune/check-coplanar.ts      # fails on any pair we placed
 import { describeCoplanar, findMapCoplanar } from "../../src/game/scaperune/coplanar";
 import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";
 import {

@@ -3,7 +3,7 @@
 // down (low height on the last frame), an attack reaches out (wide extent
 // mid-animation) and ends standing.
 //
-//   npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184 6185
+//   bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184 6185
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

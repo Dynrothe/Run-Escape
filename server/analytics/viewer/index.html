@@ -375,8 +375,8 @@
                 </p>
                 <p>
                     <code
-                        >npx wrangler d1 export run-escape-analytics --remote --output runs.sql -c
-                        ../analytics/wrangler.toml</code
+                        >bun run wrangler d1 export run-escape-analytics --remote --output runs.sql
+                        -c ../analytics/wrangler.toml</code
                     >
                 </p>
             </section>
@@ -902,7 +902,7 @@
                 const body = $("runsBody");
                 if (!hasRuns) {
                     body.innerHTML = `<p class="note">These dumps have no raw <code>runs</code> rows, so party composition, leaderboards and per-run detail aren't here. Export the whole database to get them:</p>
-            <p><code>npx wrangler d1 export run-escape-analytics --remote --output runs-${new Date().toISOString().slice(0, 10)}.sql -c ../analytics/wrangler.toml</code></p>
+            <p><code>bun run wrangler d1 export run-escape-analytics --remote --output runs-${new Date().toISOString().slice(0, 10)}.sql -c ../analytics/wrangler.toml</code></p>
             <p class="note">Raw runs are deleted after <code>RAW_RETENTION_DAYS</code>, so export at least that often to keep them.</p>`;
                     return;
                 }

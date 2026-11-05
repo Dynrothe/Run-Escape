@@ -21,8 +21,8 @@ export function loadCacheList(caches: CacheInfo[]): CacheList {
     };
 }
 
-export function loadCacheFiles(cache: CacheInfo, cachesDir = "./caches/"): CacheFiles {
-    const cachePath = cachesDir + cache.name + "/";
+export function loadCacheFiles(cache: CacheInfo): CacheFiles {
+    const cachePath = "./caches/" + cache.name + "/";
 
     const files = new Map<string, ArrayBuffer>();
 
@@ -38,9 +38,9 @@ export function loadCacheFiles(cache: CacheInfo, cachesDir = "./caches/"): Cache
     return new CacheFiles(files);
 }
 
-export function loadCache(info: CacheInfo, cachesDir = "./caches/"): LoadedCache {
-    const files = loadCacheFiles(info, cachesDir);
-    const xteas = loadXteas(info, cachesDir);
+export function loadCache(info: CacheInfo): LoadedCache {
+    const files = loadCacheFiles(info);
+    const xteas = loadXteas(info);
     return {
         info,
         type: detectCacheType(info),
@@ -49,8 +49,8 @@ export function loadCache(info: CacheInfo, cachesDir = "./caches/"): LoadedCache
     };
 }
 
-export function loadXteas(cache: CacheInfo, cachesDir = "./caches/"): XteaMap {
-    const cachePath = cachesDir + cache.name + "/";
+export function loadXteas(cache: CacheInfo): XteaMap {
+    const cachePath = "./caches/" + cache.name + "/";
     const json = fs.readFileSync(cachePath + "keys.json", "utf8");
     const data: Record<string, number[]> = JSON.parse(json);
     return new Map(Object.keys(data).map((key) => [parseInt(key), data[key]]));

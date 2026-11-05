@@ -15,8 +15,8 @@
 // draws in the map's place (GeneratedMap.standIns: the Owl's Court's statues, which the fight
 // animates) counts as though it stood there.
 //
-//   npx tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
-//   PHONE=1 TOP=10 STEP=2 WIDTH=96 npx tsx scripts/scaperune/view-weight.ts phosani
+//   bun run tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
+//   PHONE=1 TOP=10 STEP=2 WIDTH=96 bun run tsx scripts/scaperune/view-weight.ts phosani
 import { TILE_BRIDGE, TILE_SHOWN, TileGrid } from "../../src/game/scaperune/format";
 import { getRecipeWorldTile } from "../../src/game/scaperune/recipe";
 import { createBuildContext, getRecipe } from "../../src/game/scaperune/squares";

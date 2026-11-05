@@ -1,334 +1,146 @@
 // Writes a slim copy of the game's cache for hosting: only the groups the game
-// reads, in the same dat2 format, so a first visit downloads a few MB instead
-// of the whole cache.
+// reads, in chunks (src/rs/cache/ChunkedCache.ts), so a first visit downloads a
+// few MB instead of the whole cache, and an update only the chunks that changed.
 //
-// What the game reads is found by loading what it loads, with its own loaders:
-// the renderer's textures, every model it bakes (enemies, spot animations,
-// pickups and power-ups, the player in every outfit and every wearable item),
-// its sounds and sprites, an icon for every item in the content, and each map's
-// arena with MAP_MARGIN map squares around it. Then it all gets loaded again
-// from the slim cache, and a group that's missing fails the script.
+// What the game reads is found by loading what it loads, with its own loaders
+// (slim-load.ts): the renderer's textures, every model it bakes (enemies, spot
+// animations, pickups and power-ups, the player in every outfit and every
+// wearable item), its sounds and sprites, an icon for every item in the
+// content, and each map's arena with the map squares around it. The chunks are
+// written to the out dir and read back, and every group has to come out of them
+// as it went in. Then it all gets loaded again from those chunks, and a group
+// that's missing fails the script. Both loads run in worker threads, a unit (a
+// map, a batch of bakes) at a time.
 //
-//   npx tsx scripts/cache/slim-cache.ts [out dir]
+//   bun run tsx scripts/cache/slim-cache.ts [out dir]
 //
-// The out dir (dist/caches by default, so run it after the build) gets a
-// caches.json and the slim cache, named after what's in it so browsers fetch
-// a changed one. Make it again whenever the content changes.
+//   SLIM_WORKERS=n    worker threads, each holding a copy of the full cache;
+//                     the cores less one, up to 4, unless it's set
+//   SLIM_CHECK=0      skip loading it again from the slim cache (local runs only)
+//   SLIM_REUSE=0      do it all even if nothing it reads has changed
+//
+// The out dir (dist/caches by default, so run it after the build) gets the
+// chunks in chunks/, each named after its sha256, and a caches.json listing
+// them, with the build it was made for (dist/build.json): the game won't load
+// another build's. The same cache and content always give the same chunks.
+// Make it again after every build. A checked run is kept in caches/slim/, and
+// when nothing it read from (src/, scripts/cache/, the packages, the full
+// cache) has changed since, the next run reuses it rather than loading it all.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { Worker } from "node:worker_threads";
 
 import { GAME_CACHE_NAME } from "../../src/game/cache";
-import {
-    GameAssets,
-    HITSPLAT_SPRITES,
-    PICKUP_OBJS,
-    PILE_LOOKS,
-    PLAYER_SEQS,
-    PRAYER_HEADICON_SPRITE,
-    getCharacterAppearance,
-    getPlayerAttackSeqs,
-    getPowerUpLookRequests,
-} from "../../src/game/client/GameAssets";
-import { getGameSoundIds } from "../../src/game/client/GameSounds";
-import { CHARACTERS } from "../../src/game/content/characters";
-import { ENEMIES } from "../../src/game/content/enemies";
-import { FLAG_SPRITE } from "../../src/game/content/flags";
-import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
-import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
-import { PASSIVES } from "../../src/game/content/passives";
-import { PETS } from "../../src/game/content/pets";
-import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
-import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
-import { SHOP_UPGRADES } from "../../src/game/content/shop";
-import { getPlayerStanceSeqs } from "../../src/game/content/stances";
-import {
-    COLLECTION_LOG_OBJ,
-    REFUND_SPRITE,
-    TITLE_TAB_SPRITES,
-} from "../../src/game/content/titleIcons";
-import { TROPHIES } from "../../src/game/content/trophies";
-import { WEAPONS } from "../../src/game/content/weapons";
-import { installRecipeInSceneBuilder } from "../../src/game/scaperune/squares";
-import { LoadedCache } from "../../src/mapviewer/Caches";
-import { ActorBakeLoader } from "../../src/mapviewer/webgl/actor/ActorBakeLoader";
-import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
-import { SdMapDataLoader } from "../../src/mapviewer/webgl/loader/SdMapDataLoader";
-import { getSdTextureIds } from "../../src/mapviewer/webgl/loader/TextureIndex";
-import { ItemIconLoader } from "../../src/mapviewer/worker/ItemIconLoader";
-import { loadMinimapData } from "../../src/mapviewer/worker/MinimapData";
-import { RegionDataLoader } from "../../src/mapviewer/worker/RegionDataLoader";
-import { RenderDataLoader } from "../../src/mapviewer/worker/RenderDataLoader";
-import { SoundLoader } from "../../src/mapviewer/worker/SoundLoader";
-import { SpriteDataLoader } from "../../src/mapviewer/worker/SpriteDataLoader";
-import {
-    WorkerState,
-    clearWorkerStateCaches,
-    createWorkerState,
-} from "../../src/mapviewer/worker/WorkerState";
+import { assembleChunkedCache } from "../../src/mapviewer/Caches";
 import { CacheFiles } from "../../src/rs/cache/CacheFiles";
 import { CacheIndex } from "../../src/rs/cache/CacheIndex";
 import { CacheInfo } from "../../src/rs/cache/CacheInfo";
-import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
-import { Sector } from "../../src/rs/cache/store/Sector";
-import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
 import {
-    EquipSlot,
-    PlayerAppearance,
-    createAppearance,
-} from "../../src/rs/model/player/PlayerModelLoader";
-import { Scene } from "../../src/rs/scene/Scene";
-import { Hasher } from "../../src/util/Hasher";
+    CHUNK_DIR,
+    CacheGroup,
+    getChunkFileName,
+    isChunk,
+    packChunks,
+} from "../../src/rs/cache/ChunkedCache";
+import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
+import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
 import { loadCache, loadCacheInfos } from "./load-util";
+import type { WorkerData, WorkerReply } from "./slim-cache-worker";
+import { findReusable, hashInputs, pruneChunks, storeRun, writeChunks } from "./slim-files";
+import type { SlimUnit } from "./slim-load";
 
-// Map squares loaded around each arena. The camera can be up to ~15 tiles
-// outside the arena and sees 72 tiles (GameApp's RENDER_DISTANCE), so the
-// renderer asks for at most two squares past the edge.
-const MAP_MARGIN = 2;
-
-const SECTOR_SIZE = Sector.SIZE;
+// Before slim-load.ts, which counts reads through it, is loaded
+const readGroup = MemoryStore.prototype.read;
 
 const outDir = (process.argv[2] ?? "dist/caches").replace(/\/?$/, "/");
+const chunkDir = outDir + CHUNK_DIR;
 
-// The map loaders draw minimap images on an OffscreenCanvas, which Node
-// doesn't have. Only what they read from the cache matters here.
-class NodeImageData {
-    readonly data: Uint8ClampedArray;
+// The last checked run, for reuse
+const STORE_DIR = "caches/slim/";
 
-    constructor(width: number, height: number) {
-        this.data = new Uint8ClampedArray(width * height * 4);
+const CHECK = process.env.SLIM_CHECK !== "0";
+const REUSE = process.env.SLIM_REUSE !== "0";
+
+function getWorkerCount(): number {
+    const setting = process.env.SLIM_WORKERS ?? "";
+    if (setting === "") {
+        return Math.max(1, Math.min(4, (os.availableParallelism?.() ?? os.cpus().length) - 1));
     }
+    const count = Number(setting);
+    if (!Number.isInteger(count) || count < 1) {
+        throw new Error(`SLIM_WORKERS=${setting}: it takes a whole number of threads, 1 or more`);
+    }
+    return count;
 }
-class NodeOffscreenCanvas {
-    getContext() {
-        return { putImageData() {} };
-    }
 
-    convertToBlob(): Promise<Blob> {
-        return Promise.resolve(new Blob());
-    }
-}
-Object.assign(globalThis, { ImageData: NodeImageData, OffscreenCanvas: NodeOffscreenCanvas });
-
-// Every group read, as "index:archive"
-const reads = new Set<string>();
-const readGroup = MemoryStore.prototype.read;
-MemoryStore.prototype.read = function (indexId: number, archiveId: number): Int8Array {
-    reads.add(indexId + ":" + archiveId);
-    return readGroup.call(this, indexId, archiveId);
+type Pass = {
+    workers: number;
+    units: SlimUnit[];
+    describe: (unit: SlimUnit) => string;
 };
 
-// Every item the player can wear, in its slot: the outfits, held weapons, the
-// pieces passives put on and casket gear
-function getWornObjs(): [EquipSlot, number][] {
-    const worn: [EquipSlot, number][] = [];
-    for (const character of CHARACTERS) {
-        for (const [slot, objId] of Object.entries(character.equipment)) {
-            if (objId !== undefined) {
-                worn.push([Number(slot), objId]);
-            }
-        }
-    }
-    // The fun maps' players (baked in getBaseRequests too)
-    for (const enemy of ENEMIES) {
-        for (const outfit of enemy.outfits ?? []) {
-            for (const [slot, objId] of Object.entries(outfit.equipment)) {
-                if (objId !== undefined && objId !== -1) {
-                    worn.push([Number(slot), objId]);
+// Runs the units across the workers, each taking the next as it finishes one,
+// and gives back every group they read
+async function runPass(
+    label: string,
+    data: Omit<WorkerData, "entry">,
+    { workers: count, units, describe }: Pass,
+): Promise<Set<string>> {
+    const started = performance.now();
+    const reads = new Set<string>();
+    const boot = new URL("./slim-cache-boot.mjs", import.meta.url);
+    const entry = new URL("./slim-cache-worker.ts", import.meta.url).href;
+    let next = 0;
+    let done = 0;
+    const workers: Worker[] = [];
+    const runWorker = () =>
+        new Promise<void>((resolve, reject) => {
+            const worker = new Worker(boot, { workerData: { ...data, entry } });
+            workers.push(worker);
+            let unit: SlimUnit | undefined;
+            let finished = false;
+            const give = () => {
+                unit = units[next++];
+                if (unit) {
+                    worker.postMessage(unit);
+                } else {
+                    finished = true;
+                    worker.terminate().then(() => resolve(), reject);
                 }
-            }
-        }
-    }
-    for (const weapon of WEAPONS) {
-        for (const level of weapon.levels) {
-            if (level.objId !== undefined) {
-                worn.push([EquipSlot.WEAPON, level.objId]);
-            }
-        }
-    }
-    for (const passive of PASSIVES) {
-        for (const piece of passive.equipment ?? []) {
-            for (const objId of piece.objIds) {
-                if (objId !== -1) {
-                    worn.push([piece.slot, objId]);
+            };
+            worker.on("message", (reply: WorkerReply) => {
+                if ("error" in reply) {
+                    reject(new Error(`${describe(unit!)} failed: ${reply.error}`));
+                    return;
                 }
-            }
-        }
-    }
-    for (const gear of GEAR) {
-        const equipSlot = GEAR_SLOT_BY_ID.get(gear.slot)?.equipSlot;
-        if (equipSlot !== undefined) {
-            worn.push([equipSlot, gear.objId]);
-        }
-    }
-    return worn;
-}
-
-// Every item id in the content (objId, iconObjId, casketObjId, objIds...), for
-// their icons
-function getContentObjIds(): number[] {
-    const ids = new Set<number>([
-        COLLECTION_LOG_OBJ,
-        ...Object.values(PICKUP_OBJS),
-        ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
-    ]);
-    for (const [, objId] of getWornObjs()) {
-        ids.add(objId);
-    }
-    const seen = new Set<object>();
-    const visit = (value: unknown, key: string): void => {
-        if (typeof value === "number") {
-            if (/objIds?$/i.test(key) && value >= 0) {
-                ids.add(value);
-            }
-        } else if (value && typeof value === "object" && !seen.has(value)) {
-            seen.add(value);
-            for (const [childKey, child] of Object.entries(value)) {
-                visit(child, Array.isArray(value) ? key : childKey);
-            }
-        }
-    };
-    visit(
-        {
-            CHARACTERS,
-            ENEMIES,
-            WEAPONS,
-            PASSIVES,
-            ITEMS,
-            CASKETS,
-            POWER_UPS,
-            RANDOM_EVENTS,
-            THRALLS,
-            ALL_MAPS,
-            SHOP_UPGRADES,
-            TROPHIES,
-        },
-        "",
-    );
-    return [...ids];
-}
-
-// Stackables like coins have a model per stack size
-function getStackCounts(state: WorkerState, objId: number): number[] {
-    const counts = state.objTypeLoader.load(objId).countCo ?? [];
-    return [1, ...counts.filter((count) => count > 1)];
-}
-
-function playerRequest(key: string, appearance: PlayerAppearance, seqIds: number[]): BakeRequest {
-    return { kind: "player", key, appearance, seqIds };
-}
-
-// Bake requests to put through one buffer
-const BAKE_BATCH = 25;
-
-// The map loader logs every square
-async function quietly<T>(load: () => Promise<T>): Promise<T> {
-    const { log, time, timeEnd } = console;
-    console.log = console.time = console.timeEnd = () => {};
+                if ("reads" in reply) {
+                    reply.reads.forEach((key) => reads.add(key));
+                    done++;
+                }
+                give();
+            });
+            // An error outside a unit's own work, such as running out of memory
+            worker.on("error", (e) =>
+                reject(unit ? new Error(`${describe(unit)} failed`, { cause: e }) : e),
+            );
+            worker.on("exit", (code) => {
+                if (!finished) {
+                    const doing = unit ? ` on ${describe(unit)}` : "";
+                    reject(new Error(`A worker stopped (${code})${doing}`));
+                }
+            });
+        });
+    const running = Math.min(count, units.length);
     try {
-        return await load();
+        await Promise.all(Array.from({ length: running }, runWorker));
     } finally {
-        Object.assign(console, { log, time, timeEnd });
+        await Promise.all(workers.map((worker) => worker.terminate()));
     }
-}
-
-async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
-    const state = createWorkerState(cache, [], [], undefined as unknown as Cache);
-    const load = async <I, D>(loader: RenderDataLoader<I, D>, input: I): Promise<void> => {
-        loader.init();
-        await loader.load(state, input);
-        clearWorkerStateCaches(state);
-    };
-
-    // The renderer's texture array
-    for (const id of getSdTextureIds(state.textureLoader)) {
-        state.textureLoader.getPixelsArgb(id, 128, true, 1.0);
-    }
-
-    const playerSeqs = [...Object.values(PLAYER_SEQS), ...getPlayerAttackSeqs()];
-    const playerRequests: BakeRequest[] = [
-        // Every body kit
-        playerRequest("bare", createAppearance(), playerSeqs),
-        // Only the look holding the weapon plays these, so one bake reads them
-        playerRequest("stances", createAppearance(), getPlayerStanceSeqs()),
-        ...CHARACTERS.map((character) =>
-            playerRequest(character.id, getCharacterAppearance(character.id), playerSeqs),
-        ),
-        // Power-ups' worn items and their animations
-        ...getPowerUpLookRequests(createAppearance()),
-        ...getWornObjs().map(([slot, objId]) =>
-            playerRequest(`${slot}:${objId}`, createAppearance({ [slot]: objId }), []),
-        ),
-    ];
-    const bakeLoader = new ActorBakeLoader();
-    const enemyRequests = GameAssets.getEnemyRequests(ENEMIES);
-    // Pets are baked as they're picked, not with the base: every one of them
-    const petRequests = GameAssets.getPetRequests(PETS);
-    for (const all of [GameAssets.getBaseRequests(), enemyRequests, petRequests, playerRequests]) {
-        // The game bakes a map's worth at a time. Everything in one buffer is more
-        // than an array can hold (Invalid array length).
-        for (let i = 0; i < all.length; i += BAKE_BATCH) {
-            const requests = all.slice(i, i + BAKE_BATCH);
-            await load(bakeLoader, { requests, loadedTextureIds: new Set<number>() });
-        }
-    }
-
-    await load(new SoundLoader(), { ids: getGameSoundIds() });
-    // The hitsplats, the title screen's tabs, the skills' refund button, co-op's
-    // flags and the overhead prayers (every frame comes with the first), and the
-    // passives with an interface sprite for an icon
-    const spriteIds = [
-        ...Object.values(HITSPLAT_SPRITES),
-        PRAYER_HEADICON_SPRITE,
-        ...Object.values(TITLE_TAB_SPRITES),
-        REFUND_SPRITE,
-        FLAG_SPRITE,
-        ...PASSIVES.flatMap((passive) =>
-            passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
-        ),
-    ];
-    await load(new SpriteDataLoader(), { spriteIds });
-    await load(new ItemIconLoader(), {
-        requests: getContentObjIds().flatMap((objId) =>
-            getStackCounts(state, objId).map((count) => ({ objId, count })),
-        ),
-    });
-
-    const mapLoader = new SdMapDataLoader();
-    for (const map of ALL_MAPS) {
-        installRecipeInSceneBuilder(state.sceneBuilder, map.id);
-        const region = getArenaRegion(map);
-        await load(new RegionDataLoader(), region);
-
-        const { baseX, baseY, sizeX, sizeY, plane } = region;
-        const firstX = Math.floor(baseX / Scene.MAP_SQUARE_SIZE);
-        const firstY = Math.floor(baseY / Scene.MAP_SQUARE_SIZE);
-        const lastX = Math.ceil((baseX + sizeX) / Scene.MAP_SQUARE_SIZE) - 1;
-        const lastY = Math.ceil((baseY + sizeY) / Scene.MAP_SQUARE_SIZE) - 1;
-        for (let mapX = firstX - MAP_MARGIN; mapX <= lastX + MAP_MARGIN; mapX++) {
-            for (let mapY = firstY - MAP_MARGIN; mapY <= lastY + MAP_MARGIN; mapY++) {
-                // GameWebGLRenderer's settings
-                await quietly(() =>
-                    load(mapLoader, {
-                        mapX,
-                        mapY,
-                        minLevel: plane,
-                        maxLevel: plane,
-                        loadObjs: false,
-                        loadNpcs: false,
-                        smoothTerrain: false,
-                        minimizeDrawCalls: false,
-                        loadedTextureIds: new Set<number>(),
-                    }),
-                );
-            }
-        }
-        // The minimap's images
-        for (let mapX = firstX; mapX <= lastX; mapX++) {
-            for (let mapY = firstY; mapY <= lastY; mapY++) {
-                await loadMinimapData(state, mapX, mapY, plane, true);
-            }
-        }
-    }
+    const seconds = ((performance.now() - started) / 1000).toFixed(0);
+    console.log(`${label}: ${done} units on ${running} workers in ${seconds}s`);
+    return reads;
 }
 
 function parseKey(key: string): [number, number] {
@@ -354,53 +166,77 @@ function getGroupSize(files: CacheFiles, indexId: number, archiveId: number): nu
     return (entry[0] << 16) | (entry[1] << 8) | entry[2];
 }
 
-// Writes the groups the way the client stores them: each one in a chain of
-// sectors in the dat2, its index file entry pointing at the first. Index files
-// keep their length; the groups left out have empty entries.
-function writeSlimFiles(full: CacheFiles, keys: string[]): Map<string, Uint8Array> {
+// The groups the game reads, as they are in the full cache. A group the full
+// cache lists but hasn't got can't be kept: those are returned apart.
+function readGroups(full: CacheFiles, keys: string[]): { groups: CacheGroup[]; absent: string[] } {
     const store = MemoryStore.fromFiles(full);
-    const indexFiles = new Map<number, Buffer>();
-    for (const [name, data] of full.files) {
-        const indexId = getIndexId(name);
-        if (indexId !== undefined) {
-            indexFiles.set(indexId, Buffer.alloc(data.byteLength));
-        }
-    }
-
-    // Sector 0 stays empty: an entry pointing there means no group
-    const sectors: Buffer[] = [Buffer.alloc(SECTOR_SIZE)];
-    for (const [indexId, archiveId] of keys.map(parseKey)) {
-        const data = readGroup.call(store, indexId, archiveId);
-        const indexFile = indexFiles.get(indexId);
-        if (data.length === 0 || !indexFile) {
+    const groups: CacheGroup[] = [];
+    const absent: string[] = [];
+    for (const key of keys) {
+        const [indexId, archiveId] = parseKey(key);
+        if (getGroupSize(full, indexId, archiveId) === 0) {
+            absent.push(key);
             continue;
         }
-        const extended = archiveId > 0xffff;
-        const dataSize = extended ? Sector.EXTENDED_DATA_SIZE : Sector.DATA_SIZE;
-        const count = Math.ceil(data.length / dataSize);
-        const first = sectors.length;
-        indexFile.writeUIntBE(data.length, archiveId * SectorCluster.SIZE, 3);
-        indexFile.writeUIntBE(first, archiveId * SectorCluster.SIZE + 3, 3);
-        const bytes = new Uint8Array(data.buffer, data.byteOffset, data.length);
-        for (let chunk = 0; chunk < count; chunk++) {
-            const sector = Buffer.alloc(SECTOR_SIZE);
-            let offset = extended
-                ? sector.writeInt32BE(archiveId, 0)
-                : sector.writeUInt16BE(archiveId, 0);
-            offset = sector.writeUInt16BE(chunk, offset);
-            offset = sector.writeUIntBE(chunk + 1 < count ? first + chunk + 1 : 0, offset, 3);
-            offset = sector.writeUInt8(indexId, offset);
-            sector.set(bytes.subarray(chunk * dataSize, (chunk + 1) * dataSize), offset);
-            sectors.push(sector);
-        }
+        const data = readGroup.call(store, indexId, archiveId);
+        groups.push({
+            indexId,
+            archiveId,
+            data: new Uint8Array(data.buffer, data.byteOffset, data.length),
+        });
     }
+    return { groups, absent };
+}
 
-    const files = new Map<string, Uint8Array>();
-    files.set(CacheFiles.DAT2_FILE_NAME, Buffer.concat(sectors));
-    for (const [indexId, indexFile] of indexFiles) {
-        files.set(CacheFiles.INDEX_FILE_PREFIX + indexId, indexFile);
+// How many archive ids each index file has room for, by index: the slim cache
+// keeps the lengths, so a group it left out reads as missing, not out of range
+function getIndexSizes(full: CacheFiles): number[] {
+    const indexCount = full.files.get(CacheFiles.META_FILE_NAME)!.byteLength / SectorCluster.SIZE;
+    return Array.from({ length: indexCount }, (_, indexId) => {
+        const indexFile = full.files.get(CacheFiles.INDEX_FILE_PREFIX + indexId);
+        return indexFile ? indexFile.byteLength / SectorCluster.SIZE : 0;
+    });
+}
+
+// The build in dist/build.json (written by bun run build), for an out dir in
+// dist. The game checks it against its own.
+function readBuildId(): string | undefined {
+    const file = path.join(outDir, "..", "build.json");
+    try {
+        const { build } = JSON.parse(fs.readFileSync(file, "utf8"));
+        return typeof build === "string" ? build : undefined;
+    } catch {
+        return undefined;
     }
-    return files;
+}
+
+// Everything that decides what the slim cache holds: the game's code and
+// content, this script, the packages and the full cache (its listing, keys, and
+// every file's length, which download-caches changes when it fills one in).
+// Undefined, with a warning, if one can't be read: then the run is neither
+// reused nor kept.
+function hashSlimInputs(fullInfo: CacheInfo): string | undefined {
+    const cacheDir = `caches/${GAME_CACHE_NAME}/`;
+    try {
+        const cacheFiles = fs
+            .readdirSync(cacheDir)
+            .sort()
+            .map((file) => [file, fs.statSync(cacheDir + file).size]);
+        return hashInputs(
+            ["src", "scripts/cache"],
+            [
+                "package.json",
+                "bun.lock",
+                "tsconfig.json",
+                cacheDir + "info.json",
+                cacheDir + "keys.json",
+            ],
+            JSON.stringify({ cache: fullInfo, files: cacheFiles }),
+        );
+    } catch (e) {
+        console.warn(`Couldn't hash what the slim cache is made from, so it's not reused: ${e}`);
+        return undefined;
+    }
 }
 
 function formatMb(bytes: number): string {
@@ -447,27 +283,59 @@ function printSummary(full: CacheFiles, keys: string[]): void {
     }
 }
 
-// Every group comes out of the slim cache as it went in, and loading what the
-// game loads from it reads nothing that's missing
-async function checkSlimCache(full: LoadedCache, slim: LoadedCache, keys: string[]): Promise<void> {
-    const fullStore = MemoryStore.fromFiles(full.files);
-    const slimStore = MemoryStore.fromFiles(slim.files);
+// Writes the chunks to the out dir and reads them back: they're what players
+// download. caches.json, which says which chunks to load, isn't touched yet.
+async function writeShippedChunks(files: string[], chunks: Uint8Array[]): Promise<Uint8Array[]> {
+    writeChunks(chunkDir, files, chunks);
+    const written = files.map((file) => new Uint8Array(fs.readFileSync(chunkDir + file)));
+    for (let i = 0; i < files.length; i++) {
+        if (!(await isChunk(files[i], written[i]))) {
+            throw new Error(`${chunkDir}${files[i]} isn't what was written`);
+        }
+    }
+    return written;
+}
+
+// Drops the chunks and the older slim caches caches.json won't list, then
+// writes it, as players read it first
+function finishPublish(info: CacheInfo, files: string[]): void {
+    pruneChunks(chunkDir, files);
+    // The slim caches from before chunks
+    for (const entry of fs.readdirSync(outDir)) {
+        if (/-slim-[0-9a-f]+$/.test(entry)) {
+            fs.rmSync(outDir + entry, { recursive: true, force: true });
+        }
+    }
+    fs.writeFileSync(outDir + "caches.json", JSON.stringify([info]), "utf8");
+}
+
+// Every group comes out of the chunks on disk as it went in
+function checkGroups(full: CacheFiles, info: CacheInfo, written: Uint8Array[], keys: string[]) {
+    const slim = MemoryStore.fromFiles(assembleChunkedCache(info, written, false).files);
+    const fullStore = MemoryStore.fromFiles(full);
     for (const [indexId, archiveId] of keys.map(parseKey)) {
         const expected = readGroup.call(fullStore, indexId, archiveId);
-        const actual = readGroup.call(slimStore, indexId, archiveId);
+        const actual = readGroup.call(slim, indexId, archiveId);
         if (Buffer.compare(Buffer.from(expected), Buffer.from(actual)) !== 0) {
             throw new Error(`Group ${indexId}:${archiveId} was written wrong`);
         }
     }
-    reads.clear();
-    await loadWhatTheGameLoads(slim);
+}
+
+// Loads what the game loads again, from the chunks in the out dir, and fails if
+// that reads a group the full cache has and the slim one doesn't
+async function checkSlimCache(
+    full: CacheFiles,
+    info: CacheInfo,
+    keys: string[],
+    pass: Pass,
+): Promise<void> {
+    const reads = await runPass("Loaded it again from the slim cache", { info, chunkDir }, pass);
+    const kept = new Set(keys);
     // Including reads whose error a loader caught and went on from
     const missing = [...reads].filter((key) => {
         const [indexId, archiveId] = parseKey(key);
-        return (
-            getGroupSize(full.files, indexId, archiveId) > 0 &&
-            getGroupSize(slim.files, indexId, archiveId) === 0
-        );
+        return !kept.has(key) && getGroupSize(full, indexId, archiveId) > 0;
     });
     if (missing.length > 0) {
         throw new Error(`Missing from the slim cache: ${missing.join(", ")}`);
@@ -476,66 +344,114 @@ async function checkSlimCache(full: LoadedCache, slim: LoadedCache, keys: string
 
 async function main(): Promise<void> {
     const started = performance.now();
-    await Hasher.init();
-
+    const workers = getWorkerCount();
     const fullInfo = loadCacheInfos().find((c) => c.name === GAME_CACHE_NAME);
     if (!fullInfo) {
         throw new Error(`Cache ${GAME_CACHE_NAME} not found in caches/caches.json`);
     }
-    const full = loadCache(fullInfo);
+    const build = readBuildId();
+    if (build === undefined) {
+        console.warn(
+            `No build.json beside ${outDir}: the game won't check that its cache is its own. ` +
+                "Run bun run build first.",
+        );
+    }
 
+    const inputs = hashSlimInputs(fullInfo);
+    const reusable = REUSE && inputs ? await findReusable(STORE_DIR, inputs) : undefined;
+    if (reusable) {
+        const info: CacheInfo = { ...reusable, build };
+        const files = reusable.chunks!.map((chunk) => chunk.file);
+        const chunks = files.map(
+            (file) => new Uint8Array(fs.readFileSync(STORE_DIR + CHUNK_DIR + file)),
+        );
+        await writeShippedChunks(files, chunks);
+        finishPublish(info, files);
+        console.log(
+            `Nothing it reads has changed since the last run: reused ${info.name} ` +
+                `(${files.length} chunks) for build ${build ?? "(none)"}. ` +
+                "SLIM_REUSE=0 makes it again.",
+        );
+        return;
+    }
+
+    // The game's content and loaders, only when there's loading to do
+    const { describeUnit, getSlimUnits } = await import("./slim-load");
+    const pass: Pass = { workers, units: getSlimUnits(), describe: describeUnit };
+    const full = loadCache(fullInfo);
     console.log(`Loading what the game loads from ${GAME_CACHE_NAME}...`);
-    await loadWhatTheGameLoads(full);
+    const reads = await runPass("Loaded what the game loads", { info: fullInfo }, pass);
     const metaEntries = full.files.files.get(CacheFiles.META_FILE_NAME)!.byteLength;
     for (let indexId = 0; indexId < metaEntries / SectorCluster.SIZE; indexId++) {
-        // The reference tables, for every index
-        reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
+        // The reference tables, for every index there is
+        if (getGroupSize(full.files, CacheIndex.META_INDEX_ID, indexId) > 0) {
+            reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
+        }
     }
-    const keys = [...reads].sort((a, b) => {
+    const sorted = [...reads].sort((a, b) => {
         const [indexA, archiveA] = parseKey(a);
         const [indexB, archiveB] = parseKey(b);
         return indexA - indexB || archiveA - archiveB;
     });
+    const { groups, absent } = readGroups(full.files, sorted);
+    const keys = groups.map((group) => group.indexId + ":" + group.archiveId);
     printSummary(full.files, keys);
-
-    const files = writeSlimFiles(full.files, keys);
-    const hash = createHash("sha256");
-    for (const name of [...files.keys()].sort()) {
-        hash.update(name).update(files.get(name)!);
+    if (absent.length > 0) {
+        // The loaders went on without them. A download of the same cache with
+        // them would give a different slim cache.
+        console.warn(
+            `${absent.length} groups the game asked for aren't in ${GAME_CACHE_NAME}: ` +
+                absent.slice(0, 20).join(", ") +
+                (absent.length > 20 ? ", ..." : ""),
+        );
     }
-    const name = `${GAME_CACHE_NAME}-slim-${hash.digest("hex").slice(0, 8)}`;
-    let size = 0;
-    for (const data of files.values()) {
-        size += data.byteLength;
-    }
-    const slimInfo: CacheInfo = { ...fullInfo, name, size, slimOf: GAME_CACHE_NAME };
+    const chunks = packChunks(groups);
+    const files = await Promise.all(chunks.map(getChunkFileName));
+    const indexSizes = getIndexSizes(full.files);
+    const xteas: Record<string, number[]> = JSON.parse(
+        fs.readFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, "utf8"),
+    );
+    // Named after what's in it, not the build, so it's the same wherever it's made
+    const hash = createHash("sha256")
+        .update(JSON.stringify({ files, indexSizes, xteas }))
+        .digest("hex");
+    const name = `${GAME_CACHE_NAME}-slim-${hash.slice(0, 8)}`;
+    const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    // The build goes last, where a reused run puts it, so both write the same caches.json
+    const info: CacheInfo = {
+        ...fullInfo,
+        name,
+        size,
+        slimOf: GAME_CACHE_NAME,
+        indexSizes,
+        xteas,
+        chunks: files.map((file, i) => ({ file, size: chunks[i].byteLength })),
+        build,
+    };
 
-    const dir = outDir + name + "/";
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    for (const [fileName, data] of files) {
-        fs.writeFileSync(dir + fileName, data);
+    // Until caches.json is written, the out dir still says to load the chunks it had
+    const written = await writeShippedChunks(files, chunks);
+    checkGroups(full.files, info, written, keys);
+    if (CHECK) {
+        console.log(`Checking ${name}...`);
+        await checkSlimCache(full.files, info, keys, pass);
+    } else {
+        console.warn("SLIM_CHECK=0: not loaded again from the slim cache, and not kept for reuse");
     }
-    fs.copyFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, dir + "keys.json");
-
-    console.log(`Checking ${name}...`);
-    try {
-        await checkSlimCache(full, loadCache(slimInfo, outDir), keys);
-    } catch (e) {
-        fs.rmSync(dir, { recursive: true, force: true });
-        throw e;
-    }
-
-    // Only the newest slim cache stays
-    for (const entry of fs.readdirSync(outDir)) {
-        if (entry !== name && entry.startsWith(GAME_CACHE_NAME + "-slim-")) {
-            fs.rmSync(outDir + entry, { recursive: true, force: true });
+    finishPublish(info, files);
+    if (CHECK && inputs) {
+        try {
+            storeRun(STORE_DIR, inputs, info, files, chunks);
+        } catch (e) {
+            console.warn(`Couldn't keep this run in ${STORE_DIR} for the next to reuse: ${e}`);
         }
     }
-    fs.writeFileSync(outDir + "caches.json", JSON.stringify([slimInfo]), "utf8");
 
     const seconds = ((performance.now() - started) / 1000).toFixed(0);
-    console.log(`Wrote ${outDir}${name} (${formatMb(size).trim()}) in ${seconds}s`);
+    console.log(
+        `Wrote ${outDir}caches.json: ${name}, ${files.length} chunks ` +
+            `(${formatMb(size).trim()}), for build ${build ?? "(none)"}, in ${seconds}s`,
+    );
 }
 
 main().catch((e) => {

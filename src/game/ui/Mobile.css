@@ -410,6 +410,17 @@
         gap: 6px;
     }
 
+    /* As wide as the menu, and kept to two lines or so */
+    .ui-export-reminder {
+        width: min(420px, 54vw);
+        padding: 2px 6px;
+    }
+
+    .ui-export-reminder-text {
+        flex-basis: 150px;
+        line-height: 1.1;
+    }
+
     .ui-button-big {
         min-height: 50px;
         padding: 4px 6px;
@@ -544,21 +555,15 @@
         font-size: 18px;
     }
 
-    /* Skills: the subtitle goes, but not why the refund arrows are greyed */
+    /* Skills: unlike other panels' subtitles, the help stays, as it says which
+       preset an adventurer uses. One line, about 15px of the cards' room. */
 
-    .ui-shop > .ui-subtle:not(.ui-shop-notice) {
-        display: none;
-    }
-
-    .ui-shop-notice {
-        flex-shrink: 0;
+    .ui-shop-help {
         font-size: 14px;
     }
 
     .ui-shop-grid {
         flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
         grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     }
 

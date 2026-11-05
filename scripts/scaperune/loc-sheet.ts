@@ -2,17 +2,17 @@
 // browser: the quick way to look through a place's scenery. Colours are near enough (textures
 // are their average), and a loc too big for its cell is drawn smaller.
 //
-//   npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1278:22 10820
+//   bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1278:22 10820
 //
 // Drawn smaller, a tall loc looks like a small one, so compare sizes with TRUE_SCALE=1: every loc
 // at TILE_PIXELS a tile (26 if not set), on its footprint, in cells as big as the biggest needs.
 //
-//   TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 37646 37730 37865
+//   TRUE_SCALE=1 bun run tsx scripts/scaperune/loc-sheet.ts out.png 37646 37730 37865
 //
 // An id can have a loc type after it (10 if not). A prefab's rectangle, world x,y,sizeX,sizeY,
 // is drawn from above, floor and all, as the generator would have it:
 //
-//   npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 3238,3204,11,13
+//   bun run tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 3238,3204,11,13
 import fs from "node:fs";
 
 import { PlacedLoc, cacheFloorId } from "../../src/game/scaperune/format";

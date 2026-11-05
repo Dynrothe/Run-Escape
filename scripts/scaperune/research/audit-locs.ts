@@ -2,7 +2,7 @@
 // type, where. Finds what reads wrong: locs from instances, locs put down as the wrong type,
 // locs with no surface use at all.
 //
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/audit-locs.ts world.json [maps]
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/audit-locs.ts world.json [maps]
 import fs from "node:fs";
 
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";

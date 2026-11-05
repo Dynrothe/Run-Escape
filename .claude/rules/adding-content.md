@@ -10,13 +10,14 @@ Content is plain data in `src/game/content/`, typed in `types.ts`, and the comme
 each field. Find a similar entry, copy its shape, and look up real ids in the cache:
 
 ```sh
-npx tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
-npx tsx scripts/cache/find-npcs.ts "^count draynor$"     # NPCs and their idle and walk animations
-npx tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
-npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
-npx tsx scripts/cache/find-locs.ts multicannon           # scenery
-npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
-npx tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
+bun run tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
+bun run tsx scripts/cache/find-npcs.ts "^count draynor$"  # NPCs and their idle and walk animations
+bun run tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
+# tell attack and death animations apart
+bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183
+bun run tsx scripts/cache/find-locs.ts multicannon           # scenery
+bun run tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+bun run tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
 ```
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
@@ -53,6 +54,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
+- To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
+  projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
@@ -64,8 +67,12 @@ Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, an
 the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item
 (a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
 with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
-one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
-there, and the overhead prayers' frames, and `slim-cache.ts` keeps them.
+one. `sprites.ts check` (and a test, when there's a cache) makes sure every sprite the game shows
+is there, the overhead prayers' frames too, and `slim-cache.ts` keeps them.
+
+Any other interface sprite the game shows goes in `getGameSpriteIds` in `client/GameAssets.ts`
+(one the game view draws, in `GAME_VIEW_SPRITES`, or in `loadSprites` for a frame past the first,
+as the overhead prayers are), or the slim cache won't have it.
 
 ## Stat
 
@@ -77,10 +84,10 @@ starting weapon).
 ## Shop upgrade
 
 Add it to `SHOP_UPGRADES` in `shop.ts`, themed as an OSRS skill, with its `stat`. Costs and
-refunds come from `getUpgradeCost` and the save code, independently for each combat style's
-`skillPages` allocation. New ones don't need a save migration.
-A single rank's refund reprices the page's later ranks from its saved purchase order, at today's
-prices, and never gives back more than the page spent, so changing a cost needs no migration either.
+refunds come from `getPageCost` (what a page's ranks cost in all, in any order) and the save code,
+independently for each combat style's `skillPages` allocation. New ones don't need a save migration.
+A single rank's refund gives back its share of what the page spent, by what it adds at today's
+prices, so changing a cost needs no migration either.
 
 ## Gear and utility items
 

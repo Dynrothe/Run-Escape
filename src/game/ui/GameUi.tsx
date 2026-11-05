@@ -55,7 +55,6 @@ import type { RaidChest } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
-    canRefundSkillPage,
     getNextUpgradeCost,
     getSkillCoins,
     importSave,
@@ -82,7 +81,7 @@ import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
-import { SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
+import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
@@ -297,6 +296,21 @@ function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
                 on={ui.display.pauseOnBlur}
                 label="Auto-pause"
                 onToggle={() => client.toggleAutoPause()}
+            />
+        </Setting>
+    );
+}
+
+function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Power-up timers"
+            text="A circle over each power-up on the ground shows how long it has left"
+        >
+            <Toggle
+                on={ui.display.pickupTimers}
+                label="Power-up timers"
+                onToggle={() => client.togglePickupTimers()}
             />
         </Setting>
     );
@@ -599,6 +613,7 @@ function SettingsPanel({
                             onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
+                    <PickupTimerSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
@@ -784,6 +799,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         <TitleStat name="Best level" value={save.bestLevel} />
                     </div>
                 </div>
+                {/* Under the menu, so a controller's highlight still starts on
+                    Singleplayer; not while nothing's saving, as that panel comes first */}
+                {!ui.saveBlock && <ExportReminder save={save} client={client} />}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">
@@ -1548,22 +1566,18 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
-    const singleRefunds = canRefundSkillPage(page);
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>Skills</h2>
-                <p className="ui-subtle">Coins found in runs train your skills for good.</p>
-                {!singleRefunds && (
-                    <p className="ui-subtle ui-shop-notice">
-                        This class's purchase order wasn't saved, so single ranks can't be refunded.
-                        Use Refund all once to start keeping it.
-                    </p>
-                )}
+                <p className="ui-subtle ui-shop-help">
+                    Melee, Ranged and Magic are separate skill presets, used automatically by
+                    adventurers of that combat style.
+                </p>
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
-                    aria-label="Class skills"
+                    aria-label="Skill presets"
                     onKeyDown={(event) => {
                         const next = getTabFromKey(event.key, STYLES, style);
                         if (next) {
@@ -1586,7 +1600,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                             aria-controls="skills-page"
                             onClick={() => setStyle(tab)}
                         >
-                            {STYLE_NAMES[tab]}
+                            {STYLE_NAMES[tab]} preset
                         </button>
                     ))}
                 </div>
@@ -1608,7 +1622,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     }
                                     aria-disabled={!affordable}
                                     title={
-                                        rank > 0 && !isCoarsePointer && singleRefunds
+                                        rank > 0 && !isCoarsePointer
                                             ? "Right-click to refund one rank"
                                             : undefined
                                     }
@@ -1620,7 +1634,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     onContextMenu={(event) => {
                                         if (rank > 0) {
                                             event.preventDefault();
-                                            if (!isCoarsePointer && singleRefunds) {
+                                            if (!isCoarsePointer) {
                                                 client.refundUpgrade(upgrade.id, style);
                                             }
                                         }
@@ -1644,12 +1658,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     <button
                                         className="ui-shop-refund"
                                         aria-label={`Refund one ${upgrade.name} rank`}
-                                        disabled={!singleRefunds}
-                                        title={
-                                            singleRefunds
-                                                ? `Refund one ${upgrade.name} rank`
-                                                : "Use Refund all first"
-                                        }
+                                        title={`Refund one ${upgrade.name} rank`}
                                         onClick={() => client.refundUpgrade(upgrade.id, style)}
                                     >
                                         <span className="ui-shop-refund-icon" aria-hidden="true">
@@ -2627,6 +2636,7 @@ function PauseModal({
                             client={client}
                             music={getMap(ui.mapId).music !== undefined}
                         />
+                        <PickupTimerSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
                         <AutoEquipSetting ui={ui} client={client} />

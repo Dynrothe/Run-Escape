@@ -21,6 +21,7 @@ go stale. Add anything that cost you time to work out.
 | ------------------------------------------------------ | ---------------------------------------------------------------------- |
 | How the code is laid out, scripts, URL flags, hosting  | `docs/DEVELOPMENT.md`                                                  |
 | The Windows app, its game updates, releases            | `docs/DEVELOPMENT.md`, Desktop                                         |
+| The Android app, its bundled game and release signing  | `android/`, `scripts/android/`, `docs/DEVELOPMENT.md`, Android         |
 | The app's main process and update code                 | `desktop/`                                                             |
 | The release workflow                                   | `.github/workflows/release.yml`                                        |
 | The checks on a pull request                           | `.github/workflows/check.yml`                                          |
@@ -45,6 +46,7 @@ go stale. Add anything that cost you time to work out.
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
+| The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
@@ -64,6 +66,7 @@ go stale. Add anything that cost you time to work out.
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
+| The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
@@ -85,29 +88,30 @@ resends, and the camera's steadiness (an echo of an unchanged move mustn't re-ti
 ## Commands
 
 ```sh
-npm install
-npm run download-caches    # the game's cache, into caches/
-npm start                  # dev server on http://localhost:5173, with co-op's relay
-npm run start:singleplayer # the same without it (or MULTIPLAYER=off): no Multiplayer button
-npm test                   # vitest
-npx tsc --noEmit -p .      # type check
-npx prettier --write <files>
-npm run build && npm run slim-cache    # build for hosting (only when deploying)
-npm run serve              # serve the build, co-op's relay too (serve:singleplayer without)
-npm run desktop            # the Windows app, on that build
-npm run desktop:dist       # the app's zip, game zip and manifest, into release/
+bun install --frozen-lockfile
+bun run download-caches    # the game's cache, into caches/
+bun run start              # dev server on http://localhost:5173, with co-op's relay
+bun run start:singleplayer # the same without it (or MULTIPLAYER=off): no Multiplayer button
+bun run test               # vitest
+bun run tsc --noEmit -p .  # type check
+bun run prettier --write <files>
+bun run build && bun run slim-cache    # build for hosting (only when deploying)
+bun run serve              # serve the build, co-op's relay too (serve:singleplayer without)
+bun run desktop            # the Windows app, on that build
+bun run desktop:dist       # the app's zip, game zip and manifest, into release/
+bun run tsx scripts/android/prepare-game.ts --dist dist  # that build, into the Android app
+cd android && ./gradlew test assembleDebug     # the Android app (Java 21 and Android SDK 36)
 ```
 
-There's no pre-commit hook, so run Prettier yourself. `npm run lint` formats the whole repository.
+There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the whole repository.
 
 ## After every change
 
 1. Run the tests and the type check, and format what you changed.
 2. **Run a simulation if the change can affect gameplay or balance** (see below).
 3. **If you added anything from the cache** (an item, enemy, map, animation or sprite), say so in the
-   pull request. Don't run `npm run slim-cache` as part of a change: it's slow and heavy on memory, and
-   it's done when deploying. A deployed game with an old slim cache stops on a "missing from the
-   cache" error.
+   pull request. Leave `bun run slim-cache` for deployment, after every build. It takes time and
+   memory, and a deployed game won't load a slim cache made for another build: it says so.
 4. Try UI and visual changes in the browser. Tests don't cover how things look.
 5. Note the change in `CHANGELOG.md` under Unreleased.
 6. Update the docs (see [Keep these files up to date](#keep-these-files-up-to-date)).
@@ -119,13 +123,15 @@ bosses, maps, XP, the shop, the Armoury, or combat in `Sim.ts`. Put the before a
 the pull request. If a sim wasn't run, say so there.
 
 ```sh
-npx tsx scripts/game/simulate-run.ts wizard 3                # one adventurer, 3 seeds
-MAP=barrows npx tsx scripts/game/simulate-run.ts "" 3        # everyone on one map, 3 seeds
-MAP=morytania META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # everything bought
-ENDLESS=1 npx tsx scripts/game/simulate-run.ts wizard 3      # endless mode
-HARD=1 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts wizard 3    # hard mode
-WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger 3    # one weapon
-PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts "" 3    # co-op
+bun run tsx scripts/game/simulate-run.ts wizard 3                # one adventurer, 3 seeds
+MAP=barrows bun run tsx scripts/game/simulate-run.ts "" 3        # everyone on one map, 3 seeds
+# everything bought
+MAP=morytania META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3
+ENDLESS=1 bun run tsx scripts/game/simulate-run.ts wizard 3      # endless mode
+# hard mode
+HARD=1 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts wizard 3
+WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger 3    # one weapon
+PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3    # co-op
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real
@@ -154,15 +160,15 @@ PARTY=4 MAP=barrows META=max ARMOURY=max npx tsx scripts/game/simulate-run.ts ""
 After a content change, also run the checks that apply:
 
 ```sh
-npx tsx scripts/cache/check-items.ts          # casket items are the items they're named after
-npx tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
-npx tsx scripts/cache/sprites.ts check        # passives' sprites and overhead prayers are there
-npx tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
+bun run tsx scripts/cache/check-items.ts          # casket items are the items they're named after
+bun run tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
+bun run tsx scripts/cache/sprites.ts check        # the game's interface sprites are in the cache
+bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
 ```
 
 ## Tests on the release build
 
-`.github/workflows/check.yml` runs the type check and `npm test` on every pull request, without
+`.github/workflows/check.yml` runs the type check and `bun run test` on every pull request, without
 the game's cache. The release workflow runs the tests with it, and a failure there stops the
 desktop build.
 
@@ -175,6 +181,24 @@ desktop build.
   doesn't, which leaves only a single test blocking for that long.
 - **`server/coop-relay.test.ts` needs Node 22's `WebSocket`**, as the workflow has. On Node 21, run
   with `NODE_OPTIONS=--experimental-websocket`.
+
+## The Android app
+
+- **Never change its application ID (`io.jere.run_escape`) or its page's address**
+  (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
+  ID can't have a hyphen.
+- **It's only published on GitHub's releases, and never updates itself.** Don't add an update
+  check, a download or an app store build: players install a new APK over the old one, as the
+  release notes (`android/release-notes.md`) and the app's About say.
+- It packs the same game zip as the Windows app, so their co-op build ids match.
+  `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
+  change one, change the other.
+- The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
+  the relay, and the run collector. A new address the game reaches needs adding to both.
+- Its generated game files, APKs and keys stay out of Git (`.gitignore`).
+- Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
+  there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:
+  a passing build isn't one. A change to the app alone needs no simulation.
 
 ## Testing in the browser
 
@@ -217,17 +241,19 @@ desktop build.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
-  New shop upgrades, ids and optional fields don't need one. Write the save only through
-  `GameClient.persist()`: it doesn't write while another tab has `SaveLock` or the save is from a
-  newer game. Never rename the lock, `run-escape-save`, any more than the keys.
-  Skills live in `skillPages` by combat style, with separate ranks, spending and purchase order;
+  New shop upgrades, ids and optional fields don't need one, and nor does dropping an optional
+  field that loading ignores. Write the save only through `GameClient.persist()`: it doesn't write
+  while another tab has `SaveLock` or the save is from a newer game. Never rename the lock,
+  `run-escape-save`, any more than the keys.
+  Skills live in `skillPages` by combat style, with separate ranks and spending;
   each page can allocate `coins + max(page.upgradesSpent)`. Only the maximum investment is reserved;
   use `getSkillCoins(save, style)` for a page's balance. Always pass the intended style to skill
   operations and run loadouts.
-  A single rank's refund gives back what taking it out of `upgradeOrder` saves at today's prices,
-  never more than `upgradesSpent`, and a page's last rank gives back the rest. A page without an
-  order (one migration couldn't rebuild exactly from its old prices) needs Refund all first: never
-  guess an order.
+  Prices come from `getPageCost` in `content/shop.ts`, which goes only by a page's ranks, so the
+  same ranks cost the same in any order: a rank's price is what it adds to the page. Keep it that
+  way (no price that depends on what was bought before). A single rank's refund gives back its
+  share of `upgradesSpent`: what it adds today, times `upgradesSpent` over `getPageCost` (the two
+  differ only on a page bought at other prices). A page's last rank gives back the rest.
 - **Determinism**: the sim only uses its seeded `Rng`, never `Math.random`. Co-op runs the same sim
   on every player's browser, so in `src/game/core/` trigonometry goes through `fm` (`fm.sin`,
   `fm.cos`, `fm.atan2`, `fm.hypot`, `fm.acos`, `fm.pow`) from `core/fmath.ts`, never `Math`'s.

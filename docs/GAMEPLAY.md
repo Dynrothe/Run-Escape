@@ -143,7 +143,8 @@ version and how to run it.
       more hitpoints it has (up to +150% on bosses). The **Bow of Faerdhinen** fires crystal
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
       venom in what they hit, hurting it every second; it goes for enemies without venom first
-      (flying past the ones with it), so the venom spreads through a crowd. From the new maps:
+      (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
+      upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
       the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
       crossbow**'s bolts go through what they hit and one in five is enchanted (a ruby takes a
@@ -222,9 +223,11 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. Their damage keeps up with the enemies' hitpoints, and the same one never
-  drops twice in a row. The shop's Runecraft upgrade makes them drop 15% more often for each rank,
-  up to three.
+  after 30 seconds. A RuneLite-style circle over each one drains from green to orange to red as
+  that time runs out (the Power-up timers setting, on by default, in Settings and the pause
+  menu). Once a Magnet pulls one towards you it can't run out, and its circle goes. Their damage
+  keeps up with the enemies' hitpoints, and the same one never drops twice in a row. The shop's
+  Runecraft upgrade makes them drop 15% more often for each rank, up to three.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
@@ -573,17 +576,21 @@ version and how to run it.
   power-ups in their colours. Bosses, caskets and power-ups out of range sit on the rim.
 - **Hitsplats** are the client's own sprites: red for damage (on you too), green for poison.
 - **Coins** are banked when a run ends. Spend them on **Skills** (permanent bonuses, refundable).
-  Melee, Ranged and Magic each have their own skill page, ranks and prices. Each can allocate the
+  Melee, Ranged and Magic each have their own skill preset, ranks and prices. The Skills tabs are
+  labelled **Melee preset**, **Ranged preset** and **Magic preset**. Each can allocate the
   full gold budget: 10,000 coins can fund 10,000 in skills on every class, not 10,000 split between them.
   Only the largest page's investment is reserved from the coin bank; the Skills balance shows what
   the selected class can still spend. Refunding one page never creates extra gold or changes the others.
-  A run uses its adventurer's class page, including in co-op. Existing shared skills move to Melee;
-  the other pages start empty. All three pages are kept when exporting and importing a save.
-  Click or tap a bought skill's arrow button to refund its last rank, even when maxed. Skills bought
-  after it get cheaper without it, and the refund includes that too.
+  A run automatically uses its adventurer's combat-style preset, including in co-op. Existing shared
+  skills move to Melee; the other pages start empty. All three pages are kept when exporting and
+  importing a save.
+  The same skills cost the same whatever order they're bought in, but each rank on a page adds a
+  little to the price of everything on it, so a cheap skill can cost several times its own price
+  once dear ones are bought.
+  Click or tap a bought skill's arrow button to refund one rank, even when maxed. It gives back what
+  that rank adds to the page, which is its own price and what it makes the others cost. Skills
+  bought at older prices give back their share of what was paid.
   On desktop, right-clicking its card does the same; touch long presses do not refund.
-  A class page from an older save whose purchase order can't be worked out needs Refund all once
-  before single ranks can be refunded.
   **Refund all** returns the selected page's remaining investment and resets only that class's skills.
   **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.
   **Firemaking** gives up to 3 banishes a run. Banish a new weapon or passive on a level up and
@@ -622,7 +629,7 @@ version and how to run it.
       server can let anyone in instead (`MULTIPLAYER_ANY_MAP`); then a win opens the map it was
       on for a player who hadn't got that far (along with the next), but not the maps before it.
     - The run's **level is shared**: every level up gives each player their own three choices, and
-      the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
+      the run waits for everyone to pick (and for everyone's item from a casket). Coins and kills are
       shared too, and everyone banks the run's coins.
     - A **random event's** visitor turns up by one of the party, and whoever walks up first meets
       them and gets what they bring. The Mysterious Old Man's and the Quiz Master's offers are
@@ -643,9 +650,12 @@ version and how to run it.
       offer) has it decided for them: the first reward, taking the casket, or walking away. The
       host can kick a player from the menu mid-run, and everyone has to be on the same version of
       the game.
-    - Caskets drop 20% more often for each player past the first, so there's more gear to go round,
-      and power-ups hit as hard against the tougher crowd. The Highwayman takes his share of the
-      shared coins once, however many of you he hits.
+    - A casket gives every player who's up an item of their own (rolled on their own luck, gear
+      and banishes), whoever picks it up, and the run waits for each of them. Its coins go to the
+      shared pot once. Ordinary kills drop fewer caskets the bigger the party (x0.69 for two,
+      x0.43 for four), as a party kills more, so each player gets about as many items as on their
+      own, and the party about as many casket coins. Power-ups hit as hard against the tougher
+      crowd. The Highwayman takes his share of the shared coins once, however many of you he hits.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party
@@ -664,8 +674,9 @@ version and how to run it.
       co-op. They come back with 75% of their hitpoints, then 50%, then 25% for every revive
       after, and with none left they're down for good. For 5 seconds a revived player can't
       be hurt, and enemies leave them alone for a teammate instead (unless nobody else is
-      up); food, coins and caskets are theirs to pick up all the while. Level ups the party had while they were down are theirs to choose once they're
-      back.
+      up); food, coins and caskets are theirs to pick up all the while. Level ups the party had
+      while they were down are theirs to choose once they're back, but a casket picked up
+      meanwhile has no item for them.
     - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
       leaving ends it for everyone.
     - Teammates show with their names in green, an arrow at the edge of the screen when they're out
@@ -691,3 +702,5 @@ version and how to run it.
   on the pause screen.
 - **Camera spin**: the camera circles your character on the title screen and the menus; the
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
+- **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
+  turn them off.

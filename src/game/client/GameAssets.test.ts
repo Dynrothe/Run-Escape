@@ -11,6 +11,7 @@ import { REVIVE_SEQ } from "../content/coop";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
+import { PASSIVES } from "../content/passives";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { emptyStats } from "../content/types";
@@ -18,11 +19,15 @@ import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
+    GAME_VIEW_SPRITES,
     GameAssets,
+    HINT_ARROW_SPRITE,
     PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
+    getGameSpriteIds,
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
@@ -366,6 +371,21 @@ describe("power-ups in the cache", () => {
         expect(keys).toContain("spot:" + VISITOR_SPOTANIM);
     });
 
+    // Every level's, not only the first: the Toxic blowpipe's darts change as it levels
+    test("weapons' spot animations are baked at every level, so the slim cache gets them", () => {
+        const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
+        for (const weapon of WEAPONS) {
+            for (const level of weapon.levels) {
+                const ids = [level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim];
+                for (const id of ids) {
+                    if (id !== undefined) {
+                        expect(keys, weapon.id).toContain("spot:" + id);
+                    }
+                }
+            }
+        }
+    });
+
     test("Toktz-mej-tal's fire is baked with its animation", () => {
         const { burns } = getWeapon("toktz_mej_tal");
         const request = GameAssets.getBaseRequests().find((r) => r.key === "loc:" + burns!.locId);
@@ -386,6 +406,43 @@ describe("power-ups in the cache", () => {
                 }
             }
         }
+    });
+});
+
+describe("sprites", () => {
+    test("the slim cache keeps every sprite the game view loads", async () => {
+        const asked: { spriteIds: number[]; frames?: number[] }[] = [];
+        const workerPool = {
+            queueLoad: async (
+                _loader: unknown,
+                input: { spriteIds: number[]; frames?: number[] },
+            ) => {
+                asked.push(input);
+                return [];
+            },
+        };
+        const assets = new GameAssets(workerPool as never, undefined as never, undefined as never);
+        await assets.loadSprites();
+        // The game view's first frames, then each overhead prayer's frame
+        const headicons = PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE);
+        expect(asked).toEqual([
+            {
+                spriteIds: [...GAME_VIEW_SPRITES, ...headicons],
+                frames: [...GAME_VIEW_SPRITES.map(() => 0), ...PRAYER_HEADICON_FRAME_IDS],
+            },
+        ]);
+        expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
+        expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
+    });
+
+    test("the slim cache keeps every passive's icon", () => {
+        const ids = getGameSpriteIds();
+        for (const { iconSpriteId } of PASSIVES) {
+            if (iconSpriteId !== undefined) {
+                expect(ids).toContain(iconSpriteId);
+            }
+        }
+        expect(new Set(ids).size).toBe(ids.length);
     });
 });
 
