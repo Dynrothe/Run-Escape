@@ -321,6 +321,8 @@ function renderTitle(runs: number, lastExported?: number) {
     const store = new GameStore(save);
     store.set({ screen: "title" });
     const client = {
+        // Stands in for GameClient once the file's kept: the stamp and the save's write are
+        // GameClient.test.ts's to check, and this only that the bar goes by the store's save
         exportSave: vi.fn(() => {
             store.set({ save: { ...store.getSnapshot().save, lastExported: Date.now() } });
         }),
@@ -331,7 +333,16 @@ function renderTitle(runs: number, lastExported?: number) {
 }
 
 describe("the title's export reminder", () => {
-    afterEach(() => window.localStorage.clear());
+    // Its own, as Node 25 and later have a localStorage that hides jsdom's
+    beforeEach(() => {
+        const items = new Map<string, string>();
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => items.get(key) ?? null,
+            setItem: (key: string, value: string) => void items.set(key, value),
+        });
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
 
     test("isn't there for a new player, or once the save's been exported today", () => {
         expect.hasAssertions();

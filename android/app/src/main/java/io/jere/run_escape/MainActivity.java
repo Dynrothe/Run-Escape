@@ -29,6 +29,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.webkit.JavaScriptReplyProxy;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -75,6 +76,8 @@ public final class MainActivity extends Activity {
     private Button menuButton;
     private ValueCallback<Uri[]> webFileCallback;
     private String pendingExport;
+    // The page that asked for the export, told once it's written
+    private JavaScriptReplyProxy exportReply;
     private boolean gameReady;
     private boolean destroyed;
     private int diagnosticGeneration;
@@ -153,7 +156,7 @@ public final class MainActivity extends Activity {
             WebViewCompat.addWebMessageListener(webView, "NativeDownloads", Collections.singleton(ORIGIN),
                     (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
                         if (isMainFrame && ORIGIN.equals(sourceOrigin.toString())) {
-                            receiveDownload(message.getData());
+                            receiveDownload(message.getData(), replyProxy);
                         }
                     });
             WebViewCompat.getProfile(webView).setCrossOriginIsolatedAllowlist(
@@ -353,7 +356,7 @@ public final class MainActivity extends Activity {
     // The game hands over a file to keep (src/game/client/saveFile.ts): {name, text}. Its text is
     // written exactly, protected newer or unreadable saves included. Imports stay in the game so its
     // migration and save-lock checks remain in force.
-    private void receiveDownload(String message) {
+    private void receiveDownload(String message, JavaScriptReplyProxy reply) {
         if (destroyed || !gameReady || isFinishing() || pendingExport != null) return;
         try {
             JSONObject file = new JSONObject(message);
@@ -364,6 +367,7 @@ public final class MainActivity extends Activity {
             if (!SAVE_NAME.matcher(name).matches()) name = DEFAULT_SAVE_NAME;
             Files.write(pendingExportFile().toPath(), bytes);
             pendingExport = text;
+            exportReply = reply;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("application/json");
@@ -371,9 +375,19 @@ public final class MainActivity extends Activity {
             startActivityForResult(intent, EXPORT_SAVE);
         } catch (Exception exception) {
             pendingExport = null;
+            exportReply = null;
             pendingExportFile().delete();
             toast("The save could not be exported. Please try again.");
         }
+    }
+
+    // Tells the game the file's kept (saveFile.ts), so the title's reminder to export can go. A page
+    // that's gone (Android stopped the app while the picker was open) isn't told.
+    private static void tellSaved(JavaScriptReplyProxy reply) {
+        if (reply == null) return;
+        try {
+            reply.postMessage("saved");
+        } catch (Exception ignored) { }
     }
 
     private File pendingExportFile() {
@@ -409,6 +423,8 @@ public final class MainActivity extends Activity {
         }
         if (requestCode == EXPORT_SAVE) {
             byte[] save = takePendingExport();
+            JavaScriptReplyProxy reply = exportReply;
+            exportReply = null;
             if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
             Uri document = data.getData();
             try {
@@ -418,6 +434,7 @@ public final class MainActivity extends Activity {
                     stream.write(save);
                 }
                 toast("Save exported.");
+                tellSaved(reply);
             } catch (Exception exception) {
                 // The picker made the document already: don't leave an empty one that looks like a save
                 try {

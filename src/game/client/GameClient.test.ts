@@ -1175,7 +1175,12 @@ describe("saving", () => {
         setStored({ save: { ...createSave(), coins: 70 }, newer: { gameVersion: "0.23.0" } });
         lockChanged(true);
         client.exportSave();
-        expect(spy).toHaveBeenLastCalledWith("run-escape-save.json", "stored", "application/json");
+        expect(spy).toHaveBeenLastCalledWith(
+            "run-escape-save.json",
+            "stored",
+            "application/json",
+            expect.any(Function),
+        );
         // This game's own is marked with its version
         setStored({ save: { ...createSave(), coins: 80 } });
         lockChanged(true);
@@ -1185,17 +1190,22 @@ describe("saving", () => {
         spy.mockRestore();
     });
 
-    test("an export says when it was made, and the save remembers it", async () => {
+    test("an export says when it was made, and the save remembers it once it's kept", async () => {
         const saveFile = await import("./saveFile");
         const spy = vi.spyOn(saveFile, "saveFile").mockImplementation(() => {});
         vi.spyOn(Date, "now").mockReturnValue(1_790_000_000_000);
         try {
             const { client, store, saved, lockChanged } = createSaving(false);
             lockChanged(true);
-            expect(client.save.lastExported).toBeUndefined();
+            const writes = saved.length;
             client.exportSave();
-            const text = spy.mock.lastCall![1];
+            const [, text, , kept] = spy.mock.lastCall!;
             expect(JSON.parse(text).lastExported).toBe(1_790_000_000_000);
+            // Not yet: the player can still cancel the app's picker or the share sheet
+            expect(client.save.lastExported).toBeUndefined();
+            expect(saved.length).toBe(writes);
+            vi.mocked(Date.now).mockReturnValue(1_790_000_060_000);
+            kept!();
             expect(saved.at(-1)?.lastExported).toBe(1_790_000_000_000);
             expect(store.getSnapshot().save.lastExported).toBe(1_790_000_000_000);
         } finally {

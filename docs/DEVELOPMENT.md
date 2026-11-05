@@ -397,9 +397,11 @@ since starting it over reloads the page and would end a run.
 **Saves.** A WebView can't download a file, so the app puts `NativeDownloads` in the page, and
 `saveFile.ts` hands it the file's name and text instead. The app asks the player where to keep it,
 and keeps the text in its cache folder until then, in case Android stops the app while the picker's
-open. Import is the game's own file input, with Android's picker. Neither goes round the game's
-checks. Saves in the app and in a browser are separate, and Export and Import carry one across.
-Uninstalling the app or clearing its storage loses its save.
+open. Once it's written, the app answers the page with `saved` (its reply proxy), which is how the
+title's export reminder knows the file was kept and not cancelled; a page Android started over
+meanwhile isn't told. Import is the game's own file input, with Android's picker. Neither goes
+round the game's checks. Saves in the app and in a browser are separate, and Export and Import
+carry one across. Uninstalling the app or clearing its storage loses its save.
 
 ### GitHub builds and releases
 
@@ -1506,15 +1508,20 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup.** Clearing the browser's data loses the save for good, so once a
-run's been played (`runs > 0`) the title screen shows a slim reminder under its menu on any day it
-hasn't been exported (`ui/exportReminder.ts`, `ExportReminder` in `ui/SavePanels.tsx`), except while
-the game isn't saving. It comes after the menu so a controller's highlight still starts on
-Singleplayer. Export stamps `SaveData.lastExported` (`Date.now()`) before writing the file, so the
-file says when it was made and the reminder goes until tomorrow. Days are the player's local ones,
-and an export dated ahead of the clock doesn't count. Not today keeps the day in localStorage
-(`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's reminder, it
-shouldn't travel in an exported file, and it can be put off while another tab holds the save.
+**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
+reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+menu so a controller's highlight still starts on Singleplayer. The file Export gives has
+`SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
+as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
+once `saveFile` says the file's kept. The Android app says so when it's written the file, and iOS's
+share sheet when it isn't cancelled, but a browser's download can't tell: there, and in the desktop
+app, whose Save As dialog can be cancelled too, it counts as soon as the download starts. Days are
+the player's local ones, and an export dated ahead of the clock doesn't count. Not today keeps the
+day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
+reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
+the save.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

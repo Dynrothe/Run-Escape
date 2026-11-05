@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { createSave } from "../core/save";
 import {
     dismissExportReminder,
@@ -16,10 +15,22 @@ function played(lastExported?: number) {
     return { ...createSave(), runs: 3, lastExported };
 }
 
+// localStorage, as far as the reminder uses it
+function useStorage(storage: Pick<Storage, "getItem" | "setItem">): void {
+    vi.stubGlobal("window", { localStorage: storage });
+}
+
 describe("export reminder", () => {
+    beforeEach(() => {
+        const items = new Map<string, string>();
+        useStorage({
+            getItem: (key) => items.get(key) ?? null,
+            setItem: (key, value) => void items.set(key, value),
+        });
+    });
+
     afterEach(() => {
-        window.localStorage.clear();
-        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
     });
 
     test("isn't shown to a new player, with nothing to lose", () => {
@@ -50,11 +61,13 @@ describe("export reminder", () => {
     });
 
     test("can be put off without localStorage, for as long as the title keeps the day", () => {
-        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("no room");
-        });
-        vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("blocked");
+        useStorage({
+            getItem: () => {
+                throw new Error("blocked");
+            },
+            setItem: () => {
+                throw new Error("no room");
+            },
         });
         const dismissed = dismissExportReminder(NOW);
         expect(dismissed).toBe(localDay(NOW));

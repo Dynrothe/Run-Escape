@@ -184,7 +184,7 @@ export function ExportReminder({
         <div className="ui-panel rs-border rs-background ui-export-reminder">
             <span className="ui-export-reminder-text">
                 {last === undefined
-                    ? "Your progress lives only in this browser. Export a copy to keep it safe."
+                    ? "Your progress is kept only on this device. Export a copy to keep it safe."
                     : `Last exported ${new Date(last).toLocaleDateString()}. Export a fresh copy to keep it safe.`}
             </span>
             <span className="ui-export-reminder-buttons">
