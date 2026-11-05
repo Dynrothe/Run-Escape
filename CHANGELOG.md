@@ -11,6 +11,8 @@ the version in the corner).
   on her.
 - Theatre of Blood, by Okaeri: a ranged or magic weapon's level up card says, in red, that it does
   85% less damage to the bosses, as they pray against it.
+- Bosses that pray show their overhead prayer, as in OSRS: the Theatre of Blood's, Protect from
+  Missiles and Magic. Added by Okaeri.
 
 ### Fixed
 

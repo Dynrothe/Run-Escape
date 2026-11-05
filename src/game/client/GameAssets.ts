@@ -114,6 +114,24 @@ export const HITSPLAT_SPRITES = { damage: 1359, poison: 1360, block: 1358 } as c
 // The game's hint arrow (headicons_hint), the yellow one that bobs over what
 // you're pointed at
 export const HINT_ARROW_SPRITE = 441;
+// The overhead prayers (headicons), a frame each: what a boss prays against shows over its head
+export const PRAYER_HEADICON_SPRITE = 440;
+// Their frames: Protect from Melee, Missiles, Magic, then the pairs and all three, as bosses use
+const PRAYER_HEADICON_FRAMES: Record<string, number> = {
+    melee: 0,
+    ranged: 1,
+    magic: 2,
+    "magic,ranged": 6,
+    "melee,ranged": 7,
+    "magic,melee": 8,
+    "magic,melee,ranged": 9,
+};
+export const PRAYER_HEADICON_FRAME_IDS = [...new Set(Object.values(PRAYER_HEADICON_FRAMES))];
+
+// The overhead prayer frame for praying against these styles, if there's one
+export function getPrayerHeadicon(styles: readonly string[]): number | undefined {
+    return PRAYER_HEADICON_FRAMES[[...styles].sort().join(",")];
+}
 
 // Every spot animation the content uses, plus the fixed ones (cannonball,
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
@@ -439,6 +457,8 @@ export class GameAssets {
     readonly models = new Map<string, ActorModel>();
     // Cache sprites by id, for the 2D overlay
     readonly sprites = new Map<number, HTMLCanvasElement>();
+    // Frames of a sprite past its first, by sprite and frame (loadSpriteFrames)
+    readonly spriteFrames = new Map<string, HTMLCanvasElement>();
 
     private readonly players: PlayerBake[] = [];
     // Looks being baked, by appearance key: players who look alike (all the
@@ -870,6 +890,24 @@ export class GameAssets {
     // Undefined when the cache has no such sprite
     getSprite(id: number): HTMLCanvasElement | undefined {
         return this.sprites.get(id);
+    }
+
+    // Frames of a sprite past its first (the overhead prayers'), kept by sprite and frame
+    async loadSpriteFrames(id: number, frames: number[]): Promise<void> {
+        const images = await this.workerPool.queueLoad<
+            SpriteDataInput,
+            SpriteImage[],
+            SpriteDataLoader
+        >(new SpriteDataLoader(), { spriteIds: frames.map(() => id), frames });
+        images.forEach((image, i) => {
+            if (image.width > 0 && image.height > 0) {
+                this.spriteFrames.set(id + ":" + frames[i], toCanvas(image));
+            }
+        });
+    }
+
+    getSpriteFrame(id: number, frame: number): HTMLCanvasElement | undefined {
+        return this.spriteFrames.get(id + ":" + frame);
     }
 
     private getPlayerBake(slot: number): PlayerBake {

@@ -19,6 +19,7 @@ import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
     GameAssets,
+    PRAYER_HEADICON_FRAME_IDS,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
@@ -26,6 +27,7 @@ import {
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
+    getPrayerHeadicon,
     getRunAttackSeqs,
     getShieldedModelKey,
     getStatueModelKey,
@@ -384,5 +386,17 @@ describe("power-ups in the cache", () => {
                 }
             }
         }
+    });
+});
+
+describe("a boss's overhead prayer", () => {
+    test("is OSRS's own for the styles it prays against, in any order", () => {
+        expect(getPrayerHeadicon(["melee"])).toBe(0);
+        expect(getPrayerHeadicon(["ranged"])).toBe(1);
+        expect(getPrayerHeadicon(["magic"])).toBe(2);
+        // The Theatre's bosses: Protect from Missiles and Magic together
+        expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
+        expect(getPrayerHeadicon(["magic", "ranged"])).toBe(6);
+        expect(PRAYER_HEADICON_FRAME_IDS).toContain(6);
     });
 });

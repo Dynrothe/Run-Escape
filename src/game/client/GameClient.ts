@@ -80,6 +80,8 @@ import {
     GameAssets,
     HINT_ARROW_SPRITE,
     HITSPLAT_SPRITES,
+    PRAYER_HEADICON_FRAME_IDS,
+    PRAYER_HEADICON_SPRITE,
     getOfferedAttackSeqs,
     getRunAppearance,
     getRunAttackSeqs,
@@ -417,9 +419,9 @@ export class GameClient implements GameFrameHandler {
 
         const actors = await renderer.getActorRenderer();
         const assets = new GameAssets(workerPool, renderer, actors);
-        const spritesPromise = assets.loadSprites([
-            ...Object.values(HITSPLAT_SPRITES),
-            HINT_ARROW_SPRITE,
+        const spritesPromise = Promise.all([
+            assets.loadSprites([...Object.values(HITSPLAT_SPRITES), HINT_ARROW_SPRITE]),
+            assets.loadSpriteFrames(PRAYER_HEADICON_SPRITE, PRAYER_HEADICON_FRAME_IDS),
         ]);
         store.set({ loadingText: "Summoning monsters", loadingProgress: 10 });
         await assets.loadBase((done, total) => {

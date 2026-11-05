@@ -11,7 +11,14 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
-import { GameAssets, HINT_ARROW_SPRITE, getEnemyModelKey, getStatueModelKey } from "./GameAssets";
+import {
+    GameAssets,
+    HINT_ARROW_SPRITE,
+    PRAYER_HEADICON_SPRITE,
+    getEnemyModelKey,
+    getPrayerHeadicon,
+    getStatueModelKey,
+} from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 
 // What a boss with a fight of its own puts in the world (BossDef.phases,
@@ -76,6 +83,9 @@ const TOTEM_ARROW = 14;
 const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
+// A boss's overhead prayer: drawn that much bigger, and this many tiles over its head
+const OVERHEAD_SCALE = 1.5;
+const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
 function locYaw(rotation = 0): number {
@@ -1005,6 +1015,7 @@ export class BossFightView {
     drawScreen(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
         this.drawBeams(overlay, sim, now, scale);
         this.drawTotemArrows(overlay, sim, scale);
+        this.drawOverheads(overlay, sim, alpha, scale);
         this.drawHintArrows(overlay, sim, alpha, now, scale);
         const boss = sim.shownBoss;
         const width = overlay.width;
@@ -1148,6 +1159,45 @@ export class BossFightView {
     // The game's hint arrow over whatever asks for one (EnemyDef.hintArrow),
     // bobbing as it does over an NPC you're pointed at, and from the screen's
     // edge when it's off it
+    // A boss's overhead prayer, OSRS's own, for the styles it prays against (EnemyDef.protects):
+    // not one whose prayer does nothing on expert (a coloured Nylocas, Sim.prayedAgainst)
+    private drawOverheads(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const ctx = overlay.ctx;
+        for (const enemy of sim.enemies) {
+            const protects = enemy.def.protects;
+            if (!protects || !enemy.boss || enemy.dead || enemy.flung) {
+                continue;
+            }
+            if (sim.expert && enemy.def.onlyStyle) {
+                continue;
+            }
+            const frame = getPrayerHeadicon(protects.styles);
+            const sprite =
+                frame === undefined
+                    ? undefined
+                    : this.assets.getSpriteFrame(PRAYER_HEADICON_SPRITE, frame);
+            if (!sprite) {
+                continue;
+            }
+            const x = lerp(enemy.prevX, enemy.x, alpha);
+            const y = lerp(enemy.prevY, enemy.y, alpha);
+            const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+            const top =
+                this.ground(sim, x, y) -
+                ((model?.height ?? 128) * enemy.scale) / 128 -
+                OVERHEAD_GAP;
+            const p = overlay.project(x, top, y, this.a);
+            if (p.behind) {
+                continue;
+            }
+            const w = sprite.width * OVERHEAD_SCALE * scale;
+            const h = sprite.height * OVERHEAD_SCALE * scale;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h), w, h);
+            ctx.imageSmoothingEnabled = true;
+        }
+    }
+
     private drawHintArrows(
         overlay: Overlay,
         sim: Sim,
