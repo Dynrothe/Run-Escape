@@ -3,6 +3,7 @@ import {
     createMosaicFloor,
     createSepulchreCircle,
     createSlabIslands,
+    createStoneHall,
 } from "../../content/floorDemos";
 import type { FloorDef } from "../../content/types";
 import { createWardensFloor } from "../../content/wardensFloor";
@@ -251,5 +252,14 @@ export const FLOOR_DEMOS: MapRecipe[] = [
             "A floor demo, drawn by hand: islands on narrow paths, cracked tiles that give way, " +
             "pillars and glyphs.",
         floor: createAsciiFloor,
+    }),
+    floorRoom({
+        id: "scaperune_floor_materials",
+        mapX: 78,
+        mapY: 86,
+        name: "Floor demo: stone and pillars",
+        description:
+            "A floor demo: grey stone slabs and bands of brick, with pillars standing in the floor.",
+        floor: createStoneHall,
     }),
 ];

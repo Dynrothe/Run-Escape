@@ -180,6 +180,7 @@ const SKY_TINT = 0x5a3810;
 const SKY_LIGHT = 0.3;
 
 const STILL = { lift: 0, turn: 0 };
+const NO_CUE: NonNullable<FloorSkinDef["cue"]> = {};
 
 // A floor with no skins of its own: the slam's slab, rising with its own animation and tumbling
 // away as the drop's
@@ -250,9 +251,13 @@ export class FloorView {
         model: ActorModel;
         anim: ActorAnim;
         turn: number;
-        // A skin drawn under it (FloorSkinDef.under)
+        // A skin drawn under it (FloorSkinDef.under), and how far it's stretched
         under?: ActorModel;
+        underW: number;
+        underH: number;
     };
+    // How the cues look on the skin being drawn (FloorSkinDef.cue)
+    private tileCue: NonNullable<FloorSkinDef["cue"]> = {};
     private goneMask?: Uint8Array;
     private nearMask?: Uint8Array;
 
@@ -322,7 +327,23 @@ export class FloorView {
             const tumbles =
                 w === 1 && h === 1 && (skin.fall ?? (def.skins ? "code" : "tumble")) === "tumble";
             const under = skin.under !== undefined ? models[skin.under] : undefined;
-            this.tile = { w, h, tint: skin.tint ?? NO_TINT, model, anim: rest, turn, under };
+            const underSize = (skin.under !== undefined && skinDefs[skin.under]?.size) || 1;
+            // Stretched over its slab, from the tiles across it's made
+            const across = skin.size ?? 1;
+            this.tile = {
+                w: w / across,
+                h: h / across,
+                tint: skin.tint ?? NO_TINT,
+                model,
+                anim: rest,
+                turn,
+                under,
+                underW: w / underSize,
+                underH: h / underSize,
+            };
+            this.tileCue = skin.cue ?? NO_CUE;
+            // The light on this skin, if it has its own (FloorSkinDef.cue)
+            const light = skin.cue?.color ?? glow;
             this.resetTile();
             const dropAt = floor.dropAt[i];
             const restoreAt = floor.restoreAt[i];
@@ -369,9 +390,9 @@ export class FloorView {
                 const tremor = this.tremor(seconds, phase, SAG_TREMOR * (0.4 + 0.6 * t), 0);
                 const sag = t * t * SAG_DEPTH;
                 options.tint = mulTint(this.darken(style, t), this.tile.tint);
-                this.edgeLight(glow, style, t);
+                this.edgeLight(light, style, t);
                 this.drawTile(actors, x, ground + sag + tremor.lift, y, tremor.turn, edged);
-                this.drawGlow(actors, slab, rising, x, ground + sag, y, t, glow);
+                this.drawGlow(actors, slab, rising, x, ground + sag, y, t, light);
                 if (rock && t > GRIT_FROM && share % GRIT_SHARE === 0) {
                     this.drawGrit(actors, rock, x, y, ground + sag, seconds, phase);
                 }
@@ -380,7 +401,7 @@ export class FloorView {
             // To fall later in its pattern (a later row): marked, and still
             const cueAt = floor.cueAt[i];
             if (dropWarnAt !== -1) {
-                const lift = this.cue(glow, style, now, cueAt, dropWarnAt, breath, seconds, phase);
+                const lift = this.cue(light, style, now, cueAt, dropWarnAt, breath, seconds, phase);
                 this.drawTile(actors, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
@@ -391,7 +412,7 @@ export class FloorView {
                 // Its light full while it's up and hurting, fading as it settles
                 const up = (tick - roseAt) / RISE_TICKS;
                 const lit = Math.min(1, 4 * (1 - up));
-                this.edgeLight(glow, style, lit);
+                this.edgeLight(light, style, lit);
                 const dir = floor.riseDir[i];
                 if (animated) {
                     const frame = rest.getFrame(tick - roseAt, false);
@@ -404,7 +425,7 @@ export class FloorView {
                 if (edged) {
                     this.drawThickness(actors, x, ground, y, turn);
                 }
-                this.drawGlow(actors, slab, rising, x, ground, y, lit, glow);
+                this.drawGlow(actors, slab, rising, x, ground, y, lit, light);
             }
             if (dust && roseAt !== -1 && share % DUST_SHARE === 0) {
                 this.reset();
@@ -421,14 +442,14 @@ export class FloorView {
                 const strength = TREMOR_START + (1 - TREMOR_START) * t * t;
                 const tremor = this.tremor(seconds, phase, strength, t * TREMOR_LIFT);
                 options.tint = mulTint(style.tint, this.tile.tint);
-                this.edgeLight(glow, style, t);
+                this.edgeLight(light, style, t);
                 this.drawTile(actors, x, ground + tremor.lift, y, tremor.turn, edged);
-                this.drawGlow(actors, slab, rising, x, ground, y, t, glow);
+                this.drawGlow(actors, slab, rising, x, ground, y, t, light);
                 continue;
             }
             // To rise later in its pattern: marked
             if (warnAt !== -1) {
-                const lift = this.cue(glow, style, now, cueAt, warnAt, breath, seconds, phase);
+                const lift = this.cue(light, style, now, cueAt, warnAt, breath, seconds, phase);
                 this.drawTile(actors, x, ground + lift.lift, y, lift.turn, edged);
                 continue;
             }
@@ -475,14 +496,15 @@ export class FloorView {
         }
         const options = this.options;
         const edge = style.faint + (style.early - style.faint) * near;
-        options.edge = edge * k * (1 + style.breath * breath);
-        options.edgeWidth = style.earlyWidth;
+        const { strength = 1, width = 1, tremor: shake = 1 } = this.tileCue;
+        options.edge = Math.min(1, edge * k * (1 + style.breath * breath) * strength);
+        options.edgeWidth = style.earlyWidth * width;
         options.edgeColor = glow;
         options.tint = mulTint(
             this.shade(style.tint, k * (style.horizon > 0 ? 0.35 + 0.65 * near : 1)),
             this.tile.tint,
         );
-        const tremor = style.faintTremor + (style.tremor - style.faintTremor) * near;
+        const tremor = (style.faintTremor + (style.tremor - style.faintTremor) * near) * shake;
         return tremor > 0 ? this.tremor(seconds, phase, tremor * k, 0) : STILL;
     }
 
@@ -493,8 +515,9 @@ export class FloorView {
         }
         const options = this.options;
         const k = t * t;
-        options.edge = style.early + (style.full - style.early) * k;
-        options.edgeWidth = style.earlyWidth + (style.fullWidth - style.earlyWidth) * k;
+        const { strength = 1, width = 1 } = this.tileCue;
+        options.edge = Math.min(1, (style.early + (style.full - style.early) * k) * strength);
+        options.edgeWidth = (style.earlyWidth + (style.fullWidth - style.earlyWidth) * k) * width;
         options.edgeColor = glow;
     }
 
@@ -610,7 +633,11 @@ export class FloorView {
         }
         // The glow far below, in pieces, wherever there's a hole near, and never past the floor's
         // edge: an odd row or column's last piece overlaps the one before, in the same plane and
-        // colour
+        // colour. Not under a shaped floor: seen past its edge, it's a flat plane in the pit.
+        if (!floor.layout.mask.every((m) => m === 1)) {
+            this.reset();
+            return;
+        }
         this.reset();
         options.tint = SKY_TINT;
         options.flash = -SKY_LIGHT;
@@ -671,11 +698,34 @@ export class FloorView {
                     x <= Math.min(sizeX - 1, col + UNDER_REACH);
                     x++
                 ) {
-                    near[x + y * sizeX] = 1;
+                    // Only well under the floor: where there's never been any is a clean pit,
+                    // and nothing's seen from it
+                    near[x + y * sizeX] = this.inland(floor, x, y) ? 1 : 0;
                 }
             }
         }
         return near;
+    }
+
+    // Whether a tile and all eight round it are floor (the box's edge counts as floor)
+    private inland(floor: ArenaFloor, x: number, y: number): boolean {
+        const { sizeX, sizeY, layout } = floor;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const tx = x + dx;
+                const ty = y + dy;
+                if (
+                    tx >= 0 &&
+                    ty >= 0 &&
+                    tx < sizeX &&
+                    ty < sizeY &&
+                    !layout.mask[tx + ty * sizeX]
+                ) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     // Whether any tile within reach of a point (floor tiles) is near a hole
@@ -770,7 +820,13 @@ export class FloorView {
         const { model, anim, turn, under } = this.tile;
         // A decal over its skin is lifted off it, so they don't fight
         if (under) {
-            actors.draw(under, under.anims[0], 0, x, height, y, turn + yaw, this.options);
+            const options = this.options;
+            const { stretchX, stretchZ } = options;
+            options.stretchX = this.tile.underW;
+            options.stretchZ = this.tile.underH;
+            actors.draw(under, under.anims[0], 0, x, height, y, turn + yaw, options);
+            options.stretchX = stretchX;
+            options.stretchZ = stretchZ;
         }
         const lift = under ? DECAL_LIFT : 0;
         actors.draw(model, anim, 0, x, height - lift, y, turn + yaw, this.options);

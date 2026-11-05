@@ -785,6 +785,8 @@ away from it, and rows fall from the south.
 **Its shape** (`shape`, `FloorShapeDef`): `rect`, `ellipse` (a circle when `rx` and `ry` match), `ring` (round,
 or `square`), `diamond`, `cross`, and `union` and `minus` of them. A middle (`cx`, `cy`) can be in half tiles,
 and is the box's middle when it isn't given. What isn't floor is the pit from the start: blocked, and never there.
+It's a clean pit: the structure under the floor only ever shows through holes in the floor, and a shaped floor has
+no deep glow.
 
 ```ts
 shape: { kind: "minus", from: { kind: "ellipse", rx: 11, ry: 11 }, cut: { kind: "ellipse", rx: 3, ry: 3 } },
@@ -818,16 +820,32 @@ Anything without its own rise animation rises in code (`rise: "code"`): lifted, 
 way the wave goes, then settled back. A tile falls the same way in code (`fall: "code"`). Only the Wardens' 1 by
 1 slab tumbles (`fall: "tumble"`, `drop.spotAnim`).
 
-A skin should be one tile across and centred, like a floor decoration. The edge light of the cues assumes it.
-To find candidates, scan for loc models about 1 by 1 and flat. Then check their faces' alpha: many are see-through
-overlays or invisible hitboxes, such as the Tombs' "Tile" (45356, about 70% see-through) and "Frozen platform"
-(54539, invisible). Opaque ones that work:
+A skin should be one tile across and centred, like a floor decoration (the cues' edge light assumes it). A model made
+bigger says so with `size` (tiles across): a 2 by 2 pillar is `size: 2` on a 2 by 2 slab.
 
-- "Pressure plate" (45340 to 45353, gold glyphs on stone);
-- "Tile" (38822);
-- "Floor tile" (34874).
+A skin the floor's light doesn't suit can have its own cue light (`cue: { color, strength, width, tremor }`). Give
+bright tiles a stronger, hotter one, and a recoloured slab a quieter one.
 
-A decal such as "Inactive Rune" (56393) needs a skin under it (`under`).
+**Ready-made skins** (`FLOOR_SKINS`, `content/floorSkins.ts`), all opaque and checked in the game:
+
+| Group                             | Skins                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| The Wardens' slab, and recoloured | `wardensSlab`, `sepulchreSlab`, `greySlab`, `sandstoneSlab`, `claySlab`   |
+| Paving                            | `flagstones`, `brickPaving` (grooved paving, recoloured), `octagonPaving` |
+| Stone tiles                       | `marble`, `creamStone`, `darkTile`, `starTile`, `stoneTile`, `roundTile`  |
+| The Tombs' gold glyph plates      | `pressurePlate`, `glyphPlate`                                             |
+| A decal                           | `rune`                                                                    |
+| Pillars                           | `stonePillar`, `tombsPillar` (2 by 2)                                     |
+
+Most of the cache's 1 by 1 floor models are see-through overlays or invisible hitboxes:
+
+- the Tombs' "Tile" (45356) is about 70% see-through;
+- "Frozen platform" (54539) is invisible.
+
+So check a new one in the game before it goes in the list. A decal needs a skin under it (`under`).
+
+The paving (`flagstones`, `brickPaving`, `octagonPaving`) is about 110 triangles a tile, twice a slab's 52. A
+floor of it costs a phone about 10k more triangles than slabs do, so use it for bands and borders.
 
 ```ts
 skins: [
@@ -863,6 +881,19 @@ tiles: [
 | `fragile`    | yes   | yes   | Its fall is warned for half as long (`drop.fragile.warn`), and it falls by itself after rising twice (`drop.fragile.hits`) |
 | `solid`      | no    | no    |                                                                                                                            |
 | `safe`       | no    | no    | The same as `solid`, for the spots a floor promises are safe (give them a glyph skin)                                      |
+| `pillar`     | no    | no    | Nobody walks through it: it blocks the grid as an object does. Give it a pillar skin                                       |
+
+**Pillars** are the pillar type with a pillar skin. A pillar is narrower than its tiles, so give its skin the
+floor's skin to stand on (`under`). A 2 by 2 one is a slab:
+
+```ts
+{ where: { kind: "rect", x0: 10, y0: 11, x1: 11, y1: 12 }, skin: 4, type: "pillar", slab: [2, 2] },
+```
+
+- **Movement:** it blocks it, and the floor counts it as no way through, so holes never cut the floor round it.
+- **Shots:** nothing in this game stops shots at objects, so it doesn't block them.
+- **Camera:** it's drawn as an actor, not part of the world, so it can hide a player standing just north of it,
+  without the silhouette the world's walls give.
 
 **Slabs** (`slab: [x, y]` on a rule): tiles that rise and fall as one piece.
 

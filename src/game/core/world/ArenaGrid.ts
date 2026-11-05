@@ -12,6 +12,9 @@ import { Steps, canStep } from "./FlowField";
 export const SOLID_FLAGS =
     CollisionFlag.OBJECT | CollisionFlag.FLOOR | CollisionFlag.FLOOR_DECORATION;
 
+// A floor's pillar (dropTile): an object, which shots would stop at too
+const PILLAR_FLAGS = CollisionFlag.OBJECT | CollisionFlag.OBJECT_PROJECTILE_BLOCKER;
+
 // Everything outside the arena counts as solid.
 const OUTSIDE_FLAGS = CollisionFlag.OBJECT;
 
@@ -110,15 +113,16 @@ export class ArenaGrid {
     }
 
     // An open tile's floor falls away (MapDef.floor): it's blocked floor, as water is, until it's
-    // put back. Grids are kept between runs, so a run with a floor puts them all back first.
-    dropTile(tileX: number, tileY: number): void {
+    // put back. Grids are kept between runs, so a run with a floor puts them all back first. A
+    // floor's pillar (pillar) blocks the same way, as an object would.
+    dropTile(tileX: number, tileY: number, pillar = false): void {
         const i = this.indexOf(tileX, tileY);
         if (i < 0 || this.dropped[i] || this.isSolid(tileX, tileY)) {
             return;
         }
-        this.dropped[i] = 1;
+        this.dropped[i] = pillar ? 2 : 1;
         this.droppedCount++;
-        this.flags[i] |= CollisionFlag.FLOOR;
+        this.flags[i] |= pillar ? PILLAR_FLAGS : CollisionFlag.FLOOR;
         this.boxes[i * 4] = this.boxes[i * 4 + 1] = 0;
         this.boxes[i * 4 + 2] = this.boxes[i * 4 + 3] = 1;
         this.changed(tileX, tileY);
@@ -129,9 +133,9 @@ export class ArenaGrid {
         if (i < 0 || !this.dropped[i]) {
             return;
         }
+        this.flags[i] &= ~(this.dropped[i] === 2 ? PILLAR_FLAGS : CollisionFlag.FLOOR);
         this.dropped[i] = 0;
         this.droppedCount--;
-        this.flags[i] &= ~CollisionFlag.FLOOR;
         this.boxes.fill(0, i * 4, i * 4 + 4);
         this.changed(tileX, tileY);
     }
@@ -150,6 +154,12 @@ export class ArenaGrid {
     isDropped(tileX: number, tileY: number): boolean {
         const i = this.indexOf(tileX, tileY);
         return i >= 0 && this.dropped[i] === 1;
+    }
+
+    // Whether a floor's pillar stands on a tile (dropTile)
+    isPillar(tileX: number, tileY: number): boolean {
+        const i = this.indexOf(tileX, tileY);
+        return i >= 0 && this.dropped[i] === 2;
     }
 
     private indexOf(tileX: number, tileY: number): number {

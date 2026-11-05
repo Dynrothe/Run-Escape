@@ -16,12 +16,14 @@ export const TILE_TYPES: readonly FloorTileType[] = [
     "reinforced",
     "fragile",
     "safe",
+    "pillar",
 ];
 export const TYPE_NORMAL = 0;
 export const TYPE_SOLID = 1;
 export const TYPE_REINFORCED = 2;
 export const TYPE_FRAGILE = 3;
 export const TYPE_SAFE = 4;
+export const TYPE_PILLAR = 5;
 
 export type FloorLayout = {
     sizeX: number;

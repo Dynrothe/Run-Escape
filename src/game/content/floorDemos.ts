@@ -1,3 +1,4 @@
+import { FLOOR_SKINS } from "./floorSkins";
 import type { FloorDef, FloorShapeDef, FloorSkinDef } from "./types";
 import {
     RISING_SLAB,
@@ -18,25 +19,14 @@ import {
 
 type Rect = FloorDef["rect"];
 
-// The Wardens' slab, recoloured the Hallowed Sepulchre's cold blue-grey
+// The Wardens' slab, recoloured the Hallowed Sepulchre's cold blue-grey, with a deep blue light
+// in it that's quieter than the gold, and a stiller tremor, so the blue floor stays calm
 const SEPULCHRE_SLAB: FloorSkinDef = {
-    spotAnim: RISING_SLAB,
-    // Its top (the cache's dark red-brown) to a blue-grey, a shade lighter
-    recolor: [
-        [280, 37278],
-        [274, 37272],
-        [267, 37265],
-    ],
+    ...FLOOR_SKINS.sepulchreSlab,
+    cue: { color: 0x2a68d0, strength: 0.75, tremor: 0.35 },
 };
-// Glyphs: an inactive rune (a decal, 1 by 1), lying on a slab, lit as the Sepulchre's are
-const RUNE_GLYPH = 56393;
-// The Tombs' pressure plates, gold glyphs on stone, and a plain stone tile and floor tile (all
-// opaque: many of the cache's 1 by 1 floor models are see-through overlays, or invisible)
-const PRESSURE_PLATE = 45345;
-const PRESSURE_PLATE_RUNED = 45349;
-const STONE_TILE = 38822;
-const GREY_FLOOR_TILE = 34874;
-
+// On the mosaic's bright tiles, a hotter light, stronger and wider, so a cue reads on them
+const MOSAIC_CUE = { color: 0xff4a10, strength: 2.2, width: 2.2 };
 const at = (x: number, y: number): FloorShapeDef => ({ kind: "rect", x0: x, y0: y, x1: x, y1: y });
 
 // A circle of the Sepulchre's blue slabs, with glyphs round it and in its middle that never rise:
@@ -59,9 +49,9 @@ export function createSepulchreCircle(rect: Rect): FloorDef {
     return {
         ...createWardensFloor(rect),
         shape: { kind: "ellipse", rx: 11, ry: 11.5 },
-        skins: [SEPULCHRE_SLAB, { loc: RUNE_GLYPH, light: 0x9fdcff, under: 0 }],
+        skins: [SEPULCHRE_SLAB, { ...FLOOR_SKINS.rune, light: 0x9fdcff, under: 0 }],
         tiles: [{ where: glyphs, skin: 1, type: "safe" }],
-        glow: 0x7fc8ff,
+        glow: 0x3f86e0,
         script: [
             beat(3, ripple("middle", "diagonal", 0.14, 12), "The glyphs hum..."),
             beat(9, side("east", 0.12)),
@@ -78,7 +68,7 @@ export function createSepulchreCircle(rect: Rect): FloorDef {
     };
 }
 
-// Islands of 2 by 2 slabs: a ring round a middle island, joined by narrow bridges of stone tiles
+// Islands of 2 by 2 slabs: a ring round a middle island, joined by narrow bridges of grey slabs
 // that never fall
 export function createSlabIslands(rect: Rect): FloorDef {
     const ring: FloorShapeDef = { kind: "ring", inner: 7.5, outer: 11.5 };
@@ -92,7 +82,7 @@ export function createSlabIslands(rect: Rect): FloorDef {
     return {
         ...createWardensFloor(rect),
         shape: { kind: "union", of: [ring, middle, bridges] },
-        skins: [{ spotAnim: RISING_SLAB }, { loc: GREY_FLOOR_TILE }],
+        skins: [FLOOR_SKINS.wardensSlab, FLOOR_SKINS.greySlab],
         tiles: [
             { where: bridges, skin: 1, type: "reinforced" },
             {
@@ -123,10 +113,10 @@ export function createMosaicFloor(rect: Rect): FloorDef {
         ...createWardensFloor(rect),
         seed: 5,
         skins: [
-            { loc: STONE_TILE },
-            { loc: PRESSURE_PLATE },
-            { loc: PRESSURE_PLATE_RUNED },
-            { spotAnim: RISING_SLAB, tint: 0x9a9a9a },
+            { ...FLOOR_SKINS.stoneTile, cue: MOSAIC_CUE },
+            { ...FLOOR_SKINS.pressurePlate, cue: MOSAIC_CUE },
+            { ...FLOOR_SKINS.glyphPlate, cue: MOSAIC_CUE },
+            { ...FLOOR_SKINS.wardensSlab, tint: 0x9a9a9a },
         ],
         tiles: [
             { skin: 0, turn: "random" },
@@ -192,10 +182,10 @@ export function createAsciiFloor(rect: Rect): FloorDef {
         ...base,
         ascii: ASCII_MAP,
         skins: [
-            { spotAnim: RISING_SLAB },
-            { spotAnim: RISING_SLAB, tint: 0xc8b8a8, rise: "code" },
-            { spotAnim: RISING_SLAB, tint: 0x707070 },
-            { loc: PRESSURE_PLATE_RUNED, light: 0xffd890 },
+            FLOOR_SKINS.wardensSlab,
+            { ...FLOOR_SKINS.sandstoneSlab, rise: "code" },
+            FLOOR_SKINS.greySlab,
+            { ...FLOOR_SKINS.glyphPlate, light: 0xffd890 },
         ],
         tiles: [
             { where: { kind: "chars", chars: "f" }, skin: 1, type: "fragile" },
@@ -215,5 +205,50 @@ export function createAsciiFloor(rect: Rect): FloorDef {
             beat(42, { kind: "restore", rowSeconds: 0.08 }),
         ],
         loopSeconds: 46,
+    };
+}
+
+// A hall of stone: grey slabs with bands of red brick paving across it, a dark tiled border that
+// never falls, and pillars standing in it that nobody can walk through: four stone columns, and
+// the Tombs' great pillar in the middle. (The paving's twice a slab's triangles, so it's the
+// bands, not the floor.)
+export function createStoneHall(rect: Rect): FloorDef {
+    const columns: FloorShapeDef = {
+        kind: "union",
+        of: [at(5, 6), at(17, 6), at(5, 18), at(17, 18)],
+    };
+    return {
+        ...createWardensFloor(rect),
+        skins: [
+            FLOOR_SKINS.greySlab,
+            FLOOR_SKINS.brickPaving,
+            FLOOR_SKINS.darkTile,
+            // Standing on the slabs
+            { ...FLOOR_SKINS.stonePillar, under: 0 },
+            { ...FLOOR_SKINS.tombsPillar, under: 0 },
+        ],
+        tiles: [
+            { where: { kind: "stripes", axis: "y", every: 6, width: 1, offset: 3 }, skin: 1 },
+            { where: { kind: "border" }, skin: 2, type: "reinforced" },
+            { where: columns, skin: 3, type: "pillar" },
+            {
+                where: { kind: "rect", x0: 10, y0: 11, x1: 11, y1: 12 },
+                skin: 4,
+                type: "pillar",
+                slab: [2, 2],
+            },
+        ],
+        script: [
+            beat(3, side("east", 0.14), "The hall rumbles..."),
+            beat(9, side("west", 0.14)),
+            beat(15, ripple("middle", "cross", 0.14, 12)),
+            beat(21, bold(side("both", 0.12))),
+            beat(27, sweep(0.12, 3)),
+            beat(33, holes(4)),
+            beat(35, dropRows(2)),
+            beat(39, ripple("player", "diagonal", 0.12, 9)),
+            beat(45, { kind: "restore", rowSeconds: 0.08 }),
+        ],
+        loopSeconds: 49,
     };
 }

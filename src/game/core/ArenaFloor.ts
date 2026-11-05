@@ -4,6 +4,7 @@ import {
     FloorLayout,
     TYPE_FRAGILE,
     TYPE_NORMAL,
+    TYPE_PILLAR,
     TYPE_REINFORCED,
     layoutFloor,
     slabTiles,
@@ -106,9 +107,14 @@ export class ArenaFloor {
         this.by = new Int32Array(count).fill(NONE);
         // The grid's kept between runs on a map; what isn't floor is the pit's from the start
         grid.restoreAllTiles();
+        // and a pillar blocks the way, as an object would
         for (let i = 0; i < count; i++) {
+            const x = this.x0 + (i % this.sizeX);
+            const y = this.y0 + Math.floor(i / this.sizeX);
             if (!this.layout.mask[i]) {
-                grid.dropTile(this.x0 + (i % this.sizeX), this.y0 + Math.floor(i / this.sizeX));
+                grid.dropTile(x, y);
+            } else if (this.layout.type[i] === TYPE_PILLAR) {
+                grid.dropTile(x, y, true);
             }
         }
     }
@@ -449,7 +455,11 @@ export class ArenaFloor {
         const open = new Uint8Array(count);
         let total = 0;
         for (let i = 0; i < count; i++) {
-            if (this.layout.mask[i] && this.dropWarnAt[i] === NONE) {
+            if (
+                this.layout.mask[i] &&
+                this.dropWarnAt[i] === NONE &&
+                this.layout.type[i] !== TYPE_PILLAR
+            ) {
                 open[i] = 1;
                 total++;
             }
@@ -530,7 +540,8 @@ export class ArenaFloor {
                     ty < 0 ||
                     tx >= this.sizeX ||
                     ty >= this.sizeY ||
-                    !this.layout.mask[tx + ty * this.sizeX]
+                    !this.layout.mask[tx + ty * this.sizeX] ||
+                    this.layout.type[tx + ty * this.sizeX] === TYPE_PILLAR
                 ) {
                     return false;
                 }

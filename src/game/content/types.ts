@@ -1642,6 +1642,9 @@ export type FloorSkinDef = {
     retexture?: [from: number, to: number][];
     // Bigger or smaller (1 as it is), and raised (tiles, up), as baked
     scale?: number;
+    // Tiles across it's made (1 when unset): a slab of the tiles it's on draws it as it is, and a
+    // bigger or smaller one stretches it (a 2 by 2 pillar on a 2 by 2 slab)
+    size?: number;
     height?: number;
     // A tint over it (0xRRGGBB)
     tint?: number;
@@ -1655,14 +1658,19 @@ export type FloorSkinDef = {
     // A steady light along its edges while nothing's coming (0xRRGGBB): a glyph's glow
     light?: number;
     // Another skin (its index) drawn under this one, for a model that's only a decal (a rune
-    // that lies on a floor)
+    // that lies on a floor), or one that doesn't cover its tiles (a pillar standing on them)
     under?: number;
+    // How the cues look on it, for a skin the floor's own light doesn't suit: the light's colour
+    // (FloorDef.glow when unset), its strength and width (times as much), and the tremor before
+    // a tile's own warning (times as much)
+    cue?: { color?: number; strength?: number; width?: number; tremor?: number };
 };
 
 // What a tile does. normal: rises and falls. solid: never rises or falls. reinforced: rises,
 // never falls. fragile: falls faster, and falls by itself after rising a few times (drop.fragile).
 // safe: never rises or falls, as solid does; for the glyphs a floor promises as safe spots.
-export type FloorTileType = "normal" | "solid" | "reinforced" | "fragile" | "safe";
+// pillar: never rises or falls, and nobody can walk through it (give it a pillar's skin).
+export type FloorTileType = "normal" | "solid" | "reinforced" | "fragile" | "safe" | "pillar";
 
 // Where a tiles rule applies (FloorTileRuleDef), in floor tiles. A shape (FloorShapeDef); checker:
 // alternate squares of size tiles (1 when unset), odd ones if odd; border: within width tiles

@@ -1,10 +1,18 @@
-import { FloorDef, FloorPatternDef, FloorShapeDef } from "../content/types";
+import { FLOOR_SKINS } from "../content/floorSkins";
+import { FloorDef, FloorPatternDef, FloorShapeDef, FloorSkinDef } from "../content/types";
 import { createWardensFloor } from "../content/wardensFloor";
 import { FLOOR_DEMOS, FLOOR_START } from "../scaperune/maps/wardensFloor";
 import { ArenaFloor } from "./ArenaFloor";
 import { Rng } from "./Rng";
 import { TICKS_PER_SECOND } from "./Sim";
-import { TYPE_FRAGILE, TYPE_REINFORCED, TYPE_SAFE, inShape, layoutFloor } from "./floorLayout";
+import {
+    TYPE_FRAGILE,
+    TYPE_PILLAR,
+    TYPE_REINFORCED,
+    TYPE_SAFE,
+    inShape,
+    layoutFloor,
+} from "./floorLayout";
 import { makeGrid } from "./world/testGrid";
 
 // Floors of any shape, skin, type and slab size (FloorDef's shape, ascii, skins and tiles):
@@ -273,6 +281,48 @@ describe("its tiles", () => {
         islands.run(T);
         expect(islands.floor.dropWarnAt[tile(6, 2)]).not.toBe(-1);
     });
+});
+
+describe("pillars", () => {
+    test("stand in the floor: never rise or fall, block the way, and count as no way through", () => {
+        // A pillar across the middle of a corridor, but for one tile
+        const { floor, grid, run } = makeFloor(
+            floorOf(
+                {
+                    ascii: ["#####", "#####", "#####"],
+                    tiles: [
+                        { where: { kind: "rect", x0: 0, y0: 1, x1: 3, y1: 1 }, type: "pillar" },
+                    ],
+                },
+                [
+                    { kind: "side", side: "both", rowSeconds: 0.02 },
+                    { kind: "holes", count: 5 },
+                ],
+            ),
+        );
+        expect(floor.layout.type[tile(0, 1)]).toBe(TYPE_PILLAR);
+        expect(grid.isSolid(RECT.x0, RECT.y0 + 1)).toBe(true);
+        expect(grid.isPillar(RECT.x0, RECT.y0 + 1)).toBe(true);
+        expect(grid.isDropped(RECT.x0, RECT.y0 + 1)).toBe(false);
+        expect(grid.isSolid(RECT.x0 + 4, RECT.y0 + 1)).toBe(false);
+        // The one tile past it is all that joins the two halves
+        expect(floor.wouldSplit([tile(4, 1)])).toBe(true);
+        expect(floor.wouldSplit([tile(0, 0)])).toBe(false);
+        run(3 * T);
+        for (let x = 0; x <= 3; x++) {
+            expect(floor.roseAt[tile(x, 1)]).toBe(-1);
+            expect(floor.dropAt[tile(x, 1)]).toBe(-1);
+        }
+        expect(floor.dropAt[tile(4, 1)]).toBe(-1);
+    });
+});
+
+test("every ready-made skin is one model, a tile across or as big as it says", () => {
+    for (const skin of Object.values(FLOOR_SKINS) as FloorSkinDef[]) {
+        const sources = [skin.spotAnim, skin.loc, skin.model].filter((v) => v !== undefined);
+        expect(sources.length).toBe(1);
+        expect(skin.size ?? 1).toBeGreaterThanOrEqual(1);
+    }
 });
 
 describe("slabs of several tiles", () => {
