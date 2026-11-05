@@ -408,8 +408,10 @@ export const TOMBS_BOSSES = { levelHp: 0.35, levelDamage: 0.15 };
 export const TOMBS_PUZZLE_LEVELS = 2;
 
 // A boss's adds drop food this often at raid level 0, less the higher it goes, none from untilLevel
-// (Sim.tombsBossFood): Entry's for a run that's bought nothing to heal with
-export const TOMBS_BOSS_FOOD = { chance: 0.06, untilLevel: 300 };
+// (Sim.tombsBossFood): Entry's for a run that's bought nothing to heal with. The Wardens have no
+// adds to speak of, so as each of their phases ends this much food spills round the party
+// (Sim.wardensFood), as few at the same rate.
+export const TOMBS_BOSS_FOOD = { chance: 0.06, untilLevel: 300, phase: 3 };
 
 // Jungle Japes: each of Ba-Ba's baboons drops a banana peel as it dies, there for `seconds`.
 // Stepping within `radius` of one roots you for `stun` seconds. Drawn as the Banana (1963).
@@ -2125,7 +2127,7 @@ export const WARDENS: WardensDef = {
         endMessage: "uses the last of its power to restore",
     },
     three: {
-        hp: 40000,
+        hp: 25000,
         forms: {
             // The Warden that comes back is the one that fell in the first phase, with the
             // phantoms of its own two paths' bosses

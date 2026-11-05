@@ -127,7 +127,8 @@ export function tombsMove(sim: Sim): Point | undefined {
         return undefined;
     }
     if (sim.tombsWardens) {
-        return wardensMove(sim);
+        // Food spilled as a phase ends, picked up when it's wanted
+        return foodMove(sim) ?? wardensMove(sim);
     }
     if (sim.tombsPath === undefined) {
         return casketMove(sim) ?? nexusMove(sim);
@@ -1428,7 +1429,14 @@ function wardensMove(sim: Sim): Point | undefined {
     const landing = three.slam > 0 && sim.tick - seen.tick < 50 * (1 + floor.sizeY * 0.1 + 0.4);
     const next = (["east", "west", "both"] as const)[(three.slam - (landing ? 1 : 0)) % 3];
     const column = next === "east" ? middle - 1 : next === "west" ? middle + 1 : middle;
-    let to: Point = { x: column + 0.5, y: last.floor.y1 - 1.5 };
+    // As near the Warden (north, past the floor's end) as the weapons need: a melee hero on the
+    // floor's last row, anything that reaches further a step or two back
+    const warden = sim.enemies.find((e) => e.uid === three.wardenUid);
+    const reachY = warden
+        ? warden.y - warden.radius - Math.max(0.8, heroReach(sim) - 0.6)
+        : last.floor.y1 - 1.5;
+    const y = Math.min(last.floor.y1 + 0.4, Math.max(last.floor.y1 - 1.5, reachY));
+    let to: Point = { x: column + 0.5, y };
     const siphons = three.siphons;
     if (siphons) {
         const left = siphons.uids

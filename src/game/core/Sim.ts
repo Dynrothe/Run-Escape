@@ -4994,6 +4994,19 @@ export class Sim {
         );
     }
 
+    // Food round the party as a Wardens phase ends (TOMBS_BOSS_FOOD.phase), below Expert: there's
+    // nothing else to heal with between them
+    private wardensFood(): void {
+        const share = Math.max(0, 1 - this.raidLevel / TOMBS_BOSS_FOOD.untilLevel);
+        const count = this.invoked("on_a_diet") ? 0 : Math.round(TOMBS_BOSS_FOOD.phase * share);
+        const at = (this.heroes.find((hero) => this.isUp(hero)) ?? this.hero).player;
+        for (let i = 0; i < count; i++) {
+            const angle = (i / Math.max(1, count)) * Math.PI * 2;
+            const spot = this.walkableSpot(at.x + fm.cos(angle) * 2, at.y + fm.sin(angle) * 2);
+            this.dropPickup("food", spot.x, spot.y, Math.round(FOOD_HEAL * this.healScale));
+        }
+    }
+
     // A hit that takes a share of your hitpoints (a flood, a roar, an avalanche): as it is from
     // Normal up, less at Entry as the raid level's damage is (down to half), so a run that's bought
     // nothing isn't undone by one slip. Anywhere but the Tombs, as it is.
@@ -6208,6 +6221,7 @@ export class Sim {
         const loser: WardenSide = winner === "elidinis" ? "tumeken" : "elidinis";
         fight.winner = winner;
         fight.phase = 2;
+        this.wardensFood();
         fight.orbs = [];
         fight.pyramids = [];
         fight.shots = fight.shots.filter((shot) => shot.side === winner);
@@ -6763,6 +6777,7 @@ export class Sim {
         fight.shots = [];
         fight.phase = 3;
         this.moveParty(last.arrive);
+        this.wardensFood();
         const warden = this.spawnEnemy(
             getEnemy(def.forms[side].form),
             "finalBoss",

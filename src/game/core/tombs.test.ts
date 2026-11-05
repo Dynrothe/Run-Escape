@@ -18,6 +18,7 @@ import {
     APMEKEN_WAVES,
     CRONDIS,
     TOMBS_BOSSES,
+    TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
     TOMBS_SUPPLIES,
     WARDENS,
@@ -2568,6 +2569,20 @@ describe("a wipe on the Wardens", () => {
         expect(sim.tombsDeaths).toBe(1);
         expect(sim.tombsWardens!.phase).toBe(1);
         expect(sim.player.hp).toBe(sim.player.maxHp);
+    });
+
+    it("spill food as a phase ends at Entry, where there's nothing else to heal with", () => {
+        withEntryScale();
+        const food = (invocations: string[]) => {
+            const sim = tombs(invocations);
+            sim.heroes[0].weapons = [];
+            expect(sim.devToWardens()).toBe(true);
+            sim.pickups = [];
+            sim["endWardensPhaseOne"](sim.tombsWardens!);
+            return sim.pickups.filter((p) => p.kind === "food").length;
+        };
+        expect(food([])).toBe(TOMBS_BOSS_FOOD.phase);
+        expect(food(["on_a_diet"])).toBe(0);
     });
 
     it("ends the raid once an Attempts invocation's deaths are spent", () => {
