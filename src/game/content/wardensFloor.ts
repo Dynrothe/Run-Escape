@@ -20,14 +20,11 @@ const FALLING_SLAB = 2228;
 // toa_pos_p3_rocks_hit and toa_amp_rocks_fall_02 (the OSRS Wiki's sound ids)
 const SLAB_SOUND = 6555;
 const FALL_SOUND = 6572;
-// Dust thrown up (the Sepulchre's, as Zachariah's slams have, and the Tombs' own blown dust), a
-// chip of the Wardens' rock (seq 9703, a tumble) and sparks, for embers
+// Dust thrown up (the Sepulchre's, as Zachariah's slams have, and the Tombs' own blown dust), and
+// a chip of the Wardens' rock (seq 9703, a tumble)
 const SLAB_DUST = 2699;
 const FALL_DUST = 2184;
 const ROCK_CHIP = 2210;
-const EMBER = 2246;
-// The Tombs' own dark stone wall, as the Wardens' room is walled with
-const EDGE_WALL = 45120;
 
 const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
     kind: "side",
@@ -124,8 +121,6 @@ export function createWardensFloor(rect: FloorDef["rect"]): FloorDef {
             dust: SLAB_DUST,
             fallDust: FALL_DUST,
             rock: ROCK_CHIP,
-            ember: EMBER,
-            edge: EDGE_WALL,
         },
         shake: { slam: 0.1, drop: 0.25 },
         script: SCRIPT,

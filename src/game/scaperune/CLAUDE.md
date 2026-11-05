@@ -1472,8 +1472,8 @@ faces east of it are left out for the phone's sake. Every statue the Sepulchre h
 of Amascut, cut whole with `plane: 1`, with its own floor swapped for the hidden overlay and its floor decoration and middle pit
 left out. `client/FloorView.ts` draws every tile of it as a slab (the rising slab's model at rest), so each can rise or fall
 on its own. Nothing at the slabs' height is drawn, so there's nothing for them to z-fight: the floor's tiles are a bridge
-(`TILE_BRIDGE` on level 1, the hidden overlay, heights from level 0's) nine tiles over a pit, whose bottom is what the cache
-has under the real room (level 0 of the same square, thinned) on no floor but lava pools. A level-0 loc under a bridge
+(`TILE_BRIDGE` on level 1, the hidden overlay, heights from level 0's) nine tiles over a pit with no floor and nothing
+on it, so a hole looks the same at every size. A level-0 loc under a bridge
 doesn't block what's walked or what's seen across it, so `check-maps.ts`'s sight lines leave it out, and its hidden-tile
 check stands a bridge's tiles at the deck.
 

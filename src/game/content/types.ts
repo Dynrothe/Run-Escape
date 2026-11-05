@@ -1544,11 +1544,8 @@ export type FloorDef = {
         sound: number;
     };
     // What it throws up, all spot animations (client/FloorView.ts): dust as a slab comes up and
-    // as a tile goes, a chip of rock (crumbling off a tile about to go, and falling with it), and
-    // embers rising out of the dark under a hole
-    // edge: a wall (a loc, its wall model) hung down from the floor under each side of a hole the
-    // camera can see, stacked, so a hole shows how thick the floor is and how far down it goes
-    effects?: { dust: number; fallDust: number; rock: number; ember: number; edge?: number };
+    // as a tile goes, and a chip of rock (crumbling off a tile about to go, and falling with it)
+    effects?: { dust: number; fallDust: number; rock: number };
     // A slab coming up this near a player shakes the camera this much, and a tile going from under
     // or beside them this much (ImpactDef.shake; Settings can turn it off)
     shake?: { slam: number; drop: number };

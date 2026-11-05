@@ -176,7 +176,7 @@ function getSpotAnimIds(): number[] {
     for (const map of ALL_MAPS) {
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
-        add(effects?.dust, effects?.fallDust, effects?.rock, effects?.ember);
+        add(effects?.dust, effects?.fallDust, effects?.rock);
     }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
@@ -332,11 +332,6 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
 }
 
 // The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
-// A wall a floor hangs under the edges of its holes (FloorDef.effects.edge)
-export function getFloorEdgeKey(locId: number): string {
-    return "flooredge:" + locId;
-}
-
 export function getStatueModelKey(locId: number): string {
     return "statue:" + locId;
 }
@@ -595,13 +590,6 @@ export class GameAssets {
         const requests: BakeRequest[] = [];
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
-        }
-        // The walls a floor hangs under its holes' edges (a dev map's, as its slabs are)
-        for (const map of ALL_MAPS) {
-            const edge = map.floor?.effects?.edge;
-            if (edge !== undefined) {
-                requests.push({ kind: "loc", key: getFloorEdgeKey(edge), locId: edge });
-            }
         }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {
             requests.push({ kind: "obj", key: "pickup:" + kind, objId, count: 1 });

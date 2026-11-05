@@ -4,7 +4,6 @@ import { SealRegion, assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BRIDGE } from "../format";
 import type { GeneratedMap } from "../generator";
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
-import { createNoise, createRng } from "../noise";
 import { cutPrefab } from "../prefab";
 import { BuildContext, MapPoint, MapRecipe } from "../recipe";
 
@@ -33,14 +32,6 @@ const ROOM = { x0: 3797, y0: 5142, x1: 3819, y1: 5166 };
 // tiles down, far enough that the camera's fog dims it and it moves under the floor as you do
 const FLOOR_HEIGHT = 200;
 const PIT_HEIGHT = 56;
-// The pit's bottom: the void's black, with pools of lava (map file id) where the noise is over
-// LAVA_ABOVE, the red light far below
-const PIT_LAVA = 19;
-const LAVA_ABOVE = 0.62;
-// The red stone blocks the real room's level 0 is filled with: one in this many is kept, as fallen
-// masonry, the rest gone so the pit's deep
-const MASONRY = 45643;
-const MASONRY_KEPT = 6;
 // The 3 by 3 hole in the middle of the room's floor
 const BROKEN_PIT = 45747;
 // The hidden floor (map file id): walked on, and draws nothing
@@ -77,27 +68,19 @@ const POINTS: MapPoint[] = [
 
 // Under the floor: the pit a fallen tile opens onto. The floor's tiles are a bridge (as a river's
 // is, TILE_BRIDGE on level 1), each of the hidden floor that draws nothing, and under them the
-// ground drops away nine tiles. At the bottom is what the cache has under the real room, level 0
-// of the same square (the same room's shape, its middle ring and side alcoves, filled with red
-// stone blocks), thinned to a few fallen blocks in the void's black, with pools of lava. Its
-// edges are the pit's walls, one tile from the top to the bottom.
-function digPit(
-    context: BuildContext,
-    ground: Ground,
-    inFloor: (x: number, y: number) => boolean,
-): void {
+// ground drops away nine tiles to nothing at all: no floor and nothing on it, the void's black,
+// so a hole looks the same however big it is. What shows of a hole's edge is the floor's own
+// thickness, going down into the dark (client/FloorView.ts). The pit's depth is room for a tile
+// to fall into, and for anything that's ever put down there to sit far below.
+function digPit(ground: Ground, inFloor: (x: number, y: number) => boolean): void {
     const grid = ground.grid;
     const [level0, level1, level2, level3] = grid.levels;
-    // What the floor brought from upstairs goes, and the floor's whole room under it comes in
+    // What the floor brought from upstairs goes
     grid.locs = grid.locs.filter((loc) => !inFloor(loc.x, loc.y));
-    const sizeX = ROOM.x1 - ROOM.x0 + 1;
-    const sizeY = ROOM.y1 - ROOM.y0 + 1;
-    const below = cutPrefab(context.maps, ROOM.x0, ROOM.y0, sizeX, sizeY, { plane: 0 });
-    const lava = createNoise(3871);
-    for (let y = 0; y < sizeY; y++) {
-        for (let x = 0; x < sizeX; x++) {
-            const to = ground.tile(SW.x + x, SW.y + y);
-            level0.overlays[to] = lava(x / 5, y / 5) > LAVA_ABOVE ? PIT_LAVA : 0;
+    for (let y = SW.y; y <= NE.y; y++) {
+        for (let x = SW.x; x <= NE.x; x++) {
+            const to = ground.tile(x, y);
+            level0.overlays[to] = 0;
             level0.underlays[to] = 0;
             level0.shapes[to] = 0;
             level0.rotations[to] = 0;
@@ -109,15 +92,6 @@ function digPit(
                 level.overlays[to] = level.underlays[to] = level.flags[to] = 0;
             }
         }
-    }
-    const rng = createRng(3872);
-    for (const loc of below.locs) {
-        if (loc.level !== 0 || (loc.id === MASONRY && rng() * MASONRY_KEPT >= 1)) {
-            continue;
-        }
-        grid.locs.push({ ...loc, x: SW.x + loc.x, y: SW.y + loc.y });
-        // Nothing burns under what's standing
-        level0.overlays[ground.tile(SW.x + loc.x, SW.y + loc.y)] = 0;
     }
     // The pit's bottom inside its edge, and the floor's corners over it all at the floor's height
     // (a level's heights are from the level under it)
@@ -153,7 +127,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
             (loc.type === LOC_FLOOR_DECORATION || loc.id === BROKEN_PIT) &&
             inFloor(AT.x + loc.x, AT.y + loc.y),
     });
-    digPit(context, ground, inFloor);
+    digPit(ground, inFloor);
     const sealed = sealFrom(ground.grid, context.locs, [REGION], {
         outside: "block",
         label: "Wardens' floor",

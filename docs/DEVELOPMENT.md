@@ -720,18 +720,21 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   a run starts.
 - `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
   hidden floor, so each can move on its own and a fallen one opens onto the pit under it. The
-  warnings are the tiles themselves: shaking and catching the light before a rise, shaking,
-  sagging and darkening before a fall. Hits are a share of the player's hitpoints, so any
+  warnings are the tiles' own movement, with no colour of their own: a tremor (rattling up off
+  its bed and twisting) before a rise, the same tremor with a sag and a darkening before a fall.
+  The cache's rising slabs (2220 to 2223, seqs 9697 to 9700) are the rise itself, tipped three
+  ways (2223 moves as 2221 does), and there's no tremor among them, so it's in code. Hits are a share of the player's hitpoints, so any
   adventurer can try it.
 - What it throws up (`FloorDef.effects`) is drawn from the floor's arrays and the clock alone, with
-  no state: dust as slabs rise, light in the cracks and grit falling off a tile about to go, chips
-  and dust with a falling tile, embers out of the holes, and the Tombs' wall hung down each hole's
-  edge into the dark. Each is on a share of the tiles, to keep a phone's triangles down.
+  no state: dust as slabs rise, grit falling off a tile about to go, and chips and dust with a
+  falling tile. Each is on a share of the tiles, to keep a phone's triangles down. A tile beside a
+  hole has its thickness drawn under it (the slab again, lower and darker each time), so every
+  hole, one tile or most of the floor, has the same cut edge going down into the dark.
   `FloorDef.shake` has the sim shake the camera (`bossImpact`) for a slab beside a player or a
   tile going near one, which Settings can turn off.
 - The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
-  bridge (`TILE_BRIDGE` on level 1) nine tiles over the ground, and the player walks the deck
-  (`ArenaGrid.getHeight`'s bridge heights).
+  bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing in it, and the
+  player walks the deck (`ArenaGrid.getHeight`'s bridge heights).
 
 ### Pets
 
