@@ -5,11 +5,13 @@ the version in the corner).
 
 ## Unreleased
 
+## 0.27.0 - 2026-11-05
+
 ### Added
 
 - Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
   to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
-- An Android app, by coltencleland-hub: the APK on the release page. The whole game's in it, so
+- An Android app, by Duplicity: the APK on the release page. The whole game's in it, so
   solo play works offline, even on the first launch, and co-op works online. It doesn't update
   itself: install a new version's APK over the old one. Export and Import in Settings carry a save
   between it and a browser.
