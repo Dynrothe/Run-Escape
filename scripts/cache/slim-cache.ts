@@ -24,6 +24,7 @@ import {
     PICKUP_OBJS,
     PILE_LOOKS,
     PLAYER_SEQS,
+    PRAYER_HEADICON_SPRITE,
     getCharacterAppearance,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
@@ -273,10 +274,11 @@ async function loadWhatTheGameLoads(cache: LoadedCache): Promise<void> {
 
     await load(new SoundLoader(), { ids: getGameSoundIds() });
     // The hitsplats, the title screen's tabs, the skills' refund button, co-op's
-    // flags (every frame comes with the first), and the passives with an
-    // interface sprite for an icon
+    // flags and the overhead prayers (every frame comes with the first), and the
+    // passives with an interface sprite for an icon
     const spriteIds = [
         ...Object.values(HITSPLAT_SPRITES),
+        PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
         REFUND_SPRITE,
         FLAG_SPRITE,

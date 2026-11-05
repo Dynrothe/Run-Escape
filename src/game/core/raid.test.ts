@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
+import { EXPERT_HAGIOS_KEEP } from "../content/theatre";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
@@ -593,6 +594,33 @@ describe("the Theatre's bosses", () => {
         expect(bloat.bossState!.windup?.attack.name).toBe(naps.wake);
     });
 
+    it("the Bloat goes down only once his flies are out, so the whole nap's there to reach him", () => {
+        const sim = raid();
+        const def = getEnemy("tob_pestilent_bloat");
+        const naps = def.boss!.naps!;
+        const bloat = sim.spawnEnemy(def, "boss", { x: 1030.5, y: 1030.5 })!;
+        sim.player.invulnerable = 1e9;
+        // His swarm's three rings on their way, as his nap comes due
+        const swarm = def.boss!.attacks.find((a) => a.name === "Fly swarm")!;
+        sim["startBossAttack"](bloat, swarm);
+        let fired = false;
+        for (let i = 0; i < 5 * TICKS_PER_SECOND && !fired; i++) {
+            sim.step();
+            fired = sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid);
+        }
+        expect(fired).toBe(true);
+        bloat.bossState!.nextNap = sim.tick;
+        sim.step();
+        expect(sim["isNapping"](bloat)).toBe(false);
+        // Down once the last ring's out, with nothing new started meanwhile
+        for (let i = 0; i < 5 * TICKS_PER_SECOND && !sim["isNapping"](bloat); i++) {
+            sim.step();
+            expect(bloat.bossState!.windup).toBeUndefined();
+        }
+        expect(sim["isNapping"](bloat)).toBe(true);
+        expect(sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid)).toBe(false);
+    });
+
     it("drop nothing off their adds, and have no visitors, in their rooms", () => {
         const sim = raid();
         toRoomSecond(sim, 31);
@@ -750,6 +778,118 @@ describe("expert mode", () => {
         expect(hits(expert, "nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
         // Anywhere else, any style will do
         expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
+    });
+
+    it("has a wave's Nylocas take more from their own style on expert, but not Vasilias", () => {
+        // Big hits on one that never goes down, so rounding doesn't hide the share; the same seed
+        // both ways, so the same rolls
+        const dealt = (expert: boolean, id: string, weaponId: string) => {
+            const sim = raid(expert);
+            const enemy = sim.spawnEnemy(getEnemy(id), "boss", { x: 1030.5, y: 1030.5 })!;
+            enemy.hp = enemy.maxHp = 1e9;
+            sim["damageSource"] = `weapon:${weaponId}`;
+            let total = 0;
+            for (let i = 0; i < 40; i++) {
+                total += sim.damageEnemy(enemy, 100, 0, sim.player.x, sim.player.y);
+            }
+            return total;
+        };
+        const ratio = (id: string, weapon: string) =>
+            dealt(true, id, weapon) / dealt(false, id, weapon);
+        const bonus = getEnemy("nylocas_hagios").expertOwnStyle!;
+        expect(bonus).toBeGreaterThan(1);
+        expect(ratio("nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_toxobolos", "twisted_bow")).toBeCloseTo(bonus, 1);
+        expect(ratio("nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
+        // Nylocas Vasilias keeps hers: a colour's own style, no more than off expert
+        expect(ratio("nylocas_vasilias_magic", "sanguinesti_staff")).toBeLessThan(1.5);
+    });
+
+    it("has an expert blue Nylocas come in where auras reach it, not to bite, and green hang back", () => {
+        // How near one gets, from 8 tiles off, with the player standing still
+        const nearest = (expert: boolean, id = "tob_nylocas_hagios") => {
+            const sim = raid(expert);
+            const { x, y } = sim.player;
+            const enemy = sim.spawnEnemy(getEnemy(id), "normal", {
+                x: x + 8,
+                y,
+            })!;
+            let near = Infinity;
+            for (let i = 0; i < 6 * TICKS_PER_SECOND; i++) {
+                sim.player.x = sim.player.prevX = x;
+                sim.player.y = sim.player.prevY = y;
+                sim.step();
+                near = Math.min(near, fm.hypot(enemy.x - x, enemy.y - y));
+            }
+            return near;
+        };
+        // Inside Ice Barrage's reach, but not up against you
+        const iceBarrage = getWeapon("ice_barrage").levels[0].area;
+        expect(nearest(true)).toBeLessThan(iceBarrage);
+        expect(nearest(true)).toBeGreaterThan(EXPERT_HAGIOS_KEEP - 0.5);
+        // Elsewhere it still hangs back to shoot, as a green one does on expert: a bow reaches it
+        expect(nearest(false)).toBeGreaterThan(4.5);
+        expect(nearest(true, "tob_nylocas_toxobolos")).toBeGreaterThan(4.5);
+    });
+
+    it("has the Maiden slam half as often as the other slams, so melee can stay in", () => {
+        const slam = (id: string, name: string) =>
+            getEnemy(id).boss!.attacks.find((a) => a.name === name)!;
+        const other = slam("xarpus", "Acid burst").cooldown;
+        expect(slam("maiden_of_sugadinti", "Blood burst").cooldown).toBe(2 * other);
+    });
+
+    it("warns of a fan with a line for each bullet it fires, as wide, on hard too", () => {
+        // The test raid, with the Theatre's own hard mode (its bullets)
+        const map: MapDef = {
+            ...TEST_RAID,
+            id: "test_raid_hard",
+            hard: getMap("theatre_of_blood").hard,
+        };
+        MAP_BY_ID.set(map.id, map);
+        try {
+            for (const expert of [false, true]) {
+                const sim = new Sim({
+                    grid: makeGrid(field(), 1000, 1000),
+                    mapId: map.id,
+                    expert,
+                    characterId: "warrior",
+                    metaStats: emptyStats(),
+                    seed: 1,
+                    spawnX: 1018.5,
+                    spawnY: 1010.5,
+                });
+                sim.heroes[0].weapons = [];
+                sim.player.invulnerable = 1e9;
+                const boss = sim.spawnEnemy(getEnemy("maiden_of_sugadinti"), "boss", {
+                    x: sim.player.x,
+                    y: sim.player.y + 10,
+                })!;
+                const attack = boss.def.boss!.attacks.find((a) => a.name === "Blood throw")!;
+                sim["startBossAttack"](boss, attack);
+                const windup = boss.bossState!.windup!;
+                // The lines its warning draws
+                const shape = sim.volleyShape(attack.pattern!);
+                const aim = Math.atan2(windup.dirY, windup.dirX);
+                const lines = Array.from({ length: shape.count }, (_, i) =>
+                    sim.volleyHeading(shape, aim, i).toFixed(2),
+                );
+                // Its first volley, then away from it all, so it isn't aimed anew
+                for (let i = 0; i < 2 * TICKS_PER_SECOND && sim.bullets.count < lines.length; i++) {
+                    sim.player.x = sim.player.prevX = sim.player.x + 0.2;
+                    sim.step();
+                }
+                const headings = Array.from({ length: sim.bullets.count }, (_, k) => {
+                    const slot = sim.bullets.order[k];
+                    return Math.atan2(sim.bullets.vy[slot], sim.bullets.vx[slot]).toFixed(2);
+                }).sort();
+                expect(headings).toEqual([...lines].sort());
+                // Hard mode's more of them
+                expect(lines.length > attack.pattern!.count).toBe(expert);
+            }
+        } finally {
+            MAP_BY_ID.delete(map.id);
+        }
     });
 
     it("has Nylocas Vasilias change colour, keeping its hitpoints", () => {
@@ -1159,9 +1299,11 @@ describe("expert mode", () => {
             return total;
         };
         // One weapon on its colour and on a Nylocas of the same style with no prayer, so neither
-        // weapon's balance comes into it
+        // weapon's balance comes into it (less the wave Nylocas's own bonus on expert)
         const prayed = dealt("nylocas_vasilias_ranged", "twisted_bow");
-        const unprayed = dealt("tob_nylocas_toxobolos", "twisted_bow");
+        const unprayed =
+            dealt("tob_nylocas_toxobolos", "twisted_bow") /
+            getEnemy("tob_nylocas_toxobolos").expertOwnStyle!;
         expect(prayed / unprayed).toBeCloseTo(own, 1);
         expect(hits(sim, "nylocas_vasilias_ranged", "scythe_of_vitur")).toBe(0);
     });
