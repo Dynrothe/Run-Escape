@@ -16,6 +16,11 @@ the version in the corner).
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 
+### Fixed
+
+- Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
+  it: they waited for its middle to come into reach. Fixed by Okaeri.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

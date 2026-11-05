@@ -356,6 +356,13 @@ describe("melee", () => {
         expect(hitsOn(events, big).length).toBeGreaterThan(0);
     });
 
+    test("a sweep reaches a big enemy beside you too", () => {
+        const sim = armed("two_handed_sword");
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        expect(hitsOn(attackOnce(sim, 1), big).length).toBeGreaterThan(0);
+    });
+
     test("the Thunder khopesh's Thunderclap hits everything around you", () => {
         const sim = createSim();
         sim.enemies = [];
