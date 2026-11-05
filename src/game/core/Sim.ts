@@ -3644,6 +3644,7 @@ export class Sim {
 
     // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
     // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare.
+    // attack: the boss attack's name, for the event (Combat Achievements say what spoilt a task).
     // Returns what it took.
     private damagePlayer(
         damage: number,
@@ -3651,6 +3652,7 @@ export class Sim {
         elite: boolean,
         sound?: number,
         ignoreArmor = false,
+        attack?: string,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -3669,7 +3671,7 @@ export class Sim {
         this.damageTaken += amount;
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
-        this.emit({ type: "playerHit", amount, enemyId, elite, sound });
+        this.emit({ type: "playerHit", amount, enemyId, elite, sound, attack });
         if (player.hp <= 0) {
             this.playerDied();
         }
@@ -8258,6 +8260,7 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
+            attack.name,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;

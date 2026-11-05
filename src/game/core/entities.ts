@@ -913,8 +913,16 @@ type SimEventBody =
     | { type: "thrallAttack"; sound: number; x: number; y: number }
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }
-    // sound: the boss attack's hit sound, instead of the enemy's attack sound
-    | { type: "playerHit"; amount: number; enemyId: string; elite: boolean; sound?: number }
+    // sound: the boss attack's hit sound, instead of the enemy's attack sound; attack: that
+    // attack's name (BossAttackDef.name), none for a crowd's hit, a stomp or a pool
+    | {
+          type: "playerHit";
+          amount: number;
+          enemyId: string;
+          elite: boolean;
+          sound?: number;
+          attack?: string;
+      }
     | { type: "playerPoisoned"; amount: number }
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
