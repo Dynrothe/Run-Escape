@@ -196,6 +196,22 @@ describe("boss kills", () => {
         expect(ids(tracker.observe(sim, [smite(true)]))).toEqual(["contempt_of_court"]);
     });
 
+    test("Zachariah's hard tasks only on hard mode, as the hard run's won", () => {
+        const hard = (sim: Sim) => {
+            const tracker = track(sim);
+            tracker.observe(sim, [spawned("justiciar_zachariah")]);
+            sim.state = "victory";
+            return ids(tracker.observe(sim, [killed("justiciar_zachariah")]));
+        };
+        const normal = hard(createSim("zachariah"));
+        expect(normal).toContain("objection");
+        expect(normal).not.toContain("beyond_reproach");
+        expect(normal).not.toContain("flawless_verdict");
+        const onHard = hard(createSim("zachariah", { hard: true }));
+        expect(onHard).toContain("beyond_reproach");
+        expect(onHard).toContain("flawless_verdict");
+    });
+
     test("damage done before the boss arrived doesn't count against it", () => {
         const sim = createSim("zachariah");
         const tracker = track(sim);
