@@ -141,7 +141,8 @@ version and how to run it.
       more hitpoints it has (up to +150% on bosses). The **Bow of Faerdhinen** fires crystal
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
       venom in what they hit, hurting it every second; it goes for enemies without venom first
-      (flying past the ones with it), so the venom spreads through a crowd. From the new maps:
+      (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
+      upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
       the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
       crossbow**'s bolts go through what they hit and one in five is enchanted (a ruby takes a

@@ -54,6 +54,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
+- To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
+  projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
