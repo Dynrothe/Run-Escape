@@ -178,8 +178,8 @@ describe("the HUD", () => {
         const { client, store } = createClient(sim, false);
         sim.heroes[0].player.x = 1020.5;
         sim.heroes[1].player.x = 1050.5;
-        const bosses = [1022.5, 1048.5].map((x) =>
-            sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
+        const bosses = [1022.5, 1048.5].map(
+            (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
         );
         bosses[0].hp = bosses[0].maxHp / 4;
         bosses[1].hp = (bosses[1].maxHp * 3) / 4;
@@ -235,6 +235,53 @@ describe("the HUD", () => {
         updateHud(client, true);
         expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
         expect(sim.shownBoss).toBe(finalBoss);
+    });
+
+    test("co-op keeps the final boss's empty bar to the victory screen, over a living boss", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        sim.damageEnemy(finalBoss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        expect(boss.dead).toBe(false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toMatchObject({ name: finalBoss.def.name, fraction: 0 });
+    });
+
+    test("co-op's bar stays on its boss until another is clearly nearer", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const x = sim.player.x;
+        const [left, right] = [-3, 3].map(
+            (dx) =>
+                sim.spawnEnemy(getEnemy("wise_old_man"), "boss", { x: x + dx, y: sim.player.y })!,
+        );
+        left.hp = left.maxHp / 4;
+        right.hp = (right.maxHp * 3) / 4;
+        const shown = () => store.getNumbers()!.boss?.fraction;
+        sim.player.x = x - 0.1;
+        updateHud(client, true);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        // A tile nearer the other isn't enough
+        sim.player.x = x + 0.5;
+        updateHud(client);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        sim.player.x = x + 1.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+        // Nor does it go straight back
+        sim.player.x = x - 0.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
     });
 
     test("solo keeps the final boss's priority over a nearer boss", () => {

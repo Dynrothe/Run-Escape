@@ -127,6 +127,9 @@ const CATCH_UP_BUDGET_MS = 8;
 // than a slow load brings in
 const MAX_COOP_INBOX = 50_000;
 const HUD_INTERVAL_MS = 100;
+// Co-op: how much nearer, in tiles, another boss must be to take the boss bar, so two
+// about as far away don't take turns on it as everyone moves
+const BOSS_BAR_SWITCH = 2;
 // The damage meter's number holds this long, so it can be read
 const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
 
@@ -443,6 +446,8 @@ export class GameClient implements GameFrameHandler {
 
     private accumulator = 0;
     private lastHudUpdate = 0;
+    // Co-op: the living boss on the boss bar (getCoopBarBoss)
+    private coopBarBoss: Enemy | undefined;
     // Where the camera thinks the ground is, on a dev map
     private cameraGround: number | undefined;
     // How far the camera's leaning towards a raid boss (BOSS_LEAN)
@@ -1392,6 +1397,7 @@ export class GameClient implements GameFrameHandler {
         this.shownDps = 0;
         this.shownDpsTick = 0;
         this.damageMeter.reset();
+        this.coopBarBoss = undefined;
         this.appearanceVersions = [];
         this.lookChoices = [];
         this.decisionKey = "";
@@ -2572,6 +2578,54 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Co-op: the boss bar shows the living boss nearest this player (each player their own,
+    // the final boss no more than any other), and keeps showing it until another is
+    // BOSS_BAR_SWITCH tiles nearer. Once every final boss has fallen, the last one's empty bar
+    // stays to the victory screen, as solo (Sim.shownBoss)
+    private getCoopBarBoss(sim: Sim): Enemy | undefined {
+        const player = sim.player;
+        let nearest: Enemy | undefined;
+        // Squared: only the two compared at the end need their roots
+        let nearestDistance = Infinity;
+        let keptDistance = Infinity;
+        let fallen: Enemy | undefined;
+        let finalUp = false;
+        for (const enemy of sim.enemies) {
+            if (!enemy.boss) {
+                continue;
+            }
+            if (enemy.dead) {
+                if (enemy.finalBoss && !sim.endless) {
+                    fallen = enemy;
+                }
+                continue;
+            }
+            if (enemy.finalBoss) {
+                finalUp = true;
+            }
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const distance = dx * dx + dy * dy;
+            if (enemy === this.coopBarBoss) {
+                keptDistance = distance;
+            }
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearest = enemy;
+            }
+        }
+        if (fallen && !finalUp) {
+            this.coopBarBoss = undefined;
+            return fallen;
+        }
+        // (one that's gone or fallen has no distance, so gives way)
+        if (Math.sqrt(keptDistance) - Math.sqrt(nearestDistance) < BOSS_BAR_SWITCH) {
+            return this.coopBarBoss;
+        }
+        this.coopBarBoss = nearest;
+        return nearest;
+    }
+
     private updateHud(force: boolean): void {
         const sim = this.sim;
         if (!sim) {
@@ -2581,33 +2635,7 @@ export class GameClient implements GameFrameHandler {
         const thisLevel = sim.xpForThisLevel;
         const nextLevel = sim.xpForNextLevel;
         let boss: HudNumbers["boss"];
-        let shownBoss: Enemy | undefined;
-        if (sim.heroes.length > 1) {
-            const player = sim.heroes[sim.focus].player;
-            let nearest = Infinity;
-            let fallen: Enemy | undefined;
-            for (const enemy of sim.enemies) {
-                if (!enemy.boss) {
-                    continue;
-                }
-                if (enemy.dead) {
-                    if (enemy.finalBoss && !sim.endless) {
-                        fallen = enemy;
-                    }
-                    continue;
-                }
-                const dx = enemy.x - player.x;
-                const dy = enemy.y - player.y;
-                const distance = dx * dx + dy * dy;
-                if (distance < nearest) {
-                    nearest = distance;
-                    shownBoss = enemy;
-                }
-            }
-            shownBoss ??= fallen;
-        } else {
-            shownBoss = sim.shownBoss;
-        }
+        const shownBoss = sim.heroes.length > 1 ? this.getCoopBarBoss(sim) : sim.shownBoss;
         if (shownBoss) {
             const phase = shownBoss.bossState?.phase;
             const parasite = sim.parasite;

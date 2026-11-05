@@ -1162,11 +1162,15 @@ different player, clear of the others, sharing one boss's hitpoints, experience 
 their `Encounter`, so the first says so and the last to fall drops the loot. A boss with its own
 spots (`spawnAt`) gets no more copies than it has free spots, which keeps Pest Control's portals
 single, and a scripted entrance (`startIntro`) stays one boss.
-In co-op, `GameClient.updateHud` shows the living boss closest to the local hero. Selection runs
-with the HUD's 100 ms update, not every frame: one pass over enemies, distance squared only for
-living bosses, with no sorting or temporary arrays. The same pass keeps the empty final-boss bar
-when no living bosses remain outside endless mode. This is only a HUD choice: `Sim.shownBoss`
-keeps its existing priority for simulation rules and solo play.
+
+The boss bar in co-op is each player's own: `GameClient.getCoopBarBoss` shows the living boss
+nearest that player, so it's the copy in front of them. Unlike solo, the final boss comes first
+no more than any other: a nearer boss (an ambush's copy, or one left from earlier) takes the bar
+from it. The bar keeps its boss until another is `BOSS_BAR_SWITCH` tiles nearer, so two copies
+about as far away don't take turns on it. Once every final boss has fallen, the last one's empty
+bar stays to the victory screen, as in solo. Only the bar works this way: what else follows the
+boss on screen (the camera's lean, a gaze's light, `BossFightView`'s arena edge and totem arrows)
+goes by `Sim.shownBoss`, so in co-op it can be another copy than the bar's.
 
 Rooms only take players who've unlocked their map (and its endless or hard mode, for a room on
 them), and the host can only pick what everyone in the room has, so nobody skips ahead: someone
