@@ -30,6 +30,8 @@ the version in the corner).
   the desktop app. It was missing from their copy of the game's files.
 - Any class page can refund single skill ranks, including the ones that needed Refund all first.
   Fixed by trippy22.
+- In co-op, the boss health bar follows the living boss closest to your player. Fixed by
+  braiansmarzaro.
 
 ## 0.26.0 - 2026-11-05
 
