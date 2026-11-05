@@ -267,7 +267,9 @@ Metrics contain aggregate numbers only, with no player names, addresses or room 
 end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
 `VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
 shows in a build that has a collector. See the
-[collector setup, daily analytics and leaderboard](../server/analytics/README.md).
+[collector setup, daily analytics and leaderboard](../server/analytics/README.md). To look
+through an export of its database offline, run `node server/analytics/viewer/serve.mjs` and drop
+the file on the page.
 
 ## Desktop
 
