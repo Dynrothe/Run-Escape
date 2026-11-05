@@ -163,6 +163,8 @@ const IMPACT_FLASH = 0.3;
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
 // The Wardens' charged shots, drawn this much bigger than their spot animations
+// The Wardens' marks that strike (WardensFight marks)
+const MARK_STRIKE_LOOK = { scale: 1.6 };
 const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -970,6 +972,52 @@ export class GameView {
                 // Big enough to see coming across the room
                 SHOT_LOOK,
             );
+        }
+        // The second and last phases' marks on the floor: glows and shadows, then what strikes
+        for (const mark of fight.marks) {
+            if (sim.tick < mark.from || sim.tick >= mark.to) {
+                continue;
+            }
+            const model = this.assets.get("spot:" + mark.spotAnim);
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick - mark.from, true),
+                mark.x,
+                this.ground(sim, mark.x, mark.y),
+                mark.y,
+                0,
+                // What strikes, bigger than the warnings, to be seen
+                mark.hurts > 0 ? MARK_STRIKE_LOOK : undefined,
+            );
+        }
+        // The obelisk's skulls, thrown in an arc to where they'll land
+        const skull = this.assets.get("spot:" + WARDENS.two.skulls.projectile);
+        if (skull) {
+            const anim = skull.anims[0];
+            for (const one of fight.two?.skulls ?? []) {
+                if (sim.tick < one.startTick) {
+                    continue;
+                }
+                const t = Math.min(1, (sim.tick - one.startTick) / (one.landTick - one.startTick));
+                const x = one.fromX + (one.x - one.fromX) * t;
+                const y = one.fromY + (one.y - one.fromY) * t;
+                const arc = 1 + Math.sin(Math.PI * t) * 4;
+                actors.draw(
+                    skull,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y) - arc,
+                    y,
+                    0,
+                    SHOT_LOOK,
+                );
+            }
         }
     }
 

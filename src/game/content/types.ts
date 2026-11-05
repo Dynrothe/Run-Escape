@@ -1798,6 +1798,13 @@ export type TombsWardensPlaces = {
     >;
     troughs: number[];
     floor: { x0: number; y0: number; x1: number; y1: number };
+    // The last phase's room: where the party's brought in, where the Warden stands (north of the
+    // floor, which is the map's MapDef.floor), and the floor
+    last?: {
+        arrive: { x: number; y: number };
+        at: { x: number; y: number };
+        floor: { x0: number; y0: number; x1: number; y1: number };
+    };
 };
 
 // The Wardens' first phase (content/tombs.ts's WARDENS; Sim.stepWardens). The obelisk is what's
@@ -1862,6 +1869,153 @@ export type WardensDef = {
     startDelay: number;
     message: string;
     endMessage: string;
+    two: WardensPhaseTwoDef;
+    three: WardensPhaseThreeDef;
+};
+
+// The Wardens' second phase (Sim.stepWardens): the Warden with the more charge wakes after wake
+// seconds, its forms (each hurt by one style alone, the next flipping it) as bosses. hp is its
+// hitpoints before the room's scaling. Hits of the open style fill its shield (shield, a share of
+// its hitpoints); full, it kneels (its exposed form) and throws its core out `distance` tiles,
+// which takes coreMultiplier times what it's hit for off the Warden, for seconds[i] while the
+// Warden's above below[i] of its hitpoints (the last otherwise). Meanwhile the obelisk opens
+// firstOpen seconds after it's up, and `every` seconds after each special ends, warning for warn
+// seconds (its ring round it, the special's colour), taking its specials in turn.
+export type WardensPhaseTwoDef = {
+    wake: number;
+    wakeSeq: number;
+    hp: number;
+    forms: Record<
+        WardenSide,
+        {
+            // The open style first, then the other; the exposed (kneeling) form; the core
+            styles: ["magic" | "ranged", "magic" | "ranged"];
+            forms: [string, string];
+            exposed: string;
+            core: string;
+            // The other Warden's wreck
+            wreck: string;
+        }
+    >;
+    obeliskId: string;
+    shield: number;
+    coreMultiplier: number;
+    distance: number;
+    seconds: number[];
+    below: number[];
+    kneelSeq: number;
+    standSeq: number;
+    // Seconds from the kneel to the core's out, and from its going back to the Warden's up
+    kneel: number;
+    stand: number;
+    deathSeq: number;
+    // Seconds from its last hitpoint to the last phase
+    toLast: number;
+    obelisk: {
+        firstOpen: number;
+        every: number;
+        warn: number;
+        openSeq: number;
+        closeSeq: number;
+        // Each strike, of a player's hitpoints, armour or not
+        damage: number;
+    };
+    // Two pairs of closing walls: rings out from the middles of two opposite edges, a tile a
+    // `step`, `rings` of them, at most `wide` tiles either side of the line; north and south,
+    // and pause seconds after they start, east and west
+    beam: {
+        warnSpotAnim: number;
+        spotAnim: number;
+        step: number;
+        rings: number;
+        wide: number;
+        pause: number;
+    };
+    // Four arms that turn: a glow on one of five patterns, struck `strikeAfter` seconds later,
+    // a pattern every `every` seconds, rounds of them (WARDENS_WINDMILL, below the def)
+    windmill: {
+        warnSpotAnim: number;
+        glowSpotAnim: number;
+        spotAnim: number;
+        every: number;
+        strikeAfter: number;
+        rounds: number;
+    };
+    // Skulls thrown at random tiles every `every` seconds, flying for flight, then lightning over
+    // the 7 by 7 round each (all but the cross through it) strikeAfter seconds after they land
+    skulls: {
+        warnSpotAnim: number;
+        projectile: number;
+        shadowSpotAnim: number;
+        spotAnim: number;
+        count: number;
+        every: number;
+        flight: number;
+        strikeAfter: number;
+        half: number;
+    };
+    message: string;
+    kneelMessage: string;
+    standMessage: string;
+    endMessage: string;
+};
+
+// The Wardens' last phase: the other Warden back (its form, and its charging form for the
+// siphons), on the map's floor (MapDef.floor), slamming a half of it every `every` seconds (below
+// half its hitpoints, `quicker`; Overclocked, Overclocked 2 and Insanity quicker still), east, west
+// then both. At each of `at`, it charges: siphons (count[i]) land over the floor, each stopped by
+// a player stepping on it within window seconds (Insanity: insanityWindow); all stopped, it
+// staggers for a share of its hitpoints; any left, the floor erupts. The second and third bring
+// a path boss's phantom each (east, then west). At enrage, it heals heal of its hitpoints, a row
+// of the floor tears away every rowEvery seconds, and lightning walks the floor.
+export type WardensPhaseThreeDef = {
+    hp: number;
+    forms: Record<WardenSide, { form: string; charging: string; phantoms: [string, string] }>;
+    // Amascut's phantom, watching from offset tiles behind it, and as she is once it's enraged
+    amascut: { enemyId: string; enragedId: string; offset: number };
+    every: number;
+    quicker: number;
+    invoked: { overclocked: number; overclocked2: number; insanity: number };
+    rowSeconds: number;
+    slamSeqs: { east: number; west: number; both: number };
+    at: number[];
+    count: number[];
+    window: number;
+    insanityWindow: number;
+    siphon: {
+        enemyId: string;
+        reversed: string;
+        reach: number;
+        beamSpotAnim: number;
+        skull: number;
+    };
+    chargeSeq: number;
+    staggerSeq: number;
+    releaseSeq: number;
+    stagger: number;
+    restart: number;
+    phantomSpotAnim: number;
+    enrage: {
+        at: number;
+        heal: number;
+        seq: number;
+        rowEvery: number;
+        firstRow: number;
+        lightning: {
+            every: number;
+            warn: number;
+            count: number;
+            shadowSpotAnim: number;
+            spotAnim: number;
+            damage: number;
+        };
+        message: string;
+    };
+    message: string;
+    siphonMessage: string;
+    staggerMessage: string;
+    releaseMessage: string;
+    phantomMessage: string;
 };
 
 // A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to, and

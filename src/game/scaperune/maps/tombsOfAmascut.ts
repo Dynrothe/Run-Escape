@@ -1,4 +1,5 @@
 import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
+import { createWardensFloor } from "../../content/wardensFloor";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
@@ -1020,6 +1021,13 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         victoryText: "",
         // A raid, not a fun map: not endless
         fun: undefined,
+        // The Wardens' last room's floor, which moves as the fight says (Sim.stepWardens): no
+        // script of its own
+        floor: {
+            ...createWardensFloor(TOA_PLACES.wardens.last.floor),
+            script: [],
+            loopSeconds: 1e7,
+        },
         tombs: {
             nexus: TOA_PLACES.nexus.arrive,
             wardens: {
@@ -1030,6 +1038,7 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                 sides: TOA_PLACES.wardens.sides,
                 troughs: TOA_PLACES.wardens.troughs,
                 floor: TOA_PLACES.wardens.floor,
+                last: TOA_PLACES.wardens.last,
             },
             paths: (Object.keys(PATH_NAMES) as ToaPathId[]).map((id) => ({
                 id,

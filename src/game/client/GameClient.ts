@@ -2675,6 +2675,18 @@ export class GameClient implements GameFrameHandler {
                         : undefined,
                 };
             }
+            // The Wardens' three phases
+            const wardens = sim.wardensBar(shownBoss);
+            if (wardens) {
+                boss.fraction = wardens.fraction;
+                boss.fight = {
+                    phase: wardens.phase,
+                    phases: 3,
+                    stage: wardens.stage,
+                    status: wardens.status,
+                    totems: [],
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;

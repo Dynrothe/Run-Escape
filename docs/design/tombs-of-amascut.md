@@ -413,5 +413,50 @@ raid's ranges.
       seal 2214/2215) and take turns: pyramids (45750/45751) on every other 3 by 3 cell of the floor,
       Elidinis' the odd ones, hurting whoever's under one as they glow; then a shot (2238/2237)
       that arcs after each player for 8 s and lands for a share of their hitpoints.
-    - The obelisk broken, the Warden with the more charge wakes (Tumeken's on a tie) and the other
-      blows up (2216). Not in yet: phase two, and Ancient Haste on the invocation board.
+    - The obelisk broken, the Warden that's charged the more over the whole phase (what it's spent
+      on attacks and what it holds) wakes, Tumeken's on a tie, so the side a player kept blocked
+      loses however recently it attacked. The other blows up (2216) and is left a wreck (11759,
+      11760).
+- **The Wardens, phase two** (`WARDENS.two`, `Sim.stepWardensTwo`): the same room.
+    - The Warden wakes (9663) and steps out of its alcove, a boss in two forms (11753/11754
+      Elidinis', 11756/11757 Tumeken's), each hurt by one style alone (Elidinis' opens to magic,
+      Tumeken's to ranged), its bar its shield filling. Tumeken's walks up to you and slashes;
+      Elidinis' keeps her distance. Both throw skulls (2224 red, 2241 plain), a fan of them, and
+      stone where you stand (2210, a shadow first) that holds you a moment.
+    - Its shield full (3.5% of its hitpoints), it kneels (9670, the exposed form) and throws its core
+      out (11770/11771): what the core's hit for comes off the Warden five times over, for 12.6,
+      17.4 or 22.2 s by how low it is (OSRS's 21, 29 and 37 ticks). Then it stands (9672) open to
+      the other style. About three times down with the best of everything, standing close.
+    - The obelisk (11752, charged, can't be hit) opens every 9 s, its ring round it the special's
+      colour (2199, 2200, 2198), and takes its specials in turn: the converging beam (two walls of
+      glowing tiles closing on it from north and south, then east and west, a tile a tick), the
+      windmill (its five patterns, read off the OSRS Wiki's diagram, `WARDENS_WINDMILL`, each
+      glowing 1.8 s before it's struck, twelve of them) and lightning skulls (ten thrown at random
+      tiles, the 7 by 7 round each struck but its cross). Unlike OSRS's, it keeps on while the core's
+      out, and opens sooner: here the core's hit dodging it. The marks are the fight's
+      (`WardensFight.marks`), drawn by GameView: there are too many for effects. The OSRS beam's
+      own spot animations (2234, 2235) barely show from this camera, so the beam's tiles glow (2236)
+      as the kill video shows and the windmill's strikes are the Wardens' red lightning (2197).
+    - Its last hitpoint: it collapses (9662) and restores the other.
+- **The Wardens, phase three** (`WARDENS.three`, `Sim.stepWardensThree`): the last room (the same
+  room cut again, unturned, cell 4,1), the Warden that fell back up north of the floor, which is the
+  map's `MapDef.floor` (PR 133's), moved by the fight through `ArenaFloor.start` rather than a
+  script. Amascut (11767) watches from behind.
+    - Slams: half the floor rises in a wave away from it, east, then west, then both but the middle
+      three columns, every 4.2 s (3.6 below half; Overclocked 3, Overclocked 2 2.4, Insanity 1.8).
+    - At 80, 60, 40 and 20% (no hit takes it past one), it charges (11763/11764): 4, 5, 6, then 7
+      siphons (11772) land over the floor, beamed (2227), each stopped by a player stepping on it
+      (reversed, 11773) within 10.8 s (Insanity 4.8). All stopped, it staggers for 5% of its
+      hitpoints; any left, the floor erupts out from the middle. The slams start again from east
+      (Insanity: where they left off).
+    - The second charge brings a path boss's phantom east of it, the third another west: Zebak's
+      (fans of his magic or ranged) and Ba-Ba's (a rock on where you stand) with Tumeken's;
+      Akkha's (three of his ranged or magic) and Kephri's (a fireball lobbed onto you, wider with
+      Aerial Assault) with Elidinis'. They can't be hit, and quicken once it's enraged.
+    - At 5% it enrages: heals 20%, Amascut opens her mouth (11768), a row of the floor tears away
+      from the back every 10.8 s, and lightning walks the floor, each bolt's shadow (1446) 1.8 s
+      before it strikes (2197). Its death ends the raid: there's no chest yet.
+    - Invocations: Ancient Haste, Acceleration (the Warden attacks and the obelisk opens sooner),
+      Penetration (the obelisk's specials hit harder), Overclocked, Overclocked 2 and Insanity.
+    - Not in: Divine Projectile (it's about prayer, which the run hasn't got), the bot doesn't know
+      the fight, and the chest after it.

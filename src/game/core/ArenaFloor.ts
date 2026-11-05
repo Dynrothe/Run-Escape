@@ -161,11 +161,8 @@ export class ArenaFloor {
         return { rose, fell, messages };
     }
 
-    private start(
-        pattern: FloorPatternDef,
-        tick: number,
-        origin: () => { x: number; y: number },
-    ): void {
+    // A pattern, from this tick: the script's, or a fight's own (the Wardens' slams)
+    start(pattern: FloorPatternDef, tick: number, origin: () => { x: number; y: number }): void {
         const { sizeX, sizeY } = this;
         const middle = Math.floor(sizeX / 2);
         // The first warning's now, so the first tile rises a warning from now

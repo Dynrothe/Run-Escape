@@ -14,6 +14,7 @@ import {
 import { MAP_BY_ID, getMap } from "../content/maps";
 import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES, WARDENS } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
+import { createWardensFloor } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
@@ -28,12 +29,16 @@ function field(): string[] {
 
 const lumbridge = getMap("lumbridge");
 
+// The Wardens' last room's floor, which the fight moves
+const LAST_FLOOR = { x0: 1025, y0: 1040, x1: 1047, y1: 1062 };
+
 // A Nexus in an open field, with a door 6 tiles east of where the party starts
 const TEST_TOMBS: MapDef = {
     ...lumbridge,
     id: "test_tombs",
     waves: [],
     events: [],
+    floor: { ...createWardensFloor(LAST_FLOOR), script: [], loopSeconds: 1e7 },
     tombs: {
         nexus: { x: 1036.5, y: 1036.5 },
         // The Wardens' room in the same field: the obelisk north of the Nexus, a Warden either side
@@ -56,6 +61,11 @@ const TEST_TOMBS: MapDef = {
             },
             troughs: [1048.5, 1050.5, 1052.5],
             floor: { x0: 1025, y0: 1038, x1: 1047, y1: 1062 },
+            last: {
+                arrive: { x: 1036.5, y: 1044.5 },
+                at: { x: 1036.5, y: 1066.5 },
+                floor: LAST_FLOOR,
+            },
         },
         paths: [
             { id: "het", name: "Path of Het", door: { x: 1042.5, y: 1036.5 } },
@@ -2547,5 +2557,229 @@ describe("the Wardens' first phase", () => {
         expect(fight.phase).toBe(2);
         expect(fight.winner).toBe("elidinis");
         expect(fight.orbs).toHaveLength(0);
+    });
+});
+
+describe("the Wardens' second and last phases", () => {
+    function atWardens() {
+        const sim = tombs([]);
+        sim.heroes[0].weapons = [];
+        expect(sim.devToWardens()).toBe(true);
+        sim.heroes[0].weapons = [];
+        sim.player.invulnerable = 0;
+        sim.devGod = true;
+        return sim;
+    }
+    const step = (sim: Sim, seconds: number, each?: () => void) => {
+        for (let i = 0; i < seconds * TICKS_PER_SECOND; i++) {
+            each?.();
+            sim.step();
+        }
+    };
+    const find = (sim: Sim, uid: number | undefined) => sim.enemies.find((e) => e.uid === uid)!;
+    // The obelisk broken with Elidinis' the more charged, and her up
+    function atPhaseTwo() {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        fight.charge.elidinis = 100;
+        fight.charge.tumeken = 0;
+        const obelisk = find(sim, fight.obeliskUid);
+        obelisk.hp = 0;
+        obelisk.dead = true;
+        step(sim, 0.1);
+        expect(fight.phase).toBe(2);
+        expect(fight.winner).toBe("elidinis");
+        step(sim, WARDENS.two.wake + 0.2);
+        return sim;
+    }
+    const hit = (sim: Sim, enemy: ReturnType<typeof find>, weaponId: string, damage: number) => {
+        sim["damageSource"] = `weapon:${weaponId}`;
+        return sim.damageEnemy(enemy, damage, 0, sim.player.x, sim.player.y, 0);
+    };
+
+    it("wakes the Warden whose side wasn't blocked, however recently it attacked", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        const gap = sim.map.tombs!.wardens!.sides.tumeken.gap;
+        step(sim, 40, () => {
+            sim.player.x = sim.player.prevX = gap.x;
+            sim.player.y = sim.player.prevY = gap.y;
+        });
+        // Elidinis' has attacked more, and may have just now
+        expect(fight.spent.elidinis).toBeGreaterThan(fight.spent.tumeken);
+        fight.charge.elidinis = 0;
+        const obelisk = find(sim, fight.obeliskUid);
+        obelisk.hp = 0;
+        obelisk.dead = true;
+        step(sim, 0.1);
+        expect(fight.winner).toBe("elidinis");
+    });
+
+    it("wakes the Warden with the more charge, which only its open style hurts, filling its shield", () => {
+        const sim = atPhaseTwo();
+        const two = sim.tombsWardens!.two!;
+        const warden = find(sim, two.wardenUid);
+        expect(warden.def.id).toBe("elidinis_warden_magic");
+        expect(sim.shownBoss).toBe(warden);
+        // Ranged does nothing; magic fills the shield, not its hitpoints
+        expect(hit(sim, warden, "dark_bow", 100)).toBe(0);
+        expect(hit(sim, warden, "ice_barrage", 100)).toBeGreaterThan(0);
+        expect(two.shield).toBeGreaterThan(0);
+        expect(warden.hp).toBe(warden.maxHp);
+    });
+
+    it("kneels with its shield full, its core taking five times what it's hit for, then stands open to the other style", () => {
+        const sim = atPhaseTwo();
+        const two = sim.tombsWardens!.two!;
+        const warden = find(sim, two.wardenUid);
+        hit(sim, warden, "ice_barrage", two.shieldMax * 2);
+        expect(two.kneel).toBeDefined();
+        expect(warden.def.id).toBe("elidinis_warden_exposed");
+        step(sim, WARDENS.two.kneel + 0.1);
+        const core = find(sim, two.kneel!.coreUid);
+        expect(core.def.id).toBe("elidinis_warden_core");
+        const before = warden.hp;
+        const dealt = hit(sim, core, "dark_bow", 100);
+        expect(before - warden.hp).toBe(dealt * WARDENS.two.coreMultiplier);
+        // Out its time (the first, above 80%), then back up, flipped to ranged
+        step(sim, WARDENS.two.seconds[0] + WARDENS.two.stand + 0.2);
+        expect(two.kneel).toBeUndefined();
+        expect(core.dead).toBe(true);
+        expect(warden.def.id).toBe("elidinis_warden_ranged");
+        expect(hit(sim, warden, "ice_barrage", 100)).toBe(0);
+        expect(hit(sim, warden, "dark_bow", 100)).toBeGreaterThan(0);
+    });
+
+    it("has the obelisk open its specials in turn, striking the floor where it marked", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        const two = fight.two!;
+        const kinds: string[] = [];
+        let struck = 0;
+        step(sim, 120, () => {
+            if (two.current && kinds[kinds.length - 1] !== two.current.kind) {
+                kinds.push(two.current.kind);
+            }
+            struck = Math.max(struck, fight.marks.filter((m) => m.hurts > 0).length);
+        });
+        expect(kinds.length).toBeGreaterThanOrEqual(3);
+        const order = ["beam", "windmill", "skulls"];
+        const first = order.indexOf(kinds[0]);
+        kinds.slice(0, 3).forEach((kind, i) => expect(kind).toBe(order[(first + i) % 3]));
+        expect(struck).toBeGreaterThan(20);
+        // Standing on a mark as it lands hurts
+        sim.devGod = false;
+        const mark = fight.marks.find((m) => m.hurts > 0 && m.from > sim.tick);
+        if (mark) {
+            const hp = sim.player.hp;
+            step(sim, (mark.from - sim.tick) / TICKS_PER_SECOND + 0.02, () => {
+                sim.player.x = sim.player.prevX = mark.x;
+                sim.player.y = sim.player.prevY = mark.y;
+            });
+            expect(sim.player.hp).toBeLessThan(hp);
+        }
+    });
+
+    it("keeps the obelisk going while the core's out", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        const two = fight.two!;
+        step(sim, WARDENS.two.obelisk.firstOpen + 1);
+        const going = two.current;
+        expect(going).toBeDefined();
+        hit(sim, find(sim, two.wardenUid), "ice_barrage", two.shieldMax * 2);
+        step(sim, 1);
+        expect(two.kneel).toBeDefined();
+        expect(two.current).toBe(going);
+        expect(fight.marks.length).toBeGreaterThan(0);
+    });
+
+    it("brings the fallen Warden back over the moving floor, slamming east, west, then both", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        const two = fight.two!;
+        find(sim, two.wardenUid).hp = 0;
+        step(sim, WARDENS.two.toLast + 0.2);
+        expect(fight.phase).toBe(3);
+        const three = fight.three!;
+        const warden = find(sim, three.wardenUid);
+        expect(warden.def.id).toBe("tumeken_warden_last");
+        expect(sim.shownBoss).toBe(warden);
+        const last = sim.map.tombs!.wardens!.last!;
+        expect(sim.player.y).toBeCloseTo(last.arrive.y, 0);
+        // Its first slam: the east half rising, the west left alone
+        const floor = sim.floor!;
+        step(sim, 3.8);
+        const middle = floor.x0 + Math.floor(floor.sizeX / 2);
+        const row = floor.y0 + 10;
+        const warned = (x: number) =>
+            floor.warnAt[floor.index(x, row)] !== -1 || floor.roseAt[floor.index(x, row)] !== -1;
+        expect(warned(middle + 4)).toBe(true);
+        expect(warned(middle - 4)).toBe(false);
+        expect(three.slam).toBe(1);
+    });
+
+    it("charges at 80%, its siphons stopped by stepping on them, then staggers", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        find(sim, fight.two!.wardenUid).hp = 0;
+        step(sim, WARDENS.two.toLast + 0.2);
+        const three = fight.three!;
+        const warden = find(sim, three.wardenUid);
+        // A hit past 80% stops there
+        hit(sim, warden, "dark_bow", warden.maxHp);
+        expect(warden.hp).toBeCloseTo(warden.maxHp * 0.8, 0);
+        step(sim, 0.1);
+        const siphons = three.siphons!;
+        expect(siphons.uids).toHaveLength(WARDENS.three.count[0]);
+        expect(warden.def.id).toBe("tumeken_warden_charging");
+        for (const uid of siphons.uids) {
+            const siphon = find(sim, uid);
+            step(sim, 0.1, () => {
+                sim.player.x = sim.player.prevX = siphon.x;
+                sim.player.y = sim.player.prevY = siphon.y;
+            });
+        }
+        expect(three.siphons).toBeUndefined();
+        expect(warden.hp).toBeLessThan(warden.maxHp * 0.8 - 1);
+        expect(warden.def.id).toBe("tumeken_warden_last");
+    });
+
+    it("brings its phantoms with the second and third charges, and enrages at its last hitpoints", () => {
+        const sim = atPhaseTwo();
+        const fight = sim.tombsWardens!;
+        find(sim, fight.two!.wardenUid).hp = 0;
+        step(sim, WARDENS.two.toLast + 0.2);
+        const three = fight.three!;
+        const warden = find(sim, three.wardenUid);
+        for (let i = 0; i < 4; i++) {
+            hit(sim, warden, "dark_bow", warden.maxHp);
+            step(sim, 0.1);
+            // Left to go off
+            step(sim, WARDENS.three.window + 0.2);
+            expect(three.siphons).toBeUndefined();
+        }
+        expect(three.phantoms.map((uid) => find(sim, uid).def.id)).toEqual([
+            "zebaks_phantom",
+            "babas_phantom",
+        ]);
+        hit(sim, warden, "dark_bow", warden.maxHp);
+        expect(warden.hp).toBeCloseTo(warden.maxHp * WARDENS.three.enrage.at, 0);
+        step(sim, 0.1);
+        expect(three.enraged).toBe(true);
+        expect(warden.hp).toBeGreaterThan(warden.maxHp * 0.2);
+        // Rows torn away, from the back
+        step(sim, WARDENS.three.enrage.firstRow + 3);
+        expect(sim.floor!.rowsDropped).toBeGreaterThan(0);
+        // And it can be beaten
+        sim.devGod = true;
+        for (let i = 0; i < 20 && !warden.dead; i++) {
+            hit(sim, warden, "dark_bow", warden.maxHp);
+        }
+        expect(warden.dead).toBe(true);
+        step(sim, 6);
+        expect(sim.state).toBe("victory");
+        // The fight's on the run's clock, not left out as the Nexus is
+        expect(sim.seconds).toBeGreaterThan(WARDENS.two.toLast);
     });
 });

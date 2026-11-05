@@ -17,7 +17,8 @@ export type InvocationGroup =
     | "baba"
     | "akkha"
     | "kephri"
-    | "zebak";
+    | "zebak"
+    | "wardens";
 
 export type InvocationDef = {
     id: string;
@@ -51,6 +52,7 @@ export const INVOCATION_GROUPS: InvocationGroupDef[] = [
     { id: "akkha", name: "Akkha" },
     { id: "kephri", name: "Kephri" },
     { id: "zebak", name: "Zebak" },
+    { id: "wardens", name: "The Wardens" },
 ];
 
 const RAID = "the raid's rooms";
@@ -379,6 +381,58 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "zebak",
         level: 15,
         description: "His acid spreads 5 by 5, and a jug's water clears less of it.",
+    },
+    // The Wardens
+    {
+        id: "ancient_haste",
+        icon: 4588,
+        name: "Ancient Haste",
+        group: "wardens",
+        level: 10,
+        description: "In their first phase, the Wardens charge their attacks faster.",
+    },
+    {
+        id: "acceleration",
+        icon: 4588,
+        name: "Acceleration",
+        group: "wardens",
+        level: 10,
+        description:
+            "In the second phase, the Warden attacks faster and the obelisk charges faster.",
+    },
+    {
+        id: "penetration",
+        icon: 4588,
+        name: "Penetration",
+        group: "wardens",
+        level: 10,
+        description: "In the second phase, the obelisk's specials hit harder.",
+    },
+    {
+        id: "overclocked",
+        icon: 4588,
+        name: "Overclocked",
+        group: "wardens",
+        level: 10,
+        description: "In the last phase, the Warden slams the floor faster.",
+    },
+    {
+        id: "overclocked_2",
+        icon: 4588,
+        name: "Overclocked 2",
+        group: "wardens",
+        level: 10,
+        description: "In the last phase, the Warden slams the floor faster still.",
+    },
+    {
+        id: "insanity",
+        icon: 4588,
+        name: "Insanity",
+        group: "wardens",
+        level: 50,
+        description:
+            "In the last phase, the Warden slams the floor as fast as it can, its siphons go off " +
+            "far sooner, and its slams carry on where they left off.",
     },
 ];
 

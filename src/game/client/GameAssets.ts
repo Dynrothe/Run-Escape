@@ -205,6 +205,15 @@ function getSpotAnimIds(): number[] {
         WARDENS.shot.impactSpotAnim,
         2216,
     );
+    // The obelisk's specials in the second phase (their warning rings, glows and strikes, its
+    // skulls and their shadows), and in the last, the siphons' skulls and beams, the phantoms
+    // coming, and the enraged lightning and its shadows
+    const { beam, windmill, skulls } = WARDENS.two;
+    add(beam.warnSpotAnim, beam.spotAnim, windmill.warnSpotAnim, windmill.glowSpotAnim);
+    add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
+    add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
+    add(WARDENS.three.phantomSpotAnim);
+    add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
     // Zebak's roar, and his jugs breaking and splashing
     add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
     // The Scabaras room's falling roof

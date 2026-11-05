@@ -2040,9 +2040,621 @@ export const WARDENS: WardensDef = {
     startDelay: 3,
     message: "The obelisk ignites! Block a Warden's trough, and break the obelisk.",
     endMessage: "The obelisk shatters!",
+    two: {
+        wake: 4,
+        wakeSeq: 9663,
+        // Its real hitpoints, which only its core's hits (five times over) take: down three or
+        // four times, with the best of everything
+        hp: 85000,
+        forms: {
+            // Elidinis' wakes open to magic, Tumeken's to ranged
+            elidinis: {
+                styles: ["magic", "ranged"],
+                forms: ["elidinis_warden_magic", "elidinis_warden_ranged"],
+                exposed: "elidinis_warden_exposed",
+                core: "elidinis_warden_core",
+                wreck: "tumeken_warden_wreck",
+            },
+            tumeken: {
+                styles: ["ranged", "magic"],
+                forms: ["tumeken_warden_ranged", "tumeken_warden_magic"],
+                exposed: "tumeken_warden_exposed",
+                core: "tumeken_warden_core",
+                wreck: "elidinis_warden_wreck",
+            },
+        },
+        obeliskId: "wardens_obelisk_charged",
+        shield: 0.035,
+        coreMultiplier: 5,
+        distance: 3.5,
+        // OSRS's 21, 29 and 37 ticks, at 100 to 80%, 80 to 60% and under
+        seconds: [12.6, 17.4, 22.2],
+        below: [0.8, 0.6],
+        kneelSeq: 9670,
+        standSeq: 9672,
+        kneel: 3,
+        stand: 2.4,
+        deathSeq: 9662,
+        toLast: 5,
+        obelisk: {
+            // Sooner than OSRS's 36 ticks from the Warden's up and 30 after each special: it
+            // keeps on while the core's out here, and its shield fills quicker than OSRS's
+            firstOpen: 9,
+            every: 9,
+            warn: 2.4,
+            openSeq: 9728,
+            closeSeq: 9729,
+            damage: 0.14,
+        },
+        // Drawn as the tiles glowing red, as the video of it shows (its own spot animations,
+        // 2234 and 2235, barely show from this camera), and the windmill's strike as the
+        // Wardens' red lightning
+        beam: { warnSpotAnim: 2199, spotAnim: 2236, step: 0.6, rings: 12, wide: 10, pause: 3.6 },
+        windmill: {
+            warnSpotAnim: 2200,
+            glowSpotAnim: 2236,
+            spotAnim: 2197,
+            every: 1.8,
+            strikeAfter: 1.8,
+            rounds: 12,
+        },
+        skulls: {
+            warnSpotAnim: 2198,
+            projectile: 2225,
+            shadowSpotAnim: 1447,
+            spotAnim: 2198,
+            count: 10,
+            every: 1.2,
+            flight: 2.4,
+            strikeAfter: 2.4,
+            half: 3,
+        },
+        message: "The obelisk crackles with power. Only one style hurts the Warden: watch its bar!",
+        kneelMessage: "The Warden's core is exposed! Hit the core!",
+        standMessage: "The Warden takes its core back, and its defences shift!",
+        endMessage: "uses the last of its power to restore",
+    },
+    three: {
+        hp: 65000,
+        forms: {
+            // The Warden that comes back is the one that fell in the first phase, with the
+            // phantoms of its own two paths' bosses
+            elidinis: {
+                form: "elidinis_warden_last",
+                charging: "elidinis_warden_charging",
+                phantoms: ["akkhas_phantom", "kephris_phantom"],
+            },
+            tumeken: {
+                form: "tumeken_warden_last",
+                charging: "tumeken_warden_charging",
+                phantoms: ["zebaks_phantom", "babas_phantom"],
+            },
+        },
+        amascut: {
+            enemyId: "amascuts_phantom",
+            enragedId: "amascuts_phantom_enraged",
+            offset: 9,
+        },
+        // 7 ticks, and 6 under half its hitpoints; Overclocked 5, Overclocked 2 4, Insanity 3
+        every: 4.2,
+        quicker: 3.6,
+        invoked: { overclocked: 3, overclocked2: 2.4, insanity: 1.8 },
+        rowSeconds: 0.1,
+        slamSeqs: { east: 9674, west: 9676, both: 9678 },
+        at: [0.8, 0.6, 0.4, 0.2],
+        count: [4, 5, 6, 7],
+        window: 10.8,
+        insanityWindow: 4.8,
+        siphon: {
+            enemyId: "wardens_siphon",
+            reversed: "wardens_siphon_reversed",
+            reach: 0.9,
+            beamSpotAnim: 2227,
+            skull: 2226,
+        },
+        chargeSeq: 9682,
+        staggerSeq: 9680,
+        releaseSeq: 9681,
+        // Of its hitpoints, all the siphons stopped
+        stagger: 0.05,
+        restart: 5.4,
+        phantomSpotAnim: 2219,
+        enrage: {
+            at: 0.05,
+            heal: 0.2,
+            seq: 9684,
+            rowEvery: 10.8,
+            firstRow: 3.6,
+            lightning: {
+                every: 3.6,
+                warn: 1.8,
+                count: 9,
+                shadowSpotAnim: 1446,
+                spotAnim: 2197,
+                damage: 0.12,
+            },
+            message: "The Warden is enraged! Amascut tears the floor away!",
+        },
+        message: "rises again! Keep off the half of the floor it slams.",
+        siphonMessage: "The Warden is charging! Step on the energy siphons to stop them!",
+        staggerMessage: "The siphons reverse, and the Warden staggers!",
+        releaseMessage: "The Warden releases its stored energy!",
+        phantomMessage: "A phantom of a path's boss joins the fight!",
+    },
 };
 
 const WARDENS_SOUNDS = { attack: -1, hit: 6595, death: -1 };
+
+// The obelisk's windmill (WardensPhaseTwoDef windmill): which of its five patterns, A to E, strikes
+// each tile round it, read off the OSRS Wiki's diagram of it, west to east and north to south as
+// OSRS has the room; F is the obelisk. The middle column's struck by both C and D.
+export const WARDENS_WINDMILL = [
+    "AAABBBBCCCCDDDEEEEAAA",
+    "AAABBBBCCCCDDDEEEEAAA",
+    "AAAABBBBCCCDDEEEEAAAA",
+    "AAAAABBBCCCDDEEEAAAAA",
+    "EAAAABBBCCCDDEEEAAAAB",
+    "EEAAAABBBCCDEEEAAAABB",
+    "EEEEAAABBCCDEEAAABBBB",
+    "EEEEEAAABCCDEAAABBBBB",
+    "DEEEEEAABBCEEAABBBBBC",
+    "DDDDEEEEABCEABBBBCCCC",
+    "DDDDDDDEEFFFBBCCCCCCC",
+    "CCCCCCCCCFFFCCCCCCCCC",
+    "CCCCCCCBBFFFEEDDDDDDD",
+    "CCCCBBBBAECBAEEEEDDDD",
+    "CBBBBBAAEECBBAAEEEEED",
+    "BBBBBAAAEDCCBAAAEEEEE",
+    "BBBBAAAEEDCCBBAAAEEEE",
+    "BBAAAAEEEDCCBBBAAAAEE",
+    "BAAAAEEEDDCCCBBBAAAAE",
+    "AAAAAEEEDDCCCBBBAAAAA",
+    "AAAAEEEEDDCCCBBBBAAAA",
+    "AAAEEEEDDDCCCCBBBBAAA",
+    "AAAEEEEDDDCCCCBBBBAAA",
+];
+
+// Set by the fight (Sim.wakeWarden and the rest), never read
+const WARDENS_HP_UNSET = 1;
+
+// The Warden's attacks in its second phase, whichever form: skulls (its magic's red, its ranged's
+// plain) at whoever it's after, a fan of them, and stone dropped where you stand
+const RED_SKULL = 2224;
+const PLAIN_SKULL = 2241;
+const WARDEN_ATTACKS: BossAttackDef[] = [
+    {
+        name: "Red skull",
+        kind: "projectile",
+        damage: 7,
+        windup: 1.2,
+        cooldown: 0,
+        range: 40,
+        weight: 4,
+        speed: 7,
+        count: 1,
+        homing: 1.4,
+        radius: 0.5,
+        seq: 9661,
+        sound: 6236,
+        spotAnim: RED_SKULL,
+        impactSpotAnim: 2213,
+    },
+    {
+        name: "Plain skull",
+        kind: "projectile",
+        damage: 6,
+        windup: 1.2,
+        cooldown: 0,
+        range: 40,
+        weight: 4,
+        speed: 9,
+        count: 3,
+        spread: 0.35,
+        radius: 0.45,
+        seq: 9660,
+        sound: 6224,
+        spotAnim: PLAIN_SKULL,
+    },
+    {
+        name: "Skull storm",
+        kind: "pattern",
+        damage: 5,
+        windup: 1.2,
+        cooldown: 6,
+        range: 40,
+        weight: 2,
+        seq: 9661,
+        sound: 6236,
+        spotAnim: RED_SKULL,
+        pattern: {
+            shape: "spread",
+            count: 5,
+            arc: 0.8,
+            volleys: 3,
+            interval: 0.5,
+            speed: 6,
+            range: 26,
+            radius: 0.45,
+            track: true,
+        },
+    },
+    {
+        // Stone dropped on where you stand: still there, and you're held in it
+        name: "Entomb",
+        kind: "blast",
+        damage: 4,
+        windup: 1.8,
+        cooldown: 9,
+        range: 40,
+        weight: 2,
+        radius: 1.1,
+        shadow: {},
+        seq: 9661,
+        spotAnim: 2210,
+        impactSpotAnim: 2212,
+        effect: { kind: "freeze", seconds: 2.4 },
+        message: "Stone falls from above! Step off the shadow!",
+    },
+];
+// Tumeken's walks up to you, and hits beside it
+const WARDEN_SLASH: BossAttackDef = {
+    name: "Slash",
+    kind: "swing",
+    damage: 8,
+    windup: 0.9,
+    cooldown: 0,
+    range: 4.5,
+    weight: 6,
+    radius: 3.6,
+    seq: 9659,
+    sound: 6111,
+};
+
+// A Warden form of the second phase: only `open` hurts it, filling its shield (Sim.wardenTakes)
+const wardenForm = (
+    id: string,
+    name: string,
+    npcId: number,
+    open: "magic" | "ranged",
+    chases: boolean,
+): EnemyDef => ({
+    id,
+    name,
+    npcId,
+    idleSeq: 9653,
+    walkSeq: 9649,
+    attackSeq: 9661,
+    deathSeq: 9662,
+    hp: WARDENS_HP_UNSET,
+    damage: 0,
+    speed: chases ? 1.2 : 0.7,
+    radius: 2.5,
+    xp: 0,
+    scale: 1.7,
+    knockbackResist: 1,
+    solid: true,
+    onlyStyle: open,
+    sounds: WARDENS_SOUNDS,
+    boss: {
+        attackInterval: chases ? 4.8 : 4.2,
+        keepDistance: chases ? undefined : 5,
+        enrage: { message: `${name} is enraged!` },
+        attacks: chases ? [...WARDEN_ATTACKS, WARDEN_SLASH] : WARDEN_ATTACKS,
+    },
+});
+
+// Still, a form with nothing to do of its own: kneeling, charging, a wreck
+const stillWarden = (
+    id: string,
+    name: string,
+    npcId: number,
+    idleSeq: number,
+    more: Partial<EnemyDef> = {},
+): EnemyDef => ({
+    id,
+    name,
+    npcId,
+    idleSeq,
+    walkSeq: idleSeq,
+    attackSeq: idleSeq,
+    deathSeq: 9662,
+    hp: WARDENS_HP_UNSET,
+    damage: 0,
+    speed: 0,
+    radius: 2.5,
+    xp: 0,
+    scale: 1.7,
+    knockbackResist: 1,
+    stationary: true,
+    solid: true,
+    sounds: WARDENS_SOUNDS,
+    ...more,
+});
+// Its attacks are the fight's, not its own (Sim.stepWardens)
+const QUIET: NonNullable<EnemyDef["boss"]> = {
+    attackInterval: 600,
+    enrage: { message: "", at: 0 },
+    attacks: [],
+};
+
+const WARDENS_PHASE_TWO: EnemyDef[] = [
+    wardenForm("elidinis_warden_magic", "Elidinis' Warden", 11753, "magic", false),
+    wardenForm("elidinis_warden_ranged", "Elidinis' Warden", 11754, "ranged", false),
+    wardenForm("tumeken_warden_magic", "Tumeken's Warden", 11756, "magic", true),
+    wardenForm("tumeken_warden_ranged", "Tumeken's Warden", 11757, "ranged", true),
+    // Kneeling, its core out: the core's what's hit
+    stillWarden("elidinis_warden_exposed", "Elidinis' Warden", 11755, 9671, {
+        unhittable: true,
+        boss: QUIET,
+    }),
+    stillWarden("tumeken_warden_exposed", "Tumeken's Warden", 11758, 9671, {
+        unhittable: true,
+        boss: QUIET,
+    }),
+    // The one that fell, smouldering
+    stillWarden("elidinis_warden_wreck", "Elidinis' Warden", 11759, 9654, { unhittable: true }),
+    stillWarden("tumeken_warden_wreck", "Tumeken's Warden", 11760, 9654, { unhittable: true }),
+    // Its core, thrown out: what it's hit for comes off the Warden, five times over
+    ...(
+        [
+            ["elidinis_warden_core", 11771],
+            ["tumeken_warden_core", 11770],
+        ] as const
+    ).map(
+        ([id, npcId]): EnemyDef => ({
+            id,
+            name: "Core",
+            npcId,
+            idleSeq: 9704,
+            walkSeq: 9704,
+            attackSeq: 9704,
+            deathSeq: 9704,
+            hp: WARDENS_HP_UNSET,
+            damage: 0,
+            speed: 0,
+            radius: 0.7,
+            xp: 0,
+            scale: 1.5,
+            knockbackResist: 1,
+            stationary: true,
+            hintArrow: true,
+            sounds: { attack: -1, hit: 6591, death: -1 },
+        }),
+    ),
+    {
+        // The obelisk, charged: it can't be hit, and its specials are the fight's
+        id: "wardens_obelisk_charged",
+        name: "Obelisk",
+        npcId: 11752,
+        idleSeq: 9723,
+        walkSeq: 9723,
+        attackSeq: 9728,
+        deathSeq: 9734,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 1.5,
+        xp: 0,
+        stationary: true,
+        solid: true,
+        unhittable: true,
+        sounds: WARDENS_SOUNDS,
+    },
+];
+
+// The phantoms of the last phase: they can't be hit, and attack every 4.8 seconds (quicker once
+// the Warden's enraged) from beside it
+const phantom = (
+    id: string,
+    name: string,
+    npcId: number,
+    idleSeq: number,
+    attacks: BossAttackDef[],
+    scale: number,
+): EnemyDef => ({
+    id,
+    name,
+    npcId,
+    idleSeq,
+    walkSeq: idleSeq,
+    attackSeq: attacks[0].seq ?? idleSeq,
+    deathSeq: idleSeq,
+    hp: 1,
+    damage: 0,
+    speed: 0,
+    radius: 2.5,
+    xp: 0,
+    scale,
+    stationary: true,
+    unhittable: true,
+    sounds: { attack: -1, hit: -1, death: -1 },
+    boss: {
+        attackInterval: 4.8,
+        enrage: { message: "", at: 0 },
+        attacks,
+    },
+});
+const phantomShot = (
+    name: string,
+    seq: number,
+    spotAnim: number,
+    more: Partial<BossAttackDef> = {},
+): BossAttackDef => ({
+    name,
+    kind: "pattern",
+    damage: 6,
+    windup: 1.2,
+    cooldown: 0,
+    range: 60,
+    weight: 1,
+    seq,
+    spotAnim,
+    pattern: {
+        shape: "spread",
+        count: 5,
+        arc: 1,
+        volleys: 1,
+        interval: 0.4,
+        speed: 7,
+        range: 30,
+        radius: 0.45,
+        track: true,
+    },
+    ...more,
+});
+const phantomDrop = (
+    name: string,
+    seq: number,
+    windup: number,
+    spotAnim: number,
+    impactSpotAnim: number,
+    more: Partial<BossAttackDef> = {},
+): BossAttackDef => ({
+    name,
+    kind: "blast",
+    damage: 7,
+    windup,
+    cooldown: 0,
+    range: 60,
+    weight: 1,
+    radius: 1,
+    shadow: {},
+    seq,
+    spotAnim,
+    impactSpotAnim,
+    ...more,
+});
+
+const WARDENS_PHASE_THREE: EnemyDef[] = [
+    stillWarden("elidinis_warden_last", "Elidinis' Warden", 11761, 9657, {
+        boss: { ...QUIET, fallSeconds: 5 },
+    }),
+    stillWarden("tumeken_warden_last", "Tumeken's Warden", 11762, 9657, {
+        boss: { ...QUIET, fallSeconds: 5 },
+    }),
+    stillWarden("elidinis_warden_charging", "Elidinis' Warden", 11763, 9683, {
+        boss: { ...QUIET, fallSeconds: 5 },
+    }),
+    stillWarden("tumeken_warden_charging", "Tumeken's Warden", 11764, 9683, {
+        boss: { ...QUIET, fallSeconds: 5 },
+    }),
+    {
+        // An energy siphon, landed: stepped on, it's reversed (Sim.stepWardens)
+        id: "wardens_siphon",
+        name: "Energy Siphon",
+        npcId: 11772,
+        idleSeq: 9736,
+        walkSeq: 9736,
+        attackSeq: 9736,
+        deathSeq: 9735,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 0,
+        scale: 1.4,
+        stationary: true,
+        unhittable: true,
+        hintArrow: true,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    {
+        id: "wardens_siphon_reversed",
+        name: "Energy Siphon",
+        npcId: 11773,
+        idleSeq: 9736,
+        walkSeq: 9736,
+        attackSeq: 9736,
+        deathSeq: 9735,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 0,
+        scale: 1.4,
+        stationary: true,
+        unhittable: true,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    // Zebak's: a fan of his magic, or of his ranged
+    phantom(
+        "zebaks_phantom",
+        "Zebak's Phantom",
+        11774,
+        9618,
+        [
+            phantomShot("Phantom magic", 9626, 2176),
+            phantomShot("Phantom ranged", 9626, 2178, { damage: 5 }),
+        ],
+        0.8,
+    ),
+    // Ba-Ba's: a rock on where you stand, quickly
+    phantom(
+        "babas_phantom",
+        "Ba-Ba's Phantom",
+        11775,
+        9741,
+        [phantomDrop("Phantom rockfall", 9743, 1.2, 2250, 2250)],
+        1.3,
+    ),
+    // Akkha's: three of his ranged, or three of his magic
+    phantom(
+        "akkhas_phantom",
+        "Akkha's Phantom",
+        11777,
+        9760,
+        [
+            phantomShot("Phantom sand", 9772, 2255, {
+                kind: "projectile",
+                pattern: undefined,
+                speed: 8,
+                count: 1,
+                homing: 0.8,
+                damage: 5,
+                chain: { times: 2, windup: 0.5 },
+            }),
+            phantomShot("Phantom red sand", 9774, 2253, {
+                kind: "projectile",
+                pattern: undefined,
+                speed: 8,
+                count: 1,
+                homing: 0.8,
+                damage: 5,
+                impactSpotAnim: 2254,
+                chain: { times: 2, windup: 0.5 },
+            }),
+        ],
+        1.4,
+    ),
+    // Kephri's: a fireball lobbed onto where you stand (wider with Aerial Assault)
+    phantom(
+        "kephris_phantom",
+        "Kephri's Phantom",
+        11776,
+        9572,
+        [
+            phantomDrop("Phantom fireball", 9577, 2.4, 2266, 2157, {
+                damage: 8,
+                invoked: { id: "aerial_assault", radius: 1.5, damage: 1.3 },
+            }),
+        ],
+        1.3,
+    ),
+    // Amascut, watching from behind the Warden
+    stillWarden("amascuts_phantom", "Phantom", 11767, 9716, {
+        unhittable: true,
+        solid: false,
+        radius: 4,
+        scale: 1,
+    }),
+    // Her mouth open, pulling the floor in
+    stillWarden("amascuts_phantom_enraged", "Phantom", 11768, 9717, {
+        unhittable: true,
+        solid: false,
+        radius: 4,
+        scale: 1,
+    }),
+];
 
 TOMBS_ENEMIES.push(
     {
@@ -2092,6 +2704,8 @@ TOMBS_ENEMIES.push(
             sounds: WARDENS_SOUNDS,
         }),
     ),
+    ...WARDENS_PHASE_TWO,
+    ...WARDENS_PHASE_THREE,
     {
         // An energy orb down a trough: only drawn (Sim.stepWardens moves them)
         id: "wardens_energy",
