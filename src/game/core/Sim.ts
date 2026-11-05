@@ -9753,7 +9753,7 @@ export class Sim {
     }
 
     private useRaidSupply(supplyId: string): void {
-        const supply = TOMBS_SUPPLIES.find((s) => s.id === supplyId) ?? getRaidSupply(supplyId);
+        const supply = getRaidSupply(supplyId);
         const effect = supply.effect;
         if (effect.kind === "heal") {
             this.heal(this.player.maxHp * effect.fraction);
