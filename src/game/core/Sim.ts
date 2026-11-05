@@ -98,9 +98,9 @@ import {
     SCABARAS,
     SCABARAS_WAVES,
     TOMBS_BOSSES,
+    TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
     TOMBS_PUZZLE_LEVELS,
-    TOMBS_BOSS_FOOD,
     TOMBS_SPIRIT,
     TOMBS_SPIRIT_SHARE,
     TOMBS_SUPPLIES,
@@ -4977,7 +4977,9 @@ export class Sim {
         if (!this.map.tombs || !fight || fight.uid === -1) {
             return 0;
         }
-        return TOMBS_BOSS_FOOD.chance * Math.max(0, 1 - this.raidLevel / TOMBS_BOSS_FOOD.untilLevel);
+        return (
+            TOMBS_BOSS_FOOD.chance * Math.max(0, 1 - this.raidLevel / TOMBS_BOSS_FOOD.untilLevel)
+        );
     }
 
     // A hit that takes a share of your hitpoints (a flood, a roar, an avalanche): as it is from
@@ -15261,8 +15263,10 @@ export class Sim {
         const rangeSq = range * range;
         const styled = style !== undefined && this.expert;
         for (const enemy of this.enemies) {
+            // An unhittable one (Zebak's jugs) is never aimed at, any more than it's hit
             if (
                 enemy.dead ||
+                enemy.def.unhittable ||
                 enemy.shieldEnd > this.tick ||
                 (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
             ) {

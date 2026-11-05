@@ -2461,6 +2461,17 @@ describe("Zebak", () => {
         expect(sim.player.poisonEnd).toBeGreaterThan(sim.tick);
     });
 
+    it("never has a weapon aim at a jug, however near, over him", () => {
+        const sim = atZebak();
+        const jug = sim.spawnEnemy(getEnemy("zebak_jug"), "normal", {
+            x: sim.player.x + 1,
+            y: sim.player.y,
+        })!;
+        const aimed = sim["nearestEnemies"](sim.player.x, sim.player.y, 60, 5);
+        expect(aimed).not.toContain(jug);
+        expect(aimed).toContain(zebak(sim));
+    });
+
     it("rolls a jug off when you walk into it, and its water clears acid where it breaks", () => {
         const sim = atZebak();
         const fight = sim.tombsZebak!;

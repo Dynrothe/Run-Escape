@@ -2,9 +2,9 @@
 // boss, and the Wardens, as a person who knows the raid plays it. It only moves (weapons fire on
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
+import { CRONDIS } from "../../src/game/content/tombs";
 import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
 import { FlowField } from "../../src/game/core/world/FlowField";
-import { CRONDIS } from "../../src/game/content/tombs";
 
 type Point = { x: number; y: number };
 
@@ -576,8 +576,7 @@ function clearOfSpears(sim: Sim, places: CrondisPlaces, want: Point): Point {
     const now = sim.tick;
     const end = now + SPEAR_LOOK;
     // Every thrust out at some point from now till the end of the look: its tiles, and when
-    const coming: { area: { x0: number; x1: number; y0: number; y1: number }; from: number }[] =
-        [];
+    const coming: { area: { x0: number; x1: number; y0: number; y1: number }; from: number }[] = [];
     const add = (thrust: Parameters<Sim["crondisSpearArea"]>[1]) => {
         const from = thrust.startTick + tell;
         if (from + hold > now && from < end) {
@@ -788,7 +787,7 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
 
 // A move with a sidestep from what's coming mixed in, if anything is: out from under a boss's
 // blast, swing or ground mark, then whichever way (that, or round it) the bullets miss
-function dodging(sim: Sim, move: Point): Point {
+function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolean): Point {
     const away = dodge(sim, false);
     let want = move;
     if (away) {
@@ -797,7 +796,7 @@ function dodging(sim: Sim, move: Point): Point {
         const length = Math.hypot(x, y) || 1;
         want = { x: x / length, y: y / length };
     }
-    return clearOfBullets(sim, want);
+    return clearOfBullets(sim, want, avoid);
 }
 
 // How far ahead the bot looks for bullets (ticks, in steps of LOOK_STEP), and how near one has to
@@ -809,7 +808,7 @@ const LOOK_NEAR = 7;
 // The move (the one wanted if nothing it'd walk into is coming, or the nearest way to it that's
 // clear: sixteen headings and standing still) that the bullets about now miss, played forward:
 // each bullet on its line (and its turn), the bot at its speed, stopped by walls
-function clearOfBullets(sim: Sim, want: Point): Point {
+function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) => boolean): Point {
     const player = sim.player;
     const { bullets } = sim;
     const near: number[] = [];
@@ -822,7 +821,7 @@ function clearOfBullets(sim: Sim, want: Point): Point {
             near.push(slot);
         }
     }
-    if (near.length === 0) {
+    if (near.length === 0 && !avoid) {
         return want;
     }
     const speed = PLAYER_SPEED * (1 + (sim.stats.moveSpeed ?? 0));
@@ -839,6 +838,15 @@ function clearOfBullets(sim: Sim, want: Point): Point {
                 py = ny;
             }
             positions.push({ x: px, y: py });
+        }
+        // Ground to keep off (Zebak's acid): a step on it costs as a bullet would
+        if (avoid) {
+            for (const at of positions) {
+                if (avoid(at.x, at.y)) {
+                    total += 1;
+                    break;
+                }
+            }
         }
         for (const slot of near) {
             let bx = bullets.x[slot];
@@ -908,7 +916,12 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
     if (sim.tombsZebak) {
         const roaring = sim.tombsZebak.roar !== undefined;
         const move = zebakMove(sim, def, boss);
-        return roaring ? move : dodging(sim, foodMove(sim) ?? move);
+        const fight = sim.tombsZebak;
+        const inAcid = (x: number, y: number) =>
+            fight.acid.some(
+                (a) => Math.abs(a.x - x) <= a.half + 0.5 && Math.abs(a.y - y) <= a.half + 0.5,
+            );
+        return roaring ? move : dodging(sim, foodMove(sim) ?? move, inAcid);
     }
     if (sim.tombsAkkha) {
         const remembering = sim.tombsAkkha.memory !== undefined;
@@ -1195,7 +1208,10 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
     const y = Math.min(island.y1 - 3, boss.y - boss.radius - reach);
     const clear = (x: number) =>
         !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
-        !boulders.some((b) => Math.hypot(b.x - x, b.y - y) < b.radius + player.radius + 0.4);
+        !boulders.some((b) => Math.hypot(b.x - x, b.y - y) < b.radius + player.radius + 0.4) &&
+        !fight.acid.some(
+            (a) => Math.abs(a.x - x) <= a.half + 0.7 && Math.abs(a.y - y) <= a.half + 0.7,
+        );
     const within = boss.radius + heroReach(sim) - 0.3;
     for (const dx of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
         const x = boss.x + dx;
