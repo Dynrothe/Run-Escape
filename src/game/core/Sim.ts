@@ -3268,9 +3268,14 @@ export class Sim {
                         // ground if you come at them)
                         dirX = dirY = 0;
                     }
-                } else if (enemy.def.shot && distance < enemy.def.shot.range * SHOOTER_KEEP) {
+                } else if (
+                    enemy.def.shot &&
+                    distance < enemy.def.shot.range * SHOOTER_KEEP &&
+                    !(this.expert && enemy.def.onlyStyle)
+                ) {
                     // Rangers and mages hang back to shoot, and close in when
-                    // they're out of reach
+                    // they're out of reach. Not an expert raid's Nylocas: only one
+                    // style hurts them, so they come in where its auras reach too.
                     dirX = dirY = 0;
                 }
                 // Running off with the flag: away from the player when they're

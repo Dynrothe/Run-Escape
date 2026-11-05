@@ -752,6 +752,30 @@ describe("expert mode", () => {
         expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
+    it("has an expert Nylocas that shoots come in close, where auras reach it", () => {
+        // How near a blue one gets, from 8 tiles off, with the player standing still
+        const nearest = (expert: boolean) => {
+            const sim = raid(expert);
+            const { x, y } = sim.player;
+            const enemy = sim.spawnEnemy(getEnemy("tob_nylocas_hagios"), "normal", {
+                x: x + 8,
+                y,
+            })!;
+            let near = Infinity;
+            for (let i = 0; i < 6 * TICKS_PER_SECOND; i++) {
+                sim.player.x = sim.player.prevX = x;
+                sim.player.y = sim.player.prevY = y;
+                sim.step();
+                near = Math.min(near, fm.hypot(enemy.x - x, enemy.y - y));
+            }
+            return near;
+        };
+        // Ice Barrage reaches 3.8 tiles
+        expect(nearest(true)).toBeLessThan(2);
+        // Elsewhere it still hangs back to shoot
+        expect(nearest(false)).toBeGreaterThan(4.5);
+    });
+
     it("has Nylocas Vasilias change colour, keeping its hitpoints", () => {
         const sim = raid(true);
         const boss = sim.spawnEnemy(getEnemy("nylocas_vasilias"), "boss", {
