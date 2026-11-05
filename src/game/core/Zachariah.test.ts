@@ -1,6 +1,7 @@
 import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { getMap } from "../content/maps";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, emptyStats } from "../content/types";
 import {
     OWLS_COURT_FEATURES,
@@ -73,7 +74,7 @@ const O = OWLS_COURT.origin;
 // A tile's middle, in world tiles, from the court's own
 const at = (x: number, y: number) => ({ x: O.x + x + 0.5, y: O.y + y + 0.5 });
 
-function createSim(seed = 1, party?: number): Sim {
+function createSim(seed = 1, party?: number, hard = false): Sim {
     const map = getMap("zachariah");
     return new Sim({
         grid: makeGrid(COURT_ROWS, O.x, O.y),
@@ -81,6 +82,7 @@ function createSim(seed = 1, party?: number): Sim {
         characterId: "saradominist",
         metaStats: emptyStats(),
         seed,
+        hard,
         spawnX: map.spawn.x,
         spawnY: map.spawn.y,
         party:
@@ -895,6 +897,47 @@ describe("fighting back", () => {
         expect(sim.useAbility()).toBe(false);
         sim["dropGuard"](boss, 2, true, "Pillar");
         expect(sim.isStunned(boss)).toBe(false);
+    });
+});
+
+describe("the dark acorn", () => {
+    // Down in his last phase, with what the kill rolls for its trophies
+    function kill(sim: Sim, roll?: boolean): number[] {
+        const boss = startFight(sim);
+        boss.bossState!.phase!.index = 2;
+        boss.hp = 1;
+        const asked: number[] = [];
+        const chance = sim.rng.chance.bind(sim.rng);
+        sim.rng.chance = (p: number) => {
+            asked.push(p);
+            return roll ?? chance(p);
+        };
+        sim.damageEnemy(boss, 50, 0, boss.x, boss.y, 0);
+        expect(boss.dead).toBe(true);
+        return asked;
+    }
+
+    test("1 in 10 for beating him, always on hard mode, never for dying", () => {
+        const trophy = TROPHY_BY_ID.get("dark_acorn")!;
+        expect(trophy.from).toMatchObject({ enemyId: "justiciar_zachariah", mapId: "zachariah" });
+        // Normal: a 1 in 10 roll, and it's his if it comes up
+        const normal = createSim();
+        expect(kill(normal, true)).toContain(1 / 10);
+        expect(normal.trophies.has("dark_acorn")).toBe(true);
+        const unlucky = createSim();
+        kill(unlucky, false);
+        expect(unlucky.trophies.has("dark_acorn")).toBe(false);
+        // Hard: certain, as rolled
+        const hard = createSim(1, undefined, true);
+        expect(kill(hard)).toContain(1);
+        expect(hard.trophies.has("dark_acorn")).toBe(true);
+        // Dying to him: nothing
+        const dead = createSim(1, undefined, true);
+        startFight(dead);
+        dead["playerDied"]();
+        run(dead, 3);
+        expect(dead.state).toBe("dead");
+        expect(dead.trophies.has("dark_acorn")).toBe(false);
     });
 });
 

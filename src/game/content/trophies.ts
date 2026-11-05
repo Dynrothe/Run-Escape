@@ -1,8 +1,8 @@
 // Trophies: rare finds that do nothing in a run. They're kept in the Collection
 // log, and in the save once they're found.
 export type TrophySource =
-    // This chance on each kill of the boss on the map
-    | { kind: "boss"; enemyId: string; mapId: string; chance: number }
+    // This chance on each kill of the boss on the map, or hardChance on hard mode
+    | { kind: "boss"; enemyId: string; mapId: string; chance: number; hardChance?: number }
     // This chance on each trick or treat pumpkin opened
     | { kind: "pumpkin"; chance: number }
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
@@ -167,6 +167,20 @@ TROPHIES.push(
             enemyId: "tob_verzik_vitur_spider",
             mapId: "theatre_of_blood",
             chance: 1 / 50,
+        },
+    },
+    // The Hallowed Sepulchre's own pet, as the item that brings it
+    {
+        id: "dark_acorn",
+        name: "Dark acorn",
+        objId: 24733,
+        how: "1 in 10 for defeating Justiciar Zachariah; always on hard mode.",
+        from: {
+            kind: "boss",
+            enemyId: "justiciar_zachariah",
+            mapId: "zachariah",
+            chance: 1 / 10,
+            hardChance: 1,
         },
     },
 );

@@ -10335,7 +10335,7 @@ export class Sim {
                     from.kind === "boss" &&
                     from.enemyId === enemy.def.id &&
                     from.mapId === this.map.id &&
-                    this.rng.chance(from.chance)
+                    this.rng.chance(this.hard ? (from.hardChance ?? from.chance) : from.chance)
                 ) {
                     this.emit({ type: "notice", message: this.findTrophy(trophy) }, true);
                 }
