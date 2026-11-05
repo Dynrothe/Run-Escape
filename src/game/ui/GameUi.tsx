@@ -2303,16 +2303,42 @@ function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// Dev server only: straight to the Wardens with the best of everything, for testing them
+// Dev server only, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
+// God mode, without dying to them). The path bosses as the run is, with the dev skip's bow; the
+// Wardens with the best of everything, or as the run is. Gone before the raid ships.
+const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
+    { pathId: "apmeken", name: "Ba-Ba" },
+    { pathId: "het", name: "Akkha" },
+    { pathId: "scabaras", name: "Kephri" },
+    { pathId: "crondis", name: "Zebak" },
+];
+
 function DevWardensButton({ client }: { client: GameClient }): JSX.Element | null {
     const shown = useHudNumber(client, (n) => n.devWardens);
     if (!import.meta.env.DEV || !shown) {
         return null;
     }
     return (
-        <button className="ui-button ui-button-small" onClick={() => client.devToWardens()}>
-            Wardens, max kit (dev)
-        </button>
+        <>
+            {DEV_TOMBS_BOSSES.map((boss) => (
+                <button
+                    key={boss.pathId}
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devToTombsBoss(boss.pathId)}
+                >
+                    {boss.name} (dev)
+                </button>
+            ))}
+            <button className="ui-button ui-button-small" onClick={() => client.devToWardens()}>
+                Wardens, max kit (dev)
+            </button>
+            <button
+                className="ui-button ui-button-small"
+                onClick={() => client.devToWardens(false)}
+            >
+                Wardens, as you are (dev)
+            </button>
+        </>
     );
 }
 

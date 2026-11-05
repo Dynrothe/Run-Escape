@@ -1020,10 +1020,23 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
         return remembering ? move : dodging(sim, foodMove(sim) ?? move);
     }
     if (def.boulders) {
+        const player = sim.player;
         const move = babaMove(sim, def, boss);
         // In cover while her avalanche winds up, whatever's coming
         const avalanche = boss.bossState?.windup?.attack.takeCover !== undefined;
-        return boss.bossState?.ordeal || avalanche ? move : dodging(sim, foodMove(sim) ?? move);
+        // Never into her gap (Mind the Gap), dodging or not: it's a fall
+        const pit = def.boulders.pit;
+        const inPit = (x: number, y: number) =>
+            sim.tombsPit !== undefined &&
+            x >= pit.x0 - 0.8 &&
+            x <= pit.x1 + 0.8 &&
+            y >= pit.y0 - 0.8 &&
+            y <= pit.y1 + 0.8;
+        const chosen =
+            boss.bossState?.ordeal || avalanche ? move : dodging(sim, foodMove(sim) ?? move, inPit);
+        // Whatever it's after, never a step into the gap: north, away from it, instead
+        const ahead = { x: player.x + chosen.x * 0.6, y: player.y + chosen.y * 0.6 };
+        return inPit(ahead.x, ahead.y) ? { x: 0, y: 1 } : chosen;
     }
     if (sim.tombsKephri) {
         return dodging(sim, foodMove(sim) ?? kephriMove(sim, boss));
@@ -1104,9 +1117,19 @@ function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point 
         const cracked = sim.enemies
             .filter((e) => !e.dead && e.def.id === "cracked_boulder" && e.y > player.y - 0.5)
             .sort((a, b) => a.y - b.y)[0];
-        if (cracked) {
+        // With her gap open (Mind the Gap), a boulder's knock back over it is a fall: a lane
+        // above it isn't worth the cracked boulder, so off to the side of it, where a knock
+        // only hurts
+        const overGap = (x: number) =>
+            sim.tombsPit !== undefined && x > pit.x0 - 1.5 && x < pit.x1 + 1.5;
+        if (cracked && !overGap(cracked.x)) {
             const near = cracked.y - player.y < 5;
             return walkAvoiding(sim, cracked.x, player.y + (near ? 0 : 1.5), avoid, 0);
+        }
+        if (overGap(player.x) || (cracked && overGap(cracked.x))) {
+            const side =
+                Math.abs(player.x - pit.x0) < Math.abs(player.x - pit.x1) ? pit.x0 - 3 : pit.x1 + 3;
+            return walkAvoiding(sim, side, player.y, avoid, 0);
         }
         // Her altar, by the west side
         const side =

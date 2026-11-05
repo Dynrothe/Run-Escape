@@ -5877,9 +5877,9 @@ export class Sim {
     // Dev only: past all four paths to the Wardens' room, with the best of everything: the
     // shop's every upgrade (its weapon and passive slots too), DEV_WARDENS_KIT at its last level,
     // each piece as far as the Armoury takes it, on full hitpoints. False if there's nowhere to go.
-    devToWardens(): boolean {
+    devToWardens(kit = true): boolean {
         const tombs = this.map.tombs;
-        if (!tombs?.wardens || this.tombsPath !== undefined) {
+        if (!tombs?.wardens || this.tombsPath !== undefined || this.tombsWardens) {
             return false;
         }
         for (const path of tombs.paths) {
@@ -5887,13 +5887,33 @@ export class Sim {
                 this.tombsPathsDone.push(path.id);
             }
         }
-        this.devWardensKit();
+        if (kit) {
+            this.devWardensKit();
+        }
         this.enterWardens();
+        if (!kit) {
+            this.emit({
+                type: "notice",
+                message: "The Wardens (dev): every path done, as you are.",
+            });
+            return true;
+        }
         this.emit({
             type: "notice",
             message: "The Wardens (dev): every path done, best of everything.",
         });
         return true;
+    }
+
+    // Dev only: from the Nexus into a path and straight to its boss, as the party is (the dev skip
+    // hands over a bow to do some damage with), for trying a boss's mechanics
+    devToTombsBoss(pathId: string): boolean {
+        const path = this.map.tombs?.paths.find((p) => p.id === pathId);
+        if (!path?.room?.boss || this.tombsPath !== undefined || this.tombsWardens) {
+            return false;
+        }
+        this.enterTombsPath(path.id, path.room.arrive);
+        return this.devSkipToTombsBoss();
     }
 
     // Dev only (and the Tombs' sims): the whole party fitted with the best of everything, the

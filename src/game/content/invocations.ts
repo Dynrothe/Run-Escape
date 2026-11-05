@@ -517,8 +517,8 @@ export type RaidLevelScale = { hp: number; damage: number; bossHp: number; bulle
 export const RAID_LEVEL_SCALE: ({ level: number } & RaidLevelScale)[] = [
     { level: 0, hp: 0.6, damage: 0.25, bossHp: 0.35, bullets: 0.6 },
     { level: 150, hp: 1.1, damage: 1, bossHp: 1, bullets: 1 },
-    { level: 300, hp: 2, damage: 1.8, bossHp: 2, bullets: 1.15 },
-    { level: 500, hp: 4, damage: 3.2, bossHp: 4, bullets: 1.35 },
+    { level: 300, hp: 1.4, damage: 1.6, bossHp: 2, bullets: 1.15 },
+    { level: 500, hp: 2, damage: 2.4, bossHp: 4, bullets: 1.35 },
 ];
 
 export function getRaidLevelScale(level: number): RaidLevelScale {

@@ -187,14 +187,21 @@ describe("invocations", () => {
         withEntryScale();
         expect(getRaidLevelScale(0)).toEqual({ hp: 0.6, damage: 0.25, bossHp: 0.35, bullets: 0.6 });
         expect(getRaidLevelScale(150).hp).toBeCloseTo(1.1);
-        expect(getRaidLevelScale(300).damage).toBeCloseTo(1.8);
-        expect(getRaidLevelScale(500).hp).toBeCloseTo(4);
+        expect(getRaidLevelScale(300).damage).toBeCloseTo(1.6);
+        expect(getRaidLevelScale(500).bossHp).toBeCloseTo(4);
         // Past the last point at its rate
-        expect(getRaidLevelScale(600).hp).toBeGreaterThan(4);
-        // Each band's step up bigger than the last's
-        const step = (a: number, b: number) => getRaidLevelScale(b).hp - getRaidLevelScale(a).hp;
+        expect(getRaidLevelScale(600).bossHp).toBeGreaterThan(4);
+        // A boss's step up each band bigger than the last's (a room's enemies, a run's first
+        // levels, rise more gently)
+        const step = (a: number, b: number) =>
+            getRaidLevelScale(b).bossHp - getRaidLevelScale(a).bossHp;
         expect(step(150, 300)).toBeGreaterThan(step(0, 150));
         expect(step(300, 450)).toBeGreaterThan(step(150, 300));
+        for (const level of [0, 150, 300, 500]) {
+            expect(getRaidLevelScale(level).hp).toBeLessThanOrEqual(
+                getRaidLevelScale(level).bossHp + 0.25,
+            );
+        }
     });
 
     it("show each unique from its raid level, as OSRS's chest has them", () => {
@@ -2545,6 +2552,27 @@ describe("Zebak", () => {
         at(sim, SOUTH);
         expect(boss.bossState!.enraged).toBe(true);
         expect(sim.tombsZebak!.acid).toHaveLength(0);
+    });
+});
+
+describe("the dev server's way to each boss", () => {
+    it("goes from the Nexus straight to a path's boss, and not from inside a path", () => {
+        const sim = tombs([]);
+        // The test map's Het has no room to go to
+        expect(sim.devToTombsBoss("het")).toBe(false);
+        expect(sim.devToTombsBoss("apmeken")).toBe(true);
+        expect(sim.tombsPath).toBe("apmeken");
+        expect(sim.tombsRoom!.boss).toBeDefined();
+        expect(sim.devToTombsBoss("apmeken")).toBe(false);
+    });
+
+    it("goes to the Wardens as the run is, without the max kit", () => {
+        const sim = tombs([]);
+        const weapons = sim.weapons.map((w) => w.def.id);
+        expect(sim.devToWardens(false)).toBe(true);
+        expect(sim.tombsWardens).toBeDefined();
+        expect(sim.weapons.map((w) => w.def.id)).toEqual(weapons);
+        expect(sim.devToWardens(false)).toBe(false);
     });
 });
 

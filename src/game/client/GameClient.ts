@@ -676,10 +676,18 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Dev only: to the Wardens with the best of everything (Sim.devToWardens)
-    devToWardens(): void {
+    // Dev only: to the Wardens, with the best of everything or as the run is (Sim.devToWardens)
+    devToWardens(kit = true): void {
         if (import.meta.env.DEV && !this.coopRun) {
-            this.sim?.devToWardens();
+            this.sim?.devToWardens(kit);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: from the Nexus straight to a path's boss (Sim.devToTombsBoss)
+    devToTombsBoss(pathId: string): void {
+        if (import.meta.env.DEV && !this.coopRun) {
+            this.sim?.devToTombsBoss(pathId);
             this.updateHud(true);
         }
     }
@@ -2913,7 +2921,10 @@ export class GameClient implements GameFrameHandler {
                 : undefined,
             devGod: import.meta.env.DEV ? sim.devGod : undefined,
             devWardens:
-                import.meta.env.DEV && sim.map.tombs?.wardens !== undefined && !sim.tombsPath,
+                import.meta.env.DEV &&
+                sim.map.tombs?.wardens !== undefined &&
+                !sim.tombsPath &&
+                !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,
