@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { getEnemy } from "./enemies";
 import { getMap } from "./maps";
-import { getRaidBossShare } from "./raidBosses";
+import { getBossPrayerStyles, getRaidBossShare } from "./raidBosses";
 
 describe("a raid's bosses' prayers, for weapon cards", () => {
     const theatre = getMap("theatre_of_blood");
@@ -19,5 +20,21 @@ describe("a raid's bosses' prayers, for weapon cards", () => {
 
     it("has nothing to warn of off a raid", () => {
         expect(getRaidBossShare(getMap("lumbridge"), "magic", false)).toBeUndefined();
+    });
+});
+
+describe("a boss's overhead prayer", () => {
+    it("shows what a colour of Nylocas Vasilias holds back: the two styles that aren't hers", () => {
+        const styles = (id: string) => [...getBossPrayerStyles(getEnemy(id))].sort();
+        expect(styles("nylocas_vasilias")).toEqual(["magic", "ranged"]);
+        expect(styles("nylocas_vasilias_ranged")).toEqual(["magic", "melee"]);
+        expect(styles("nylocas_vasilias_magic")).toEqual(["melee", "ranged"]);
+    });
+
+    it("shows what any other boss prays against", () => {
+        expect([...getBossPrayerStyles(getEnemy("maiden_of_sugadinti"))].sort()).toEqual([
+            "magic",
+            "ranged",
+        ]);
     });
 });

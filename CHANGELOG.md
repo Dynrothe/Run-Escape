@@ -8,7 +8,8 @@ the version in the corner).
 ### Added
 
 - Overhead prayers, by Okaeri: bosses that pray show OSRS's overhead prayer for it, as the Theatre
-  of Blood's do, Protect from Missiles and Magic.
+  of Blood's do, Protect from Missiles and Magic. Nylocas Vasilias's shows the two styles its colour
+  holds back, and changes with it.
 - Boss prayer warnings, by Okaeri: in the Theatre of Blood, a ranged or magic weapon's level up
   card says in red how much less damage it does to the bosses, as they pray against it.
 

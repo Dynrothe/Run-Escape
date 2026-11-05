@@ -1,5 +1,6 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
+import { getBossPrayerStyles } from "../content/raidBosses";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -1156,19 +1157,21 @@ export class BossFightView {
         ctx.stroke();
     }
 
-    // A boss's overhead prayer, OSRS's own, for the styles it prays against (EnemyDef.protects):
-    // not on expert for a Nylocas whose prayer does nothing there (Sim.prayedAgainst)
+    // A boss's overhead prayer, OSRS's own, for the styles it holds back (getBossPrayerStyles: a
+    // colour of Nylocas Vasilias, the two that aren't it): not on expert for a Nylocas whose prayer
+    // does nothing there (Sim.prayedAgainst)
     private drawOverheads(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
         const ctx = overlay.ctx;
         for (const enemy of sim.enemies) {
-            const protects = enemy.def.protects;
-            if (!protects || !enemy.boss || enemy.dead || enemy.flung) {
+            if (!enemy.boss || enemy.dead || enemy.flung) {
                 continue;
             }
             if (sim.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
                 continue;
             }
-            const frame = getPrayerHeadicon(protects.styles);
+            // A colour of Nylocas Vasilias shows the two styles it holds back, not its prayer
+            const styles = getBossPrayerStyles(enemy.def);
+            const frame = styles.length > 0 ? getPrayerHeadicon(styles) : undefined;
             const sprite =
                 frame === undefined
                     ? undefined

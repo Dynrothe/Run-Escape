@@ -1,5 +1,5 @@
 import { getEnemy } from "./enemies";
-import { CombatStyle, MapDef } from "./types";
+import { CombatStyle, EnemyDef, MapDef } from "./types";
 
 // The share of a style's damage every boss in a raid takes, when they all pray against it (the
 // Theatre's against ranged and magic), for a weapon card to warn of it; undefined when a boss takes
@@ -30,4 +30,16 @@ export function getRaidBossShare(
         share = Math.max(share, protects.damage);
     }
     return share;
+}
+
+const STYLES: CombatStyle[] = ["melee", "ranged", "magic"];
+
+// The styles a boss's overhead prayer shows it holds back: a boss with colours (Nylocas Vasilias)
+// takes its colour's style best and the other two least, whatever its prayer says, so it's those
+// two; any other, what it prays against (EnemyDef.protects)
+export function getBossPrayerStyles(def: EnemyDef): CombatStyle[] {
+    if (def.onlyStyle && def.boss?.colours) {
+        return STYLES.filter((style) => style !== def.onlyStyle);
+    }
+    return def.protects?.styles ?? [];
 }
