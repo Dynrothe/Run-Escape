@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Fixed
+
+- Melee weapons swing at a big boss you're standing beside: the Theatre of Blood's bosses and
+  the Nightmare were often out of reach of a sword's swing even up close.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

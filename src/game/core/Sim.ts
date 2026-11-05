@@ -898,6 +898,9 @@ export class Sim {
     // Enemy id -> the tick the next of its kind can go (EnemyBlinksDef.gap)
     private readonly blinkGapEnd = new Map<string, number>();
     private readonly enemyHash: SpatialHash<Enemy>;
+    // The biggest radius of any enemy in enemyHash, so a melee search by reach finds a big one whose
+    // middle is further off than its edge (at least 1, as the search always went)
+    private enemyHashRadius = 0;
     private readonly pileHash: SpatialHash<Pickup>;
     private nextUid = 1;
     // Enemies that have died or vanished so far, for Enemy.deathSeq
@@ -3095,9 +3098,11 @@ export class Sim {
 
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
+        this.enemyHashRadius = 0;
         for (const enemy of this.enemies) {
             if (!enemy.dead && !enemy.leaving) {
                 this.enemyHash.insert(enemy);
+                this.enemyHashRadius = Math.max(this.enemyHashRadius, enemy.radius);
             }
         }
     }
@@ -9022,7 +9027,8 @@ export class Sim {
         const reach = level.area * (1 + this.stats.area);
         const player = this.player;
         return (
-            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def)).length > 0
+            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def), true)
+                .length > 0
         );
     }
 
@@ -9066,6 +9072,7 @@ export class Sim {
             reach + 1.5,
             1,
             getWeaponStyle(def),
+            true,
         )[0];
         if (nearest) {
             const dx = nearest.x - player.x;
@@ -9109,19 +9116,24 @@ export class Sim {
                 arc: SLASH_ARC,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
-                const ox = enemy.x - player.x;
-                const oy = enemy.y - player.y;
-                const along = ox * dirX + oy * dirY;
-                const across = Math.abs(ox * -dirY + oy * dirX);
-                if (
-                    along >= -0.3 &&
-                    along <= reach + enemy.radius &&
-                    across <= width / 2 + enemy.radius
-                ) {
-                    hit.push(enemy);
-                }
-            });
+            this.enemyHash.query(
+                player.x,
+                player.y,
+                reach + Math.max(1, this.enemyHashRadius),
+                (enemy) => {
+                    const ox = enemy.x - player.x;
+                    const oy = enemy.y - player.y;
+                    const along = ox * dirX + oy * dirY;
+                    const across = Math.abs(ox * -dirY + oy * dirX);
+                    if (
+                        along >= -0.3 &&
+                        along <= reach + enemy.radius &&
+                        across <= width / 2 + enemy.radius
+                    ) {
+                        hit.push(enemy);
+                    }
+                },
+            );
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -9158,22 +9170,27 @@ export class Sim {
                 arc,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
-                const ox = enemy.x - player.x;
-                const oy = enemy.y - player.y;
-                const dist = fm.hypot(ox, oy);
-                if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
-                    return;
-                }
-                // Anything right on top of the player is in the way of the
-                // swing, whichever way it goes
-                const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
-                const angle = fm.acos(Math.max(-1, Math.min(1, along)));
-                if (dist > 0.8 && angle > arc + enemy.radius / dist) {
-                    return;
-                }
-                hit.add(enemy);
-            });
+            this.enemyHash.query(
+                player.x,
+                player.y,
+                reach + Math.max(1, this.enemyHashRadius),
+                (enemy) => {
+                    const ox = enemy.x - player.x;
+                    const oy = enemy.y - player.y;
+                    const dist = fm.hypot(ox, oy);
+                    if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
+                        return;
+                    }
+                    // Anything right on top of the player is in the way of the
+                    // swing, whichever way it goes
+                    const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
+                    const angle = fm.acos(Math.max(-1, Math.min(1, along)));
+                    if (dist > 0.8 && angle > arc + enemy.radius / dist) {
+                        return;
+                    }
+                    hit.add(enemy);
+                },
+            );
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -9480,12 +9497,16 @@ export class Sim {
     // blocked, so aiming at them would waste shots while pests close in.
     // style: a weapon's, which leaves out what it can't hurt (an expert Nylocas of another
     // style). What isn't a weapon (thralls, the cannon, power-ups) hurts any, and passes none.
+    // edge: an enemy bigger than a tile across counts as nearer by its size past that, as a melee
+    // weapon's reach is (fireSlash hits whatever its reach touches, so a big boss is in reach from
+    // beside it). Nothing smaller changes.
     private nearestEnemies(
         x: number,
         y: number,
         range: number,
         count: number,
         style?: CombatStyle,
+        edge = false,
     ): Enemy[] {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
@@ -9500,7 +9521,12 @@ export class Sim {
             }
             const dx = enemy.x - x;
             const dy = enemy.y - y;
-            const distSq = dx * dx + dy * dy;
+            let distSq = dx * dx + dy * dy;
+            // Past a tile across: what's beyond a tile of its size counts as in reach
+            if (edge && enemy.radius > 1) {
+                const gap = Math.max(0, Math.sqrt(distSq) - (enemy.radius - 1));
+                distSq = gap * gap;
+            }
             if (distSq <= rangeSq) {
                 found.push({ enemy, distSq });
             }
