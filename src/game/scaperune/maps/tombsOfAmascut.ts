@@ -346,6 +346,10 @@ const ZEBAK_ARENA: RoomCut = {
 const ZEBAK_AT = [24, 48];
 const ZEBAK_LINE = 15;
 const ZEBAK_ISLAND = { x0: 14, y0: 19, x1: 34, y1: 40 };
+// (unturned) The island's east edge, towards the way in: its two blocked columns, and the
+// invisible walls (38848, 2639) along it
+const ZEBAK_EDGE = { x0: 39, y0: 15, x1: 40, y1: 33 };
+const ZEBAK_EDGE_WALLS = [38848, 2639];
 const ZEBAK_STEPS = [
     [13, 30],
     [35, 30],
@@ -886,6 +890,28 @@ function build(context: BuildContext): TileGrid {
                         (WARDENS_TALL_PIECES.includes(loc.id) || !raised(loc.x, loc.y)),
                 ),
             );
+        }
+        // The island's edge on the way in: OSRS's deck stands a level up behind invisible walls,
+        // and left so it's a piece of its own nobody can walk onto. Its walls on that side go and
+        // its edge is floor
+        if (cut === ZEBAK_ARENA) {
+            prefab.locs = prefab.locs.filter(
+                (loc) =>
+                    !(
+                        ZEBAK_EDGE_WALLS.includes(loc.id) &&
+                        loc.x >= ZEBAK_EDGE.x0 - 3 &&
+                        loc.x <= ZEBAK_EDGE.x1 &&
+                        loc.y >= ZEBAK_EDGE.y0 - 2 &&
+                        loc.y <= ZEBAK_EDGE.y1 + 2
+                    ),
+            );
+            for (const level of prefab.levels) {
+                for (let y = ZEBAK_EDGE.y0; y <= ZEBAK_EDGE.y1; y++) {
+                    for (let x = ZEBAK_EDGE.x0; x <= ZEBAK_EDGE.x1; x++) {
+                        level.flags[x + y * cut.sizeX] &= ~TILE_BLOCKED;
+                    }
+                }
+            }
         }
         // The gap into Akkha's arena, which OSRS takes you over: floor, as his own
         if (cut === AKKHA_ARENA) {

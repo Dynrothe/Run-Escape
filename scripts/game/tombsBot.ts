@@ -530,9 +530,163 @@ function spearDodge(sim: Sim, def: PathRoom, to: Point): Point | undefined {
 function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
     // Not up yet: north past the line, where it rises
     if (uid === -1) {
-        return walkTo(sim, def.at.x, def.line.y + 4);
+        return walkTo(sim, def.arrive.x, def.line.y + 2.5);
     }
-    return undefined;
+    const boss = sim.enemies.find((e) => e.uid === uid);
+    if (!boss || boss.dead) {
+        return { x: 0, y: 0 };
+    }
+    if (sim.tombsZebak) {
+        return zebakMove(sim, def, boss);
+    }
+    if (sim.tombsAkkha) {
+        return akkhaMove(sim, def, boss);
+    }
+    if (def.boulders) {
+        return babaMove(sim, def, boss);
+    }
+    // Kephri, and anything else: near enough for every weapon, off what's close
+    return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5);
+}
+
+// Ba-Ba: up to her altar while her stones roll (round the edges, where the gap isn't), beside a
+// boulder's rocks whenever there are some (her avalanche hits everyone not beside one), and never
+// into the pit
+function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point {
+    const player = sim.player;
+    const boulders = def.boulders!;
+    const pit = boulders.pit;
+    const avoid: Point[] = [];
+    if (sim.tombsPit) {
+        for (let y = Math.floor(pit.y0) - 1; y <= pit.y1 + 1; y++) {
+            for (let x = Math.floor(pit.x0) - 1; x <= pit.x1 + 1; x++) {
+                avoid.push({ x: x + 0.5, y: y + 0.5 });
+            }
+        }
+    }
+    if (boss.bossState?.ordeal) {
+        // Her altar, by the west side
+        const side =
+            Math.abs(player.x - pit.x0) < Math.abs(player.x - pit.x1) ? pit.x0 - 3 : pit.x1 + 3;
+        const to =
+            player.y < boulders.altar.y - 6 ? { x: side, y: boulders.altar.y - 2 } : boulders.altar;
+        return walkAvoiding(sim, to.x, to.y, avoid, 0);
+    }
+    const rock = sim.tombsCover
+        .filter((c) => c.endTick > sim.tick)
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+        )[0];
+    if (rock) {
+        // Beside it, on her side, so her stomp and shockwave still miss
+        const dx = boss.x - rock.x;
+        const dy = boss.y - rock.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const reach = rock.radius + 1;
+        const to = { x: rock.x - (dx / len) * reach, y: rock.y - (dy / len) * reach };
+        return Math.hypot(to.x - player.x, to.y - player.y) < 1
+            ? nudge(sim, to.x, to.y)
+            : walkAvoiding(sim, to.x, to.y, avoid, 0);
+    }
+    const anchor = { x: boss.x, y: boss.y - (boss.radius + 4.5) };
+    return avoid.length > 0
+        ? walkAvoiding(sim, anchor.x, anchor.y, avoid, 0)
+        : kite(sim, anchor, 2.5);
+}
+
+// Akkha: the quadrant his Memory Blast spares at each burst; with his shadows up, the quadrant of
+// one that's dead (he walks after you, and only there can he be hurt), off his trailing orbs
+function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point {
+    const fight = sim.tombsAkkha!;
+    const q = def.quadrants!;
+    const corner = (quadrant: number): Point => {
+        const sx = quadrant === 1 || quadrant === 2 ? 1 : -1;
+        const sy = quadrant === 0 || quadrant === 1 ? 1 : -1;
+        return { x: q.middle.x + sx * q.half * 0.45, y: q.middle.y + sy * q.half * 0.45 };
+    };
+    const orbs = fight.orbs.map((o) => ({ x: o.x, y: o.y }));
+    const go = (to: Point) =>
+        Math.hypot(to.x - sim.player.x, to.y - sim.player.y) < 1
+            ? nudge(sim, to.x, to.y)
+            : walkAvoiding(sim, to.x, to.y, orbs, 0);
+    const memory = fight.memory;
+    if (memory && memory.step < memory.order.length) {
+        return go(corner(memory.order[memory.step]));
+    }
+    if (fight.shadows.length > 0) {
+        const dead = fight.shadows.filter((s) => {
+            const e = sim.enemies.find((x) => x.uid === s.uid);
+            return !e || e.dead;
+        });
+        if (dead.length > 0) {
+            return go(corner(dead[0].quadrant));
+        }
+        // None down yet: beside the nearest, out of its quadrant's flood when one's due
+        const live = fight.shadows
+            .map((s) => sim.enemies.find((x) => x.uid === s.uid))
+            .filter((e): e is NonNullable<typeof e> => !!e && !e.dead)
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.x - sim.player.x, a.y - sim.player.y) -
+                    Math.hypot(b.x - sim.player.x, b.y - sim.player.y),
+            )[0];
+        if (live) {
+            return go({ x: (live.x + q.middle.x) / 2, y: (live.y + q.middle.y) / 2 });
+        }
+    }
+    return kite(sim, { x: boss.x, y: boss.y - 3 }, 2.5);
+}
+
+// Zebak: on his island near enough for weapons to reach him; south of a boulder on the line
+// from him before his roar; in a tidal wave's gap as it comes; off his acid
+function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point {
+    const fight = sim.tombsZebak!;
+    const island = def.island!;
+    const player = sim.player;
+    const acid: Point[] = [];
+    for (const pool of fight.acid) {
+        for (let y = Math.floor(pool.y - pool.half); y <= pool.y + pool.half; y++) {
+            for (let x = Math.floor(pool.x - pool.half); x <= pool.x + pool.half; x++) {
+                acid.push({ x: x + 0.5, y: y + 0.5 });
+            }
+        }
+    }
+    const go = (to: Point) =>
+        Math.hypot(to.x - player.x, to.y - player.y) < 1
+            ? nudge(sim, to.x, to.y)
+            : walkAvoiding(sim, to.x, to.y, acid, 0);
+    if (fight.roar) {
+        const shelter = sim.tombsCover
+            .filter((c) => c.look === "zebak_boulder" && c.endTick > sim.tick)
+            .map((c) => {
+                const dx = c.x - boss.x;
+                const dy = c.y - boss.y;
+                const len = Math.hypot(dx, dy) || 1;
+                return {
+                    x: c.x + (dx / len) * (c.radius + 1.2),
+                    y: c.y + (dy / len) * (c.radius + 1.2),
+                };
+            })
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.x - player.x, a.y - player.y) -
+                    Math.hypot(b.x - player.x, b.y - player.y),
+            )[0];
+        if (shelter) {
+            return go(shelter);
+        }
+    }
+    for (const wave of fight.waves) {
+        const coming = (player.y - wave.y) * wave.dir;
+        if (coming > -0.6 && coming < 4) {
+            return go({ x: (wave.gapX0 + wave.gapX1) / 2 + 0.5, y: player.y });
+        }
+    }
+    // As near him as the island goes
+    const anchor = { x: boss.x, y: Math.min(island.y1 - 1, boss.y - boss.radius - 3) };
+    return go(anchor);
 }
 
 function wardensMove(sim: Sim): Point | undefined {
