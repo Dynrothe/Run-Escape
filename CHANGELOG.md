@@ -22,8 +22,7 @@ the version in the corner).
   - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
     slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
     a burst of light as he kneels, and a ring across the court as he rises.
-  - A pet for the Collection log: the Dark acorn, 1 in 10 for beating him, and always on hard
-    mode.
+  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
 

@@ -353,18 +353,19 @@ With the quicker ice (`GOD=1`, seeds 1 to 3): the careful bot clears phase 1 in 
 fight in 2:10-2:25, the sloppy one in 24-28 s and 2:46-3:03, and the sloppy one never smiting in
 45-53 s and 4:48-5:14.
 
-### Round 9
+### Round 9 and 10
 
-Dynny: a pet, the dark acorn or the dark squirrel, "1/10 for normal mode, 100% in hard mode".
+Dynny: a pet, the dark acorn or the dark squirrel, "1/10 for normal mode, 100% in hard mode";
+then, once main had pets (0.25.0), "merge main into the branch, there is a pet system".
 
-1. The **Dark acorn** (obj 24733, `find-objs`) is a trophy (`trophies.ts`): 1 in 10 for killing
-   him, certain on hard mode (`TrophySource.hardChance`, read by `Sim.rollBossTrophies`). Dying
-   to him rolls nothing; a fight map rolls only its trophies, and only on the kill. It's in the
-   Collection log's Hallowed Night page with the rest, and `slim-cache` keeps it (it walks every
-   trophy's `objId`).
-2. The **dark squirrel** (npcs 9637, 9638) isn't used: the game has no followers, and every
-   trophy is an object in the Collection log, so the acorn stands for it.
-3. **Hard mode** is the map's own, unchanged: open once he's beaten, 1.3 times his hitpoints and
+1. The **Dark squirrel** is a trophy (`trophies.ts`, id `dark_squirrel`) and a pet (`pets.ts`):
+   1 in 10 for killing him, certain on hard mode (`TrophySource.hardChance`, read by
+   `Sim.rollBossTrophies`). Dying to him rolls nothing; a fight map rolls only its trophies, and
+   only on the kill. Its icon is the Dark acorn (obj 24733), the item that is the pet in OSRS; the
+   follower is npc 9637 (`find-npcs` marks it, the one with Metamorphosis; 9638 is the other),
+   idle 7309, walk 7310, model 32206. Once found it's on the Pet row like the others, and
+   `slim-cache` keeps the acorn (every trophy's `objId`) and the squirrel (`getPetRequests`).
+2. **Hard mode** is the map's own, unchanged: open once he's beaten, 1.3 times his hitpoints and
    damage, and every boss's attacks 15% closer together on hard (`HARD_BOSS_INTERVAL`). The
    windups and the court's tells are the same. Combat Achievements' "on hard" tasks (Beyond
    Reproach, Flawless Verdict) go by `sim.hard`, so they count there.

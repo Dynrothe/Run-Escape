@@ -249,8 +249,9 @@ version and how to run it.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
   mask or a Scythe inside, for the Collection log. Those do nothing in a run.
-- **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, and Lil' Zik from
-  Verzik with its looks from expert clears) can be taken along, picked under the adventurers. It
+- **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
+  Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
+  taken along, picked under the adventurers. It
   follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
   in co-op the party sees each other's.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
@@ -334,8 +335,8 @@ version and how to run it.
       and a bridge of fire south to a lily terrace where you start. No waves, no picks, no items:
       you play the Saradominist with Saradomin Strike, which only reaches him from about eight
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
-      can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark acorn for
-      the Collection log 1 time in 10, and every time on hard mode.
+      can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
+      pet, 1 time in 10, and every time on hard mode.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
