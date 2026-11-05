@@ -9,6 +9,7 @@ import {
 import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
 import { ENEMIES, getEnemy } from "../content/enemies";
+import { GEAR_SLOTS } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
@@ -410,6 +411,24 @@ describe("power-ups in the cache", () => {
 });
 
 describe("sprites", () => {
+    test("the slim cache keeps the matching empty equipment-slot silhouettes", () => {
+        const sprites = getGameSpriteIds();
+        expect(Object.fromEntries(GEAR_SLOTS.map((slot) => [slot.id, slot.iconSpriteId]))).toEqual({
+            head: 156,
+            cape: 157,
+            neck: 158,
+            body: 161,
+            shield: 162,
+            legs: 163,
+            hands: 164,
+            feet: 165,
+            ring: 160,
+        });
+        for (const slot of GEAR_SLOTS) {
+            expect(sprites).toContain(slot.iconSpriteId);
+        }
+    });
+
     test("the slim cache keeps every sprite the game view loads", async () => {
         const asked: { spriteIds: number[]; frames?: number[] }[] = [];
         const workerPool = {

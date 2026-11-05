@@ -68,10 +68,6 @@
         touch-action: none;
     }
 
-    .ui-slot {
-        pointer-events: none;
-    }
-
     /* Keys don't mean anything here */
     .ui-choice-key,
     .ui-inv-key,
@@ -590,6 +586,13 @@
     .ui-armoury-tile {
         width: 44px;
         height: 44px;
+    }
+
+    .ui-armoury-step {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
     }
 
     /* Quests and the collection log */
