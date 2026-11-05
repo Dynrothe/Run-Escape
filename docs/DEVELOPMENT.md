@@ -1150,8 +1150,19 @@ class, evolution and normal/hard mode examples. Weapon damage rules use the star
 throughout the run.
 
 How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
-one goes down, is revived or leaves, with each of those down or gone still counting as half a
-player (`PLAYER_GONE`).
+one goes down, is revived or leaves, with each of those down or gone still counting as half a player
+(`PLAYER_GONE`).
+
+Caskets are scaled there too. `Sim.openCasket` pays a casket's coins (the party's) once and counts
+it once towards the run's `casketsOpened` and the picker's `Hero.casketsOpened` (the results
+screen's, which add up to the run's), then `offerCasketItem` gives every hero who's up an item of
+their own, rolled on that hero's luck, gear and banishes. A hero who's down misses out, unlike a
+level up, which waits for their revive. The run waits on each of them, so an idle player who's up holds every casket until
+`DECIDE_AFTER_MS`, as they do a level up. With every casket giving the whole party an item, an
+ordinary kill's casket chance is times `PartyScale.caskets` (`CASKETS_PER_PLAYER`), so the bigger
+crowd's extra kills leave each player about as many items as solo, and the party about as many
+casket coins as a player on their own. Elites' and bosses' caskets aren't scaled: they already drop
+one a kill, as solo.
 
 Revives are in `content/coop.ts` too (how many a player gets, the hitpoints each brings back,
 how long a teammate stands over them, how long the immunity lasts, and the extra revive's item,

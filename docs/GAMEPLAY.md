@@ -624,7 +624,7 @@ version and how to run it.
       server can let anyone in instead (`MULTIPLAYER_ANY_MAP`); then a win opens the map it was
       on for a player who hadn't got that far (along with the next), but not the maps before it.
     - The run's **level is shared**: every level up gives each player their own three choices, and
-      the run waits for everyone to pick (and for anyone opening a casket). Coins and kills are
+      the run waits for everyone to pick (and for everyone's item from a casket). Coins and kills are
       shared too, and everyone banks the run's coins.
     - A **random event's** visitor turns up by one of the party, and whoever walks up first meets
       them and gets what they bring. The Mysterious Old Man's and the Quiz Master's offers are
@@ -645,9 +645,12 @@ version and how to run it.
       offer) has it decided for them: the first reward, taking the casket, or walking away. The
       host can kick a player from the menu mid-run, and everyone has to be on the same version of
       the game.
-    - Caskets drop 20% more often for each player past the first, so there's more gear to go round,
-      and power-ups hit as hard against the tougher crowd. The Highwayman takes his share of the
-      shared coins once, however many of you he hits.
+    - A casket gives every player who's up an item of their own (rolled on their own luck, gear
+      and banishes), whoever picks it up, and the run waits for each of them. Its coins go to the
+      shared pot once. Ordinary kills drop fewer caskets the bigger the party (x0.69 for two,
+      x0.43 for four), as a party kills more, so each player gets about as many items as on their
+      own, and the party about as many casket coins. Power-ups hit as hard against the tougher
+      crowd. The Highwayman takes his share of the shared coins once, however many of you he hits.
     - The crowd is **bigger and tougher** for each player past the first: 35% more of them about
       at once, 50% more hitpoints, bosses 110% more (keeping up with the party's damage), and
       10% harder hits. Bones are worth 12% less for each, so with the bigger crowd the party
@@ -666,8 +669,9 @@ version and how to run it.
       co-op. They come back with 75% of their hitpoints, then 50%, then 25% for every revive
       after, and with none left they're down for good. For 5 seconds a revived player can't
       be hurt, and enemies leave them alone for a teammate instead (unless nobody else is
-      up); food, coins and caskets are theirs to pick up all the while. Level ups the party had while they were down are theirs to choose once they're
-      back.
+      up); food, coins and caskets are theirs to pick up all the while. Level ups the party had
+      while they were down are theirs to choose once they're back, but a casket picked up
+      meanwhile has no item for them.
     - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
       leaving ends it for everyone.
     - Teammates show with their names in green, an arrow at the edge of the screen when they're out

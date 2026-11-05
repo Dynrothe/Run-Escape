@@ -25,6 +25,11 @@ the version in the corner).
 - Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
+- Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just
+  whoever picks it up, and the run waits for each of them. Its coins still go to the party once.
+  Ordinary kills drop fewer caskets the bigger the party, so each player gets about as many items
+  as on their own, and the party about as many casket coins. A player who's down when one's picked
+  up misses out.
 
 ### Fixed
 
