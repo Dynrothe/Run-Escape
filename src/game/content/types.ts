@@ -1777,8 +1777,90 @@ export type TombsDef = {
     // brings it back to
     nexus: { x: number; y: number };
     paths: TombsPathDef[];
-    // The Wardens, once all four paths are done (in development): where the party's brought in
-    wardens?: { arrive: { x: number; y: number } };
+    // The Wardens, once all four paths are done (in development): their room, in world tiles
+    wardens?: TombsWardensPlaces;
+};
+
+// Which Warden: Elidinis' or Tumeken's
+export type WardenSide = "elidinis" | "tumeken";
+
+// The Wardens' room, in world tiles (maps/tombsOfAmascut.ts): where the party's brought in, the
+// obelisk's middle and each Warden's, each side's orb spawn tile and gap tile (where standing
+// blocks that side) and the x its troughs end at, the troughs' rows, and the floor
+export type TombsWardensPlaces = {
+    arrive: { x: number; y: number };
+    obelisk: { x: number; y: number };
+    elidinis: { x: number; y: number };
+    tumeken: { x: number; y: number };
+    sides: Record<
+        WardenSide,
+        { spawn: { x: number; y: number }; gap: { x: number; y: number }; end: number }
+    >;
+    troughs: number[];
+    floor: { x0: number; y0: number; x1: number; y1: number };
+};
+
+// The Wardens' first phase (content/tombs.ts's WARDENS; Sim.stepWardens). The obelisk is what's
+// fought. It sends an energy orb down one of three troughs each side every `every` seconds (a step
+// of a tile each stepSeconds, steps of them), each one that gets there charging its Warden; a
+// player on a side's gap or spawn tile (within reach) stops it, for blockDamage an orb. A Warden
+// charges perSecond and perOrb more (Ancient Haste: haste), and full, discharges (its seq and seal),
+// paused for pause seconds, its attacks taking turns: pyramids, then a shot.
+export type WardensDef = {
+    obeliskId: string;
+    wardens: Record<
+        WardenSide,
+        {
+            enemyId: string;
+            // Its pyramids' loc as they glow, the seal it discharges each attack with, its shot
+            // (a spot animation homing on each player over the shot's flight) and the share of a
+            // player's hitpoints it takes
+            pyramid: number;
+            pyramidsSpotAnim: number;
+            shotSpotAnim: number;
+            shotSeal: number;
+            shotShare: number;
+            name: string;
+        }
+    >;
+    orbs: {
+        lookId: string;
+        every: number;
+        stepSeconds: number;
+        steps: number;
+        reach: number;
+        blockDamage: number;
+    };
+    charge: {
+        full: number;
+        perSecond: number;
+        perOrb: number;
+        haste: { perSecond: number; perOrb: number };
+        // The charging platform under each Warden, empty to full (45606 to 45626)
+        platforms: number[];
+    };
+    discharge: { seq: number; pause: number };
+    // Pyramids: 3 by 3 cells over the floor, cols by rows from the floor's corner offset by
+    // `from`, each Warden's every other cell (Elidinis' those whose column and row add up odd),
+    // none on the obelisk. Up `appear` seconds after the discharge, hurting whoever's in one every
+    // `every` seconds from firstHit to lastHit, gone at `leave`.
+    pyramids: {
+        cell: number;
+        cols: number;
+        rows: number;
+        from: { x: number; y: number };
+        appear: number;
+        firstHit: number;
+        lastHit: number;
+        every: number;
+        leave: number;
+        damage: number;
+    };
+    shot: { flight: number; impactSpotAnim: number };
+    // Seconds before the first orbs, once the party's in
+    startDelay: number;
+    message: string;
+    endMessage: string;
 };
 
 // A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to, and

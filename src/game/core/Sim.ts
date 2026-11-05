@@ -97,6 +97,7 @@ import {
     SCABARAS,
     SCABARAS_WAVES,
     TOMBS_BOSSES,
+    WARDENS,
     getApmekenTrickle,
     getCrondisTrickle,
     getHetTrickle,
@@ -146,7 +147,9 @@ import {
     Stats,
     TombsPathDef,
     TombsSpotDef,
+    TombsWardensPlaces,
     UtilityDef,
+    WardenSide,
     WaveDef,
     WeaponDef,
     ZebakDef,
@@ -940,6 +943,38 @@ export type AkkhaFight = {
 // caught), his acid pools (middles and half widths), how long each hero's stood in one, his jugs
 // (rolling, which way and how far it's got to go), his blood clouds (where each was last, to
 // waste it as it goes) and when the next come
+// The Wardens' first phase (WardensDef; Sim.stepWardens): the obelisk and the Wardens (uids),
+// each side's charge, when it can charge again after a discharge and which attack's next, the order
+// its orbs take the three troughs and which is next, when the next orbs go, and what's out: orbs
+// (a step a stepSeconds, from (fromX, fromY) to (x, y), since stepTick), pyramids (a cell's
+// south-west tile, since startTick) and shots (at a hero, from a Warden, landing at landTick)
+export type WardensFight = {
+    phase: 1 | 2;
+    startTick: number;
+    obeliskUid: number;
+    wardens: Record<WardenSide, number>;
+    charge: Record<WardenSide, number>;
+    pausedUntil: Record<WardenSide, number>;
+    next: Record<WardenSide, "pyramids" | "shot">;
+    troughs: Record<WardenSide, number[]>;
+    trough: Record<WardenSide, number>;
+    nextOrbTick: number;
+    orbs: {
+        side: WardenSide;
+        row: number;
+        step: number;
+        stepTick: number;
+        fromX: number;
+        fromY: number;
+        x: number;
+        y: number;
+    }[];
+    pyramids: { side: WardenSide; x: number; y: number; startTick: number }[];
+    shots: { side: WardenSide; hero: number; startTick: number; landTick: number }[];
+    // Which Warden wakes for the second phase
+    winner?: WardenSide;
+};
+
 export type ZebakFight = {
     uid: number;
     special: number;
@@ -1161,6 +1196,8 @@ export class Sim {
     tombsAkkha?: AkkhaFight;
     tombsKephri?: KephriFight;
     tombsZebak?: ZebakFight;
+    // The Wardens' fight, once the party's in their room
+    tombsWardens?: WardensFight;
     // Rocks Ba-Ba's boulders left, solid, to take cover by (BossAttackDef.leavesCover)
     tombsCover: { x: number; y: number; radius: number; endTick: number; look: string }[] = [];
     // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
@@ -2718,6 +2755,7 @@ export class Sim {
         }
         this.stepRaid();
         this.stepTombs();
+        this.stepWardens();
         this.stepApmeken();
         this.stepIntro();
         this.stepDirector();
@@ -5644,11 +5682,309 @@ export class Sim {
         this.tombsDoors.clear();
         this.gatherHall();
         this.moveParty(tombs.wardens.arrive);
+        this.startWardens();
         this.emit({
             type: "notice",
             message: "The Wardens (dev): every path done, best of everything.",
         });
         return true;
+    }
+
+    // Into the Wardens' fight: the obelisk and the two Wardens on their platforms, the first orbs a
+    // moment off
+    private startWardens(): void {
+        const places = this.map.tombs?.wardens;
+        if (!places) {
+            return;
+        }
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        // As tough as a path's boss would be after every path (TOMBS_BOSSES)
+        const obeliskDef = getEnemy(WARDENS.obeliskId);
+        const obelisk = this.spawnEnemy(
+            obeliskDef,
+            "boss",
+            places.obelisk,
+            obeliskDef.hp *
+                this.map.difficulty.hp *
+                (1 + TOMBS_BOSSES.levelHp * this.tombsPathLevel),
+        );
+        const elidinis = this.spawnEnemy(
+            getEnemy(WARDENS.wardens.elidinis.enemyId),
+            "normal",
+            places.elidinis,
+        );
+        const tumeken = this.spawnEnemy(
+            getEnemy(WARDENS.wardens.tumeken.enemyId),
+            "normal",
+            places.tumeken,
+        );
+        if (!obelisk || !elidinis || !tumeken) {
+            return;
+        }
+        // Each side takes the three troughs in an order of its own
+        const order = (): number[] => {
+            const rows = [0, 1, 2];
+            for (let i = rows.length - 1; i > 0; i--) {
+                const j = this.rng.int(i + 1);
+                [rows[i], rows[j]] = [rows[j], rows[i]];
+            }
+            return rows;
+        };
+        this.tombsWardens = {
+            phase: 1,
+            startTick: this.tick,
+            obeliskUid: obelisk.uid,
+            wardens: { elidinis: elidinis.uid, tumeken: tumeken.uid },
+            charge: { elidinis: 0, tumeken: 0 },
+            pausedUntil: { elidinis: 0, tumeken: 0 },
+            next: { elidinis: "pyramids", tumeken: "pyramids" },
+            troughs: { elidinis: order(), tumeken: order() },
+            trough: { elidinis: 0, tumeken: 0 },
+            nextOrbTick: this.tick + secondsToTicks(WARDENS.startDelay),
+            orbs: [],
+            pyramids: [],
+            shots: [],
+        };
+        this.emit({ type: "notice", message: WARDENS.message });
+    }
+
+    // The Wardens' first phase, each tick: the obelisk's orbs down the troughs (or blocked), the
+    // Wardens charging and discharging, their pyramids and shots, and the obelisk breaking
+    private stepWardens(): void {
+        const fight = this.tombsWardens;
+        const places = this.map.tombs?.wardens;
+        if (!fight || !places || fight.phase !== 1) {
+            return;
+        }
+        const obelisk = this.enemies.find((e) => e.uid === fight.obeliskUid);
+        if (!obelisk || obelisk.dead) {
+            this.endWardensPhaseOne(fight);
+            return;
+        }
+        const sides: WardenSide[] = ["elidinis", "tumeken"];
+        const haste = this.invoked("ancient_haste");
+        const step = secondsToTicks(WARDENS.orbs.stepSeconds);
+        // The next orbs, a side at a time: none from a side someone's blocking, who pays for it
+        if (this.tick >= fight.nextOrbTick) {
+            fight.nextOrbTick = this.tick + secondsToTicks(WARDENS.orbs.every);
+            for (const side of sides) {
+                const { spawn, gap } = places.sides[side];
+                let blocked = false;
+                this.forEachHeroInReach(() => {
+                    const player = this.player;
+                    const near = (at: { x: number; y: number }) =>
+                        fm.hypot(player.x - at.x, player.y - at.y) <= WARDENS.orbs.reach;
+                    if (this.isUp(this.hero) && (near(spawn) || near(gap))) {
+                        blocked = true;
+                        this.damagePlayer(
+                            WARDENS.orbs.blockDamage * this.tombsRoomScale().damage,
+                            WARDENS.obeliskId,
+                            false,
+                        );
+                    }
+                });
+                if (blocked) {
+                    continue;
+                }
+                obelisk.anim = "attack";
+                obelisk.attackSeq = obelisk.def.attackSeq;
+                obelisk.animStart = this.tick;
+                const row = fight.troughs[side][fight.trough[side] % 3];
+                fight.orbs.push({
+                    side,
+                    row,
+                    step: 0,
+                    stepTick: this.tick,
+                    fromX: spawn.x,
+                    fromY: spawn.y,
+                    x: spawn.x,
+                    y: spawn.y,
+                });
+            }
+        }
+        // The orbs a step on, each down its trough: across to its row, then along it
+        fight.orbs = fight.orbs.filter((orb) => {
+            if (this.tick - orb.stepTick < step) {
+                return true;
+            }
+            if (orb.step >= WARDENS.orbs.steps) {
+                // There: its Warden charges, and the next orb takes the next trough
+                fight.charge[orb.side] += haste
+                    ? WARDENS.charge.haste.perOrb
+                    : WARDENS.charge.perOrb;
+                fight.trough[orb.side]++;
+                return false;
+            }
+            const side = places.sides[orb.side];
+            const dir = Math.sign(side.end - side.spawn.x);
+            const rowY = places.troughs[orb.row];
+            orb.fromX = orb.x;
+            orb.fromY = orb.y;
+            orb.x += dir;
+            orb.y += Math.sign(rowY - orb.y) * Math.min(1, Math.abs(rowY - orb.y));
+            orb.step++;
+            orb.stepTick = this.tick;
+            return true;
+        });
+        // The Wardens charge, and full, discharge: pyramids, then a shot, then pyramids
+        for (const side of sides) {
+            if (this.tick < fight.pausedUntil[side]) {
+                continue;
+            }
+            fight.charge[side] +=
+                (haste ? WARDENS.charge.haste.perSecond : WARDENS.charge.perSecond) /
+                TICKS_PER_SECOND;
+            if (fight.charge[side] < WARDENS.charge.full) {
+                continue;
+            }
+            fight.charge[side] = 0;
+            fight.pausedUntil[side] = this.tick + secondsToTicks(WARDENS.discharge.pause);
+            this.dischargeWarden(fight, side, places);
+        }
+        // Pyramids hurt whoever's under one, every so often while they glow, and go
+        const pyramids = WARDENS.pyramids;
+        const every = Math.max(1, secondsToTicks(pyramids.every));
+        fight.pyramids = fight.pyramids.filter((pyramid) => {
+            const since = this.tick - pyramid.startTick;
+            if (since >= secondsToTicks(pyramids.leave)) {
+                return false;
+            }
+            const from = secondsToTicks(pyramids.firstHit);
+            if (
+                since >= from &&
+                since <= secondsToTicks(pyramids.lastHit) &&
+                (since - from) % every === 0
+            ) {
+                this.forEachHeroInReach(() => {
+                    const { x, y } = this.player;
+                    if (
+                        this.isUp(this.hero) &&
+                        x >= pyramid.x &&
+                        x < pyramid.x + pyramids.cell &&
+                        y >= pyramid.y &&
+                        y < pyramid.y + pyramids.cell
+                    ) {
+                        this.damagePlayer(
+                            pyramids.damage * this.tombsRoomScale().damage,
+                            WARDENS.wardens[pyramid.side].enemyId,
+                            false,
+                        );
+                    }
+                });
+            }
+            return true;
+        });
+        // Shots land on whoever they were for, wherever they are
+        fight.shots = fight.shots.filter((shot) => {
+            if (this.tick < shot.landTick) {
+                return true;
+            }
+            const hero = this.heroes[shot.hero];
+            if (hero && this.isUp(hero)) {
+                const current = this.hero;
+                this.use(hero);
+                const player = this.player;
+                this.damagePlayer(
+                    player.maxHp * WARDENS.wardens[shot.side].shotShare,
+                    WARDENS.wardens[shot.side].enemyId,
+                    false,
+                    undefined,
+                    true,
+                );
+                this.addEffect(WARDENS.shot.impactSpotAnim, player.x, player.y, 0, 30);
+                this.use(current);
+            }
+            return false;
+        });
+    }
+
+    // A Warden's charge spent: its attack (pyramids over its cells of the floor, or a shot at each
+    // player), with its seal before it
+    private dischargeWarden(
+        fight: WardensFight,
+        side: WardenSide,
+        places: TombsWardensPlaces,
+    ): void {
+        const def = WARDENS.wardens[side];
+        const warden = this.enemies.find((e) => e.uid === fight.wardens[side]);
+        const at = places[side];
+        if (warden) {
+            warden.anim = "attack";
+            warden.attackSeq = WARDENS.discharge.seq;
+            warden.animStart = this.tick;
+        }
+        const attack = fight.next[side];
+        fight.next[side] = attack === "pyramids" ? "shot" : "pyramids";
+        if (attack === "pyramids") {
+            this.addEffect(def.pyramidsSpotAnim, at.x, at.y, 0, secondsToTicks(4));
+            const { cell, cols, rows, from } = WARDENS.pyramids;
+            const x0 = places.floor.x0 + from.x;
+            const y0 = places.floor.y0 + from.y;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    // Elidinis' the odd cells, Tumeken's the even
+                    if ((i + j) % 2 !== (side === "elidinis" ? 1 : 0)) {
+                        continue;
+                    }
+                    const x = x0 + i * cell;
+                    const y = y0 + j * cell;
+                    // None on the obelisk
+                    if (
+                        Math.abs(x + cell / 2 - places.obelisk.x) < cell &&
+                        Math.abs(y + cell / 2 - places.obelisk.y) < cell
+                    ) {
+                        continue;
+                    }
+                    fight.pyramids.push({
+                        side,
+                        x,
+                        y,
+                        startTick: this.tick + secondsToTicks(WARDENS.pyramids.appear),
+                    });
+                }
+            }
+            return;
+        }
+        this.addEffect(def.shotSeal, at.x, at.y, 0, secondsToTicks(4));
+        this.emit({ type: "notice", message: "A large ball of energy is shot your way..." });
+        this.heroes.forEach((hero, index) => {
+            if (this.isUp(hero)) {
+                fight.shots.push({
+                    side,
+                    hero: index,
+                    startTick: this.tick,
+                    landTick: this.tick + secondsToTicks(WARDENS.shot.flight),
+                });
+            }
+        });
+    }
+
+    // The obelisk broken: the Warden with the more charge wakes (Tumeken's on a tie), the other
+    // blows up, and what's in the air from it is gone
+    private endWardensPhaseOne(fight: WardensFight): void {
+        const winner: WardenSide =
+            fight.charge.elidinis > fight.charge.tumeken ? "elidinis" : "tumeken";
+        const loser: WardenSide = winner === "elidinis" ? "tumeken" : "elidinis";
+        fight.winner = winner;
+        fight.phase = 2;
+        fight.orbs = [];
+        fight.pyramids = [];
+        fight.shots = fight.shots.filter((shot) => shot.side === winner);
+        const lost = this.enemies.find((e) => e.uid === fight.wardens[loser]);
+        if (lost) {
+            lost.anim = "attack";
+            lost.attackSeq = lost.def.deathSeq;
+            lost.animStart = this.tick;
+            this.addEffect(2216, lost.x, lost.y, 0, secondsToTicks(7));
+        }
+        this.emit({
+            type: "notice",
+            message: `${WARDENS.endMessage} As ${WARDENS.wardens[loser].name} falls, ${WARDENS.wardens[winner].name} powers up!`,
+        });
     }
 
     // The next of a wave's baboons out of the walls, once it's time

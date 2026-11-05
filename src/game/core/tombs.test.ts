@@ -12,7 +12,7 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
-import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES } from "../content/tombs";
+import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES, WARDENS } from "../content/tombs";
 import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { createSave, migrateSave } from "./save";
@@ -36,6 +36,27 @@ const TEST_TOMBS: MapDef = {
     events: [],
     tombs: {
         nexus: { x: 1036.5, y: 1036.5 },
+        // The Wardens' room in the same field: the obelisk north of the Nexus, a Warden either side
+        wardens: {
+            arrive: { x: 1036.5, y: 1040.5 },
+            obelisk: { x: 1036.5, y: 1050.5 },
+            elidinis: { x: 1050.5, y: 1050.5 },
+            tumeken: { x: 1022.5, y: 1050.5 },
+            sides: {
+                elidinis: {
+                    spawn: { x: 1039.5, y: 1050.5 },
+                    gap: { x: 1038.5, y: 1050.5 },
+                    end: 1047.5,
+                },
+                tumeken: {
+                    spawn: { x: 1033.5, y: 1050.5 },
+                    gap: { x: 1034.5, y: 1050.5 },
+                    end: 1025.5,
+                },
+            },
+            troughs: [1048.5, 1050.5, 1052.5],
+            floor: { x0: 1025, y0: 1038, x1: 1047, y1: 1062 },
+        },
         paths: [
             { id: "het", name: "Path of Het", door: { x: 1042.5, y: 1036.5 } },
             {
@@ -2418,5 +2439,111 @@ describe("Zebak", () => {
         at(sim, SOUTH);
         expect(boss.bossState!.enraged).toBe(true);
         expect(sim.tombsZebak!.acid).toHaveLength(0);
+    });
+});
+
+describe("the Wardens' first phase", () => {
+    // In their room (the dev skip), the obelisk kept whole unless a test breaks it
+    function atWardens() {
+        const sim = tombs([]);
+        sim.heroes[0].weapons = [];
+        expect(sim.devToWardens()).toBe(true);
+        sim.heroes[0].weapons = [];
+        sim.player.invulnerable = 0;
+        return sim;
+    }
+    const step = (sim: Sim, seconds: number, each?: () => void) => {
+        for (let i = 0; i < seconds * TICKS_PER_SECOND; i++) {
+            each?.();
+            sim.step();
+        }
+    };
+    const stand = (sim: Sim, at: { x: number; y: number }) => {
+        sim.player.x = sim.player.prevX = at.x;
+        sim.player.y = sim.player.prevY = at.y;
+    };
+
+    it("brings in the obelisk to break and the two Wardens, which nothing hurts", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        expect(fight.phase).toBe(1);
+        const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
+        expect(obelisk.boss).toBe(true);
+        expect(sim.shownBoss).toBe(obelisk);
+        for (const uid of Object.values(fight.wardens)) {
+            const warden = sim.enemies.find((e) => e.uid === uid)!;
+            expect(sim.damageEnemy(warden, 100, 0, sim.player.x, sim.player.y)).toBe(0);
+        }
+    });
+
+    it("sends orbs down the troughs that charge their Warden, unless a player blocks the side", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        const tumekenGap = sim.map.tombs!.wardens!.sides.tumeken.gap;
+        const hp = sim.player.hp;
+        step(sim, 20, () => stand(sim, tumekenGap));
+        // Elidinis' orbs got there, Tumeken's never left
+        expect(fight.charge.elidinis).toBeGreaterThan(
+            fight.charge.tumeken + WARDENS.charge.perOrb * 3,
+        );
+        expect(fight.orbs.every((orb) => orb.side === "elidinis")).toBe(true);
+        // and blocking cost hitpoints
+        expect(sim.player.hp).toBeLessThan(hp);
+    });
+
+    it("discharges a full Warden: its pyramids over every other cell, then a shot that finds you", () => {
+        const sim = atWardens();
+        sim.devGod = true;
+        const fight = sim.tombsWardens!;
+        fight.charge.elidinis = WARDENS.charge.full;
+        step(sim, 0.1);
+        const mine = fight.pyramids.filter((p) => p.side === "elidinis");
+        expect(mine.length).toBeGreaterThan(10);
+        const floor = sim.map.tombs!.wardens!.floor;
+        const { cell, from } = WARDENS.pyramids;
+        for (const pyramid of mine) {
+            const i = (pyramid.x - (floor.x0 + from.x)) / cell;
+            const j = (pyramid.y - (floor.y0 + from.y)) / cell;
+            expect((i + j) % 2).toBe(1);
+        }
+        expect(fight.next.elidinis).toBe("shot");
+        // Next time, the shot, landing wherever you've gone
+        sim.devGod = false;
+        fight.pyramids = [];
+        fight.pausedUntil.elidinis = 0;
+        fight.charge.elidinis = WARDENS.charge.full;
+        step(sim, 0.1);
+        expect(fight.shots).toHaveLength(1);
+        const hp = sim.player.hp;
+        step(sim, WARDENS.shot.flight + 0.2, () => stand(sim, { x: 1030.5, y: 1060.5 }));
+        expect(sim.player.hp).toBeLessThan(hp);
+    });
+
+    it("hurts whoever's under a pyramid while it glows, and nobody beside it", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        const pyramid = { side: "tumeken" as const, x: 1040, y: 1056, startTick: sim.tick };
+        fight.pyramids = [pyramid];
+        fight.nextOrbTick = Infinity;
+        const hp = sim.player.hp;
+        step(sim, WARDENS.pyramids.leave, () => stand(sim, { x: 1044.5, y: 1057.5 }));
+        expect(sim.player.hp).toBe(hp);
+        fight.pyramids = [{ ...pyramid, startTick: sim.tick }];
+        step(sim, WARDENS.pyramids.leave, () => stand(sim, { x: 1041.5, y: 1057.5 }));
+        expect(sim.player.hp).toBeLessThan(hp);
+        expect(fight.pyramids).toHaveLength(0);
+    });
+
+    it("wakes the Warden with the more charge once the obelisk breaks", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        fight.charge.elidinis = 80;
+        fight.charge.tumeken = 20;
+        const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
+        sim.damageEnemy(obelisk, 1e9, 0, sim.player.x, sim.player.y);
+        step(sim, 0.1);
+        expect(fight.phase).toBe(2);
+        expect(fight.winner).toBe("elidinis");
+        expect(fight.orbs).toHaveLength(0);
     });
 });

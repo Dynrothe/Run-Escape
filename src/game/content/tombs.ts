@@ -6,6 +6,7 @@ import {
     EnemyShotDef,
     KephriDef,
     PlayerEffectDef,
+    WardensDef,
     WaveDef,
     ZebakDef,
 } from "./types";
@@ -1976,6 +1977,136 @@ const ZEBAK_ATTACKS: BossAttackDef[] = [
 ];
 
 // What draws, but never fights: a boulder to shelter behind, and a tidal wave's crest
+// ---- The Wardens ----
+
+// Phase one (WardensDef; Sim.stepWardens): the obelisk in the middle of their room is what's
+// fought, while it charges the two Wardens either side through the troughs, and they take turns at
+// pyramids over half the floor and a slow shot that finds you. When it breaks, the Warden with the
+// more charge is the one that wakes. Timings from OSRS (a tick is 0.6 seconds).
+export const WARDENS: WardensDef = {
+    obeliskId: "wardens_obelisk",
+    wardens: {
+        elidinis: {
+            enemyId: "elidinis_warden_dormant",
+            name: "Elidinis' Warden",
+            pyramid: 45750,
+            pyramidsSpotAnim: 2214,
+            shotSeal: 2215,
+            shotSpotAnim: 2238,
+            // Its shot hits harder than Tumeken's (45 and 30 at most, solo, in OSRS)
+            shotShare: 0.3,
+        },
+        tumeken: {
+            enemyId: "tumeken_warden_dormant",
+            name: "Tumeken's Warden",
+            pyramid: 45751,
+            pyramidsSpotAnim: 2214,
+            shotSeal: 2215,
+            shotSpotAnim: 2237,
+            shotShare: 0.2,
+        },
+    },
+    orbs: {
+        lookId: "wardens_energy",
+        every: 1.2,
+        stepSeconds: 0.6,
+        steps: 8,
+        reach: 0.9,
+        blockDamage: 2,
+    },
+    charge: {
+        full: 125,
+        perSecond: 2 / 0.6,
+        perOrb: 4,
+        haste: { perSecond: 3 / 0.6, perOrb: 6 },
+        platforms: Array.from({ length: 21 }, (_, i) => 45606 + i),
+    },
+    discharge: { seq: 9667, pause: 1.8 },
+    pyramids: {
+        cell: 3,
+        cols: 7,
+        rows: 9,
+        from: { x: 1, y: -1 },
+        appear: 1.8,
+        firstHit: 3.6,
+        lastHit: 6,
+        every: 0.6,
+        leave: 6.6,
+        damage: 4,
+    },
+    shot: { flight: 8, impactSpotAnim: 1605 },
+    startDelay: 3,
+    message: "The obelisk ignites! Block a Warden's trough, and break the obelisk.",
+    endMessage: "The obelisk shatters!",
+};
+
+const WARDENS_SOUNDS = { attack: -1, hit: 6595, death: -1 };
+
+TOMBS_ENEMIES.push(
+    {
+        // What's fought in the first phase (11751): it never moves or hits back (Sim.stepWardens)
+        id: "wardens_obelisk",
+        name: "Obelisk",
+        npcId: 11751,
+        idleSeq: 9720,
+        walkSeq: 9720,
+        attackSeq: 9721,
+        deathSeq: 9734,
+        // As a path's boss, and tougher with the path level as they are (Sim.startWardens)
+        hp: 6000,
+        damage: 0,
+        speed: 0,
+        radius: 1.5,
+        xp: 0,
+        stationary: true,
+        solid: true,
+        sounds: WARDENS_SOUNDS,
+    },
+    ...(
+        [
+            ["elidinis_warden_dormant", "Elidinis' Warden", 11748],
+            ["tumeken_warden_dormant", "Tumeken's Warden", 11749],
+        ] as const
+    ).map(
+        ([id, name, npcId]): EnemyDef => ({
+            // A Warden charging on its platform: nothing hurts it yet
+            id,
+            name,
+            npcId,
+            idleSeq: 9665,
+            walkSeq: 9649,
+            attackSeq: 9667,
+            deathSeq: 9669,
+            hp: 1000,
+            damage: 0,
+            speed: 0,
+            radius: 2.5,
+            xp: 0,
+            // Towering over its platform, as in OSRS
+            scale: 1.7,
+            stationary: true,
+            unhittable: true,
+            sounds: WARDENS_SOUNDS,
+        }),
+    ),
+    {
+        // An energy orb down a trough: only drawn (Sim.stepWardens moves them)
+        id: "wardens_energy",
+        name: "Energy",
+        npcId: 11769,
+        idleSeq: 7571,
+        walkSeq: 7571,
+        attackSeq: 7571,
+        deathSeq: 9735,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.4,
+        xp: 0,
+        sounds: WARDENS_SOUNDS,
+    },
+);
+
 const zebakLook = (id: string, name: string, npcId: number, seq: number): EnemyDef => ({
     id,
     name,

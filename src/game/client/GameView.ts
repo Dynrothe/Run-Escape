@@ -19,6 +19,7 @@ import {
     KEPHRI,
     SARCOPHAGI,
     SCABARAS,
+    WARDENS,
     ZEBAK,
 } from "../content/tombs";
 import { EnemyDef } from "../content/types";
@@ -161,6 +162,8 @@ const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
 const ROCK_FALL_HEIGHT = 14;
+// The Wardens' charged shots, drawn this much bigger than their spot animations
+const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
 const REVIVE_TICKS = REVIVE_SECONDS * TICKS_PER_SECOND;
@@ -612,6 +615,7 @@ export class GameView {
         this.drawKephri(actors, sim);
         this.drawCrondis(actors, sim);
         this.drawZebak(actors, sim);
+        this.drawWardens(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -871,6 +875,101 @@ export class GameView {
                     );
                 }
             }
+        }
+    }
+
+    // The Wardens' room: each Warden's charging platform, as full as it is; the obelisk's orbs down
+    // the troughs; the pyramids, while they're up; and the shots, on their way to whoever they're
+    // for, arcing over
+    private drawWardens(actors: ActorRenderer, sim: Sim): void {
+        const places = sim.map.tombs?.wardens;
+        if (!places) {
+            return;
+        }
+        const fight = sim.tombsWardens;
+        const platforms = WARDENS.charge.platforms;
+        for (const side of ["elidinis", "tumeken"] as const) {
+            const charge = fight?.phase === 1 ? fight.charge[side] : 0;
+            const filled = Math.floor((charge / WARDENS.charge.full) * (platforms.length - 1));
+            const model = this.assets.get(
+                "loc:" + platforms[Math.min(platforms.length - 1, Math.max(0, filled))],
+            );
+            if (model) {
+                const at = places[side];
+                // Turned with the room: Elidinis' faces west, Tumeken's east
+                const rotation = side === "elidinis" ? 1 : 3;
+                actors.draw(
+                    model,
+                    model.anims[0],
+                    0,
+                    at.x,
+                    this.ground(sim, at.x, at.y),
+                    at.y,
+                    rotation * 512,
+                );
+            }
+        }
+        if (!fight) {
+            return;
+        }
+        const look = getEnemy(WARDENS.orbs.lookId);
+        const orb = this.assets.get(getEnemyModelKey(look, 0));
+        if (orb) {
+            const anim = orb.getAnim(look.idleSeq);
+            const step = WARDENS.orbs.stepSeconds * TICKS_PER_SECOND;
+            for (const one of fight.orbs) {
+                const t = Math.min(1, (sim.tick - one.stepTick) / step);
+                const x = one.fromX + (one.x - one.fromX) * t;
+                const y = one.fromY + (one.y - one.fromY) * t;
+                actors.draw(
+                    orb,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y) - 0.3,
+                    y,
+                    0,
+                );
+            }
+        }
+        const { cell, leave } = WARDENS.pyramids;
+        for (const pyramid of fight.pyramids) {
+            const since = sim.tick - pyramid.startTick;
+            if (since < 0 || since >= leave * TICKS_PER_SECOND) {
+                continue;
+            }
+            const model = this.assets.get("loc:" + WARDENS.wardens[pyramid.side].pyramid);
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const x = pyramid.x + cell / 2;
+            const y = pyramid.y + cell / 2;
+            actors.draw(model, anim, anim.getFrame(since, true), x, this.ground(sim, x, y), y, 0);
+        }
+        for (const shot of fight.shots) {
+            const hero = sim.heroes[shot.hero];
+            const model = this.assets.get("spot:" + WARDENS.wardens[shot.side].shotSpotAnim);
+            if (!hero || !model) {
+                continue;
+            }
+            const from = places[shot.side];
+            const t = Math.min(1, (sim.tick - shot.startTick) / (shot.landTick - shot.startTick));
+            const x = from.x + (hero.player.x - from.x) * t;
+            const y = from.y + (hero.player.y - from.y) * t;
+            const arc = 1 + Math.sin(Math.PI * t) * 3;
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                x,
+                this.ground(sim, x, y) - arc,
+                y,
+                0,
+                // Big enough to see coming across the room
+                SHOT_LOOK,
+            );
         }
     }
 

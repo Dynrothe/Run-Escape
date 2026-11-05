@@ -376,8 +376,8 @@ const WARDENS_SIDES = {
 };
 const WARDENS_TROUGHS = [11, 13, 15];
 const WARDENS_FLOOR = { x0: 10, y0: 1, x1: 32, y1: 25 };
-// The charging circles under the Wardens (45605, filled through 45606 to 45626): in the map for
-// now, empty; the fight will draw them as they fill
+// The charging circles under the Wardens (45605, filled through 45606 to 45626), which the game
+// draws as they fill: out of the map
 const WARDENS_CHARGING = 45605;
 // Its floor, as OSRS draws it: the room's own tiles are mostly the hidden overlay, drawing nothing,
 // and what shows is the plane under it, its floor and the pieces on it (the slabs, the troughs,
@@ -829,6 +829,7 @@ function build(context: BuildContext): TileGrid {
                 !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
                 !(cut === CRONDIS && loc.id === APMEKEN_BARRIER && loc.x === CRONDIS_GATE.x) &&
                 !(cut === CRONDIS && loc.id === CRONDIS_WATERFALL) &&
+                !(cut === WARDENS && loc.id === WARDENS_CHARGING) &&
                 // The last room's floor is the game's: its decoration and the broken pit in its
                 // middle go (it's whole to begin with), and so do the charging circles
                 !(
@@ -1021,7 +1022,15 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         fun: undefined,
         tombs: {
             nexus: TOA_PLACES.nexus.arrive,
-            wardens: { arrive: TOA_PLACES.wardens.arrive },
+            wardens: {
+                arrive: TOA_PLACES.wardens.arrive,
+                obelisk: TOA_PLACES.wardens.obelisk,
+                elidinis: TOA_PLACES.wardens.elidinis,
+                tumeken: TOA_PLACES.wardens.tumeken,
+                sides: TOA_PLACES.wardens.sides,
+                troughs: TOA_PLACES.wardens.troughs,
+                floor: TOA_PLACES.wardens.floor,
+            },
             paths: (Object.keys(PATH_NAMES) as ToaPathId[]).map((id) => ({
                 id,
                 name: PATH_NAMES[id],

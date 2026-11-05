@@ -397,3 +397,19 @@ raid's ranges.
       healing him if they reach you), Arterial Spray (they heal more), Blood Thinners (three at a
       time), Upset Stomach (wider acid, less water from a jug).
     - Not in yet: his phantom (the Wardens'), and the bot doesn't know his fight.
+- **The Wardens, phase one** (`WARDENS` in `content/tombs.ts`, `Sim.stepWardens`): their room, square
+  59,80 on plane 1, turned half round so you come in from the south. Its floor is mostly the hidden
+  overlay over the plane under it, which OSRS draws: that plane's floor colours, its pieces on the
+  floor, and its tall pieces under the raised border, sunk to it (`LocOverrides`). On the dev server
+  the Nexus has a button straight to it with the best of everything (`Sim.devToWardens`).
+    - The obelisk (11751, the boss bar) is what's fought, as tough as a path's boss after every path.
+    - Orbs (11769) leave it each side every 1.2 s, a tile every 0.6 s for 8, down one of three
+      troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). A
+      player on a side's gap or spawn tile stops that side, for a little damage each orb.
+    - The Wardens (11748, 11749, nothing hurts them) charge 2 a tick besides; full at 125, the
+      platform under them filling (45606 to 45626, drawn by the game), they discharge (9667, the
+      seal 2214/2215) and take turns: pyramids (45750/45751) on every other 3 by 3 cell of the floor,
+      Elidinis' the odd ones, hurting whoever's under one as they glow; then a shot (2238/2237)
+      that arcs after each player for 8 s and lands for a share of their hitpoints.
+    - The obelisk broken, the Warden with the more charge wakes (Tumeken's on a tie) and the other
+      blows up (2216). Not in yet: phase two, and Ancient Haste on the invocation board.

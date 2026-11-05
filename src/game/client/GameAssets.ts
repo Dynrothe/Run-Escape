@@ -41,6 +41,7 @@ import {
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     SCABARAS,
+    WARDENS,
     ZEBAK,
 } from "../content/tombs";
 import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
@@ -193,6 +194,17 @@ function getSpotAnimIds(): number[] {
     add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
     // The Crondis room's poison, pale and dark, and its water poured
     add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
+    // The Wardens: their seals as they discharge, their shots and where those land, and the one
+    // that loses blowing up
+    add(
+        ...Object.values(WARDENS.wardens).flatMap((w) => [
+            w.pyramidsSpotAnim,
+            w.shotSeal,
+            w.shotSpotAnim,
+        ]),
+        WARDENS.shot.impactSpotAnim,
+        2216,
+    );
     // Zebak's roar, and his jugs breaking and splashing
     add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
     // The Scabaras room's falling roof
@@ -708,6 +720,10 @@ export class GameAssets {
         ]) {
             locIds.add(id);
         }
+        // The Wardens' charging platforms, empty to full
+        for (const id of WARDENS.charge.platforms) {
+            locIds.add(id);
+        }
         // The Het room's mirrors, clean and dirty
         locIds.add(HET.mirrorLoc);
         locIds.add(HET.dirtyLoc);
@@ -739,6 +755,11 @@ export class GameAssets {
             SCABARAS.locs.matched,
         ]) {
             requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Wardens' pyramids, glowing
+        for (const { pyramid } of Object.values(WARDENS.wardens)) {
+            requests.push({ kind: "loc", key: "loc:" + pyramid, locId: pyramid, animated: true });
         }
 
         // Akkha's symbols, glowing
