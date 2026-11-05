@@ -7,17 +7,19 @@ the version in the corner).
 
 ### Changed
 
-- Theatre of Blood: the Maiden's Blood burst comes half as often, so melee can stay in on her.
+- Theatre of Blood, by Okaeri: the Maiden's Blood burst comes half as often, so melee can stay in
+  on her.
 
 ### Fixed
 
 - The Collection log has a tab for each place with finds of its own: the Theatre of Blood's has
-  its chest's finds, Lil' Zik and the weapons it brings in, and Zachariah's has the Dark squirrel,
-  rather than them all sitting under the Hallowed Night.
-- Theatre of Blood expert mode: the green and blue Nylocas come in close to shoot, rather than
-  hanging back out of reach of auras like Ice Barrage, which left a mage nothing to hit them with.
+  its chest's finds, Lil' Zik and the weapons it brings in, and Justiciar Zachariah's has the Dark
+  squirrel, rather than them all sitting under the Hallowed Night. Fixed by Okaeri.
+- Theatre of Blood expert mode: the green and blue Nylocas come in to a couple of tiles to shoot,
+  rather than hanging back out of reach of auras like Ice Barrage, which left a mage nothing to
+  hit them with. Fixed by Okaeri.
 - Hard and expert mode: a boss's fan of shots (the Maiden's Blood throw) shows a line for every
-  shot, rather than fewer lines than shots, which left shots between them.
+  shot, rather than fewer lines than shots, which left shots between them. Fixed by Okaeri.
 
 ## 0.26.0 - 2026-11-05
 

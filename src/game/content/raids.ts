@@ -24,6 +24,11 @@ export const HARD_RAID_COINS = 1.5;
 // Expert mode (hard mode with the Nylocas's colours): twice as many
 export const EXPERT_RAID_COINS = 2;
 
+// Expert mode's Nylocas that shoot (EnemyDef.onlyStyle) stop this many tiles off rather than hanging
+// back to shoot: only one style hurts them, so they come in where a magic aura (Ice Barrage reaches
+// 3.8) gets them, and still out of their bite
+export const EXPERT_NYLOCAS_KEEP = 2.5;
+
 // The chest at the end: a purple's chance is a player's raid points over PURPLE_POINTS (all of
 // them, spent or not), held between these; on hard mode, a roll for its own as well
 export const PURPLE_POINTS = 2500;

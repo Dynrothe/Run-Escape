@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
-import { getRoomPoints } from "../content/raids";
+import { EXPERT_NYLOCAS_KEEP, getRoomPoints } from "../content/raids";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
@@ -752,7 +752,7 @@ describe("expert mode", () => {
         expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
-    it("has an expert Nylocas that shoots come in close, where auras reach it", () => {
+    it("has an expert Nylocas that shoots come in where auras reach it, not to bite", () => {
         // How near a blue one gets, from 8 tiles off, with the player standing still
         const nearest = (expert: boolean) => {
             const sim = raid(expert);
@@ -770,8 +770,10 @@ describe("expert mode", () => {
             }
             return near;
         };
-        // Ice Barrage reaches 3.8 tiles
-        expect(nearest(true)).toBeLessThan(2);
+        // Inside Ice Barrage's reach, but not up against you
+        const iceBarrage = getWeapon("ice_barrage").levels[0].area;
+        expect(nearest(true)).toBeLessThan(iceBarrage);
+        expect(nearest(true)).toBeGreaterThan(EXPERT_NYLOCAS_KEEP - 0.5);
         // Elsewhere it still hangs back to shoot
         expect(nearest(false)).toBeGreaterThan(4.5);
     });
@@ -779,32 +781,44 @@ describe("expert mode", () => {
     it("has the Maiden slam half as often as the other slams, so melee can stay in", () => {
         const slam = (id: string, name: string) =>
             getEnemy(id).boss!.attacks.find((a) => a.name === name)!;
-        expect(slam("maiden_of_sugadinti", "Blood burst").cooldown).toBe(8);
-        expect(slam("xarpus", "Acid burst").cooldown).toBe(4);
+        const other = slam("xarpus", "Acid burst").cooldown;
+        expect(slam("maiden_of_sugadinti", "Blood burst").cooldown).toBe(2 * other);
     });
 
-    it("warns of a fan with as many lines as it fires, as wide, on hard too", () => {
+    it("warns of a fan with a line for each bullet it fires, as wide, on hard too", () => {
+        // The test raid, with the Theatre's own hard mode (its bullets)
+        const map: MapDef = {
+            ...TEST_RAID,
+            id: "test_raid_hard",
+            hard: getMap("theatre_of_blood").hard,
+        };
+        MAP_BY_ID.set(map.id, map);
         for (const expert of [false, true]) {
-            const sim = raid(expert);
+            const sim = new Sim({
+                grid: makeGrid(field(), 1000, 1000),
+                mapId: map.id,
+                expert,
+                characterId: "warrior",
+                metaStats: emptyStats(),
+                seed: 1,
+                spawnX: 1018.5,
+                spawnY: 1010.5,
+            });
+            sim.heroes[0].weapons = [];
             sim.player.invulnerable = 1e9;
-            // As the Theatre's hard mode has it (its map's hard.bullets)
-            if (expert) {
-                (sim as unknown as { bulletScale: number }).bulletScale = 1.5;
-            }
             const boss = sim.spawnEnemy(getEnemy("maiden_of_sugadinti"), "boss", {
                 x: sim.player.x,
                 y: sim.player.y + 10,
             })!;
             const attack = boss.def.boss!.attacks.find((a) => a.name === "Blood throw")!;
-            const { count, arc } = sim.volleyShape(attack.pattern!);
             sim["startBossAttack"](boss, attack);
             const windup = boss.bossState!.windup!;
-            const aim = Math.atan2(windup.dirY, windup.dirX);
-            const lines = Array.from({ length: count }, (_, i) =>
-                (aim - arc / 2 + (arc * i) / Math.max(1, count - 1)).toFixed(2),
-            );
+            // The lines its warning draws
+            const lines = sim
+                .volleyHeadings(attack.pattern!, Math.atan2(windup.dirY, windup.dirX))
+                .map((angle) => angle.toFixed(2));
             // Its first volley, then away from it all, so it isn't aimed anew
-            for (let i = 0; i < 2 * TICKS_PER_SECOND && sim.bullets.count < count; i++) {
+            for (let i = 0; i < 2 * TICKS_PER_SECOND && sim.bullets.count < lines.length; i++) {
                 sim.player.x = sim.player.prevX = sim.player.x + 0.2;
                 sim.step();
             }
@@ -814,8 +828,9 @@ describe("expert mode", () => {
             }).sort();
             expect(headings).toEqual([...lines].sort());
             // Hard mode's more of them
-            expect(count > attack.pattern!.count).toBe(expert);
+            expect(lines.length > attack.pattern!.count).toBe(expert);
         }
+        MAP_BY_ID.delete(map.id);
     });
 
     it("has Nylocas Vasilias change colour, keeping its hitpoints", () => {

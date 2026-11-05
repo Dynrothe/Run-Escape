@@ -13,8 +13,8 @@ import { ItemIcon } from "./ItemIcon";
 
 // Every evolution, after the client's Collection log. What it takes is always
 // shown; what it makes stays ??? until it's been made in a run. Then a tab for
-// each map with rewards to find (the Hallowed Night's, the Theatre of Blood's),
-// ??? until they're found: the weapons it brings in, then its trophies.
+// each map with trophies to find (content/collectionLog.ts), ??? until they're
+// found: the weapons it brings in, then its trophies.
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
@@ -75,7 +75,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     </>
                 ) : (
                     <>
-                        <p className="ui-subtle">What the {getMap(tab).name} has to find.</p>
+                        <p className="ui-subtle">{getMap(tab).name}: what there is to find.</p>
                         <div className="ui-log-list">
                             {rewards.map((entry, i) => (
                                 <RewardCard

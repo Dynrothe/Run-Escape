@@ -50,6 +50,7 @@ import {
     getPowerUp,
 } from "../content/powerups";
 import {
+    EXPERT_NYLOCAS_KEEP,
     EXPERT_RAID_COINS,
     HARD_RAID_COINS,
     HARD_UNIQUE_CHANCE,
@@ -3270,12 +3271,14 @@ export class Sim {
                     }
                 } else if (
                     enemy.def.shot &&
-                    distance < enemy.def.shot.range * SHOOTER_KEEP &&
-                    !(this.expert && enemy.def.onlyStyle)
+                    distance <
+                        (this.expert && enemy.def.onlyStyle
+                            ? EXPERT_NYLOCAS_KEEP
+                            : enemy.def.shot.range * SHOOTER_KEEP)
                 ) {
                     // Rangers and mages hang back to shoot, and close in when
-                    // they're out of reach. Not an expert raid's Nylocas: only one
-                    // style hurts them, so they come in where its auras reach too.
+                    // they're out of reach. An expert raid's Nylocas come in closer,
+                    // where auras reach them (EXPERT_NYLOCAS_KEEP).
                     dirX = dirY = 0;
                 }
                 // Running off with the flag: away from the player when they're
@@ -5921,6 +5924,14 @@ export class Sim {
         return { count, arc };
     }
 
+    // A spread's bullets' headings, aimed at aim: as many as a volley fires, as wide, so its
+    // warning lines (BossFightView.drawAim) are where they go
+    volleyHeadings(pattern: BulletPatternDef, aim: number): number[] {
+        const { count, arc } = this.volleyShape(pattern);
+        const step = arc / Math.max(1, count - 1);
+        return Array.from({ length: count }, (_, i) => aim - arc / 2 + i * step);
+    }
+
     private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
         const pattern = emitter.attack.pattern!;
         // Each volley after the first can be quicker than the last (speedUp)
@@ -5928,7 +5939,7 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        const { count, arc } = this.volleyShape(pattern);
+        const { count } = this.volleyShape(pattern);
         if (pattern.shape === "wall" || pattern.shape === "closing") {
             this.fireGappedVolley(emitter, boss, speed, life, turn, count);
             return;
@@ -5972,14 +5983,14 @@ export class Sim {
                 this.tick,
             );
         };
-        const step = spread ? arc / Math.max(1, count - 1) : (Math.PI * 2) / count;
-        const first = spread ? emitter.angle - arc / 2 : emitter.angle;
+        const step = (Math.PI * 2) / count;
+        const headings = spread ? this.volleyHeadings(pattern, emitter.angle) : undefined;
         for (let i = 0; i < count; i++) {
             // The way through a ring, at its own angle
             if (!spread && pattern.gap !== undefined && i * step < pattern.gap) {
                 continue;
             }
-            const angle = first + i * step;
+            const angle = headings ? headings[i] : emitter.angle + i * step;
             fire(angle);
             if (pattern.mirror) {
                 // The same the other side of the aim, so it turns the other way

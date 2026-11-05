@@ -3,8 +3,8 @@ import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
 
-// The Collection log's rewards: a tab for each map with trophies to find (the Hallowed Night's,
-// the Theatre of Blood's), each listing the weapons it brings in and then its trophies.
+// The Collection log's rewards: a tab for each map a trophy comes from (TrophyDef.from), each
+// listing the weapons it brings in and then its trophies. A new source gets its tab by itself.
 
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
 

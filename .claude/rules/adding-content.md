@@ -240,6 +240,10 @@ script marks `follower`, not the other one. It's baked as it's wanted (and by `s
 offered once found, with nothing else to add. Pets never go in the sim: see Pets in
 `docs/DEVELOPMENT.md`.
 
+A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
+under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`
+names that map (`content/collectionLog.ts`).
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`

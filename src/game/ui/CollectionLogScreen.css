@@ -18,6 +18,8 @@
 .ui-log-tabs {
     flex-shrink: 0;
     display: flex;
+    /* A tab for each place with finds: onto a second row on a narrow screen */
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 4px;
 }
