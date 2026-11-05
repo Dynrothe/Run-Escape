@@ -1754,3 +1754,216 @@ describe("the Scabaras room", () => {
         expect(sim.player.hp).toBeLessThan(sim.player.maxHp);
     });
 });
+
+const TEST_KEPHRI: MapDef = {
+    ...TEST_SCABARAS,
+    id: "test_kephri",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                ...TEST_SCABARAS.tombs!.paths[0],
+                room: {
+                    ...TEST_SCABARAS.tombs!.paths[0].room!,
+                    boss: {
+                        enemyId: "kephri",
+                        arrive: { x: 1036.5, y: 1024.5 },
+                        at: { x: 1036.5, y: 1046.5 },
+                        line: { y: 1026 },
+                        swarms: [
+                            { x: 1028.5, y: 1044.5 },
+                            { x: 1044.5, y: 1044.5 },
+                            { x: 1044.5, y: 1034.5 },
+                            { x: 1028.5, y: 1034.5 },
+                        ],
+                    },
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_KEPHRI.id, TEST_KEPHRI);
+
+describe("Kephri", () => {
+    const DEF = getEnemy("kephri").boss!.kephri!;
+    // Well south of her, out of everything's way
+    const SOUTH = { x: 1036.5, y: 1030.5 };
+    function atKephri(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_KEPHRI.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.devSkipToTombsBoss()).toBe(true);
+        sim.weapons = [];
+        seconds(sim, 0.2, SOUTH);
+        expect(sim.tombsKephri).toBeDefined();
+        return sim;
+    }
+    const kephri = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsKephri!.uid)!;
+    const swarms = (sim: Sim) =>
+        sim.enemies.filter((e) => !e.dead && e.def.id === DEF.swarm.enemyId);
+    // Down to her first shield's break
+    function intermission(invocations: string[] = []): Sim {
+        const sim = atKephri(invocations);
+        const boss = kephri(sim);
+        boss.hp = Math.floor(boss.maxHp * DEF.intermissions.at[0]) - 1;
+        seconds(sim, 0.1, SOUTH);
+        expect(sim.tombsKephri!.intermission).toBeDefined();
+        return sim;
+    }
+
+    it("rises when the party walks in, and sits where she is", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        const { x, y } = boss;
+        seconds(sim, 3, SOUTH);
+        expect(boss.x).toBe(x);
+        expect(boss.y).toBe(y);
+    });
+
+    it("breaks her shield at its share: dazed, she can't be hurt, and her overlord comes", () => {
+        const sim = intermission();
+        const boss = kephri(sim);
+        expect(boss.hp).toBe(Math.round(boss.maxHp * DEF.intermissions.at[0]));
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(boss, 500, 0, boss.x, boss.y)).toBe(0);
+        expect(sim.enemies.some((e) => !e.dead && e.def.id === "kephri_spitting")).toBe(true);
+    });
+
+    it("sends her swarms round the edge, quicker as they come, healing her if they reach her", () => {
+        const sim = intermission();
+        const boss = kephri(sim);
+        const hp = boss.hp;
+        const seen = new Set<string>();
+        for (let i = 0; i < 20 * TICKS_PER_SECOND; i++) {
+            for (const swarm of swarms(sim)) {
+                seen.add(swarm.uid + "");
+            }
+            seconds(sim, 1 / TICKS_PER_SECOND, SOUTH);
+        }
+        expect(seen.size).toBeGreaterThan(10);
+        expect(boss.hp).toBeGreaterThan(hp);
+    });
+
+    it("comes out of it once the swarms and overlords are dead", () => {
+        const sim = intermission();
+        const boss = kephri(sim);
+        for (let i = 0; i < 90 && sim.tombsKephri!.intermission; i++) {
+            for (const enemy of sim.enemies) {
+                if (!enemy.dead && enemy !== boss) {
+                    sim.damageEnemy(enemy, 1e9, 0, enemy.x, enemy.y);
+                }
+            }
+            seconds(sim, 0.5, SOUTH);
+        }
+        expect(sim.tombsKephri!.intermission).toBeUndefined();
+        expect(sim.tombsKephri!.phase).toBe(1);
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(boss, 50, 0, boss.x, boss.y)).toBeGreaterThan(0);
+    });
+
+    it("brings another overlord with More Overlords", () => {
+        const sim = intermission(["more_overlords"]);
+        expect(sim.enemies.some((e) => !e.dead && e.def.id === "kephri_soldier")).toBe(true);
+    });
+
+    it("throws you back from her with Dung Strike, stunned, with dung along the way", () => {
+        const sim = atKephri();
+        const fight = sim.tombsKephri!;
+        fight.nextDungTick = sim.tick;
+        seconds(sim, 0.1, { x: 1036.5, y: 1038.5 });
+        expect(fight.dung?.heroes).toEqual([0]);
+        expect(sim.kephriDungHeroes).toEqual([0]);
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1038.5;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && fight.dung; i++) {
+            sim.player.hp = sim.player.maxHp;
+            sim.player.invulnerable = 0;
+            sim.step();
+        }
+        expect(fight.dung).toBeUndefined();
+        expect(sim.player.y).toBeLessThan(1038.5 - 4);
+        expect(sim.player.frozen).toBeGreaterThan(0);
+        expect(sim.tombsCover.some((pile) => pile.look === "loc:" + DEF.dung.pileLoc)).toBe(true);
+    });
+
+    it("has a light egg go off if it isn't broken, and a dark one hatch", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        const light = sim.spawnEnemy(getEnemy("kephri_egg_explode"), "normal", SOUTH)!;
+        const dark = sim.spawnEnemy(getEnemy("kephri_egg_hatch"), "normal", {
+            x: 1030.5,
+            y: 1030.5,
+        })!;
+        sim.player.hp = sim.player.maxHp;
+        for (let i = 0; i < 7 * TICKS_PER_SECOND; i++) {
+            sim.player.x = sim.player.prevX = SOUTH.x;
+            sim.player.y = sim.player.prevY = SOUTH.y;
+            sim.player.invulnerable = 0;
+            boss.bossState!.channelEnd = sim.tick + 2;
+            sim.step();
+            if (light.dead) {
+                break;
+            }
+        }
+        expect(light.dead).toBe(true);
+        expect(sim.player.hp).toBeLessThan(sim.player.maxHp);
+        seconds(sim, 2, SOUTH);
+        expect(dark.dead).toBe(true);
+        expect(sim.enemies.some((e) => !e.dead && e.def.id === "agile_scarab")).toBe(true);
+    });
+
+    it("throws more eggs with Lively Larvae", () => {
+        const count = (invocations: string[]) => {
+            const sim = atKephri(invocations);
+            const attack = kephri(sim).def.boss!.attacks.find((a) => a.name === "Mass Incubation")!;
+            return sim["invokedAttack"](attack).summon!.count;
+        };
+        expect(count([])).toBe(2);
+        expect(count(["lively_larvae"])).toBe(4);
+    });
+
+    it("has her Arcane Scarab go off once charged, or fly off if it's hit hard", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        const arcane = sim.spawnEnemy(getEnemy("kephri_arcane"), "normal", {
+            x: boss.x + 4,
+            y: boss.y - 5,
+        })!;
+        seconds(sim, 0.1, SOUTH);
+        const charge = sim.tombsKephri!.arcane.get(arcane.uid)!;
+        expect(charge).toBeDefined();
+        const { x, y } = arcane;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(arcane, arcane.maxHp * 0.3, 0, arcane.x, arcane.y);
+        seconds(sim, 0.1, SOUTH);
+        expect(arcane.x !== x || arcane.y !== y).toBe(true);
+        expect(charge.spot).toBe(1);
+        // Left alone, it goes off
+        const bullets = sim.bullets.count;
+        seconds(sim, DEF.arcane.charge + 0.2, SOUTH);
+        expect(sim.bullets.count).toBeGreaterThan(bullets);
+    });
+
+    it("comes back for her last without her swarm, throwing everyone back", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        sim.tombsKephri!.phase = DEF.intermissions.at.length;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(boss, boss.hp + 10, 0, boss.x, boss.y);
+        seconds(sim, 0.2, SOUTH);
+        const risen = kephri(sim);
+        expect(risen.def.id).toBe("kephri_final");
+        expect(sim.tombsKephri!.final).toBe(true);
+        expect(sim.tombsKephri!.dung?.heroes).toEqual([0]);
+    });
+});

@@ -32,6 +32,9 @@ import {
     APMEKEN_SPOTANIMS,
     HET,
     JUNGLE_JAPES,
+    KEPHRI,
+    KEPHRI_ARCANE_BLAST,
+    KEPHRI_EGG_BLAST,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     SCABARAS,
@@ -163,6 +166,11 @@ function getSpotAnimIds(): number[] {
     add(SARCOPHAGUS_BLAST.spotAnim);
     // The Het room's beam, along and across, and where it stops
     add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // Kephri's shield (up, and taking a swarm), her flies, dung coming down, her eggs going
+    // off, the Arcane Scarab's charge, and what her specials' shards are drawn as
+    add(2141, 2144, KEPHRI.dung.spotAnim, KEPHRI.dung.dropSpotAnim, KEPHRI.eggs.spotAnim);
+    add(KEPHRI.arcane.spotAnim, 2150);
+    add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
     // The Scabaras room's falling roof
     add(SCABARAS.rockSpotAnim);
     // Akkha's quadrants' elements, which are no attack of his
@@ -582,6 +590,8 @@ export class GameAssets {
         objIds.add(JUNGLE_JAPES.objId);
         // Ba-Ba's sarcophagi, open
         locIds.add(SARCOPHAGI.loc);
+        // Kephri's dung, a wall where it's dropped
+        locIds.add(KEPHRI.dung.pileLoc);
         // The Scabaras room's plates, as they stand
         const { locs: scabaras } = SCABARAS;
         for (const id of [

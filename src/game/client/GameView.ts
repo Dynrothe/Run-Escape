@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { AKKHA, HET, JUNGLE_JAPES, SARCOPHAGI, SCABARAS } from "../content/tombs";
+import { AKKHA, HET, JUNGLE_JAPES, KEPHRI, SARCOPHAGI, SCABARAS } from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -161,6 +161,8 @@ const TOMBS_GATE_YAW = 512;
 // Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
 // Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
 // (they're a tile across)
+// Kephri's swarm shield, round her while it's up
+const KEPHRI_SHIELD_SPOTANIM = 2141;
 const AKKHA_SYMBOL_OUT = 1.5;
 const AKKHA_SYMBOL_SCALE = 2.2;
 // How strongly the quadrant he's showing glows, against a blast's full strength
@@ -562,6 +564,7 @@ export class GameView {
         this.drawHet(actors, sim);
         this.drawAkkha(actors, sim);
         this.drawScabaras(actors, sim);
+        this.drawKephri(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -768,6 +771,44 @@ export class GameView {
                     one.y,
                     yaw,
                 );
+            }
+        }
+    }
+
+    // Kephri: her swarm's shield round her while it's up (2141), and her flies round whoever's
+    // about to be thrown back (2146)
+    private drawKephri(actors: ActorRenderer, sim: Sim): void {
+        const fight = sim.tombsKephri;
+        if (!fight) {
+            return;
+        }
+        const boss = sim.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        const play = (spotAnim: number, x: number, y: number, scale = 1) => {
+            const model = this.assets.get("spot:" + spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                x,
+                this.ground(sim, x, y),
+                y,
+                0,
+                {
+                    scale,
+                },
+            );
+        };
+        if (boss && !fight.final && !fight.intermission) {
+            play(KEPHRI_SHIELD_SPOTANIM, boss.x, boss.y, 1.6);
+        }
+        for (const index of sim.kephriDungHeroes) {
+            const player = sim.heroes[index]?.player;
+            if (player) {
+                play(KEPHRI.dung.spotAnim, player.x, player.y);
             }
         }
     }

@@ -338,4 +338,27 @@ raid's ranges.
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
       stream in from the passages.
     - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip), and
-      Kephri. The bot doesn't know the room.
+      the bot doesn't know the room.
+- **Kephri** (`KEPHRI` in `content/tombs.ts`, `Sim.stepKephri`), the Scabaras path's boss, after its
+  room. Her arena is square 55,84's floor, cut without the teleport crystal's room past its chasm and
+  turned a quarter clockwise, so you walk in from the south and she sits at the north. She never moves.
+    - **Her attacks**, as data: fireballs (Vorkath's firebomb, 2167) down on where you stood under
+      their shadows, twice, each breaking into shards; rings of scarab spit with a way through; her
+      swarm spiralling out both ways; and Mass Incubation, eggs thrown round the arena: dark ones
+      hatch an Agile Scarab, the light one goes off in a 3 by 3 and breaks into shards unless
+      it's broken first.
+    - **Her shield** (2141 round her) breaks at 66% and 33%: dazed (11720) and shielded, she
+      doesn't attack while swarms (28, then 24, more with path levels) come round the arena's edge
+      clockwise from six holes, one every 4 game ticks, then 3, 2 and 1, sometimes three at once
+      from path level 2. Each that reaches her heals her. Her overlords come too: a Spitting Scarab,
+      then a Soldier (whose swarm heals her every 5 s) and an Arcane Scarab, which charges and then
+      sends a ring of red swarm all round unless it's hit hard enough to fly off and start again.
+      It's over once the swarms and overlords are all done.
+    - **Dung Strike**: flies round you (2146) for 1.8 s, then she throws you straight back from
+      her, stunned for 2 s, with dung left along the way as walls for a while.
+    - **Her last**: at 0 she's back with a quarter of her hitpoints as 11721, her swarm gone,
+      throwing the whole party back.
+    - **Invocations**: Lively Larvae (two more dark eggs), More Overlords, Blowing Mud (two
+      thrown back), Medic! (swarms between her shield's breaks too, at half speed), Aerial
+      Assault (bigger, harder fireballs).
+    - Not in yet: her phantom (the Wardens'), and the bot doesn't know her fight.

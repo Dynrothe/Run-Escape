@@ -250,6 +250,33 @@ const SCABARAS_ENTRANCES = [
     [21, 18],
 ];
 
+// Kephri's arena, in square 55,84: a floor 16 by 17 (local 24 to 39, 24 to 40), her end the west,
+// the way in the east behind its barrier (45335, local 40), and past a chasm on the west the
+// teleport crystal's room, which the cut leaves out. Turned a quarter clockwise, so you walk in
+// from the south and she's at the north: a tile (x, y) of the cut lies at (y, 22 - x).
+const KEPHRI_ARENA: RoomCut = {
+    x: 3540,
+    y: 5398,
+    sizeX: 23,
+    sizeY: 21,
+    plane: 0,
+    cell: [0, 1],
+    arrive: [10, 4],
+    turns: 1,
+};
+// (turned) Where she sits, the line past which (north) she rises, and her swarms' way in round
+// the floor's edge, clockwise from the north-west
+const KEPHRI_AT = [10.5, 15.5];
+const KEPHRI_LINE = 6;
+const KEPHRI_SWARMS = [
+    [2, 14],
+    [18, 14],
+    [18, 6],
+    [15, 3],
+    [5, 3],
+    [2, 6],
+];
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -266,7 +293,7 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS].map((cut) => {
+const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS, KEPHRI_ARENA].map((cut) => {
     const at = cellCorner(cut);
     return {
         cut,
@@ -285,6 +312,7 @@ const BA_BA_ROOM = ROOMS[2];
 const HET_ROOM = ROOMS[3];
 const AKKHA_ROOM = ROOMS[4];
 const SCABARAS_ROOM = ROOMS[5];
+const KEPHRI_ROOM = ROOMS[6];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -338,6 +366,17 @@ export const TOA_PLACES = {
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
             },
         },
+    },
+    kephri: {
+        arrive: worldTile(KEPHRI_ROOM.arrive.x, KEPHRI_ROOM.arrive.y),
+        at: {
+            x: MAP_X * MAP_SQUARE_SIZE + KEPHRI_ROOM.at.x + KEPHRI_AT[0],
+            y: MAP_Y * MAP_SQUARE_SIZE + KEPHRI_ROOM.at.y + KEPHRI_AT[1],
+        },
+        line: { y: MAP_Y * MAP_SQUARE_SIZE + KEPHRI_ROOM.at.y + KEPHRI_LINE },
+        swarms: KEPHRI_SWARMS.map(([x, y]) =>
+            worldTile(KEPHRI_ROOM.at.x + x, KEPHRI_ROOM.at.y + y),
+        ),
     },
     scabaras: {
         arrive: worldTile(SCABARAS_ROOM.arrive.x, SCABARAS_ROOM.arrive.y),
@@ -654,6 +693,13 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                         gate: TOA_PLACES.scabaras.gate,
                         entrances: TOA_PLACES.scabaras.entrances,
                         scabaras: TOA_PLACES.scabaras.puzzle,
+                        boss: {
+                            enemyId: "kephri",
+                            arrive: TOA_PLACES.kephri.arrive,
+                            at: TOA_PLACES.kephri.at,
+                            line: TOA_PLACES.kephri.line,
+                            swarms: TOA_PLACES.kephri.swarms,
+                        },
                     },
                 }),
                 ...(id === "apmeken" && {

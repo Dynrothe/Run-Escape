@@ -86,6 +86,8 @@ import {
     HET,
     HET_WAVES,
     JUNGLE_JAPES,
+    KEPHRI_ARCANE_BLAST,
+    KEPHRI_EGG_BLAST,
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     SCABARAS,
@@ -121,6 +123,7 @@ import {
     EnemyTag,
     GearSlot,
     GroundPatternDef,
+    KephriDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -826,6 +829,28 @@ export type AkkhaFight = {
     stand?: { corner: number; nextTick: number; since: number; hpAt: number };
 };
 
+// Kephri's fight (BossDef.kephri), while she's up: how many intermissions she's had, whether
+// she's on her last (her swarm gone), the intermission she's in (its swarms still to send, how
+// many have gone, when the next does and from which hole, her overlords), the heroes her flies
+// are round and when they're thrown, when her next Dung Strike and Medic!'s next swarm come, and
+// each Arcane Scarab's charge (when it began, its hitpoints then, where it's flown to)
+export type KephriFight = {
+    uid: number;
+    phase: number;
+    final: boolean;
+    intermission?: {
+        left: number;
+        sent: number;
+        nextTick: number;
+        point: number;
+        overlords: number[];
+    };
+    dung?: { heroes: number[]; strikeTick: number };
+    nextDungTick: number;
+    medicTick: number;
+    arcane: Map<number, { startTick: number; hpAt: number; spot: number }>;
+};
+
 // Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
 const AKKHA_VANISH_SEQ = 9784;
 
@@ -963,6 +988,7 @@ export class Sim {
     tombsPeels: { x: number; y: number; endTick: number }[] = [];
     // Akkha's fight, while he's up
     tombsAkkha?: AkkhaFight;
+    tombsKephri?: KephriFight;
     // Rocks Ba-Ba's boulders left, solid, to take cover by (BossAttackDef.leavesCover)
     tombsCover: { x: number; y: number; radius: number; endTick: number; look: string }[] = [];
     // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
@@ -4472,6 +4498,10 @@ export class Sim {
                     ...attack.pattern,
                     speed: attack.pattern.speed * (invoked.speed ?? 1),
                 },
+                summon: attack.summon && {
+                    ...attack.summon,
+                    count: attack.summon.count + (invoked.count ?? 0),
+                },
                 ground: attack.ground && {
                     ...attack.ground,
                     radius: attack.ground.radius * (invoked.radius ?? 1),
@@ -4615,6 +4645,7 @@ export class Sim {
         if (fight.beatenTick !== undefined) {
             this.tombsPeels = [];
             this.tombsAkkha = undefined;
+            this.tombsKephri = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
@@ -4626,6 +4657,7 @@ export class Sim {
             // Not up (yet, or again after a death): nothing of the last fight's left lying about
             this.tombsPeels = [];
             this.tombsAkkha = undefined;
+            this.tombsKephri = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
@@ -4635,6 +4667,18 @@ export class Sim {
                 const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
                 if (enemy) {
                     fight.uid = enemy.uid;
+                    if (enemy.def.boss?.kephri) {
+                        this.tombsKephri = {
+                            uid: enemy.uid,
+                            phase: 0,
+                            final: false,
+                            nextDungTick:
+                                this.tick + secondsToTicks(enemy.def.boss.kephri.dung.every),
+                            medicTick:
+                                this.tick + secondsToTicks(enemy.def.boss.kephri.swarm.medic),
+                            arcane: new Map(),
+                        };
+                    }
                     if (enemy.def.boss?.akkha) {
                         this.tombsAkkha = {
                             uid: enemy.uid,
@@ -4679,6 +4723,7 @@ export class Sim {
             return;
         }
         this.stepAkkha(boss);
+        this.stepKephri(boss);
         this.stepTombsCover();
         this.stepTombsPit(boss);
         this.stepTombsPeels();
@@ -5366,6 +5411,341 @@ export class Sim {
             }
         }
         this.stepApmekenIssue(room, spots!);
+    }
+
+    // ---- Kephri ----
+
+    // Her fight, each tick she's up: her shield's intermissions, Dung Strike, her eggs and her
+    // overlords
+    private stepKephri(boss: Enemy): void {
+        const fight = this.tombsKephri;
+        const def = boss.def.boss?.kephri;
+        if (!fight || !def || fight.uid !== boss.uid) {
+            return;
+        }
+        // Up again for her last: her swarm's gone, and she throws everyone back
+        if (boss.def.id !== "kephri" && !fight.final) {
+            fight.final = true;
+            fight.intermission = undefined;
+            this.emit({ type: "notice", message: def.finalMessage });
+            this.startKephriDung(
+                fight,
+                this.heroes.filter((hero) => this.isUp(hero)).map((hero) => hero.index),
+            );
+        }
+        this.stepKephriIntermission(boss, fight, def);
+        this.stepKephriDung(boss, fight, def);
+        this.stepKephriEggs(boss, def);
+        this.stepKephriArcane(boss, fight, def);
+        this.stepKephriSwarms(boss, fight, def);
+    }
+
+    // Her shield breaking at each of its shares of her hitpoints: dazed and shielded, no attacks,
+    // while her swarms come round the edge and her overlords fight. Over once they're all done.
+    private stepKephriIntermission(boss: Enemy, fight: KephriFight, def: KephriDef): void {
+        const at = def.intermissions.at;
+        const state = boss.bossState;
+        if (!fight.intermission) {
+            if (
+                fight.final ||
+                fight.phase >= at.length ||
+                boss.hp > boss.maxHp * at[fight.phase] ||
+                state?.windup
+            ) {
+                return;
+            }
+            const which = fight.phase;
+            boss.hp = Math.max(boss.hp, Math.round(boss.maxHp * at[which]));
+            const level = this.tombsPathLevel;
+            const swarms = def.intermissions.swarms[which] + 2 * level;
+            const overlords = [
+                ...def.intermissions.overlords[which],
+                ...(this.invoked("more_overlords") ? def.intermissions.moreOverlords[which] : []),
+            ];
+            const uids: number[] = [];
+            for (const id of overlords) {
+                const [dx, dy] = def.overlordAt[id] ?? [0, -4];
+                const one = this.spawnEnemy(getEnemy(id), "normal", {
+                    x: boss.x + dx,
+                    y: boss.y + dy,
+                });
+                if (one) {
+                    one.noDrops = true;
+                    uids.push(one.uid);
+                }
+            }
+            fight.intermission = {
+                left: swarms,
+                sent: 0,
+                nextTick: this.tick + secondsToTicks(1),
+                point: this.rng.int(Math.max(1, this.tombsPathRoom?.boss?.swarms?.length ?? 1)),
+                overlords: uids,
+            };
+            this.emit({ type: "notice", message: def.intermissions.message });
+        }
+        const intermission = fight.intermission;
+        // Dazed and shielded, and not attacking
+        boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
+        if (state) {
+            state.channelEnd = Math.max(state.channelEnd ?? 0, this.tick + 2);
+        }
+        const points = this.tombsPathRoom?.boss?.swarms ?? [];
+        if (intermission.left > 0 && this.tick >= intermission.nextTick && points.length > 0) {
+            // Round the edge clockwise, now and then skipping a point
+            intermission.point =
+                (intermission.point + (this.rng.chance(0.25) ? 2 : 1)) % points.length;
+            const level = this.tombsPathLevel;
+            const trio =
+                level >= def.swarm.trios &&
+                this.rng.chance(level >= def.swarm.trios + 2 ? 0.5 : 0.25);
+            const count = Math.min(intermission.left, trio ? 3 : 1);
+            for (let i = 0; i < count; i++) {
+                this.sendKephriSwarm(points[intermission.point], def, 1, i);
+            }
+            intermission.left -= count;
+            intermission.sent += count;
+            const step =
+                def.swarm.cadence[
+                    Math.min(def.swarm.cadence.length - 1, Math.floor(intermission.sent / 4))
+                ];
+            intermission.nextTick = this.tick + secondsToTicks(step);
+        }
+        const alive = (uid: number) => this.enemies.some((e) => e.uid === uid && !e.dead);
+        const swarmsUp = this.enemies.some((e) => !e.dead && e.def.id === def.swarm.enemyId);
+        if (intermission.left === 0 && !swarmsUp && !intermission.overlords.some(alive)) {
+            fight.intermission = undefined;
+            fight.phase++;
+            boss.shieldEnd = 0;
+            if (state) {
+                state.channelEnd = 0;
+            }
+            fight.nextDungTick = this.tick + secondsToTicks(this.kephriDungEvery(def));
+            this.emit({ type: "notice", message: def.intermissions.endMessage });
+        }
+    }
+
+    // A swarm out of one of the edge's holes (a step apart for a trio), making for her
+    private sendKephriSwarm(
+        at: { x: number; y: number },
+        def: KephriDef,
+        speed: number,
+        i: number,
+    ): void {
+        const one = this.spawnEnemy(getEnemy(def.swarm.enemyId), "normal", {
+            x: at.x + (i === 1 ? 0.6 : i === 2 ? -0.6 : 0),
+            y: at.y,
+        });
+        if (one) {
+            one.noDrops = true;
+            one.speed *= speed;
+        }
+    }
+
+    // Swarms that get to her restore her (her shield, as her hitpoints) and are gone; Medic! has
+    // them come outside her intermissions too
+    private stepKephriSwarms(boss: Enemy, fight: KephriFight, def: KephriDef): void {
+        const points = this.tombsPathRoom?.boss?.swarms ?? [];
+        if (
+            this.invoked("medic") &&
+            !fight.intermission &&
+            points.length > 0 &&
+            this.tick >= fight.medicTick
+        ) {
+            fight.medicTick = this.tick + secondsToTicks(def.swarm.medic);
+            this.sendKephriSwarm(points[this.rng.int(points.length)], def, 0.5, 0);
+        }
+        const reach = boss.radius + def.swarm.reach;
+        for (const enemy of this.enemies) {
+            if (enemy.dead || enemy.def.id !== def.swarm.enemyId) {
+                continue;
+            }
+            if (fm.hypot(enemy.x - boss.x, enemy.y - boss.y) > reach) {
+                continue;
+            }
+            boss.hp = Math.min(
+                boss.maxHp,
+                boss.hp + Math.max(1, Math.round(boss.maxHp * def.swarm.heal)),
+            );
+            this.addEffect(2144, boss.x, boss.y, 0, 30, boss.uid);
+            this.vanish(enemy);
+        }
+    }
+
+    private kephriDungEvery(def: KephriDef): number {
+        return Math.max(def.dung.least, def.dung.every - this.tombsPathLevel);
+    }
+
+    // Flies round these heroes: they're thrown back once the tell's done
+    private startKephriDung(fight: KephriFight, heroes: number[]): void {
+        const def = this.enemies.find((e) => e.uid === fight.uid)?.def.boss?.kephri;
+        if (!def || heroes.length === 0) {
+            return;
+        }
+        fight.dung = { heroes, strikeTick: this.tick + secondsToTicks(def.dung.warn) };
+        const current = this.hero;
+        for (const index of heroes) {
+            this.use(this.heroes[index]);
+            this.emit({ type: "notice", message: def.dung.message }, true);
+        }
+        this.use(current);
+    }
+
+    // Dung Strike, now and then outside her intermissions (Blowing Mud: on two of the party)
+    private stepKephriDung(boss: Enemy, fight: KephriFight, def: KephriDef): void {
+        if (!fight.dung) {
+            if (fight.intermission || this.tick < fight.nextDungTick || boss.bossState?.windup) {
+                return;
+            }
+            fight.nextDungTick = this.tick + secondsToTicks(this.kephriDungEvery(def));
+            const up = this.heroes.filter((hero) => this.isUp(hero));
+            const picked: number[] = [];
+            const want = Math.min(up.length, this.invoked("blowing_mud") ? 2 : 1);
+            while (picked.length < want) {
+                const hero = up[this.rng.int(up.length)];
+                if (!picked.includes(hero.index)) {
+                    picked.push(hero.index);
+                }
+            }
+            this.startKephriDung(fight, picked);
+            return;
+        }
+        if (this.tick < fight.dung.strikeTick) {
+            return;
+        }
+        const heroes = fight.dung.heroes;
+        fight.dung = undefined;
+        const current = this.hero;
+        const damage = def.dung.damage * this.tombsRoomScale().damage;
+        for (const index of heroes) {
+            const hero = this.heroes[index];
+            if (!hero || !this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            const player = this.player;
+            // Straight away from her, as far as the floor goes
+            const dx = player.x - boss.x;
+            const dy = player.y - boss.y;
+            const length = Math.max(0.001, fm.hypot(dx, dy));
+            const ux = dx / length;
+            const uy = dy / length;
+            const fromX = player.x;
+            const fromY = player.y;
+            let gone = 0;
+            for (let step = 0.25; step <= def.dung.knock; step += 0.25) {
+                const x = fromX + ux * step;
+                const y = fromY + uy * step;
+                if (!this.grid.contains(x, y) || this.grid.isSolid(x, y)) {
+                    break;
+                }
+                gone = step;
+            }
+            player.x = player.prevX = fromX + ux * gone;
+            player.y = player.prevY = fromY + uy * gone;
+            player.frozen = Math.max(player.frozen, secondsToTicks(def.dung.stun));
+            this.damagePlayer(damage, boss.def.id, false);
+            this.emit({ type: "notice", message: def.dung.thrownMessage }, true);
+            // Dung down along the way: walls for a while
+            for (let along = def.dung.gap; along < gone - 0.5; along += def.dung.gap) {
+                const x = fromX + ux * along;
+                const y = fromY + uy * along;
+                this.tombsCover.push({
+                    x,
+                    y,
+                    radius: def.dung.radius,
+                    endTick: this.tick + secondsToTicks(def.dung.seconds),
+                    look: "loc:" + def.dung.pileLoc,
+                });
+                this.addEffect(def.dung.dropSpotAnim, x, y, 0, 40);
+            }
+        }
+        this.use(current);
+    }
+
+    // Her light eggs, going off as they'd hatch if nobody's broken them
+    private stepKephriEggs(boss: Enemy, def: KephriDef): void {
+        const eggs = def.eggs;
+        for (const egg of this.enemies) {
+            if (egg.dead || egg.def.id !== eggs.explodeId || egg.hatchTick === 0) {
+                continue;
+            }
+            if (this.tick < egg.hatchTick - 1) {
+                continue;
+            }
+            const damage = eggs.damage * this.tombsRoomScale().damage;
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                if (
+                    Math.abs(player.x - egg.x) <= eggs.radius &&
+                    Math.abs(player.y - egg.y) <= eggs.radius
+                ) {
+                    this.damagePlayer(damage, boss.def.id, false);
+                }
+            });
+            this.addEffect(eggs.spotAnim, egg.x, egg.y, 0, 40);
+            this.fireShards(boss, KEPHRI_EGG_BLAST, KEPHRI_EGG_BLAST.shards!, egg.x, egg.y);
+            this.vanish(egg);
+        }
+    }
+
+    // Her Arcane Scarab: charging, going off all round once charged, and flying off to charge
+    // again somewhere else if it's hit hard enough meanwhile
+    private stepKephriArcane(boss: Enemy, fight: KephriFight, def: KephriDef): void {
+        const arcane = def.arcane;
+        for (const enemy of this.enemies) {
+            if (enemy.dead || enemy.def.id !== arcane.enemyId) {
+                continue;
+            }
+            let charge = fight.arcane.get(enemy.uid);
+            const chargeTicks = secondsToTicks(
+                Math.max(3, arcane.charge - 0.5 * this.tombsPathLevel),
+            );
+            if (!charge) {
+                charge = { startTick: this.tick, hpAt: enemy.hp, spot: 0 };
+                fight.arcane.set(enemy.uid, charge);
+                this.addEffect(arcane.spotAnim, enemy.x, enemy.y, 0, chargeTicks, enemy.uid, true);
+                this.emit({ type: "notice", message: arcane.message });
+            }
+            if (charge.hpAt - enemy.hp >= enemy.maxHp * arcane.disperse) {
+                // Dispersed: off to the next spot, to start over
+                charge.spot = (charge.spot + 1) % arcane.spots.length;
+                const [dx, dy] = arcane.spots[charge.spot];
+                enemy.x = enemy.prevX = boss.x + dx;
+                enemy.y = enemy.prevY = boss.y + dy;
+                this.endEffectsOn(enemy.uid);
+                charge.startTick = this.tick;
+                charge.hpAt = enemy.hp;
+                this.addEffect(arcane.spotAnim, enemy.x, enemy.y, 0, chargeTicks, enemy.uid, true);
+                this.emit({ type: "notice", message: "The Arcane Scarab's swarm scatters!" });
+                continue;
+            }
+            if (this.tick - charge.startTick >= chargeTicks) {
+                this.fireShards(
+                    boss,
+                    KEPHRI_ARCANE_BLAST,
+                    KEPHRI_ARCANE_BLAST.shards!,
+                    enemy.x,
+                    enemy.y,
+                );
+                charge.startTick = this.tick;
+                charge.hpAt = enemy.hp;
+                this.addEffect(arcane.spotAnim, enemy.x, enemy.y, 0, chargeTicks, enemy.uid, true);
+            }
+        }
+    }
+
+    // Ends the effects following an enemy now
+    private endEffectsOn(uid: number): void {
+        for (const effect of this.effects) {
+            if (effect.enemyUid === uid) {
+                effect.endTick = this.tick;
+            }
+        }
+    }
+
+    // Who Kephri's flies are round, for drawing them
+    get kephriDungHeroes(): number[] {
+        return this.tombsKephri?.dung?.heroes ?? [];
     }
 
     // ---- The Scabaras room ----

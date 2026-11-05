@@ -219,8 +219,10 @@ export class BossFightView {
         }
         // Ba-Ba's boulders' rocks, to take cover by
         sim.tombsCover.forEach((rock) => {
-            const def = getEnemy(rock.look);
-            const model = this.assets.get(getEnemyModelKey(def, 0));
+            // An enemy's model, or a loc's (Kephri's dung)
+            const model = rock.look.startsWith("loc:")
+                ? this.assets.get(rock.look)
+                : this.assets.get(getEnemyModelKey(getEnemy(rock.look), 0));
             if (model) {
                 const anim = model.anims[0];
                 actors.draw(

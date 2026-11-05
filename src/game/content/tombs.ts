@@ -1,4 +1,12 @@
-import { AkkhaDef, AkkhaElementDef, BossAttackDef, EnemyDef, EnemyShotDef, WaveDef } from "./types";
+import {
+    AkkhaDef,
+    AkkhaElementDef,
+    BossAttackDef,
+    EnemyDef,
+    EnemyShotDef,
+    KephriDef,
+    WaveDef,
+} from "./types";
 
 // The Tombs of Amascut (in development: docs/design/tombs-of-amascut.md): its enemies, and what
 // each path's room does. The map, with where things stand, is the dev map's
@@ -1255,3 +1263,369 @@ export const SCABARAS = {
         "Foot",
     ],
 };
+
+// ---- Kephri, the Path of Scabaras's boss ----
+
+// The giant dawn scarab (NPCs 11719 to 11722, size 5, model 46417): 11719 behind her swarm's
+// shield, 11720 dazed while it's down, 11721 once it's gone for good. She never moves. Her
+// fireball is Vorkath's firebomb (2167), her eggs her own projectiles (2164, 2165).
+const KEPHRI_IDLE = 9572;
+const KEPHRI_DEATH = 9582;
+const KEPHRI_SOUNDS = { attack: -1, hit: -1, death: -1 };
+// Her scarabs' green spit (the Spitting Scarab's projectile, 2152)
+const SCARAB_SPIT = 2152;
+
+export const KEPHRI: KephriDef = {
+    intermissions: {
+        // At these shares of her hitpoints her shield breaks: dazed, she can't be hurt while
+        // swarms (swarms of them) rush in to restore it, and her overlords come (moreOverlords
+        // too, with More Overlords). It's over once the swarms are all in or dead and the
+        // overlords are dead.
+        at: [0.66, 0.33],
+        swarms: [28, 24],
+        overlords: [["kephri_spitting"], ["kephri_soldier", "kephri_arcane"]],
+        moreOverlords: [["kephri_soldier"], ["kephri_spitting"]],
+        message: "Kephri's shield breaks! She's dazed, and her swarms rush in to restore it!",
+        endMessage: "Kephri's swarm shield reforms around her!",
+    },
+    swarm: {
+        enemyId: "kephri_swarm",
+        // A share of her hitpoints each heals her by, reaching her, and how near is reaching
+        heal: 0.015,
+        reach: 1.2,
+        // Seconds between each one (the first four, then the next, and so on: 4 game ticks, then
+        // 3, 2, then 1 for the rest)
+        cadence: [2.4, 1.8, 1.2, 0.6],
+        // From this path level, now and then three at once (more often two levels on)
+        trios: 2,
+        // Medic!: one this often outside her intermissions too, at half speed
+        medic: 4,
+    },
+    dung: {
+        every: 11,
+        least: 6,
+        // The flies round you for warn seconds (2146), then you're thrown back from her up to
+        // knock tiles, stunned stun seconds, for damage, with dung dropped every gap tiles along
+        // the way: solid, radius across, for seconds
+        warn: 1.8,
+        knock: 6,
+        stun: 2,
+        damage: 6,
+        gap: 1.4,
+        radius: 0.65,
+        seconds: 10,
+        spotAnim: 2146,
+        dropSpotAnim: 2145,
+        pileLoc: 45504,
+        message: "Flies swarm round you: Kephri's about to throw you back!",
+        thrownMessage: "Kephri throws you back!",
+    },
+    eggs: {
+        // The light egg goes off fuse seconds after it lands unless it's broken, in a 3 by 3,
+        // breaking into shards (the dark one hatches an Agile Scarab: EnemyDef.hatches)
+        explodeId: "kephri_egg_explode",
+        fuse: 5,
+        radius: 1.5,
+        damage: 8,
+        spotAnim: 2166,
+    },
+    arcane: {
+        enemyId: "kephri_arcane",
+        // Charging its red swarm for charge seconds (2149), then a ring of it out all round. Hit
+        // for disperse of its hitpoints meanwhile, it flies off to the next of spots (tiles from
+        // Kephri) and starts again.
+        charge: 7,
+        disperse: 0.2,
+        spotAnim: 2149,
+        spots: [
+            [4, -5],
+            [-4, -5],
+            [0, -8],
+            [5, -2],
+        ],
+        message: "The Arcane Scarab charges its swarm!",
+    },
+    // Where her overlords come in, in tiles from her
+    overlordAt: {
+        kephri_spitting: [5, -3],
+        kephri_soldier: [-5, -3],
+        kephri_arcane: [4, -5],
+    },
+    finalMessage: "Kephri's swarm is gone: she's open to attack, and throws everyone back!",
+};
+
+// Her specials as attacks, which no boss uses but which fire bullets as hers: the Arcane
+// Scarab's swarm going off, and an egg going off
+export const KEPHRI_ARCANE_BLAST: BossAttackDef = {
+    name: "Arcane swarm",
+    kind: "blast",
+    damage: 6,
+    windup: 0,
+    cooldown: 0,
+    range: 30,
+    weight: 0,
+    spotAnim: 2153,
+    shards: { count: 24, speed: 3.5, range: 12, radius: 0.45, damage: 6, spotAnim: 2153 },
+};
+export const KEPHRI_EGG_BLAST: BossAttackDef = {
+    name: "Egg",
+    kind: "blast",
+    damage: 4,
+    windup: 0,
+    cooldown: 0,
+    range: 30,
+    weight: 0,
+    spotAnim: SCARAB_SPIT,
+    shards: { count: 8, speed: 4, range: 7, radius: 0.4, damage: 3, spotAnim: SCARAB_SPIT },
+};
+
+const KEPHRI_ATTACKS: BossAttackDef[] = [
+    {
+        // Into the air and down on where you stood, under its shadow, breaking up (Aerial
+        // Assault: bigger and harder), twice over
+        name: "Fireball",
+        kind: "blast",
+        damage: 7,
+        windup: 1.8,
+        cooldown: 0,
+        range: 30,
+        weight: 6,
+        radius: 1,
+        shadow: {},
+        spotAnim: 2167,
+        impactSpotAnim: 2157,
+        chain: { times: 1, windup: 0.9 },
+        shards: {
+            count: 8,
+            speed: 4,
+            range: 7,
+            radius: 0.4,
+            damage: 3,
+            spotAnim: 2167,
+            scale: 0.5,
+        },
+        invoked: { id: "aerial_assault", radius: 1.5, damage: 1.3 },
+        seq: 9575,
+    },
+    {
+        // Spit all round from her, a way through each ring
+        name: "Scarab spit",
+        kind: "pattern",
+        damage: 4,
+        windup: 0.8,
+        cooldown: 3,
+        range: 30,
+        weight: 4,
+        seq: 9576,
+        spotAnim: SCARAB_SPIT,
+        pattern: {
+            shape: "ring",
+            count: 18,
+            volleys: 3,
+            interval: 0.55,
+            speed: 5,
+            range: 16,
+            radius: 0.4,
+            gap: 0.6,
+            gapAt: "player",
+            turn: 0.15,
+        },
+    },
+    {
+        // Her swarm wheeling out from her both ways
+        name: "Swarm spiral",
+        kind: "pattern",
+        damage: 4,
+        windup: 0.8,
+        cooldown: 6,
+        range: 30,
+        weight: 3,
+        seq: 9577,
+        spotAnim: 2153,
+        pattern: {
+            shape: "spiral",
+            count: 5,
+            volleys: 12,
+            interval: 0.25,
+            speed: 4.5,
+            range: 16,
+            radius: 0.4,
+            turn: 0.28,
+            mirror: true,
+        },
+    },
+    {
+        // Eggs splattered round the arena: dark ones hatch, the light one goes off (Lively
+        // Larvae: more dark ones)
+        name: "Mass Incubation",
+        kind: "summon",
+        damage: 0,
+        windup: 1,
+        cooldown: 12,
+        range: 30,
+        weight: 2,
+        seq: 9578,
+        summon: {
+            enemyId: "kephri_egg_hatch",
+            count: 2,
+            alsoId: "kephri_egg_explode",
+            thrown: { seconds: 1 },
+            distance: 5,
+        },
+        invoked: { id: "lively_larvae", count: 2 },
+        message: "Kephri splatters eggs round the arena: break them!",
+    },
+];
+
+const kephriForm = (id: string, npcId: number, hp: number, rises: boolean): EnemyDef => ({
+    id,
+    name: "Kephri",
+    npcId,
+    idleSeq: KEPHRI_IDLE,
+    walkSeq: KEPHRI_IDLE,
+    attackSeq: 9575,
+    deathSeq: KEPHRI_DEATH,
+    hp,
+    damage: 0,
+    speed: 0,
+    radius: 2.5,
+    xp: 1500,
+    knockbackResist: 1,
+    stationary: true,
+    solid: true,
+    // Dazed (11720) while her shield's down and she can't be hurt (Sim.stepKephri)
+    shield: { seconds: 0, look: { npcId: 11720, idleSeq: 9580 } },
+    sounds: KEPHRI_SOUNDS,
+    spawnMessage: "Kephri rises to guard the path of Scabaras!",
+    boss: {
+        attackInterval: 2.2,
+        enrage: { message: "Kephri buzzes in a fury!" },
+        ...(rises && {
+            rises: {
+                times: 1,
+                hp: 0.25,
+                message: "Kephri's swarm is spent... but she isn't!",
+                into: "kephri_final",
+            },
+        }),
+        kephri: KEPHRI,
+        attacks: KEPHRI_ATTACKS,
+    },
+});
+
+const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>): EnemyDef => ({
+    id,
+    name,
+    npcId,
+    idleSeq: 9586,
+    walkSeq: 9584,
+    attackSeq: 9585,
+    deathSeq: 9598,
+    hp: 260,
+    damage: 4,
+    speed: 1.4,
+    radius: 1.3,
+    xp: 120,
+    knockbackResist: 0.8,
+    healthBar: true,
+    sounds: { attack: -1, hit: -1, death: -1 },
+    ...more,
+});
+
+TOMBS_ENEMIES.push(
+    kephriForm("kephri", 11719, 7000, true),
+    kephriForm("kephri_final", 11721, 7000, false),
+    {
+        // Walks to her and restores her shield if it gets there (Sim.stepKephri): anything kills it
+        id: "kephri_swarm",
+        name: "Scarab Swarm",
+        npcId: 11723,
+        idleSeq: 9606,
+        walkSeq: 9606,
+        attackSeq: 9605,
+        deathSeq: 9608,
+        hp: 4,
+        damage: 0,
+        speed: 2.2,
+        radius: 0.4,
+        xp: 4,
+        heals: {
+            fraction: 0,
+            interval: 99,
+            range: 1,
+            targets: ["kephri", "kephri_final"],
+            seek: 40,
+        },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    // Her overlords: the Spitting Scarab's poison spit, the Soldier's slashes and the swarm it
+    // sends her every few seconds, and the Arcane Scarab, which only charges (Sim.stepKephri)
+    scarab("kephri_spitting", "Spitting Scarab", 11725, {
+        stationary: true,
+        shot: {
+            range: 10,
+            interval: 1.8,
+            speed: 7,
+            spotAnim: 2153,
+            impactSpotAnim: 2155,
+            sound: -1,
+        },
+        touches: { kind: "poison", damage: 2, seconds: 6 },
+    }),
+    scarab("kephri_soldier", "Soldier Scarab", 11724, {
+        damage: 9,
+        speed: 1.8,
+        heals: {
+            fraction: 0.02,
+            interval: 5,
+            range: 40,
+            targets: ["kephri", "kephri_final"],
+            seek: 0.1,
+            spotAnim: 2150,
+        },
+    }),
+    scarab("kephri_arcane", "Arcane Scarab", 11726, {
+        idleSeq: 9594,
+        walkSeq: 9592,
+        attackSeq: 9594,
+        damage: 0,
+        speed: 0,
+        stationary: true,
+    }),
+    {
+        id: "kephri_egg_hatch",
+        name: "Egg",
+        npcId: 11729,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 10,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 6,
+        stationary: true,
+        hatches: { seconds: 6, into: "agile_scarab", count: 1, spotAnim: 2166 },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+    {
+        // Goes off as it would hatch (Sim.stepKephri), unless it's broken first
+        id: "kephri_egg_explode",
+        name: "Egg",
+        npcId: 11728,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 10,
+        damage: 0,
+        speed: 0,
+        radius: 0.4,
+        xp: 6,
+        stationary: true,
+        healthBar: true,
+        hatches: { seconds: KEPHRI.eggs.fuse, into: "kephri_swarm", count: 0 },
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
+);

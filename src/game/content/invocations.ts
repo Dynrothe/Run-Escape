@@ -15,7 +15,8 @@ export type InvocationGroup =
     | "prayer"
     | "restoration"
     | "baba"
-    | "akkha";
+    | "akkha"
+    | "kephri";
 
 export type InvocationDef = {
     id: string;
@@ -47,6 +48,7 @@ export const INVOCATION_GROUPS: InvocationGroupDef[] = [
     { id: "restoration", name: "Restoration" },
     { id: "baba", name: "Ba-Ba" },
     { id: "akkha", name: "Akkha" },
+    { id: "kephri", name: "Kephri" },
 ];
 
 const RAID = "the raid's rooms";
@@ -301,6 +303,47 @@ export const INVOCATIONS: InvocationDef[] = [
         level: 20,
         description:
             "Memory Blast gives you half the time between bursts, and his orbs land ahead of you too.",
+    },
+    {
+        id: "lively_larvae",
+        icon: 4588,
+        name: "Lively Larvae",
+        group: "kephri",
+        level: 5,
+        description: "Her Mass Incubation throws two more eggs that hatch.",
+    },
+    {
+        id: "more_overlords",
+        icon: 4588,
+        name: "More Overlords",
+        group: "kephri",
+        level: 15,
+        description: "Another of her overlords comes in each time her shield breaks.",
+    },
+    {
+        id: "blowing_mud",
+        icon: 4588,
+        name: "Blowing Mud",
+        group: "kephri",
+        level: 10,
+        description: "Her Dung Strike throws two of the party back.",
+    },
+    {
+        id: "medic",
+        icon: 4588,
+        name: "Medic!",
+        group: "kephri",
+        level: 15,
+        description:
+            "Her swarms keep coming to heal her between her shield's breaks, at half speed.",
+    },
+    {
+        id: "aerial_assault",
+        icon: 4588,
+        name: "Aerial Assault",
+        group: "kephri",
+        level: 10,
+        description: "Her fireballs land harder and further across.",
     },
 ];
 

@@ -514,6 +514,53 @@ export type AkkhaElementDef = {
     symbolLoc: number;
 };
 
+// Kephri's fight (BossDef.kephri; Sim.stepKephri), as content/tombs.ts's KEPHRI says
+export type KephriDef = {
+    intermissions: {
+        at: number[];
+        swarms: number[];
+        overlords: string[][];
+        moreOverlords: string[][];
+        message: string;
+        endMessage: string;
+    };
+    swarm: {
+        enemyId: string;
+        heal: number;
+        reach: number;
+        cadence: number[];
+        trios: number;
+        medic: number;
+    };
+    dung: {
+        every: number;
+        least: number;
+        warn: number;
+        knock: number;
+        stun: number;
+        damage: number;
+        gap: number;
+        radius: number;
+        seconds: number;
+        spotAnim: number;
+        dropSpotAnim: number;
+        pileLoc: number;
+        message: string;
+        thrownMessage: string;
+    };
+    eggs: { explodeId: string; fuse: number; radius: number; damage: number; spotAnim: number };
+    arcane: {
+        enemyId: string;
+        charge: number;
+        disperse: number;
+        spotAnim: number;
+        spots: [number, number][];
+        message: string;
+    };
+    overlordAt: Record<string, [number, number]>;
+    finalMessage: string;
+};
+
 // Akkha (the Tombs of Amascut). He fights in one style at a time, praying against it (his forms,
 // each an enemy of its own), and every specialEvery attacks does a special instead and changes to
 // another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
@@ -737,7 +784,8 @@ export type BossAttackDef = {
     ordeal?: boolean;
     // The Tombs of Amascut: with this invocation on, the attack's that much bigger, quicker or
     // harder (Boulderdash's boulders twice as fast, Shaking Things Up's wider shockwave)
-    invoked?: { id: string; speed?: number; radius?: number; damage?: number };
+    // (count: a summon's more of them)
+    invoked?: { id: string; speed?: number; radius?: number; damage?: number; count?: number };
     // Blasts: each one breaks up where it lands into count shards flying out all round (drawn as
     // the attack's spotAnim), each doing damage (Ba-Ba's rockfall)
     // (scale: drawn that much bigger than they hit, to be seen)
@@ -975,6 +1023,7 @@ export type BossDef = {
     yellows?: BossOrdealDef & { seconds: number };
     // Akkha's fight (the Tombs of Amascut): his quadrants, his specials and his shadows
     akkha?: AkkhaDef;
+    kephri?: KephriDef;
     // Ba-Ba's rolling stones (the Tombs of Amascut): at each of these shares of her hitpoints she
     // can't be hurt for seconds, and does only these: boulders rolling across the arena in rows
     rollingStones?: BossOrdealDef & { seconds: number };
@@ -1444,6 +1493,8 @@ export type TombsPathDef = {
             // Akkha's four quadrants (BossDef.akkha): the floor's middle and half its width, in
             // world tiles. Quadrant 0 is the north-west and they go round clockwise.
             quadrants?: { middle: { x: number; y: number }; half: number };
+            // Kephri's swarms' way in, round the arena's edge clockwise (BossDef.kephri)
+            swarms?: { x: number; y: number }[];
         };
     };
 };
