@@ -2,8 +2,8 @@
 // placement's ground, floors and neighbours, turned so that the fall always comes down facing
 // south. The numbers behind the rules on falls in CLAUDE.md.
 //
-//   npx tsx scripts/scaperune/research/falls.ts world.json
-//   npx tsx scripts/scaperune/research/falls.ts world.json 51484 45398    # just these locs
+//   bun run tsx scripts/scaperune/research/falls.ts world.json
+//   bun run tsx scripts/scaperune/research/falls.ts world.json 51484 45398    # just these locs
 import fs from "node:fs";
 
 import { WATER_OVERLAYS } from "../../../src/game/scaperune/catalogue";

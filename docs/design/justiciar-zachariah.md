@@ -437,10 +437,10 @@ a power-up's.
 
 ## 10. Numbers from the bot
 
-`FLAT=1 MAP=zachariah DODGE=1 npx tsx scripts/game/simulate-run.ts saradominist 3` is a density
-meter, not a player: it stays in reach, steps off strips, lines and squares, hides from the gaze
-and steps off checker cells, smites whenever his guard's down (`SMITE=0` never does), and still
-takes what it reads late. It prints each phase's time and how much of it the boss was in reach.
+`FLAT=1 MAP=zachariah DODGE=1 bun run tsx scripts/game/simulate-run.ts saradominist 3` is a
+density meter, not a player: it stays in reach, steps off strips, lines and squares, hides from the
+gaze and steps off checker cells, smites whenever his guard's down (`SMITE=0` never does), and
+still takes what it reads late. It prints each phase's time and how much of it the boss was in reach.
 Seeds 1 to 3, on 2026-11-04:
 
 | Round | Bot      | Lasted (seeds 1, 2, 3)        | Got to         |

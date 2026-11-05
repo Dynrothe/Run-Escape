@@ -13,8 +13,8 @@
 // Only drawn locs count: the ground floor, and upper levels where their tiles are shown
 // (TILE_SHOWN) or a bridge's. The floor's own triangles, two a tile, are left out.
 //
-//   npx tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
-//   PHONE=1 TOP=10 STEP=2 WIDTH=96 npx tsx scripts/scaperune/view-weight.ts phosani
+//   bun run tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
+//   PHONE=1 TOP=10 STEP=2 WIDTH=96 bun run tsx scripts/scaperune/view-weight.ts phosani
 import { TILE_BRIDGE, TILE_SHOWN, TileGrid } from "../../src/game/scaperune/format";
 import { getRecipeWorldTile } from "../../src/game/scaperune/recipe";
 import { createBuildContext, getRecipe } from "../../src/game/scaperune/squares";

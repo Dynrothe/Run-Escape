@@ -1,8 +1,8 @@
 // Interface sprite tools. Sprites have no names in the cache, so finding one
 // means drawing a range of ids and looking at them.
 //
-//   npx tsx scripts/cache/sprites.ts png out 1420 940-950   write sprites to out/<id>.png, 4x size
-//   npx tsx scripts/cache/sprites.ts check                  every passive's iconSpriteId is in the cache
+//   bun run tsx scripts/cache/sprites.ts png out 1420 940-950   write sprites to out/<id>.png, 4x size
+//   bun run tsx scripts/cache/sprites.ts check                  every passive's iconSpriteId is in the cache
 import fs from "fs";
 import path from "path";
 

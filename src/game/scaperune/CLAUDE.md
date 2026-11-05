@@ -246,8 +246,8 @@ includes the margin, and in `GeneratorSettings` it doesn't.
 Work on shapes with `relief.ts`, which takes seconds and no cache:
 
 ```sh
-npx tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
-npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
+bun run tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
+bun run tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
 ```
 
 | To get                   | Reach for                                                                                                |
@@ -512,19 +512,22 @@ gate, goes in `designed`, as rectangles of tiles, which is the only way out of a
 
 ## Checking a map
 
-**A round.** Each of these is cheap, so go round often. On a small machine run anything that loads the cache one at a
-time (the team's VM has a job wrapper for that outside the repository; plain `npx tsx` is fine anywhere else).
+**A round.** Run these checks often. On a small machine, run one cache task at a time. The team's
+VM has a job wrapper for this outside the repository. Elsewhere, use `bun run tsx` directly.
 
 ```sh
-npx tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis          # from above, and reachability
-ONLY='scaperune_oasis$' npx tsx scripts/scaperune/check-maps.ts           # every rule, on one map
-npx tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
-npx tsx scripts/scaperune/world-index.ts world.json                       # once, for the next line
-npx tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
-npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2   # scenery from above, which preview can't show
-npx tsx scripts/scaperune/view-weight.ts scaperune_oasis                       # triangles per camera view (PHONE=1 for a phone's)
-npx tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off   # will a cut hold waves?
-DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
+bun run tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis  # from above, and reachability
+ONLY='scaperune_oasis$' bun run tsx scripts/scaperune/check-maps.ts  # every rule, on one map
+bun run tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
+bun run tsx scripts/scaperune/world-index.ts world.json  # once, for the next line
+bun run tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
+# scenery from above, which preview can't show
+bun run tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2
+# triangles per camera view (PHONE=1 for a phone's)
+bun run tsx scripts/scaperune/view-weight.ts scaperune_oasis
+# will a cut hold waves?
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off
+DEV_MAPS=1 MAP=scaperune_oasis bun run tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
 ```
 
 **Will a cut hold together?** `find-prefabs.ts rect=x,y,w,h collision=1` draws the game's collision (`.` open, `#` blocked,
@@ -534,8 +537,9 @@ out in 190 pieces, the biggest 1,356 tiles; with doors and props off it's 4,116.
 a town that falls into pieces has nowhere for waves to come at you. In a recipe,
 `findPieces(getCollisionFlags(grid, locs), sizeX, sizeY, rect)` (`collision.ts`) gives the same list, biggest first, to throw on if the biggest is too small.
 
-Before you finish: `npx vitest run src/game/scaperune`, which runs `check-maps.ts` over every dev map, about 60 settings at
-their extremes, the presets and 12 random rolls. That takes a few minutes.
+Before you finish, run `bun run vitest run src/game/scaperune`. It runs `check-maps.ts` over every
+dev map, about 60 settings at their extremes, the presets and 12 random rolls. That takes a few
+minutes.
 
 ### The look line
 
@@ -698,7 +702,7 @@ Tests don't cover how things look, and this is where most maps fall down. From a
 a preview is the arena and the red dot is the spawn, and the minimap renderer doesn't draw trees or rocks.
 
 ```sh
-npm start        # the dev server, then in another shell, the screenshot helper (see below):
+bun run start        # the dev server, then in another shell, the screenshot helper (see below):
 PROFILE=<profile dir> PORT=5173 MAP=scaperune_town node rs-height.mjs out square:6152:11674:18 side:6152:11674:18:-250
 ```
 
@@ -714,11 +718,16 @@ Vite reloads the page and kills the job.
 ### Trying a new loc
 
 ```sh
-npx tsx scripts/scaperune/research/model-bounds.ts 3709 60440    # contour, triangles, how far it really reaches
-npx tsx scripts/scaperune/research/where.ts 44,56 3709           # how the world uses it: the ground, and what's round it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22      # draw it, about as the play camera sees it
-TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646   # every loc at the same scale, on its footprint
-npx tsx scripts/scaperune/research/kit-scan.ts kits.json          # suggests kit pieces from the whole cache
+# contour, triangles, how far it really reaches
+bun run tsx scripts/scaperune/research/model-bounds.ts 3709 60440
+# how the world uses it: the ground, and what's round it
+bun run tsx scripts/scaperune/research/where.ts 44,56 3709
+# draw it, about as the play camera sees it
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# every loc at the same scale, on its footprint
+TRUE_SCALE=1 bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646
+# suggests kit pieces from the whole cache
+bun run tsx scripts/scaperune/research/kit-scan.ts kits.json
 ```
 
 Read `model-bounds.ts` like this: `contour` 0 or more follows the ground, and -1 stands level, so it wants flat ground.
@@ -947,20 +956,32 @@ cuts off is only looked at, and a river would cut the land in two for good, so `
 **Finding what a place is made of**, all without a browser:
 
 ```sh
-npx tsx scripts/scaperune/world-index.ts world.json         # every square's locs and floors, once
-npx tsx scripts/scaperune/find-place.ts world.json colour=red surface=0                  # places whose ground is mostly red
-npx tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1    # by locs, upstairs
-npx tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1      # a cut, upstairs, as the game walks it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22 # draws locs, about as the play camera sees them
-npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle of the world from above
-npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
-npx tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12  # a real cliff as text: heights, floors, what's on it
-npx tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2  # a real place from above
-npx tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map    # a place's walls: ranked by level, as a text map
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795 # one id's longest run, and what's across it
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # every loc and floor, tile by tile, on each level
-npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90          # a place's streets, blocks and gaps, as numbers
-npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1    # the same inside a made wall
+bun run tsx scripts/scaperune/world-index.ts world.json  # every square's locs and floors, once
+# places whose ground is mostly red
+bun run tsx scripts/scaperune/find-place.ts world.json colour=red surface=0
+# by locs, upstairs
+bun run tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1
+# a cut, upstairs, as the game walks it
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1
+# draws locs, about as the play camera sees them
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# draws a rectangle of the world from above
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5
+bun run tsx scripts/scaperune/find-buildings.ts 50 50 51 50  # whole buildings in a block of squares
+# a real cliff as text: heights, floors, what's on it
+bun run tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12
+# a real place from above
+bun run tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2
+# a place's walls: ranked by level, as a text map
+bun run tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map
+# one id's longest run, and what's across it
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795
+# every loc and floor, tile by tile, on each level
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump
+# a place's streets, blocks and gaps, as numbers
+bun run tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90
+# the same inside a made wall
+bun run tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1
 ```
 
 `find-place.ts` searches the index: floor colour by name (`red`, `brown`, `yellow`, `green`, `blue`, `purple`, `grey`,
@@ -1258,16 +1279,16 @@ There's no building entity in the cache. A building is its locs and floor tiles,
 rectangle of the real world.
 
 1. **Find one.** `find-buildings.ts` finds whole buildings in a block of squares, and `loc-sheet.ts` draws what it finds.
-   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world coordinates down the
-   side; `rect=x,y,w,h` draws any rectangle instead, across squares, and `plane=N` another level. Pick a rectangle
-   that holds the whole building and nothing else.
+   `bun run tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world
+   coordinates down the side. Use `rect=x,y,w,h` for a rectangle across squares and `plane=N` for
+   another level. Pick a rectangle that holds the whole building and nothing else.
 2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles, and give it a kind in
    `BUILDING_KINDS`. The rectangle must take in every wall of the building, with nothing else in it. A rectangle a row short
    loses that wall, and the floor behind it with it. The start of its name is its family, so a new prefab for an existing
    family goes in that family's towns.
-3. **Check it**: `npx tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every prefab in every
-   rotation and fails if a wall's cut off, floor is lost indoors, or there's no way out. Then look at it:
-   `scaperune_prefabs` is a dev map with all of them in all 4 rotations.
+3. **Check it** with `bun run tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every
+   prefab in every rotation and fails if a wall is cut off, floor is lost indoors, or there's no way
+   out. The dev map `scaperune_prefabs` shows them all in all four rotations.
 4. **Stamp it**: `kit.stamp(ground, name, turns, x, y)` on a `PrefabKit` stands it on flat ground with its doors off,
    and `kit.stampRuin` leaves most of it gone. `new PrefabKit(context, MY_PREFABS)` lets a map bring its own, which
    the generator won't pick and `check-prefabs.ts` won't check. For anything else,
@@ -1603,9 +1624,10 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 - Shipped maps aren't held to the look rules, and get the catalogue (ban list minus `allowLocs`, kit pieces, blood and
   foam) as warnings, not failures. They must stay byte for byte: Hallowed Night imports `Ground`, `collision`, `format`,
   `mapBuild`, `noise`, `prefabs` and `recipe`. Each shipped map's hash is pinned in `scripts/scaperune/grid-hash.ts`
-  (`SHIPPED_HASHES`), and `CHECK=1 npx tsx scripts/scaperune/grid-hash.ts` builds every shipped map and fails if one moved;
-  `generator.test.ts` runs it when the cache is there. A change meant to change a shipped map updates its hash on purpose,
-  and says why in the pull request. A new shipped map adds its hash: the check fails on a shipped map with none.
+  (`SHIPPED_HASHES`). Run `CHECK=1 bun run tsx scripts/scaperune/grid-hash.ts` to build every
+  shipped map and compare its hash. `generator.test.ts` runs this check when the cache is present.
+  If you change a shipped map, update its hash and explain why in the pull request. Add a hash for
+  each new shipped map too. A missing hash fails the check.
 - A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
   Sanctuary's and the Owl's Court's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds those
   tables to the cache, and a cache-gated test in each map's test runs it, so a cache update that changes a size or a clip
@@ -1619,7 +1641,7 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 ### The slim cache
 
 The hosted game's cache only holds what the game reads, found by loading every map in `ALL_MAPS`
-(`scripts/cache/slim-cache.ts`). Don't run `npm run slim-cache` as part of a change: it's done when
+(`scripts/cache/slim-cache.ts`). Don't run `bun run slim-cache` as part of a change: it's done when
 deploying. To ship a map:
 
 - **A fixed map or a fixed seed:** make it a real entry in `ALL_MAPS`, and say so in the pull request.
@@ -1627,8 +1649,9 @@ deploying. To ship a map:
 - **A different seed each run:** seeds read different things, so a sample map isn't enough. Put
   `PALETTE_RECIPE` in `ALL_MAPS` too, as it holds all the generator can use, and hide it from the map list.
   Run-time seeds also need a way to pass the seed in (recipes are a fixed list today).
-- **If you add to `BIOMES` or `PREFABS`,** run `npx tsx scripts/scaperune/check-palette.ts`. It fails if a
-  generated map reads something the palette doesn't. `palette.ts` picks new entries up by itself.
+- **If you add to `BIOMES` or `PREFABS`,** run `bun run tsx scripts/scaperune/check-palette.ts`.
+  It fails if a generated map reads something the palette doesn't. `palette.ts` picks up new
+  entries by itself.
 
 Terrain and locs live in our code, so they add nothing to the slim cache. Only what they point at does.
 

@@ -32,7 +32,7 @@ export async function fetchCacheList(): Promise<CacheList | undefined> {
         };
     } catch (e) {
         console.error(
-            "Failed to load cache list. Run `npm run download-caches` to fetch the game caches.",
+            "Failed to load cache list. Run `bun run download-caches` to fetch the game caches.",
             e,
         );
         return undefined;

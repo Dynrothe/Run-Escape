@@ -9,7 +9,7 @@
 // arena with MAP_MARGIN map squares around it. Then it all gets loaded again
 // from the slim cache, and a group that's missing fails the script.
 //
-//   npx tsx scripts/cache/slim-cache.ts [out dir]
+//   bun run tsx scripts/cache/slim-cache.ts [out dir]
 //
 // The out dir (dist/caches by default, so run it after the build) gets a
 // caches.json and the slim cache, named after what's in it so browsers fetch

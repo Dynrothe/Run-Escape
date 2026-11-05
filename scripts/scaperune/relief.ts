@@ -2,8 +2,8 @@
 // the shape of the land. Fake prefabs stand in for the real ones, so buildings don't come out
 // right, and water, rock and roads are only marked in colour. Prints what's walkable.
 //
-//   npx tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
-//   npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
+//   bun run tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
+//   bun run tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
 import { writeFileSync } from "node:fs";
 
 import { findReachable, findStranded, getCollisionFlags } from "../../src/game/scaperune/collision";

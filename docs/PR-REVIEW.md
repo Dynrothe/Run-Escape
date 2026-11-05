@@ -22,11 +22,11 @@ against the release branch as well, then go through the list below.
 
 All of these are in `CLAUDE.md`'s "After every change":
 
-- `npm test` and `npx tsc --noEmit -p .`.
-- **Prettier on the files you changed**: `npx prettier --write <files>`, run from the repository so
-  its config is used. Don't format the whole repository, and don't run it on `CHANGELOG.md` (see
-  below). An editor's own formatter can reformat unrelated lines in a way the repository's doesn't.
-  On Windows, `npx prettier --check --end-of-line auto` tells real changes from CRLF line endings.
+- `bun run test` and `bun run tsc --noEmit -p .`.
+- **Prettier on the files you changed**: run `bun run prettier --write <files>` from the repository
+  so it uses the project config. Don't format the whole repository, and exclude `CHANGELOG.md`
+  (see below). An editor's formatter can reformat unrelated lines. On Windows, use `bun run prettier --check --end-of-line auto` to
+  distinguish formatting changes from CRLF line endings.
 - **A simulation** if the change can affect gameplay or balance, with before and after numbers.
 - **A frame's cost** before and after, for anything drawn or run every tick (see Performance).
 - **The browser** for anything on screen, **and a phone** for anything new on screen (Touch
@@ -78,7 +78,7 @@ All of these are in `CLAUDE.md`'s "After every change":
 - **What you ran**: tests, type check, Prettier, simulations (the commands, settings and before and
   after numbers), frame costs, the browser, a phone. Say plainly what you didn't try. "Not tried
   on a phone" will come back as a finding, so try it if you can.
-- **Anything new from the cache**: name the ids. The hosted game needs `npm run slim-cache` before
+- **Anything new from the cache**: name the ids. The hosted game needs `bun run slim-cache` before
   the release, or it stops with a "missing from the cache" error.
 - **Trade-offs for players**, with numbers: a reward that gets rarer, an unlock that becomes a
   grind, a fight that gets longer. They're the maintainer's call, so make them visible.
@@ -109,8 +109,9 @@ never crash or desync another player, or cost the maintainer money.
 - **Workflows**: `permissions: {}` at the top and only what each job needs, actions pinned to
   commits (Dependabot updates them, so don't by hand), and no `pull_request_target`. A job that
   holds a secret or a write token runs no npm packages and downloads no build plugins.
-- **Dependencies**: a new npm package needs a reason in the description, and fewer is better.
-  `package-lock.json` should change only as installing it changes it.
+- **Dependencies**: a new package needs a reason in the description, and fewer is better. Run
+  `bun install` in the package you changed (the repository root or `server/cloudflare`) and commit
+  its `bun.lock`, which should change only as installing it changes it.
 - **No secrets or addresses in the code.** No tokens, keys or personal data, and no default URL
   that appears nowhere else in the repository: addresses such as the relay's come from environment
   variables.
@@ -165,7 +166,7 @@ never crash or desync another player, or cost the maintainer money.
 The game has to run on phones. Measure rather than guess, and put the numbers in the description.
 
 - **A frame's cost**: in dev, `await frameProbe.sample(60)` gives a frame's triangles, draws and
-  CPU time, and `npx tsx scripts/dev/render-stats.ts <map>` gives a map's without a browser.
+  CPU time, and `bun run tsx scripts/dev/render-stats.ts <map>` gives a map's without a browser.
   Compare those before and after. A headless browser draws in software, so its frame rate means
   little.
 - **Crowds**: `?stress=300` adds goblins. Code that runs per enemy mustn't scan every enemy for

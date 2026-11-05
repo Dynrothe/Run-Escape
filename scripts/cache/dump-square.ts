@@ -2,7 +2,7 @@
 // its underlays and overlays. A floor's shown as map file id/cache id, then how many tiles: a
 // recipe writes the first number, the floor loaders take the second (cacheFloorId).
 // WHERE=id,id prints every position of those loc ids.
-//   npx tsx scripts/cache/dump-square.ts 60,155 59,152
+//   bun run tsx scripts/cache/dump-square.ts 60,155 59,152
 import {
     cacheFloorId,
     createTileGrid,

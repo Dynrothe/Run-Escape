@@ -1,6 +1,6 @@
 // Prints the raw bytes of config entries, to work out new opcodes.
 //
-//   npx tsx scripts/cache/dump-config.ts <archive> <id> [id...]
+//   bun run tsx scripts/cache/dump-config.ts <archive> <id> [id...]
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { IndexType } from "../../src/rs/cache/IndexType";

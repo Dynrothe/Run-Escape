@@ -42,20 +42,21 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   away from one.
 - A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
   lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
-  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
+  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `bun run
 check` tests the lobby itself.
 
 ## Setting it up
 
-You need a Cloudflare account (free is fine to start: see Cost below) and Node 22 or newer, which
-Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
+You need a Cloudflare account (free is fine to start: see Cost below), Bun to install Wrangler, and
+Node 22 or newer, which Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev`
+address.
 
 1. **Install and log in.** From the repository:
 
     ```sh
     cd server/cloudflare
-    npm install
-    npx wrangler login
+    bun install --frozen-lockfile
+    bun run wrangler login
     ```
 
     `login` opens the browser to let Wrangler use your Cloudflare account.
@@ -63,13 +64,13 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 2. **Try it locally (optional).**
 
     ```sh
-    npx wrangler dev --port 8787
+    bun run wrangler dev --port 8787
     ```
 
     and in another terminal, from the repository's root:
 
     ```sh
-    VITE_COOP_URL=ws://127.0.0.1:8787/coop npm start
+    VITE_COOP_URL=ws://127.0.0.1:8787/coop bun run start
     ```
 
     Open the game in two windows (one private), make a room in one and join it from the other.
@@ -78,7 +79,7 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 3. **Deploy.**
 
     ```sh
-    npx wrangler deploy
+    bun run wrangler deploy
     ```
 
     The first time, Cloudflare may ask you to pick a `workers.dev` subdomain (the deploy prints a
@@ -89,7 +90,7 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
     ```sh
     curl https://run-escape-coop.<your-subdomain>.workers.dev/coop
     # {"coop":true}
-    npm run check -- wss://run-escape-coop.<your-subdomain>.workers.dev/coop
+    bun run check wss://run-escape-coop.<your-subdomain>.workers.dev/coop
     ```
 
     `check` plays a host and a guest through it (an invite-only room, so nobody sees it): making
@@ -99,18 +100,18 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 4. **Point the game at it.** Build with the relay's address, `wss://` and `/coop` on the end:
 
     ```sh
-    VITE_COOP_URL=wss://run-escape-coop.<your-subdomain>.workers.dev/coop npm run build
+    VITE_COOP_URL=wss://run-escape-coop.<your-subdomain>.workers.dev/coop bun run build
     ```
 
     and deploy the build as usual. Whatever serves the game no longer needs a relay of its own
-    (`npm run serve:singleplayer`, or drop the `/coop` proxy).
+    (`bun run serve:singleplayer`, or drop the `/coop` proxy).
 
 5. **The desktop app.** Set the `COOP_URL` repository variable (Settings, Secrets and variables,
    Actions) to the same `wss://…/coop` address, and the release workflow builds it into the game and
    the launcher (see Desktop in `docs/DEVELOPMENT.md`). As with any change to `COOP_URL`, players
    only get it in a new launcher download.
 
-**Updating it** after changing anything in `server/cloudflare/` is `npx wrangler deploy` again.
+**Updating it** after changing anything in `server/cloudflare/` is `bun run wrangler deploy` again.
 Rooms carry on through a deploy, as through Cloudflare's own restarts (see below).
 
 **Restarts.** Cloudflare restarts Workers and Durable Objects now and then, on any plan: runtime
@@ -129,7 +130,7 @@ what it had in memory, often more than once an hour. So:
   just before the drop is sent again, and the host takes it once.
 - The lobby's connection dropping doesn't touch a room: the game makes it again after.
 
-`npm run check` tests coming back, against a running relay. `room.test.ts` runs a room under
+`bun run check` tests coming back, against a running relay. `room.test.ts` runs a room under
 Node, with `test/durable-object.mjs` in place of `cloudflare:workers` (see `vite.config.ts`). To see a restart for yourself under `wrangler dev`, save any
 file in `src/` during a run: wrangler reloads, which drops everything as Cloudflare does.
 
@@ -144,7 +145,7 @@ phone locking, a lost signal) has no close to answer, and still ends abnormally.
 they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
 the same numbers as `coop-relay.mjs`.
 
-**Taking it down**: `npx wrangler delete run-escape-coop`.
+**Taking it down**: `bun run wrangler delete run-escape-coop`.
 
 ## Cost
 
