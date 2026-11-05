@@ -300,6 +300,21 @@ function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Power-up timers"
+            text="A circle over each power-up on the ground shows how long it has left"
+        >
+            <Toggle
+                on={ui.display.pickupTimers}
+                label="Power-up timers"
+                onToggle={() => client.togglePickupTimers()}
+            />
+        </Setting>
+    );
+}
+
 function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting name="Auto alch" text="High alch every casket as you open it, without stopping">
@@ -597,6 +612,7 @@ function SettingsPanel({
                             onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
+                    <PickupTimerSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
@@ -2571,6 +2587,7 @@ function PauseModal({
                             client={client}
                             music={getMap(ui.mapId).music !== undefined}
                         />
+                        <PickupTimerSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
                         <AutoEquipSetting ui={ui} client={client} />

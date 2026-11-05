@@ -4,15 +4,22 @@ import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
-import { GameAssets } from "./GameAssets";
+import type { GameAssets } from "./GameAssets";
 import { GameView } from "./GameView";
-import { Overlay } from "./Overlay";
+import type { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
 });
 
 describe("dropped power-up timers", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    // An item's model, in model units (1/128 tile)
+    const model = { key: "obj:1", height: 32, radius: 0 };
+
     function setup() {
         const sim = new Sim({
             grid: makeGrid(Array(8).fill("........")),
@@ -38,13 +45,9 @@ describe("dropped power-up timers", () => {
         };
         sim.pickups = [pickup];
         sim.tick = pickup.spawnTick;
-        const assets = Object.assign(Object.create(GameAssets.prototype) as GameAssets, {
-            get: vi.fn(() => undefined),
-        });
-        const view = new GameView(assets);
+        const assets = { get: vi.fn((): typeof model | undefined => model) };
+        const view = new GameView(assets as unknown as GameAssets);
         const ctx = {
-            save: vi.fn(),
-            restore: vi.fn(),
             beginPath: vi.fn(),
             arc: vi.fn(),
             moveTo: vi.fn(),
@@ -58,12 +61,9 @@ describe("dropped power-up timers", () => {
         const project = vi
             .fn<Overlay["project"]>()
             .mockReturnValue({ x: 100, y: 100, visible: true });
-        const overlay = Object.assign(Object.create(Overlay.prototype) as Overlay, {
-            ctx,
-            project,
-        });
+        const overlay = { ctx, project } as unknown as Overlay;
         const draw = (alpha = 1, scale = 1) => view["drawPickupTimers"](overlay, sim, alpha, scale);
-        return { sim, pickup, assets, ctx, project, draw };
+        return { sim, pickup, assets, view, ctx, project, draw };
     }
 
     test("starts full, drains clockwise with sim ticks, and ends at expiry", () => {
@@ -103,7 +103,7 @@ describe("dropped power-up timers", () => {
         expect(ctx.strokeStyle).toBe(color);
     });
 
-    test("interpolates within a tick, stays still while paused, and never changes the drop", () => {
+    test("interpolates within a tick, goes by the sim's ticks and never changes the drop", () => {
         const { sim, pickup, ctx, draw } = setup();
         const before = { ...pickup };
         sim.tick += 100;
@@ -111,13 +111,15 @@ describe("dropped power-up timers", () => {
         const first = ctx.arc.mock.lastCall!;
         draw(0.75);
         expect(ctx.arc.mock.lastCall![3]).toBeGreaterThan(first[3]);
+        // A paused run (GameClient.getAlpha gives 1, and the tick stands still):
+        // a minute on the clock changes nothing
         draw(1);
-        const paused = ctx.arc.mock.lastCall;
-        vi.spyOn(performance, "now").mockReturnValue(999999);
+        const still = ctx.arc.mock.lastCall;
+        const later = performance.now() + 60_000;
+        vi.spyOn(performance, "now").mockReturnValue(later);
         draw(1);
-        expect(ctx.arc.mock.lastCall).toEqual(paused);
+        expect(ctx.arc.mock.lastCall).toEqual(still);
         expect(pickup).toEqual(before);
-        vi.restoreAllMocks();
     });
 
     test.each(["bones", "coins", "food", "casket"] as const)(
@@ -130,17 +132,38 @@ describe("dropped power-up timers", () => {
         },
     );
 
-    test("hides attracted, collected and off-screen drops", () => {
-        const { pickup, ctx, project, draw } = setup();
+    test("hides attracted and off-screen drops, and ones whose model isn't drawn yet", () => {
+        const { pickup, assets, ctx, project, draw } = setup();
         pickup.attracted = true;
         draw();
         pickup.attracted = false;
-        pickup.value = -1;
+        assets.get.mockReturnValueOnce(undefined);
         draw();
-        pickup.value = 1;
         project.mockReturnValue({ x: 0, y: 0, visible: false, behind: true });
         draw();
         expect(ctx.stroke).not.toHaveBeenCalled();
+    });
+
+    test("go once the run's over, and with the setting off", () => {
+        const { sim, view, ctx, draw } = setup();
+        view.pickupTimers = false;
+        draw();
+        view.pickupTimers = true;
+        sim.state = "dead";
+        draw();
+        expect(ctx.stroke).not.toHaveBeenCalled();
+    });
+
+    test("sits over as far as the item reaches on the screen, not on it", () => {
+        const { assets, ctx, project, draw } = setup();
+        // 32 pixels a tile across the screen, from the drop
+        project.mockImplementation((x) => ({ x: 100 + (x - 104.5) * 32, y: 100, visible: true }));
+        draw();
+        const flat = ctx.arc.mock.lastCall![1];
+        // Half a tile from its middle, or more as power-ups are drawn bigger
+        assets.get.mockReturnValue({ ...model, radius: 64 });
+        draw();
+        expect(flat - ctx.arc.mock.lastCall![1]).toBeGreaterThanOrEqual(16);
     });
 
     test("scales on small screens and stays visible during the final blinking seconds", () => {
@@ -149,8 +172,6 @@ describe("dropped power-up timers", () => {
         draw(1, 0.75);
         expect(ctx.arc.mock.lastCall![2]).toBe(8.25);
         expect(ctx.stroke).toHaveBeenCalledOnce();
-        expect(ctx.save).toHaveBeenCalledOnce();
-        expect(ctx.restore).toHaveBeenCalledOnce();
     });
 });
 

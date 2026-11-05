@@ -7,16 +7,6 @@ The [README](../README.md) covers getting it running.
 Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
 its `yallist`, and the dev server fails with `Yallist is not a constructor`.
 
-## Dropped-item timers
-
-`GameView` draws countdown circles only over expiring ground power-ups. They follow simulation
-ticks (including pauses), not wall-clock time, and disappear once the drop is attracted.
-Ordinary loot has no expiry and no timer.
-
-These are small RuneLite-style progress pies drawn on the overlay, not cache artwork. The fill
-drains clockwise from full, changing from green to orange with half its lifetime remaining, then
-red at a quarter. The border uses the same colour. No additional cache assets are needed.
-
 ## Hosting
 
 ```
@@ -909,6 +899,15 @@ The overlay draws each hitsplat (its kind, number and size) once and copies it a
 projectile glows likewise: text and gradients are the slowest things on a 2D canvas, and a big
 fight has a hundred splats. The effects it prunes each frame are pruned in place, and the enemies
 reuse one options object, to keep a phone's garbage collector quiet.
+
+Power-ups on the ground have a countdown pie over them, like RuneLite's
+(`GameView.drawPickupTimers`): it drains clockwise, from green to orange at half the power-up's
+time and red at a quarter. It goes by the sim's ticks, so it stops with the run, and it's gone
+once a drop is attracted (those never expire) or the run's over. From the play camera's height a
+flat item reaches further up the screen than its height does, so the pie sits over the furthest
+the item reaches as it turns, not over its top. The Power-up timers setting
+(`DisplaySettings.pickupTimers`, in Settings and the pause menu, on by default) turns it off;
+`GameClient` hands it to the view each frame.
 
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.

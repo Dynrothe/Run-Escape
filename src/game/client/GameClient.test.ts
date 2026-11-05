@@ -22,7 +22,7 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { UpMessage } from "./coop/protocol";
@@ -156,6 +156,38 @@ describe("the co-op flag", () => {
         client.toggleCoopFlag();
         expect(setMe).toHaveBeenLastCalledWith({ hideCountry: false });
         vi.unstubAllGlobals();
+    });
+});
+
+describe("power-up timers", () => {
+    test("show unless they've been turned off, and are remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ menuSpin: false }));
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        saveDisplaySettings({ ...loadDisplaySettings(), pickupTimers: false });
+        expect(loadDisplaySettings().pickupTimers).toBe(false);
+        vi.unstubAllGlobals();
+    });
+
+    // The view draws a timer from the tick and this, so it stops with the run
+    test("stand still while a solo run is paused", () => {
+        const sim = createSim();
+        sim.state = "playing";
+        const { client } = createClient(sim, false);
+        const getAlpha = () => (client as unknown as { getAlpha(): number }).getAlpha();
+        Object.assign(client, { accumulator: TICK_MS / 2 });
+        expect(getAlpha()).toBe(0.5);
+        Object.assign(client, { paused: true });
+        expect(getAlpha()).toBe(1);
     });
 });
 

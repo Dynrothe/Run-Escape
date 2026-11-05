@@ -221,12 +221,11 @@ version and how to run it.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
-  after 30 seconds. A RuneLite-style circle above each one drains from green to orange to red
-  as that time runs out; it disappears when a Magnet pulls the drop towards you, since attracted
-  drops no longer expire.
-  Their damage keeps up with the enemies' hitpoints, and the same one never
-  drops twice in a row. The shop's Runecraft upgrade makes them drop 15% more often for each rank,
-  up to three.
+  after 30 seconds. A RuneLite-style circle over each one drains from green to orange to red as
+  that time runs out (the Power-up timers setting, on by default, in Settings and the pause
+  menu). Once a Magnet pulls one towards you it can't run out, and its circle goes. Their damage
+  keeps up with the enemies' hitpoints, and the same one never drops twice in a row. The shop's
+  Runecraft upgrade makes them drop 15% more often for each rank, up to three.
     - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
@@ -694,3 +693,5 @@ version and how to run it.
   on the pause screen.
 - **Camera spin**: the camera circles your character on the title screen and the menus; the
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
+- **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
+  turn them off.

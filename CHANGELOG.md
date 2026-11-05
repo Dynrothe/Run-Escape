@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Added
 
-- Power-up timers, by braiansmarzaro: dropped power-ups show a shrinking RuneLite-style circle, turning from green to orange to red before they disappear.
+- Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
+  to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
 
 ### Changed
 
