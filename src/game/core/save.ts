@@ -18,8 +18,9 @@ import {
     isRaidMap,
     isSeasonalMap,
 } from "../content/maps";
+import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
-import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
+import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
 import {
     CharacterDef,
@@ -47,8 +48,9 @@ export const SAVE_VERSION = 11;
 
 export type SkillPage = {
     upgrades: Record<string, number>;
+    // What was paid for the page's ranks, which Refund all gives back. It's
+    // getPageCost(upgrades) unless prices have changed since.
     upgradesSpent: number;
-    upgradeRefunds?: Record<string, number[]>;
 };
 
 function createSkillPage(): SkillPage {
@@ -101,6 +103,10 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The pet taken along on runs (pets.ts), one of the trophies found
+    pet?: string;
+    // The adventurer the game starts on, picked as a favourite
+    favouriteCharacter?: string;
 };
 
 // The round reached, and how long the run lasted
@@ -264,6 +270,15 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
+        save.pet = data.pet;
+    }
+    if (
+        typeof data.favouriteCharacter === "string" &&
+        CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)
+    ) {
+        save.favouriteCharacter = data.favouriteCharacter;
+    }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {
             if (QUEST_BY_ID.has(id) && !save.questsDone.includes(id)) {
@@ -274,6 +289,15 @@ export function migrateSave(raw: unknown): SaveData {
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
     return save;
+}
+
+// The adventurer the game starts on: the favourite, if it's open, or else the first that is
+export function getStartingCharacter(save: SaveData): string {
+    const favourite = save.favouriteCharacter;
+    if (favourite && save.unlockedCharacters.includes(favourite)) {
+        return favourite;
+    }
+    return save.unlockedCharacters[0] ?? "warrior";
 }
 
 // Gear that can come out of a casket (not one of the Armoury's variants)
@@ -304,28 +328,7 @@ function migrateSkillPage(raw: unknown): SkillPage {
             ? 0
             : Number.isSafeInteger(data.upgradesSpent) && data.upgradesSpent! >= 0
               ? data.upgradesSpent!
-              : estimateSpent(page.upgrades);
-    if (data.upgradeRefunds && typeof data.upgradeRefunds === "object") {
-        const refunds: Record<string, number[]> = {};
-        let total = 0;
-        let valid = true;
-        for (const [id, rank] of Object.entries(page.upgrades)) {
-            const costs = data.upgradeRefunds[id];
-            if (
-                !Array.isArray(costs) ||
-                costs.length !== rank ||
-                !costs.every((cost) => Number.isSafeInteger(cost) && cost >= 0)
-            ) {
-                valid = false;
-                break;
-            }
-            refunds[id] = [...costs];
-            total += costs.reduce((sum, cost) => sum + cost, 0);
-        }
-        if (valid && total === page.upgradesSpent) {
-            page.upgradeRefunds = refunds;
-        }
-    }
+              : getPageCost(page.upgrades);
     return page;
 }
 
@@ -336,10 +339,6 @@ export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stat
         stats[upgrade.stat] += upgrade.perRank * rank;
     }
     return stats;
-}
-
-export function getTotalUpgradesBought(save: SaveData, style: CombatStyle = "melee"): number {
-    return Object.values(save.skillPages[style].upgrades).reduce((sum, rank) => sum + rank, 0);
 }
 
 function getMaxSkillSpending(save: SaveData): number {
@@ -363,7 +362,7 @@ export function getNextUpgradeCost(
     if (rank >= upgrade.maxRank) {
         return undefined;
     }
-    return getUpgradeCost(upgrade, rank, getTotalUpgradesBought(save, style));
+    return getUpgradeCost(upgradeId, save.skillPages[style].upgrades);
 }
 
 // Returns false when it can't be bought (maxed or too expensive)
@@ -378,88 +377,51 @@ export function buyUpgrade(
     }
     const reserved = getMaxSkillSpending(save);
     const page = save.skillPages[style];
-    const refunds = getUpgradeRefunds(page);
-    (refunds[upgradeId] ??= []).push(cost);
     page.upgradesSpent += cost;
     save.coins -= getMaxSkillSpending(save) - reserved;
     page.upgrades[upgradeId] = (page.upgrades[upgradeId] ?? 0) + 1;
     return true;
 }
 
+// Takes back one rank of the skill for its share of what the page paid: what
+// it adds to the page's cost today, times what the page paid over that cost.
+// The two are the same unless prices have changed since, and then each rank
+// gives back its part of the difference rather than one rank all of it, or
+// nothing. The last rank gives back the rest, so a page returns exactly what
+// it cost.
 export function refundUpgrade(
     save: SaveData,
     upgradeId: string,
     style: CombatStyle = "melee",
 ): boolean {
-    const upgrade = SHOP_UPGRADE_BY_ID.get(upgradeId);
     const page = save.skillPages[style];
     const rank = page.upgrades[upgradeId] ?? 0;
-    if (!upgrade || rank <= 0) {
+    if (rank <= 0) {
         return false;
     }
     const reserved = getMaxSkillSpending(save);
-    const refunds = getUpgradeRefunds(page);
-    const refund = refunds[upgradeId].pop()!;
-    page.upgradesSpent -= refund;
-    save.coins += reserved - getMaxSkillSpending(save);
+    const upgrades = { ...page.upgrades, [upgradeId]: rank - 1 };
     if (rank === 1) {
-        delete page.upgrades[upgradeId];
-        delete refunds[upgradeId];
+        delete upgrades[upgradeId];
+    }
+    if (Object.keys(upgrades).length === 0) {
+        save.skillPages[style] = createSkillPage();
     } else {
-        page.upgrades[upgradeId] = rank - 1;
+        const cost = getPageCost(page.upgrades);
+        const saved = cost - getPageCost(upgrades);
+        const refund = cost > 0 ? Math.round((saved * page.upgradesSpent) / cost) : 0;
+        page.upgradesSpent -= Math.min(refund, page.upgradesSpent);
+        page.upgrades = upgrades;
     }
-    if (getTotalUpgradesBought(save, style) === 0) {
-        delete page.upgradeRefunds;
-    }
+    save.coins += reserved - getMaxSkillSpending(save);
     return true;
-}
-
-function getUpgradeRefunds(page: SkillPage): Record<string, number[]> {
-    if (page.upgradeRefunds) {
-        return page.upgradeRefunds;
-    }
-    const refunds: Record<string, number[]> = {};
-    let remaining = page.upgradesSpent;
-    let weightLeft = 0;
-    for (const [id, rank] of Object.entries(page.upgrades)) {
-        const upgrade = SHOP_UPGRADE_BY_ID.get(id)!;
-        refunds[id] = Array.from({ length: rank }, (_, index) => getUpgradeCost(upgrade, index, 0));
-        weightLeft += refunds[id].reduce((sum, weight) => sum + weight, 0);
-    }
-    for (const costs of Object.values(refunds)) {
-        for (let index = 0; index < costs.length; index++) {
-            const weight = costs[index];
-            const refund = Math.round((remaining * weight) / weightLeft);
-            costs[index] = refund;
-            remaining -= refund;
-            weightLeft -= weight;
-        }
-    }
-    page.upgradeRefunds = refunds;
-    return refunds;
 }
 
 // Sells every upgrade back for what it cost (VS lets you refund)
 export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): void {
     const reserved = getMaxSkillSpending(save);
-    const page = save.skillPages[style];
-    page.upgradesSpent = 0;
+    save.skillPages[style] = createSkillPage();
     save.coins += reserved - getMaxSkillSpending(save);
-    page.upgrades = {};
-    delete page.upgradeRefunds;
-}
-
-// For saves from before spending was tracked: what buying these ranks one
-// upgrade at a time would have cost
-function estimateSpent(upgrades: Record<string, number>): number {
-    const replay = createSave();
-    replay.coins = Infinity;
-    for (const [id, rank] of Object.entries(upgrades)) {
-        for (let r = 0; r < rank; r++) {
-            buyUpgrade(replay, id);
-        }
-    }
-    return replay.skillPages.melee.upgradesSpent;
 }
 
 export type RunSummary = {
@@ -618,6 +580,11 @@ function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean
             return run?.mapId === task.mapId && run.bossesKilled.includes(task.enemyId);
         case "survive":
             return run?.mapId === task.mapId && run.seconds >= task.seconds;
+        case "raidChest":
+            return (
+                save.trophies.includes(task.trophyId) ||
+                (run?.trophies ?? []).includes(task.trophyId)
+            );
     }
 }
 

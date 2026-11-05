@@ -1,19 +1,18 @@
 // Goes through what a map is made of and flags locs that read wrong anywhere but where they
 // were built for. The classes are the draft of a catalogue check: see the research doc.
 //
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/trap-scan.ts world.json out.json map map ...
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/trap-scan.ts world.json out.json map map ...
 import fs from "node:fs";
 
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../../src/game/scaperune/maps/shippedMaps";
 import { createBuildContext } from "../../../src/game/scaperune/squares";
-import { bump, locLabel, openWorld, round } from "./lib";
+import { bump, createShapes, locLabel, openWorld, round } from "./lib";
 
 type Square = { x: number; y: number; locs: Record<string, number> };
 const [worldFile, out, ...wanted] = process.argv.slice(2);
 const world = JSON.parse(fs.readFileSync(worldFile, "utf8")) as { squares: Square[] };
 const w = openWorld();
-const models = w.factory.getModelLoader();
 
 // How a loc's used in the world, whatever the type
 const surface = new Map<number, number>();
@@ -27,44 +26,7 @@ for (const square of world.squares) {
     }
 }
 
-type Shape = { sink: number; top: number; reach: number; tris: number };
-const shapes = new Map<string, Shape>();
-function shapeOf(id: number, locType: number): Shape {
-    const key = `${id}:${locType}`;
-    let shape = shapes.get(key);
-    if (shape) return shape;
-    const type = w.locTypes.load(id);
-    shape = { sink: 0, top: 0, reach: 0, tris: 0 };
-    const sets = type.models ?? [];
-    let list = sets.flat();
-    if (type.types && sets.length > 0) {
-        const at = type.types.indexOf(locType);
-        // A type with no model of its own draws nothing
-        list = at >= 0 ? sets[at] : [];
-    }
-    const scaleX = type.modelSizeX / 128;
-    const scaleY = type.modelSizeHeight / 128;
-    const scaleZ = type.modelSizeY / 128;
-    for (const modelId of list) {
-        const model = models.getModel(modelId);
-        if (!model) continue;
-        shape.tris += model.faceCount;
-        for (let v = 0; v < model.verticesCount; v++) {
-            const up = -model.verticesY[v] * scaleY;
-            shape.top = Math.max(shape.top, up / 128);
-            shape.sink = Math.max(shape.sink, -up / 128);
-            const halfX = (type.sizeX * 128) / 2;
-            const halfZ = (type.sizeY * 128) / 2;
-            shape.reach = Math.max(
-                shape.reach,
-                (Math.abs(model.verticesX[v] * scaleX) - halfX) / 128,
-                (Math.abs(model.verticesZ[v] * scaleZ) - halfZ) / 128,
-            );
-        }
-    }
-    shapes.set(key, shape);
-    return shape;
-}
+const shapeOf = createShapes(w);
 
 const context = createBuildContext(w.maps, w.locTypes);
 const results: Record<string, object> = {};

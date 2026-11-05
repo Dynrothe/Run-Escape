@@ -15,6 +15,8 @@ export type MovementRules = {
     held: boolean;
     curse?: PlayerCurse;
     arena?: MovementBounds;
+    // Turned to face this spot whatever's pressed (a boss rising, watched: Sim.introFacing)
+    faces?: { x: number; y: number };
 };
 type MovementBody = Pick<Player, "x" | "y" | "yaw"> & Partial<Pick<Player, "facingX" | "facingY">>;
 
@@ -37,11 +39,18 @@ export function movePlayer(
     const input = moveX !== 0 || moveY !== 0;
     const moving = !rules.frozen && input;
     if (moving && ticks > 0) {
-        const sled = rules.tick < rules.sledEndTick ? rules.sledSpeed : 1;
-        const speed = rules.baseSpeed * (1 + rules.moveSpeed) * sled;
+        const speed = walkSpeed(rules);
         moveCircle(grid, body, moveX * speed * ticks, moveY * speed * ticks, rules.radius);
     }
-    if (moving || (rules.frozen && rules.held && input)) {
+    const faces = rules.faces;
+    const toX = faces ? faces.x - body.x : 0;
+    const toY = faces ? faces.y - body.y : 0;
+    if (faces && (toX !== 0 || toY !== 0)) {
+        const len = fm.hypot(toX, toY);
+        body.facingX = toX / len;
+        body.facingY = toY / len;
+        body.yaw = yawFromVector(toX, toY);
+    } else if (moving || (rules.frozen && rules.held && input)) {
         const len = fm.hypot(moveX, moveY);
         body.facingX = moveX / len;
         body.facingY = moveY / len;
@@ -54,6 +63,45 @@ export function movePlayer(
         body.y = Math.max(arena.minY + edge, Math.min(arena.maxY - edge, body.y));
     }
     return moving;
+}
+
+// How far the player goes in a tick of walking, sled and all
+export function walkSpeed(
+    rules: Pick<MovementRules, "baseSpeed" | "moveSpeed" | "tick" | "sledEndTick" | "sledSpeed">,
+): number {
+    const sled = rules.tick < rules.sledEndTick ? rules.sledSpeed : 1;
+    return rules.baseSpeed * (1 + rules.moveSpeed) * sled;
+}
+
+// A follower's tick (a thrall, a pet): towards its goal, stopping `stop` short of it, at most
+// `speed`, and through walls only if it's a ghost. Whether it had ground to cover.
+export function walkToward(
+    grid: ArenaGrid,
+    body: Pick<Player, "x" | "y" | "yaw">,
+    goalX: number,
+    goalY: number,
+    stop: number,
+    speed: number,
+    radius: number,
+    ghost = false,
+): boolean {
+    const dx = goalX - body.x;
+    const dy = goalY - body.y;
+    const distance = fm.hypot(dx, dy);
+    if (!(distance > stop)) {
+        return false;
+    }
+    const move = Math.min(speed, distance - stop);
+    const moveX = (dx / distance) * move;
+    const moveY = (dy / distance) * move;
+    if (ghost) {
+        body.x += moveX;
+        body.y += moveY;
+    } else {
+        moveCircle(grid, body, moveX, moveY, radius);
+    }
+    body.yaw = yawFromVector(dx, dy);
+    return true;
 }
 
 // RS yaw (0 south, 512 west, 1024 north, 1536 east) for a direction.

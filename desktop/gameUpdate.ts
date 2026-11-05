@@ -1,15 +1,28 @@
 import JSZip from "jszip";
 import { createHash } from "node:crypto";
 import { constants, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import {
+    access,
+    copyFile,
+    mkdir,
+    readFile,
+    readdir,
+    rename,
+    rm,
+    writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ReadableStream as WebReadableStream } from "node:stream/web";
 
 import {
+    CHUNK_FILE_PATTERN,
     GameFolder,
     GameManifest,
+    ManifestChunk,
+    chunkName,
+    chunkPath,
     compareVersions,
     isVersion,
     parseManifest,
@@ -22,12 +35,23 @@ const MARKER_NAME = "verified.json";
 const CHECK_TIMEOUT_MS = 5000;
 const STALL_TIMEOUT_MS = 20000;
 const MAX_REDIRECTS = 5;
+// Chunks downloaded at once in a split update
+const CHUNK_DOWNLOADS = 4;
+// A split update is taken only when the chunks it downloads are at most this share of them all:
+// each one is a request of its own, through a redirect, so a small saving isn't worth it
+const SPLIT_SHARE = 0.5;
 
 export const gameZipName = (version: string) => `game-${version}.zip`;
+// The game zip without its cache's chunks, which are assets of their own
+export const liteZipName = (version: string) => `game-${version}-lite.zip`;
+export const chunkAssetName = (file: string) => `cache-${file}`;
+
+// Where the lite zip and each chunk can be downloaded from, when the release has them
+export type SplitUpdate = { liteUrl: string; chunkUrls: Record<string, string> };
 
 export type UpdateCheck =
     | { kind: "none" }
-    | { kind: "update"; manifest: GameManifest; zipUrl: string }
+    | { kind: "update"; manifest: GameManifest; zipUrl: string; split?: SplitUpdate }
     // A newer game that this launcher can't run
     | { kind: "launcher"; version: string; releasePage?: string };
 
@@ -114,7 +138,26 @@ export async function checkForUpdate(
     if (!zipUrl) {
         throw new Error(`Release ${release.tag_name} has no game zip`);
     }
-    return { kind: "update", manifest, zipUrl };
+    return { kind: "update", manifest, zipUrl, split: findSplitUpdate(manifest, assetUrl) };
+}
+
+function findSplitUpdate(
+    manifest: GameManifest,
+    assetUrl: (name: string) => string | undefined,
+): SplitUpdate | undefined {
+    const liteUrl = assetUrl(liteZipName(manifest.version));
+    if (!manifest.lite || !manifest.chunks || !liteUrl) {
+        return undefined;
+    }
+    const chunkUrls: Record<string, string> = {};
+    for (const { file } of manifest.chunks) {
+        const url = assetUrl(chunkAssetName(file));
+        if (!url) {
+            return undefined;
+        }
+        chunkUrls[file] = url;
+    }
+    return { liteUrl, chunkUrls };
 }
 
 // Streams a download to a file and gives back its sha256. Gives up if nothing arrives for a while,
@@ -216,8 +259,93 @@ export async function readInstalledGames(dataDir: string): Promise<GameFolder[]>
     return folders;
 }
 
+// Where one of the folders has the chunk as it should be
+async function findChunk(file: string, folders: string[]): Promise<string | undefined> {
+    for (const folder of folders) {
+        const source = chunkPath(folder, file);
+        const data = await readFile(source).catch(() => undefined);
+        if (data && chunkName(data) === file) {
+            return source;
+        }
+    }
+    return undefined;
+}
+
+// Downloads one file of a split update and gives back its sha256, adding to the update's progress
+type Fetcher = (url: string, file: string, size: number) => Promise<string>;
+
+// The lite zip, and the chunks: the ones the game has already are copied, the rest downloaded a
+// few at a time
+async function installSplit(
+    manifest: GameManifest & Required<Pick<GameManifest, "lite" | "chunks">>,
+    split: SplitUpdate,
+    missing: ManifestChunk[],
+    have: Map<string, string>,
+    workDir: string,
+    extracted: string,
+    signal: AbortSignal,
+    fetchFile: Fetcher,
+): Promise<void> {
+    const liteFile = path.join(workDir, liteZipName(manifest.version));
+    const sha256 = await fetchFile(split.liteUrl, liteFile, manifest.lite.size);
+    if (sha256 !== manifest.lite.sha256) {
+        throw new Error(`The lite zip's sha256 is ${sha256}, not ${manifest.lite.sha256}`);
+    }
+    await extractZip(liteFile, extracted, signal);
+    await mkdir(path.dirname(chunkPath(extracted, "x")), { recursive: true });
+    for (const [file, source] of have) {
+        await copyFile(source, chunkPath(extracted, file));
+    }
+    let next = 0;
+    const worker = async () => {
+        while (next < missing.length) {
+            const { file, size } = missing[next++];
+            try {
+                const target = chunkPath(extracted, file);
+                const hash = await fetchFile(split.chunkUrls[file], target, size);
+                if (hash.slice(0, 32) + ".bin" !== file) {
+                    throw new Error(`Chunk ${file} downloaded as ${hash}`);
+                }
+            } catch (e) {
+                // The others stop after the chunk they're on
+                next = missing.length;
+                throw e;
+            }
+        }
+    };
+    const workers = Array.from({ length: Math.min(CHUNK_DOWNLOADS, missing.length) }, worker);
+    // All of them finish before anything removes the folder they write into
+    const failed = (await Promise.allSettled(workers)).find((r) => r.status === "rejected");
+    if (failed) {
+        throw failed.reason;
+    }
+}
+
+// Every chunk caches.json lists is in the folder: a game that's missing one stops partway through
+// loading
+async function checkChunks(folder: string): Promise<void> {
+    const caches: unknown = JSON.parse(
+        await readFile(path.join(folder, "caches", "caches.json"), "utf8"),
+    );
+    if (!Array.isArray(caches)) {
+        throw new Error("caches.json isn't a list");
+    }
+    for (const cache of caches) {
+        for (const chunk of cache?.chunks ?? []) {
+            if (!CHUNK_FILE_PATTERN.test(chunk?.file)) {
+                throw new Error(`caches.json lists a chunk called ${chunk?.file}`);
+            }
+            await access(chunkPath(folder, chunk.file), constants.R_OK);
+        }
+    }
+}
+
 // Downloads, verifies and installs a game update, and returns its folder. The game folder only
 // changes at the rename, so until then a failure or a cancel leaves it as it was.
+//
+// With a split update, the chunks already in reuseFrom's folders (the game being played) are
+// copied, and only the rest are downloaded. When that wouldn't save much, the whole zip is one
+// download rather than one per chunk, and it's what's downloaded if the split one fails.
 export async function installUpdate(
     manifest: GameManifest,
     zipUrl: string,
@@ -226,22 +354,79 @@ export async function installUpdate(
     signal: AbortSignal,
     onProgress: (fraction: number | undefined) => void,
     stallMs = STALL_TIMEOUT_MS,
+    split?: SplitUpdate,
+    reuseFrom: string[] = [],
+    onSplitFailed: (e: unknown) => void = () => {},
 ): Promise<GameFolder> {
     const workDir = updateDir(dataDir);
     await rm(workDir, { recursive: true, force: true });
     await mkdir(workDir, { recursive: true });
     await mkdir(gamesDir(dataDir), { recursive: true });
     try {
-        const zipFile = path.join(workDir, gameZipName(manifest.version));
-        const sha256 = await download(zipUrl, source, zipFile, signal, onProgress, stallMs);
-        if (sha256 !== manifest.sha256) {
-            throw new Error(`The download's sha256 is ${sha256}, not ${manifest.sha256}`);
-        }
-
         const extracted = path.join(workDir, "extracted");
-        await extractZip(zipFile, extracted, signal);
+        const { lite, chunks } = manifest;
+        // Each chunk the game has, by where it is
+        const have = new Map<string, string>();
+        for (const { file } of split && lite && chunks ? chunks : []) {
+            const source = await findChunk(file, reuseFrom);
+            if (source) {
+                have.set(file, source);
+            }
+        }
+        const sizeOf = (list: ManifestChunk[]) => list.reduce((sum, chunk) => sum + chunk.size, 0);
+        const missing = (chunks ?? []).filter((chunk) => !have.has(chunk.file));
+        let installed = false;
+        if (split && lite && chunks && sizeOf(missing) <= SPLIT_SHARE * sizeOf(chunks)) {
+            const total = lite.size + sizeOf(missing);
+            // What's arrived of every file, for the progress bar
+            let done = 0;
+            const fetchFile: Fetcher = async (url, file, size) => {
+                let counted = 0;
+                const count = (bytes: number) => {
+                    done += bytes - counted;
+                    counted = bytes;
+                    onProgress(total ? done / total : 1);
+                };
+                const hash = await download(
+                    url,
+                    source,
+                    file,
+                    signal,
+                    (fraction) => count((fraction ?? 0) * size),
+                    stallMs,
+                );
+                count(size);
+                return hash;
+            };
+            const required = { ...manifest, lite, chunks };
+            try {
+                await installSplit(
+                    required,
+                    split,
+                    missing,
+                    have,
+                    workDir,
+                    extracted,
+                    signal,
+                    fetchFile,
+                );
+                installed = true;
+            } catch (e) {
+                signal.throwIfAborted();
+                onSplitFailed(e);
+                await rm(extracted, { recursive: true, force: true });
+            }
+        }
+        if (!installed) {
+            const zipFile = path.join(workDir, gameZipName(manifest.version));
+            const sha256 = await download(zipUrl, source, zipFile, signal, onProgress, stallMs);
+            if (sha256 !== manifest.sha256) {
+                throw new Error(`The download's sha256 is ${sha256}, not ${manifest.sha256}`);
+            }
+            await extractZip(zipFile, extracted, signal);
+        }
         await access(path.join(extracted, "index.html"), constants.R_OK);
-        await access(path.join(extracted, "caches", "caches.json"), constants.R_OK);
+        await checkChunks(extracted);
         await writeFile(path.join(extracted, MARKER_NAME), JSON.stringify(manifest));
 
         signal.throwIfAborted();

@@ -1,0 +1,3 @@
+# Exports of the collector's database stay out of the repository
+*
+!.gitignore

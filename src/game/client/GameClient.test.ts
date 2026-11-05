@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
+import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
-import { hasBadNumber } from "../core/lockstep";
+import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
     SaveData,
@@ -17,13 +18,16 @@ import {
     DisplaySettings,
     FrameRate,
     frameCap,
+    getDefaultDisplaySettings,
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, loadoutStats } from "./GameClient";
+import { GameClient, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
+import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
+import { UpMessage } from "./coop/protocol";
 
-function createSim(): Sim {
+function createSim(focus?: number): Sim {
     const row = ".".repeat(72);
     return new Sim({
         grid: makeGrid(Array(72).fill(row), 1000, 1000),
@@ -33,11 +37,20 @@ function createSim(): Sim {
         seed: 5,
         spawnX: 1036.5,
         spawnY: 1036.5,
+        party:
+            focus === undefined
+                ? undefined
+                : ["warrior", "wizard"].map((characterId) => ({
+                      name: characterId,
+                      characterId,
+                      metaStats: emptyStats(),
+                  })),
+        focus,
     });
 }
 
 // The client's run flow on its own: nothing it draws or plays is needed
-function createClient(sim: Sim, autoAlch: boolean) {
+function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
     const save = createSave();
     const store = new GameStore(save);
     const client: GameClient = Object.create(GameClient.prototype);
@@ -50,16 +63,15 @@ function createClient(sim: Sim, autoAlch: boolean) {
         shownDpsTick: 0,
         damageMeter: new DamageMeter(),
         lastHudUpdate: 0,
+        coopPlayerIds: sim.heroes.map((hero) => `hero-${hero.index}`),
         display: {
+            ...getDefaultDisplaySettings(),
             menuSpin: false,
-            pauseOnBlur: true,
-            questTracker: true,
-            damagePanel: false,
             autoAlch,
+            autoEquip,
             movePrediction: false,
-            coopFlag: true,
         },
-        sounds: { onEvents() {}, levelUp() {}, playerDied() {} },
+        sounds: { onEvents() {}, levelUp() {}, playerDied() {}, chest() {} },
         view: { onEvents() {} },
         finishRun() {},
     });
@@ -126,6 +138,10 @@ describe("the co-op flag", () => {
         expect(loadDisplaySettings().coopFlag).toBe(true);
         saveDisplaySettings({ ...loadDisplaySettings(), coopFlag: false });
         expect(loadDisplaySettings().coopFlag).toBe(false);
+        // Sharing run stats is on for settings saved before it existed, and remembered off
+        expect(loadDisplaySettings().runStats).toBe(true);
+        saveDisplaySettings({ ...loadDisplaySettings(), runStats: false });
+        expect(loadDisplaySettings().runStats).toBe(false);
         vi.unstubAllGlobals();
     });
 
@@ -150,6 +166,148 @@ function displayOf(client: GameClient): DisplaySettings {
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
+
+    test.each([
+        [0, "boss"],
+        [1, "boss"],
+        [0, "finalBoss"],
+        [1, "finalBoss"],
+    ] as const)("co-op hero %i sees the nearest living %s", (focus, type) => {
+        const sim = createSim(focus);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        sim.heroes[0].player.x = 1020.5;
+        sim.heroes[1].player.x = 1050.5;
+        const bosses = [1022.5, 1048.5].map(
+            (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
+        );
+        bosses[0].hp = bosses[0].maxHp / 4;
+        bosses[1].hp = (bosses[1].maxHp * 3) / 4;
+        const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        const other = 1 - focus;
+        sim.player.x = bosses[other].x;
+        sim.player.y = bosses[other].y;
+        // A regular enemy even closer must not take the boss bar.
+        sim.spawnEnemy(getEnemy("goblin"), "normal", { x: sim.player.x, y: sim.player.y });
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(other));
+
+        // Distance includes both axes, and is reconsidered as bosses move.
+        bosses[other].y += 40;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+        bosses[other].y = sim.player.y;
+        bosses[other].dead = true;
+        bosses[other].hp = 0;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        bosses[focus].dead = true;
+        bosses[focus].hp = 0;
+        updateHud(client);
+        if (type === "finalBoss") {
+            expect(store.getNumbers()!.boss).toMatchObject({
+                name: bosses[focus].def.name,
+                fraction: 0,
+                enraged: false,
+            });
+        } else {
+            expect(store.getNumbers()!.boss).toBeUndefined();
+        }
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
+
+    test("co-op chooses the closest boss even when a final boss is farther away", () => {
+        const sim = createSim(1);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        expect(sim.shownBoss).toBe(finalBoss);
+    });
+
+    test("co-op keeps the final boss's empty bar to the victory screen, over a living boss", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        sim.damageEnemy(finalBoss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        expect(boss.dead).toBe(false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toMatchObject({ name: finalBoss.def.name, fraction: 0 });
+    });
+
+    test("co-op's bar stays on its boss until another is clearly nearer", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const x = sim.player.x;
+        const [left, right] = [-3, 3].map(
+            (dx) =>
+                sim.spawnEnemy(getEnemy("wise_old_man"), "boss", { x: x + dx, y: sim.player.y })!,
+        );
+        left.hp = left.maxHp / 4;
+        right.hp = (right.maxHp * 3) / 4;
+        const shown = () => store.getNumbers()!.boss?.fraction;
+        sim.player.x = x - 0.1;
+        updateHud(client, true);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        // A tile nearer the other isn't enough
+        sim.player.x = x + 0.5;
+        updateHud(client);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        sim.player.x = x + 1.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+        // Nor does it go straight back
+        sim.player.x = x - 0.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+    });
+
+    test("solo keeps the final boss's priority over a nearer boss", () => {
+        const sim = createSim();
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        });
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(finalBoss.def.name);
+    });
+
+    test("co-op without bosses has no boss bar", () => {
+        const sim = createSim(1);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toBeUndefined();
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
 
     test("keeps what hasn't changed the same object, so its parts don't draw again", () => {
         vi.stubGlobal("window", { localStorage: { setItem() {} } });
@@ -346,6 +504,292 @@ describe("the damage panel", () => {
         // How a run ends is the sim's business; only that it has matters here
         Object.defineProperty(sim, "runOver", { value: true });
         expect(isPlaying()).toBe(false);
+    });
+});
+
+describe("auto equip", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    function offer(sim: Sim, itemId: string, upgrades = 0): void {
+        sim.openCasket("easy");
+        Object.assign(sim.chests[sim.chests.length - 1], { itemId, upgrades });
+    }
+
+    test("defaults off for new and existing settings and remembers the toggle", () => {
+        // A stand-in, as jsdom's own storage isn't there on every Node
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().autoEquip).toBe(false);
+        const key = "rune-survivors-display";
+        for (const data of [{ autoAlch: true }, { autoEquip: "true" }]) {
+            stored.set(key, JSON.stringify(data));
+            expect(loadDisplaySettings().autoEquip).toBe(false);
+        }
+        const { client, store } = createClient(createSim(), false);
+        expect(store.getSnapshot().display.autoEquip).toBe(false);
+        client.toggleAutoEquip();
+        expect(loadDisplaySettings().autoEquip).toBe(true);
+        expect(store.getSnapshot().display.autoEquip).toBe(true);
+        client.toggleAutoEquip();
+        expect(loadDisplaySettings().autoEquip).toBe(false);
+    });
+
+    test("off, even an empty slot still asks", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, false);
+        offer(sim, "rune_boots");
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(store.getSnapshot().overlay).toBe("chest");
+    });
+
+    test("matches clicking Equip, including upgrades, replaced gear's coins and stats", () => {
+        const clicked = createSim();
+        const auto = createSim();
+        const { store, sync } = createClient(auto, false, true);
+        for (const sim of [clicked, auto]) {
+            sim.equip("rune_boots", 1);
+            sim.takeEvents();
+            offer(sim, "dragon_boots", 2);
+        }
+        const coins = auto.alchValue("rune_boots", 1);
+        clicked.resolveChest("take");
+        sync();
+        expect(auto.gear).toEqual(clicked.gear);
+        expect(auto.gearUpgrades).toEqual(clicked.gearUpgrades);
+        expect(auto.stats).toEqual(clicked.stats);
+        expect(auto.coins).toBe(clicked.coins);
+        expect(auto.getResult()).toEqual(clicked.getResult());
+        expect(store.getSnapshot().overlay).toBe("none");
+        expect(store.getSnapshot().chest).toBeUndefined();
+        expect(store.getSnapshot().toasts.map((t) => t.text)).toEqual([
+            `Equipped Dragon boots; high alched Rune boots for ${coins.toLocaleString()} coins`,
+        ]);
+    });
+
+    test.each([
+        ["rune_boots", "rune_boots"],
+        ["climbing_boots", "dragon_boots"],
+        ["dragon_boots", "rune_boots"],
+        ["void_melee_helm", "slayer_helmet"],
+        ["crystal_helm", "corrupted_crystal_helm"],
+        ["rune_boots", "shark"],
+    ])("keeps the prompt for %s to %s", (wornId, offeredId) => {
+        const sim = createSim();
+        sim.equip(wornId);
+        const gear = { ...sim.gear };
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, offeredId);
+        sync();
+        expect(sim.gear).toEqual(gear);
+        expect(store.getSnapshot().overlay).toBe("chest");
+        expect(store.getSnapshot().chest?.item.id).toBe(offeredId);
+        client.resolveChest("alch");
+        expect(sim.gear).toEqual(gear);
+        expect(sim.chests).toHaveLength(0);
+    });
+
+    test("processes queued upgrades against newly equipped gear, stopping at a trade-off", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        for (const id of ["rune_boots", "dragon_boots", "climbing_boots", "rune_full_helm"]) {
+            offer(sim, id);
+        }
+        sync();
+        expect(sim.gear.feet).toBe("dragon_boots");
+        expect(sim.chests).toHaveLength(2);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        client.resolveChest("alch");
+        expect(sim.gear.head).toBe("rune_full_helm");
+        expect(sim.chests).toHaveLength(0);
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("auto alch still takes priority when both are on", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, true, true);
+        offer(sim, "rune_boots");
+        const coins = sim.coins;
+        const worth = sim.alchValue("rune_boots", 0);
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(sim.coins).toBe(coins + worth);
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("waits for a level up before equipping and preserves a pending level up afterwards", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        sim.xp = sim.xpForNextLevel;
+        sim.step(0, 0);
+        offer(sim, "rune_boots");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("levelUp");
+        expect(sim.gear.feet).toBeUndefined();
+        client.choose(0);
+        expect(sim.gear.feet).toBe("rune_boots");
+        expect(sim.chests).toHaveLength(0);
+        offer(sim, "rune_full_helm");
+        sim.xp = sim.xpForNextLevel;
+        sync();
+        expect(sim.gear.head).toBe("rune_full_helm");
+        expect(store.getSnapshot().overlay).toBe("levelUp");
+    });
+
+    test("does not take an offer after the run ends", () => {
+        const sim = createSim();
+        const { store, sync } = createClient(sim, false, true);
+        offer(sim, "rune_boots");
+        sim.state = "dead";
+        sync();
+        expect(sim.gear.feet).toBeUndefined();
+        expect(sim.chests).toHaveLength(1);
+        expect(store.getSnapshot().overlay).toBe("dead");
+    });
+
+    test("checks a rerolled casket before showing its new item", () => {
+        const sim = createSim();
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, "shark");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("chest");
+        const sounds = (client as unknown as { sounds: { chest(): void } }).sounds;
+        const chestSound = vi.spyOn(sounds, "chest");
+        vi.spyOn(sim, "reroll").mockImplementation(() => {
+            sim.chests[0].itemId = "rune_boots";
+            return true;
+        });
+        expect(client.reroll()).toBe(true);
+        expect(sim.gear.feet).toBe("rune_boots");
+        expect(store.getSnapshot().overlay).toBe("none");
+        // No casket bursts open again for an item that's taken at once
+        expect(chestSound).not.toHaveBeenCalled();
+    });
+
+    test("says nothing more when the player clicks Equip on a casket that asked", () => {
+        const sim = createSim();
+        sim.equip("rune_boots");
+        const { client, store, sync } = createClient(sim, false, true);
+        offer(sim, "climbing_boots");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("chest");
+        client.resolveChest("take");
+        expect(sim.gear.feet).toBe("climbing_boots");
+        expect(store.getSnapshot().toasts).toEqual([]);
+    });
+
+    // A host and a guest, the guest (hero 1) with a rune boots casket and then
+    // a climbing boots one, and the host wearing dragon boots
+    function coopPair(now: () => number = Date.now) {
+        const host = createSim(0);
+        const guest = createSim(1);
+        for (const sim of [host, guest]) {
+            sim.as(0, () => sim.equip("dragon_boots"));
+            sim.as(1, () => {
+                offer(sim, "rune_boots");
+                offer(sim, "climbing_boots");
+            });
+        }
+        const messages: UpMessage[] = [];
+        const heroes = new Map([
+            ["host", 0],
+            ["guest", 1],
+        ]);
+        const guestRun = new CoopRun(
+            guest,
+            false,
+            { sendUp: (message) => messages.push(message), sendDown() {} },
+            heroes,
+            "host",
+            now,
+        );
+        const hostRun = new CoopRun(
+            host,
+            true,
+            { sendUp() {}, sendDown: (message) => guestRun.receiveDown(message) },
+            heroes,
+            "host",
+        );
+        hostRun.receiveUp("guest", { loaded: true });
+        const { client, store, sync } = createClient(guest, false, true);
+        Object.assign(client, { coopRun: guestRun });
+        return { host, guest, hostRun, guestRun, messages, client, store, sync };
+    }
+
+    test("a co-op guest's lost answer goes again, with the casket hidden and the menu working", () => {
+        let time = 1000;
+        const { host, guest, hostRun, guestRun, messages, client, store, sync } = coopPair(
+            () => time,
+        );
+        const resend = () =>
+            (
+                client as unknown as { resendAutoChest(sim: Sim, run: CoopRun): void }
+            ).resendAutoChest(guest, guestRun);
+        sync();
+        const take = { action: { kind: "chest", action: "take" } };
+        expect(messages).toEqual([take]);
+        // Lost on the way: nothing goes again until it's had time to arrive
+        resend();
+        time += DECISION_RESEND_MS - 1;
+        resend();
+        expect(messages).toHaveLength(1);
+        client.pause();
+        expect(store.getSnapshot().overlay).toBe("paused");
+        expect(store.getSnapshot().chest).toBeUndefined();
+        client.resume();
+        expect(store.getSnapshot().overlay).toBe("none");
+        time += 1;
+        resend();
+        expect(messages).toEqual([take, take]);
+        resend();
+        expect(messages).toHaveLength(2);
+        hostRun.receiveUp("guest", messages[1]);
+        hostRun.stepFrame();
+        hostRun.flush(true);
+        guestRun.stepFrame();
+        (client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }).handleEvents(
+            guest,
+            guest.takeEvents(),
+        );
+        sync();
+        expect(guest.gear.feet).toBe("rune_boots");
+        expect(syncHash(guest)).toBe(syncHash(host));
+        expect(store.getSnapshot().toasts.map((t) => t.text)).toEqual(["Equipped Rune boots"]);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        expect(store.getSnapshot().overlay).toBe("chest");
+        // The casket that asks isn't answered for the player
+        resend();
+        expect(messages).toHaveLength(2);
+    });
+
+    test("a co-op guest sends one local choice and waits for the host to apply it", () => {
+        const { host, guest, hostRun, guestRun, messages, store, sync } = coopPair();
+        store.set({ overlay: "chest" });
+        sync();
+        sync();
+        expect(messages).toEqual([{ action: { kind: "chest", action: "take" } }]);
+        expect(guest.gear.feet).toBeUndefined();
+        expect(store.getSnapshot().overlay).toBe("none");
+        hostRun.receiveUp("guest", messages[0]);
+        hostRun.stepFrame();
+        hostRun.flush(true);
+        guestRun.stepFrame();
+        sync();
+        expect(guest.gear.feet).toBe("rune_boots");
+        expect(guest.heroes[0].gear.feet).toBe("dragon_boots");
+        expect(syncHash(guest)).toBe(syncHash(host));
+        expect(messages).toHaveLength(1);
+        expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
+        expect(store.getSnapshot().overlay).toBe("chest");
     });
 });
 
@@ -618,6 +1062,22 @@ describe("saving", () => {
         expect(saved).toEqual([]);
     });
 
+    test("refunding an early skill saves what the page costs without it", () => {
+        expect.hasAssertions();
+        const { client, store, saved } = createSaving(true);
+        client.save.coins = 50000;
+        buyUpgrade(client.save, "strength");
+        buyUpgrade(client.save, "smithing");
+        client.refundUpgrade("strength");
+        expect(client.save.coins).toBe(40000);
+        expect(client.save.skillPages.melee).toEqual({
+            upgrades: { smithing: 1 },
+            upgradesSpent: 10000,
+        });
+        expect(saved).toEqual([client.save]);
+        expect(store.getSnapshot().save).toEqual(client.save);
+    });
+
     test("nothing's saved while another tab has the game", () => {
         const { client, store, saved, lockChanged } = createSaving(true);
         lockChanged(false);
@@ -727,6 +1187,73 @@ describe("saving", () => {
         client.closeUnreadableNotice();
         expect(store.getSnapshot().unreadableSave).toBeUndefined();
     });
+
+    describe("the favourite adventurer", () => {
+        const locked = CHARACTERS.find((c) => c.unlock)!.id;
+
+        // With the pick's look and co-op's word of it watched
+        function createPicking() {
+            const saving = createSaving(true);
+            const setCharacterLook = vi.fn();
+            const setMe = vi.fn();
+            Object.assign(saving.client, { assets: { setCharacterLook }, coop: { setMe } });
+            return { ...saving, setCharacterLook, setMe };
+        }
+
+        test("is saved, and taken off again, only for an adventurer that's open", () => {
+            const { client, store, saved } = createPicking();
+            client.toggleFavouriteCharacter("wizard");
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["wizard"]);
+            expect(store.getSnapshot().save.favouriteCharacter).toBe("wizard");
+            // It's not the pick
+            expect(store.getSnapshot().characterId).toBe("warrior");
+            client.toggleFavouriteCharacter("wizard");
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["wizard", undefined]);
+            client.toggleFavouriteCharacter(locked);
+            expect(client.save.favouriteCharacter).toBeUndefined();
+            expect(saved).toHaveLength(2);
+        });
+
+        test("an imported save goes to its favourite, picked once", () => {
+            const { client, store, saved, setCharacterLook, setMe } = createPicking();
+            client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
+            expect(store.getSnapshot().characterId).toBe("ranger");
+            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setMe).toHaveBeenCalledTimes(1);
+            expect(saved.map((s) => s.favouriteCharacter)).toEqual(["ranger"]);
+        });
+
+        test("an imported save's favourite that isn't open in it leaves the pick alone", () => {
+            const { client, store, setCharacterLook } = createPicking();
+            store.set({ characterId: "wizard" });
+            client.replaceSave({ ...createSave(), favouriteCharacter: locked });
+            expect(store.getSnapshot().characterId).toBe("wizard");
+            expect(setCharacterLook).not.toHaveBeenCalled();
+        });
+
+        test("a pick that isn't open in an imported save goes to its favourite, once", () => {
+            const { client, store, setCharacterLook, setMe } = createPicking();
+            client.save.unlockedCharacters.push(locked);
+            store.set({ characterId: locked });
+            client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
+            expect(store.getSnapshot().characterId).toBe("ranger");
+            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setMe).toHaveBeenCalledTimes(1);
+        });
+
+        test("a save given back by another tab leaves an open pick alone", () => {
+            const { client, store, setStored, lockChanged } = createPicking();
+            store.set({ characterId: "wizard" });
+            setStored({ save: { ...createSave(), favouriteCharacter: "ranger" } });
+            lockChanged(true);
+            expect(client.save.favouriteCharacter).toBe("ranger");
+            expect(store.getSnapshot().characterId).toBe("wizard");
+            // One that isn't open in it goes to the favourite
+            store.set({ characterId: locked });
+            lockChanged(true);
+            expect(store.getSnapshot().characterId).toBe("ranger");
+        });
+    });
 });
 
 describe("loadoutStats", () => {
@@ -750,5 +1277,46 @@ describe("loadoutStats", () => {
         expect(stats.might).toBeLessThan(1e9);
         expect(stats.armor).toBe(0);
         expect(stats.regen).toBe(0);
+    });
+});
+
+describe("a boss bar in phases", () => {
+    // Just what the bar reads: its hitpoints and its phases (Justiciar Zachariah's)
+    const boss = (hp: number) => {
+        const def = getEnemy("justiciar_zachariah");
+        return { def, hp, maxHp: 1000 } as unknown as Parameters<typeof getPhaseBarFraction>[0];
+    };
+
+    test("is a full bar for each of Zachariah's phases, empty at the next threshold", () => {
+        const phases = getEnemy("justiciar_zachariah").boss!.phases!;
+        expect(phases.barPerPhase).toBe(true);
+        const [first, second] = phases.phases.map((p) => (p.until ?? 0) * 1000);
+        expect(getPhaseBarFraction(boss(1000), 0)).toBe(1);
+        expect(getPhaseBarFraction(boss(first), 0)).toBe(0);
+        // The next phase starts full where the last one ended
+        expect(getPhaseBarFraction(boss(first), 1)).toBe(1);
+        expect(getPhaseBarFraction(boss((first + second) / 2), 1)).toBeCloseTo(0.5);
+        expect(getPhaseBarFraction(boss(second), 2)).toBe(1);
+        expect(getPhaseBarFraction(boss(0), 2)).toBe(0);
+    });
+
+    test("is the whole of the hitpoints for a boss that doesn't ask for it", () => {
+        const def = getEnemy("phosanis_nightmare");
+        expect(def.boss?.phases?.barPerPhase).toBeUndefined();
+        const phosani = { def, hp: 300, maxHp: 1000 } as unknown as Parameters<
+            typeof getPhaseBarFraction
+        >[0];
+        expect(getPhaseBarFraction(phosani, 1)).toBeCloseTo(0.3);
+    });
+});
+
+describe("raid modes", () => {
+    test("turning hard mode off turns expert off with it, as expert is hard mode too", () => {
+        const { client, store } = createClient(createSim(), false);
+        Object.assign(client, { coop: { isHost: false } });
+        store.set({ mapId: "theatre_of_blood", hard: true, expert: true });
+        client.toggleHard();
+        expect(store.getSnapshot().hard).toBe(false);
+        expect(store.getSnapshot().expert).toBe(false);
     });
 });

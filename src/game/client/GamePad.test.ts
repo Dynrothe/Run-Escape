@@ -203,6 +203,92 @@ describe("GamePads", () => {
         expect(keys).toContain("+KeyP");
     });
 
+    // An Xbox pad and a second one, with frame(first's buttons, second's) a
+    // frame apart
+    const twoPads = (secondId = fakePad().id) => {
+        const second = (down: number[]) =>
+            ({ ...fakePad(down), index: 1, id: secondId }) as Gamepad;
+        let both = [fakePad(), second([])];
+        Object.defineProperty(navigator, "getGamepads", { value: () => both, configurable: true });
+        const p = new GamePads();
+        const keys: string[] = [];
+        p.onKeyDown = (code) => keys.push("+" + code);
+        p.onKeyUp = (code) => keys.push("-" + code);
+        const connected = vi.fn();
+        p.onConnect = connected;
+        let now = 0;
+        const frame = (first: number[], other: number[] = []) => {
+            both = [fakePad(first), second(other)];
+            p.poll(now, "run");
+            now += 16;
+        };
+        const later = (ms: number) => (now += ms);
+        return { keys, connected, frame, later };
+    };
+    // DS4Windows: the PlayStation pad, beside the Xbox one it makes
+    const DUALSHOCK = "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)";
+    const LB = [PAD.leftBumper];
+    const RB = [PAD.rightBumper];
+
+    test("keeps to one of two pads that press together, so presses count", () => {
+        const { keys, connected, frame } = twoPads(DUALSHOCK);
+        for (let i = 0; i < 3; i++) {
+            frame(LB, LB);
+            frame([]);
+        }
+        expect(connected).toHaveBeenCalledTimes(1);
+        expect(keys).toEqual(["+Digit1", "-Digit1", "+Digit1", "-Digit1", "+Digit1", "-Digit1"]);
+    });
+
+    test("keeps to one of two pads a frame or two apart, whichever is ahead", () => {
+        const { keys, connected, frame } = twoPads(DUALSHOCK);
+        // The PlayStation pad ahead, pressing and letting go (it's taken up)
+        frame([], LB);
+        frame(LB, LB);
+        frame(LB, []);
+        frame([]);
+        // Then the Xbox one, by two frames
+        frame(LB, []);
+        frame(LB, []);
+        frame(LB, LB);
+        frame([], LB);
+        frame([], LB);
+        frame([]);
+        expect(connected).toHaveBeenCalledTimes(1);
+        expect(keys).toEqual(["+Digit1", "-Digit1", "+Digit1", "-Digit1"]);
+    });
+
+    test("hands over to another pad once the one in use has been let go a moment", () => {
+        const { keys, connected, frame } = twoPads();
+        frame(LB);
+        for (let i = 0; i < 4; i++) {
+            frame([], RB);
+        }
+        expect(connected).toHaveBeenCalledTimes(1);
+        frame([], RB);
+        expect(connected).toHaveBeenCalledTimes(2);
+        // The press that took it over doesn't count, the next one does
+        frame([]);
+        frame([], RB);
+        expect(keys).toEqual(["+Digit1", "-Digit1", "+Digit2"]);
+    });
+
+    test("a pad resting with something held gives way to another, and doesn't take back over", () => {
+        const { keys, connected, frame, later } = twoPads();
+        frame(LB);
+        later(2000);
+        for (let i = 0; i < 5; i++) {
+            frame(LB, RB);
+        }
+        expect(connected).toHaveBeenCalledTimes(2);
+        // Its key's let go as the other takes over
+        expect(keys).toEqual(["+Digit1", "-Digit1"]);
+        for (let i = 0; i < 5; i++) {
+            frame(LB);
+        }
+        expect(connected).toHaveBeenCalledTimes(2);
+    });
+
     test("a pad off the standard layout only moves", () => {
         const { p, keys } = pads();
         pad = fakePad([PAD.leftBumper], [1, 0], "");

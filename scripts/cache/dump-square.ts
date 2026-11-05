@@ -1,7 +1,14 @@
 // Lists what a real map square is made of, level by level: its locs (by id:type, with names and sizes),
-// its underlays and overlays. WHERE=id,id prints every position of those ids.
-//   npx tsx scripts/cache/dump-square.ts 60,155 59,152
-import { createTileGrid, readLocs, readTerrain } from "../../src/game/scaperune/format";
+// its underlays and overlays. A floor's shown as map file id/cache id, then how many tiles: a
+// recipe writes the first number, the floor loaders take the second (cacheFloorId).
+// WHERE=id,id prints every position of those loc ids.
+//   bun run tsx scripts/cache/dump-square.ts 60,155 59,152
+import {
+    cacheFloorId,
+    createTileGrid,
+    readLocs,
+    readTerrain,
+} from "../../src/game/scaperune/format";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
 import { loadGameCache } from "./scene-util";
@@ -12,6 +19,7 @@ const maps = factory.getMapFileLoader();
 const locTypes = factory.getLocTypeLoader();
 const where = new Set((process.env.WHERE ?? "").split(",").filter(Boolean).map(Number));
 
+console.log("floors: map file id/cache id x tiles");
 for (const arg of process.argv.slice(2)) {
     const [mapX, mapY] = arg.split(",").map(Number);
     const terrain = maps.getTerrainData(mapX, mapY);
@@ -28,7 +36,7 @@ for (const arg of process.argv.slice(2)) {
         for (let i = 0; i < arr.length; i++) if (arr[i]) out[arr[i]] = (out[arr[i]] ?? 0) + 1;
         return Object.entries(out)
             .sort((a, b) => b[1] - a[1])
-            .map(([k, v]) => `${k}x${v}`)
+            .map(([k, v]) => `${k}/${cacheFloorId(Number(k))}x${v}`)
             .join(" ");
     };
     for (let level = 0; level < grid.levels.length; level++) {

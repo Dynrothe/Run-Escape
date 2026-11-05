@@ -37,6 +37,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
+- **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
+  that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
+  reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
 
@@ -59,17 +62,19 @@ changing both.
 
 ## Getting started
 
-You need [Node.js](https://nodejs.org/) 20 or newer.
+You need [Bun](https://bun.com/) (the version in `package.json`'s `packageManager`) and
+[Node.js](https://nodejs.org/) 20 or newer. Bun installs the packages and runs the project's
+commands, and Node runs Vite, Vitest and the co-op relay.
 
 ```sh
-npm install
-npm run download-caches
-npm start
+bun install --frozen-lockfile
+bun run download-caches
+bun run start
 ```
 
 and open http://localhost:5173.
 
-`npm run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
+`bun run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
 [OpenRS2 Archive](https://archive.openrs2.org/) into `caches/`; you can also copy a `caches/` folder
 over from another checkout. The download gives up when nothing has arrived for a minute; on a
 connection that drops out for longer, set `CACHE_DOWNLOAD_TIMEOUT_MS` to a longer wait in
@@ -81,10 +86,14 @@ loads are quick.
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
-the mouse wheel zooms.
+the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
+
+Hover over an item in your bag to read the description shown when you found it.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
-use your items, and everything else is a tap. To open it full screen from its own icon, pick Add to
+use your items: tap an item to use it, or hold it to read its description without using it.
+Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
 A controller works too, in the browser and the desktop app. The left stick or d-pad moves, the
@@ -97,9 +106,9 @@ doesn't recognise the layout of only moves.
 ### Tests and tools
 
 ```sh
-npm test                   # the game's tests (vitest)
-npx tsc --noEmit -p .      # type check
-npm run lint               # format everything with Prettier
+bun run test               # the game's tests (vitest)
+bun run tsc --noEmit -p .  # type check
+bun run lint               # format everything with Prettier
 ```
 
 `scripts/game/simulate-run.ts` has a bot play full runs for balancing, and `scripts/cache/` has
@@ -110,19 +119,20 @@ to host a build.
 ## Hosting
 
 ```sh
-npm run build
-npm run slim-cache
+bun run build
+bun run slim-cache
 ```
 
 writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only what the game
-reads, about 26 MB instead of 227 MB). The page has to be served with
-`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
-HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples. `npm run serve` serves the build with those headers from one Node process with no
-packages, co-op's relay included (`npm run serve:singleplayer` leaves it out). The game only offers
-Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
-[Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
-`npm run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
+reads, about 22 MB instead of 227 MB, in chunks so an update downloads only what changed). The
+page has to be served with `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, over HTTPS, and `caches/caches.json` with
+`Cache-Control: no-cache`. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details,
+with nginx and Apache examples. `bun run serve` serves the build with those headers from one Node
+process with no packages, co-op's relay included (`bun run serve:singleplayer` leaves it out). The
+game only offers Multiplayer where a relay answers, so a plain static host serves it as a
+single-player game; see [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
+`bun run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).
 
@@ -136,13 +146,17 @@ and Export and Import in Settings carry one across.
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome. Before you open a pull request, go through
+[docs/PR-REVIEW.md](docs/PR-REVIEW.md), which lists what review looks for, and give it to your agent
+if you work with one.
 
-- Format with Prettier (`npm run lint`), and keep `npm test` and the type check passing.
+- Base your branch on the current `release-<version>` branch (or `main` if there isn't one), and
+  point the pull request at it.
+- Format what you changed with Prettier (`bun run prettier --write <files>`), and keep
+  `bun run test` and the type check passing.
 - Content is plain data in `src/game/content/`, with real cache ids; the tools in `scripts/cache/`
-  find them. After changing content, `npm run slim-cache` checks that everything it needs is in the
-  cache.
-- Note what you change under a version in [CHANGELOG.md](CHANGELOG.md). It's written for players,
+  find them. Say in the pull request if it uses anything new from the cache.
+- Note what you change under Unreleased in [CHANGELOG.md](CHANGELOG.md). It's written for players,
   and the game shows it on its title screen.
 
 ## Credits

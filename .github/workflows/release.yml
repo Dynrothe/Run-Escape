@@ -76,9 +76,12 @@ jobs:
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version: 22
-                  cache: npm
 
-            - run: npm ci
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version-file: package.json
+
+            - run: bun install --frozen-lockfile
 
             - name: Find the game's cache
               id: game-cache
@@ -98,7 +101,7 @@ jobs:
               env:
                   CACHE_NAME: ${{ steps.game-cache.outputs.name }}
               run: |
-                  npm run download-caches
+                  bun run download-caches
                   test -f "caches/$CACHE_NAME/main_file_cache.dat2"
                   test -f caches/caches.json
 
@@ -109,16 +112,18 @@ jobs:
                   path: caches
                   key: osrs-cache-${{ steps.game-cache.outputs.name }}
 
-            - run: npm test
+            - run: bun run test
             # Where desktop players find co-op: the COOP_URL repository variable,
             # wss://example.com/coop. Without it, the app has no Multiplayer.
-            - run: npm run build
+            - run: bun run build
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
-            - run: npm run slim-cache
-            - run: npm run desktop:dist
+                  VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+            - run: bun run slim-cache
+            - run: bun run desktop:dist
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
+                  VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
@@ -126,6 +131,7 @@ jobs:
                   path: |
                       release/Run-Escape-*-win-x64.zip
                       release/game-*.zip
+                      release/cache-*.bin
                       release/game-manifest.json
                       release/notes.md
                   if-no-files-found: error
@@ -151,7 +157,8 @@ jobs:
                   VERSION: ${{ needs.check.outputs.version }}
                   DRAFT_EXISTS: ${{ needs.check.outputs.draft }}
               run: |
-                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/game-manifest.json)
+                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/cache-*.bin
+                      release/game-manifest.json)
                   if [ "$DRAFT_EXISTS" = true ]; then
                       gh release upload "v$VERSION" "${files[@]}" --clobber
                       gh release edit "v$VERSION" --notes-file release/notes.md --target "$GITHUB_SHA"

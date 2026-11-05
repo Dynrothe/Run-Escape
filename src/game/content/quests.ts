@@ -319,6 +319,13 @@ export const QUESTS: QuestDef[] = [
         coins: 4000,
     },
     {
+        id: "the_owls_judgement",
+        name: "The Owl's Judgement",
+        mapId: "zachariah",
+        objective: { kind: "kill", enemyIds: ["justiciar_zachariah"], count: 1 },
+        coins: 4000,
+    },
+    {
         id: "ratcatchers",
         name: "Ratcatchers",
         objective: {

@@ -1,11 +1,15 @@
 {
     "name": "run-escape-coop-cloudflare",
+    "packageManager": "bun@1.3.14",
     "private": true,
     "type": "module",
     "scripts": {
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
-        "check": "node check.mjs"
+        "check": "node check.mjs",
+        "analytics:dev": "wrangler d1 migrations apply DB --local -c ../analytics/wrangler.toml && wrangler dev -c ../analytics/wrangler.toml --port 8789",
+        "analytics:setup": "wrangler deploy -c ../analytics/wrangler.toml && wrangler d1 migrations apply DB --remote -c ../analytics/wrangler.toml",
+        "analytics:deploy": "wrangler d1 migrations apply DB --remote -c ../analytics/wrangler.toml && wrangler deploy -c ../analytics/wrangler.toml"
     },
     "devDependencies": {
         "wrangler": "^4.40.0"

@@ -25,6 +25,8 @@ const SHORTBOWS = [841, 843, 849, 853, 857, 861];
 // Arrows in flight: one model the metals recolour (the Twisted bow's amethyst
 // arrows are another)
 const ARROWS = { bronze: 10, iron: 9, steel: 11, black: 14, mithril: 12, adamant: 13, rune: 15 };
+// Darts in flight: the metals recolour one model, and dragon has its own
+const DART_PROJECTILES = { bronze: 226, steel: 228, mithril: 229, rune: 231, dragon: 1122 };
 // Bronze to rune, then dragon
 const THROWNAXES = [800, 801, 802, 803, 804, 805, 20849, 20849];
 // Thrownaxes in flight, spinning: one model the metals recolour, and the
@@ -1206,7 +1208,11 @@ export const WEAPONS: WeaponDef[] = [
             spotAnim: 1542,
             effect: { kind: "heal", fraction: 0.3, max: 2 },
         },
-        unlock: { kind: "beatMap", mapId: "theatre_of_blood", hard: true },
+        unlock: {
+            kind: "raidChest",
+            mapId: "theatre_of_blood",
+            trophyId: "holy_scythe_of_vitur_uncharged",
+        },
         levels: levels(
             {
                 damage: 30,
@@ -1565,7 +1571,7 @@ export const WEAPONS: WeaponDef[] = [
         rarity: "veryRare",
         style: "melee",
         bigHits: [0.6],
-        unlock: { kind: "beatMap", mapId: "theatre_of_blood" },
+        unlock: { kind: "raidChest", mapId: "theatre_of_blood", trophyId: "ghrazi_rapier" },
         levels: levels(
             {
                 damage: 24,
@@ -1972,13 +1978,30 @@ export const WEAPONS: WeaponDef[] = [
                 venom: 3,
                 knockback: 0.1,
                 objId: 12926,
-                // Dragon darts
-                projectileSpotAnim: 1122,
+                projectileSpotAnim: DART_PROJECTILES.bronze,
             },
-            { venom: 4, description: "Stronger venom: 4 damage a second." },
-            { amount: 2, description: "Fires one more dart." },
-            { damage: 7, cooldown: 0.35, description: "+2 damage, fires faster." },
-            { venom: 6, duration: 4, description: "Stronger venom that lasts longer." },
+            {
+                projectileSpotAnim: DART_PROJECTILES.steel,
+                venom: 4,
+                description: "Steel darts. Stronger venom: 4 damage a second.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.mithril,
+                amount: 2,
+                description: "Mithril darts. Fires one more dart.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.rune,
+                damage: 7,
+                cooldown: 0.35,
+                description: "Rune darts. +2 damage, fires faster.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.dragon,
+                venom: 6,
+                duration: 4,
+                description: "Dragon darts. Stronger venom that lasts longer.",
+            },
         ),
     },
     {

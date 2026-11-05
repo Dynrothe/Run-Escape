@@ -751,6 +751,41 @@
     padding: 0;
 }
 
+/* The pet taken along, under the adventurers */
+.ui-pet-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 2px;
+}
+
+.ui-pet-label {
+    color: #ff981f;
+    white-space: nowrap;
+}
+
+.ui-pet-name {
+    color: #ffffff;
+}
+
+.ui-pet-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.ui-pet-tile {
+    justify-content: center;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+}
+
+.ui-pet-none {
+    font-size: 12px;
+}
+
 .ui-tile-badge {
     position: absolute;
     right: 1px;
@@ -921,15 +956,30 @@
 
 /* Skills */
 
+/* As wide as the window allows, so every skill fits in a few rows and the
+   page needs no scrolling. On a window too small for that only the skills
+   scroll, and the tabs and buttons stay in view; the whole panel scrolls only
+   when even they don't fit (a very short window, or the browser zoomed right
+   in). dvh, as a tablet's browser bars take some of 100vh. */
 .ui-shop {
-    width: min(760px, calc(94vw / var(--ui-scale)));
-    max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(1180px, calc(94vw / var(--ui-scale)));
+    max-height: calc((100vh - 24px) / var(--ui-scale));
+    max-height: calc((100dvh - 24px) / var(--ui-scale));
     overflow-y: auto;
 }
 
+.ui-shop > :not(.ui-shop-grid) {
+    flex-shrink: 0;
+}
+
+/* 4px, as a flex column's margins don't collapse into the 10px above */
 .ui-shop-tabs {
     justify-content: flex-start;
     gap: 8px;
+    margin-top: 4px;
     margin-bottom: 8px;
 }
 
@@ -948,10 +998,17 @@
     transform: translateY(1px);
 }
 
+/* It scrolls, so it clips what's outside it: the padding is room for a
+   controller's highlight around the cards at its edges (3px out, 3px wide),
+   and the margin keeps the cards where they'd be without it */
 .ui-shop-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 8px;
+    padding: 6px;
+    margin: -6px;
+    scroll-padding: 6px;
+    overflow-y: auto;
 }
 
 .ui-shop-entry {
@@ -963,6 +1020,7 @@
 .ui-shop-card {
     flex-direction: column;
     align-items: flex-start;
+    gap: 3px;
     width: 100%;
     min-width: 0;
 }
@@ -1016,15 +1074,20 @@
     transform: scale(0.96);
 }
 
+/* A finger-sized button, reaching up beside the pips rather than making the
+   cost's row taller, so a page of skills still fits a tablet */
 @media (pointer: coarse) {
     .ui-shop-card .ui-card-cost {
-        min-height: 44px;
-        padding-right: 52px;
+        padding-right: 40px;
     }
 
     .ui-shop-refund {
+        right: 2px;
+        bottom: 2px;
+        box-sizing: border-box;
         width: 44px;
         height: 44px;
+        padding: 4px;
     }
 }
 
@@ -1520,6 +1583,75 @@
     gap: 3px;
 }
 
+.ui-hud-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+/* A fight's own button (AbilityButton): it fills from the bottom as it charges, is dim while
+   the boss is out of its reach, and shines gold while his guard's down */
+.ui-ability {
+    position: relative;
+    width: 54px;
+    height: 48px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: rgba(62, 53, 41, 0.9);
+    border: 2px solid #000;
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.ui-ability-near {
+    opacity: 1;
+}
+
+.ui-ability-opened {
+    border-color: var(--ui-yellow);
+    box-shadow:
+        inset 0 0 0 1px var(--ui-yellow),
+        0 0 10px 2px rgba(255, 220, 90, 0.75);
+}
+
+.ui-ability-charge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    transform-origin: top;
+    pointer-events: none;
+}
+
+.ui-ability-name {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 12px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    text-align: center;
+}
+
+.ui-ability > img,
+.ui-ability > canvas {
+    position: relative;
+    top: -4px;
+}
+
+/* Only on a touch screen (Mobile.css) */
+.ui-touch-ability {
+    display: none;
+}
+
 .ui-inv-slot {
     position: relative;
     width: 46px;
@@ -1561,6 +1693,26 @@
     font-size: 14px;
     color: var(--ui-yellow);
     text-shadow: 1px 1px 0 #000;
+}
+
+.ui-inv-tip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 260px;
+    max-width: calc(100vw / var(--ui-scale) - 24px);
+    padding: 8px 10px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    font-weight: normal;
+    color: var(--ui-white);
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
 }
 
 .ui-hp {
@@ -1628,6 +1780,24 @@
 /* A fight in phases: its shield, then its totems filling up */
 .ui-boss-phase {
     color: #ff9ae6;
+}
+
+/* A new phase: its number pulses a moment (keyed on the phase, so it plays once each) */
+.ui-boss-phase-new {
+    display: inline-block;
+    transform-origin: left center;
+    animation: ui-boss-phase-pulse 0.5s ease-in-out 4 alternate;
+}
+
+@keyframes ui-boss-phase-pulse {
+    from {
+        transform: scale(1);
+        text-shadow: none;
+    }
+    to {
+        transform: scale(1.25);
+        text-shadow: 0 0 8px #fff3c4;
+    }
 }
 
 .ui-boss-fill-shield {
@@ -2210,4 +2380,15 @@
 
 .ui-pad-control-text {
     color: var(--ui-white);
+}
+
+/* The favourite adventurer, which the game starts on: at the end of the details' head */
+.ui-favourite {
+    margin-left: auto;
+    align-self: flex-start;
+}
+
+.ui-favourite-on {
+    color: var(--ui-yellow);
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
 }

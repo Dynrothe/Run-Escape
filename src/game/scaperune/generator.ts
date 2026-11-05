@@ -165,8 +165,9 @@ export type GeneratedMap = {
     fences?: PlacedFence[];
     // Tiles of buildings a road wanted, which painting stopped it at
     clippedRoads?: Uint8Array;
-    // Rectangles of tiles a recipe says are designed that way: check-maps.ts lets clashes on these
-    // go. Nothing generated has any.
+    // Rectangles of tiles a recipe says are designed that way, such as places cut from the real
+    // world: check-maps.ts lets clashes on these go, and doesn't hold their bridges, slopes or
+    // water to the generator's rules. Nothing generated has any.
     designed?: TileRect[];
 };
 

@@ -10,12 +10,14 @@ Content is plain data in `src/game/content/`, typed in `types.ts`, and the comme
 each field. Find a similar entry, copy its shape, and look up real ids in the cache:
 
 ```sh
-npx tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
-npx tsx scripts/cache/find-npcs.ts "^count draynor$"     # NPCs and their idle and walk animations
-npx tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
-npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
-npx tsx scripts/cache/find-locs.ts multicannon           # scenery
-npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+bun run tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
+bun run tsx scripts/cache/find-npcs.ts "^count draynor$"  # NPCs and their idle and walk animations
+bun run tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
+# tell attack and death animations apart
+bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183
+bun run tsx scripts/cache/find-locs.ts multicannon           # scenery
+bun run tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+bun run tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
 ```
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
@@ -52,6 +54,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
+- To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
+  projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
@@ -60,7 +64,14 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 ## Passive
 
 Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, and `alsoAdds` puts
-the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item.
+the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item
+(a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
+with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
+one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
+there, and `slim-cache.ts` keeps them.
+
+Any other interface sprite the game shows goes in `getGameSpriteIds` in `client/GameAssets.ts`
+(one the game view draws, in `GAME_VIEW_SPRITES`), or the slim cache won't have it.
 
 ## Stat
 
@@ -72,8 +83,10 @@ starting weapon).
 ## Shop upgrade
 
 Add it to `SHOP_UPGRADES` in `shop.ts`, themed as an OSRS skill, with its `stat`. Costs and
-refunds come from `getUpgradeCost` and the save code, independently for each combat style's
-`skillPages` allocation. New ones don't need a save migration.
+refunds come from `getPageCost` (what a page's ranks cost in all, in any order) and the save code,
+independently for each combat style's `skillPages` allocation. New ones don't need a save migration.
+A single rank's refund gives back its share of what the page spent, by what it adds at today's
+prices, so changing a cost needs no migration either.
 
 ## Gear and utility items
 
@@ -146,7 +159,13 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   boss's `bulletGrace` how long after a bullet hits before another can (a second), a final
   boss's `fallSeconds` how long its death plays before the victory screen, and a phased boss's
   phases each take an `ambient` pattern it keeps up on its own, a `tempo` and a `speed`, with a
-  `finale` after the last blast. Boss fights as data in `docs/DEVELOPMENT.md` has the lot.
+  `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
+  (`until`, `threshold`, Justiciar Zachariah's). Attacks that read the arena (`MapDef.features`:
+  a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
+  under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
+  (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
+  and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
+  `docs/DEVELOPMENT.md` has the lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -181,7 +200,9 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   experience, so that kit is the whole run, and the boss's hitpoints (the event's `hp`) are tuned
   to it. The spawn is the middle of the boss square, where the entrance puts the player anyway.
   The bot keeps away from bosses, so with nothing but melee it walks up to a shielded one and
-  takes her swings: its numbers say how long the kit takes, not how a player fares. It's listed
+  takes her swings: its numbers say how long the kit takes, not how a player fares. A fight can
+  open after another fight (Justiciar Zachariah after Phosani's), as long as the chain ends at a
+  map that isn't one. It's listed
   under Boss fights on the map screen's Bosses tab, and can't be endless. Sim it with
   `FLAT=1 MAP=phosani DODGE=1`, which needs no cache, and go by how long the bot lasts and what
   hits it (its `boss attacks that hit` line says which of the boss's attacks did it): it can't
@@ -207,9 +228,23 @@ another, each with its waves, events, boss and where things are. Its arena is a 
 with a hall for each room's waves and its boss room cut from the cache (`maps/theatreOfBlood.ts`),
 which exports where everything is. `waves` and `events` on the `MapDef` are every room's, for what
 bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a file of their own
-(`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays
-as it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`,
-`stare`, `expert` on an attack) and do nothing off a raid's expert mode.
+(`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays as
+it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`, `stare`,
+`expert` on an attack) and do nothing off a raid's expert mode, but `colours.offStyle` brings a
+boss's colours to normal too. A boss's own mechanic can be a while it can't be hurt: `shadowRealm`
+or `yellows` (for so many seconds) or `exhumes` (until so many of its smother ground marks are stood
+on, or its time's up), each at shares of its hitpoints, doing only the attacks they name meanwhile
+(`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used only then. The balance bot has to know
+how to play a new one (`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
+
+## Pet
+
+A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
+(`from`), then an entry in `PETS` (`pets.ts`) with its id, the follower NPC and its idle and walk
+animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
+script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
+offered once found, with nothing else to add. Pets never go in the sim: see Pets in
+`docs/DEVELOPMENT.md`.
 
 ## Adventurer
 

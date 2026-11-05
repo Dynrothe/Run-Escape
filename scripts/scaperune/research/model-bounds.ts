@@ -2,7 +2,7 @@
 // they reach past its tiles. Finds hidden geometry: skirts below ground, tall backdrops, floors
 // with a drop built in.
 //
-//   npx tsx scripts/scaperune/research/model-bounds.ts 45881 48332 ...
+//   bun run tsx scripts/scaperune/research/model-bounds.ts 45881 48332 ...
 import { openWorld } from "./lib";
 
 const w = openWorld();

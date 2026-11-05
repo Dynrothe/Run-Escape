@@ -2,9 +2,9 @@
 // game's loader and counts triangles, draw ranges and bytes, then works out what
 // each spot's camera has in view.
 //
-//   npx tsx scripts/dev/render-stats.ts prifddinas falador lumbridge
-//   npx tsx scripts/dev/render-stats.ts --bake        # memory for the baked actors
-//   npx tsx scripts/dev/render-stats.ts --cull=8 prifddinas
+//   bun run tsx scripts/dev/render-stats.ts prifddinas falador lumbridge
+//   bun run tsx scripts/dev/render-stats.ts --bake        # memory for the baked actors
+//   bun run tsx scripts/dev/render-stats.ts --cull=8 prifddinas
 //
 // With --cull (the size of the cull cells, in tiles) it bakes the way the game
 // does, checks that every vertex is inside the box its draw is culled by (that's

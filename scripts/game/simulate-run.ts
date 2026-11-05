@@ -1,24 +1,29 @@
 // Plays runs with a simple bot on the real arena (collision from a snapshot of
 // the cache, see collision-snapshot.ts) and prints how they go, for balancing waves, weapons and the XP curve.
 //
-//   npx tsx scripts/game/simulate-run.ts                 # every character once
-//   npx tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
-//   npx tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
-//   MAP=barrows npx tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
-//   UNLOCKS=none npx tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
-//   META=max npx tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
-//   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
-//   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
-//   HARD=1 npx tsx scripts/game/simulate-run.ts          # on hard mode
+//   bun run tsx scripts/game/simulate-run.ts                 # every character once
+//   bun run tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
+//   bun run tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
+//   MAP=barrows bun run tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
+//   UNLOCKS=none bun run tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
+//   META=max bun run tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
+//   ARMOURY=max bun run tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
+//   ENDLESS=1 bun run tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
+//   HARD=1 bun run tsx scripts/game/simulate-run.ts          # on hard mode
 //   EXPERT=1 MAP=theatre_of_blood ...  # a raid's expert mode (hard, and the Nylocas's colours)
-//   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
-//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
+//   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
+//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what a phased boss marks on the ground, and sidesteps bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
+//   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
+//                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
+//   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
+//                    # in every 10 (out of a reach-limited weapon's reach), and misses about
+//                    # half the chances to use the fight's button
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -31,6 +36,7 @@ import { RUN_LENGTH } from "../../src/game/content/waves";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
+import { behindPillar } from "../../src/game/core/arena";
 import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -67,6 +73,11 @@ const ARENA = map.arena;
 const finalBoss = process.env.FINAL_BOSS;
 const fresh = process.env.FRESH === "1";
 const dodges = process.env.DODGE === "1";
+const smites = process.env.SMITE !== "0";
+const sloppy = process.env.SLOPPY === "1";
+// A sloppy bot's lapses: these seconds in every SLOPPY_EVERY it backs off from the boss
+const SLOPPY_EVERY = 10;
+const SLOPPY_LAPSE = 3;
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
@@ -234,10 +245,27 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     const boss = sim.shownBoss;
     const state = boss?.bossState;
     const phase = state?.phase;
+    const player = sim.player;
+    // Xarpus's exhumeds: stood on until they're smothered, or he can't be hurt (BossDef.exhumes)
+    let mark: { x: number; y: number } | undefined;
+    let markAway = Infinity;
+    // And Verzik's yellows: into a pool before the ball gets there (GroundPatternDef.safe)
+    for (const hazard of sim.hazards) {
+        const away = Math.hypot(hazard.x - player.x, hazard.y - player.y);
+        const ground = hazard.attack.ground;
+        if ((ground?.smother || ground?.safe) && hazard.endTick !== -1 && away < markAway) {
+            mark = hazard;
+            markAway = away;
+        }
+    }
+    if (mark) {
+        return markAway < 0.5
+            ? { x: 0, y: 0 }
+            : { x: (mark.x - player.x) / markAway, y: (mark.y - player.y) / markAway };
+    }
     if (!boss || !state || !phase || boss.dead) {
         return undefined;
     }
-    const player = sim.player;
     const towards = (x: number, y: number) => {
         const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
         return { x: (x - player.x) / length, y: (y - player.y) / length };
@@ -284,7 +312,125 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             const length = Math.hypot(awayX, awayY);
             return { x: awayX / length, y: awayY / length };
         }
+        // Off a lunge's strip, out of a square blast, off a wave's or a thrown sword's line, as a
+        // person reads them (BossAttackDef.line, square, wave, boomerang)
+        const windup = state.windup;
+        const across = (x: number, y: number, dirX: number, dirY: number, half: number) => {
+            const along = (player.x - x) * dirX + (player.y - y) * dirY;
+            const side = (player.x - x) * -dirY + (player.y - y) * dirX;
+            return along > -1 && Math.abs(side) < half + 0.8
+                ? { x: -dirY * (side >= 0 ? 1 : -1), y: dirX * (side >= 0 ? 1 : -1) }
+                : undefined;
+        };
+        if (windup?.attack.line) {
+            const step = across(
+                boss.x,
+                boss.y,
+                windup.dirX,
+                windup.dirY,
+                windup.attack.line.width / 2,
+            );
+            if (step) {
+                return step;
+            }
+        }
+        if (windup?.attack.square) {
+            const half = windup.attack.square / 2 + 0.7;
+            for (const spot of windup.targets) {
+                const dx = player.x - spot.x;
+                const dy = player.y - spot.y;
+                if (Math.abs(dx) < half && Math.abs(dy) < half) {
+                    return Math.abs(dx) > Math.abs(dy)
+                        ? { x: Math.sign(dx) || 1, y: 0 }
+                        : { x: 0, y: Math.sign(dy) || 1 };
+                }
+            }
+        }
+        if (windup && (windup.attack.wave || windup.attack.boomerang)) {
+            const half = windup.attack.radius ?? 0.35;
+            const lines = windup.from
+                ? windup.from.map((s) => {
+                      const x = s.x + (s.size ?? 1) / 2;
+                      const y = s.y + (s.size ?? 1) / 2;
+                      const t = windup.targets[0];
+                      const l = Math.max(0.001, Math.hypot(t.x - x, t.y - y));
+                      return { x, y, dirX: (t.x - x) / l, dirY: (t.y - y) / l };
+                  })
+                : [{ x: boss.x, y: boss.y, dirX: windup.dirX, dirY: windup.dirY }];
+            for (const line of lines) {
+                const step = across(line.x, line.y, line.dirX, line.dirY, half);
+                if (step) {
+                    return step;
+                }
+            }
+        }
+        for (const projectile of sim.enemyProjectiles) {
+            if (!projectile.hit) {
+                continue;
+            }
+            const speed = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy));
+            const step = across(
+                projectile.x,
+                projectile.y,
+                projectile.vx / speed,
+                projectile.vy / speed,
+                projectile.radius,
+            );
+            if (step) {
+                return step;
+            }
+        }
+        // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
+        // spot within reach that's hidden from it
+        const pillars = sim.map.features?.pillars;
+        if (state.windup?.attack.cover && pillars) {
+            let best: { x: number; y: number } | undefined;
+            let bestDistance = Infinity;
+            for (let dy = -10; dy <= 10; dy++) {
+                for (let dx = -10; dx <= 10; dx++) {
+                    const x = Math.floor(player.x) + dx + 0.5;
+                    const y = Math.floor(player.y) + dy + 0.5;
+                    const distance = Math.hypot(dx, dy);
+                    if (
+                        distance < bestDistance &&
+                        !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
+                        !pillars.some(
+                            (p) =>
+                                x > p.x - 0.5 &&
+                                x < p.x + p.size + 0.5 &&
+                                y > p.y - 0.5 &&
+                                y < p.y + p.size + 0.5,
+                        ) &&
+                        behindPillar(pillars, boss.x, boss.y, x, y)
+                    ) {
+                        best = { x, y };
+                        bestDistance = distance;
+                    }
+                }
+            }
+            if (best) {
+                return Math.hypot(best.x - player.x, best.y - player.y) < 0.3
+                    ? { x: 0, y: 0 }
+                    : towards(best.x, best.y);
+            }
+        }
         for (const hazard of sim.hazards) {
+            // A checker's cell (GroundHazard.half), once it's shown: off it the short way
+            const half = hazard.half;
+            if (half) {
+                const dx = player.x - hazard.x;
+                const dy = player.y - hazard.y;
+                if (
+                    sim.tick >= hazard.startTick &&
+                    Math.abs(dx) < half + 0.6 &&
+                    Math.abs(dy) < half + 0.6
+                ) {
+                    return Math.abs(dx) > Math.abs(dy)
+                        ? { x: Math.sign(dx) || 1, y: 0 }
+                        : { x: 0, y: Math.sign(dy) || 1 };
+                }
+                continue;
+            }
             const away = Math.hypot(player.x - hazard.x, player.y - hazard.y);
             if (away < hazard.radius + 1.2) {
                 return towards(
@@ -293,6 +439,27 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 );
             }
         }
+    }
+    // A less careful person: now and then backs off and loses reach
+    if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {
+        const away = towards(boss.x, boss.y);
+        return { x: -away.x, y: -away.y };
+    }
+    // In to use the fight's button while the boss's guard is down (BossDef.guard), if it's ready
+    const ability = sim.map.fight?.ability;
+    if (
+        smites &&
+        ability &&
+        sim.isExposed(boss) &&
+        sim.abilitySecondsLeft() === 0 &&
+        Math.hypot(boss.x - player.x, boss.y - player.y) > ability.reach - 0.5
+    ) {
+        return towards(boss.x, boss.y);
+    }
+    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him
+    const reach = sim.map.fight?.strikeReach;
+    if (reach !== undefined && Math.hypot(boss.x - player.x, boss.y - player.y) > reach - 1.5) {
+        return towards(boss.x, boss.y);
     }
     let target: { x: number; y: number } | undefined;
     let nearest = Infinity;
@@ -318,6 +485,23 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         return nearest < 2 ? { x: 0, y: 0 } : towards(target.x, target.y);
     }
     return undefined;
+}
+
+// A fight's button (MapDef.fight.ability), pressed while the boss's guard is down and it'd land
+function useAbility(sim: Sim): void {
+    const boss = sim.shownBoss;
+    // A sloppy one only sees the chance every other second
+    const sees = !sloppy || Math.floor(sim.tick / TICKS_PER_SECOND) % 2 === 0;
+    if (
+        sees &&
+        smites &&
+        boss &&
+        sim.map.fight?.ability &&
+        sim.isExposed(boss) &&
+        sim.abilityTarget()
+    ) {
+        sim.useAbility();
+    }
 }
 
 // Works out what to press for a shuffled direction, as a person soon does
@@ -404,6 +588,10 @@ function runOnce(characterId: string, seed: number) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
     }
     let fightTicks = 0;
+    // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
+    // weapon's reach (MapDef.fight.strikeReach)
+    const phaseTicks: number[] = [];
+    const reachTicks: number[] = [];
     while (sim.tick < maxTicks && !sim.runOver) {
         if (sim.state === "levelUp") {
             const ranked = sim.choices
@@ -478,10 +666,22 @@ function runOnce(characterId: string, seed: number) {
             // Untouchable, as a late endless round's hits are bigger than any health bar
             sim.player.invulnerable = 1e9;
         }
+        useAbility(sim);
         const pressed = uncursed(sim, move);
         sim.step(pressed.x, pressed.y);
-        if (sim.shownBoss?.bossState?.phase) {
+        const fighting = sim.shownBoss?.bossState?.phase;
+        if (fighting) {
             fightTicks++;
+            const at = fighting.index;
+            phaseTicks[at] = (phaseTicks[at] ?? 0) + 1;
+            const boss = sim.shownBoss!;
+            const reach = sim.map.fight?.strikeReach;
+            if (
+                reach !== undefined &&
+                Math.hypot(boss.x - sim.player.x, boss.y - sim.player.y) <= reach
+            ) {
+                reachTicks[at] = (reachTicks[at] ?? 0) + 1;
+            }
         }
         for (const event of sim.takeEvents()) {
             if (event.type === "playerHit") {
@@ -538,6 +738,20 @@ function runOnce(characterId: string, seed: number) {
                 `maxHp ${sim.player.maxHp}, armour ${sim.stats.armor}, ` +
                 `taken ${sim.damageTaken}, dps ${Math.round(sim.dps)}`,
         );
+        if (phaseTicks.length > 1 || sim.map.fight?.strikeReach !== undefined) {
+            console.log(
+                "  phases: " +
+                    phaseTicks
+                        .map(
+                            (ticks, i) =>
+                                `${i + 1} ${(ticks / TICKS_PER_SECOND).toFixed(0)}s` +
+                                (sim.map.fight?.strikeReach !== undefined
+                                    ? ` (${Math.round((100 * (reachTicks[i] ?? 0)) / ticks)}% in reach)`
+                                    : ""),
+                        )
+                        .join(", "),
+            );
+        }
         // Which of the boss's attacks did it, over the whole fight
         const byAttack = Object.entries(sim.damageByAttack).sort((a, b) => b[1] - a[1]);
         if (byAttack.length > 0) {
@@ -629,6 +843,7 @@ function runParty(characterId: string, seed: number) {
                 if (sim.tick % 5 === 0) {
                     moves[hero.index] = fightMove(sim) ?? botMove(sim);
                 }
+                useAbility(sim);
                 const pressed = uncursed(sim, moves[hero.index]);
                 sim.setInput(hero.index, pressed.x, pressed.y);
             });

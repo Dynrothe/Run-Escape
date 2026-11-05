@@ -427,6 +427,16 @@ describe.skipIf(!existsSync(`caches/${GAME_CACHE_NAME}`))("generated maps", () =
         expect(stdout).toContain("All open tiles reach the spawn");
     }, 410000);
 
+    // A shipped map changes only on purpose: update its hash in grid-hash.ts when it's meant to
+    it("leave every shipped map as it was", async () => {
+        const { stdout } = await run(process.execPath, tsx("scripts/scaperune/grid-hash.ts"), {
+            encoding: "utf8",
+            env: { ...process.env, CHECK: "1" },
+            timeout: 120000,
+        });
+        expect(stdout).toContain("Every shipped map matches its pinned hash");
+    }, 130000);
+
     it("have every prefab's floor, in every rotation", async () => {
         const { stdout } = await run(process.execPath, tsx("scripts/scaperune/check-prefabs.ts"), {
             encoding: "utf8",

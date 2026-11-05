@@ -1,8 +1,9 @@
-// Trophies: rare finds that do nothing in a run. They're kept in the Collection
-// log, and in the save once they're found.
+// Trophies: rare finds, kept in the Collection log, and in the save once they're
+// found. They do nothing in a run, but a few bring a weapon into the game (the
+// Theatre of Blood's rapier and Holy Scythe: UnlockTask "raidChest").
 export type TrophySource =
-    // This chance on each kill of the boss on the map
-    | { kind: "boss"; enemyId: string; mapId: string; chance: number }
+    // This chance on each kill of the boss on the map, or hardChance on hard mode
+    | { kind: "boss"; enemyId: string; mapId: string; chance: number; hardChance?: number }
     // This chance on each trick or treat pumpkin opened
     | { kind: "pumpkin"; chance: number }
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
@@ -82,7 +83,7 @@ TROPHIES.push(
         id: "ghrazi_rapier",
         name: "Ghrazi rapier",
         objId: 22324,
-        how: PURPLE,
+        how: `${PURPLE} Unlocks the rapier as a weapon.`,
         from: { ...TOB, weight: 2 },
     },
     {
@@ -119,6 +120,13 @@ TROPHIES.push(
         objId: 22486,
         how: PURPLE,
         from: { ...TOB, weight: 1 },
+    },
+    {
+        id: "holy_scythe_of_vitur_uncharged",
+        name: "Holy Scythe of Vitur (uncharged)",
+        objId: 25738,
+        how: `${HARD_PURPLE} Unlocks the Holy Scythe as a weapon.`,
+        from: { ...TOB, weight: 1, hard: true },
     },
     {
         id: "holy_ornament_kit",
@@ -167,6 +175,20 @@ TROPHIES.push(
             enemyId: "tob_verzik_vitur_spider",
             mapId: "theatre_of_blood",
             chance: 1 / 50,
+        },
+    },
+    // The Hallowed Sepulchre's pet (pets.ts), shown as the Dark acorn, its item in OSRS
+    {
+        id: "dark_squirrel",
+        name: "Dark squirrel",
+        objId: 24733,
+        how: "1 in 10 for defeating Justiciar Zachariah; always on hard mode.",
+        from: {
+            kind: "boss",
+            enemyId: "justiciar_zachariah",
+            mapId: "zachariah",
+            chance: 1 / 10,
+            hardChance: 1,
         },
     },
 );

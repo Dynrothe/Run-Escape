@@ -2,10 +2,10 @@
 // tile's local class is the commonest in 15 by 15 tiles round it. Then: what's along the lines
 // between classes, and how far from a line a tile's own colour stops matching its side's.
 //
-//   npx tsx scripts/scaperune/research/biome-edges.ts out.json
+//   bun run tsx scripts/scaperune/research/biome-edges.ts out.json
 import fs from "node:fs";
 
-import { TILE_BLOCKED, TILE_INSIDE } from "../../../src/game/scaperune/format";
+import { TILE_BLOCKED, TILE_INSIDE, cacheFloorId } from "../../../src/game/scaperune/format";
 import { getTileSlope } from "../../../src/game/scaperune/terrain";
 import { openWorld, round } from "./lib";
 
@@ -18,7 +18,8 @@ const classOf = new Map<number, number>();
 const CLASSES = ["green", "yellow", "brown", "red", "grey", "white", "blue"];
 function colourClass(id: number): number {
     if (!classOf.has(id)) {
-        const rgb = (w.underlays.load(id - 1) as unknown as { rgbColor: number }).rgbColor;
+        const rgb = (w.underlays.load(cacheFloorId(id)) as unknown as { rgbColor: number })
+            .rgbColor;
         const r = (rgb >> 16) & 255;
         const g = (rgb >> 8) & 255;
         const b = rgb & 255;

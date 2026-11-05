@@ -4,6 +4,8 @@ import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
 import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
+import { SHOP_UPGRADES } from "../content/shop";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { LOCKABLE_ITEMS } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
 import {
@@ -23,6 +25,7 @@ import {
     getNextUpgradeCost,
     getQuestProgress,
     getSkillCoins,
+    getStartingCharacter,
     importSave,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -36,6 +39,15 @@ import {
 
 // The game's version, as far as these tests go
 const GAME = "0.22.1";
+
+function permutations<T>(items: T[]): T[][] {
+    if (items.length <= 1) {
+        return [items];
+    }
+    return items.flatMap((item, i) =>
+        permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest]),
+    );
+}
 
 function run(mapId: string, changes: Partial<RunSummary> = {}): RunSummary {
     return {
@@ -55,16 +67,23 @@ describe("save", () => {
         expect.hasAssertions();
         const save = createSave();
         save.coins = 9400;
+        const page = {
+            upgrades: { strength: 1 },
+            upgradesSpent: 200,
+            upgradeRefunds: { strength: [200] },
+        };
+        const loaded = migrateSave({
+            ...save,
+            version: 10,
+            skillPages: { melee: page, ranged: page, magic: page },
+        });
+        expect(loaded.coins).toBe(9800);
         for (const style of ["melee", "ranged", "magic"] as const) {
-            save.skillPages[style] = {
+            expect(loaded.skillPages[style]).toEqual({
                 upgrades: { strength: 1 },
                 upgradesSpent: 200,
-                upgradeRefunds: { strength: [200] },
-            };
+            });
         }
-        const loaded = migrateSave({ ...save, version: 10 });
-        expect(loaded.coins).toBe(9800);
-        expect(loaded.skillPages).toEqual(save.skillPages);
         expect(migrateSave(loaded)).toEqual(loaded);
         expect(importSave(exportSave(loaded, GAME), GAME)).toEqual(loaded);
         for (const style of ["melee", "ranged", "magic"] as const) {
@@ -156,11 +175,13 @@ describe("save", () => {
         expect(save.skillPages.magic).toEqual({ upgrades: {}, upgradesSpent: 0 });
         const loaded = importSave(exportSave(save, GAME), GAME);
         expect(loaded).toEqual(save);
-        expect(refundUpgrade(loaded, "ring_of_life", "melee")).toBe(true);
-        expect(loaded.coins).toBe(49600);
         refundUpgrades(loaded, "ranged");
         refundUpgrades(loaded, "magic");
-        expect(loaded.coins).toBe(49600);
+        expect(loaded.coins).toBe(39600);
+        // Ring of life adds 10,510 of the 10,710 the page costs today, and gives
+        // back that share of the 10,400 it paid
+        expect(refundUpgrade(loaded, "ring_of_life", "melee")).toBe(true);
+        expect(loaded.coins).toBe(39600 + 10206);
         refundUpgrades(loaded, "melee");
         expect(loaded.coins).toBe(50000);
     });
@@ -347,7 +368,38 @@ describe("save", () => {
         expect(save).toEqual(before);
     });
 
-    test("an early expensive purchase refunds its paid price after reloading", () => {
+    test("the same ranks cost the same, whatever order they're bought in", () => {
+        expect.hasAssertions();
+        const skills = ["strength", "defence", "hitpoints", "prayer"];
+        const orders = permutations(skills);
+        expect(orders).toHaveLength(24);
+        for (const order of orders) {
+            const save = createSave();
+            save.coins = 50000;
+            for (const id of order) {
+                expect(buyUpgrade(save, id)).toBe(true);
+            }
+            expect(save.skillPages.melee.upgradesSpent).toBe(1380);
+            expect(save.coins).toBe(50000 - 1380);
+        }
+    });
+
+    test("ranks of one skill mixed in with others cost the same in any order", () => {
+        expect.hasAssertions();
+        const ranks = ["strength", "strength", "ring_of_life", "hitpoints", "strength", "defence"];
+        const totals = new Set<number>();
+        for (const order of permutations(ranks)) {
+            const save = createSave();
+            save.coins = 1e6;
+            for (const id of order) {
+                expect(buyUpgrade(save, id)).toBe(true);
+            }
+            totals.add(save.skillPages.melee.upgradesSpent);
+        }
+        expect([...totals]).toEqual([15000]);
+    });
+
+    test("a skill bought first refunds what it adds to the page, after reloading", () => {
         expect.hasAssertions();
         const save = createSave();
         save.coins = 50000;
@@ -356,16 +408,62 @@ describe("save", () => {
         buyUpgrade(save, "hitpoints");
         const loaded = migrateSave(JSON.parse(exportSave(save, GAME)));
         expect(refundUpgrade(loaded, "ring_of_life")).toBe(true);
-        expect(loaded.coins).toBe(49540);
-        expect(loaded.skillPages.melee.upgradesSpent).toBe(460);
-        expect(loaded.skillPages.melee.upgrades).toEqual({ strength: 1, hitpoints: 1 });
-        expect(loaded.skillPages.melee.upgradeRefunds).toEqual({
-            strength: [220],
-            hitpoints: [240],
+        expect(loaded.coins).toBe(49580);
+        expect(loaded.skillPages.melee).toEqual({
+            upgrades: { strength: 1, hitpoints: 1 },
+            upgradesSpent: 420,
         });
     });
 
-    test("legacy saves allocate their full spending without making other skills free", () => {
+    test.each([
+        [{ strength: 2, ring_of_life: 1 }, 11680, { strength: [200, 480], ring_of_life: [11000] }],
+        [{ ring_of_life: 1 }, 11000, { ring_of_life: [11000] }],
+        [{ strength: 1, hitpoints: 1 }, 440, { strength: [220], hitpoints: [220] }],
+    ])(
+        "an older page refunds single ranks and gives back what it paid: %o",
+        (upgrades, spent, refunds) => {
+            expect.hasAssertions();
+            const save = migrateSave({
+                ...createSave(),
+                coins: 50000 - spent,
+                skillPages: {
+                    melee: { upgrades, upgradesSpent: spent, upgradeRefunds: refunds },
+                },
+            });
+            expect(save.skillPages.melee).toEqual({ upgrades, upgradesSpent: spent });
+            for (const id of Object.keys(upgrades)) {
+                while (save.skillPages.melee.upgrades[id]) {
+                    expect(refundUpgrade(save, id)).toBe(true);
+                }
+            }
+            expect(save.coins).toBe(50000);
+            expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
+        },
+    );
+
+    test.each([
+        ["fell", 12000, 796],
+        ["rose", 500, 33],
+    ])("a page bought before prices %s gives back exactly what was paid", (_, paid, share) => {
+        expect.hasAssertions();
+        const save = migrateSave({
+            ...createSave(),
+            coins: 50000 - paid,
+            skillPages: {
+                melee: { upgrades: { strength: 1, smithing: 1 }, upgradesSpent: paid },
+            },
+        });
+        expect(refundUpgrade(save, "strength")).toBe(true);
+        // Today Strength adds 710 of the 10,710 the page costs, and gives back
+        // that share of what it paid
+        expect(save.coins).toBe(50000 - paid + share);
+        expect(save.skillPages.melee.upgradesSpent).toBe(paid - share);
+        expect(refundUpgrade(save, "smithing")).toBe(true);
+        expect(save.coins).toBe(50000);
+        expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
+    });
+
+    test("a page that paid less than today's prices leaves no rank free", () => {
         expect.hasAssertions();
         const save = migrateSave({
             ...createSave(),
@@ -374,16 +472,39 @@ describe("save", () => {
             upgrades: { ring_of_life: 1, strength: 1, hitpoints: 1 },
             upgradesSpent: 10460,
         });
-        expect(refundUpgrade(save, "ring_of_life")).toBe(true);
-        expect(save.skillPages.melee.upgradesSpent).toBeGreaterThan(0);
         expect(save.coins + save.skillPages.melee.upgradesSpent).toBe(50000);
-        buyUpgrade(save, "strength");
+        // Ring of life adds 11,020 of the 11,440 the page costs today
+        expect(refundUpgrade(save, "ring_of_life")).toBe(true);
+        expect(save.coins).toBe(39540 + 10076);
+        expect(save.skillPages.melee.upgradesSpent).toBe(384);
+        // Strength adds 220 of the 420 left
         expect(refundUpgrade(save, "strength")).toBe(true);
+        expect(save.skillPages.melee.upgradesSpent).toBe(183);
         expect(refundUpgrade(save, "hitpoints")).toBe(true);
-        expect(refundUpgrade(save, "strength")).toBe(true);
         expect(save.coins).toBe(50000);
-        expect(save.skillPages.melee.upgradesSpent).toBe(0);
-        expect(save.skillPages.melee.upgradeRefunds).toBeUndefined();
+        expect(save.skillPages.melee).toEqual({ upgrades: {}, upgradesSpent: 0 });
+    });
+
+    test("a page that paid more than today's prices gives some of it back with each rank", () => {
+        expect.hasAssertions();
+        // Every skill maxed in the Skills screen's order, at the old prices
+        const upgrades = Object.fromEntries(SHOP_UPGRADES.map((u) => [u.id, u.maxRank]));
+        const save = migrateSave({
+            ...createSave(),
+            coins: 0,
+            skillPages: { melee: { upgrades, upgradesSpent: 648680 } },
+        });
+        // Ring of life adds 45,560 of the 484,800 the page costs today
+        expect(refundUpgrade(save, "ring_of_life")).toBe(true);
+        expect(save.coins).toBe(60961);
+        for (const upgrade of SHOP_UPGRADES) {
+            while (save.skillPages.melee.upgrades[upgrade.id]) {
+                const coins = save.coins;
+                expect(refundUpgrade(save, upgrade.id)).toBe(true);
+                expect(save.coins).toBeGreaterThan(coins);
+            }
+        }
+        expect(save.coins).toBe(648680);
     });
 
     test.each([
@@ -392,7 +513,7 @@ describe("save", () => {
         { strength: [200, 300] },
         { strength: [10000] },
         {},
-    ])("invalid refund records fall back to the legacy balance: %o", (upgradeRefunds) => {
+    ])("old refund records are ignored: %o", (upgradeRefunds) => {
         expect.hasAssertions();
         const save = migrateSave({
             ...createSave(),
@@ -401,10 +522,64 @@ describe("save", () => {
             upgradesSpent: 200,
             upgradeRefunds,
         });
+        expect(save.skillPages.melee).toEqual({ upgrades: { strength: 1 }, upgradesSpent: 200 });
         expect(refundUpgrade(save, "strength")).toBe(true);
         expect(save.coins).toBe(200);
         expect(save.skillPages.melee.upgradesSpent).toBe(0);
     });
+
+    test.each(["melee", "ranged", "magic"] as const)(
+        "%s refunds take out one rank without changing other pages",
+        (style) => {
+            expect.hasAssertions();
+            const save = createSave();
+            const expected = createSave();
+            save.coins = expected.coins = 100000;
+            const later = ["smithing", "crafting", "smithing", "crafting", "ring_of_life"];
+            for (const other of ["melee", "ranged", "magic"] as const) {
+                if (other !== style) {
+                    buyUpgrade(save, "ring_of_life", other);
+                    buyUpgrade(expected, "ring_of_life", other);
+                }
+            }
+            buyUpgrade(save, "strength", style);
+            for (const id of later) {
+                expect(buyUpgrade(save, id, style)).toBe(true);
+                expect(buyUpgrade(expected, id, style)).toBe(true);
+            }
+            const loaded = importSave(exportSave(save, GAME), GAME);
+            expect(refundUpgrade(loaded, "strength", style)).toBe(true);
+            expect(loaded).toEqual(expected);
+            expect(loaded.skillPages[style].upgradesSpent).toBe(75000);
+            for (const id of [...later].reverse()) {
+                expect(refundUpgrade(loaded, id, style)).toBe(true);
+            }
+            for (const other of ["melee", "ranged", "magic"] as const) {
+                refundUpgrades(loaded, other);
+            }
+            expect(loaded.coins).toBe(100000);
+        },
+    );
+
+    test.each([["unknown"], ["strength", "strength"], ["hitpoints"], [1], []])(
+        "a purchase order from an older game is dropped: %o",
+        (...upgradeOrder) => {
+            expect.hasAssertions();
+            const save = createSave();
+            save.coins = 500;
+            buyUpgrade(save, "strength");
+            const loaded = migrateSave({
+                ...save,
+                skillPages: {
+                    ...save.skillPages,
+                    melee: { ...save.skillPages.melee, upgradeOrder },
+                },
+            });
+            expect(loaded.skillPages.melee).toEqual(save.skillPages.melee);
+            expect(refundUpgrade(loaded, "strength")).toBe(true);
+            expect(loaded.coins).toBe(500);
+        },
+    );
 
     test("out-of-order refunds and repurchases never create coins", () => {
         expect.hasAssertions();
@@ -422,7 +597,24 @@ describe("save", () => {
         refundUpgrades(save);
         expect(save.coins).toBe(50000);
         expect(save.skillPages.melee.upgradesSpent).toBe(0);
-        expect(save.skillPages.melee.upgradeRefunds).toBeUndefined();
+    });
+
+    test("repricing across the maximum reservation releases only unneeded coins", () => {
+        expect.hasAssertions();
+        const save = createSave();
+        save.coins = 50000;
+        buyUpgrade(save, "strength", "melee");
+        buyUpgrade(save, "smithing", "melee");
+        buyUpgrade(save, "ring_of_life", "ranged");
+        const ranged = structuredClone(save.skillPages.ranged);
+        expect(refundUpgrade(save, "strength", "melee")).toBe(true);
+        expect(save.coins).toBe(40000);
+        expect(save.skillPages.melee.upgradesSpent).toBe(10000);
+        expect(save.skillPages.ranged).toEqual(ranged);
+        expect(refundUpgrade(save, "smithing", "melee")).toBe(true);
+        expect(save.coins).toBe(40000);
+        refundUpgrades(save, "ranged");
+        expect(save.coins).toBe(50000);
     });
 
     test("recording runs", () => {
@@ -490,6 +682,22 @@ describe("save", () => {
         recordRun(guest, run("phosani", { victory: true, seconds: 300, level: 20 }));
         expect(isMapUnlocked(guest, "phosani")).toBe(true);
         expect(isMapUnlocked(guest, CAMPAIGN_MAPS[1].id)).toBe(false);
+    });
+
+    test("Justiciar Zachariah's fight opens once Phosani's is beaten: the Wolf's trial, then the Owl's", () => {
+        const save = createSave();
+        expect(getMap("zachariah").fight?.requires).toBe("phosani");
+        expect(CAMPAIGN_MAPS.some((map) => map.id === "zachariah")).toBe(false);
+        recordRun(save, run("halloween", { victory: true, seconds: 900, level: 40 }));
+        expect(isMapUnlocked(save, "phosani")).toBe(true);
+        expect(isMapUnlocked(save, "zachariah")).toBe(false);
+        recordRun(save, run("phosani", { victory: true, seconds: 300, level: 20 }));
+        expect(isMapUnlocked(save, "zachariah")).toBe(true);
+        expect(isEndlessUnlocked(save, "zachariah")).toBe(false);
+        expect(isHardUnlocked(save, "zachariah")).toBe(false);
+        recordRun(save, run("zachariah", { victory: true, seconds: 300, level: 1 }));
+        expect(isHardUnlocked(save, "zachariah")).toBe(true);
+        expect(save.unlockedCharacters).not.toContain("saradominist");
     });
 
     test("wins from before maps count as Lumbridge wins", () => {
@@ -663,10 +871,52 @@ describe("save", () => {
                 expect(bossesOn(task.mapId)).toContain(task.enemyId);
             } else if (task.kind === "survive") {
                 expect(task.seconds).toBeLessThan(RUN_LENGTH);
+            } else if (task.kind === "raidChest") {
+                // A real trophy, from this raid's chest
+                const from = TROPHY_BY_ID.get(task.trophyId)?.from;
+                expect(from, task.trophyId).toMatchObject({ kind: "raid", mapId: task.mapId });
             } else {
                 expect(getMap(task.mapId)).toBeDefined();
             }
         }
+    });
+});
+
+describe("pets", () => {
+    it("keeps the pet taken along, only if it's been found", () => {
+        const save = createSave();
+        save.trophies.push("lil_zik");
+        expect(migrateSave({ ...save, pet: "lil_zik" }).pet).toBe("lil_zik");
+        expect(migrateSave({ ...save, pet: "lil_maiden" }).pet).toBeUndefined();
+        expect(migrateSave({ ...save, pet: "not_a_pet" }).pet).toBeUndefined();
+        expect(migrateSave(save).pet).toBeUndefined();
+    });
+});
+
+describe("the favourite adventurer", () => {
+    it("is kept in the save, only as an adventurer this game has", () => {
+        const save = createSave();
+        expect(migrateSave({ ...save, favouriteCharacter: "wizard" }).favouriteCharacter).toBe(
+            "wizard",
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: "nobody" }).favouriteCharacter).toBe(
+            undefined,
+        );
+        // Not a map's own adventurer, who's never picked
+        const only = CHARACTERS.find((c) => c.only)!.id;
+        expect(migrateSave({ ...save, favouriteCharacter: only }).favouriteCharacter).toBe(
+            undefined,
+        );
+        expect(migrateSave({ ...save, favouriteCharacter: 3 }).favouriteCharacter).toBe(undefined);
+    });
+
+    it("is what the game starts on, while it's open", () => {
+        const save = createSave();
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
+        save.favouriteCharacter = save.unlockedCharacters[1];
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[1]);
+        save.favouriteCharacter = CHARACTERS.find((c) => c.unlock)!.id;
+        expect(getStartingCharacter(save)).toBe(save.unlockedCharacters[0]);
     });
 });
 

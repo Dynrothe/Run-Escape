@@ -1,14 +1,14 @@
-import { BossAttackDef, BossDef, CombatStyle, EnemyDef } from "./types";
+import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./types";
 
 // The Theatre of Blood raid's bosses (raids.ts), fought in their own rooms, each as a bullet hell
 // built round what its real fight is known for: the Maiden's blood closing in, the Bloat's flies,
 // Sotetseg's maze as a wall with a way through, Xarpus's acid filling the floor, Verzik's three
 // forms. Two of the shapes are the Theatre's own (BulletPatternDef wall and closing), and more of
-// everything comes once a boss is enraged. Their own spot animations throughout: the Maiden's blood (1578, pools
-// 1579), the Bloat's flies (1568) and flesh (1570, 1571), Xarpus's poison (1555, splash 1654),
-// Sotetseg's orbs (1606) and ball of death (1604), and Verzik's power blast (1580), lightning (1585)
-// and green ball (1598). The Bloat's flesh (1570, 1571) falls from above, so the Maiden's blood pool
-// (1579) marks where it'll land.
+// everything comes once a boss is enraged. Their own spot animations throughout: the Maiden's
+// blood (1578, pools 1579), the Bloat's flies (1568) and flesh (1570, 1571), Xarpus's poison
+// (1555, splash 1654), Sotetseg's orbs (1606) and ball of death (1604), and Verzik's power blast
+// (1580), lightning (1585), green ball (1598) and yellows (1595). The Bloat's flesh (1570, 1571)
+// falls from above, so the Maiden's blood pool (1579) marks where it'll land.
 //
 // The Pestilent Bloat, Sotetseg and Verzik Vitur also turn up on Morytania, tuned for there; the
 // raid's are copies of them with these fights, so Morytania plays as it did. Damage is about half
@@ -18,17 +18,57 @@ import { BossAttackDef, BossDef, CombatStyle, EnemyDef } from "./types";
 const BRIGHT = 0.6;
 
 // ToB's a melee raid: its bosses pray against missiles and magic, taking this share from them
-const PROTECTS = { styles: ["ranged", "magic"], damage: 0.3 } as const;
+const PROTECTS = { styles: ["ranged", "magic"], damage: 0.15 } as const;
 const protects: EnemyDef["protects"] = {
     styles: [...PROTECTS.styles] as CombatStyle[],
     damage: PROTECTS.damage,
 };
 
+// The first clears took little damage over a whole raid: a boss's hits do this much more than
+// they were first tuned at, and a bullet can hit again this soon after the last (a second
+// elsewhere), so standing in a pattern costs, as on Phosani's Nightmare (her 0.3)
+const HIT_HARDER = 1.5;
+const BULLET_GRACE = 0.5;
+// Armour (Protect from Melee, Defence, gear) takes off at most this share of a boss's hit: fully
+// built, it had made nearly every hit a 1
+const ARMOR_CAP = 0.5;
+
 // Splats (the blood 1579, the acid 1654) reach well past their middle: drawn at this size, all of
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
 
+// Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
+// close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
+// the time there. A slam marks the ground under the boss as it winds up, so there's time to step
+// out and back in. The slams are the stationary bosses' (the Maiden, Xarpus, Verzik's throne),
+// where you could otherwise stand just inside the longest melee reach (the scythe's, about 4.35
+// tiles) and outside the slam's, so they reach past it, and wind up longer for it.
+const CLOSE_REACH = 4.6;
+const CLOSE_WEIGHT = 10;
+const SLAM_RADIUS = 4;
+function slam(
+    name: string,
+    spotAnim: number,
+    sound: number,
+    damage: number,
+    fit?: number,
+): BossAttackDef {
+    return {
+        name,
+        kind: "ground",
+        sound,
+        damage,
+        windup: 1.5,
+        cooldown: 4,
+        range: CLOSE_REACH,
+        weight: CLOSE_WEIGHT,
+        ground: { spots: [{ shape: "under" }], radius: SLAM_RADIUS, spotAnim, fit },
+    };
+}
+
 const MAIDEN_ATTACKS: BossAttackDef[] = [
+    // Her blood bursts out round her
+    slam("Blood burst", 1579, 3606, 5, SPLAT_FIT),
     {
         name: "Blood throw",
         kind: "pattern",
@@ -123,14 +163,16 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
 
 const BLOAT_ATTACKS: BossAttackDef[] = [
     {
+        // Wide enough to reach the longest melee weapon's reach (CLOSE_REACH), and he wakes with
+        // it
         name: "Stomp",
         kind: "swing",
         sound: 918,
         damage: 6,
-        windup: 0.9,
+        windup: 1.1,
         cooldown: 0,
-        range: 3.4,
-        radius: 3.2,
+        range: CLOSE_REACH,
+        radius: 4,
         weight: 3,
     },
     {
@@ -163,7 +205,7 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         weight: 3,
         pattern: {
             shape: "wall",
-            count: 6,
+            count: 10,
             volleys: 3,
             interval: 1,
             speed: 4,
@@ -171,6 +213,30 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
             radius: 0.4,
             gap: 2,
             spacing: 0.9,
+            bright: BRIGHT,
+        },
+    },
+    {
+        // His flies close in round you wherever you are, so keeping away from him isn't safe
+        name: "Fly swarm",
+        kind: "pattern",
+        spotAnim: 1568,
+        sound: 292,
+        damage: 2,
+        windup: 1.0,
+        cooldown: 6,
+        range: 40,
+        weight: 4,
+        pattern: {
+            shape: "closing",
+            count: 18,
+            volleys: 3,
+            interval: 0.9,
+            speed: 4.5,
+            range: 20,
+            radius: 0.4,
+            gap: 3,
+            distance: 6,
             bright: BRIGHT,
         },
     },
@@ -383,6 +449,28 @@ const SOTETSEG_ATTACKS: BossAttackDef[] = [
 
 const XARPUS_ATTACKS: BossAttackDef[] = [
     {
+        // His exhumeds (32743) come up out of the floor: stand on one to smother it, or it heals
+        // him (his energy orb, 1550). Only in his exhumes (BossDef.exhumes).
+        name: "Exhumeds",
+        kind: "ground",
+        ordeal: true,
+        sound: 3606,
+        damage: 0,
+        windup: 0.6,
+        cooldown: 0,
+        range: 40,
+        weight: 1,
+        ground: {
+            spots: [{ shape: "scatter", count: 3, spread: 7, awayFrom: 2 }],
+            radius: 0.9,
+            locId: 32743,
+            lingers: { seconds: 6, interval: 60, damage: 0 },
+            smother: { seconds: 1, heal: 0.04, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
+        },
+    },
+    // Acid all round his pool
+    slam("Acid burst", 1654, 3606, 4, SPLAT_FIT),
+    {
         // His acid stays where it lands, so the floor fills up, as in OSRS
         name: "Acid",
         kind: "ground",
@@ -395,7 +483,8 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
         ground: {
             spots: [{ shape: "player" }, { shape: "scatter", count: 1, spread: 5 }],
             radius: 1.3,
-            lingers: { seconds: 6, interval: 0.6, damage: 0.5 },
+            // Not so long that hard's longer fight fills the floor for good
+            lingers: { seconds: 4.5, interval: 0.6, damage: 0.35 },
             spotAnim: 1654,
             fit: SPLAT_FIT,
         },
@@ -450,6 +539,32 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
 
 // What's added to each of Verzik's forms
 const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
+    // Lightning round her throne (her other forms have their bounce and claws)
+    slam("Lightning burst", 1585, 879, 5),
+    {
+        // Closes in round you, near her or far: her throne's other attacks were easy to dodge
+        name: "Power blast tide",
+        kind: "pattern",
+        spotAnim: 1580,
+        sound: 879,
+        damage: 3,
+        windup: 1.2,
+        cooldown: 6,
+        range: 40,
+        weight: 3,
+        pattern: {
+            shape: "closing",
+            count: 16,
+            volleys: 2,
+            interval: 1.2,
+            speed: 4,
+            range: 20,
+            radius: 0.45,
+            gap: 3,
+            distance: 7,
+            bright: BRIGHT,
+        },
+    },
     {
         name: "Power blast ring",
         kind: "pattern",
@@ -514,6 +629,46 @@ const VERZIK_TWO_ATTACKS: BossAttackDef[] = [
 ];
 const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
     {
+        // Her yellows: a slow ball that follows you and hits hard, unless you're standing in the
+        // glowing pool that comes with it. Only in her yellows (BossDef.yellows); expert's doom
+        // ball is the deadly one.
+        name: "Yellows",
+        kind: "projectile",
+        ordeal: true,
+        // A yellow orb (one of her own, 1595), not her Green ball's (1598): one needs standing
+        // still in a pool, the other outrunning
+        spotAnim: 1595,
+        sound: 879,
+        damage: 12,
+        windup: 1.2,
+        cooldown: 0,
+        range: 40,
+        weight: 1,
+        speed: 3,
+        homing: 0.08,
+        ground: {
+            spots: [{ shape: "scatter", count: 1, spread: 7, awayFrom: 4 }],
+            radius: 1.6,
+            safe: true,
+            lingers: { seconds: 6, interval: 60, damage: 0 },
+            spotAnim: 1581,
+        },
+    },
+    {
+        // Keep away from her claws and she jumps on you
+        name: "Leap",
+        kind: "blast",
+        sound: 3605,
+        damage: 8,
+        windup: 1.2,
+        cooldown: 5,
+        range: 40,
+        minRange: 6,
+        radius: 2.4,
+        weight: 8,
+        leap: true,
+    },
+    {
         // Expert mode: a slow green ball that follows you and kills you, unless you're standing
         // in the glowing circle that comes with it
         name: "Doom ball",
@@ -531,11 +686,13 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         homing: 0.05,
         message: "Verzik throws a ball that won't miss! Get in the glowing circle!",
         ground: {
-            // Away from her, so getting to it means leaving her be
+            // Away from her, so getting to it means leaving her be. Wider than her leap (2.4), so
+            // it can be dodged without leaving, and there as long as the ball can be (range over
+            // speed, about 17s), so it can't outlast it
             spots: [{ shape: "scatter", count: 1, spread: 9, awayFrom: 8 }],
-            radius: 1.6,
+            radius: 2.6,
             safe: true,
-            lingers: { seconds: 10, interval: 60, damage: 0 },
+            lingers: { seconds: 20, interval: 60, damage: 0 },
             spotAnim: 1581,
         },
     },
@@ -614,39 +771,33 @@ function vasilias(): EnemyDef {
         boss: {
             attackInterval: 2.0,
             keepDistance: 4,
-            colours: { every: 8, forms: VASILIAS_FORMS },
+            // Its colours on normal too: the other styles do a quarter (its prayer as well, for
+            // missiles and magic), so a one-style build waits out two colours in three, and one
+            // with all three switches. Its own style gets through its prayer for 35%, more than
+            // melee's quarter, but not so much a max bow beats it in a few seconds.
+            colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.25, ownStyle: 0.35 },
             enrage: { message: "Nylocas Vasilias shrieks!" },
             summonsAt: [
                 { hp: 0.75, enemyId: "nylocas_ischyros", count: 6 },
-                { hp: 0.5, enemyId: "nylocas_toxobolos", count: 6 },
-                { hp: 0.25, enemyId: "nylocas_hagios", count: 6 },
+                { hp: 0.5, enemyId: "tob_nylocas_toxobolos", count: 6 },
+                { hp: 0.25, enemyId: "tob_nylocas_hagios", count: 6 },
             ],
             attacks: oftener(VASILIAS_ATTACKS, 2.2, 2.0),
         },
     };
 }
 
-// ToB's a melee raid: what a boss fires from itself starts this many tiles out, so there's a
-// pocket up close that its rings, spreads and walls never cross. Ranged and magic fight from
-// where they're thick, for a fifth of the damage (PROTECTS).
-const MELEE_POCKET = 2.5;
-const POCKETED = new Set(["ring", "spiral", "spread", "wall"]);
-
-// A raid boss's attacks: the melee pocket, and when it attacks more often than its hits were
-// tuned for (every `from` seconds), each one lighter to match, for more to dodge and the same
-// damage over time. Expert mode's own attacks keep their damage, as the green ball's meant to kill.
+// A raid boss's attacks: its close attacks picked CLOSE_WEIGHT, and when it attacks more often
+// than its hits were tuned for (every `from` seconds), each one lighter to match, for more to
+// dodge and the same damage over time, and HIT_HARDER on top. Expert mode's own attacks keep their
+// damage, as the green ball's meant to kill. What a boss fires from itself starts at its middle:
+// there's no safe spot on it, for melee or anyone, only its mechanics to play.
 function oftener(attacks: BossAttackDef[], from: number, to: number): BossAttackDef[] {
-    return attacks.map((attack) => {
-        const pattern = attack.pattern;
-        return {
-            ...attack,
-            damage: attack.expert ? attack.damage : (attack.damage * to) / from,
-            pattern:
-                pattern && POCKETED.has(pattern.shape)
-                    ? { ...pattern, from: pattern.from ?? MELEE_POCKET }
-                    : pattern,
-        };
-    });
+    return attacks.map((attack) => ({
+        ...attack,
+        damage: attack.expert ? attack.damage : (attack.damage * to * HIT_HARDER) / from,
+        weight: attack.range <= CLOSE_REACH ? CLOSE_WEIGHT : attack.weight,
+    }));
 }
 
 // A boss from elsewhere as the raid has it: its own self, a raid id, and its fight with more on top
@@ -662,6 +813,7 @@ function raidVersion(
 ): EnemyDef {
     const all = replace ? attacks : [...base.boss!.attacks, ...attacks];
     const interval = extra.attackInterval ?? tunedAt;
+    const summonsAt = extra.summonsAt ?? base.boss!.summonsAt;
     return {
         ...base,
         id,
@@ -669,9 +821,25 @@ function raidVersion(
         boss: {
             ...base.boss!,
             ...extra,
-            attacks: oftener(all, tunedAt, interval),
+            // What it calls in is the raid's: its green and blue Nylocas shoot (RAID_NYLOCAS)
+            attacks: oftener(all, tunedAt, interval).map((attack) =>
+                attack.summon
+                    ? {
+                          ...attack,
+                          summon: { ...attack.summon, enemyId: raidId(attack.summon.enemyId) },
+                      }
+                    : attack,
+            ),
+            ...(summonsAt && {
+                summonsAt: summonsAt.map((s) => ({ ...s, enemyId: raidId(s.enemyId) })),
+            }),
         },
     };
+}
+
+// The raid's copy of an enemy, if it has one (RAID_NYLOCAS), or the enemy as it is
+function raidId(enemyId: string): string {
+    return RAID_NYLOCAS.some(([id]) => id === enemyId) ? "tob_" + enemyId : enemyId;
 }
 
 // Bigger than Morytania has them, as the raid's rooms are bigger. Drawn only: what can be hit
@@ -683,9 +851,39 @@ function withScale(scale: number, enemy: EnemyDef): EnemyDef {
 
 // The raid's own bosses. The Bloat, Sotetseg and Verzik need Morytania's, from enemies.ts.
 export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
+    return theatreBosses(byId).map((enemy) =>
+        enemy.boss
+            ? { ...enemy, boss: { ...enemy.boss, bulletGrace: BULLET_GRACE, armorCap: ARMOR_CAP } }
+            : enemy,
+    );
+}
+
+// The raid's green and blue Nylocas shoot, as in the Theatre: copies of Morytania's, which don't,
+// so Morytania plays as it did. Green fires the Theatre's own Nylocas projectile (1559, 1561 for
+// the big ones); blue has none of its own in the cache, so Water Wave (162, 163).
+const RAID_NYLOCAS: [string, EnemyShotDef][] = [
+    ["nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1559, sound: 3605 }],
+    ["big_nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1561, sound: 3605 }],
+    [
+        "nylocas_hagios",
+        { range: 7, interval: 3.2, speed: 7, spotAnim: 162, impactSpotAnim: 163, sound: 3605 },
+    ],
+    [
+        "big_nylocas_hagios",
+        { range: 7, interval: 3.2, speed: 7, spotAnim: 162, impactSpotAnim: 163, sound: 3605 },
+    ],
+];
+
+function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     const verzikOne = byId("verzik_vitur");
     const verzikTwo = byId("verzik_vitur_risen");
     return [
+        ...RAID_NYLOCAS.map(([id, shot]): EnemyDef => {
+            const base = byId(id);
+            // A big one splits into the raid's small ones
+            const splits = base.splits && { ...base.splits, into: "tob_" + base.splits.into };
+            return { ...base, id: "tob_" + id, shot, ...(splits && { splits }) };
+        }),
         {
             id: "maiden_of_sugadinti",
             name: "The Maiden of Sugadinti",
@@ -711,19 +909,37 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             boss: {
                 attackInterval: 2,
                 enrage: { message: "The Maiden's blood boils!" },
+                // Her Nylocas Matomenos crawl to her and feed her, as in OSRS: kill them on the
+                // way, or she's back up the hitpoints you took
                 summonsAt: [
                     {
-                        hp: 0.7,
-                        enemyId: "nylocas_matomenos",
+                        hp: 0.8,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
                         count: 4,
-                        message: "Nylocas Matomenos crawl out to the Maiden!",
+                        message: "Nylocas Matomenos crawl to the Maiden to feed her! Kill them!",
+                    },
+                    {
+                        hp: 0.6,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
+                        count: 6,
+                        message: "More Nylocas crawl to the Maiden!",
                     },
                     { hp: 0.5, enemyId: "blood_spawn", count: 6 },
                     {
-                        hp: 0.3,
-                        enemyId: "nylocas_matomenos",
+                        hp: 0.4,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
                         count: 6,
-                        message: "More Nylocas crawl out to the Maiden!",
+                        message: "More Nylocas crawl to the Maiden!",
+                    },
+                    {
+                        hp: 0.2,
+                        enemyId: "nylocas_matomenos_healer",
+                        distance: 9,
+                        count: 8,
+                        message: "The Nylocas swarm to the Maiden!",
                     },
                 ],
                 // Lighter again: a hit's moment of safety used to soak up more of her bullets
@@ -740,8 +956,10 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 attackInterval: 3,
                 naps: {
                     every: 9,
-                    seconds: 5,
-                    // With the prayer, missiles and magic do 1% while he walks
+                    // Short enough that he's up for most of a fight: dodging him while he's
+                    // awake is the fight, not waiting for him to go down
+                    seconds: 3.5,
+                    // With the prayer, missiles and magic do under 1% while he walks
                     awakeDamage: 0.05,
                     wake: "Stomp",
                     seq: 8082,
@@ -776,7 +994,19 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                 byId("sotetseg"),
                 "tob_sotetseg",
                 SOTETSEG_ATTACKS,
-                { attackInterval: 1.9 },
+                {
+                    attackInterval: 1.9,
+                    // He drags you into his shadow realm: no hitting him, only his maze to get
+                    // through, a row after another
+                    shadowRealm: {
+                        at: [0.66, 0.33],
+                        seconds: 16,
+                        attacks: ["The maze", "The maze (faster)", "Ball of death"],
+                        interval: 0.6,
+                        message: "Sotetseg drags you into the shadow realm! Survive his maze!",
+                        endMessage: "You escape the shadow realm. Sotetseg can be hurt again!",
+                    },
+                },
                 true,
                 2.4,
             ),
@@ -804,12 +1034,27 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             boss: {
                 attackInterval: 1.7,
                 enrage: { message: "Xarpus screeches, poison spraying everywhere!" },
+                // He comes up out of his pool, and goes back down at half: he can't be hurt until
+                // his exhumeds are smothered, and those left heal him
+                exhumes: {
+                    // Not at full hitpoints: each exhumed missed heals him, which at full does
+                    // nothing
+                    at: [0.8, 0.4],
+                    count: 8,
+                    // Not forever, for whoever doesn't know to: he rises the better for each left
+                    seconds: 30,
+                    leftHeal: 0.04,
+                    attacks: ["Exhumeds", "Exhumeds", "Acid"],
+                    interval: 1.4,
+                    message: "Xarpus sinks into his pool! Stand on his exhumeds to smother them!",
+                    endMessage: "Xarpus rises from his pool!",
+                },
                 // Expert mode: he stares one way, and hitting him from in front hurts you
                 stare: {
                     every: 6,
                     arc: 2.1,
-                    damage: 4,
-                    message: "Xarpus turns to stare! Don't hit him from in front.",
+                    damage: 3,
+                    message: "Xarpus is turning! Don't hit him from in front.",
                 },
                 attacks: oftener(XARPUS_ATTACKS, 2.2, 1.7),
             },
@@ -834,9 +1079,29 @@ export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             byId("verzik_vitur_spider"),
             "tob_verzik_vitur_spider",
             VERZIK_THREE_ATTACKS,
-            { attackInterval: 2.6 },
+            {
+                attackInterval: 2.6,
+                yellows: {
+                    at: [0.66, 0.33],
+                    seconds: 12,
+                    attacks: ["Yellows", "Yellows", "Webs"],
+                    interval: 1.4,
+                    message: "Verzik throws her yellows! Get into a glowing pool as each lands!",
+                    endMessage: "Verzik's yellows are spent. She can be hurt again!",
+                },
+            },
             false,
             2.9,
         ),
+        // Expert mode's Maiden healers (nylocas_matomenos_healer's expertAs): they feed her more
+        (() => {
+            const healer = byId("nylocas_matomenos_healer");
+            return {
+                ...healer,
+                id: "tob_nylocas_matomenos_feeder",
+                expertAs: undefined,
+                heals: { ...healer.heals!, fraction: 0.035 },
+            };
+        })(),
     ];
 }

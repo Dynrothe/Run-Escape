@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "game",
-            "runtimeExecutable": "npm",
+            "runtimeExecutable": "bun",
             "runtimeArgs": ["run", "start:singleplayer"],
             "port": 5173
         }

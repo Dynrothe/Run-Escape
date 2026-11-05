@@ -1,3 +1,4 @@
+import { CacheIndex } from "../../rs/cache/CacheIndex";
 import { IndexType } from "../../rs/cache/IndexType";
 import { SpriteLoader } from "../../rs/sprite/SpriteLoader";
 import { RenderDataLoader, RenderDataResult } from "./RenderDataLoader";
@@ -19,8 +20,16 @@ export type SpriteImage = {
 export type SpriteDataInput = { spriteIds: number[]; frames?: number[] };
 
 export function loadSpriteImage(state: WorkerState, id: number, frame: number = 0): SpriteImage {
+    return decodeSpriteImage(state.cacheSystem.getIndex(IndexType.DAT2.sprites), id, frame);
+}
+
+// The same from the sprites' index itself, for scripts
+export function decodeSpriteImage(
+    spriteIndex: CacheIndex,
+    id: number,
+    frame: number = 0,
+): SpriteImage {
     const empty = { id, width: 0, height: 0, pixels: new Int32Array(0) };
-    const spriteIndex = state.cacheSystem.getIndex(IndexType.DAT2.sprites);
     const sprite = SpriteLoader.loadIntoIndexedSprite(spriteIndex, id, frame);
     if (!sprite || sprite.width <= 0 || sprite.height <= 0) {
         return empty;

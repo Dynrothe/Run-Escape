@@ -1,11 +1,11 @@
 // Measures the real places in areas.ts and made maps the same way, and saves a summary.
 //
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/measure.ts out.json              # all of it
-//   npx tsx scripts/scaperune/research/measure.ts out.json real                    # real places
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/measure.ts out.json scaperune_ysmar halloween
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/measure.ts out.json              # all of it
+//   bun run tsx scripts/scaperune/research/measure.ts out.json real                    # real places
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/measure.ts out.json scaperune_ysmar halloween
 import fs from "node:fs";
 
-import { TileGrid } from "../../../src/game/scaperune/format";
+import { TileGrid, cacheFloorId } from "../../../src/game/scaperune/format";
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";
 import { SCAPERUNE_MAPS } from "../../../src/game/scaperune/maps/shippedMaps";
 import { createBuildContext } from "../../../src/game/scaperune/squares";
@@ -43,7 +43,7 @@ const singles = new Map<string, number>();
 const waterKinds = new Map<number, boolean>();
 const isWater = (id: number): boolean => {
     if (!waterKinds.has(id)) {
-        const type = w.overlays.load(id - 1);
+        const type = w.overlays.load(cacheFloorId(id));
         waterKinds.set(id, [1, 24, 25].includes(type.textureId) || [6, 7, 442].includes(id));
     }
     return waterKinds.get(id)!;

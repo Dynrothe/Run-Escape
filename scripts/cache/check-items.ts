@@ -1,7 +1,7 @@
 // Checks that every casket item's id is the item it's named after in the
 // cache, and that gear can be worn in its slot. Prints the ones that aren't.
 //
-//   npx tsx scripts/cache/check-items.ts
+//   bun run tsx scripts/cache/check-items.ts
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";

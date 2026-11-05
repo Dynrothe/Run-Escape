@@ -26,3 +26,6 @@ yarn-debug.log*
 yarn-error.log*
 
 caches/
+
+# ScapeRune world index, made by scripts/scaperune/world-index.ts
+world.json

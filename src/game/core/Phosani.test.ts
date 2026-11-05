@@ -832,7 +832,7 @@ describe("her fight", () => {
     });
 
     test("her totems are her own, grown to be seen, and what her parasites recharge", () => {
-        const totems = phosani().boss!.phases!.totems;
+        const totems = phosani().boss!.phases!.totems!;
         expect([totems.idleId, totems.chargingId, totems.chargedId]).toEqual([
             "phosani_totem",
             "phosani_totem_charging",
@@ -906,7 +906,7 @@ describe("her fight", () => {
         const middle = { x: BASE + SIZE / 2, y: BASE + SIZE / 2 };
         // Their scroll hangs round from where the yaw points, and the offset
         // turns it to the middle
-        const offset = phosani().boss!.phases!.totems.yawOffset!;
+        const offset = phosani().boss!.phases!.totems!.yawOffset!;
         expect(offset).toBe(768);
         const facing = () =>
             phaseOf(boss).totems.map((t) => [
