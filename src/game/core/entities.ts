@@ -3,12 +3,15 @@ import {
     BossAttackDef,
     CasketTier,
     EnemyDef,
+    ImpactSpotDef,
     PlayerEffectDef,
     RandomEventDef,
+    SongPhraseDef,
     Stats,
     ThrallDef,
     WeaponDef,
 } from "../content/types";
+import type { SongShape } from "./song";
 
 // Positions are world tiles (x east, y north). prevX/prevY are last tick's
 // position, for drawing between ticks.
@@ -944,6 +947,21 @@ type SimEventBody =
           y: number;
           opened: boolean;
       }
+    // A song's (BossDef.song): a beat (inBar 0 is a downbeat); a phrase begun (sound: as it
+    // begins, at x, y); a Toll (onBeat, how much it did, rung: a bell rung back, by index);
+    // and a Grace, for whoever stepped out on the last count
+    | { type: "songBeat"; beat: number; inBar: number; ticksPerBeat: number }
+    | { type: "songPhrase"; name: string; kind: string; sound: number; x: number; y: number }
+    | {
+          type: "songToll";
+          onBeat: boolean;
+          damage: number;
+          rung?: number;
+          sound: number;
+          x: number;
+          y: number;
+      }
+    | { type: "songGrace"; x: number; y: number }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
@@ -1040,3 +1058,120 @@ type SimEventBody =
     | { type: "heroRevived"; by: number }
     // Co-op: a hero found or bought an extra revive
     | { type: "extraRevive" };
+
+// A song's state (BossDef.song, core/song.ts), from its boss's entrance: the beat clock, the
+// phrases going, what they'll land as, and the arena's bells and rest
+export type SongState = {
+    startTick: number;
+    // The last beat (counted from 0 at startTick) and its tick, and the next one's; ticks a beat
+    // now, the beat the bar began on, and a new tempo from a downbeat (a threshold's key change)
+    beat: number;
+    beatTick: number;
+    nextTick: number;
+    ticksPerBeat: number;
+    barBeat: number;
+    tempoAt?: { beat: number; ticksPerBeat: number };
+    // The last few beats' ticks, for judging a press a co-op guest made a moment ago
+    recent: { index: number; tick: number }[];
+    // The beat each lane can begin a phrase from, and the last phrase it had
+    voiceFree: number;
+    arenaFree: number;
+    lastVoice?: string;
+    lastArena?: string;
+    // The phase its phrases are from, and whether its lanes have begun (after the entrance and
+    // each threshold)
+    phase: number;
+    playing: boolean;
+    phrases: SongPhrase[];
+    notes: SongNote[];
+    nextId: number;
+    // The great bells: lifted from liftTick, struck at strikeTick, humming (to be rung back) on
+    // the beats humFrom to humTo, and which round of them it was
+    bells: SongBell[];
+    // Silence's rest: from fromTick to untilTick, nobody can move further than tolerance from
+    // where they were at fromTick (by hero), each struck once
+    rest?: SongRest;
+    // The choir singing (lit) until these ticks, by soul
+    singing: number[];
+    // The round of the bells that's dropped the boss's guard, so a round drops it once
+    discordRound: number;
+    // The boss's reflection is in the water (SongPhaseDef.canon)
+    reflection: boolean;
+};
+
+export type SongPhrase = {
+    id: number;
+    def: SongPhraseDef;
+    startTick: number;
+    startBeat: number;
+    ticksPerBeat: number;
+    // The ticks it's done with
+    endTick: number;
+    // Its reflection's copy, a bar later and mirrored
+    canon: boolean;
+    // Heroes (a bit each) given a Grace by it already
+    graced: number;
+    // Where it was begun (a clap's middle), and the choir it lit (harmony)
+    x: number;
+    y: number;
+    souls?: number[][];
+    // The bells' order (bells), each beat's bells
+    order?: number[][];
+};
+
+// A part of a phrase that lands: its shape from shownTick, landing at landTick and hurting for
+// hurtTicks, warned a step a beat from countFrom (steps of them)
+export type SongNote = {
+    id: number;
+    phrase: number;
+    name: string;
+    shape: SongShape;
+    shownTick: number;
+    countFrom: number;
+    steps: number;
+    landTick: number;
+    hurtTicks: number;
+    damage: number;
+    // Heroes (a bit each) in it as its last beat began, and those it's hit
+    inside: number;
+    hit: number;
+    canon: boolean;
+    // The bell it's round, by index (bells)
+    bell?: number;
+    // Thrown up where it lands, and its sound
+    spot?: ImpactSpotDef;
+    gap?: number;
+    sound?: number;
+};
+
+export type SongBell = {
+    liftTick: number;
+    strikeTick: number;
+    humFrom: number;
+    humTo: number;
+    round: number;
+    rung: boolean;
+};
+
+export type SongRest = {
+    phrase: number;
+    fromTick: number;
+    untilTick: number;
+    tolerance: number;
+    damage: number;
+    from: ({ x: number; y: number } | undefined)[];
+    struck: number;
+};
+
+// A hero's part in a song: their Resonance, the last beat they tolled on, their Grace's end, and
+// counts for the run's stats
+export type HeroSong = {
+    resonance: number;
+    lastBeat: number;
+    graceEnd: number;
+    graces: number;
+    tolls: number;
+    onBeat: number;
+    ringBacks: number;
+    silenced: number;
+};

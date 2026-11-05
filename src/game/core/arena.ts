@@ -236,6 +236,25 @@ export function moveFeatures(features: ArenaFeatures, dx: number, dy: number): A
     if (features.dais) {
         moved.dais = { ...features.dais, x: features.dais.x + dx, y: features.dais.y + dy };
     }
+    if (features.bells) {
+        moved.bells = features.bells.map(statue);
+    }
+    if (features.tenor) {
+        moved.tenor = statue(features.tenor);
+    }
+    if (features.choir) {
+        moved.choir = features.choir.map((soul) => ({ ...soul, x: soul.x + dx, y: soul.y + dy }));
+    }
+    if (features.nave) {
+        const { x0, y0, x1, y1 } = features.nave;
+        moved.nave = { x0: x0 + dx, y0: y0 + dy, x1: x1 + dx, y1: y1 + dy };
+    }
+    if (features.bands) {
+        moved.bands = features.bands.map((band) => ({ y0: band.y0 + dy, y1: band.y1 + dy }));
+    }
+    if (features.axis !== undefined) {
+        moved.axis = features.axis + dx;
+    }
     if (features.statues) {
         moved.statues = Object.fromEntries(
             Object.entries(features.statues).map(([group, list]) => [group, list.map(statue)]),

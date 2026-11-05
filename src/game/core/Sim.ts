@@ -116,6 +116,8 @@ import {
     RaidRoomDef,
     RandomEventDef,
     RandomEventEffect,
+    SongDef,
+    SongPhraseDef,
     SpecialAttackDef,
     Stats,
     UtilityDef,
@@ -192,6 +194,7 @@ import {
     GroundFire,
     GroundHazard,
     GroundPool,
+    HeroSong,
     PassiveState,
     PendingHit,
     Pickup,
@@ -204,6 +207,9 @@ import {
     ProjectileKind,
     Rampage,
     SimEvent,
+    SongNote,
+    SongPhrase,
+    SongState,
     SurgeLane,
     Thrall,
     Turret,
@@ -213,6 +219,17 @@ import {
     quarterOf,
 } from "./entities";
 import { fm } from "./fmath";
+import {
+    SongShape,
+    beatAt,
+    halfBeat,
+    harmonyChoices,
+    inShape,
+    mirrorShape,
+    phraseBeats,
+    phraseLane,
+    shapeSpots,
+} from "./song";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
@@ -372,6 +389,10 @@ const ABILITY_BUFFER_SECONDS = 0.3;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
+// A song (BossDef.song): beats kept for judging a co-op guest's press from a moment ago, and how
+// many ticks a Psalm's band surges for
+const SONG_RECENT_BEATS = 6;
+const PSALM_SURGE_TICKS = 3;
 // Tiles from the player that what holds them turns up
 const SUMMON_BESIDE = 1.8;
 // Tiles from a boss that what's walking to it is absorbed
@@ -748,6 +769,8 @@ export type Hero = {
     // that couldn't go off yet is held till this one (ABILITY_BUFFER_SECONDS)
     abilityReadyTick: number;
     abilityHeldUntil: number;
+    // A song's (BossDef.song): their Resonance, Grace and counts
+    song?: HeroSong;
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -826,6 +849,11 @@ export class Sim {
     // (BossIntroDef.alone), for as long as it's up
     intro?: BossIntro;
     private aloneWith?: Enemy;
+    // A song's state while its boss is fought (BossDef.song), for the view and the bot too
+    song?: SongState;
+    private songBossDef?: EnemyDef;
+    private songOpener?: string;
+    private readonly songAttacks = new Map<string, BossAttackDef>();
     // Burning ground left by weapons
     fires: GroundFire[] = [];
     // Pools left by bosses' attacks
@@ -3659,6 +3687,14 @@ export class Sim {
         const amount = Math.max(1, Math.round(damage - armor));
         player.hp -= amount;
         this.damageTaken += amount;
+        // On a song, a hit costs Resonance (SongTollDef.hitCost)
+        const heroSong = this.hero.song;
+        if (heroSong && amount > 0) {
+            heroSong.resonance = Math.max(
+                0,
+                heroSong.resonance - (this.songDef?.toll.hitCost ?? 0),
+            );
+        }
         player.flash = 6;
         player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
         this.emit({ type: "playerHit", amount, enemyId, elite, sound });
@@ -4748,6 +4784,10 @@ export class Sim {
         this.clearBossAttacks();
         this.enemyProjectiles = [];
         this.funBossGroup = [];
+        // A song's beat starts with its entrance, the music's first beat with it
+        if (def.boss?.song) {
+            this.startSong(def);
+        }
         this.emit({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
     }
 
@@ -5137,9 +5177,11 @@ export class Sim {
         const threshold = phases.threshold;
         if (threshold) {
             const state = boss.bossState!;
-            const end = this.tick + secondsToTicks(threshold.seconds);
+            // A song's is a key change, on its bars (songKeyChange)
+            const key = boss.def.boss!.song ? this.songKeyChange(phase.index) : undefined;
+            const end = key?.end ?? this.tick + secondsToTicks(threshold.seconds);
             phase.pauseEnd = end;
-            phase.riseTick = end - secondsToTicks(threshold.riseSeconds ?? 0);
+            phase.riseTick = key?.countIn ?? end - secondsToTicks(threshold.riseSeconds ?? 0);
             phase.ambientNext = end;
             state.windup = undefined;
             state.chain = undefined;
@@ -6124,6 +6166,10 @@ export class Sim {
         if (this.runOver) {
             return;
         }
+        this.stepSong();
+        if (this.runOver) {
+            return;
+        }
         this.stepHold();
         this.stepEmitters();
         this.stepBullets();
@@ -6663,6 +6709,14 @@ export class Sim {
         }
         this.stepColours(enemy);
         this.stepStare(enemy);
+        // A song's phrases are its beat's (stepSong): it only keeps up with the players, not
+        // while it's standing for one of them
+        if (def.song) {
+            if (def.leash && distance > def.leash.distance && this.tick >= state.channelEnd) {
+                this.leashBoss(enemy, def.leash);
+            }
+            return;
+        }
         const windup = state.windup;
         if (windup) {
             if (this.tick >= windup.landTick) {
@@ -7239,7 +7293,858 @@ export class Sim {
     // A press a moment too soon (the button still charging, or the boss just out of reach) is
     // held for ABILITY_BUFFER_SECONDS and goes off as soon as it can, rather than lost; one that
     // couldn't in that time says no. Whether it went off, or is held.
-    useAbility(): boolean {
+    // ---- A song (BossDef.song, core/song.ts): its beat clock, phrases, Toll and Grace ----
+
+    // The song's def, while there's a song
+    private get songDef(): SongDef | undefined {
+        return this.song ? this.songBossDef?.boss?.song : undefined;
+    }
+
+    // Its beat clock starts with its entrance: the music's first beat is beat 0
+    private startSong(def: EnemyDef): void {
+        const song = def.boss!.song!;
+        const features = this.map.features;
+        const ticksPerBeat = song.phases[0].ticksPerBeat;
+        this.songBossDef = def;
+        this.song = {
+            startTick: this.tick,
+            beat: 0,
+            beatTick: this.tick,
+            nextTick: this.tick + ticksPerBeat,
+            ticksPerBeat,
+            barBeat: 0,
+            recent: [{ index: 0, tick: this.tick }],
+            voiceFree: 0,
+            arenaFree: 0,
+            phase: 0,
+            playing: false,
+            phrases: [],
+            notes: [],
+            nextId: 1,
+            bells: (features?.bells ?? []).map(() => ({
+                liftTick: -1,
+                strikeTick: -1,
+                humFrom: -1,
+                humTo: -2,
+                round: -1,
+                rung: false,
+            })),
+            singing: (features?.choir ?? []).map(() => -1),
+            discordRound: -1,
+            reflection: false,
+        };
+        this.songOpener = song.phases[0].opener;
+        for (const hero of this.heroes) {
+            hero.song = {
+                resonance: 0,
+                lastBeat: -1,
+                graceEnd: -1,
+                graces: 0,
+                tolls: 0,
+                onBeat: 0,
+                ringBacks: 0,
+                silenced: 0,
+            };
+        }
+        this.emit({ type: "songBeat", beat: 0, inBar: 0, ticksPerBeat });
+    }
+
+    // The song's tick: its beat, its phrases' counts, what lands, and its rest
+    private stepSong(): void {
+        const song = this.song;
+        const def = this.songDef;
+        if (!song || !def) {
+            return;
+        }
+        const boss = this.shownBoss;
+        const up =
+            boss !== undefined &&
+            !boss.dead &&
+            boss.def.boss?.song === def &&
+            this.victoryAt < 0 &&
+            !this.runOver;
+        if (!up) {
+            // Fallen: the clock goes on for the music, and nothing more lands
+            song.notes = [];
+            song.phrases = [];
+            song.rest = undefined;
+            song.playing = false;
+        }
+        if (this.tick >= song.nextTick) {
+            this.songBeat(song, def, up ? boss : undefined);
+        }
+        if (!up) {
+            return;
+        }
+        this.stepPhrases(song, boss);
+        this.stepNotes(song, boss);
+        if (this.runOver) {
+            return;
+        }
+        this.stepRest(song, boss);
+        song.phrases = song.phrases.filter((phrase) => this.tick < phrase.endTick);
+    }
+
+    // A beat: the bar turns over on every fourth, a new tempo comes in on its downbeat, and the
+    // lanes begin their phrases on a downbeat
+    private songBeat(song: SongState, def: SongDef, boss: Enemy | undefined): void {
+        song.beat++;
+        song.beatTick = this.tick;
+        if (song.beat - song.barBeat >= 4) {
+            song.barBeat = song.beat;
+        }
+        if (song.tempoAt && song.beat >= song.tempoAt.beat) {
+            song.ticksPerBeat = song.tempoAt.ticksPerBeat;
+            song.tempoAt = undefined;
+        }
+        song.nextTick = this.tick + song.ticksPerBeat;
+        song.recent.push({ index: song.beat, tick: this.tick });
+        if (song.recent.length > SONG_RECENT_BEATS) {
+            song.recent.shift();
+        }
+        const inBar = song.beat - song.barBeat;
+        this.emit({ type: "songBeat", beat: song.beat, inBar, ticksPerBeat: song.ticksPerBeat });
+        const phase = boss?.bossState?.phase;
+        // Its lanes play once it's up and between thresholds
+        song.playing =
+            boss !== undefined &&
+            !this.intro &&
+            phase?.pauseEnd === undefined &&
+            boss.risingEnd <= this.tick;
+        if (inBar === 0 && song.playing && boss) {
+            this.startLanes(song, def, boss);
+        }
+    }
+
+    // Each lane free on this downbeat begins a phrase: the phase's opener if it's this lane's,
+    // else one of the phase's, not the same as last time when there's another
+    private startLanes(song: SongState, def: SongDef, boss: Enemy): void {
+        const phaseDef = def.phases[Math.min(song.phase, def.phases.length - 1)];
+        const bands = this.map.features?.bands?.length ?? 0;
+        for (const lane of ["arena", "voice"] as const) {
+            const free = lane === "voice" ? song.voiceFree : song.arenaFree;
+            // Under the water (her leash's leap), she has no voice
+            if (song.beat < free || (lane === "voice" && boss.bossState?.leap)) {
+                continue;
+            }
+            const last = lane === "voice" ? song.lastVoice : song.lastArena;
+            let phraseDef: SongPhraseDef | undefined;
+            const opener = this.songOpener && def.phrases.find((p) => p.name === this.songOpener);
+            if (opener && phraseLane(opener) === lane) {
+                phraseDef = opener;
+                this.songOpener = undefined;
+            } else {
+                const choices = def.phrases.filter(
+                    (p) =>
+                        phraseLane(p) === lane &&
+                        p.weight > 0 &&
+                        p.phases.includes(song.phase + 1) &&
+                        this.canPlayPhrase(p),
+                );
+                const fresh = choices.filter((p) => p.name !== last);
+                const pool = fresh.length > 0 ? fresh : choices;
+                if (pool.length === 0) {
+                    continue;
+                }
+                phraseDef = pool[this.rng.weightedIndex(pool.map((p) => p.weight))];
+            }
+            if (!phraseDef) {
+                continue;
+            }
+            const canon = phaseDef.canon === true && lane === "voice";
+            this.startPhrase(song, phraseDef, boss, canon);
+            const rest = Math.floor(phaseDef.rest[lane] * (this.hard ? HARD_BOSS_INTERVAL : 1));
+            const beats = phraseBeats(phraseDef, bands, canon) + rest;
+            const next = song.beat + Math.ceil(beats / 4) * 4;
+            if (lane === "voice") {
+                song.voiceFree = next;
+                song.lastVoice = phraseDef.name;
+            } else {
+                song.arenaFree = next;
+                song.lastArena = phraseDef.name;
+            }
+        }
+    }
+
+    // Whether the arena has what a phrase needs
+    private canPlayPhrase(def: SongPhraseDef): boolean {
+        const features = this.map.features;
+        switch (def.kind) {
+            case "bells":
+                return (features?.bells?.length ?? 0) > 0;
+            case "psalm":
+                return (features?.bands?.length ?? 0) > 0 && features?.nave !== undefined;
+            case "harmony":
+                return (features?.choir?.length ?? 0) >= 4;
+            default:
+                return true;
+        }
+    }
+
+    // A phrase, from this downbeat: what it lands as is laid out now (an echo's marks as its
+    // beats come), each part shown from its own count
+    private startPhrase(song: SongState, def: SongPhraseDef, boss: Enemy, canon: boolean): void {
+        const tpb = song.ticksPerBeat;
+        const start = this.tick;
+        const bands = this.map.features?.bands?.length ?? 0;
+        const phrase: SongPhrase = {
+            id: song.nextId++,
+            def,
+            startTick: start,
+            startBeat: song.beat,
+            ticksPerBeat: tpb,
+            endTick: start + (phraseBeats(def, bands, canon) + 2) * tpb,
+            canon,
+            graced: 0,
+            x: boss.x,
+            y: boss.y,
+        };
+        song.phrases.push(phrase);
+        song.reflection = canon;
+        const state = boss.bossState!;
+        const axis = this.songAxis();
+        switch (def.kind) {
+            case "clap": {
+                const land = start + 3 * tpb;
+                const half = halfBeat(tpb);
+                const clap: SongShape = {
+                    kind: "circle",
+                    x: boss.x,
+                    y: boss.y,
+                    r: def.radius ?? 3,
+                };
+                const parts: { shape: SongShape; land: number; damage: number }[] = [
+                    { shape: clap, land, damage: def.damage },
+                ];
+                const double = def.double;
+                if (double) {
+                    parts.push({
+                        shape: {
+                            kind: "ring",
+                            x: boss.x,
+                            y: boss.y,
+                            r0: def.radius ?? 3,
+                            r1: double.to,
+                        },
+                        land: land + half,
+                        damage: double.damage,
+                    });
+                }
+                for (const part of parts) {
+                    this.addNote(song, phrase, part.shape, start, start, 3, part.land, 1, {
+                        damage: part.damage,
+                    });
+                    if (canon && axis !== undefined) {
+                        const bar = 4 * tpb;
+                        this.addNote(
+                            song,
+                            phrase,
+                            mirrorShape(part.shape, axis),
+                            start + bar,
+                            start + bar,
+                            3,
+                            part.land + bar,
+                            1,
+                            { damage: part.damage, canon: true },
+                        );
+                    }
+                }
+                // She stands for it, her clap timed to land on the beat
+                state.channelEnd = Math.max(state.channelEnd, land + (double ? half : 0));
+                this.playSongSeq(boss, def, land);
+                break;
+            }
+            case "echo":
+                // Its marks are laid as its beats come (stepPhrases)
+                break;
+            case "bells": {
+                const bells = this.map.features?.bells ?? [];
+                let order: number[][];
+                const indices = bells.map((_, i) => i);
+                if (def.order === "shuffled" || def.order === "pairs") {
+                    for (let i = indices.length - 1; i > 0; i--) {
+                        const j = this.rng.int(i + 1);
+                        [indices[i], indices[j]] = [indices[j], indices[i]];
+                    }
+                }
+                if (def.order === "pairs") {
+                    order = [];
+                    for (let i = 0; i < indices.length; i += 2) {
+                        order.push(indices.slice(i, i + 2));
+                    }
+                } else {
+                    order = indices.map((i) => [i]);
+                }
+                phrase.order = order;
+                const hum = this.songDef?.toll.ringBack.hum ?? 2;
+                order.forEach((group, k) => {
+                    const lift = start + k * tpb;
+                    const strike = lift + 4 * tpb;
+                    const strikeBeat = song.beat + 4 + k;
+                    for (const index of group) {
+                        const bell = song.bells[index];
+                        bell.liftTick = lift;
+                        bell.strikeTick = strike;
+                        bell.humFrom = strikeBeat + 1;
+                        bell.humTo = strikeBeat + hum;
+                        bell.round = phrase.id;
+                        bell.rung = false;
+                        const middle = statueMiddle(bells[index]);
+                        this.addNote(
+                            song,
+                            phrase,
+                            { kind: "circle", x: middle.x, y: middle.y, r: def.radius ?? 4.5 },
+                            lift,
+                            lift,
+                            4,
+                            strike,
+                            1,
+                            { damage: def.damage, bell: index },
+                        );
+                    }
+                });
+                break;
+            }
+            case "psalm": {
+                const features = this.map.features!;
+                const nave = features.nave!;
+                const bandList = features.bands!;
+                const count = bandList.length;
+                for (let i = 0; i < count; i++) {
+                    const waves = def.both && count - 1 - i !== i ? [i, count - 1 - i] : [i];
+                    for (const index of waves) {
+                        const band = bandList[index];
+                        const land = start + (4 + i) * tpb;
+                        // The first band foams the bar before; each band's warned two beats
+                        const shown = i === 0 ? start : land - 2 * tpb;
+                        this.addNote(
+                            song,
+                            phrase,
+                            {
+                                kind: "box",
+                                x0: nave.x0,
+                                y0: band.y0,
+                                x1: nave.x1 + 1,
+                                y1: band.y1 + 1,
+                            },
+                            shown,
+                            land - 2 * tpb,
+                            2,
+                            land,
+                            PSALM_SURGE_TICKS,
+                            { damage: def.damage },
+                        );
+                    }
+                }
+                break;
+            }
+            case "silence": {
+                const still = def.still ?? { tolerance: 0.15, grace: 4 };
+                song.rest = {
+                    phrase: phrase.id,
+                    fromTick: start + 3 * tpb + still.grace,
+                    untilTick: start + 4 * tpb,
+                    tolerance: still.tolerance,
+                    damage: def.damage,
+                    from: this.heroes.map(() => undefined),
+                    struck: 0,
+                };
+                // The choir sings a stall at a time, swelling into the rest, and she stands
+                const choir = this.map.features?.choir ?? [];
+                choir.forEach((soul, i) => {
+                    const row = choir.filter((s) => s.side === soul.side && s.y < soul.y).length;
+                    song.singing[i] = Math.max(song.singing[i], start + Math.min(row + 1, 3) * tpb);
+                });
+                state.channelEnd = Math.max(state.channelEnd, start + 4 * tpb);
+                this.playSongSeq(boss, def, start);
+                break;
+            }
+            case "harmony": {
+                const choir = this.map.features?.choir ?? [];
+                const choices = harmonyChoices(choir, def.lines ?? 1);
+                if (choices.length === 0) {
+                    break;
+                }
+                const lines = choices[this.rng.int(choices.length)];
+                phrase.souls = lines;
+                const land = start + 4 * tpb;
+                for (const [a, b] of lines) {
+                    const from = choir[a];
+                    const to = choir[b];
+                    const shape: SongShape = {
+                        kind: "strip",
+                        ax: from.x + 0.5,
+                        ay: from.y + 0.5,
+                        bx: to.x + 0.5,
+                        by: to.y + 0.5,
+                        width: def.width ?? 1.5,
+                    };
+                    this.addNote(song, phrase, shape, start, start, 4, land, 1, {
+                        damage: def.damage,
+                    });
+                    song.singing[a] = Math.max(song.singing[a], land);
+                    song.singing[b] = Math.max(song.singing[b], land);
+                    if (canon && axis !== undefined) {
+                        const bar = 4 * tpb;
+                        this.addNote(
+                            song,
+                            phrase,
+                            mirrorShape(shape, axis),
+                            start + bar,
+                            start + bar,
+                            4,
+                            land + bar,
+                            1,
+                            { damage: def.damage, canon: true },
+                        );
+                    }
+                }
+                this.playSongSeq(boss, def, land);
+                break;
+            }
+        }
+        if (def.shout) {
+            this.emit({ type: "bossShout", enemyUid: boss.uid, text: def.shout });
+        }
+        this.emit({
+            type: "songPhrase",
+            name: def.name,
+            kind: def.kind,
+            sound: def.sound ?? -1,
+            x: boss.x,
+            y: boss.y,
+        });
+    }
+
+    // The north-south line the canon mirrors about
+    private songAxis(): number | undefined {
+        const features = this.map.features;
+        if (features?.axis !== undefined) {
+            return features.axis;
+        }
+        const nave = features?.nave;
+        return nave ? (nave.x0 + nave.x1 + 1) / 2 : undefined;
+    }
+
+    // Her animation for a phrase, its blow (strikeAt seconds in) at the tick it lands: started
+    // partway if the count's shorter than that
+    private playSongSeq(boss: Enemy, def: SongPhraseDef, land: number): void {
+        if (def.seq === undefined) {
+            return;
+        }
+        boss.anim = "attack";
+        boss.attackSeq = def.seq;
+        boss.animStart = land - secondsToTicks(def.strikeAt ?? 0);
+    }
+
+    private addNote(
+        song: SongState,
+        phrase: SongPhrase,
+        shape: SongShape,
+        shownTick: number,
+        countFrom: number,
+        steps: number,
+        landTick: number,
+        hurtTicks: number,
+        extra: { damage: number; canon?: boolean; bell?: number },
+    ): void {
+        const def = phrase.def;
+        song.notes.push({
+            id: song.nextId++,
+            phrase: phrase.id,
+            name: def.name,
+            shape,
+            shownTick,
+            countFrom,
+            steps,
+            landTick,
+            hurtTicks,
+            damage: extra.damage,
+            inside: 0,
+            hit: 0,
+            canon: extra.canon === true,
+            ...(extra.bell !== undefined && { bell: extra.bell }),
+            ...(def.spot && { spot: def.spot }),
+            ...(def.gap !== undefined && { gap: def.gap }),
+            ...(def.landSound !== undefined && { sound: def.landSound }),
+        });
+    }
+
+    // What a phrase does on its beats once it's begun: an echo's marks, where each player stands
+    private stepPhrases(song: SongState, boss: Enemy): void {
+        for (const phrase of song.phrases) {
+            const def = phrase.def;
+            if (def.kind !== "echo") {
+                continue;
+            }
+            const tpb = phrase.ticksPerBeat;
+            const since = this.tick - phrase.startTick;
+            if (since < 0 || since % tpb !== 0 || since / tpb >= 4) {
+                continue;
+            }
+            const land = this.tick + 4 * tpb + (def.offbeat ? halfBeat(tpb) : 0);
+            const axis = this.songAxis();
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const shape: SongShape = {
+                    kind: "circle",
+                    x: player.x,
+                    y: player.y,
+                    r: def.radius ?? 1,
+                };
+                this.addNote(song, phrase, shape, this.tick, this.tick, 4, land, 1, {
+                    damage: def.damage,
+                });
+                if (phrase.canon && axis !== undefined) {
+                    const bar = 4 * tpb;
+                    this.addNote(
+                        song,
+                        phrase,
+                        mirrorShape(shape, axis),
+                        this.tick + bar,
+                        this.tick + bar,
+                        4,
+                        land + bar,
+                        1,
+                        { damage: def.damage, canon: true },
+                    );
+                }
+                if (def.countSound !== undefined) {
+                    this.emit({
+                        type: "bossAttack",
+                        enemyId: boss.def.id,
+                        sound: def.countSound,
+                        x: player.x,
+                        y: player.y,
+                    });
+                }
+            });
+        }
+    }
+
+    // Each part as its last beat begins (who's in it, for a Grace) and as it lands
+    private stepNotes(song: SongState, boss: Enemy): void {
+        const tick = this.tick;
+        let done = false;
+        for (const note of song.notes) {
+            const phrase = song.phrases.find((p) => p.id === note.phrase);
+            const tpb = phrase?.ticksPerBeat ?? song.ticksPerBeat;
+            if (tick === note.landTick - tpb) {
+                note.inside = this.heroesIn(note.shape);
+            }
+            if (tick < note.landTick || tick >= note.landTick + note.hurtTicks) {
+                continue;
+            }
+            if (tick === note.landTick) {
+                this.showNote(note);
+            }
+            this.forEachHeroInReach(() => {
+                const hero = this.hero;
+                const bit = 1 << hero.index;
+                if (
+                    note.hit & bit ||
+                    !inShape(note.shape, this.player.x, this.player.y, PLAYER_RADIUS)
+                ) {
+                    return;
+                }
+                note.hit |= bit;
+                this.songHit(boss, note.name, note.damage);
+            });
+            if (this.runOver) {
+                return;
+            }
+            if (tick === note.landTick + note.hurtTicks - 1) {
+                done = true;
+                // Out on the last count, and missed: in time
+                const missed = note.inside & ~note.hit;
+                if (missed && phrase) {
+                    for (const hero of this.heroes) {
+                        if (missed & (1 << hero.index) && this.isUp(hero)) {
+                            this.as(hero.index, () => this.songGrace(song, phrase));
+                        }
+                    }
+                }
+            }
+        }
+        if (done) {
+            song.notes = song.notes.filter((note) => tick < note.landTick + note.hurtTicks - 1);
+        }
+    }
+
+    // The heroes (a bit each) up and touching a shape
+    private heroesIn(shape: SongShape): number {
+        let mask = 0;
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            if (this.isUp(hero) && inShape(shape, player.x, player.y, PLAYER_RADIUS)) {
+                mask |= 1 << hero.index;
+            }
+        }
+        return mask;
+    }
+
+    // What a part throws up where it lands: a splash at its middle, or along its band or line
+    private showNote(note: SongNote): void {
+        if (!note.spot) {
+            return;
+        }
+        for (const spot of shapeSpots(note.shape, note.gap ?? 3)) {
+            this.addImpactSpot(note.spot, spot.x, spot.y);
+        }
+    }
+
+    // A song's hit on the current hero, as one of its attacks
+    private songHit(boss: Enemy, name: string, damage: number): void {
+        let attack = this.songAttacks.get(name);
+        if (!attack) {
+            const phrase = boss.def.boss?.song?.phrases.find((p) => p.name === name);
+            attack = {
+                name,
+                kind: "ground",
+                damage,
+                windup: 0,
+                cooldown: 0,
+                range: 999,
+                weight: 0,
+                phases: [],
+                ...(phrase?.hitSound !== undefined && { hitSound: phrase.hitSound }),
+            };
+            this.songAttacks.set(name, attack);
+        }
+        this.bossHit(boss.def.id, boss, attack, damage * boss.damageScale, false);
+    }
+
+    // Stepped out on the last count: more Resonance, and further reach for a bar (once a phrase)
+    private songGrace(song: SongState, phrase: SongPhrase): void {
+        const hero = this.hero;
+        const heroSong = hero.song;
+        const def = this.songDef;
+        const bit = 1 << hero.index;
+        if (!heroSong || !def || phrase.graced & bit) {
+            return;
+        }
+        phrase.graced |= bit;
+        const grace = def.toll.grace;
+        heroSong.resonance = Math.min(def.toll.maxResonance, heroSong.resonance + grace.resonance);
+        heroSong.graceEnd = this.tick + grace.bars * 4 * song.ticksPerBeat;
+        heroSong.graces++;
+        const player = this.player;
+        this.emit({ type: "songGrace", x: player.x, y: player.y });
+    }
+
+    // Silence's rest: whoever moves in it is struck, once
+    private stepRest(song: SongState, boss: Enemy): void {
+        const rest = song.rest;
+        if (!rest) {
+            return;
+        }
+        if (this.tick >= rest.untilTick) {
+            song.rest = undefined;
+            return;
+        }
+        if (this.tick < rest.fromTick) {
+            return;
+        }
+        if (this.tick === rest.fromTick) {
+            for (const hero of this.heroes) {
+                rest.from[hero.index] = { x: hero.player.x, y: hero.player.y };
+            }
+            return;
+        }
+        this.forEachHeroInReach(() => {
+            const hero = this.hero;
+            const from = rest.from[hero.index];
+            const bit = 1 << hero.index;
+            const player = this.player;
+            if (
+                !from ||
+                rest.struck & bit ||
+                fm.hypot(player.x - from.x, player.y - from.y) <= rest.tolerance
+            ) {
+                return;
+            }
+            rest.struck |= bit;
+            if (hero.song) {
+                hero.song.silenced++;
+            }
+            const phrase = song.phrases.find((p) => p.id === rest.phrase);
+            this.songHit(boss, phrase?.def.name ?? "Silence", rest.damage);
+        });
+    }
+
+    // A threshold on a song is a key change: the rest of this bar (and the next too, if it's less
+    // than half a bar) at the old tempo while she's under, a bar counted in at the new one, and up
+    // she comes on the downbeat. Returns the tick she's up, and when the count-in begins.
+    private songKeyChange(phaseIndex: number): { end: number; countIn: number } | undefined {
+        const song = this.song;
+        const def = this.songDef;
+        if (!song || !def) {
+            return undefined;
+        }
+        const old = song.ticksPerBeat;
+        const next = def.phases[Math.min(phaseIndex, def.phases.length - 1)];
+        let downBeat = song.barBeat + 4;
+        let downTick = song.beatTick + (downBeat - song.beat) * old;
+        if (downTick - this.tick < 2 * old) {
+            downBeat += 4;
+            downTick += 4 * old;
+        }
+        song.tempoAt = { beat: downBeat, ticksPerBeat: next.ticksPerBeat };
+        song.phase = phaseIndex;
+        song.playing = false;
+        song.voiceFree = song.arenaFree = downBeat + 4;
+        song.lastVoice = song.lastArena = undefined;
+        song.notes = [];
+        song.phrases = [];
+        song.rest = undefined;
+        song.reflection = false;
+        song.singing = song.singing.map(() => -1);
+        for (const bell of song.bells) {
+            bell.humTo = -2;
+        }
+        this.songOpener = next.opener;
+        return { end: downTick + 4 * next.ticksPerBeat, countIn: downTick };
+    }
+
+    // The fight's button on a song: Toll, judged on the beat at the tick it was pressed (a co-op
+    // guest's, a moment ago: at, no further back than lookBack)
+    private toll(at: number | undefined): boolean {
+        const song = this.song;
+        const def = this.songDef;
+        const hero = this.hero;
+        const heroSong = hero.song;
+        if (!song || !def || !heroSong || this.state !== "playing" || !this.isUp(hero)) {
+            return false;
+        }
+        const toll = def.toll;
+        const when = Math.min(this.tick, Math.max(this.tick - def.lookBack, at ?? this.tick));
+        const beat = beatAt(
+            [...song.recent, { index: song.beat + 1, tick: song.nextTick }],
+            when,
+            def.early,
+            def.late,
+        );
+        const player = this.player;
+        heroSong.tolls++;
+        if (beat === undefined) {
+            // Off the beat: a dull clunk, and their Resonance halves
+            heroSong.resonance = Math.floor(heroSong.resonance / 2);
+            this.emit({
+                type: "songToll",
+                onBeat: false,
+                damage: 0,
+                sound: toll.offSound,
+                x: player.x,
+                y: player.y,
+            });
+            return true;
+        }
+        // A second press in a beat's window is let go
+        if (beat <= heroSong.lastBeat) {
+            return true;
+        }
+        heroSong.lastBeat = beat;
+        heroSong.onBeat++;
+        if (toll.playerSeq !== undefined) {
+            player.attackSeq = toll.playerSeq;
+            player.attackStart = this.tick;
+        }
+        const boss = this.songTarget();
+        // A bell humming on this beat, near enough: rung back
+        const bells = this.map.features?.bells ?? [];
+        const bellIndex = song.bells.findIndex((bell, i) => {
+            if (bell.rung || beat < bell.humFrom || beat > bell.humTo || !bells[i]) {
+                return false;
+            }
+            const middle = statueMiddle(bells[i]);
+            return (
+                fm.hypot(player.x - middle.x, player.y - middle.y) <=
+                toll.ringBack.reach + PLAYER_RADIUS
+            );
+        });
+        if (bellIndex >= 0 && boss) {
+            const bell = song.bells[bellIndex];
+            bell.rung = true;
+            const middle = statueMiddle(bells[bellIndex]);
+            const damage = toll.ringBack.damage + toll.ringBack.perResonance * heroSong.resonance;
+            heroSong.resonance = 0;
+            heroSong.ringBacks++;
+            if (toll.ringSpot) {
+                this.addImpactSpot(toll.ringSpot, middle.x, middle.y);
+                this.addImpactSpot(toll.ringSpot, boss.x, boss.y, boss.uid);
+            }
+            this.damageSource = "ability:ringback";
+            const dealt = this.damageEnemy(boss, damage, 0, middle.x, middle.y);
+            // Out of tune for a bar or so, once a round of the bells
+            if (song.discordRound !== bell.round && !boss.dead) {
+                song.discordRound = bell.round;
+                this.dropGuard(
+                    boss,
+                    (toll.discordBars * 4 * song.ticksPerBeat) / TICKS_PER_SECOND,
+                    false,
+                    "discord",
+                );
+            }
+            this.emit({
+                type: "songToll",
+                onBeat: true,
+                damage: dealt,
+                rung: bellIndex,
+                sound: toll.ringSound,
+                x: middle.x,
+                y: middle.y,
+            });
+            return true;
+        }
+        let dealt = 0;
+        if (boss && fm.hypot(boss.x - player.x, boss.y - player.y) <= this.tollReach(hero)) {
+            const damage = toll.damage + toll.perResonance * heroSong.resonance;
+            heroSong.resonance = Math.min(toll.maxResonance, heroSong.resonance + 1);
+            this.damageSource = "ability:toll";
+            dealt = this.damageEnemy(boss, damage, 0, player.x, player.y);
+        }
+        this.emit({
+            type: "songToll",
+            onBeat: true,
+            damage: dealt,
+            sound: toll.sound,
+            x: player.x,
+            y: player.y,
+        });
+        return true;
+    }
+
+    // How far a hero's Toll reaches now: further for a bar after a Grace
+    tollReach(hero: Hero = this.hero): number {
+        const toll = this.songDef?.toll;
+        if (!toll) {
+            return 0;
+        }
+        return this.tick < (hero.song?.graceEnd ?? -1) ? toll.grace.reach : toll.reach;
+    }
+
+    // The song's boss, when a Toll can reach it: up, and not kneeling or under the water
+    private songTarget(): Enemy | undefined {
+        const boss = this.shownBoss;
+        if (
+            !boss ||
+            boss.dead ||
+            !boss.def.boss?.song ||
+            this.intro ||
+            boss.bossState?.leap ||
+            boss.shieldEnd > this.tick
+        ) {
+            return undefined;
+        }
+        return boss;
+    }
+
+    // The fight's button (MapDef.fight.ability). On a song it's judged on the beat at the tick it
+    // was pressed (at, a co-op guest's frame), else held a moment if it can't go off yet.
+    useAbility(at?: number): boolean {
+        if (this.song) {
+            return this.toll(at);
+        }
         const ability = this.map.fight?.ability;
         const hero = this.hero;
         if (!ability || this.state !== "playing" || !this.isUp(hero)) {
@@ -7326,6 +8231,13 @@ export class Sim {
 
     // What the fight's button would land on now: the boss, up, in reach of the current hero
     abilityTarget(ability = this.map.fight?.ability): Enemy | undefined {
+        if (this.song) {
+            const target = this.songTarget();
+            const player = this.player;
+            return target && fm.hypot(target.x - player.x, target.y - player.y) <= this.tollReach()
+                ? target
+                : undefined;
+        }
         const boss = this.shownBoss;
         const state = boss?.bossState;
         if (!ability || !boss || !state || boss.dead || this.intro || state.leap) {

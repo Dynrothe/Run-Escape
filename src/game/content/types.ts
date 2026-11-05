@@ -1072,6 +1072,111 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Fought to a beat (the Bell Choir's): its attacks are phrases on a beat clock, and the
+    // players hurt it by keeping time (SongDef). Its attacks list and attackInterval go unused.
+    song?: SongDef;
+};
+
+// A fight that's a song (the Bell Choir: docs/design/the-bell-choir.md). A beat clock runs from
+// the boss's entrance, four beats to the bar, each phase at its own tempo (whole ticks a beat). The
+// boss's attacks are phrases begun on a bar's downbeat: each is counted in on beats and lands on a
+// beat or the half beat after one, warned on the ground a step a beat. At most one of its voice's
+// phrases and one of its arena's run at once. The players hurt it only with the fight's button on
+// the beat (SongTollDef), and stepping out of an attack on its last count is a Grace.
+export type SongDef = {
+    phases: SongPhaseDef[];
+    // A press counts for a beat from early ticks before it to late ticks after
+    early: number;
+    late: number;
+    // A co-op guest's press is judged at the tick they pressed it on (the ability action's at),
+    // at most this many ticks back
+    lookBack: number;
+    phrases: SongPhraseDef[];
+    toll: SongTollDef;
+    // Its animations: the threshold's sink and rise are BossPhasesDef.threshold's
+    idleSeq?: number;
+};
+
+// A phase's tempo, and the beats each lane rests after a phrase before its next can begin (on the
+// next downbeat after that). opener: the phrase (by name) the phase begins with, in its lane.
+// canon: the boss's reflection repeats its voice's phrases a bar later, mirrored about the
+// arena's axis (ArenaFeatures.axis).
+export type SongPhaseDef = {
+    ticksPerBeat: number;
+    rest: { voice: number; arena: number };
+    opener?: string;
+    canon?: boolean;
+};
+
+// What a phrase is: clap (a circle round the boss, on beat 4), echo (a mark where each player
+// stands on each beat of a bar, each landing a bar later), bells (the arena's great bells lifted a
+// bar, then struck in turn round each, then humming to be rung back), psalm (a surge down the
+// arena's bands, one a beat), silence (beat 4 a rest that hurts whoever moves in it) and harmony
+// (the line between two of the choir)
+export type SongPhraseKind = "clap" | "echo" | "bells" | "psalm" | "silence" | "harmony";
+
+export type SongPhraseDef = {
+    name: string;
+    kind: SongPhraseKind;
+    // In which phases (1-based) it's picked, and how likely
+    phases: number[];
+    weight: number;
+    damage: number;
+    // clap: round the boss's middle; echo: each mark; bells: round each bell's middle
+    radius?: number;
+    // harmony: the line's width
+    width?: number;
+    // clap: a second clap on the half beat after, over the ring from radius to `to`
+    double?: { to: number; damage: number };
+    // echo: each mark lands on the half beat after its beat
+    offbeat?: boolean;
+    // bells: in the map's order, shuffled, or two at a time
+    order?: "fixed" | "shuffled" | "pairs";
+    // psalm: from both ends at once, meeting in the middle
+    both?: boolean;
+    // harmony: how many lines at once (that never cross)
+    lines?: number;
+    // silence: how far a player can move in the rest, and how many ticks after its beat it starts
+    still?: { tolerance: number; grace: number };
+    // The boss's animation as it begins, with its blow strikeAt seconds in landing with the hit
+    // (started partway when the count's shorter)
+    seq?: number;
+    strikeAt?: number;
+    // Heard as it begins (and on each of its counts, for echo and bells), as each part lands,
+    // and by whoever it hits
+    sound?: number;
+    countSound?: number;
+    landSound?: number;
+    hitSound?: number;
+    // What each part throws up where it lands, and along a band or line every `gap` tiles
+    spot?: ImpactSpotDef;
+    gap?: number;
+    shout?: string;
+};
+
+// The fight's button on a song (the Bell Choir's Toll): on the beat within reach of the boss's
+// middle, it takes damage + perResonance x the player's Resonance, and they gain one (up to max).
+// Off the beat their Resonance halves, and a hit on them takes hitCost. Within ringBack.reach of
+// a bell humming (the beats after it's struck) it's rung back instead: the bell's damage +
+// perResonance x Resonance, Resonance gone, and the boss's guard down (BossDef.guard) for
+// discordBars bars, once a round of the bells. A Grace (stepping out on an attack's last count)
+// gives grace.resonance and grace.reach for grace.bars.
+export type SongTollDef = {
+    reach: number;
+    damage: number;
+    perResonance: number;
+    maxResonance: number;
+    hitCost: number;
+    ringBack: { reach: number; damage: number; perResonance: number; hum: number };
+    discordBars: number;
+    grace: { resonance: number; reach: number; bars: number };
+    // On the beat, off it (a dull clunk), and ringing a bell back
+    sound: number;
+    offSound: number;
+    ringSound: number;
+    // Rung back: what runs over the water to the boss
+    ringSpot?: ImpactSpotDef;
+    playerSeq?: number;
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -1082,6 +1187,8 @@ export type BossDef = {
 // the player stays on the screen.
 export type BossLookDef = {
     lean?: boolean;
+    // The tint its guard down is drawn with (gold unless set)
+    exposedTint?: number;
     title?: string;
     subtitle?: string;
     edge?: string | null;
@@ -1117,6 +1224,15 @@ export type ArenaFeatures = {
     rise?: { x: number; y: number };
     // Other statues an attack animates, by group (BossAttackDef.statues group)
     statues?: Record<string, ArenaStatue[]>;
+    // A song's arena (BossDef.song): the great bells (south-west tile, size; struck and rung
+    // back), the tenor that keeps the beat, the choir (side -1 west, 1 east), the box its bands
+    // run across, the bands north to south (tile rows y0 to y1), and the line it mirrors about
+    bells?: ArenaStatue[];
+    tenor?: ArenaStatue;
+    choir?: { x: number; y: number; side: -1 | 1 }[];
+    nave?: { x0: number; y0: number; x1: number; y1: number };
+    bands?: { y0: number; y1: number }[];
+    axis?: number;
 };
 
 // How a character fights, for the weapons only their class can find

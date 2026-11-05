@@ -1660,7 +1660,8 @@ export class GameClient implements GameFrameHandler {
         if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
             return;
         }
-        this.act({ kind: "ability" });
+        // The tick it's pressed on: a song judges its beat by it, wherever the press arrives
+        this.act({ kind: "ability", at: sim.tick });
     }
 
     // The opening animation's sounds, timed by the UI

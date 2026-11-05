@@ -20,8 +20,9 @@ export type CoopAction =
     // A random event's offer: take one of its options, or walk away
     | { kind: "event"; index: number }
     | { kind: "leaveEvent" }
-    // The fight's button (MapDef.fight.ability)
-    | { kind: "ability" };
+    // The fight's button (MapDef.fight.ability); at: the tick it was pressed on, as the presser
+    // saw it, for a song's beat (Sim.useAbility clamps how far back)
+    | { kind: "ability"; at?: number };
 
 // Something that happens to a hero just before frame `frame` is stepped:
 // what they're pressing now (as whole numbers, -127 to 127), what they did,
@@ -51,7 +52,7 @@ export function cleanAction(value: unknown): CoopAction | undefined {
     if (!value || typeof value !== "object") {
         return undefined;
     }
-    const { kind, index, action } = value as Record<string, unknown>;
+    const { kind, index, action, at } = value as Record<string, unknown>;
     const isIndex = typeof index === "number" && Number.isInteger(index) && index >= 0;
     switch (kind) {
         case "choose":
@@ -63,8 +64,11 @@ export function cleanAction(value: unknown): CoopAction | undefined {
         case "skip":
         case "banishChest":
         case "leaveEvent":
-        case "ability":
             return { kind };
+        case "ability":
+            return Number.isSafeInteger(at) && (at as number) >= 0
+                ? { kind, at: at as number }
+                : { kind };
         case "chest":
             return CHEST_ACTIONS.includes(action as ChestAction)
                 ? { kind, action: action as ChestAction }
@@ -198,7 +202,7 @@ export function applyAction(sim: Sim, action: CoopAction): boolean {
             sim.leaveEvent();
             return true;
         case "ability":
-            return sim.useAbility();
+            return sim.useAbility(action.at);
     }
 }
 
