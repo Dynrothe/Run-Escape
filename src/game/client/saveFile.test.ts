@@ -76,29 +76,42 @@ describe("saveFile", () => {
         expect(share).not.toHaveBeenCalled();
     });
 
+    test("counts a download as kept as soon as it starts, as the browser can't say", () => {
+        const kept = vi.fn();
+        saveFile(NAME, "{}", "application/json", kept);
+        expect(downloaded).toEqual([NAME]);
+        expect(kept).toHaveBeenCalledTimes(1);
+    });
+
     test("uses the share sheet when installed on iOS", async () => {
         const share = installedOnIos(async () => {});
-        saveFile(NAME, "{}", "application/json");
-        await Promise.resolve();
+        const kept = vi.fn();
+        saveFile(NAME, "{}", "application/json", kept);
+        await new Promise((resolve) => setTimeout(resolve));
         expect(share).toHaveBeenCalledTimes(1);
         const [file] = share.mock.calls[0][0].files;
         expect(file.name).toBe(NAME);
         expect(file.type).toBe("application/json");
         expect(downloaded).toEqual([]);
+        expect(kept).toHaveBeenCalledTimes(1);
     });
 
-    test("closing the share sheet doesn't start a download", async () => {
+    test("closing the share sheet doesn't start a download, or count as kept", async () => {
         installedOnIos(() => Promise.reject(new DOMException("Closed", "AbortError")));
-        saveFile(NAME, "{}", "application/json");
+        const kept = vi.fn();
+        saveFile(NAME, "{}", "application/json", kept);
         await new Promise((resolve) => setTimeout(resolve));
         expect(downloaded).toEqual([]);
+        expect(kept).not.toHaveBeenCalled();
     });
 
     test("falls back to a download when sharing fails", async () => {
         installedOnIos(() => Promise.reject(new DOMException("No", "NotAllowedError")));
-        saveFile(NAME, "{}", "application/json");
+        const kept = vi.fn();
+        saveFile(NAME, "{}", "application/json", kept);
         await new Promise((resolve) => setTimeout(resolve));
         expect(downloaded).toEqual([NAME]);
+        expect(kept).toHaveBeenCalledTimes(1);
     });
 
     test("falls back to a download when the file can't be shared", () => {
@@ -113,5 +126,44 @@ describe("saveFile", () => {
         setNavigator({ standalone: true });
         saveFile(NAME, "{}", "application/json");
         expect(downloaded).toEqual([NAME]);
+    });
+
+    test("hands the file, with its name, to the Android app", () => {
+        const postMessage = vi.fn();
+        vi.stubGlobal("NativeDownloads", { postMessage });
+        try {
+            saveFile("run-escape-save-unreadable.json", '{"coins":5}', "application/json");
+            expect(JSON.parse(postMessage.mock.calls[0][0])).toEqual({
+                name: "run-escape-save-unreadable.json",
+                text: '{"coins":5}',
+            });
+            expect(downloaded).toEqual([]);
+            expect(URL.createObjectURL).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    test("counts the app's file as kept only once the app says it's written", () => {
+        const app = {
+            postMessage: vi.fn(),
+            onmessage: null as ((e: { data: unknown }) => void) | null,
+        };
+        vi.stubGlobal("NativeDownloads", app);
+        try {
+            const kept = vi.fn();
+            saveFile(NAME, "{}", "application/json", kept);
+            // Picked nowhere yet, or cancelled: the app says nothing
+            expect(kept).not.toHaveBeenCalled();
+            app.onmessage!({ data: "something else" });
+            expect(kept).not.toHaveBeenCalled();
+            app.onmessage!({ data: "saved" });
+            expect(kept).toHaveBeenCalledTimes(1);
+            // Only the once
+            app.onmessage!({ data: "saved" });
+            expect(kept).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 });

@@ -148,4 +148,4 @@ A change to a map's collision (a ScapeRune map rebuilt, a prop moved, a wall ope
 seed on it, so before and after aren't matched any more. Compare tuning on a map that hasn't changed,
 or over 6 to 12 seeds rather than 1 to 3.
 
-For a repeatable attack-level comparison, run `npx tsx scripts/game/measure-weapon-dps.ts`.
+For a repeatable attack-level comparison, run `bun run tsx scripts/game/measure-weapon-dps.ts`.

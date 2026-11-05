@@ -2,7 +2,7 @@
 // the client's own noise, and which locs stand on steep ground, so a region's rock kit can be
 // read off. Saves a summary.
 //
-//   npx tsx scripts/scaperune/research/survey.ts out.json
+//   bun run tsx scripts/scaperune/research/survey.ts out.json
 import fs from "node:fs";
 
 import { BIOMES } from "../../../src/game/scaperune/biomes";

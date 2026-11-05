@@ -2,9 +2,9 @@
 // change meant to leave a map alone can prove it did. Shipped maps mustn't move: CHECK=1 holds
 // each one to its hash below, and generator.test.ts runs that when the cache is there.
 //
-//   npx tsx scripts/scaperune/grid-hash.ts halloween [scaperune_ysmar ...]
-//   VERBOSE=1 npx tsx scripts/scaperune/grid-hash.ts halloween    # each square's too
-//   CHECK=1 npx tsx scripts/scaperune/grid-hash.ts                # every shipped map, against SHIPPED_HASHES
+//   bun run tsx scripts/scaperune/grid-hash.ts halloween [scaperune_ysmar ...]
+//   VERBOSE=1 bun run tsx scripts/scaperune/grid-hash.ts halloween    # each square's too
+//   CHECK=1 bun run tsx scripts/scaperune/grid-hash.ts                # every shipped map, against SHIPPED_HASHES
 import crypto from "node:crypto";
 
 import { SCAPERUNE_MAPS } from "../../src/game/scaperune/maps/shippedMaps";

@@ -5,6 +5,8 @@ export type DisplaySettings = {
     menuSpin: boolean;
     // The camera shakes a little when a boss's blow lands hard (ImpactDef.shake)
     screenShake: boolean;
+    // A countdown pie over each power-up on the ground (GameView.drawPickupTimers)
+    pickupTimers: boolean;
     // A run pauses when the window loses focus or the tab is hidden
     pauseOnBlur: boolean;
     // The quest tracker on the HUD is open (Q, or its title, opens and shuts it)
@@ -60,6 +62,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
     return {
         menuSpin: !reducedMotion,
         screenShake: !reducedMotion,
+        pickupTimers: true,
         pauseOnBlur: true,
         questTracker: true,
         damagePanel: false,
@@ -83,6 +86,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.screenShake === "boolean") {
                 settings.screenShake = data.screenShake;
+            }
+            if (typeof data.pickupTimers === "boolean") {
+                settings.pickupTimers = data.pickupTimers;
             }
             if (typeof data.pauseOnBlur === "boolean") {
                 settings.pauseOnBlur = data.pauseOnBlur;

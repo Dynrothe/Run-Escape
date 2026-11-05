@@ -3,9 +3,9 @@
 // not. Squares that touch are one place: it prints each place's squares and the box round them,
 // in world tiles, the biggest first.
 //
-//   npx tsx scripts/scaperune/world-index.ts world.json    # once
-//   npx tsx scripts/scaperune/find-place.ts world.json colour=red surface=0
-//   npx tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10
+//   bun run tsx scripts/scaperune/world-index.ts world.json    # once
+//   bun run tsx scripts/scaperune/find-place.ts world.json colour=red surface=0
+//   bun run tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10
 //
 // Options:
 //   colour=NAME    floor colour by name: red, brown, yellow, green, blue, purple, grey, white, black

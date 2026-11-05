@@ -24,10 +24,16 @@ export type PartyScale = {
     damage: number;
     // Multiplies the experience in enemies' bones
     xp: number;
-    // Multiplies the chance of an enemy dropping a casket, so there's gear
-    // enough for everyone
+    // Multiplies the chance of a casket from an ordinary kill (elites' and bosses' are as solo)
     caskets: number;
 };
+
+// A casket gives every player who's up an item of their own (Sim.openCasket), and a bigger
+// party's bigger crowd brings more kills, so ordinary kills drop fewer: 1 / (1 + this for each
+// player past the first). That leaves each player about as many items as solo, and the party
+// about as many casket coins. Elites' and bosses' caskets drop one a kill, as solo, so they're
+// left alone.
+const CASKETS_PER_PLAYER = 0.45;
 
 // Each player past the first adds this much of each (the experience, takes
 // it away)
@@ -36,7 +42,6 @@ const HP_PER_PLAYER = 0.5;
 const BOSS_HP_PER_PLAYER = 1.1;
 const DAMAGE_PER_PLAYER = 0.1;
 const XP_PER_PLAYER = -0.12;
-const CASKETS_PER_PLAYER = 0.2;
 
 // Bosses come as copies in co-op: a pair on normal mode, one for each player
 // on hard. Between them the copies have one boss's hitpoints and experience,
@@ -59,7 +64,7 @@ export function getPartyScale(players: number): PartyScale {
         bossHp: 1 + BOSS_HP_PER_PLAYER * extra,
         damage: 1 + DAMAGE_PER_PLAYER * extra,
         xp: 1 + XP_PER_PLAYER * extra,
-        caskets: 1 + CASKETS_PER_PLAYER * extra,
+        caskets: 1 / (1 + CASKETS_PER_PLAYER * extra),
     };
 }
 
