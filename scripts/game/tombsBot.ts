@@ -423,7 +423,7 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (sim.tick < shown + 5) {
             return stepOn(sim, { x: plate.x + 1, y: plate.y + 1 }, boards);
         }
-        return on === `sequence:${index}` ? stepOff(sim, plate) : stepOn(sim, plate, boards);
+        return on === `s${index}` ? stepOff(sim, plate) : stepOn(sim, plate, boards);
     }
     // Lights out: the fewest presses that light them all, nearest first
     if (!solved("lights")) {
@@ -438,7 +438,7 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (!next) {
             return { x: 0, y: 0 };
         }
-        return on === `lights:${next.i}`
+        return on === `l${next.i}`
             ? stepOff(sim, next.plate)
             : stepOn(sim, next.plate, boards);
     }
@@ -847,10 +847,12 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
             }
         }
     }
+    // His boulders are solid: round them, not into them
+    const boulders = sim.tombsCover.filter((c) => c.endTick > sim.tick);
     const go = (to: Point) =>
         Math.hypot(to.x - player.x, to.y - player.y) < 1
             ? nudge(sim, to.x, to.y)
-            : walkAvoiding(sim, to.x, to.y, acid, 0);
+            : walkAvoiding(sim, to.x, to.y, [...acid, ...boulders], 0);
     if (fight.roar) {
         const shelter = sim.tombsCover
             .filter((c) => c.look === "zebak_boulder" && c.endTick > sim.tick)
