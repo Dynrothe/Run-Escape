@@ -411,4 +411,15 @@ describe("a boss's overhead prayer", () => {
             expect(PRAYER_HEADICON_FRAME_IDS).toContain(getPrayerHeadicon(styles));
         }
     });
+
+    test("is the frame sprite 440 draws that prayer, or pair, in", () => {
+        // Pinned from the cache (sprites.ts png 440): a swapped pair would show green Nylocas
+        // Vasilias the wrong prayers, and sprites.ts check only finds a frame drawn
+        expect(getPrayerHeadicon(["melee"])).toBe(0);
+        expect(getPrayerHeadicon(["ranged"])).toBe(1);
+        expect(getPrayerHeadicon(["magic"])).toBe(2);
+        expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
+        expect(getPrayerHeadicon(["melee", "ranged"])).toBe(7);
+        expect(getPrayerHeadicon(["melee", "magic"])).toBe(8);
+    });
 });

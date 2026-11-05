@@ -33,4 +33,9 @@ describe("the Collection log's rewards", () => {
             expect.arrayContaining(["inquisitors_mace", "volatile_nightmare_staff"]),
         );
     });
+
+    it("has a tab for a boss fight that brings in a weapon, with no trophy: Phosani's staff", () => {
+        expect(REWARD_MAPS).toContain("phosani");
+        expect(getRewards(createSave(), "phosani").map((r) => r.id)).toContain("nightmare_staff");
+    });
 });

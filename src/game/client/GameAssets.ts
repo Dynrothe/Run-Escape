@@ -456,9 +456,8 @@ export function lookHas(
 export class GameAssets {
     readonly models = new Map<string, ActorModel>();
     // Cache sprites by id, for the 2D overlay
-    readonly sprites = new Map<number, HTMLCanvasElement>();
-    // Frames of a sprite past its first, by sprite and frame (loadSpriteFrames)
-    readonly spriteFrames = new Map<string, HTMLCanvasElement>();
+    // By sprite and frame ("id:frame")
+    readonly sprites = new Map<string, HTMLCanvasElement>();
 
     private readonly players: PlayerBake[] = [];
     // Looks being baked, by appearance key: players who look alike (all the
@@ -870,15 +869,16 @@ export class GameAssets {
         return tasks.sort((a, b) => animations(b) - animations(a));
     }
 
-    async loadSprites(spriteIds: number[]): Promise<void> {
+    // Sprites' first frames, or each one's frame in frames (the overhead prayers' past the first)
+    async loadSprites(spriteIds: number[], frames?: number[]): Promise<void> {
         const images = await this.workerPool.queueLoad<
             SpriteDataInput,
             SpriteImage[],
             SpriteDataLoader
-        >(new SpriteDataLoader(), { spriteIds });
+        >(new SpriteDataLoader(), { spriteIds, frames });
         for (const image of images) {
             if (image.width > 0 && image.height > 0) {
-                this.sprites.set(image.id, toCanvas(image));
+                this.sprites.set(image.id + ":" + image.frame, toCanvas(image));
             }
         }
     }
@@ -888,26 +888,8 @@ export class GameAssets {
     }
 
     // Undefined when the cache has no such sprite
-    getSprite(id: number): HTMLCanvasElement | undefined {
-        return this.sprites.get(id);
-    }
-
-    // Frames of a sprite past its first (the overhead prayers'), kept by sprite and frame
-    async loadSpriteFrames(id: number, frames: number[]): Promise<void> {
-        const images = await this.workerPool.queueLoad<
-            SpriteDataInput,
-            SpriteImage[],
-            SpriteDataLoader
-        >(new SpriteDataLoader(), { spriteIds: frames.map(() => id), frames });
-        images.forEach((image, i) => {
-            if (image.width > 0 && image.height > 0) {
-                this.spriteFrames.set(id + ":" + frames[i], toCanvas(image));
-            }
-        });
-    }
-
-    getSpriteFrame(id: number, frame: number): HTMLCanvasElement | undefined {
-        return this.spriteFrames.get(id + ":" + frame);
+    getSprite(id: number, frame = 0): HTMLCanvasElement | undefined {
+        return this.sprites.get(id + ":" + frame);
     }
 
     private getPlayerBake(slot: number): PlayerBake {

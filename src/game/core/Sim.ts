@@ -51,7 +51,6 @@ import {
 } from "../content/powerups";
 import { isPrayerIgnored } from "../content/raidBosses";
 import {
-    EXPERT_NYLOCAS_KEEP,
     EXPERT_RAID_COINS,
     HARD_RAID_COINS,
     HARD_UNIQUE_CHANCE,
@@ -3273,13 +3272,13 @@ export class Sim {
                 } else if (
                     enemy.def.shot &&
                     distance <
-                        (this.expert && enemy.def.onlyStyle
-                            ? EXPERT_NYLOCAS_KEEP
+                        (this.expert && enemy.def.shot.expertKeep !== undefined
+                            ? enemy.def.shot.expertKeep
                             : enemy.def.shot.range * SHOOTER_KEEP)
                 ) {
                     // Rangers and mages hang back to shoot, and close in when
-                    // they're out of reach. An expert raid's Nylocas come in closer,
-                    // where auras reach them (EXPERT_NYLOCAS_KEEP).
+                    // they're out of reach. Some come in closer on expert
+                    // (EnemyShotDef.expertKeep).
                     dirX = dirY = 0;
                 }
                 // Running off with the flag: away from the player when they're
@@ -4510,6 +4509,15 @@ export class Sim {
             return 1;
         }
         return style === only ? 1 : share;
+    }
+
+    // Expert mode: what a Nylocas in the waves takes from its own style (EnemyDef.expertOwnStyle)
+    private ownStyle(enemy: Enemy): number {
+        const only = enemy.def.onlyStyle;
+        if (!this.expert || enemy.def.boss || !only || this.sourceStyle !== only) {
+            return 1;
+        }
+        return enemy.def.expertOwnStyle ?? 1;
     }
 
     // A weapon's hit an expert raid's Nylocas won't take (EnemyDef.onlyStyle)
@@ -5925,12 +5933,11 @@ export class Sim {
         return { count, arc };
     }
 
-    // A spread's bullets' headings, aimed at aim: as many as a volley fires, as wide, so its
+    // A spread's ith bullet's heading, of a volley this shape (volleyShape) aimed at aim, so its
     // warning lines (BossFightView.drawAim) are where they go
-    volleyHeadings(pattern: BulletPatternDef, aim: number): number[] {
-        const { count, arc } = this.volleyShape(pattern);
-        const step = arc / Math.max(1, count - 1);
-        return Array.from({ length: count }, (_, i) => aim - arc / 2 + i * step);
+    volleyHeading(shape: { count: number; arc: number }, aim: number, i: number): number {
+        // The step first, then times i, as it always was: seeded fights stay as they were
+        return aim - shape.arc / 2 + i * (shape.arc / Math.max(1, shape.count - 1));
     }
 
     private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
@@ -5940,7 +5947,8 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        const { count } = this.volleyShape(pattern);
+        const shape = this.volleyShape(pattern);
+        const { count } = shape;
         if (pattern.shape === "wall" || pattern.shape === "closing") {
             this.fireGappedVolley(emitter, boss, speed, life, turn, count);
             return;
@@ -5985,13 +5993,14 @@ export class Sim {
             );
         };
         const step = (Math.PI * 2) / count;
-        const headings = spread ? this.volleyHeadings(pattern, emitter.angle) : undefined;
         for (let i = 0; i < count; i++) {
             // The way through a ring, at its own angle
             if (!spread && pattern.gap !== undefined && i * step < pattern.gap) {
                 continue;
             }
-            const angle = headings ? headings[i] : emitter.angle + i * step;
+            const angle = spread
+                ? this.volleyHeading(shape, emitter.angle, i)
+                : emitter.angle + i * step;
             fire(angle);
             if (pattern.mirror) {
                 // The same the other side of the aim, so it turns the other way
@@ -6612,6 +6621,11 @@ export class Sim {
         }
         if (this.tick < state.nextNap) {
             return false;
+        }
+        // Not while his volleys are still coming (a swarm's three rings): he goes down once
+        // they're out, starting nothing new meanwhile, so the whole nap is there to reach him
+        if (this.emitters.some((emitter) => emitter.enemyUid === enemy.uid && !emitter.ambient)) {
+            return true;
         }
         state.napEnd = this.tick + secondsToTicks(naps.seconds);
         enemy.vx = enemy.vy = 0;
@@ -8502,8 +8516,9 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
-        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle)
-        const offColour = poison ? 1 : this.offColour(enemy);
+        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle); on expert,
+        // a Nylocas that isn't a boss takes more from its own (EnemyDef.expertOwnStyle)
+        const offColour = poison ? 1 : this.offColour(enemy) * this.ownStyle(enemy);
         // And a staring boss turns a hit from in front back on whoever made it
         if (!poison && this.staredAt(enemy)) {
             this.showBlocked(enemy);

@@ -32,7 +32,7 @@ function loadSprite(id: number): SpriteImage {
     try {
         return decodeSpriteImage(spriteIndex, id);
     } catch {
-        return { id, width: 0, height: 0, pixels: new Int32Array(0) };
+        return { id, frame: 0, width: 0, height: 0, pixels: new Int32Array(0) };
     }
 }
 

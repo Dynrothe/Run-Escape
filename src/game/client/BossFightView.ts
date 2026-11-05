@@ -85,8 +85,8 @@ const HINT_ARROW_SCALE = 1.2;
 const HINT_ARROW_GAP = 0.6;
 const HINT_ARROW_BOB = 10;
 // A boss's overhead prayer: drawn that much bigger, and this many tiles over its head
-const OVERHEAD_SCALE = 1.5;
-const OVERHEAD_GAP = 0.3;
+export const OVERHEAD_SCALE = 1.5;
+export const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
 function locYaw(rotation = 0): number {
@@ -989,11 +989,12 @@ export class BossFightView {
         const ctx = overlay.ctx;
         const base = Math.atan2(windup.dirY, windup.dirX);
         // A line where each of its bullets goes: hard mode's more of them, in a wider fan
-        const headings = sim.volleyHeadings(pattern, base);
+        const shape = sim.volleyShape(pattern);
         ctx.strokeStyle = "#ffb060";
         ctx.globalAlpha = (0.3 + 0.5 * t) * WARNING_ALPHA;
         ctx.lineWidth = Math.max(2, 3 * scale);
-        for (const angle of headings) {
+        for (let i = 0; i < shape.count; i++) {
+            const angle = sim.volleyHeading(shape, base, i);
             const from = overlay.project(
                 enemy.x,
                 this.ground(sim, enemy.x, enemy.y),
@@ -1157,6 +1158,16 @@ export class BossFightView {
         ctx.stroke();
     }
 
+    // On the screen, gap tiles over the top of an enemy's model, where it is this frame: what's
+    // drawn over its head (its overhead prayer, a hint arrow) sits on this
+    private overHead(overlay: Overlay, sim: Sim, enemy: Enemy, alpha: number, gap: number) {
+        const x = lerp(enemy.prevX, enemy.x, alpha);
+        const y = lerp(enemy.prevY, enemy.y, alpha);
+        const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
+        const top = this.ground(sim, x, y) - ((model?.height ?? 128) * enemy.scale) / 128 - gap;
+        return overlay.project(x, top, y, this.a);
+    }
+
     // A boss's overhead prayer, OSRS's own, for the styles it holds back (getBossPrayerStyles: a
     // colour of Nylocas Vasilias, the two that aren't it): not on expert for a Nylocas whose prayer
     // does nothing there (Sim.prayedAgainst)
@@ -1175,18 +1186,11 @@ export class BossFightView {
             const sprite =
                 frame === undefined
                     ? undefined
-                    : this.assets.getSpriteFrame(PRAYER_HEADICON_SPRITE, frame);
+                    : this.assets.getSprite(PRAYER_HEADICON_SPRITE, frame);
             if (!sprite) {
                 continue;
             }
-            const x = lerp(enemy.prevX, enemy.x, alpha);
-            const y = lerp(enemy.prevY, enemy.y, alpha);
-            const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
-            const top =
-                this.ground(sim, x, y) -
-                ((model?.height ?? 128) * enemy.scale) / 128 -
-                OVERHEAD_GAP;
-            const p = overlay.project(x, top, y, this.a);
+            const p = this.overHead(overlay, sim, enemy, alpha, OVERHEAD_GAP);
             if (p.behind) {
                 continue;
             }
@@ -1217,14 +1221,7 @@ export class BossFightView {
             if (!enemy.def.hintArrow || enemy.dead || enemy.flung) {
                 continue;
             }
-            const x = lerp(enemy.prevX, enemy.x, alpha);
-            const y = lerp(enemy.prevY, enemy.y, alpha);
-            const model = this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
-            const top =
-                this.ground(sim, x, y) -
-                ((model?.height ?? 128) * enemy.scale) / 128 -
-                HINT_ARROW_GAP;
-            const p = overlay.project(x, top, y, this.a);
+            const p = this.overHead(overlay, sim, enemy, alpha, HINT_ARROW_GAP);
             if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
                 this.drawEdgeArrow(overlay, sim, enemy.x, enemy.y, TOTEM_ARROW * scale, 40 * scale);
                 continue;

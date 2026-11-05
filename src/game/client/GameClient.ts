@@ -68,6 +68,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
+import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -82,6 +83,7 @@ import {
     HITSPLAT_SPRITES,
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
+    getEnemyModelKey,
     getOfferedAttackSeqs,
     getRunAppearance,
     getRunAttackSeqs,
@@ -175,11 +177,16 @@ const RUN_DISTANCE = 18;
 const CAMERA_GROUND_EASE = 110;
 // For a boss that asks for it (BossLookDef.lean), the camera leans this much of the way towards
 // where it stands, up to so many tiles, so a big boss isn't under the HUD at the top; and how long
-// that takes, in ms. A raid's boss rooms don't: players there would rather it stayed on them, as
-// in the halls.
+// that takes, in ms (the ease is a raid boss room's too). A raid's boss rooms lean only as far
+// as they need (RAID_LEAN_MAX): players there would rather it stayed on them.
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
+// In a raid's boss room the camera stays on the player, as in the halls, leaning north only as
+// far as keeps the boss and its overhead prayer below the boss bar (a big boss on a phone's short
+// screen most of all), and only when that's no more than this many tiles: a boss further off
+// isn't leant towards
+const RAID_LEAN_MAX = 4;
 // How much brighter a gaze lights the arena at its height (getGazeLight)
 const GAZE_LIGHT = 0.6;
 // Ms the light takes to catch up with that, roughly
@@ -425,7 +432,10 @@ export class GameClient implements GameFrameHandler {
         const assets = new GameAssets(workerPool, renderer, actors);
         const spritesPromise = Promise.all([
             assets.loadSprites([...Object.values(HITSPLAT_SPRITES), HINT_ARROW_SPRITE]),
-            assets.loadSpriteFrames(PRAYER_HEADICON_SPRITE, PRAYER_HEADICON_FRAME_IDS),
+            assets.loadSprites(
+                PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE),
+                PRAYER_HEADICON_FRAME_IDS,
+            ),
         ]);
         store.set({ loadingText: "Summoning monsters", loadingProgress: 10 });
         await assets.loadBase((done, total) => {
@@ -485,6 +495,11 @@ export class GameClient implements GameFrameHandler {
     private cameraGround: number | undefined;
     // How far the camera's leaning towards a boss that asks for it (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
+    // Where a raid boss's head was on the screen (getRaidRoomLean), and the boss bar's bottom
+    private readonly leanPoint: ScreenPoint = { x: 0, y: 0, visible: false };
+    private bossBarBottom?: { y: number; at: number };
+    // How far north of the player last frame's camera was, all told (its lean and any shake)
+    private cameraOffsetY = 0;
     // How lit a gaze has the arena now (getGazeLight, eased)
     private gazeLight = 1;
     // The camera's shake: how hard (0 to 1), and since when (ms)
@@ -2074,7 +2089,7 @@ export class GameClient implements GameFrameHandler {
             ground = last + (ground - last) * (1 - Math.exp(-deltaTimeMs / CAMERA_GROUND_EASE));
             this.cameraGround = ground;
         }
-        const lean = this.getBossLean(sim, px, py);
+        const lean = this.getRaidRoomLean(sim, now) ?? this.getBossLean(sim, px, py);
         const ease = 1 - Math.exp(-deltaTimeMs / BOSS_LEAN_EASE);
         this.cameraLean.x += (lean.x - this.cameraLean.x) * ease;
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
@@ -2086,6 +2101,7 @@ export class GameClient implements GameFrameHandler {
             ground - 0.6,
             py + this.cameraLean.y + pan.y + shake.y,
         );
+        this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
         // A raid hall can be drawn darker than the map, and washed with a colour
         // (RaidRoomDef.hall)
         const hall =
@@ -2172,6 +2188,52 @@ export class GameClient implements GameFrameHandler {
         const t = Math.min(1, Math.max(0, (seconds - pan.from) / pan.over));
         const away = 1 - t * t * (3 - 2 * t);
         return { x: (at.x - px) * away, y: (at.y - py) * away };
+    }
+
+    // In a raid's boss room, while its boss is up: north just far enough that its head, and its
+    // overhead prayer, are below the boss bar (up to RAID_LEAN_MAX), measured on last frame's
+    // camera. Undefined anywhere else.
+    private getRaidRoomLean(sim: Sim, now: number): { x: number; y: number } | undefined {
+        const boss = sim.shownBoss;
+        if (!sim.map.raid || sim.raidStage !== "boss" || !boss || boss.dead || sim.intro) {
+            return undefined;
+        }
+        const overlay = this.overlay;
+        if (overlay.height === 0) {
+            return { x: 0, y: 0 };
+        }
+        // Where its overhead prayer's drawn from (BossFightView.drawOverheads), and the icon's top
+        const model = this.assets.get(getEnemyModelKey(boss.def, boss.variant));
+        const top =
+            this.grid.getHeight(boss.x, boss.y) / 128 -
+            ((model?.height ?? 128) * boss.scale) / 128 -
+            OVERHEAD_GAP;
+        const icon = this.assets.getSprite(PRAYER_HEADICON_SPRITE, PRAYER_HEADICON_FRAME_IDS[0]);
+        const iconHeight = (icon?.height ?? 25) * OVERHEAD_SCALE * overlay.uiScale;
+        const head = overlay.project(boss.x, top, boss.y, this.leanPoint).y - iconHeight;
+        // How far up the screen a tile further north moves it
+        const perTile =
+            head + iconHeight - overlay.project(boss.x, top, boss.y + 1, this.leanPoint).y;
+        if (!(perTile > 0)) {
+            return { x: 0, y: this.cameraLean.y };
+        }
+        // Leaning north moves everything down the screen by perTile a tile. Last frame's camera
+        // was off by all of cameraOffsetY (its lean, and a shake), so the lean wanted is that and
+        // what's short of it.
+        const lean = this.cameraOffsetY + (this.getBossBarBottom(now) - head) / perTile;
+        return { x: 0, y: lean > RAID_LEAN_MAX ? 0 : Math.max(0, lean) };
+    }
+
+    // The boss bar's bottom edge in the overlay's pixels, looked up now and then (a layout read)
+    private getBossBarBottom(now: number): number {
+        if (!this.bossBarBottom || now - this.bossBarBottom.at > 500) {
+            const bar = document.querySelector(".ui-boss-bar")?.getBoundingClientRect();
+            const overlay = this.overlay;
+            const scale = overlay.height / Math.max(1, overlay.canvas.offsetHeight);
+            const canvasTop = overlay.canvas.getBoundingClientRect().top;
+            this.bossBarBottom = { y: bar ? (bar.bottom - canvasTop) * scale : 0, at: now };
+        }
+        return this.bossBarBottom.y;
     }
 
     // Towards a boss that asks for it (BossLookDef.lean), wherever it is

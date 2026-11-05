@@ -569,7 +569,10 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       sim's `statueSeq` events say when each starts, and `BossFightView.drawStatues` draws them
       still until then. A loc bake takes `seqs` for that (`getStatueModelKey`).
     - `BossDef.look` gives the shared fight screen its own colours (`edge` and `vignette` can be
-      `null`), and `lean` has the camera lean towards the boss. `MapDef.fight.strikeReach` keeps a
+      `null`), and `lean` has the camera lean towards the boss. A raid's boss rooms don't lean
+      that way: the camera moves north only as far as keeps the boss and its overhead prayer below
+      the boss bar, and not at all for a boss more than `RAID_LEAN_MAX` tiles' lean off
+      (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
       it misses everyone (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
@@ -642,7 +645,9 @@ that hit` line, for tuning a fight.
   `lingers` and hurt while you stand in them, and `safe` marks a projectile spares you in;
   `EnemyDef.protects` (a share of ranged or magic weapons' damage); `BossDef.naps` (the Bloat: up
   and guarded, then down and open, then a stomp); and for a raid's expert mode `EnemyDef.onlyStyle`,
-  `BossDef.colours`, `BossDef.stare`, `EnemyDef.expertAs` and `BossAttackDef.expert`.
+  `BossDef.colours`, `BossDef.stare`, `EnemyDef.expertAs`, `BossAttackDef.expert` and
+  `EnemyShotDef.expertKeep` (how close a shooter comes: the blue Nylocas, into a magic aura) and
+  `EnemyDef.expertOwnStyle` (a wave Nylocas's own style does more, as the other two do nothing).
 
 The curse is applied to the input in `stepPlayer`, so keys and the touch stick go the same way.
 
@@ -668,29 +673,30 @@ gap between its `RaidRoomDef.at` and the last room's later, or at once when the 
 quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
 hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
 boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' hits are
-lightened to match a faster `attackInterval`, then made `HIT_HARDER` (`oftener` in `theatre.ts`),
-and their bullets can hit again after `BULLET_GRACE` rather than a second. Every one has an attack
-for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a ground mark under it), and
-`oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatternDef.from`, so there's
-no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the slams
-are as wide, so there's no ring round a still boss to hit it from untouched. Each has something for
-a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on them. Each boss
-has a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints:
-the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's naps, Nylocas
-Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with the prayer on
-top for missiles and magic; its own gets through the prayer for `ownStyle`), Sotetseg's
-`shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an exhumed by
-`stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`, `tob_`
-ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss calls. A
-summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's healers
-all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all of them
-within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of another
-style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass none and go
-for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias turns
-(needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back to
-the walkable try furthest from the boss, never off the map; an ordeal waits while its boss's expert
-projectile is in the air, the boss shielded meanwhile so the wait can't take it past a phase, and
-throwing no more of expert's own; and a stare is shown `BossDef.stare.warning` before it turns
+lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`), and their bullets can hit
+again after `BULLET_GRACE` rather than a second. The Maiden, the first boss, is the exception: her
+hits are scaled down by `MAIDEN_HIT_SCALE`, and her `bulletGrace` is a full second. Every one has an
+attack for whoever's within `CLOSE_REACH` (a swing round it, or a `slam`: a ground mark under it),
+and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatternDef.from`, so
+there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the
+slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
+something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
+them. Each boss has a mechanic of its own that makes the fight longer by making it harder, not by
+more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
+the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
+Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
+exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`,
+`tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
+calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
+healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
+of them within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of
+another style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass
+none and go for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias
+turns (needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back
+to the walkable try furthest from the boss, never off the map; an ordeal waits while its boss's
+expert projectile is in the air, the boss shielded meanwhile so the wait can't take it past a phase,
+and throwing no more of expert's own; and a stare is shown `BossDef.stare.warning` before it turns
 (`STARE_WARNING_SECONDS` unless set): the boss faces where it'll stare, and the notice names the
 side. Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`, looked up in
 `damagePlayer`, so it holds for a stomp, a pool or a stare too; a ground mark keeps its boss's id

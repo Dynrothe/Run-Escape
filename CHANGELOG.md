@@ -18,17 +18,25 @@ the version in the corner).
 - Theatre of Blood, by Okaeri: the Maiden was killing nearly every party. She has less than half
   the hitpoints, her blood hits softer and a second apart, her pools are smaller, tick slower and
   fade sooner, and her Blood burst comes half as often, so melee can stay in on her.
-- Theatre of Blood, by Okaeri: in a boss room the camera stays on you, as in the halls, rather
-  than leaning towards the boss.
+- Theatre of Blood, by Okaeri: the bosses after the Maiden hit a third softer, losing the extra
+  half 0.25.0 gave their hits, on every mode (expert's own attacks keep theirs).
+- Theatre of Blood expert mode, by Okaeri: the small and big Nylocas take three times the damage
+  from their own colour's style, so the right weapon brings them down quickly. Nylocas Vasilias is
+  unchanged.
+- Theatre of Blood, by Okaeri: the Pestilent Bloat goes down only once his flies are out, rather
+  than in the middle of his swarm, so there's the whole of his nap to reach him.
+- Theatre of Blood, by Okaeri: in a boss room the camera stays on you, as in the halls, moving up
+  only as far as keeps the boss below its health bar, rather than leaning towards the boss.
 
 ### Fixed
 
 - The Collection log has a tab for each place with finds of its own: the Theatre of Blood's has
-  its chest's finds, Lil' Zik and the weapons it brings in, and Justiciar Zachariah's has the Dark
-  squirrel, rather than them all sitting under the Hallowed Night. Fixed by Okaeri.
-- Theatre of Blood expert mode: the green and blue Nylocas come in to a couple of tiles to shoot,
-  rather than hanging back out of reach of auras like Ice Barrage, which left a mage nothing to
-  hit them with. Fixed by Okaeri.
+  its chest's finds, Lil' Zik and the weapons it brings in, Justiciar Zachariah's has the Dark
+  squirrel, and Phosani's Nightmare's has her staff, rather than them all sitting under the
+  Hallowed Night or missing. Fixed by Okaeri.
+- Theatre of Blood expert mode: the blue Nylocas come in to a couple of tiles to shoot, rather
+  than hanging back out of reach of auras like Ice Barrage, which left a mage nothing to hit them
+  with. Fixed by Okaeri.
 - Theatre of Blood on Safari: the first hall drew as a flat dark red over everything, with
   nothing of the world showing. Fixed by Okaeri.
 - Hard and expert mode: a boss's fan of shots (the Maiden's Blood throw) shows a line for every
