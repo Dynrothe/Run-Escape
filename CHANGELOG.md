@@ -15,8 +15,11 @@ the version in the corner).
 
 ### Changed
 
-- Theatre of Blood, by Okaeri: the Maiden's Blood burst comes half as often, so melee can stay in
-  on her.
+- Theatre of Blood, by Okaeri: the Maiden was killing nearly every party. She has less than half
+  the hitpoints, her blood hits softer and a second apart, her pools are smaller, tick slower and
+  fade sooner, and her Blood burst comes half as often, so melee can stay in on her.
+- Theatre of Blood, by Okaeri: in a boss room the camera stays on you, as in the halls, rather
+  than leaning towards the boss.
 
 ### Fixed
 

@@ -48,6 +48,9 @@ const CLOSE_WEIGHT = 10;
 const SLAM_RADIUS = 4;
 // Seconds between the Maiden's slams
 const MAIDEN_SLAM_COOLDOWN = 8;
+// The first boss, met at about level 20 in the run's first gear: her hits are scaled by this rather
+// than HIT_HARDER, or nobody gets past her
+const MAIDEN_HIT_SCALE = 0.7;
 function slam(
     name: string,
     spotAnim: number,
@@ -108,8 +111,10 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         weight: 2,
         ground: {
             spots: [{ shape: "player" }, { shape: "scatter", count: 3, spread: 6 }],
-            radius: 1.3,
-            lingers: { seconds: 7, interval: 0.6, damage: 1 },
+            // Small and brief: with armour stopping at most half a hit (ARMOR_CAP), their ticks
+            // would otherwise be most of what kills a party at the first boss
+            radius: 1.1,
+            lingers: { seconds: 5, interval: 0.8, damage: 1 },
             spotAnim: 1579,
             fit: SPLAT_FIT,
         },
@@ -793,13 +798,18 @@ function vasilias(): EnemyDef {
 
 // A raid boss's attacks: its close attacks picked CLOSE_WEIGHT, and when it attacks more often
 // than its hits were tuned for (every `from` seconds), each one lighter to match, for more to
-// dodge and the same damage over time, and HIT_HARDER on top. Expert mode's own attacks keep their
+// dodge and the same damage over time, and `harder` (HIT_HARDER unless given) on top. Expert mode's own attacks keep their
 // damage, as the green ball's meant to kill. What a boss fires from itself starts at its middle:
 // there's no safe spot on it, for melee or anyone, only its mechanics to play.
-function oftener(attacks: BossAttackDef[], from: number, to: number): BossAttackDef[] {
+function oftener(
+    attacks: BossAttackDef[],
+    from: number,
+    to: number,
+    harder = HIT_HARDER,
+): BossAttackDef[] {
     return attacks.map((attack) => ({
         ...attack,
-        damage: attack.expert ? attack.damage : (attack.damage * to * HIT_HARDER) / from,
+        damage: attack.expert ? attack.damage : (attack.damage * to * harder) / from,
         weight: attack.range <= CLOSE_REACH ? CLOSE_WEIGHT : attack.weight,
     }));
 }
@@ -857,7 +867,14 @@ function withScale(scale: number, enemy: EnemyDef): EnemyDef {
 export function getTheatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
     return theatreBosses(byId).map((enemy) =>
         enemy.boss
-            ? { ...enemy, boss: { ...enemy.boss, bulletGrace: BULLET_GRACE, armorCap: ARMOR_CAP } }
+            ? {
+                  ...enemy,
+                  boss: {
+                      ...enemy.boss,
+                      bulletGrace: enemy.boss.bulletGrace ?? BULLET_GRACE,
+                      armorCap: ARMOR_CAP,
+                  },
+              }
             : enemy,
     );
 }
@@ -946,8 +963,11 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                         message: "The Nylocas swarm to the Maiden!",
                     },
                 ],
-                // Lighter again: a hit's moment of safety used to soak up more of her bullets
-                attacks: oftener(MAIDEN_ATTACKS, 2.4, 1.8),
+                // The first boss: lighter than the rest (MAIDEN_HIT_SCALE), and a second between
+                // her bullets' hits rather than BULLET_GRACE's half, at a level where nobody was
+                // past her
+                attacks: oftener(MAIDEN_ATTACKS, 2.4, 1.8, MAIDEN_HIT_SCALE),
+                bulletGrace: 1,
             },
         },
         // He walks his loop with his guard up, and goes down now and then: that's when to hit him

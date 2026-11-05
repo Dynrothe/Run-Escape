@@ -698,7 +698,7 @@ for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` tim
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
 width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
 spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it dies to the Maiden.
+clears, not the bot's: it often dies to the Maiden.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
@@ -899,7 +899,7 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         BOSS_ARENA=48 tries a phased boss on any
                                                         map, FRESH=1 straight at it, SAFE_WAVES=1
                                                         with what a run earned, FLAT=1 with no
-                                                        walls, DODGE=1 keeping off its marks,
+                                                        walls, DODGE=1 dodging a boss's attacks,
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see

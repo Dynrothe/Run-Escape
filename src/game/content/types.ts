@@ -1078,8 +1078,8 @@ export type BossDef = {
 // Nightmare: each unset is hers. edge: the stroke round the bossArena while it's
 // up, or none (a court whose edges are drops). vignette: the dim round the
 // screen's edges while it's up, or none. dark: its entrance's dark (r, g, b).
-// lean: the camera leans towards it, as in a raid's boss room, so a boss north of
-// the player stays on the screen.
+// lean: the camera leans towards it, so a boss north of the player stays on the
+// screen (a raid's boss rooms don't: the camera stays on the player there).
 export type BossLookDef = {
     lean?: boolean;
     title?: string;

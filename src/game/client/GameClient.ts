@@ -173,8 +173,10 @@ const RUN_DISTANCE = 18;
 // How long the camera takes to follow the ground up a slope on a dev map, in ms: without this,
 // it lurches at every crease in tall ground
 const CAMERA_GROUND_EASE = 110;
-// In a raid's boss room the camera leans this much of the way towards where the boss stands, up
-// to so many tiles, so a big boss isn't under the HUD at the top; and how long that takes, in ms
+// For a boss that asks for it (BossLookDef.lean), the camera leans this much of the way towards
+// where it stands, up to so many tiles, so a big boss isn't under the HUD at the top; and how long
+// that takes, in ms. A raid's boss rooms don't: players there would rather it stayed on them, as
+// in the halls.
 const BOSS_LEAN = 0.4;
 const BOSS_LEAN_MAX = 2.5;
 const BOSS_LEAN_EASE = 350;
@@ -481,7 +483,7 @@ export class GameClient implements GameFrameHandler {
     private lastHudUpdate = 0;
     // Where the camera thinks the ground is, on a dev map
     private cameraGround: number | undefined;
-    // How far the camera's leaning towards a raid boss (BOSS_LEAN)
+    // How far the camera's leaning towards a boss that asks for it (BOSS_LEAN)
     private cameraLean = { x: 0, y: 0 };
     // How lit a gaze has the arena now (getGazeLight, eased)
     private gazeLight = 1;
@@ -2160,13 +2162,10 @@ export class GameClient implements GameFrameHandler {
         return { x: (at.x - px) * away, y: (at.y - py) * away };
     }
 
-    // Towards where a raid room's boss stands, while it's being fought, or a boss that asks for
-    // it (BossLookDef.lean), wherever it is
+    // Towards a boss that asks for it (BossLookDef.lean), wherever it is
     private getBossLean(sim: Sim, px: number, py: number): { x: number; y: number } {
-        const room = sim.map.raid?.rooms[sim.raidRoom];
         const boss = sim.shownBoss;
-        const leaning = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
-        const at = room && sim.raidStage === "boss" ? room.bossAt : leaning;
+        const at = boss?.def.boss?.look?.lean && !boss.dead && !sim.intro ? boss : undefined;
         if (!at) {
             return { x: 0, y: 0 };
         }
