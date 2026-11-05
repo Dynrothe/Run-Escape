@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
 import { RARITIES } from "../content/rarity";
@@ -11,6 +12,7 @@ import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { SaveData, getArmouryStep } from "../core/save";
 import "./ArmouryScreen.css";
 import { Coins } from "./Coins";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 
 // The Armoury: every piece of gear caskets give, slot by slot, as the
@@ -84,16 +86,24 @@ function ArmouryTile({
     const steps = getUpgradeLine(itemId).length - 1;
     const upgrades = save.armoury[itemId] ?? 0;
     return (
-        <button
+        <DescriptionButton
+            itemId={piece.id}
             className={
                 "ui-card ui-armoury-tile" +
                 (selected ? " ui-card-selected" : "") +
                 (found ? "" : " ui-card-locked")
             }
             style={found ? { borderColor: RARITIES[piece.rarity].color } : undefined}
-            title={found ? piece.name : `${piece.name} (not found yet)`}
+            aria-label={found ? piece.name : `${piece.name} (not found yet)`}
             aria-pressed={selected}
-            onClick={onSelect}
+            onUse={onSelect}
+            silent={false}
+            description={
+                <ArmouryDescription
+                    itemId={piece.id}
+                    notFound={found ? undefined : describeNotFound(save, itemId)}
+                />
+            }
         >
             <ItemIcon objId={piece.objId} size={30} />
             {found && steps > 0 && (
@@ -106,8 +116,31 @@ function ArmouryTile({
                     ))}
                 </span>
             )}
-        </button>
+        </DescriptionButton>
     );
+}
+
+// notFound: what it takes to find it, for a piece not found yet
+function ArmouryDescription({
+    itemId,
+    notFound,
+}: {
+    itemId: string;
+    notFound?: string;
+}): JSX.Element {
+    return (
+        <ItemDescription item={getItemView(getGear(itemId))} setClassName="ui-armoury-set">
+            {notFound && <span>{notFound}</span>}
+        </ItemDescription>
+    );
+}
+
+// A map task can still keep a piece out of caskets
+function describeNotFound(save: SaveData, itemId: string): string {
+    const base = getGear(itemId);
+    return base.unlock && !isAvailable(base, new Set(save.unlockedItems))
+        ? `${describeUnlockTask(base.unlock)} to find it in caskets.`
+        : "Not found yet: find it in a casket to upgrade it.";
 }
 
 function ArmouryDetails({
@@ -127,17 +160,9 @@ function ArmouryDetails({
     const next = step && getGear(step.into);
     const base = getGear(itemId);
     const set = getItemSet(base);
-    // Still locked behind a map task, so caskets don't have it yet
-    const lockedBy = isAvailable(base, new Set(save.unlockedItems)) ? undefined : base.unlock;
     let action: JSX.Element;
     if (!found) {
-        action = (
-            <div className="ui-card-cost">
-                {lockedBy
-                    ? `${describeUnlockTask(lockedBy)} to find it in caskets.`
-                    : "Not found yet: find it in a casket to upgrade it."}
-            </div>
-        );
+        action = <div className="ui-card-cost">{describeNotFound(save, itemId)}</div>;
     } else if (!step || !next) {
         action = (
             <div className="ui-card-style">
@@ -215,16 +240,18 @@ function ArmouryDetails({
                         return (
                             <Fragment key={id}>
                                 {i > 0 && <span className="ui-armoury-arrow">›</span>}
-                                <span
+                                <DescriptionButton
+                                    itemId={id}
                                     className={
                                         "ui-armoury-step" +
                                         (found && i <= upgrades ? " ui-armoury-step-done" : "") +
                                         (found && i === upgrades ? " ui-armoury-step-now" : "")
                                     }
-                                    title={form.name}
+                                    aria-label={form.name}
+                                    description={<ArmouryDescription itemId={id} />}
                                 >
                                     <ItemIcon objId={form.objId} size={28} />
-                                </span>
+                                </DescriptionButton>
                             </Fragment>
                         );
                     })}

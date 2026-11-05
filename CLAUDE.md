@@ -55,6 +55,7 @@ go stale. Add anything that cost you time to work out.
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
+| Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
 | Weapon stat lines on cards, pause and tooltips         | `src/game/content/weaponStats.ts`                                      |
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |
 | Stat names and types                                   | `src/game/content/stats.ts`, `types.ts`                                |

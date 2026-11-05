@@ -31,6 +31,7 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     INVOCATIONS,
     INVOCATION_BY_ID,
@@ -84,6 +85,7 @@ import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
@@ -1972,14 +1974,6 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
         <div className="ui-fill ui-run">
-            {hud && (
-                <Hud
-                    hud={hud}
-                    client={client}
-                    questTracker={ui.display.questTracker}
-                    damagePanel={ui.display.damagePanel}
-                />
-            )}
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />
@@ -1992,6 +1986,16 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
+                />
+            )}
+            {/* The inspectable HUD slots sit above the touch movement zone. */}
+            {hud && (
+                <Hud
+                    hud={hud}
+                    client={client}
+                    questTracker={ui.display.questTracker}
+                    damagePanel={ui.display.damagePanel}
+                    disabled={ui.overlay !== "none"}
                 />
             )}
             <div className="ui-toasts">
@@ -2055,26 +2059,30 @@ function formatSlotLevel(slot: SlotView): string {
 
 // A weapon or passive in the HUD, with what it does on a card shown while
 // it's pointed at
-const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element {
+const Slots = memo(function Slots({
+    slots,
+    max,
+    disabled,
+}: {
+    slots: SlotView[];
+    max: number;
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots">
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
-                    <div
+                    <DescriptionButton
                         key={i}
+                        itemId={slot?.id}
+                        disabled={!slot || disabled}
+                        aria-label={slot?.name ?? `Empty slot ${i + 1}`}
                         className={"ui-slot" + (slot?.evolution?.ready ? " ui-slot-evolve" : "")}
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
-                    >
-                        {slot && (
-                            <>
-                                <ItemIcon
-                                    objId={slot.iconObjId}
-                                    spriteId={slot.iconSpriteId}
-                                    size={30}
-                                />
-                                <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
-                                <div className="ui-slot-tip rs-border rs-background">
+                        description={
+                            slot && (
+                                <>
                                     <div style={{ color: slot.rarityColor }}>{slot.name}</div>
                                     <div className="ui-slot-tip-level">
                                         {slot.level >= slot.maxLevel
@@ -2086,10 +2094,21 @@ const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: numb
                                     ))}
                                     {slot.detail && <div>{slot.detail}</div>}
                                     {slot.evolution && <EvolutionLine {...slot.evolution} />}
-                                </div>
+                                </>
+                            )
+                        }
+                    >
+                        {slot && (
+                            <>
+                                <ItemIcon
+                                    objId={slot.iconObjId}
+                                    spriteId={slot.iconSpriteId}
+                                    size={30}
+                                />
+                                <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
                             </>
                         )}
-                    </div>
+                    </DescriptionButton>
                 );
             })}
         </div>
@@ -2120,27 +2139,34 @@ function EvolutionLine({
 }
 
 // Worn gear, small, under the weapons and passives
-const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): JSX.Element {
+const GearSlots = memo(function GearSlots({
+    gear,
+    disabled,
+}: {
+    gear: GearSlotView[];
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots ui-gear-slots">
             {gear.map((slot) => (
-                <div
+                <DescriptionButton
                     key={slot.slot}
-                    className="ui-slot ui-gear-slot"
+                    itemId={slot.item?.id}
+                    disabled={!slot.item || disabled}
+                    aria-label={slot.item?.name ?? `${slot.name} (empty)`}
+                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
-                    title={
-                        slot.item
-                            ? `${slot.item.name}: ${slot.item.lines.join(", ")}` +
-                              (slot.item.set ? `\n${slot.item.set.text}` : "")
-                            : `${slot.name} (empty)`
-                    }
+                    description={slot.item && <ItemDescription item={slot.item} />}
                 >
                     {slot.item ? (
                         <ItemIcon objId={slot.item.objId} size={22} />
                     ) : (
-                        <span className="ui-gear-empty">{slot.name[0]}</span>
+                        <ItemIcon
+                            spriteId={GEAR_SLOT_BY_ID.get(slot.slot)!.iconSpriteId}
+                            size={22}
+                        />
                     )}
-                </div>
+                </DescriptionButton>
             ))}
         </div>
     );
@@ -2150,14 +2176,22 @@ const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): J
 const Inventory = memo(function Inventory({
     inventory,
     client,
+    disabled,
 }: {
     inventory: InventorySlotView[];
     client: GameClient;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <div className="ui-inventory">
             {inventory.map((slot, i) => (
-                <InventoryItem key={i} slot={slot} index={i} onUse={() => client.useItem(i)} />
+                <InventoryItem
+                    key={i}
+                    slot={slot}
+                    index={i}
+                    disabled={disabled}
+                    onUse={() => client.useItem(i)}
+                />
             ))}
         </div>
     );
@@ -2191,20 +2225,22 @@ const Hud = memo(function Hud({
     client,
     questTracker,
     damagePanel,
+    disabled,
 }: {
     hud: HudView;
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <>
             <XpBar level={hud.level} client={client} />
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} />
-                    <GearSlots gear={hud.gear} />
+                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
+                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
+                    <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
                 <div className="ui-hud-right">
@@ -2229,7 +2265,7 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-actions">
                     {/* A boss fight has no items, only its own button */}
                     {!getMap(hud.mapId).fight && (
-                        <Inventory inventory={hud.inventory} client={client} />
+                        <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
                 </div>

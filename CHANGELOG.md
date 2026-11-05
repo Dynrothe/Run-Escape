@@ -5,10 +5,16 @@ the version in the corner).
 
 ## Unreleased
 
-### Fixed
+### Added
 
-- Melee weapons swing at a big boss you're standing beside: the Theatre of Blood's bosses and
-  the Nightmare were often out of reach of a sword's swing even up close.
+- Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
+  piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
+  passive, worn piece or Armoury piece to read it.
+
+### Changed
+
+- Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
+  Smarzaro.
 
 ## 0.27.0 - 2026-11-05
 
