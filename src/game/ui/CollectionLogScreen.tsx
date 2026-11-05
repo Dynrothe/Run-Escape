@@ -2,20 +2,19 @@ import { useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
+import { REWARD_MAPS, RewardEntry, getRewards } from "../content/collectionLog";
 import { EVOLUTIONS, EvolutionDef } from "../content/evolutions";
+import { getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
-import { TROPHIES } from "../content/trophies";
-import { describeUnlockTask } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { getWeapon } from "../content/weapons";
-import { SaveData } from "../core/save";
 import { Coins } from "./Coins";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 
 // Every evolution, after the client's Collection log. What it takes is always
-// shown; what it makes stays ??? until it's been made in a run. Another tab
-// has the Halloween map's rewards, ??? until they're found.
+// shown; what it makes stays ??? until it's been made in a run. Then a tab for
+// each map with rewards to find (the Hallowed Night's, the Theatre of Blood's),
+// ??? until they're found: the weapons it brings in, then its trophies.
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
@@ -23,9 +22,14 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const made = EVOLUTIONS.filter((e) => save.evolutionsMade.includes(e.into.id)).length;
     const [shown, setShown] = useState(EVOLUTIONS[0]);
-    const [tab, setTab] = useState<"evolutions" | "rewards">("evolutions");
-    const rewards = getHalloweenRewards(save);
+    // "evolutions", or a reward map's id
+    const [tab, setTab] = useState("evolutions");
+    const rewards = tab === "evolutions" ? [] : getRewards(save, tab);
     const [reward, setReward] = useState(0);
+    const open = (id: string) => {
+        setTab(id);
+        setReward(0);
+    };
     const found = rewards.filter((r) => r.found).length;
     return (
         <div className="ui-fill ui-center">
@@ -34,16 +38,19 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                 <div className="ui-log-tabs">
                     <button
                         className={"ui-log-tab" + (tab === "evolutions" ? " ui-log-selected" : "")}
-                        onClick={() => setTab("evolutions")}
+                        onClick={() => open("evolutions")}
                     >
                         Evolutions
                     </button>
-                    <button
-                        className={"ui-log-tab" + (tab === "rewards" ? " ui-log-selected" : "")}
-                        onClick={() => setTab("rewards")}
-                    >
-                        Hallowed Night
-                    </button>
+                    {REWARD_MAPS.map((mapId) => (
+                        <button
+                            key={mapId}
+                            className={"ui-log-tab" + (tab === mapId ? " ui-log-selected" : "")}
+                            onClick={() => open(mapId)}
+                        >
+                            {getMap(mapId).name}
+                        </button>
+                    ))}
                 </div>
                 {tab === "evolutions" ? (
                     <>
@@ -68,7 +75,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     </>
                 ) : (
                     <>
-                        <p className="ui-subtle">What the Hallowed Night has to find.</p>
+                        <p className="ui-subtle">What the {getMap(tab).name} has to find.</p>
                         <div className="ui-log-list">
                             {rewards.map((entry, i) => (
                                 <RewardCard
@@ -99,30 +106,6 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             </div>
         </div>
     );
-}
-
-type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
-
-// The weapons The Nightmare brings in, then the trophies
-function getHalloweenRewards(save: SaveData): RewardEntry[] {
-    const weapons = ["inquisitors_mace", "volatile_nightmare_staff"].map((id) => {
-        const weapon = getWeapon(id);
-        return {
-            id,
-            name: weapon.name,
-            objId: weapon.iconObjId,
-            how: `${describeUnlockTask(weapon.unlock!)} to bring it in.`,
-            found: save.unlockedItems.includes(id),
-        };
-    });
-    const trophies = TROPHIES.map(({ id, name, objId, how }) => ({
-        id,
-        name,
-        objId,
-        how,
-        found: save.trophies.includes(id),
-    }));
-    return [...weapons, ...trophies];
 }
 
 function RewardCard({

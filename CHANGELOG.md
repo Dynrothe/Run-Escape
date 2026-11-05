@@ -11,6 +11,8 @@ the version in the corner).
 
 ### Fixed
 
+- The Collection log has a Theatre of Blood tab, with its chest's finds, Lil' Zik and the weapons
+  it brings in, rather than the Theatre's finds sitting under the Hallowed Night.
 - Theatre of Blood expert mode: the green and blue Nylocas come in close to shoot, rather than
   hanging back out of reach of auras like Ice Barrage, which left a mage nothing to hit them with.
 ## 0.26.0 - 2026-11-05

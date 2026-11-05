@@ -65,7 +65,8 @@ version and how to run it.
   damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
-  recipe, keeping what it makes as ??? until you've made it.
+  recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with finds
+  of its own (the Hallowed Night, the Theatre of Blood): the weapons it brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
