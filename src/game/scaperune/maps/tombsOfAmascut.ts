@@ -236,6 +236,8 @@ const SCABARAS_MATCHING = {
     north: [5, 7, 9].flatMap((x) => [16, 18, 20].map((y) => [x, y])),
     south: [5, 7, 9].flatMap((x) => [4, 6, 8].map((y) => [x, y])),
 };
+// The barriers into Matching's room, across the doorways at x 12 (the cut's own tiles)
+const SCABARAS_MATCHING_BARRIER = { x: 12, ids: [45135, 45375, 45376, 45377, 45378, 45379] };
 // Every board's tiles, whose floor decoration (the room's patterned tiles) the plates replace
 const SCABARAS_BOARD = new Set(
     [
@@ -822,7 +824,15 @@ function build(context: BuildContext): TileGrid {
         // Left out, in the cut's own tiles, before it's turned
         prefab.locs = prefab.locs.filter(
             (loc) =>
-                !(cut === SCABARAS && loc.type === 22 && SCABARAS_BOARD.has(loc.x + "," + loc.y)),
+                !(cut === SCABARAS && loc.type === 22 && SCABARAS_BOARD.has(loc.x + "," + loc.y)) &&
+                // The barriers into Matching's room (45135, 45375 to 45379), which OSRS opens once
+                // the other three are solved: here its tiles won't turn till then (the sim's), and
+                // left in, they shut the room off for good
+                !(
+                    cut === SCABARAS &&
+                    loc.x === SCABARAS_MATCHING_BARRIER.x &&
+                    SCABARAS_MATCHING_BARRIER.ids.includes(loc.id)
+                ),
         );
         prefab.locs = prefab.locs.filter(
             (loc) =>

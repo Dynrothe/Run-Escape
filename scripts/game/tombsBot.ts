@@ -284,28 +284,20 @@ function hetTurns(sim: Sim, def: PathRoom): number[] {
     return het.mirrors.slice(0, 4).map((m) => m.turn);
 }
 
-// Scabaras: a plate stepped on by the lines between the board's plates (they're 2 apart), so no
-// other plate's crossed on the way: across to the column beside it, along to the row beside it,
-// over, then onto it
-function stepOn(sim: Sim, plate: Point): Point {
+// Scabaras: a plate stepped on round every other plate on the boards, so none's pressed on the way
+function stepOn(sim: Sim, plate: Point, boards: NonNullable<PathRoom["scabaras"]>): Point {
     const player = sim.player;
-    if (Math.abs(player.x - plate.x) < 0.3 && Math.abs(player.y - plate.y) < 1.3) {
+    if (Math.hypot(plate.x - player.x, plate.y - player.y) < 1.2) {
         return nudge(sim, plate.x, plate.y);
     }
-    const between = (at: number, p: number) => p + 1 + 2 * Math.round((at - p - 1) / 2);
-    const cx = between(player.x, plate.x);
-    const cy = player.y < plate.y ? plate.y - 1 : plate.y + 1;
-    if (Math.hypot(plate.x - player.x, plate.y - player.y) > 9) {
-        // Off the board: round walls to beside it
-        return walkTo(sim, plate.x, cy);
-    }
-    if (Math.abs(player.y - cy) < 0.2) {
-        return nudge(sim, plate.x, cy);
-    }
-    if (Math.abs(player.x - cx) < 0.2) {
-        return nudge(sim, cx, cy);
-    }
-    return nudge(sim, cx, player.y);
+    const plates = [
+        ...boards.sequence,
+        ...boards.lights,
+        ...boards.addition,
+        ...boards.matching.north,
+        ...boards.matching.south,
+    ].filter((p) => p.x !== plate.x || p.y !== plate.y);
+    return walkAvoiding(sim, plate.x, plate.y, plates, 0);
 }
 
 // Off a plate, to the gap beside it
@@ -328,10 +320,10 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (m.up.north !== undefined) {
             const symbol = m.north[m.up.north];
             const j = m.south.findIndex((s) => s === symbol);
-            return stepOn(sim, boards.matching.south[j]);
+            return stepOn(sim, boards.matching.south[j], boards);
         }
         const i = m.north.findIndex((s) => !m.matched[s]);
-        return i === -1 ? { x: 0, y: 0 } : stepOn(sim, boards.matching.north[i]);
+        return i === -1 ? { x: 0, y: 0 } : stepOn(sim, boards.matching.north[i], boards);
     }
     // Sequence: its plates in order, once it's been shown
     if (!solved("sequence")) {
@@ -340,9 +332,9 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         const index = seq.order[seq.step];
         const plate = boards.sequence[index];
         if (sim.tick < shown + 5) {
-            return stepOn(sim, { x: plate.x + 1, y: plate.y + 1 });
+            return stepOn(sim, { x: plate.x + 1, y: plate.y + 1 }, boards);
         }
-        return on === `sequence:${index}` ? stepOff(sim, plate) : stepOn(sim, plate);
+        return on === `sequence:${index}` ? stepOff(sim, plate) : stepOn(sim, plate, boards);
     }
     // Lights out: the fewest presses that light them all, nearest first
     if (!solved("lights")) {
@@ -357,12 +349,14 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (!next) {
             return { x: 0, y: 0 };
         }
-        return on === `lights:${next.i}` ? stepOff(sim, next.plate) : stepOn(sim, next.plate);
+        return on === `lights:${next.i}`
+            ? stepOff(sim, next.plate)
+            : stepOn(sim, next.plate, boards);
     }
     // Addition: plates that make up exactly what's left
     const add = scab.addition;
     const pick = additionPick(add.values, add.stepped, add.target - add.sum);
-    return pick.length === 0 ? { x: 0, y: 0 } : stepOn(sim, boards.addition[pick[0]]);
+    return pick.length === 0 ? { x: 0, y: 0 } : stepOn(sim, boards.addition[pick[0]], boards);
 }
 
 // Lights out's presses: pressing i toggles i - 1, i and i + 1 round the ring; the fewest that
