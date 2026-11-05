@@ -3,6 +3,7 @@ import { useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
 import { EVOLUTIONS, EvolutionDef } from "../content/evolutions";
+import { ALL_MAPS } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { TROPHIES } from "../content/trophies";
 import { describeUnlockTask } from "../content/unlocks";
@@ -115,13 +116,17 @@ function getHalloweenRewards(save: SaveData): RewardEntry[] {
             found: save.unlockedItems.includes(id),
         };
     });
-    const trophies = TROPHIES.map(({ id, name, objId, how }) => ({
-        id,
-        name,
-        objId,
-        how,
-        found: save.trophies.includes(id),
-    }));
+    // The Tombs of Amascut's stay out of it while the raid's a dev map
+    const tombs = ALL_MAPS.some((map) => map.id === "tombs_of_amascut");
+    const trophies = TROPHIES.filter((t) => tombs || t.from.kind !== "tombs").map(
+        ({ id, name, objId, how }) => ({
+            id,
+            name,
+            objId,
+            how,
+            found: save.trophies.includes(id),
+        }),
+    );
     return [...weapons, ...trophies];
 }
 

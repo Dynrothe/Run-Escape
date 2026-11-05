@@ -1161,14 +1161,18 @@ function RaidObjective({
 // The chest at the end of a raid: what it was rolled with, and what came out
 function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
     const found = chest.found.map((id) => TROPHY_BY_ID.get(id)!).filter(Boolean);
+    // The Tombs' pet, Thread and jewels aren't purples
+    const purple = found.some((t) => t.from.kind !== "tombs" || t.from.weight !== undefined);
     return (
         <div className="ui-raid-chest">
             <div className="ui-raid-chest-title">
-                {found.length > 0 ? "A purple chest!" : "The raid's chest"}
+                {purple ? "A purple chest!" : "The raid's chest"}
             </div>
             <div className="ui-subtle">
-                {chest.points.toLocaleString("en-GB")} raid points: a{" "}
-                {Math.round(chest.chance * 100)}% chance of a unique
+                {chest.level !== undefined
+                    ? `Raid level ${chest.level} (${getRaidBand(chest.level)})`
+                    : `${chest.points.toLocaleString("en-GB")} raid points`}
+                : a {Math.round(chest.chance * 100)}% chance of a unique
             </div>
             {found.length > 0 ? (
                 <div className="ui-raid-chest-items">

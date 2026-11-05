@@ -629,7 +629,8 @@ export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
 
 // A raid's chest at the end: the points it went by, the chance of a purple they gave, and the
 // trophies in it
-export type RaidChest = { points: number; chance: number; found: string[] };
+// (The Tombs of Amascut's goes by its raid level, `level`, and has no points.)
+export type RaidChest = { points: number; chance: number; found: string[]; level?: number };
 
 export type RunResult = {
     mapId: string;
@@ -9500,6 +9501,53 @@ export class Sim {
         this.use(current);
     }
 
+    // The Tombs of Amascut's chest, once the last Warden's down, each of the party their own: a
+    // purple, more likely the higher the raid level (PURPLE_CHANCE's least at 0, its most at
+    // 500), from those its level allows, then its pet, the Thread and the jewels, each a roll of
+    // its own from its raid level
+    private openTombsChest(): void {
+        const level = this.raidLevel;
+        const open = TROPHIES.flatMap((trophy) =>
+            trophy.from.kind === "tombs" && level >= trophy.from.level
+                ? [{ trophy, from: trophy.from }]
+                : [],
+        );
+        const purples = open.filter(({ from }) => from.weight !== undefined);
+        const [min, max] = PURPLE_CHANCE;
+        const chance = purples.length > 0 ? min + ((max - min) * Math.min(level, 500)) / 500 : 0;
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            this.use(hero);
+            const found: TrophyDef[] = [];
+            const purple =
+                purples.length > 0 && this.rng.chance(chance)
+                    ? purples[this.rng.weightedIndex(purples.map(({ from }) => from.weight!))]
+                          .trophy
+                    : undefined;
+            if (purple) {
+                found.push(purple);
+            }
+            for (const { trophy, from } of open) {
+                if (from.chance !== undefined && this.rng.chance(from.chance)) {
+                    found.push(trophy);
+                }
+            }
+            hero.raidChest = { points: 0, chance, found: found.map((t) => t.id), level };
+            this.emit(
+                {
+                    type: "notice",
+                    message:
+                        found.length > 0
+                            ? (purple ? "A purple chest! " : "") +
+                              found.map((t) => this.findTrophy(t)).join(" ")
+                            : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                },
+                true,
+            );
+        }
+        this.use(current);
+    }
+
     get raidPoints(): number {
         return this.hero.raidPoints;
     }
@@ -14019,6 +14067,9 @@ export class Sim {
                 // Its death first, with nothing landing meanwhile (stepRun)
                 this.victoryAt = this.tick + secondsToTicks(fall);
                 this.fellTick = this.tick;
+                if (this.map.tombs) {
+                    this.openTombsChest();
+                }
             } else {
                 if (this.map.raid) {
                     this.scoreRaidRoom();

@@ -13,6 +13,7 @@ import {
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
 import { APMEKEN, APMEKEN_WAVES, CRONDIS, TOMBS_BOSSES, WARDENS } from "../content/tombs";
+import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { createWardensFloor } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -168,8 +169,12 @@ describe("invocations", () => {
         expect(at(0)).not.toContain("Osmumten's fang");
         expect(at(0)).toContain("Tumeken's guardian");
         expect(at(50)).toEqual(expect.arrayContaining(["Osmumten's fang", "Lightbearer"]));
-        expect(at(149)).not.toContain("Tumeken's shadow (uncharged)");
-        expect(at(150)).toHaveLength(TOMBS_UNIQUES.length);
+        expect(at(149)).not.toContain("Tumeken's shadow");
+        expect(at(150)).toContain("Tumeken's shadow");
+        // The jewels come in higher, Amascut's at the very top
+        expect(at(299)).not.toContain("Eye of the Corruptor");
+        expect(at(499)).not.toContain("Jewel of Amascut");
+        expect(at(500)).toHaveLength(TOMBS_UNIQUES.length);
     });
 
     it("are kept in the save, as only what this game knows", () => {
@@ -2777,9 +2782,53 @@ describe("the Wardens' second and last phases", () => {
             hit(sim, warden, "dark_bow", warden.maxHp);
         }
         expect(warden.dead).toBe(true);
+        // The chest opened as it fell, on the victory screen
+        expect(sim.heroes[0].raidChest?.level).toBe(0);
         step(sim, 6);
         expect(sim.state).toBe("victory");
+        expect(sim.getResult().raidChest).toBeDefined();
         // The fight's on the run's clock, not left out as the Nexus is
         expect(sim.seconds).toBeGreaterThan(WARDENS.two.toLast);
+    });
+});
+
+describe("the Tombs' chest", () => {
+    // The chest opened as the last Warden falls, at this raid level, so many times over
+    const open = (invocations: string[], times: number) => {
+        const sim = tombs(invocations);
+        const found: string[] = [];
+        for (let i = 0; i < times; i++) {
+            sim.trophies.clear();
+            sim["openTombsChest"]();
+            found.push(...sim.heroes[0].raidChest!.found);
+        }
+        return { sim, found };
+    };
+
+    it("has no purple under raid level 50, and only the fang or the Lightbearer under 150", () => {
+        const { sim, found } = open([], 200);
+        expect(sim.raidLevel).toBe(0);
+        expect(sim.heroes[0].raidChest!.chance).toBe(0);
+        expect(found.every((id) => TROPHY_BY_ID.get(id)!.from.kind === "tombs")).toBe(true);
+        expect(
+            found.filter((id) => !["tumekens_guardian", "thread_of_elidinis"].includes(id)),
+        ).toEqual([]);
+    });
+
+    it("finds more purples the higher the raid level, and the jewels only from theirs", () => {
+        const invocations = INVOCATIONS.map((i) => i.id);
+        const high = open(invocations, 300);
+        const level = high.sim.raidLevel;
+        expect(level).toBeGreaterThanOrEqual(150);
+        const purples = high.found.filter((id) => {
+            const from = TROPHY_BY_ID.get(id)!.from;
+            return from.kind === "tombs" && from.weight !== undefined;
+        });
+        expect(purples.length).toBeGreaterThan(300 * 0.3);
+        for (const id of high.found) {
+            const from = TROPHY_BY_ID.get(id)!.from;
+            expect(from.kind === "tombs" && from.level <= level).toBe(true);
+        }
+        expect(high.sim.heroes[0].raidChest!.level).toBe(level);
     });
 });
