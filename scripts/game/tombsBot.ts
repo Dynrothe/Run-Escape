@@ -583,7 +583,22 @@ export function dodge(sim: Sim): Point | undefined {
     // Out from under a boss's blast as it winds up, straight away from where it'll land
     for (const enemy of sim.enemies) {
         const windup = enemy.bossState?.windup;
-        if (enemy.dead || !windup || windup.attack.kind !== "blast") {
+        if (enemy.dead || !windup) {
+            continue;
+        }
+        // A swing hits round the boss (or along its line): out of its reach
+        if (windup.attack.kind === "swing") {
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            const away = Math.hypot(dx, dy) || 0.01;
+            const reach = (windup.attack.line?.length ?? windup.attack.radius ?? 2) + enemy.radius + player.radius + 0.8;
+            if (away < reach) {
+                awayX += (dx / away) * 4;
+                awayY += (dy / away) * 4;
+            }
+            continue;
+        }
+        if (windup.attack.kind !== "blast") {
             continue;
         }
         const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
