@@ -15,6 +15,7 @@ the version in the corner).
 
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
+- The Armadyl crossbow, by @braiansmarzaro: clearer bolts that upgrade from bronze to dragon as it levels.
 
 ## 0.27.0 - 2026-11-05
 

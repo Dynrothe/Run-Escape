@@ -247,16 +247,15 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId =
+                level.projectileObjId ?? (weapon.kind === "knives" ? level.objId : undefined);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {

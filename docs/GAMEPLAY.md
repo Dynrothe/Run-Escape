@@ -147,7 +147,8 @@ version and how to run it.
       upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
       the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
-      crossbow**'s bolts go through what they hit and one in five is enchanted (a ruby takes a
+      crossbow**'s bolts visibly upgrade from bronze to steel, mithril, runite, then dragon.
+      They go through what they hit and one in five is enchanted (a ruby takes a
       share of what's left of its hitpoints, a diamond pierces more, a dragonstone burns), and
       the **Crystal bow**'s arrows split into three where they first hit.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage

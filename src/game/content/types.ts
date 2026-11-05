@@ -1169,8 +1169,8 @@ export type WeaponLevel = {
     description: string;
     // Item shown in the player's hand at this level
     objId?: number;
-    // Knives: the item that flies when it isn't the one held (the atlatl's
-    // darts)
+    // Item drawn in flight instead of a spot animation (bolts, or the atlatl's darts).
+    // Knives default to the held item when this isn't set.
     projectileObjId?: number;
     // Sounds at this level, overriding the weapon's (spells sound different
     // as they upgrade)
@@ -1196,6 +1196,10 @@ export type WeaponDef = {
     sound: number;
     hitSound: number;
     levels: WeaponLevel[];
+    // Visual size only; doesn't change a projectile's hit radius.
+    projectileScale?: number;
+    // Model-facing correction in cache angle units (2048 is a full turn).
+    projectileYawOffset?: number;
     // How often it's offered on level ups
     rarity: Rarity;
     // Replaces this weapon once it's at max level and the passive is owned
