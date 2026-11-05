@@ -1779,6 +1779,8 @@ export type TombsDef = {
     paths: TombsPathDef[];
     // The Wardens, once all four paths are done (in development): their room, in world tiles
     wardens?: TombsWardensPlaces;
+    // The way to the Wardens in the Nexus, in world tiles: open once every path's done
+    wardensDoor?: { x: number; y: number };
 };
 
 // Which Warden: Elidinis' or Tumeken's

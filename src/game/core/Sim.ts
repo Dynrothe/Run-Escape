@@ -4796,6 +4796,33 @@ export class Sim {
             return;
         }
         const current = this.hero;
+        // The way to the Wardens, once every path's done
+        const door = tombs.wardensDoor;
+        if (door && tombs.wardens && !this.tombsWardens) {
+            const near = this.heroes.find(
+                (hero) =>
+                    this.isUp(hero) &&
+                    fm.hypot(door.x - hero.player.x, door.y - hero.player.y) <= TOMBS_DOOR_REACH,
+            );
+            const open = tombs.paths.every((path) => this.tombsPathsDone.includes(path.id));
+            if (near && open) {
+                this.enterWardens();
+                return;
+            }
+            if (near && this.tombsDoors.get(near.index) !== "wardens") {
+                this.tombsDoors.set(near.index, "wardens");
+                this.use(near);
+                this.emit(
+                    {
+                        type: "notice",
+                        message: "The way to the Wardens opens once all four paths are done.",
+                    },
+                    true,
+                );
+                this.use(current);
+                return;
+            }
+        }
         for (const hero of this.heroes) {
             if (!this.isUp(hero)) {
                 continue;
@@ -5779,15 +5806,20 @@ export class Sim {
             this.appearanceVersion++;
         }
         this.use(current);
-        this.tombsDoors.clear();
-        this.gatherHall();
-        this.moveParty(tombs.wardens.arrive);
-        this.startWardens();
+        this.enterWardens();
         this.emit({
             type: "notice",
             message: "The Wardens (dev): every path done, best of everything.",
         });
         return true;
+    }
+
+    // Into the Wardens' room, the whole party, with what's on the floor
+    private enterWardens(): void {
+        this.tombsDoors.clear();
+        this.gatherHall();
+        this.moveParty(this.map.tombs!.wardens!.arrive);
+        this.startWardens();
     }
 
     // Into the Wardens' fight: the obelisk and the two Wardens on their platforms, the first orbs a

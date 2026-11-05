@@ -49,6 +49,8 @@ const TEST_TOMBS: MapDef = {
     floor: { ...createWardensFloor(LAST_FLOOR), script: [], loopSeconds: 1e7 },
     tombs: {
         nexus: { x: 1036.5, y: 1036.5 },
+        // The way to the Wardens, 6 tiles south
+        wardensDoor: { x: 1036.5, y: 1030.5 },
         // The Wardens' room in the same field: the obelisk north of the Nexus, a Warden either side
         wardens: {
             arrive: { x: 1036.5, y: 1040.5 },
@@ -232,6 +234,21 @@ describe("the Tombs of Amascut", () => {
         expect(sim.tombsPath).toBe("apmeken");
         seconds(sim, 2, { x: 1036.5, y: 1060.5 });
         expect(sim.seconds).toBeCloseTo(2, 1);
+    });
+
+    it("open the way to the Wardens once all four paths are done", () => {
+        const sim = tombs([]);
+        sim.weapons = [];
+        sim.player.y = sim.player.prevY = 1030.5;
+        sim.step();
+        expect(sim.tombsWardens).toBeUndefined();
+        expect(
+            sim.takeEvents().some((e) => e.type === "notice" && e.message.includes("four paths")),
+        ).toBe(true);
+        sim.tombsPathsDone.push(...sim.map.tombs!.paths.map((p) => p.id));
+        sim.step();
+        expect(sim.tombsWardens?.phase).toBe(1);
+        expect(sim.player.y).toBeCloseTo(sim.map.tombs!.wardens!.arrive.y);
     });
 
     it("take the party into a path's room through its door", () => {

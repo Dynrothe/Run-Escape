@@ -1030,6 +1030,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         },
         tombs: {
             nexus: TOA_PLACES.nexus.arrive,
+            // The Nexus's north end, as OSRS's way to the Wardens is
+            wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),
             wardens: {
                 arrive: TOA_PLACES.wardens.arrive,
                 obelisk: TOA_PLACES.wardens.obelisk,
