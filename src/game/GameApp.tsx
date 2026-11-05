@@ -67,7 +67,7 @@ async function loadViewer(
     const cacheInfo = findGameCache(cacheList.caches);
     if (!cacheInfo) {
         throw new Error(
-            `Cache ${GAME_CACHE_NAME} is missing. Download it with npm run download-caches.`,
+            `Cache ${GAME_CACHE_NAME} is missing. Download it with bun run download-caches.`,
         );
     }
     const cache = await loadCacheFiles(cacheInfo, signal, onProgress);

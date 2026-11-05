@@ -28,10 +28,10 @@ function checkDist(): void {
     try {
         caches = JSON.parse(readFileSync(path.join(DIST, "caches", "caches.json"), "utf8"));
     } catch {
-        throw new Error("No dist/caches: run npm run build, then npm run slim-cache");
+        throw new Error("No dist/caches: run bun run build, then bun run slim-cache");
     }
     if (caches.length === 0 || caches.some((cache) => !cache.slimOf)) {
-        throw new Error("dist/caches isn't only the slim cache: run npm run slim-cache");
+        throw new Error("dist/caches isn't only the slim cache: run bun run slim-cache");
     }
 }
 

@@ -7,15 +7,15 @@ with Share run stats in Settings. Gameplay and local saves never wait for report
 
 ## Set up the collector
 
-You need a Cloudflare account (free is fine) and Node 22 or newer. The scripts use the Wrangler
+You need a Cloudflare account, Bun and Node 22.12 or newer. The scripts use the Wrangler
 installed for the co-op relay, but deploy a different Worker, `run-escape-analytics`.
 
 1. **Install and log in**, from the repository:
 
     ```sh
     cd server/cloudflare
-    npm install
-    npx wrangler login
+    bun install --frozen-lockfile
+    bun run wrangler login
     ```
 
 2. **Say where the game is.** In `server/analytics/wrangler.toml`, add the web game's origin to
@@ -26,7 +26,7 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
 3. **Create and deploy it**, the first time only:
 
     ```sh
-    npm run analytics:setup
+    bun run analytics:setup
     ```
 
     The first deploy creates the `run-escape-analytics` database, then the schema is applied. It
@@ -36,7 +36,7 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
    least 32 characters, kept somewhere safe, as you'll send it to read them.
 
     ```sh
-    npx wrangler secret put ANALYTICS_READ_TOKEN -c ../analytics/wrangler.toml
+    bun run wrangler secret put ANALYTICS_READ_TOKEN -c ../analytics/wrangler.toml
     ```
 
     Reads fail closed without it. Never put it in a game build or a `VITE_` variable.
@@ -47,12 +47,12 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
    URL, and the release workflow builds it into the game and the launcher. An older launcher
    needs a new download before it lets the game reach the collector. `COOP_URL` is independent.
 
-**After a change** to the Worker or a new migration, run `npm run analytics:deploy`. It applies
+**After a change** to the Worker or a new migration, run `bun run analytics:deploy`. It applies
 new migrations before deploying, so new code never runs against an old schema. Migrations must
 add to the schema (new tables, columns with defaults) rather than change it, since the running
 Worker uses it until the deploy finishes.
 
-**Locally**, run `npm run analytics:dev`, which applies the schema to a local database and serves
+**Locally**, run `bun run analytics:dev`, which applies the schema to a local database and serves
 the Worker on port 8789. Put the dev game's origin (usually `http://localhost:5173`) and a test
 read token in `server/analytics/.dev.vars`:
 
@@ -61,7 +61,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 ANALYTICS_READ_TOKEN=a-local-token-of-at-least-32-characters
 ```
 
-and start the game with `VITE_RUN_ANALYTICS_URL=http://localhost:8789/v1/runs npm start`.
+and start the game with `VITE_RUN_ANALYTICS_URL=http://localhost:8789/v1/runs bun run start`.
 
 ## What it accepts
 
@@ -122,7 +122,7 @@ row has a count, time and stat totals, the highest hit, the average duration and
 rows the answer says it was truncated; narrow the dates or filters.
 
 Anything else is a query in the dashboard, or with
-`npx wrangler d1 execute DB --remote -c ../analytics/wrangler.toml --command "..."`. Wins
+`bun run wrangler d1 execute DB --remote -c ../analytics/wrangler.toml --command "..."`. Wins
 against full-party deaths on both relays, for example:
 
 ```sql
@@ -146,7 +146,7 @@ GROUP BY characters, map_id, mode;
 
 ## Export and look through it
 
-`npx wrangler d1 export run-escape-analytics --remote --output runs-2026-11-05.sql -c ../analytics/wrangler.toml`
+`bun run wrangler d1 export run-escape-analytics --remote --output runs-2026-11-05.sql -c ../analytics/wrangler.toml`
 writes the whole database, schema and rows, as SQL. `--table daily_stats` (repeatable) limits it
 to some tables and `--no-schema` leaves out the `CREATE` statements; without `runs`, the viewer
 below has no party composition, leaderboard or single runs to show. An export

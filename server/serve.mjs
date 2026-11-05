@@ -1,9 +1,9 @@
-// Serves a build (npm run build, then npm run slim-cache for its slim cache)
+// Serves a build (bun run build, then bun run slim-cache for its slim cache)
 // with everything it needs, co-op's relay included, from one Node process
 // with no packages:
 //
-//   npm run serve                          # on port 8080 (or PORT), co-op included
-//   npm run serve:singleplayer             # without co-op (or MULTIPLAYER=off)
+//   bun run serve                          # on port 8080 (or PORT), co-op included
+//   bun run serve:singleplayer             # without co-op (or MULTIPLAYER=off)
 //   ... -- --proxy=cloudflare              # behind a proxy (or PROXY=local|cloudflare;
 //                                          # see client-ip.mjs)
 //   ... -- --any-map                       # rooms take players without their map
@@ -183,11 +183,11 @@ if (relay) {
 }
 
 if (!existsSync(join(ROOT, "index.html"))) {
-    console.error(`No build in ${ROOT}. Run npm run build first.`);
+    console.error(`No build in ${ROOT}. Run bun run build first.`);
     process.exit(1);
 }
 if (!existsSync(join(CACHES, "caches.json"))) {
-    console.error(`No cache in ${CACHES}. Run npm run download-caches (or npm run slim-cache).`);
+    console.error(`No cache in ${CACHES}. Run bun run download-caches (or bun run slim-cache).`);
     process.exit(1);
 }
 

@@ -6,8 +6,8 @@ The [README](../README.md) covers getting it running.
 ## Hosting
 
 ```
-npm run build
-npm run slim-cache
+bun run build
+bun run slim-cache
 ```
 
 writes the game to `dist/`, with a slim copy of the cache in `dist/caches/`: only what the game
@@ -21,12 +21,12 @@ caches/caches.json
 caches/osrs-241_2026-09-30-slim-<hash>/
 ```
 
-`npm run slim-cache` loads everything the game loads (every model it bakes, an icon for every
+`bun run slim-cache` loads everything the game loads (every model it bakes, an icon for every
 item, each map's arena and the map squares around it) with the game's own loaders and keeps the
 groups they read. Then it loads it all again from the slim copy and fails if anything is missing.
 It takes a couple of minutes. Run it again after changing the content (a new enemy, item or map),
 or the game stops on a "missing from the cache" error. The slim cache is named after what's in it,
-so players' browsers fetch the new one and drop the old. `npm run preview` serves the build with
+so players' browsers fetch the new one and drop the old. `bun run preview` serves the build with
 its slim cache, to try it before uploading. The full cache works too, if you'd rather host that.
 The map viewer (`?viewer=1`) needs the full one.
 
@@ -58,11 +58,11 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 
 ### Co-op relay
 
-The simplest way to host everything: `npm run serve` (`node server/serve.mjs`, no packages) serves
+The simplest way to host everything: `bun run serve` (`node server/serve.mjs`, no packages) serves
 `dist/` with the headers above on `PORT` (8080), and runs the co-op relay in the same process.
-Multiplayer is on unless it's turned off (`npm run serve:singleplayer`, `MULTIPLAYER=off` or
+Multiplayer is on unless it's turned off (`bun run serve:singleplayer`, `MULTIPLAYER=off` or
 `--no-multiplayer`), and either way the game only offers it when a relay answers: it asks once,
-in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds. Run `npm run build` first; with no
+in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds. Run `bun run build` first; with no
 slim cache in `dist/caches` it serves the full one from `caches/`, so it also works for trying a
 build locally (http://localhost:8080). Put something that does HTTPS in front of it, like Caddy
 (`caddy reverse-proxy --from game.example.com --to localhost:8080`).
@@ -102,7 +102,7 @@ ProxyPass "/game/coop" "http://127.0.0.1:8787/coop" upgrade=websocket
 ```
 
 The relay limits each address (see below), so behind a proxy, where every player looks like the
-proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve --`). It's off
+proxy, tell it what's in front with `PROXY` (or `--proxy=` after `bun run serve`). It's off
 (`none`) unless it's set:
 
 | `PROXY`        | For                                                                            | Whose word it takes for a player's address                                                                                       |
@@ -175,9 +175,9 @@ is around 50 Mbit/s and three quarters of one core. Set `MULTIPLAYER_MAX_ROOMS` 
 messages on as they came rather than decoding and encoding them again, so what's left of its CPU is
 mostly Node writing to sockets.
 
-Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
-else. `npm start` and `npm run preview` run a relay of their own at `/coop`
-(`npm run start:singleplayer`, or `MULTIPLAYER=off`, without).
+Or build with `VITE_COOP_URL=wss://relay.example.com/coop bun run build` to point it anywhere
+else. `bun run start` and `bun run preview` run a relay of their own at `/coop`
+(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without).
 
 **On Cloudflare instead.** [server/cloudflare/](../server/cloudflare/README.md) is the same relay
 as a Cloudflare Worker with Durable Objects: a lobby for the rooms list and names, and each room its
@@ -187,19 +187,19 @@ setup, from `wrangler login` to the build, and what it costs. The game works wit
 
 #### Optional multiplayer metrics
 
-A server that hosts the game (`npm run serve`, or the standalone relay) serves multiplayer metrics
+A server that hosts the game (`bun run serve`, or the standalone relay) serves multiplayer metrics
 by default, on a separate listener bound only to `127.0.0.1`, port 8788. The endpoint serves
 Prometheus text format 0.0.4 with `HELP` and `TYPE` metadata. Read it from the server itself:
 
 ```sh
-npm run serve
+bun run serve
 curl http://127.0.0.1:8788/coop/metrics
 ```
 
 In PowerShell:
 
 ```powershell
-npm run serve
+bun run serve
 # From another terminal:
 (Invoke-WebRequest http://127.0.0.1:8788/coop/metrics).Content
 ```
@@ -207,7 +207,7 @@ npm run serve
 Set `MULTIPLAYER_METRICS=off` (or `false`, `0`, `no`) and restart to turn the metrics listener off
 (`$env:MULTIPLAYER_METRICS = "off"` in PowerShell); `on`, `true`, `1` or `yes` turn it on. Any other
 value, an empty one included, is the same as none, like `MULTIPLAYER`. The dev server and
-`npm run preview` only run the listener when it's set to `on`: nobody scrapes a dev server, and two
+`bun run preview` only run the listener when it's set to `on`: nobody scrapes a dev server, and two
 checkouts would fight over the port. If the standalone relay uses `MULTIPLAYER_PATH`, the metrics
 path is that path plus `/metrics`. Multiplayer must be running for metrics to be available. Set
 `MULTIPLAYER_METRICS_PORT` to another port (1–65535) if needed, for example when running several
@@ -291,9 +291,9 @@ the first time it's opened. There's no installer. Unzip it anywhere and run it. 
 `desktop/`, apart from the game, which doesn't know it's in an app.
 
 ```
-npm run build && npm run slim-cache
-npm run desktop         # the app, on this build, with no update check
-npm run desktop:dist    # everything a release carries, in release/
+bun run build && bun run slim-cache
+bun run desktop         # the app, on this build, with no update check
+bun run desktop:dist    # everything a release carries, in release/
 ```
 
 `desktop:dist` stops if `dist/caches` isn't the slim cache. It needs Node 22.12 or later (Electron
@@ -862,7 +862,7 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
 
 ### Scripts
 
-All run from the repository root with `npx tsx`:
+All run from the repository root with `bun run tsx`:
 
 ```
 scripts/cache/validate-decoders.ts       decode every type the game uses; fails on new opcodes
@@ -877,7 +877,7 @@ scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
-scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
+scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
 scripts/scaperune/relief.ts out.png preset=Alpine        a generated map's height, in seconds, without the cache
@@ -910,7 +910,7 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
                                          counts what spots draw, --bake is memory per map's actors)
 ```
 
-Tests: `npm test`. `.github/workflows/check.yml` runs them with the type check on every pull
+Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
 request (without the game's cache, so `generator.test.ts` skips its long map check there).
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
@@ -1157,7 +1157,7 @@ flag, with its name from `Intl.DisplayNames` as the tooltip. Emoji flags won't d
 so they show as two letters there anyway. A room's flag is its host's, which on the Cloudflare relay
 is roughly where the room runs too.
 
-To try it locally, `npm start` and open the game in two windows (one private, for a
+To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
 game's open in another tab, and Play without saving lets it play (see Saves).
 
@@ -1328,5 +1328,5 @@ game loads rather than built in, so on a hosted game `notice.md` can be edited o
 
 The version is `package.json`'s, shown in the title screen's corner, and [CHANGELOG.md](../CHANGELOG.md)
 says what changed in each one; the title screen shows it too. Note changes under Unreleased as
-they're made. For a release, `npm version minor --no-git-tag-version` (or `patch` for fixes alone),
+they're made. For a release, `bun pm version minor --no-git-tag-version` (or `patch` for fixes alone),
 then turn Unreleased into the new version's heading with the date. A test checks the two agree.

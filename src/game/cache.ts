@@ -2,7 +2,7 @@ import { CacheInfo } from "../rs/cache/CacheInfo";
 
 // The game only runs on this cache: content ids (npcs, seqs, objs, spotanims)
 // and the decoder fixes were checked against it. Download it into caches/ with
-// npm run download-caches (or copy it in) before starting. The README's Cache
+// bun run download-caches (or copy it in) before starting. The README's Cache
 // version section says which it is; change it there too (a test checks).
 export const GAME_CACHE_NAME = "osrs-241_2026-09-30";
 

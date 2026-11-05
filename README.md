@@ -62,17 +62,18 @@ changing both.
 
 ## Getting started
 
-You need [Node.js](https://nodejs.org/) 20 or newer.
+Install [Bun](https://bun.com/) 1.3.14 and [Node.js](https://nodejs.org/) 22.12 or newer.
+Bun installs dependencies and runs project commands. Node runs Vite, Vitest and the co-op relay.
 
 ```sh
-npm install
-npm run download-caches
-npm start
+bun install --frozen-lockfile
+bun run download-caches
+bun run start
 ```
 
 and open http://localhost:5173.
 
-`npm run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
+`bun run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
 [OpenRS2 Archive](https://archive.openrs2.org/) into `caches/`; you can also copy a `caches/` folder
 over from another checkout. The download gives up when nothing has arrived for a minute; on a
 connection that drops out for longer, set `CACHE_DOWNLOAD_TIMEOUT_MS` to a longer wait in
@@ -104,9 +105,9 @@ doesn't recognise the layout of only moves.
 ### Tests and tools
 
 ```sh
-npm test                   # the game's tests (vitest)
-npx tsc --noEmit -p .      # type check
-npm run lint               # format everything with Prettier
+bun run test               # the game's tests (vitest)
+bun run tsc --noEmit -p .  # type check
+bun run lint               # format everything with Prettier
 ```
 
 `scripts/game/simulate-run.ts` has a bot play full runs for balancing, and `scripts/cache/` has
@@ -117,19 +118,19 @@ to host a build.
 ## Hosting
 
 ```sh
-npm run build
-npm run slim-cache
+bun run build
+bun run slim-cache
 ```
 
 writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only what the game
 reads, about 26 MB instead of 227 MB). The page has to be served with
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
 HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples. `npm run serve` serves the build with those headers from one Node process with no
-packages, co-op's relay included (`npm run serve:singleplayer` leaves it out). The game only offers
+examples. `bun run serve` serves the build with those headers from one Node process with no
+packages, co-op's relay included (`bun run serve:singleplayer` leaves it out). The game only offers
 Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
 [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
-`npm run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
+`bun run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).
 
@@ -149,8 +150,8 @@ if you work with one.
 
 - Base your branch on the current `release-<version>` branch (or `main` if there isn't one), and
   point the pull request at it.
-- Format what you changed with Prettier (`npx prettier --write <files>`), and keep `npm test` and
-  the type check passing.
+- Format what you changed with Prettier (`bun run prettier --write <files>`), and keep
+  `bun run test` and the type check passing.
 - Content is plain data in `src/game/content/`, with real cache ids; the tools in `scripts/cache/`
   find them. Say in the pull request if it uses anything new from the cache.
 - Note what you change under Unreleased in [CHANGELOG.md](CHANGELOG.md). It's written for players,

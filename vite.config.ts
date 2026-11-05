@@ -74,7 +74,7 @@ function glslIncludesPlugin(): Plugin {
 
 // Serves the gitignored `caches/` directory at `/caches` during dev and
 // `vite preview`, matching the previous craco devServer express.static middleware.
-// `vite preview` serves the build's slim cache instead once `npm run slim-cache`
+// `vite preview` serves the build's slim cache instead once `bun run slim-cache`
 // has written one to dist/caches.
 function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
@@ -121,7 +121,7 @@ function serveCachesPlugin(): Plugin {
 }
 
 // Runs the co-op relay (server/coop-relay.mjs) at /coop on the dev server and
-// `vite preview`, unless multiplayer's turned off (npm run start:singleplayer,
+// `vite preview`, unless multiplayer's turned off (bun run start:singleplayer,
 // or MULTIPLAYER=off). Off, the game hides co-op.
 function coopRelayPlugin(): Plugin {
     const start = (httpServer: HttpServer | null, middlewares: Connect.Server) => {

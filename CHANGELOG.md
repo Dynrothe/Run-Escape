@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Development and CI now use Bun to install dependencies and run project commands.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added
