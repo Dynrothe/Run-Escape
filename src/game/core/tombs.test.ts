@@ -2366,6 +2366,23 @@ describe("Zebak", () => {
         expect(roarOn(true).hurt).toBe(0);
     });
 
+    it("leaves a party his roar kills where the room starts over, not thrown from there", () => {
+        const sim = atZebak();
+        special(sim, 0);
+        const fight = sim.tombsZebak!;
+        fight.acid = [];
+        const boulder = sim.tombsCover.find((r) => r.look === DEF.roar.look)!;
+        fight.roar!.tick = sim.tick + 2;
+        sim.player.hp = 1;
+        for (let i = 0; i < 5 && sim.tombsDeaths === 0; i++) {
+            at(sim, { x: boulder.x + 2.5, y: boulder.y - 1.5 });
+        }
+        expect(sim.tombsDeaths).toBe(1);
+        const arrive = sim.tombsPathRoom!.boss!.arrive;
+        expect(sim.player.x).toBeCloseTo(arrive.x);
+        expect(sim.player.y).toBeCloseTo(arrive.y);
+    });
+
     it("sends tidal waves across, a gap in each, that wash his acid away", () => {
         const sim = atZebak();
         special(sim, 1);

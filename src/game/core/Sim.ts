@@ -7243,7 +7243,13 @@ export class Sim {
                 undefined,
                 true,
             );
-            this.zebakShove(player, player.x - boss.x, player.y - boss.y, def.roar.knock);
+            // A wipe has the room start over from its safe end: nobody's thrown from there
+            if (this.tombsRoom?.boss?.uid !== boss.uid) {
+                break;
+            }
+            if (this.isUp(hero)) {
+                this.zebakShove(player, player.x - boss.x, player.y - boss.y, def.roar.knock);
+            }
         }
         this.use(current);
         this.tombsCover = this.tombsCover.filter((rock) => rock.look !== def.roar.look);
@@ -7291,7 +7297,9 @@ export class Sim {
                 }
                 wave.hit.push(index);
                 this.damagePlayer(damage, "zebak", false);
-                this.zebakShove(player, 0, wave.dir, def.waves.shove);
+                if (this.tombsRoom?.boss?.uid === fight.uid && this.isUp(this.hero)) {
+                    this.zebakShove(player, 0, wave.dir, def.waves.shove);
+                }
             });
             return wave.dir > 0 ? wave.y < island.y1 + 2 : wave.y > island.y0 - 1;
         });

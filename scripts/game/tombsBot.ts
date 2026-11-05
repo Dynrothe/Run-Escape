@@ -138,8 +138,37 @@ function nexusMove(sim: Sim): Point {
     const next = PATH_ORDER.map((id) => tombs.paths.find((p) => p.id === id)).find(
         (path) => path?.room && !sim.tombsPathsDone.includes(path.id),
     );
-    const to = next?.door ?? tombs.wardensDoor ?? tombs.nexus;
+    const to = openNear(sim, next?.door ?? tombs.wardensDoor ?? tombs.nexus, 2.5, tombs.nexus);
     return walkTo(sim, to.x, to.y);
+}
+
+// The open tile within reach of a spot (a door set in a wall) nearest another (where the bot's
+// coming from); the spot itself if it's open
+function openNear(sim: Sim, spot: Point, reach: number, from: Point): Point {
+    if (!sim.grid.isSolid(Math.floor(spot.x), Math.floor(spot.y))) {
+        return spot;
+    }
+    let best = spot;
+    let bestAway = Infinity;
+    const r = Math.ceil(reach);
+    for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+            const x = Math.floor(spot.x) + dx + 0.5;
+            const y = Math.floor(spot.y) + dy + 0.5;
+            if (
+                Math.hypot(x - spot.x, y - spot.y) > reach ||
+                sim.grid.isSolid(Math.floor(x), Math.floor(y))
+            ) {
+                continue;
+            }
+            const away = Math.hypot(x - from.x, y - from.y);
+            if (away < bestAway) {
+                bestAway = away;
+                best = { x, y };
+            }
+        }
+    }
+    return best;
 }
 
 type PathRoom = NonNullable<NonNullable<Sim["map"]["tombs"]>["paths"][number]["room"]>;
