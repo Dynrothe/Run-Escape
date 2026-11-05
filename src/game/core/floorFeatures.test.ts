@@ -2,10 +2,12 @@ import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, getMap } from "../content/maps";
 import { FloorDef, MapDef, emptyStats } from "../content/types";
 import { createWardensFloor } from "../content/wardensFloor";
+import { FLOOR_DEMOS, FLOOR_START } from "../scaperune/maps/wardensFloor";
 import { ArenaFloor } from "./ArenaFloor";
 import { Rng } from "./Rng";
 import { FLOOR_SOURCE, Sim, TICKS_PER_SECOND } from "./Sim";
 import { EFFECT_BURN, FLOOR_EFFECTS } from "./floorLayout";
+import { PHONE_TRIANGLES, lintFloor } from "./floorLint";
 import { makeGrid } from "./world/testGrid";
 
 // What a floor's tiles can do besides rising and falling (FloorDef): effects on whoever's on them,
@@ -417,5 +419,68 @@ describe("raised tiles and ramps", () => {
         new ArenaFloor(quiet(), grid, new Rng(1), T);
         expect(grid.version).toBeGreaterThan(before);
         expect(grid.steps.can(RECT.x0 + 9, RECT.y0 + 15, 1)).toBe(true);
+    });
+});
+
+describe("materials", () => {
+    test("each skin's material sounds as it rises and falls, and the floor's for the rest", () => {
+        const sim = createSim(
+            quiet({
+                skins: [
+                    { spotAnim: 2220 },
+                    { spotAnim: 2220, material: { rise: { sound: 170 }, fall: { sound: 168 } } },
+                ],
+                tiles: [{ where: box(12, 0, 22, 24), skin: 1 }],
+                script: [{ at: 1, pattern: { kind: "side", side: "both", rowSeconds: 0 } }],
+            }),
+            1.5,
+            1.5,
+        );
+        const sounds = new Set<number>();
+        for (let i = 0; i < 2.5 * T; i++) {
+            sim.events.length = 0;
+            sim.step(0, 0);
+            for (const event of sim.events) {
+                if (event.type === "impact") {
+                    sounds.add(event.sound!);
+                }
+            }
+        }
+        expect([...sounds].sort()).toEqual([170, sim.floor!.def.slam.sound].sort());
+    });
+});
+
+describe("the preview's checks", () => {
+    test("every demo is in one piece, reachable from its start and within a phone's budget", () => {
+        for (const recipe of FLOOR_DEMOS) {
+            const lint = lintFloor(recipe.mapDef!.floor!, FLOOR_START);
+            expect(lint.warnings).toEqual([]);
+            expect(lint.triangles.busy).toBeLessThanOrEqual(PHONE_TRIANGLES);
+        }
+    });
+
+    test("it finds islands, tiles behind ledges, see-through skins and level ramps", () => {
+        const lint = lintFloor(
+            quiet({
+                // A lone tile between two empty rows, cut off from the rest
+                ascii: Array.from({ length: 25 }, (_, y) =>
+                    y === 2 || y === 4
+                        ? ".".repeat(23)
+                        : y === 3
+                          ? "#" + ".".repeat(22)
+                          : "#".repeat(23),
+                ),
+                skins: [{ spotAnim: 2220 }, { loc: 45356 }],
+                tiles: [
+                    { where: box(2, 15, 6, 19), height: 1 },
+                    { where: at(15, 15), ramp: "east" },
+                ],
+            }),
+            FLOOR_START,
+        );
+        expect(lint.warnings.some((w) => w.includes("pieces"))).toBe(true);
+        expect(lint.warnings.some((w) => w.includes("can't be reached"))).toBe(true);
+        expect(lint.warnings.some((w) => w.includes("see-through"))).toBe(true);
+        expect(lint.warnings.some((w) => w.includes("is level"))).toBe(true);
     });
 });
