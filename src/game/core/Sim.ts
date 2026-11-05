@@ -496,6 +496,9 @@ const FLEE_LOOKAHEAD = 1;
 
 // What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
 export const FLOOR_SOURCE = "floor";
+// Tiles from a player that a slab coming up, or a tile going, shakes the camera (FloorDef.shake)
+const FLOOR_SLAM_SHAKE_REACH = 1.5;
+const FLOOR_DROP_SHAKE_REACH = 2.5;
 
 // The events that are one hero's own, which co-op tags with who: what they
 // did, what happened to them, what they picked up
@@ -6194,6 +6197,12 @@ export class Sim {
                 this.emit({ type: "impact", sound, x: x / count, y: y / count });
             }
         }
+        // The camera shakes when it happens close by: a slab coming up beside a player, a tile
+        // going near one. The client leaves it out if Settings say so.
+        if (def.shake) {
+            this.shakeNear(rose, FLOOR_SLAM_SHAKE_REACH, def.shake.slam);
+            this.shakeNear(fell, FLOOR_DROP_SHAKE_REACH, def.shake.drop);
+        }
         if (fell.length > 0) {
             // Enemies on a tile that's gone go to the nearest that isn't
             for (const enemy of this.enemies) {
@@ -6235,6 +6244,21 @@ export class Sim {
                 this.hitByFloor(def.slam.damage, def.slam.sound, false);
             }
         });
+    }
+
+    // One shake for the first of these tiles (x then y) within reach of a hero who's up
+    private shakeNear(tiles: number[], reach: number, shake: number): void {
+        for (let i = 0; i < tiles.length; i += 2) {
+            const x = tiles[i] + 0.5;
+            const y = tiles[i + 1] + 0.5;
+            for (const hero of this.heroes) {
+                const { player } = hero;
+                if (this.isUp(hero) && fm.hypot(player.x - x, player.y - y) <= reach) {
+                    this.emit({ type: "bossImpact", x, y, shake });
+                    return;
+                }
+            }
+        }
     }
 
     // A share of the player's hitpoints, armour or not; a fall always lands, a slab not again

@@ -719,9 +719,19 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   Flying enemies cross holes. Grids are kept between runs, so `ArenaFloor` puts every tile back as
   a run starts.
 - `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
-  hidden floor, so each can move on its own and a fallen one leaves the void. The warnings are the
-  tiles themselves: shaking and catching the light before a rise, shaking, sagging and darkening
-  before a fall. Hits are a share of the player's hitpoints, so any adventurer can try it.
+  hidden floor, so each can move on its own and a fallen one opens onto the pit under it. The
+  warnings are the tiles themselves: shaking and catching the light before a rise, shaking,
+  sagging and darkening before a fall. Hits are a share of the player's hitpoints, so any
+  adventurer can try it.
+- What it throws up (`FloorDef.effects`) is drawn from the floor's arrays and the clock alone, with
+  no state: dust as slabs rise, light in the cracks and grit falling off a tile about to go, chips
+  and dust with a falling tile, embers out of the holes, and the Tombs' wall hung down each hole's
+  edge into the dark. Each is on a share of the tiles, to keep a phone's triangles down.
+  `FloorDef.shake` has the sim shake the camera (`bossImpact`) for a slab beside a player or a
+  tile going near one, which Settings can turn off.
+- The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
+  bridge (`TILE_BRIDGE` on level 1) nine tiles over the ground, and the player walks the deck
+  (`ArenaGrid.getHeight`'s bridge heights).
 
 ### Pets
 
