@@ -2,7 +2,7 @@ import { FLOOR_SKINS } from "../content/floorSkins";
 import type { FloorDef, FloorSkinDef } from "../content/types";
 import { ArenaFloor, FLOOR_EAST, FLOOR_NORTH, FLOOR_SOUTH, FLOOR_WEST } from "./ArenaFloor";
 import { Rng } from "./Rng";
-import { RAMP_NONE, TYPE_PILLAR } from "./floorLayout";
+import { RAMP_NONE, TYPE_FRAGILE, TYPE_NORMAL, TYPE_PILLAR, TYPE_REINFORCED } from "./floorLayout";
 import { makeGrid } from "./world/testGrid";
 
 // Checks on a floor (FloorDef) before it's played, for the floor preview page (dev only,
@@ -14,29 +14,27 @@ import { makeGrid } from "./world/testGrid";
 export const PHONE_TRIANGLES = 69000;
 // What a phone draws besides the floor in the Wardens' room (its walls and props, the player),
 // and the share of a 23 by 25 floor in view: worked out from the probes of rounds 1 to 10
-const ROOM_TRIANGLES = 24000;
+const ROOM_TRIANGLES = 25000;
 const SHARE_IN_VIEW = 0.52;
-// What a wave and falling tiles add at their worst (dust, chips, thickness round holes)
-const BUSY_TRIANGLES = 14000;
-// Triangles in a skin's model, by what it's made from (counted from the cache); and its top alone
-// (FloorView draws a tile at rest among others as its top). Unknown ones count as a slab.
+// What a wave and falling tiles add at their worst (dust, chips, thickness round holes). At rest
+// the estimate came within 1k of the probe on four floors; at the busiest, within about 8k either way
+const BUSY_TRIANGLES = 18000;
+// Triangles in a skin's model, by what it's made from (counted from the game's bakes); and its top
+// alone (FloorView draws a tile at rest among others as its top). Unknown ones count as a slab.
 const SKIN_TRIANGLES: Record<string, [whole: number, top: number]> = {
-    "spot:2220": [52, 14],
-    "loc:20624": [110, 50],
-    "loc:20633": [138, 60],
-    "loc:13686": [34, 18],
-    "loc:38825": [36, 18],
-    "loc:53349": [64, 30],
-    "loc:38447": [44, 20],
-    "loc:38822": [40, 20],
-    "loc:34874": [48, 24],
-    "loc:45345": [56, 26],
-    "loc:45349": [56, 26],
-    "loc:56393": [12, 12],
+    "spot:2220": [52, 36],
+    "loc:20624": [110, 38],
+    "loc:38822": [58, 50],
+    "loc:45345": [50, 26],
+    "loc:45349": [94, 51],
+    "loc:53349": [186, 149],
+    "loc:56393": [30, 30],
     "loc:7016": [214, 214],
-    "loc:45582": [260, 260],
+    "loc:45582": [338, 338],
 };
 const SLAB = SKIN_TRIANGLES["spot:2220"];
+// The tile types that rise or fall (floorLayout's TYPE_ and on)
+const MOVING = new Set([TYPE_NORMAL, TYPE_REINFORCED, TYPE_FRAGILE]);
 // Floor models the cache has that are see-through or draw nothing (scaperune/CLAUDE.md)
 const SEE_THROUGH = new Set(["loc:45356", "loc:54539"]);
 
@@ -134,7 +132,7 @@ export function lintFloor(def: FloorDef, start: { x: number; y: number }): Floor
         }
         if (reached < total) {
             warnings.push(
-                `${total - reached} of ${total} tiles can't be reached from the start (ledges with no ramp?).`,
+                `${total - reached} of ${total} tiles can't be reached from the start (cut off, or behind a ledge with no ramp).`,
             );
         }
     }
@@ -194,7 +192,9 @@ export function lintFloor(def: FloorDef, start: { x: number; y: number }): Floor
                 (k) => layout.mask[k] && layout.height[k] === layout.height[i],
             );
         rest += (inner ? top : whole) + underWhole;
-        busy += whole + underWhole;
+        // A tile that never moves stays as it is at rest
+        const moves = MOVING.has(layout.type[i]);
+        busy += (moves || !inner ? whole : top) + underWhole;
         // A raised tile's sides
         if (layout.height[i] > 0.01) {
             const steps = Math.ceil(layout.height[i] / 0.13);

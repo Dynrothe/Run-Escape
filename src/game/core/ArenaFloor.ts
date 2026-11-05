@@ -104,6 +104,8 @@ export class ArenaFloor {
     // Whether any tile's a pillar (they block shots and sight), or has an effect
     readonly hasPillars: boolean;
     readonly hasEffects: boolean;
+    // Whether any tile's raised, sunken or a ramp
+    readonly hasLevels: boolean;
 
     constructor(
         readonly def: FloorDef,
@@ -148,6 +150,9 @@ export class ArenaFloor {
             (type, i) => this.layout.mask[i] === 1 && type === TYPE_PILLAR,
         );
         this.hasEffects = this.layout.effect.some((e) => e !== EFFECT_NONE) || !!def.phases;
+        this.hasLevels =
+            this.layout.height.some((h) => h !== 0) ||
+            this.layout.ramp.some((r) => r !== RAMP_NONE);
         // The grid's kept between runs on a map; what isn't floor is the pit's from the start
         grid.restoreAllTiles();
         // and a pillar blocks the way, as an object would
@@ -211,6 +216,9 @@ export class ArenaFloor {
     // How high the floor stands at a point (world tiles), in tiles: a platform's height, a
     // sunken tile's, or partway up a ramp; 0 off the floor
     liftAt(x: number, y: number): number {
+        if (!this.hasLevels) {
+            return 0;
+        }
         const i = this.index(Math.floor(x), Math.floor(y));
         if (i < 0 || !this.layout.mask[i]) {
             return 0;

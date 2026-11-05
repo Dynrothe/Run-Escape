@@ -181,9 +181,9 @@ const FEW_ENEMIES: WaveDef[] = [
             { id: "chicken", weight: 2 },
             { id: "goblin", weight: 1 },
         ],
-        spawnRate: 0.6,
-        minAlive: 5,
-        maxAlive: 10,
+        spawnRate: 0.5,
+        minAlive: 4,
+        maxAlive: 8,
     },
 ];
 

@@ -42,6 +42,7 @@ go stale. Add anything that cost you time to work out.
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
+| A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |

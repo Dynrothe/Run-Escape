@@ -406,7 +406,9 @@ export function createTerraces(rect: Rect): FloorDef {
             { ...FLOOR_SKINS.sandstoneSlab, material: FLOOR_MATERIALS.stone },
             { ...FLOOR_SKINS.stonePillar, under: 0 },
             { ...FLOOR_SKINS.tombsPillar, under: 0 },
-            FLOOR_SKINS.darkTile,
+            // The sunken corner: a stone with a diamond set in it (the dark tile's three times the
+            // triangles)
+            FLOOR_SKINS.stoneTile,
         ],
         tiles: [
             { skin: 0 },

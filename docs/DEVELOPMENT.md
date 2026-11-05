@@ -742,6 +742,18 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
 - The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
   bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing of the map's in it, and the
   player walks the deck (`ArenaGrid.getHeight`'s bridge heights).
+- What else a floor can do is all optional on `FloorDef` (the map-making guide, "Floors that fight
+  back"): tile effects (`Sim.stepFloorEffects`, and `PlayerMovement`'s `floor` rule for haste, slow
+  and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
+  `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
+  which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+- Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
+  silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
+  raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top
+  alone: a tile at rest among others is drawn as that. `window.floorWholeTiles = true` (dev) draws
+  them whole, to compare.
+- The floor preview, `?floorpreview` on the dev server (`ui/FloorPreview.tsx`, checks in
+  `core/floorLint.ts`), draws a floor flat and plays its script on a timeline.
 
 ### Pets
 

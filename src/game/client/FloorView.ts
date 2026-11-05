@@ -752,8 +752,8 @@ export class FloorView {
         this.drawGlow(actors, slab, anim, x, ground + depth, y, t, light);
     }
 
-    // A raised tile's sides, down to the floor (FloorTileRuleDef.height), where it's above what's
-    // beside it
+    // A tile's sides, down to the lowest of what's beside it, where that's lower (a raised tile's,
+    // or one beside a sunken one: FloorTileRuleDef.height); off the floor counts as its level
     private drawPlinth(
         actors: ActorRenderer,
         floor: ArenaFloor,
@@ -764,24 +764,26 @@ export class FloorView {
         yaw: number,
         lift: number,
     ): void {
-        if (lift <= 0.01 || floor.layout.ramp[i] !== RAMP_NONE) {
+        const { layout } = floor;
+        if (layout.ramp[i] !== RAMP_NONE || !floor.hasLevels) {
             return;
         }
         const col = i % floor.sizeX;
         const row = Math.floor(i / floor.sizeX);
-        const { layout } = floor;
-        const exposed = NEIGHBOURS.some(([dx, dy]) => {
+        let lowest = lift;
+        for (const [dx, dy] of NEIGHBOURS) {
             const j = floor.index(floor.x0 + col + dx, floor.y0 + row + dy);
-            return j < 0 || !layout.mask[j] || layout.height[j] < lift - 0.01;
-        });
-        if (!exposed) {
+            lowest = Math.min(lowest, j >= 0 && layout.mask[j] ? layout.height[j] : 0);
+        }
+        const depth = lift - lowest;
+        if (depth <= 0.01) {
             return;
         }
         const model = this.tile.under ?? this.tile.model;
         const anim = model.anims[0];
         const { tint, edge } = this.options;
         this.options.edge = 0;
-        const steps = Math.ceil(lift / SLAB_THICKNESS);
+        const steps = Math.ceil(depth / SLAB_THICKNESS);
         for (let k = 1; k <= steps; k++) {
             const t = k / steps;
             const c = Math.round(
@@ -793,7 +795,7 @@ export class FloorView {
                 anim,
                 0,
                 x,
-                top + Math.min(lift, SLAB_THICKNESS * k),
+                top + Math.min(depth, SLAB_THICKNESS * k),
                 y,
                 yaw,
                 this.options,
@@ -1178,9 +1180,7 @@ export class FloorView {
         if (edged) {
             this.drawThickness(actors, x, height, y, turn + yaw);
         }
-        if (lift > 0.01) {
-            this.drawPlinth(actors, this.drawing, this.tile.index, x, height, y, turn + yaw, lift);
-        }
+        this.drawPlinth(actors, this.drawing, this.tile.index, x, height, y, turn + yaw, lift);
     }
 
     // The tile again under itself, a slab's thickness at a time, darker each, so a hole's edge

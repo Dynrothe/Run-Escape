@@ -62,19 +62,14 @@ function getModelBounds(model: Model): { height: number; radius: number } {
     return { height, radius };
 }
 
-// A model's top alone (ModelBakeRequest.topOnly): every face but those looking up, within the top
-// part of it, hidden as the cache hides one (a third colour of -2), on a copy
+// A model's top alone (ModelBakeRequest.topOnly): every face but those looking up hidden, as the
+// cache hides one (a third colour of -2), on a copy. Which way is up for its faces' winding is
+// the way the face highest in it looks.
 function topOnly(model: Model): Model {
-    let top = Infinity;
-    let bottom = -Infinity;
-    for (let i = 0; i < model.verticesCount; i++) {
-        top = Math.min(top, model.verticesY[i]);
-        bottom = Math.max(bottom, model.verticesY[i]);
-    }
-    // Up is negative
-    const near = top + Math.max(2, (bottom - top) * 0.4);
-    const colors = model.faceColors3.slice();
     const { verticesX: vx, verticesY: vy, verticesZ: vz } = model;
+    const normals = new Float32Array(model.faceCount);
+    let highest = Infinity;
+    let up = -1;
     for (let f = 0; f < model.faceCount; f++) {
         const a = model.indices1[f];
         const b = model.indices2[f];
@@ -89,8 +84,17 @@ function topOnly(model: Model): Model {
         const ny = uz * wx - ux * wz;
         const nz = ux * wy - uy * wx;
         const length = Math.hypot(nx, ny, nz);
+        normals[f] = length > 0 ? ny / length : 0;
+        // Up is negative: the highest flat face looks up
         const middle = (vy[a] + vy[b] + vy[c]) / 3;
-        if (length === 0 || Math.abs(ny) / length < 0.6 || middle > near) {
+        if (Math.abs(normals[f]) > 0.9 && middle < highest) {
+            highest = middle;
+            up = Math.sign(normals[f]);
+        }
+    }
+    const colors = model.faceColors3.slice();
+    for (let f = 0; f < model.faceCount; f++) {
+        if (normals[f] * up < 0.5) {
             colors[f] = -2;
         }
     }

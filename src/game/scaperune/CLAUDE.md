@@ -921,13 +921,13 @@ hit from the moment it starts.
 
 **Tiles that do something** (`effect` on a tiles rule, or a skin's own `effect`; `"none"` takes a skin's away):
 
-| Effect  | On a player                                          | On an enemy           | Ready-made skin             |
-| ------- | ---------------------------------------------------- | --------------------- | --------------------------- |
-| `burn`  | 4% of their hitpoints every 0.5 s, with no grace     | 3 damage every 0.5 s  | `lava` (glows, `glow: 0.3`) |
-| `heal`  | 3% of their hitpoints every 0.5 s                    | nothing               | `healGlyph` (a decal)       |
-| `haste` | 40% faster                                           | 40% faster            | `speedPlate`                |
-| `slow`  | 45% slower                                           | 45% slower            | `mud`, `sand`               |
-| `ice`   | they keep their momentum, steering 6% of it a tick   | nothing               | `ice`                       |
+| Effect  | On a player                                        | On an enemy          | Ready-made skin             |
+| ------- | -------------------------------------------------- | -------------------- | --------------------------- |
+| `burn`  | 4% of their hitpoints every 0.5 s, with no grace   | 3 damage every 0.5 s | `lava` (glows, `glow: 0.3`) |
+| `heal`  | 3% of their hitpoints every 0.5 s                  | nothing              | `healGlyph` (a decal)       |
+| `haste` | 40% faster                                         | 40% faster           | `speedPlate`                |
+| `slow`  | 45% slower                                         | 45% slower           | `mud`, `sand`               |
+| `ice`   | they keep their momentum, steering 6% of it a tick | nothing              | `ice`                       |
 
 Tune them with `tileEffects` (`burn: { damage, every, enemyDamage }`, `heal: { amount, every }`, `haste`, `slow`,
 `ice: { grip }`). Flying enemies don't burn. A skin's `glow` (0 to 1) lights it all over in its `tint`'s colour, for lava.
@@ -969,15 +969,15 @@ triggers: { trap: { actions: [{ kind: "slam", group: "jaws" }], cooldown: 4, mes
 
 **Actions** (`FloorActionDef`), each with an optional `delay` in seconds:
 
-| Action      | What it does                                                    |
-| ----------- | --------------------------------------------------------------- |
-| `pattern`   | starts a pattern, or one of `patterns` by name                  |
+| Action      | What it does                                                        |
+| ----------- | ------------------------------------------------------------------- |
+| `pattern`   | starts a pattern, or one of `patterns` by name                      |
 | `drop`      | a group falls, warned as a fall is (never cutting the floor in two) |
-| `raise`     | a group's fallen tiles come back                                |
-| `slam`      | a group rises, a warning from now: a trap                       |
-| `dropUnder` | the tile under whoever it's aimed at falls                      |
-| `arm`       | arms a trigger, or disarms it (`armed: false`)                  |
-| `phase`     | goes to one of the floor's `phases`                             |
+| `raise`     | a group's fallen tiles come back                                    |
+| `slam`      | a group rises, a warning from now: a trap                           |
+| `dropUnder` | the tile under whoever it's aimed at falls                          |
+| `arm`       | arms a trigger, or disarms it (`armed: false`)                      |
+| `phase`     | goes to one of the floor's `phases`                                 |
 
 A beat in the script can be an action instead of a pattern: `{ at: 30, action: { kind: "phase", phase: "molten" } }`.
 
