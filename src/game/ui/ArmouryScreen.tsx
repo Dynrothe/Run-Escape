@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
 import { RARITIES } from "../content/rarity";
@@ -11,6 +12,7 @@ import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { SaveData, getArmouryStep } from "../core/save";
 import "./ArmouryScreen.css";
 import { Coins } from "./Coins";
+import { DescriptionButton } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 
 // The Armoury: every piece of gear caskets give, slot by slot, as the
@@ -84,16 +86,19 @@ function ArmouryTile({
     const steps = getUpgradeLine(itemId).length - 1;
     const upgrades = save.armoury[itemId] ?? 0;
     return (
-        <button
+        <DescriptionButton
+            itemId={piece.id}
             className={
                 "ui-card ui-armoury-tile" +
                 (selected ? " ui-card-selected" : "") +
                 (found ? "" : " ui-card-locked")
             }
             style={found ? { borderColor: RARITIES[piece.rarity].color } : undefined}
-            title={found ? piece.name : `${piece.name} (not found yet)`}
+            aria-label={found ? piece.name : `${piece.name} (not found yet)`}
             aria-pressed={selected}
-            onClick={onSelect}
+            onUse={onSelect}
+            silent={false}
+            description={<ArmouryDescription itemId={piece.id} notFound={!found} />}
         >
             <ItemIcon objId={piece.objId} size={30} />
             {found && steps > 0 && (
@@ -106,7 +111,27 @@ function ArmouryTile({
                     ))}
                 </span>
             )}
-        </button>
+        </DescriptionButton>
+    );
+}
+
+function ArmouryDescription({
+    itemId,
+    notFound = false,
+}: {
+    itemId: string;
+    notFound?: boolean;
+}): JSX.Element {
+    const item = getItemView(getGear(itemId));
+    return (
+        <>
+            <span style={{ color: item.rarity.color }}>{item.name}</span>
+            {item.lines.map((line) => (
+                <span key={line}>{line}</span>
+            ))}
+            {item.set && <span className="ui-armoury-set">{item.set.text}</span>}
+            {notFound && <span>Not found yet: find it in a casket to upgrade it.</span>}
+        </>
     );
 }
 
@@ -215,16 +240,18 @@ function ArmouryDetails({
                         return (
                             <Fragment key={id}>
                                 {i > 0 && <span className="ui-armoury-arrow">›</span>}
-                                <span
+                                <DescriptionButton
+                                    itemId={id}
                                     className={
                                         "ui-armoury-step" +
                                         (found && i <= upgrades ? " ui-armoury-step-done" : "") +
                                         (found && i === upgrades ? " ui-armoury-step-now" : "")
                                     }
-                                    title={form.name}
+                                    aria-label={form.name}
+                                    description={<ArmouryDescription itemId={id} />}
                                 >
                                     <ItemIcon objId={form.objId} size={28} />
-                                </span>
+                                </DescriptionButton>
                             </Fragment>
                         );
                     })}

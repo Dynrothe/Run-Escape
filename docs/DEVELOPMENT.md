@@ -642,7 +642,7 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon, CountryFlag (a co-op player's flag), CoopScreen (the rooms, the
+            offer), ItemIcon (item models and standalone SpriteIcon sprites), CountryFlag (a co-op player's flag), CoopScreen (the rooms, the
             lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
@@ -659,6 +659,11 @@ src/mapviewer/worker/        RegionDataLoader (collision and heights for the who
 src/rs/audio/               the client's sound effect synth: instruments, envelopes, filters
 src/rs/model/player/         player models from identity kits and worn items
 ```
+
+Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.iconSpriteId` in
+`content/items.ts`), drawn through `SpriteIcon` in `ui/ItemIcon.tsx`. They are included in
+`client/GameAssets.ts`'s `getGameSpriteIds`, so sprite validation and the deployment's slim cache
+cover them too. Equipped slots still show their item's model; small phones still hide the gear row.
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 opcodes, the map loader can take extra map squares as plain data
@@ -1407,12 +1412,19 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   is down, so the sim gets the same input a keyboard gives: length 0 or 1.
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
-  `click` for a second finger while the thumb's down. `ui/InventoryItem.tsx` shares the bag buttons
-  with the desktop HUD: hover or hold for 500 ms to read the same `ItemView.lines` as the casket.
+  `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
+  keyboard focus and 500 ms holds across bag items, weapons, passives, worn gear and Armoury
+  tiles and upgrade steps. `ui/InventoryItem.tsx` uses it for both bag layouts, with the same
+  `ItemView.lines` as the casket. Descriptions are portalled outside scrolling panels and the
+  phone HUD's extra zoom, clamped to the viewport while keeping the UI's text scale.
+  The HUD renders after the touch movement zone so its slots receive holds; a run overlay
+  disables those slots and dismisses their descriptions.
   Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
   further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
   The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
-  clicks still use the item.
+  clicks still use the item. Holding an Armoury tile never selects or buys it; a quick tap
+  still selects it. Scroll and Escape dismiss descriptions too. Small phones keep worn gear
+  and its descriptions in the pause menu.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.

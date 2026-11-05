@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
 import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
+import { getUpgradeLine } from "../content/armoury";
+import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
+import { iconCache } from "./ItemIcon";
 
 function slot(id: string, level: number): SlotView {
     return { id, name: id, level, maxLevel: 8, iconObjId: 1, detail: "", rarityColor: "#fff" };
@@ -59,9 +63,58 @@ function renderHud() {
     return { store, view };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+});
 
 describe("the run's HUD", () => {
+    test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {
+        vi.spyOn(iconCache, "getFrame").mockImplementation(
+            (id) => `data:image/png;base64,slot${id}`,
+        );
+        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        vi.spyOn(iconCache, "get").mockImplementation(() => "data:image/png;base64,equipped");
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        const { store } = renderHud();
+        const emptyGear = GEAR_SLOTS.map(({ id, name }) => ({ slot: id, name }));
+        act(() => store.set({ hud: { ...hud([]), gear: emptyGear } }));
+        for (const slot of GEAR_SLOTS) {
+            const button = screen.getByRole("button", { name: `${slot.name} (empty)` });
+            expect(button).toBeDisabled();
+            expect(button).toHaveClass("ui-gear-slot-empty");
+            expect(button.textContent).toBe("");
+            expect(button.querySelector("img")).toHaveAttribute(
+                "src",
+                `data:image/png;base64,slot${slot.iconSpriteId}`,
+            );
+            expect(button.querySelector("img")).toHaveAttribute("alt", "");
+        }
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+        const item = getItemView(CASKET_GEAR[0]);
+        act(() =>
+            store.set({
+                hud: {
+                    ...hud([]),
+                    gear: emptyGear.map((slot) =>
+                        slot.slot === CASKET_GEAR[0].slot ? { ...slot, item } : slot,
+                    ),
+                },
+            }),
+        );
+        const equipped = screen.getByRole("button", { name: item.name });
+        expect(equipped).toBeEnabled();
+        expect(equipped).not.toHaveClass("ui-gear-slot-empty");
+        expect(equipped.querySelector("img")).toHaveAttribute(
+            "src",
+            "data:image/png;base64,equipped",
+        );
+        act(() => store.set({ hud: { ...hud([]), gear: emptyGear } }));
+        expect(
+            screen.getByRole("button", { name: "Head (empty)" }).querySelector("img"),
+        ).toHaveAttribute("src", "data:image/png;base64,slot156");
+    });
+
     test("shows its numbers as they change, apart from the rest of the UI", () => {
         const { store, view } = renderHud();
         const timer = () => view.container.querySelector(".ui-timer")!.textContent;
@@ -88,5 +141,92 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")).toBeNull();
         act(() => store.setNumbers(numbers({ bossIn: 42 })));
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
+    });
+
+    test("weapons and passives describe their current stats and evolution on focus", () => {
+        const { store } = renderHud();
+        const weapon: SlotView = {
+            ...slot("bow", 8),
+            stats: ["Damage: 20", "Cooldown: 1s"],
+            detail: "Shoots an arrow.",
+            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+        };
+        const passive: SlotView = { ...slot("Piety", 2), detail: "+10% damage" };
+        act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));
+        const bow = screen.getByRole("button", { name: "bow" });
+        fireEvent.focus(bow);
+        const tip = screen.getByRole("tooltip");
+        expect(bow).toHaveAttribute("aria-describedby", tip.id);
+        for (const text of ["Max level", ...weapon.stats!, weapon.detail, "Piety"]) {
+            expect(tip).toHaveTextContent(text);
+        }
+        fireEvent.blur(bow);
+        const prayer = screen.getByRole("button", { name: "Piety" });
+        fireEvent.focus(prayer);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Level 2 of 8");
+        expect(screen.getByRole("tooltip")).toHaveTextContent(passive.detail);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+        fireEvent.focus(prayer);
+        act(() => store.set({ overlay: "paused" }));
+        expect(prayer).toBeDisabled();
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    test("worn equipment shows the reward description and current set bonus", () => {
+        const { store } = renderHud();
+        const item = {
+            ...getItemView(CASKET_GEAR[0], 2),
+            set: { text: "Set bonus active", active: true },
+        };
+        act(() =>
+            store.set({
+                hud: { ...hud([]), gear: [{ slot: CASKET_GEAR[0].slot, name: "Head", item }] },
+            }),
+        );
+        const button = screen.getByRole("button", { name: item.name });
+        fireEvent.focus(button);
+        const tip = screen.getByRole("tooltip");
+        for (const text of [item.name, ...item.lines, item.set.text]) {
+            expect(tip).toHaveTextContent(text);
+        }
+        expect(within(tip).getByText(item.set.text)).toHaveClass("ui-good");
+        expect(button).not.toHaveAttribute("title");
+    });
+
+    test("Armoury tiles and future upgrades describe the actual piece without buying it", () => {
+        const { store, view } = renderHud();
+        const base = CASKET_GEAR.find((g) => getUpgradeLine(g.id).length > 2)!;
+        const line = getUpgradeLine(base.id);
+        const save = createSave();
+        save.foundGear = [base.id];
+        save.armoury[base.id] = 1;
+        act(() => store.set({ screen: "armoury", save }));
+        const tile = within(
+            view.container.querySelector<HTMLElement>(".ui-armoury-slots")!,
+        ).getByRole("button", { name: getGear(line[1]).name });
+        fireEvent.focus(tile);
+        const current = getItemView(getGear(line[1]));
+        for (const text of [current.name, ...current.lines]) {
+            expect(screen.getByRole("tooltip")).toHaveTextContent(text);
+        }
+        fireEvent.blur(tile);
+        const future = getItemView(getGear(line[2]));
+        const step = within(
+            view.container.querySelector<HTMLElement>(".ui-armoury-line")!,
+        ).getByRole("button", { name: future.name });
+        fireEvent.focus(step);
+        for (const text of [future.name, ...future.lines]) {
+            expect(screen.getByRole("tooltip")).toHaveTextContent(text);
+        }
+        fireEvent.blur(step);
+        const locked = view.container.querySelector<HTMLElement>(
+            ".ui-armoury-tile.ui-card-locked",
+        )!;
+        fireEvent.focus(locked);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Not found yet");
+        fireEvent.click(locked);
+        expect(locked).toHaveAttribute("aria-pressed", "true");
+        expect(save.armoury[base.id]).toBe(1);
     });
 });
