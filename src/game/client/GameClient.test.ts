@@ -22,7 +22,7 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { UpMessage } from "./coop/protocol";
@@ -63,6 +63,7 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
         shownDpsTick: 0,
         damageMeter: new DamageMeter(),
         lastHudUpdate: 0,
+        coopPlayerIds: sim.heroes.map((hero) => `hero-${hero.index}`),
         display: {
             ...getDefaultDisplaySettings(),
             menuSpin: false,
@@ -158,6 +159,38 @@ describe("the co-op flag", () => {
     });
 });
 
+describe("power-up timers", () => {
+    test("show unless they've been turned off, and are remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ menuSpin: false }));
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        saveDisplaySettings({ ...loadDisplaySettings(), pickupTimers: false });
+        expect(loadDisplaySettings().pickupTimers).toBe(false);
+        vi.unstubAllGlobals();
+    });
+
+    // The view draws a timer from the tick and this, so it stops with the run
+    test("stand still while a solo run is paused", () => {
+        const sim = createSim();
+        sim.state = "playing";
+        const { client } = createClient(sim, false);
+        const getAlpha = () => (client as unknown as { getAlpha(): number }).getAlpha();
+        Object.assign(client, { accumulator: TICK_MS / 2 });
+        expect(getAlpha()).toBe(0.5);
+        Object.assign(client, { paused: true });
+        expect(getAlpha()).toBe(1);
+    });
+});
+
 function displayOf(client: GameClient): DisplaySettings {
     return (client as unknown as { display: DisplaySettings }).display;
 }
@@ -165,6 +198,148 @@ function displayOf(client: GameClient): DisplaySettings {
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
+
+    test.each([
+        [0, "boss"],
+        [1, "boss"],
+        [0, "finalBoss"],
+        [1, "finalBoss"],
+    ] as const)("co-op hero %i sees the nearest living %s", (focus, type) => {
+        const sim = createSim(focus);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        sim.heroes[0].player.x = 1020.5;
+        sim.heroes[1].player.x = 1050.5;
+        const bosses = [1022.5, 1048.5].map(
+            (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
+        );
+        bosses[0].hp = bosses[0].maxHp / 4;
+        bosses[1].hp = (bosses[1].maxHp * 3) / 4;
+        const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        const other = 1 - focus;
+        sim.player.x = bosses[other].x;
+        sim.player.y = bosses[other].y;
+        // A regular enemy even closer must not take the boss bar.
+        sim.spawnEnemy(getEnemy("goblin"), "normal", { x: sim.player.x, y: sim.player.y });
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(other));
+
+        // Distance includes both axes, and is reconsidered as bosses move.
+        bosses[other].y += 40;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+        bosses[other].y = sim.player.y;
+        bosses[other].dead = true;
+        bosses[other].hp = 0;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        bosses[focus].dead = true;
+        bosses[focus].hp = 0;
+        updateHud(client);
+        if (type === "finalBoss") {
+            expect(store.getNumbers()!.boss).toMatchObject({
+                name: bosses[focus].def.name,
+                fraction: 0,
+                enraged: false,
+            });
+        } else {
+            expect(store.getNumbers()!.boss).toBeUndefined();
+        }
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
+
+    test("co-op chooses the closest boss even when a final boss is farther away", () => {
+        const sim = createSim(1);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        expect(sim.shownBoss).toBe(finalBoss);
+    });
+
+    test("co-op keeps the final boss's empty bar to the victory screen, over a living boss", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        sim.damageEnemy(finalBoss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        expect(boss.dead).toBe(false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toMatchObject({ name: finalBoss.def.name, fraction: 0 });
+    });
+
+    test("co-op's bar stays on its boss until another is clearly nearer", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const x = sim.player.x;
+        const [left, right] = [-3, 3].map(
+            (dx) =>
+                sim.spawnEnemy(getEnemy("wise_old_man"), "boss", { x: x + dx, y: sim.player.y })!,
+        );
+        left.hp = left.maxHp / 4;
+        right.hp = (right.maxHp * 3) / 4;
+        const shown = () => store.getNumbers()!.boss?.fraction;
+        sim.player.x = x - 0.1;
+        updateHud(client, true);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        // A tile nearer the other isn't enough
+        sim.player.x = x + 0.5;
+        updateHud(client);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        sim.player.x = x + 1.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+        // Nor does it go straight back
+        sim.player.x = x - 0.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+    });
+
+    test("solo keeps the final boss's priority over a nearer boss", () => {
+        const sim = createSim();
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        });
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(finalBoss.def.name);
+    });
+
+    test("co-op without bosses has no boss bar", () => {
+        const sim = createSim(1);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toBeUndefined();
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
 
     test("keeps what hasn't changed the same object, so its parts don't draw again", () => {
         vi.stubGlobal("window", { localStorage: { setItem() {} } });
@@ -919,7 +1094,7 @@ describe("saving", () => {
         expect(saved).toEqual([]);
     });
 
-    test("refunding an early skill persists later purchases' lower prices", () => {
+    test("refunding an early skill saves what the page costs without it", () => {
         expect.hasAssertions();
         const { client, store, saved } = createSaving(true);
         client.save.coins = 50000;
@@ -930,22 +1105,9 @@ describe("saving", () => {
         expect(client.save.skillPages.melee).toEqual({
             upgrades: { smithing: 1 },
             upgradesSpent: 10000,
-            upgradeOrder: ["smithing"],
         });
         expect(saved).toEqual([client.save]);
         expect(store.getSnapshot().save).toEqual(client.save);
-    });
-
-    test("a single-rank refund on a page with no order changes and saves nothing", () => {
-        expect.hasAssertions();
-        const { client, saved } = createSaving(true);
-        client.save.coins = 10000;
-        buyUpgrade(client.save, "strength");
-        delete client.save.skillPages.melee.upgradeOrder;
-        const before = structuredClone(client.save);
-        client.refundUpgrade("strength");
-        expect(client.save).toEqual(before);
-        expect(saved).toEqual([]);
     });
 
     test("nothing's saved while another tab has the game", () => {
@@ -1013,7 +1175,12 @@ describe("saving", () => {
         setStored({ save: { ...createSave(), coins: 70 }, newer: { gameVersion: "0.23.0" } });
         lockChanged(true);
         client.exportSave();
-        expect(spy).toHaveBeenLastCalledWith("run-escape-save.json", "stored", "application/json");
+        expect(spy).toHaveBeenLastCalledWith(
+            "run-escape-save.json",
+            "stored",
+            "application/json",
+            expect.any(Function),
+        );
         // This game's own is marked with its version
         setStored({ save: { ...createSave(), coins: 80 } });
         lockChanged(true);
@@ -1021,6 +1188,30 @@ describe("saving", () => {
         const text = spy.mock.lastCall![1];
         expect(JSON.parse(text)).toMatchObject({ coins: 80, gameVersion: "0.22.1" });
         spy.mockRestore();
+    });
+
+    test("an export says when it was made, and the save remembers it once it's kept", async () => {
+        const saveFile = await import("./saveFile");
+        const spy = vi.spyOn(saveFile, "saveFile").mockImplementation(() => {});
+        vi.spyOn(Date, "now").mockReturnValue(1_790_000_000_000);
+        try {
+            const { client, store, saved, lockChanged } = createSaving(false);
+            lockChanged(true);
+            const writes = saved.length;
+            client.exportSave();
+            const [, text, , kept] = spy.mock.lastCall!;
+            expect(JSON.parse(text).lastExported).toBe(1_790_000_000_000);
+            // Not yet: the player can still cancel the app's picker or the share sheet
+            expect(client.save.lastExported).toBeUndefined();
+            expect(saved.length).toBe(writes);
+            vi.mocked(Date.now).mockReturnValue(1_790_000_060_000);
+            kept!();
+            expect(saved.at(-1)?.lastExported).toBe(1_790_000_000_000);
+            expect(store.getSnapshot().save.lastExported).toBe(1_790_000_000_000);
+        } finally {
+            vi.mocked(Date.now).mockRestore();
+            spy.mockRestore();
+        }
     });
 
     test("another tab taking the save pauses a solo run, once, and not co-op's", () => {

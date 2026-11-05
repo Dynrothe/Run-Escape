@@ -346,6 +346,16 @@ describe("melee", () => {
         expect(scimitar.cooldown).toBeGreaterThan(10);
     });
 
+    test("a slash goes for a big enemy beside you, whose middle is out of reach", () => {
+        const sim = armed("scimitar");
+        // Its edge a tile off, its middle four: in reach, as the slash's hit counts its size
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        const events = attackOnce(sim, 1);
+        expect(events.some((e) => e.type === "slash")).toBe(true);
+        expect(hitsOn(events, big).length).toBeGreaterThan(0);
+    });
+
     test("the Thunder khopesh's Thunderclap hits everything around you", () => {
         const sim = createSim();
         sim.enemies = [];
@@ -3350,6 +3360,22 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(864);
         sim.addWeapon("twisted_bow");
         expect(sim.getHeldObjId()).toBe(20997);
+    });
+
+    test("the Toxic blowpipe fires a better dart at each level, bronze to dragon", () => {
+        const darts = getWeapon("toxic_blowpipe").levels.map((level, i) => {
+            const sim = armed("toxic_blowpipe", "ranger");
+            sim.weapons[0].level = i + 1;
+            dummy(sim, 5, 0);
+            attack(sim);
+            expect(sim.projectiles.length).toBeGreaterThan(0);
+            // Drawn as the spot animation, not as an item
+            for (const projectile of sim.projectiles) {
+                expect(projectile).toMatchObject({ spotAnim: level.projectileSpotAnim, objId: -1 });
+            }
+            return level.projectileSpotAnim;
+        });
+        expect(new Set(darts).size).toBe(darts.length);
     });
 
     test("the Toxic blowpipe's venom hurts every second, and spreads", () => {

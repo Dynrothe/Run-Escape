@@ -20,14 +20,17 @@ import {
 import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
+import { FLAG_SPRITE } from "../content/flags";
+import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
 import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { ALL_MAPS, MAPS } from "../content/maps";
-import { getPassive } from "../content/passives";
+import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
+import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -147,6 +150,34 @@ export const PRAYER_HEADICON_FRAME_IDS = [...new Set(Object.values(PRAYER_HEADIC
 // The overhead prayer frame for praying against these styles, if there's one
 export function getPrayerHeadicon(styles: readonly string[]): number | undefined {
     return PRAYER_HEADICON_FRAMES[[...styles].sort().join(",")];
+}
+
+// The sprites the game view draws, which loadSprites loads as the game starts
+export const GAME_VIEW_SPRITES: readonly number[] = [
+    ...Object.values(HITSPLAT_SPRITES),
+    HINT_ARROW_SPRITE,
+];
+
+// Every interface sprite the game shows: the game view's, the title screen's
+// tabs, the skills' refund button, co-op's flags and the overhead prayers
+// (every frame comes with the first) and the passives with a sprite for an
+// icon. The slim cache keeps these and no others, so a sprite the game shows
+// has to be in here.
+export function getGameSpriteIds(): number[] {
+    const ids = [
+        ...GAME_VIEW_SPRITES,
+        PRAYER_HEADICON_SPRITE,
+        ...Object.values(TITLE_TAB_SPRITES),
+        REFUND_SPRITE,
+        FLAG_SPRITE,
+        ...PASSIVES.flatMap((passive) =>
+            passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
+        ),
+        // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
+        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        ...Object.values(RAID_BAND_SPRITES),
+    ];
+    return [...new Set(ids)];
 }
 
 // Every spot animation the content uses, plus the fixed ones (cannonball,
@@ -1001,8 +1032,14 @@ export class GameAssets {
         return tasks.sort((a, b) => animations(b) - animations(a));
     }
 
-    // Sprites' first frames, or each one's frame in frames (the overhead prayers' past the first)
-    async loadSprites(spriteIds: number[], frames?: number[]): Promise<void> {
+    // The game view's sprites and the overhead prayers' frames, for getSprite.
+    // Only these: the slim cache has what getGameSpriteIds lists.
+    async loadSprites(): Promise<void> {
+        const spriteIds = [
+            ...GAME_VIEW_SPRITES,
+            ...PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE),
+        ];
+        const frames = [...GAME_VIEW_SPRITES.map(() => 0), ...PRAYER_HEADICON_FRAME_IDS];
         const images = await this.workerPool.queueLoad<
             SpriteDataInput,
             SpriteImage[],

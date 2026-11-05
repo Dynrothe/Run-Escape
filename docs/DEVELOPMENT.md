@@ -3,47 +3,111 @@
 How the code is laid out, the tools that come with it, how to host a build, and the desktop app.
 The [README](../README.md) covers getting it running.
 
+**A checkout that was installed with npm** needs `node_modules` deleted before `bun install`.
+Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
+its `yallist`, and the dev server fails with `Yallist is not a constructor`.
+
 ## Hosting
 
 ```
-npm run build
-npm run slim-cache
+bun run build
+bun run slim-cache
 ```
 
 writes the game to `dist/`, with a slim copy of the cache in `dist/caches/`: only what the game
-reads, about 26 MB instead of 227 MB. Put what's in `dist/` on a web server, at the site's root or
+reads, about 22 MB instead of 227 MB. Put what's in `dist/` on a web server, at the site's root or
 in a folder (asset paths are relative, so https://example.com/game/ works):
 
 ```
 index.html
+build.json
 assets/
 caches/caches.json
-caches/osrs-241_2026-09-30-slim-<hash>/
+caches/chunks/<sha256>.bin
 ```
 
-`npm run slim-cache` loads everything the game loads (every model it bakes, an icon for every
+`bun run slim-cache` loads everything the game loads (every model it bakes, an icon for every
 item, each map's arena and the map squares around it) with the game's own loaders and keeps the
-groups they read. Then it loads it all again from the slim copy and fails if anything is missing.
-It takes a couple of minutes. Run it again after changing the content (a new enemy, item or map),
-or the game stops on a "missing from the cache" error. The slim cache is named after what's in it,
-so players' browsers fetch the new one and drop the old. `npm run preview` serves the build with
-its slim cache, to try it before uploading. The full cache works too, if you'd rather host that.
-The map viewer (`?viewer=1`) needs the full one.
+groups they read. It writes them in chunks (`src/rs/cache/ChunkedCache.ts`), each a range of
+archive ids from one index, named after the first 32 hex digits of its sha256, and lists them in
+`caches.json` with the build they're for (from `dist/build.json`, which the build writes). Then
+it loads it all again from the chunks and fails if anything is missing. **Run it after every
+build**: `bun run build` empties `dist/`. `bun run preview` serves the build with its slim cache,
+to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
+(`?viewer=1`) needs it.
 
-The server has to send two headers with the page. The game shares the cache with its workers in
-a SharedArrayBuffer, which browsers only allow on a cross-origin isolated page; without them the
-game says so instead of loading:
+It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
+each holding the full cache. Which worker loads what doesn't change the result: it's the union of
+what they read, sorted, and each map takes out the ScapeRune squares an earlier one put in. Before
+anything's published, the chunks in the out dir are read back, and every group has to come out of
+them as it went in; the check then loads it all from those same chunks.
+
+A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if nothing it
+reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock`, `tsconfig.json`,
+and the full cache's `info.json`, `keys.json` and the size of each of its files. Chunks are
+written under a temporary name and renamed into place (tried again for a few seconds while Windows
+holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
+doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
+registers it.
+
+- `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
+  less one, up to 4, unless it's set.
+- `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
+  chunks are still read back and compared group by group. Leave the check on for anything players
+  get. An unchecked run isn't kept for reuse.
+- `SLIM_REUSE=0`: does it all even when nothing has changed.
+
+- **The same cache and content give the same chunks**, byte for byte, on any machine, and the
+  same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
+  a change to a group renames only its own chunk, and a player who's played before downloads only
+  that one. Changing a span renames that index's chunks.
+- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses. It
+  checks each one it downloads against its name, and after loading drops the ones `caches.json`
+  doesn't list.
+- **A cache made for another build** would stop partway through loading, on a group it hasn't
+  got, so the game checks `caches.json`'s build against its own before it starts. On a mismatch it
+  reloads the page once, as the page may be an old copy, and then says what's wrong rather than
+  loading. That's what a server with an old `caches.json` and a new build shows: run
+  `bun run slim-cache` again.
+
+The chunks and `assets/` are named after what's in them, so they can be kept for good. Everything
+else changes under the same name, so it has to be checked with the server each time:
+
+| Path                                      | `Cache-Control`                       |
+| ----------------------------------------- | ------------------------------------- |
+| `assets/*`, `caches/chunks/*.bin`         | `public, max-age=31536000, immutable` |
+| Everything else, `caches/caches.json` too | `no-cache`                            |
+
+`bun run serve` sends these. The game asks for `caches.json` with `no-cache` and its build in the
+query, so a browser or CDN that keeps it anyway can't give a new page an old one. Upload the
+chunks before `caches.json` and `index.html`, and if you can, leave the old chunks there for a
+while, so a page that started loading before the upload can finish. `slim-cache` takes the ones
+the new `caches.json` doesn't list out of `dist/`, so that means uploading without deleting what
+isn't in `dist/` (no `rsync --delete`), and clearing them out later.
+
+The server has to send two more headers with the page. The game shares the cache with its workers
+in a SharedArrayBuffer, which browsers only allow on a cross-origin isolated page; without them
+the game says so instead of loading:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-With nginx, in the game's `location` block:
+With nginx, for a game at the site's root (`add_header` in a `location` replaces the ones outside
+it, so each has all three):
 
 ```
-add_header Cross-Origin-Opener-Policy same-origin always;
-add_header Cross-Origin-Embedder-Policy require-corp always;
+location / {
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cache-Control no-cache always;
+}
+location ~ ^/(assets|caches/chunks)/ {
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Cross-Origin-Embedder-Policy require-corp always;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+}
 ```
 
 With Apache, in an `.htaccess` beside `index.html` (needs mod_headers):
@@ -51,6 +115,10 @@ With Apache, in an `.htaccess` beside `index.html` (needs mod_headers):
 ```
 Header set Cross-Origin-Opener-Policy "same-origin"
 Header set Cross-Origin-Embedder-Policy "require-corp"
+Header set Cache-Control "no-cache"
+<If "%{REQUEST_URI} =~ m#/(assets|caches/chunks)/#">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</If>
 ```
 
 It needs HTTPS (or localhost) for the browser's cache storage, and a folder's address with its
@@ -58,13 +126,13 @@ trailing slash (`/game/`, not `/game`), or the relative paths point at the paren
 
 ### Co-op relay
 
-The simplest way to host everything: `npm run serve` (`node server/serve.mjs`, no packages) serves
+The simplest way to host everything: `bun run serve` (`node server/serve.mjs`, no packages) serves
 `dist/` with the headers above on `PORT` (8080), and runs the co-op relay in the same process.
-Multiplayer is on unless it's turned off (`npm run serve:singleplayer`, `MULTIPLAYER=off` or
+Multiplayer is on unless it's turned off (`bun run serve:singleplayer`, `MULTIPLAYER=off` or
 `--no-multiplayer`), and either way the game only offers it when a relay answers: it asks once,
-in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds. Run `npm run build` first; with no
-slim cache in `dist/caches` it serves the full one from `caches/`, so it also works for trying a
-build locally (http://localhost:8080). Put something that does HTTPS in front of it, like Caddy
+in the background, as it starts, and hides Multiplayer if nothing says yes within 4 seconds.
+Run `bun run build` first. If `dist/caches` is missing, the server uses the full cache in `caches/`
+so you can try the build locally (http://localhost:8080). For HTTPS, use a proxy like Caddy
 (`caddy reverse-proxy --from game.example.com --to localhost:8080`).
 
 The relay is light. In a load test at the game's own rates (host frames 25 times a second, guests'
@@ -102,7 +170,7 @@ ProxyPass "/game/coop" "http://127.0.0.1:8787/coop" upgrade=websocket
 ```
 
 The relay limits each address (see below), so behind a proxy, where every player looks like the
-proxy, tell it what's in front with `PROXY` (or `--proxy=` after `npm run serve --`). It's off
+proxy, tell it what's in front with `PROXY` (or `--proxy=` after `bun run serve`). It's off
 (`none`) unless it's set:
 
 | `PROXY`        | For                                                                            | Whose word it takes for a player's address                                                                                       |
@@ -175,9 +243,9 @@ is around 50 Mbit/s and three quarters of one core. Set `MULTIPLAYER_MAX_ROOMS` 
 messages on as they came rather than decoding and encoding them again, so what's left of its CPU is
 mostly Node writing to sockets.
 
-Or build with `VITE_COOP_URL=wss://relay.example.com/coop npm run build` to point it anywhere
-else. `npm start` and `npm run preview` run a relay of their own at `/coop`
-(`npm run start:singleplayer`, or `MULTIPLAYER=off`, without).
+Or build with `VITE_COOP_URL=wss://relay.example.com/coop bun run build` to point it anywhere
+else. `bun run start` and `bun run preview` run a relay of their own at `/coop`
+(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without).
 
 **On Cloudflare instead.** [server/cloudflare/](../server/cloudflare/README.md) is the same relay
 as a Cloudflare Worker with Durable Objects: a lobby for the rooms list and names, and each room its
@@ -187,19 +255,19 @@ setup, from `wrangler login` to the build, and what it costs. The game works wit
 
 #### Optional multiplayer metrics
 
-A server that hosts the game (`npm run serve`, or the standalone relay) serves multiplayer metrics
+A server that hosts the game (`bun run serve`, or the standalone relay) serves multiplayer metrics
 by default, on a separate listener bound only to `127.0.0.1`, port 8788. The endpoint serves
 Prometheus text format 0.0.4 with `HELP` and `TYPE` metadata. Read it from the server itself:
 
 ```sh
-npm run serve
+bun run serve
 curl http://127.0.0.1:8788/coop/metrics
 ```
 
 In PowerShell:
 
 ```powershell
-npm run serve
+bun run serve
 # From another terminal:
 (Invoke-WebRequest http://127.0.0.1:8788/coop/metrics).Content
 ```
@@ -207,7 +275,7 @@ npm run serve
 Set `MULTIPLAYER_METRICS=off` (or `false`, `0`, `no`) and restart to turn the metrics listener off
 (`$env:MULTIPLAYER_METRICS = "off"` in PowerShell); `on`, `true`, `1` or `yes` turn it on. Any other
 value, an empty one included, is the same as none, like `MULTIPLAYER`. The dev server and
-`npm run preview` only run the listener when it's set to `on`: nobody scrapes a dev server, and two
+`bun run preview` only run the listener when it's set to `on`: nobody scrapes a dev server, and two
 checkouts would fight over the port. If the standalone relay uses `MULTIPLAYER_PATH`, the metrics
 path is that path plus `/metrics`. Multiplayer must be running for metrics to be available. Set
 `MULTIPLAYER_METRICS_PORT` to another port (1–65535) if needed, for example when running several
@@ -271,6 +339,119 @@ shows in a build that has a collector. See the
 through an export of its database offline, run `node server/analytics/viewer/serve.mjs` and drop
 the file on the page.
 
+## Android
+
+The Android app (`android/`) is a WebView around the same web build and slim cache as the desktop
+app, packed into the APK. It never needs the website to start, so solo play works in airplane mode,
+first launch included, and co-op uses the relay when there's a connection. Building it needs Java
+21, Android SDK Platform 36 and Build-Tools 36.0.0; playing it needs a current Android System
+WebView. Before it opens the game it checks cross-origin isolation, WebGL 2, shared memory with a
+worker and the worker's access to the bundled cache, and a WebView that fails shows an update link
+rather than a blank game.
+
+### Building an APK
+
+A playable debug build, from a build and its slim cache:
+
+```sh
+bun install --frozen-lockfile
+bun run download-caches
+VITE_COOP_URL=wss://relay.example.com/coop bun run build
+bun run slim-cache
+bun run tsx scripts/android/prepare-game.ts --dist dist
+cd android
+./gradlew test assembleDebug -PcoopUrl=wss://relay.example.com/coop
+```
+
+The APK is in `android/app/build/outputs/apk/debug/`. Without `prepare-game.ts` the app still
+compiles, as it does in pull requests' checks, but says its game files are missing. They go in
+`android/app/src/main/assets/game/`, which Git ignores; the script puts them together in
+`android/app/build/` first, so a run that's stopped partway leaves nothing Gradle would pack.
+
+`prepare-game.ts <release directory>` instead takes a release's `game-manifest.json`, checks its
+version and the sha256 of `game-<version>.zip`, and unpacks that. Both forms check the slim cache
+as `desktop/release-files.ts` does: one cache, made for this build (`build.json`), with every
+chunk it lists.
+
+### Online and offline play
+
+The web build and the app each need the relay and the run collector, and they must match: the
+build as `VITE_COOP_URL` and `VITE_RUN_ANALYTICS_URL`, the app as `-PcoopUrl` and
+`-PrunAnalyticsUrl` (the `COOP_URL` and `RUN_ANALYTICS_URL` repository variables in the workflows).
+Empty means solo only, or no run stats, as on desktop. Android, desktop and the website share rooms
+only on the same game build.
+
+The game runs at `https://appassets.androidplatform.net/assets/game/index.html`, answered inside
+the app. **Never change that address or the application ID, `io.jere.run_escape`**: Android
+players' saves belong to them. `RelayPolicy.java` lets out what the desktop app does, and nothing
+else: the relay's https address (GET only), and the collector's one URL by POST and its preflight.
+Its `connect-src` says the same, as WebSockets skip the app's request handling; workers get it too.
+
+Shared memory needs cross-origin isolation, which COOP and COEP headers alone don't give a WebView:
+the app adds AndroidX WebKit's profile allowlist and `Document-Isolation-Policy`, so it needs a
+WebView with `CROSS_ORIGIN_ISOLATED_ALLOWLIST`.
+
+The activity takes every configuration change itself (split screen, a fold, dark mode, a keyboard),
+since starting it over reloads the page and would end a run.
+
+**Saves.** A WebView can't download a file, so the app puts `NativeDownloads` in the page, and
+`saveFile.ts` hands it the file's name and text instead. The app asks the player where to keep it,
+and keeps the text in its cache folder until then, in case Android stops the app while the picker's
+open. Once it's written, the app answers the page with `saved` (its reply proxy), which is how the
+title's export reminder knows the file was kept and not cancelled; a page Android started over
+meanwhile isn't told. Import is the game's own file input, with Android's picker. Neither goes
+round the game's checks. Saves in the app and in a browser are separate, and Export and Import
+carry one across. Uninstalling the app or clearing its storage loses its save.
+
+### GitHub builds and releases
+
+`.github/workflows/android.yml` compiles the app and runs its tests on pull requests, without the
+cache or any secrets. Run it by hand with **playable** for a debug APK with the game in it, as an
+Actions artifact; its **coop_url** overrides `COOP_URL`. Each run's debug APK has the runner's own
+debug key, so installing a later one may mean uninstalling the earlier: export the save first.
+
+Releases build the APK too once it's set up, from the same game zip as the Windows app, signed with
+a key kept as repository secrets. Make the key once, and keep it safe: a release signed with another
+key can't update an installed app, so players would have to uninstall it, losing their save.
+
+```sh
+keytool -genkeypair -v -keystore run-escape-release.jks -alias run-escape -keyalg RSA \
+    -keysize 4096 -validity 10000
+base64 -w0 run-escape-release.jks | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEYSTORE_PASSWORD   # asks for it
+gh secret set ANDROID_KEY_ALIAS --body run-escape
+gh secret set ANDROID_KEY_PASSWORD        # the same password: a .jks from keytool has one
+gh variable set ANDROID_RELEASE_ENABLED --body true
+```
+
+Keep the `.jks` and its password somewhere other than this computer, and out of the repository
+(`.gitignore` has `*.jks`). With `ANDROID_RELEASE_ENABLED` set, the release's `android` job checks
+and unpacks the desktop game zip, builds the APK, and signs and checks it with
+`scripts/android/sign-apk.py`; the draft then carries `Run-Escape-<version>-android.apk`. If that
+job fails, there's no draft at all, rather than one without the APK. Without the variable, releases
+are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
+environment variables.
+
+**Only on GitHub, and no updates.** The APK is only ever published on this repository's releases,
+never in an app store, and the app never checks for, downloads or installs a new version. That's
+by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
+first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
+job adds to the draft when the APK's built), and so do the app's About and Save help, whose New
+versions button opens the releases page. Unlike desktop players, whose launcher updates the game,
+Android players on an older APK can't join rooms on the current build until they install it.
+
+The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
+`-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
+won't install an older APK over a newer one.
+
+**Google's developer verification** applies outside app stores too. Certified Android phones are
+starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
+from 30 September 2026 in Brazil, Indonesia, Singapore and Thailand, and everywhere in 2027, as
+reported in 2026 (check Google's own page for where it stands). Players can still install an
+unregistered APK with ADB, or a slow opt-in in developer options. Registering, in the Android
+Developer Console, takes the application ID and the release key's certificate, so make the key
+first.
+
 ## Desktop
 
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
@@ -291,14 +472,14 @@ the first time it's opened. There's no installer. Unzip it anywhere and run it. 
 `desktop/`, apart from the game, which doesn't know it's in an app.
 
 ```
-npm run build && npm run slim-cache
-npm run desktop         # the app, on this build, with no update check
-npm run desktop:dist    # everything a release carries, in release/
+bun run build && bun run slim-cache
+bun run desktop         # the app, on this build, with no update check
+bun run desktop:dist    # everything a release carries, in release/
 ```
 
-`desktop:dist` stops if `dist/caches` isn't the slim cache. It needs Node 22.12 or later (Electron
-does), and Electron's binary downloads the first time it's run. Dev runs keep their saves in a
-`Run Escape Dev` folder, so they can't touch a real one.
+`desktop:dist` stops if `dist/caches` isn't the slim cache made for this build. It needs Node
+22.12 or later (Electron does), and Electron's binary downloads the first time it's run. Dev runs
+keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 
 | File                   | What it does                                                      |
 | ---------------------- | ----------------------------------------------------------------- |
@@ -308,7 +489,7 @@ does), and Electron's binary downloads the first time it's run. Dev runs keep th
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
-| `release-files.ts`     | Makes the game zip, the manifest and the release notes            |
+| `release-files.ts`     | Makes the game zips, the chunks, the manifest and the notes       |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
 
 ### Where things are kept
@@ -331,14 +512,15 @@ Nothing listens on a port. `gameServer.ts` answers the game's requests inside th
 it's on purpose:
 
 - **It can't be a custom scheme.** `app://` gets cross-origin isolation and `fetch`, but the Cache
-  API's `put()` refuses anything but http(s) with `Request scheme 'app' is unsupported`, and
-  `CacheFiles.ts` waits on those puts, so the game fails on its first load.
+  API's `put()` refuses anything but http(s) with `Request scheme 'app' is unsupported`, and the
+  game keeps its cache with `put()`.
 - `.invalid` can never resolve, so a request that somehow got out wouldn't reach anyone.
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
-- `CacheFiles.ts` resumes with `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back
-  to what it has, so a server that ignores Range corrupts the cache. `gameServer.ts` clamps the
-  end and answers 206, with a `Content-Length` of what's left.
+- `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has, so a server
+  that ignores Range corrupts the cache. `gameServer.ts` clamps the end and answers 206, with a
+  `Content-Length` of what's left.
 
 Interception only works reliably for one session per process, so don't add a second.
 
@@ -350,7 +532,8 @@ The launcher updates the game's files by itself, not the launcher. At launch:
    a 5 second limit. Drafts aren't returned, so publishing is what lets players have it.
 2. If the release's `game-manifest.json` has a newer version than the game it has, it shows a small
    window, downloads `game-<version>.zip`, checks its sha256, extracts it to a temporary folder and
-   renames that to `game/<version>` in the user data folder. Then it removes older ones.
+   renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
+   can, it downloads less (below).
 3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
    as they are after unzipping a newer launcher.
 
@@ -366,6 +549,20 @@ Downloads start only from this repository's release URLs, over https. GitHub the
 Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
 Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
 checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+
+A release also carries the game in two parts: `game-<version>-lite.zip`, the game zip without
+`caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
+them (`lite`, with its sha256 and size, and `chunks`). A launcher that knows them copies the chunks
+the game it's playing already has, each checked against its name, and downloads the lite zip and
+only the chunks that changed, a few at a time, each checked too. When those are more than half of
+the chunks' bytes (a game from before chunks has none to copy), it downloads the whole zip instead,
+as one download is quicker than many. If any part of a split update fails, short of the player
+cancelling, it downloads the whole zip after all, and the launcher's log says why. Launchers from
+before this ignore both and download the whole zip, so it didn't need a new `LAUNCHER_VERSION`.
+Either way, a game whose `caches.json` lists a chunk it hasn't got isn't installed.
+
+The game's Cache API copy of the chunks is under `GAME_ORIGIN`, which never changes, so after an
+update the game reads the chunks it had from there, and drops the ones it no longer needs.
 
 ### When the launcher has to change
 
@@ -390,9 +587,12 @@ hand.
 
 It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
 `GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
-`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip` and
-`game-manifest.json`. **Publishing the draft by hand is what releases it to players**, and the tag
-only exists from then on. A version needs its own section in `CHANGELOG.md`, or the build fails.
+`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
+`game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
+`Run-Escape-<version>-android.apk` once Android releases are set up (see
+[GitHub builds and releases](#github-builds-and-releases)).
+**Publishing the draft by hand is what releases it to players**, and the tag only exists from then
+on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
 The app isn't signed, so Windows shows a SmartScreen warning the first time it's run (More info,
 then Run anyway). Unzip it first: running it from inside the zip fails.
@@ -859,6 +1059,15 @@ projectile glows likewise: text and gradients are the slowest things on a 2D can
 fight has a hundred splats. The effects it prunes each frame are pruned in place, and the enemies
 reuse one options object, to keep a phone's garbage collector quiet.
 
+Power-ups on the ground have a countdown pie over them, like RuneLite's
+(`GameView.drawPickupTimers`): it drains clockwise, from green to orange at half the power-up's
+time and red at a quarter. It goes by the sim's ticks, so it stops with the run, and it's gone
+once a drop is attracted (those never expire) or the run's over. From the play camera's height a
+flat item reaches further up the screen than its height does, so the pie sits over the furthest
+the item reaches as it turns, not over its top. The Power-up timers setting
+(`DisplaySettings.pickupTimers`, in Settings and the pause menu, on by default) turns it off;
+`GameClient` hands it to the view each frame.
+
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
 
@@ -906,7 +1115,7 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
 
 ### Scripts
 
-All run from the repository root with `npx tsx`:
+All run from the repository root with `bun run tsx`:
 
 ```
 scripts/cache/validate-decoders.ts       decode every type the game uses; fails on new opcodes
@@ -920,8 +1129,9 @@ scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death an
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
-scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for passives)
-scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (npm run slim-cache)
+scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
+scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
+                                         SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
 scripts/scaperune/preview.ts out.png seed=7 biome=snow    a ScapeRune map from above, and its reachability
 scripts/scaperune/relief.ts out.png preset=Alpine        a generated map's height, in seconds, without the cache
@@ -962,7 +1172,7 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
                                          counts what spots draw, --bake is memory per map's actors)
 ```
 
-Tests: `npm test`. `.github/workflows/check.yml` runs them with the type check on every pull
+Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
 request (without the game's cache, so `generator.test.ts` skips its long map check there).
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
@@ -1051,7 +1261,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.
 - **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
-  room only takes players on the host's, as different builds fall out of step.
+  room only takes players on the host's, as different builds fall out of step. The slim cache
+  checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
   run, rather than everyone waiting on a copy that can't recover.
@@ -1106,8 +1317,19 @@ class, evolution and normal/hard mode examples. Weapon damage rules use the star
 throughout the run.
 
 How much bigger the crowd gets for each player is in `content/coop.ts`, worked out again whenever
-one goes down, is revived or leaves, with each of those down or gone still counting as half a
-player (`PLAYER_GONE`).
+one goes down, is revived or leaves, with each of those down or gone still counting as half a player
+(`PLAYER_GONE`).
+
+Caskets are scaled there too. `Sim.openCasket` pays a casket's coins (the party's) once and counts
+it once towards the run's `casketsOpened` and the picker's `Hero.casketsOpened` (the results
+screen's, which add up to the run's), then `offerCasketItem` gives every hero who's up an item of
+their own, rolled on that hero's luck, gear and banishes. A hero who's down misses out, unlike a
+level up, which waits for their revive. The run waits on each of them, so an idle player who's up holds every casket until
+`DECIDE_AFTER_MS`, as they do a level up. With every casket giving the whole party an item, an
+ordinary kill's casket chance is times `PartyScale.caskets` (`CASKETS_PER_PLAYER`), so the bigger
+crowd's extra kills leave each player about as many items as solo, and the party about as many
+casket coins as a player on their own. Elites' and bosses' caskets aren't scaled: they already drop
+one a kill, as solo.
 
 Revives are in `content/coop.ts` too (how many a player gets, the hitpoints each brings back,
 how long a teammate stands over them, how long the immunity lasts, and the extra revive's item,
@@ -1127,6 +1349,15 @@ different player, clear of the others, sharing one boss's hitpoints, experience 
 their `Encounter`, so the first says so and the last to fall drops the loot. A boss with its own
 spots (`spawnAt`) gets no more copies than it has free spots, which keeps Pest Control's portals
 single, and a scripted entrance (`startIntro`) stays one boss.
+
+The boss bar in co-op is each player's own: `GameClient.getCoopBarBoss` shows the living boss
+nearest that player, so it's the copy in front of them. Unlike solo, the final boss comes first
+no more than any other: a nearer boss (an ambush's copy, or one left from earlier) takes the bar
+from it. The bar keeps its boss until another is `BOSS_BAR_SWITCH` tiles nearer, so two copies
+about as far away don't take turns on it. Once every final boss has fallen, the last one's empty
+bar stays to the victory screen, as in solo. Only the bar works this way: what else follows the
+boss on screen (the camera's lean, a gaze's light, `BossFightView`'s arena edge and totem arrows)
+goes by `Sim.shownBoss`, so in co-op it can be another copy than the bar's.
 
 Rooms only take players who've unlocked their map (and its endless or hard mode, for a room on
 them), and the host can only pick what everyone in the room has, so nobody skips ahead: someone
@@ -1209,7 +1440,7 @@ flag, with its name from `Intl.DisplayNames` as the tooltip. Emoji flags won't d
 so they show as two letters there anyway. A room's flag is its host's, which on the Cloudflare relay
 is roughly where the room runs too.
 
-To try it locally, `npm start` and open the game in two windows (one private, for a
+To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
 game's open in another tab, and Play without saving lets it play (see Saves).
 
@@ -1329,6 +1560,21 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
+**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
+reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+menu so a controller's highlight still starts on Singleplayer. The file Export gives has
+`SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
+as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
+once `saveFile` says the file's kept. The Android app says so when it's written the file, and iOS's
+share sheet when it isn't cancelled, but a browser's download can't tell: there, and in the desktop
+app, whose Save As dialog can be cancelled too, it counts as soon as the download starts. Days are
+the player's local ones, and an export dated ahead of the clock doesn't count. Not today keeps the
+day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
+reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
+the save.
+
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or
 reloads: getting the lock reads the stored save, which replaces what this tab had in memory. When
@@ -1338,36 +1584,51 @@ The desktop app has one window and plays the newest game it has, so neither tabs
 game come up there; an export from a newer version is turned away on import, as anywhere.
 
 `SaveData.skillPages` holds independent `melee`, `ranged` and `magic` allocations, each with
-`upgrades`, `upgradesSpent` and an optional `upgradeOrder`: the skill id each rank was bought for,
-oldest first. Each page can allocate the full budget: `coins + max(upgradesSpent)`. `coins` is the unreserved bank available
-outside Skills, while `getSkillCoins(save, style)` subtracts that page's spending from the budget.
+`upgrades` and `upgradesSpent`, what was paid for them. Each page can allocate the full budget:
+`coins + max(upgradesSpent)`. `coins` is the unreserved bank available outside Skills, while
+`getSkillCoins(save, style)` subtracts that page's spending from the budget.
 Purchases and refunds adjust the bank only by the change in the largest page's spending; they never
 change another class's ranks or remaining budget. Armoury purchases still spend unreserved coins.
 Save format 11 converts the former sum of page investments into a maximum reservation, restoring
-the difference to `coins` once. Export/import retains this budget and every page's purchase order.
+the difference to `coins` once. Export/import retains this budget.
 Save format 10 moves the old shared allocation and its investment into Melee without duplicating either;
-Ranged and Magic start empty. Export and import preserve all three pages and their purchase orders.
+Ranged and Magic start empty. Export and import preserve all three pages.
 Solo and co-op loadouts use the actual adventurer's style, including maps with a forced adventurer;
 changing a co-op adventurer or room map refreshes the transmitted loadout.
+Prices come from `getPageCost` in `content/shop.ts`: what a page's ranks cost in all. It goes only
+by the ranks, never the order they were bought in, so buying the same ranks in any order costs the
+same. A rank's price is what it adds to the page (`getUpgradeCost`): each rank of a skill costs more
+than the last, and every rank on the page adds a little to the price of the whole page. That part
+falls on whatever's bought next, so a cheap skill costs several times its own price once dear ones
+are on the page. Any price that ignores the order works that way, as long as ranks make each other
+dearer.
 The arrow button on bought cards (the client's back-arrow sprite,
-`REFUND_SPRITE`) takes the most recently bought rank of that skill out of the order, through
-`GameClient.persist()`. It gives back what that saves at today's prices: the rank's own price and
-what it added to every rank bought after it. It never gives back more than the page's
-`upgradesSpent`, and the page's last rank gives back the rest, so a page returns exactly what it
-cost even when prices have changed since. A saved order is kept whatever the prices, so changing a
-skill's cost needs no migration. The button is separate from the purchase button and has a larger
-hit area on coarse pointers. Desktop right-clicking does the same; coarse-pointer context menus
-never refund. Unavailable purchases use `aria-disabled` and keep their disabled appearance on hover,
-without blocking the desktop right-click shortcut or the refund button.
-A page with ranks but no order can't refund single ranks: its arrow buttons are disabled and
-greyed, and the Skills screen says to use Refund all, which starts a new order. That notice
-(`.ui-shop-notice`) stays on phones, where `Mobile.css` hides the screen's subtitle. Pages saved before
-the order was kept have the price paid for each rank instead (`upgradeRefunds`, which only migration
-reads). A price says how many ranks were bought before it, so migration rebuilds the order when the
-prices make one unbroken run that replays to exactly the same prices. A page that refunded single
-ranks the old way leaves gaps and gets none. Never guess an order.
-Refund all clears only the selected class's ranks, spending and purchase order. It's there whenever
+`REFUND_SPRITE`) takes one rank of that skill off the page, through `GameClient.persist()`. It gives
+back that rank's share of the page's `upgradesSpent`: what it adds to the page at today's prices,
+times `upgradesSpent` over `getPageCost`. The two are the same unless prices have changed since the
+page was bought. Then each rank gives back its part of the difference, rather than one rank giving
+back all of it, or nothing and leaving the rest free. The page's last rank gives back the rest, so
+a page returns exactly what it cost, and changing a skill's cost needs no migration. The
+button is separate from the purchase button and has a larger hit area on coarse pointers. Desktop
+right-clicking does the same; coarse-pointer context menus never refund. Unavailable purchases use
+`aria-disabled` and keep their disabled appearance on hover, without blocking the desktop
+right-click shortcut or the refund button.
+Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
+(`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
+single ranks, whatever game bought them.
+Refund all clears only the selected class's ranks and spending. It's there whenever
 the page has ranks, even with no spending recorded.
+The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
+and the page needs no scrolling on a window at least about 1000x720 in the UI's own pixels (a
+bigger window draws the UI bigger, so it fits the same way) and on tablets. A narrower window
+(960x720 has five columns) or a shorter one, such as a phone held sideways, scrolls only the
+cards, so the tabs and buttons stay in view; the whole panel scrolls only when even those don't
+fit. The cards' grid scrolls, so it clips what's outside it: its 6px padding (and `scroll-padding`)
+is room for a controller's highlight around the cards at its edges. On a touch screen the refund
+button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
+skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a phone the
+one-line help under the title stays, though other panels drop their subtitle there: it says which
+preset an adventurer uses. Keep it to one line at 667 wide.
 
 ### Notice
 
@@ -1380,5 +1641,6 @@ game loads rather than built in, so on a hosted game `notice.md` can be edited o
 
 The version is `package.json`'s, shown in the title screen's corner, and [CHANGELOG.md](../CHANGELOG.md)
 says what changed in each one; the title screen shows it too. Note changes under Unreleased as
-they're made. For a release, `npm version minor --no-git-tag-version` (or `patch` for fixes alone),
-then turn Unreleased into the new version's heading with the date. A test checks the two agree.
+they're made. For a release, run `bun pm version minor --no-git-tag-version` (use `patch` for fixes
+alone), then turn Unreleased into the new version's heading with the date. A test checks the two
+agree.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
@@ -52,16 +52,26 @@ function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "
     return { ...actions, save };
 }
 
+test("skills explain how combat-style presets are used", () => {
+    renderShop({});
+    expect(screen.getByRole("tablist", { name: "Skill presets" })).toBeInTheDocument();
+    expect(
+        screen.getByText(
+            "Melee, Ranged and Magic are separate skill presets, used automatically by adventurers of that combat style.",
+        ),
+    ).toBeVisible();
+});
+
 test("switching class pages keeps purchases and single-rank refunds isolated", () => {
     expect.hasAssertions();
     const actions = renderShop({}, 50000);
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     const melee = structuredClone(actions.save.skillPages.melee);
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Ranged");
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Ranged preset");
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     const ranged = structuredClone(actions.save.skillPages.ranged);
-    fireEvent.click(screen.getByRole("tab", { name: "Magic" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Magic preset" }));
     expect(screen.getByRole("button", { name: "Refund all" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
     fireEvent.contextMenu(screen.getByRole("button", { name: /^Strength\b/ }));
@@ -69,18 +79,18 @@ test("switching class pages keeps purchases and single-rank refunds isolated", (
     expect(actions.save.skillPages.magic.upgrades).toEqual({});
     expect(actions.save.skillPages.melee).toEqual(melee);
     expect(actions.save.skillPages.ranged).toEqual(ranged);
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
     fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
     expect(actions.refundUpgrades).toHaveBeenLastCalledWith("ranged");
     expect(actions.save.skillPages.melee).toEqual(melee);
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
     expect(screen.getByRole("button", { name: "Refund all" })).toBeEnabled();
 }, 30000);
 
 test("each page can afford the full gold budget after another class spends it", () => {
     expect.hasAssertions();
     const actions = renderShop({}, 10000);
-    for (const label of ["Melee", "Ranged", "Magic"]) {
+    for (const label of ["Melee preset", "Ranged preset", "Magic preset"]) {
         fireEvent.click(screen.getByRole("tab", { name: label }));
         const card = screen.getByRole("button", { name: /^Ring of life\b/ });
         expect(card).not.toHaveClass("ui-card-dim");
@@ -97,9 +107,9 @@ test("each page can afford the full gold budget after another class spends it", 
 }, 30000);
 
 test.each([
-    ["warrior", "Melee"],
-    ["ranger", "Ranged"],
-    ["wizard", "Magic"],
+    ["warrior", "Melee preset"],
+    ["ranger", "Ranged preset"],
+    ["wizard", "Magic preset"],
 ])("skills open on %s's class page", (characterId, label) => {
     expect.hasAssertions();
     renderShop({}, 0, characterId);
@@ -110,10 +120,10 @@ test("class tabs support arrow keys and wrap without changing any skill pages", 
     expect.hasAssertions();
     const actions = renderShop({ strength: 1 }, 50000);
     const before = structuredClone(actions.save);
-    const melee = screen.getByRole("tab", { name: "Melee" });
+    const melee = screen.getByRole("tab", { name: "Melee preset" });
     melee.focus();
     fireEvent.keyDown(melee, { key: "ArrowLeft" });
-    const magic = screen.getByRole("tab", { name: "Magic" });
+    const magic = screen.getByRole("tab", { name: "Magic preset" });
     expect(magic).toHaveFocus();
     expect(magic).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(magic, { key: "ArrowRight" });
@@ -185,32 +195,12 @@ test("unbought skills have no refund button", () => {
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
 });
 
-test("legacy pages explain why partial refunds need a full reset", () => {
-    expect.hasAssertions();
-    const actions = renderShop({}, 50000);
-    fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
-    delete actions.save.skillPages.melee.upgradeOrder;
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
-    expect(screen.getByText(/purchase order wasn't saved/)).toBeVisible();
-    const refund = screen.getByRole("button", { name: "Refund one Strength rank" });
-    expect(refund).toBeDisabled();
-    fireEvent.click(refund);
-    fireEvent.contextMenu(screen.getByRole("button", { name: /^Strength\b/ }));
-    expect(actions.refundUpgrade).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
-    expect(screen.queryByText(/purchase order wasn't saved/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
-    expect(screen.getByRole("button", { name: "Refund one Strength rank" })).toBeEnabled();
-});
-
 test("Refund all clears ranks that have no spending recorded", () => {
     expect.hasAssertions();
     const actions = renderShop({ strength: 2 });
     actions.save.skillPages.melee.upgradesSpent = 0;
-    delete actions.save.skillPages.melee.upgradeOrder;
-    fireEvent.click(screen.getByRole("tab", { name: "Ranged" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Melee" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
     fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
     expect(actions.refundUpgrades).toHaveBeenCalledExactlyOnceWith("melee");
     expect(actions.save.skillPages.melee.upgrades).toEqual({});
@@ -324,4 +314,70 @@ test("map tabs support arrow keys and wrap", () => {
     fireEvent.keyDown(bosses, { key: "ArrowLeft" });
     fireEvent.keyDown(campaign, { key: "ArrowLeft" });
     expect(screen.getAllByRole("tab").at(-1)).toHaveFocus();
+});
+
+function renderTitle(runs: number, lastExported?: number) {
+    const save = { ...createSave(), runs, lastExported };
+    const store = new GameStore(save);
+    store.set({ screen: "title" });
+    const client = {
+        // Stands in for GameClient once the file's kept: the stamp and the save's write are
+        // GameClient.test.ts's to check, and this only that the bar goes by the store's save
+        exportSave: vi.fn(() => {
+            store.set({ save: { ...store.getSnapshot().save, lastExported: Date.now() } });
+        }),
+        playClick: vi.fn(),
+    };
+    render(<GameUi store={store} client={client as unknown as GameClient} />);
+    return { client, store };
+}
+
+describe("the title's export reminder", () => {
+    // Its own, as Node 25 and later have a localStorage that hides jsdom's
+    beforeEach(() => {
+        const items = new Map<string, string>();
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => items.get(key) ?? null,
+            setItem: (key: string, value: string) => void items.set(key, value),
+        });
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    test("isn't there for a new player, or once the save's been exported today", () => {
+        expect.hasAssertions();
+        renderTitle(0);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+        cleanup();
+        renderTitle(4, Date.now());
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("exports, and then goes", () => {
+        expect.hasAssertions();
+        const { client } = renderTitle(4);
+        fireEvent.click(screen.getByRole("button", { name: "Export save" }));
+        expect(client.exportSave).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("put off, it stays gone for the day, here and after a reload", () => {
+        expect.hasAssertions();
+        const { client } = renderTitle(4, Date.now() - 3 * 24 * 60 * 60 * 1000);
+        expect(screen.getByText(/^Last exported/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Not today" }));
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+        expect(client.exportSave).not.toHaveBeenCalled();
+        cleanup();
+        renderTitle(4);
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("waits while the game isn't saving", () => {
+        expect.hasAssertions();
+        const { store } = renderTitle(4);
+        expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
+        act(() => store.set({ saveBlock: { kind: "otherTab" }, saveBlockClosed: true }));
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
 });

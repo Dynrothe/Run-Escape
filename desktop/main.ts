@@ -119,6 +119,7 @@ async function updateGame(splash: BrowserWindow, current: GameFolder): Promise<v
             const { version } = check.manifest;
             const text = `Updating to ${version}...`;
             showSplashStatus(splash, text, 0, true);
+            // Only the cache's chunks this game hasn't got are downloaded
             await installUpdate(
                 check.manifest,
                 check.zipUrl,
@@ -126,6 +127,10 @@ async function updateGame(splash: BrowserWindow, current: GameFolder): Promise<v
                 app.getPath("userData"),
                 cancel.signal,
                 (fraction) => showSplashStatus(splash, text, fraction ?? 0, true),
+                undefined,
+                check.split,
+                [current.path],
+                (e) => void log(`The split update failed, so it's the whole zip: ${e}`),
             );
             await log(`Updated to ${version}`);
         }

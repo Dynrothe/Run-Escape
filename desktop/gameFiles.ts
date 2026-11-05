@@ -1,6 +1,35 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 
-export type GameManifest = { version: string; sha256: string; minLauncher: string };
+// A chunk of the slim cache, in caches/chunks/ (src/rs/cache/ChunkedCache.ts): its name is the
+// first 32 hex digits of its sha256
+export type ManifestChunk = { file: string; size: number };
+
+// lite and chunks are the game zip split in two: the zip without caches/chunks/, and the chunks
+// as their own release assets, so an update downloads only the chunks that changed. Launchers
+// from before them ignore both and download the whole zip.
+export type GameManifest = {
+    version: string;
+    sha256: string;
+    minLauncher: string;
+    lite?: { sha256: string; size: number };
+    chunks?: ManifestChunk[];
+};
+
+export const CHUNK_FILE_PATTERN = /^[0-9a-f]{32}\.bin$/;
+
+// The name a chunk with these bytes has
+export const chunkName = (data: Uint8Array) =>
+    createHash("sha256").update(data).digest("hex").slice(0, 32) + ".bin";
+
+// Where a game folder keeps its chunks
+export const chunkPath = (folder: string, file: string) =>
+    path.join(folder, "caches", "chunks", file);
+
+const isSize = (size: unknown): size is number =>
+    typeof size === "number" && Number.isSafeInteger(size) && size >= 0;
+const isSha256 = (sha256: unknown): sha256 is string =>
+    typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256);
 
 // A set of game files: the ones bundled with the launcher, or an update in the user data folder.
 // The bundled ones have no minLauncher, as they came with this launcher.
@@ -22,14 +51,37 @@ export function compareVersions(a: string, b: string): number {
 }
 
 export function parseManifest(text: string): GameManifest {
-    const { version, sha256, minLauncher } = JSON.parse(text) ?? {};
+    const { version, sha256, minLauncher, lite, chunks } = JSON.parse(text) ?? {};
     if (!isVersion(version) || !isVersion(minLauncher)) {
         throw new Error("The manifest's versions aren't valid");
     }
-    if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+    if (!isSha256(sha256)) {
         throw new Error("The manifest's sha256 isn't valid");
     }
-    return { version, sha256, minLauncher };
+    const manifest: GameManifest = { version, sha256, minLauncher };
+    if (lite === undefined && chunks === undefined) {
+        return manifest;
+    }
+    if (!isSha256(lite?.sha256) || !isSize(lite?.size)) {
+        throw new Error("The manifest's lite zip isn't valid");
+    }
+    const files = new Set<string>();
+    const valid =
+        Array.isArray(chunks) &&
+        chunks.every(
+            (chunk) =>
+                typeof chunk?.file === "string" &&
+                CHUNK_FILE_PATTERN.test(chunk.file) &&
+                !files.has(chunk.file) &&
+                files.add(chunk.file) &&
+                isSize(chunk.size),
+        );
+    if (!valid) {
+        throw new Error("The manifest's chunks aren't valid");
+    }
+    manifest.lite = { sha256: lite.sha256, size: lite.size };
+    manifest.chunks = chunks.map(({ file, size }: ManifestChunk) => ({ file, size }));
+    return manifest;
 }
 
 // The newest game files this launcher can run. A folder needing a newer launcher is left out: a

@@ -21,7 +21,7 @@ import {
 } from "../content/maps";
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
-import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
+import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
 import {
     CharacterDef,
@@ -49,11 +49,9 @@ export const SAVE_VERSION = 11;
 
 export type SkillPage = {
     upgrades: Record<string, number>;
+    // What was paid for the page's ranks, which Refund all gives back. It's
+    // getPageCost(upgrades) unless prices have changed since.
     upgradesSpent: number;
-    // The skill each rank was bought for, oldest first, which a single rank's
-    // refund reprices the later ones from. A page from before it was kept has
-    // none if it couldn't be worked out, and needs Refund all first.
-    upgradeOrder?: string[];
 };
 
 function createSkillPage(): SkillPage {
@@ -112,6 +110,9 @@ export type SaveData = {
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
+    // When the player last exported it (Date.now()), so an exported file says
+    // when it was made, and the title screen can remind them to keep a copy
+    lastExported?: number;
 };
 
 // The round reached, and how long the run lasted
@@ -287,6 +288,11 @@ export function migrateSave(raw: unknown): SaveData {
     ) {
         save.favouriteCharacter = data.favouriteCharacter;
     }
+    // A time a Date can hold, or the reminder couldn't tell its day
+    const exported = data.lastExported;
+    if (typeof exported === "number" && exported > 0 && !isNaN(new Date(exported).getTime())) {
+        save.lastExported = exported;
+    }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {
             if (QUEST_BY_ID.has(id) && !save.questsDone.includes(id)) {
@@ -319,8 +325,7 @@ function migrateSkillPage(raw: unknown): SkillPage {
     if (!raw || typeof raw !== "object") {
         return page;
     }
-    // upgradeRefunds: the price paid for each rank, kept before the order was
-    const data = raw as Partial<SkillPage> & { upgradeRefunds?: unknown };
+    const data = raw as Partial<SkillPage>;
     if (data.upgrades && typeof data.upgrades === "object") {
         for (const [id, rank] of Object.entries(data.upgrades)) {
             const upgrade = SHOP_UPGRADE_BY_ID.get(id);
@@ -337,88 +342,8 @@ function migrateSkillPage(raw: unknown): SkillPage {
             ? 0
             : Number.isSafeInteger(data.upgradesSpent) && data.upgradesSpent! >= 0
               ? data.upgradesSpent!
-              : estimateSpent(page.upgrades);
-    const order =
-        readUpgradeOrder(data.upgradeOrder, page.upgrades) ??
-        recoverUpgradeOrder(data.upgradeRefunds, page);
-    if (order) {
-        page.upgradeOrder = order;
-    }
+              : getPageCost(page.upgrades);
     return page;
-}
-
-// A saved order, if it has every rank bought and nothing else. It isn't
-// checked against the spending: that stays what was paid, so a price change
-// since doesn't lose it.
-function readUpgradeOrder(raw: unknown, upgrades: Record<string, number>): string[] | undefined {
-    if (!Array.isArray(raw) || raw.length === 0) {
-        return undefined;
-    }
-    const counts: Record<string, number> = {};
-    for (const id of raw) {
-        if (typeof id !== "string") {
-            return undefined;
-        }
-        counts[id] = (counts[id] ?? 0) + 1;
-    }
-    const ids = Object.keys(upgrades);
-    const same =
-        ids.length === Object.keys(counts).length && ids.every((id) => counts[id] === upgrades[id]);
-    return same ? [...raw] : undefined;
-}
-
-// Pages from before the order was kept have the price paid for each rank,
-// and a price says how many ranks were bought before it. When those make one
-// unbroken run that replays to exactly the same prices, that's the order. A
-// page that refunded single ranks the old way leaves gaps, and has none.
-function recoverUpgradeOrder(raw: unknown, page: SkillPage): string[] | undefined {
-    const total = Object.values(page.upgrades).reduce((sum, rank) => sum + rank, 0);
-    if (!raw || typeof raw !== "object" || total === 0) {
-        return undefined;
-    }
-    const paid = raw as Record<string, unknown>;
-    const order: string[] = [];
-    for (const [id, rank] of Object.entries(page.upgrades)) {
-        const prices = paid[id];
-        if (!Array.isArray(prices) || prices.length !== rank) {
-            return undefined;
-        }
-        const upgrade = SHOP_UPGRADE_BY_ID.get(id)!;
-        for (let r = 0; r < rank; r++) {
-            let bought = 0;
-            while (bought < total && getUpgradeCost(upgrade, r, bought) !== prices[r]) {
-                bought++;
-            }
-            if (bought === total || order[bought] !== undefined) {
-                return undefined;
-            }
-            order[bought] = id;
-        }
-    }
-    const replay = priceUpgradeOrder(order);
-    const exact =
-        replay.spent === page.upgradesSpent &&
-        Object.entries(replay.prices).every(([id, prices]) =>
-            prices.every((price, r) => price === (paid[id] as unknown[])[r]),
-        );
-    return exact ? order : undefined;
-}
-
-// What buying these ranks in this order costs, in all and rank by rank
-function priceUpgradeOrder(order: string[]): { spent: number; prices: Record<string, number[]> } {
-    const prices: Record<string, number[]> = {};
-    let spent = 0;
-    order.forEach((id, bought) => {
-        const ranks = (prices[id] ??= []);
-        const cost = getUpgradeCost(SHOP_UPGRADE_BY_ID.get(id)!, ranks.length, bought);
-        ranks.push(cost);
-        spent += cost;
-    });
-    return { spent, prices };
-}
-
-export function canRefundSkillPage(page: SkillPage): boolean {
-    return page.upgradeOrder !== undefined || Object.keys(page.upgrades).length === 0;
 }
 
 export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stats {
@@ -428,10 +353,6 @@ export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stat
         stats[upgrade.stat] += upgrade.perRank * rank;
     }
     return stats;
-}
-
-export function getTotalUpgradesBought(save: SaveData, style: CombatStyle = "melee"): number {
-    return Object.values(save.skillPages[style].upgrades).reduce((sum, rank) => sum + rank, 0);
 }
 
 function getMaxSkillSpending(save: SaveData): number {
@@ -455,7 +376,7 @@ export function getNextUpgradeCost(
     if (rank >= upgrade.maxRank) {
         return undefined;
     }
-    return getUpgradeCost(upgrade, rank, getTotalUpgradesBought(save, style));
+    return getUpgradeCost(upgradeId, save.skillPages[style].upgrades);
 }
 
 // Returns false when it can't be bought (maxed or too expensive)
@@ -470,20 +391,18 @@ export function buyUpgrade(
     }
     const reserved = getMaxSkillSpending(save);
     const page = save.skillPages[style];
-    // A page keeps its order from its first rank on
-    if (Object.keys(page.upgrades).length === 0) {
-        page.upgradeOrder = [];
-    }
-    page.upgradeOrder?.push(upgradeId);
     page.upgradesSpent += cost;
     save.coins -= getMaxSkillSpending(save) - reserved;
     page.upgrades[upgradeId] = (page.upgrades[upgradeId] ?? 0) + 1;
     return true;
 }
 
-// Takes back the skill's last rank: its price and what it added to every rank
-// bought after it, at today's prices. Never more than the page has spent, and
-// its last rank gives back the rest, so a page returns exactly what it cost.
+// Takes back one rank of the skill for its share of what the page paid: what
+// it adds to the page's cost today, times what the page paid over that cost.
+// The two are the same unless prices have changed since, and then each rank
+// gives back its part of the difference rather than one rank all of it, or
+// nothing. The last rank gives back the rest, so a page returns exactly what
+// it cost.
 export function refundUpgrade(
     save: SaveData,
     upgradeId: string,
@@ -491,24 +410,22 @@ export function refundUpgrade(
 ): boolean {
     const page = save.skillPages[style];
     const rank = page.upgrades[upgradeId] ?? 0;
-    const bought = page.upgradeOrder ?? [];
-    const index = bought.lastIndexOf(upgradeId);
-    if (rank <= 0 || index < 0) {
+    if (rank <= 0) {
         return false;
     }
     const reserved = getMaxSkillSpending(save);
-    const order = bought.filter((_, i) => i !== index);
-    if (order.length === 0) {
+    const upgrades = { ...page.upgrades, [upgradeId]: rank - 1 };
+    if (rank === 1) {
+        delete upgrades[upgradeId];
+    }
+    if (Object.keys(upgrades).length === 0) {
         save.skillPages[style] = createSkillPage();
     } else {
-        const saved = priceUpgradeOrder(bought).spent - priceUpgradeOrder(order).spent;
-        page.upgradesSpent -= Math.min(saved, page.upgradesSpent);
-        page.upgradeOrder = order;
-        if (rank === 1) {
-            delete page.upgrades[upgradeId];
-        } else {
-            page.upgrades[upgradeId] = rank - 1;
-        }
+        const cost = getPageCost(page.upgrades);
+        const saved = cost - getPageCost(upgrades);
+        const refund = cost > 0 ? Math.round((saved * page.upgradesSpent) / cost) : 0;
+        page.upgradesSpent -= Math.min(refund, page.upgradesSpent);
+        page.upgrades = upgrades;
     }
     save.coins += reserved - getMaxSkillSpending(save);
     return true;
@@ -517,24 +434,8 @@ export function refundUpgrade(
 // Sells every upgrade back for what it cost (VS lets you refund)
 export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): void {
     const reserved = getMaxSkillSpending(save);
-    const page = save.skillPages[style];
-    page.upgradesSpent = 0;
+    save.skillPages[style] = createSkillPage();
     save.coins += reserved - getMaxSkillSpending(save);
-    page.upgrades = {};
-    delete page.upgradeOrder;
-}
-
-// For saves from before spending was tracked: what buying these ranks one
-// upgrade at a time would have cost
-function estimateSpent(upgrades: Record<string, number>): number {
-    const replay = createSave();
-    replay.coins = Infinity;
-    for (const [id, rank] of Object.entries(upgrades)) {
-        for (let r = 0; r < rank; r++) {
-            buyUpgrade(replay, id);
-        }
-    }
-    return replay.skillPages.melee.upgradesSpent;
 }
 
 export type RunSummary = {
