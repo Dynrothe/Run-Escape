@@ -125,7 +125,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
-import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
@@ -9725,7 +9725,7 @@ export class Sim {
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
-            objId: level.projectileObjId ?? (kind === "knife" ? (level.objId ?? -1) : -1),
+            objId: getProjectileObjId(def, level) ?? -1,
             startTick: this.tick,
             ...(def.split && { split: def.split }),
         });

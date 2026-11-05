@@ -145,12 +145,12 @@ version and how to run it.
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
       upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
-      the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
+      the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
-      crossbow**'s bolts visibly upgrade from bronze to steel, mithril, runite, then dragon.
-      They go through what they hit and one in five is enchanted (a ruby takes a
-      share of what's left of its hitpoints, a diamond pierces more, a dragonstone burns), and
-      the **Crystal bow**'s arrows split into three where they first hit.
+      crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go
+      through what they hit and one in five is enchanted (a ruby takes a share of what's left of
+      its hitpoints, a diamond pierces more, a dragonstone burns), and the **Crystal bow**'s
+      arrows split into three where they first hit.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half

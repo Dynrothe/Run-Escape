@@ -1183,6 +1183,15 @@ export type WeaponLevel = {
     name?: string;
 };
 
+// How an item is drawn in flight when its cache model needs help, whichever
+// weapon throws it (PROJECTILE_ITEM_LOOKS). Drawing only: hit sizes stay as they are.
+export type ProjectileItemLook = {
+    // Drawn this much bigger, for a model too small to see from the game's camera
+    scale?: number;
+    // Turned this far (2048 is a full turn), for a model that doesn't point the way it flies
+    yawOffset?: number;
+};
+
 export type WeaponDef = {
     id: string;
     name: string;
@@ -1196,10 +1205,6 @@ export type WeaponDef = {
     sound: number;
     hitSound: number;
     levels: WeaponLevel[];
-    // Visual size only; doesn't change a projectile's hit radius.
-    projectileScale?: number;
-    // Model-facing correction in cache angle units (2048 is a full turn).
-    projectileYawOffset?: number;
     // How often it's offered on level ups
     rarity: Rarity;
     // Replaces this weapon once it's at max level and the passive is owned

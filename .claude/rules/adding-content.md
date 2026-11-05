@@ -56,11 +56,14 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
   projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
-  Use `projectileObjId` for a real item model instead (the Armadyl crossbow's bolts); these are
-  baked at every level too, without changing the held weapon or the projectile's hit size.
-  A weapon's `projectileScale` enlarges only its drawing when the cache model is too small to see.
-  `projectileYawOffset` corrects its facing in cache angle units; bolt items need a half-turn (1024)
-  to fly point-first. Neither belongs in the sim's movement or hit calculations.
+  Use `projectileObjId` for a real item model instead (the crossbows' bolts); these are baked at
+  every level too, without changing the held weapon or the projectile's hit size.
+  `getProjectileObjId` in `weapons.ts` says which item flies (a knife's the one in hand), for the
+  sim and the baking both. An item whose model is too small to see, or doesn't point the way it
+  flies, gets an entry in `PROJECTILE_ITEM_LOOKS` there: bolts are drawn 3x and turned half round,
+  as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
+  fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
+  ways: none of these pointed the way they fly as they come from the cache.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache

@@ -2,7 +2,7 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { emptyStats } from "../content/types";
-import { getWeapon } from "../content/weapons";
+import { PROJECTILE_ITEM_LOOKS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
@@ -14,61 +14,67 @@ vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
 });
 
-test.each(["armadyl_crossbow", "dragon_hunter_crossbow", "toxic_blowpipe"])(
-    "%s draws every projectile tier without changing its movement or hit size",
-    (weaponId) => {
-        const sim = new Sim({
-            grid: makeGrid(Array(8).fill("........")),
-            characterId: "ranger",
-            metaStats: emptyStats(),
-            seed: 3,
-            spawnX: 103.5,
-            spawnY: 203.5,
-        });
-        const anim = new ActorAnim(
-            -1,
-            new Int32Array(4),
-            new Uint16Array(1),
-            new Uint16Array([1]),
-            false,
-        );
-        const model = { anims: [anim] } as ActorModel;
-        const assets = {
-            get: vi.fn(() => model),
-            getPlayer: () => undefined,
-        } as unknown as GameAssets;
-        const view = new GameView(assets);
-        const draw = vi.fn<ActorRenderer["draw"]>();
-        const actors = { draw } as unknown as ActorRenderer;
-        const weapon = getWeapon(weaponId);
-        for (const level of weapon.levels) {
-            for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-                sim.projectiles.length = 0;
-                sim["addProjectile"]("spell", weapon, level, undefined, angle);
-                const projectile = sim.projectiles[0];
-                const before = { ...projectile };
-                view.submitActors(actors, sim, 1);
-                expect(assets.get).toHaveBeenLastCalledWith(
-                    level.projectileObjId !== undefined
-                        ? "obj:" + level.projectileObjId
-                        : "spot:" + level.projectileSpotAnim,
-                );
-                expect(draw).toHaveBeenLastCalledWith(
-                    model,
-                    anim,
-                    0,
-                    projectile.x,
-                    expect.any(Number),
-                    projectile.y,
-                    (projectile.yaw + (weaponId === "armadyl_crossbow" ? 1024 : 0)) & 2047,
-                    { scale: weaponId === "armadyl_crossbow" ? 3 : 1 },
-                );
-                expect(projectile).toEqual(before);
-                expect(projectile.radius).toBe(0.4);
-            }
+// Bolts, knives and the atlatl's darts are items with a look, and the blowpipe's darts spot
+// animations without one
+test.each([
+    "armadyl_crossbow",
+    "dragon_hunter_crossbow",
+    "eclipse_atlatl",
+    "throwing_knives",
+    "toxic_blowpipe",
+])("%s draws every projectile tier without changing its movement or hit size", (weaponId) => {
+    const sim = new Sim({
+        grid: makeGrid(Array(8).fill("........")),
+        characterId: "ranger",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 103.5,
+        spawnY: 203.5,
+    });
+    const anim = new ActorAnim(
+        -1,
+        new Int32Array(4),
+        new Uint16Array(1),
+        new Uint16Array([1]),
+        false,
+    );
+    const model = { anims: [anim] } as ActorModel;
+    const assets = {
+        get: vi.fn(() => model),
+        getPlayer: () => undefined,
+    } as unknown as GameAssets;
+    const view = new GameView(assets);
+    const draw = vi.fn<ActorRenderer["draw"]>();
+    const actors = { draw } as unknown as ActorRenderer;
+    const weapon = getWeapon(weaponId);
+    for (const level of weapon.levels) {
+        for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+            sim.projectiles.length = 0;
+            sim["addProjectile"]("spell", weapon, level, undefined, angle);
+            const projectile = sim.projectiles[0];
+            const before = { ...projectile };
+            view.submitActors(actors, sim, 1);
+            const objId = getProjectileObjId(weapon, level);
+            expect(assets.get).toHaveBeenLastCalledWith(
+                objId !== undefined ? "obj:" + objId : "spot:" + level.projectileSpotAnim,
+            );
+            const look = objId !== undefined ? PROJECTILE_ITEM_LOOKS[objId] : undefined;
+            expect(look === undefined).toBe(weaponId === "toxic_blowpipe");
+            expect(draw).toHaveBeenLastCalledWith(
+                model,
+                anim,
+                0,
+                projectile.x,
+                expect.any(Number),
+                projectile.y,
+                (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
+                { scale: look?.scale ?? 1 },
+            );
+            expect(projectile).toEqual(before);
+            expect(projectile.radius).toBe(0.4);
         }
-    },
-);
+    }
+});
 
 describe("dropped power-up timers", () => {
     afterEach(() => {
