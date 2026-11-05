@@ -155,8 +155,6 @@ export type HudNumbers = {
     // waves: still in its waves, so its boss is on the way (not fought or beaten)
     // portal: the hall's teleporter can be used; first: the player's never beaten it
     raidRoom?: {
-        // The hall's colour wash, while its waves are on (RaidRoomDef.hall)
-        wash?: string;
         number: number;
         count: number;
         name: string;

@@ -492,6 +492,8 @@ export class GameClient implements GameFrameHandler {
     private shownDps = 0;
     // The world's brightness as last set: a raid hall can draw darker than its map
     private shownBrightness = 1;
+    // The raid hall's colour wash as last set (RaidRoomDef.hall)
+    private shownWash: string | undefined;
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
     // Each hero's look, as last baked
@@ -1408,6 +1410,8 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean = { x: 0, y: 0 };
         this.renderer.setBrightness(map.brightness ?? 1);
         this.shownBrightness = map.brightness ?? 1;
+        this.renderer.setWash(undefined);
+        this.shownWash = undefined;
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
         if (music) {
@@ -1779,6 +1783,8 @@ export class GameClient implements GameFrameHandler {
         this.renderer.setSmoothTerrain(false);
         this.renderer.setBrightness(1);
         this.shownBrightness = 1;
+        this.renderer.setWash(undefined);
+        this.shownWash = undefined;
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2080,11 +2086,17 @@ export class GameClient implements GameFrameHandler {
             ground - 0.6,
             py + this.cameraLean.y + pan.y + shake.y,
         );
-        // A raid hall can be drawn darker than the map (RaidRoomDef.hall)
-        const hallBrightness =
+        // A raid hall can be drawn darker than the map, and washed with a colour
+        // (RaidRoomDef.hall)
+        const hall =
             sim.map.raid && sim.raidStage === "waves"
-                ? sim.map.raid.rooms[sim.raidRoom].hall?.brightness
+                ? sim.map.raid.rooms[sim.raidRoom].hall
                 : undefined;
+        const hallBrightness = hall?.brightness;
+        if (hall?.wash !== this.shownWash) {
+            this.shownWash = hall?.wash;
+            this.renderer.setWash(hall?.wash);
+        }
         // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
         // eased both ways so it never steps
         const light = getGazeLight(sim);
@@ -2678,10 +2690,6 @@ export class GameClient implements GameFrameHandler {
             // Whole seconds, as they're shown, so standing still changes nothing
             bossIn: Math.ceil(sim.timeLeftForBoss),
             raidRoom: sim.map.raid && {
-                wash:
-                    sim.raidStage === "waves"
-                        ? sim.map.raid.rooms[sim.raidRoom].hall?.wash
-                        : undefined,
                 number: sim.raidRoom + 1,
                 count: sim.map.raid.rooms.length,
                 name: sim.map.raid.rooms[sim.raidRoom].name,

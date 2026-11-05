@@ -1549,7 +1549,8 @@ export type RaidRoomDef = {
     // tuned to take a strong player
     par: number;
     // How its hall looks while its waves are on: drawn this bright (as MapDef.brightness, lower
-    // darker), and the screen washed with this colour (multiplied over it, so white is no change)
+    // darker), and the world washed with this colour ("#rrggbb", multiplied over it in the
+    // shader, so white is no change)
     hall?: { brightness?: number; wash?: string };
 };
 

@@ -29,6 +29,8 @@ the version in the corner).
 - Theatre of Blood expert mode: the green and blue Nylocas come in to a couple of tiles to shoot,
   rather than hanging back out of reach of auras like Ice Barrage, which left a mage nothing to
   hit them with. Fixed by Okaeri.
+- Theatre of Blood on Safari: the first hall drew as a flat dark red over everything, with
+  nothing of the world showing. Fixed by Okaeri.
 - Hard and expert mode: a boss's fan of shots (the Maiden's Blood throw) shows a line for every
   shot, rather than fewer lines than shots, which left shots between them. Fixed by Okaeri.
 
