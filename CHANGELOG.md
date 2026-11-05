@@ -18,8 +18,8 @@ the version in the corner).
 
 ### Fixed
 
-- Melee weapons swing at an enemy more than a tile across from beside it, as they hit it: they
-  waited for its middle to come into reach. Fixed by Okaeri.
+- Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
+  it: they waited for its middle to come into reach. Fixed by Okaeri.
 
 ## 0.27.0 - 2026-11-05
 
