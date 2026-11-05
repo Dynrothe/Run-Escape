@@ -776,6 +776,41 @@ describe("expert mode", () => {
         expect(nearest(false)).toBeGreaterThan(4.5);
     });
 
+    it("warns of a fan with as many lines as it fires, as wide, on hard too", () => {
+        for (const expert of [false, true]) {
+            const sim = raid(expert);
+            sim.player.invulnerable = 1e9;
+            // As the Theatre's hard mode has it (its map's hard.bullets)
+            if (expert) {
+                (sim as unknown as { bulletScale: number }).bulletScale = 1.5;
+            }
+            const boss = sim.spawnEnemy(getEnemy("maiden_of_sugadinti"), "boss", {
+                x: sim.player.x,
+                y: sim.player.y + 10,
+            })!;
+            const attack = boss.def.boss!.attacks.find((a) => a.name === "Blood throw")!;
+            const { count, arc } = sim.volleyShape(attack.pattern!);
+            sim["startBossAttack"](boss, attack);
+            const windup = boss.bossState!.windup!;
+            const aim = Math.atan2(windup.dirY, windup.dirX);
+            const lines = Array.from({ length: count }, (_, i) =>
+                (aim - arc / 2 + (arc * i) / Math.max(1, count - 1)).toFixed(2),
+            );
+            // Its first volley, then away from it all, so it isn't aimed anew
+            for (let i = 0; i < 2 * TICKS_PER_SECOND && sim.bullets.count < count; i++) {
+                sim.player.x = sim.player.prevX = sim.player.x + 0.2;
+                sim.step();
+            }
+            const headings = Array.from({ length: sim.bullets.count }, (_, k) => {
+                const slot = sim.bullets.order[k];
+                return Math.atan2(sim.bullets.vy[slot], sim.bullets.vx[slot]).toFixed(2);
+            }).sort();
+            expect(headings).toEqual([...lines].sort());
+            // Hard mode's more of them
+            expect(count > attack.pattern!.count).toBe(expert);
+        }
+    });
+
     it("has Nylocas Vasilias change colour, keeping its hitpoints", () => {
         const sim = raid(true);
         const boss = sim.spawnEnemy(getEnemy("nylocas_vasilias"), "boss", {

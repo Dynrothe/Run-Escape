@@ -977,12 +977,13 @@ export class BossFightView {
         }
         const ctx = overlay.ctx;
         const base = Math.atan2(windup.dirY, windup.dirX);
-        const arc = pattern.arc ?? 1;
+        // As many lines as it fires, as wide: hard mode's more bullets in a wider fan
+        const { count, arc } = sim.volleyShape(pattern);
         ctx.strokeStyle = "#ffb060";
         ctx.globalAlpha = (0.3 + 0.5 * t) * WARNING_ALPHA;
         ctx.lineWidth = Math.max(2, 3 * scale);
-        for (let i = 0; i < pattern.count; i++) {
-            const angle = base - arc / 2 + (arc * i) / Math.max(1, pattern.count - 1);
+        for (let i = 0; i < count; i++) {
+            const angle = base - arc / 2 + (arc * i) / Math.max(1, count - 1);
             const from = overlay.project(
                 enemy.x,
                 this.ground(sim, enemy.x, enemy.y),

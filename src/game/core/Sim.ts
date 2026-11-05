@@ -5905,6 +5905,22 @@ export class Sim {
         }
     }
 
+    // How many bullets a volley of a pattern fires, and a spread's arc, for the warning to match.
+    // More bullets on hard (bulletScale), the space between them as wide: a ring's gap is an
+    // angle, so it stays as wide; a spread fans out wider to keep its bullets as far apart; a
+    // ring or spiral with no gap has nothing to keep open, so it stays as it is (more would
+    // only close it up)
+    volleyShape(pattern: BulletPatternDef): { count: number; arc: number } {
+        const closed =
+            (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
+        const count = closed ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        const arc = Math.min(
+            Math.PI * 2,
+            ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
+        );
+        return { count, arc };
+    }
+
     private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
         const pattern = emitter.attack.pattern!;
         // Each volley after the first can be quicker than the last (speedUp)
@@ -5912,13 +5928,7 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        // More bullets on hard (bulletScale), the space between them as wide: a ring's gap is an
-        // angle, so it stays as wide; a spread fans out wider to keep its bullets as far apart; a
-        // ring or spiral with no gap has nothing to keep open, so it stays as it is (more would
-        // only close it up)
-        const closed =
-            (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
-        const count = closed ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        const { count, arc } = this.volleyShape(pattern);
         if (pattern.shape === "wall" || pattern.shape === "closing") {
             this.fireGappedVolley(emitter, boss, speed, life, turn, count);
             return;
@@ -5928,10 +5938,6 @@ export class Sim {
             return;
         }
         const spread = pattern.shape === "spread";
-        const arc = Math.min(
-            Math.PI * 2,
-            ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
-        );
         // Whoever's nearest now: a tracking spread's aim, a closing ring's middle
         const target = this.nearestHero(boss.x, boss.y).player;
         if (spread && pattern.track) {
