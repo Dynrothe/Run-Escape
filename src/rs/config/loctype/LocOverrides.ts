@@ -15,13 +15,19 @@ export type LocOverride = {
     height?: number;
 };
 
-// The Wardens' room's floor (the Tombs of Amascut): flat stone slabs on the plane under the room's,
-// which draws nothing, brought up to it (maps/tombsOfAmascut.ts). The floor's own tiles say what's
-// walkable, so they block nothing
+// The Wardens' room's floor (the Tombs of Amascut): the plane under the room's, which is what
+// OSRS shows through its hidden floor, brought up to it (maps/tombsOfAmascut.ts). The room's own
+// tiles say what's walkable, so they block nothing; the tall ones stand under the room's raised
+// border, so they're sunk by its height (13 height units, 104 scene units), as they were under it.
+// The cache places them only there.
 const WARDENS_FLOOR: [number, LocOverride][] = [
-    ...[45643, 45644, 45645].map((id): [number, LocOverride] => [id, { solid: false }]),
-    // A block whose top is the floor, 0.8 of a tile up from the plane under it: sunk by that
-    [45601, { solid: false, height: -104 }],
+    ...[45585, 45586, 45589, 45593, 45594, 45595, 45596, 45597, 45627, 45643, 45644, 45645].map(
+        (id): [number, LocOverride] => [id, { solid: false }],
+    ),
+    ...[45590, 45591, 45592, 45599, 45601, 45603].map((id): [number, LocOverride] => [
+        id,
+        { solid: false, height: -104 },
+    ]),
 ];
 
 // Akkha's arena's floor (the Tombs of Amascut): in the cache its stone pieces stand on the plane

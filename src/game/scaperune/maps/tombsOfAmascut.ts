@@ -376,13 +376,22 @@ const WARDENS_SIDES = {
 };
 const WARDENS_TROUGHS = [11, 13, 15];
 const WARDENS_FLOOR = { x0: 10, y0: 1, x1: 32, y1: 25 };
-// The charging circles under the Wardens (45605, filled through 45606 to 45626), which the game
-// draws as they fill: out of the map
+// The charging circles under the Wardens (45605, filled through 45606 to 45626): in the map for
+// now, empty; the fight will draw them as they fill
 const WARDENS_CHARGING = 45605;
-// Its floor: the room's own tiles are the hidden overlay, drawing nothing, over flat stone slabs on
-// the plane under it, which is what OSRS shows. Brought up to the room's plane, flush with its
-// floor, and walked over (LocOverrides)
-export const WARDENS_FLOOR_SLABS = [45601, 45643, 45644, 45645];
+// Its floor, as OSRS draws it: the room's own tiles are mostly the hidden overlay, drawing nothing,
+// and what shows is the plane under it, its floor and the pieces on it (the slabs, the troughs,
+// the ring round the obelisk, the yellow edging). That plane's level with the room's floor; the
+// border round it stands 13 height units higher, the pieces under that rising to it. So the room
+// keeps its own heights, and the plane under it comes up: its floor where the room's draws
+// nothing, its pieces where nothing covers them (the floor) and its tall ones under the border,
+// sunk by the border's height (LocOverrides). They're walked over: the room's tiles say what's
+// walkable.
+// The room's hidden overlays (map file ids), and the plane under it's that show
+const WARDENS_HIDDEN_OVERLAYS = [65, 73, 124, 138];
+const WARDENS_SHOWN_UNDER = [11, 194];
+// The plane under it's pieces that stand up to the border, under it
+export const WARDENS_TALL_PIECES = [45590, 45591, 45592, 45599, 45601, 45603];
 
 // The Wardens' last phase: the same room again, unturned (the Warden at the north, as OSRS has it,
 // slamming the floor away from it) and cut further north for it to stand over the floor, whose
@@ -774,6 +783,20 @@ function build(context: BuildContext): TileGrid {
         // The Apmeken room's east barrier is the sim's (APMEKEN, above)
         const gateX = 59 * MAP_SQUARE_SIZE - APMEKEN.x + APMEKEN_GATE.x;
         const cutOut = cutPrefab(context.maps, cut.x, cut.y, cut.sizeX, cut.sizeY);
+        // The Wardens' room shows the plane under it through its hidden floor
+        if (cut === WARDENS) {
+            const [under, room] = cutOut.levels;
+            for (let i = 0; i < room.overlays.length; i++) {
+                if (
+                    WARDENS_HIDDEN_OVERLAYS.includes(room.overlays[i]) &&
+                    WARDENS_SHOWN_UNDER.includes(under.overlays[i])
+                ) {
+                    room.overlays[i] = under.overlays[i];
+                    room.shapes[i] = under.shapes[i];
+                    room.rotations[i] = under.rotations[i];
+                }
+            }
+        }
         const prefab = bringDown(cutOut, cut.plane);
         // The Wardens' room has its ceiling on the level over it, which drew over the floor once
         // it came down: only the room's own level stays
@@ -806,7 +829,6 @@ function build(context: BuildContext): TileGrid {
                 !(cut === HET && loc.id === APMEKEN_BARRIER && loc.x === HET_GATE.x) &&
                 !(cut === CRONDIS && loc.id === APMEKEN_BARRIER && loc.x === CRONDIS_GATE.x) &&
                 !(cut === CRONDIS && loc.id === CRONDIS_WATERFALL) &&
-                !(cut === WARDENS && loc.id === WARDENS_CHARGING) &&
                 // The last room's floor is the game's: its decoration and the broken pit in its
                 // middle go (it's whole to begin with), and so do the charging circles
                 !(
@@ -833,11 +855,23 @@ function build(context: BuildContext): TileGrid {
                         (loc.id === 85 && loc.x === 12 && loc.y >= 11 && loc.y <= 13))
                 ),
         );
-        // The Wardens' room's floor, from the plane under it
+        // The Wardens' room's floor, from the plane under it: what's on the floor, and the tall
+        // pieces under the raised border
         if (cut === WARDENS) {
+            const room = cutOut.levels[1];
+            const corners = cut.sizeX + 1;
+            const raised = (x: number, y: number) =>
+                Math.max(
+                    room.heights[x + y * corners],
+                    room.heights[x + 1 + y * corners],
+                    room.heights[x + (y + 1) * corners],
+                    room.heights[x + 1 + (y + 1) * corners],
+                ) > 0;
             prefab.locs.push(
                 ...cutOut.locs.filter(
-                    (loc) => loc.level === 0 && WARDENS_FLOOR_SLABS.includes(loc.id),
+                    (loc) =>
+                        loc.level === 0 &&
+                        (WARDENS_TALL_PIECES.includes(loc.id) || !raised(loc.x, loc.y)),
                 ),
             );
         }
@@ -867,7 +901,9 @@ function build(context: BuildContext): TileGrid {
             {
                 floor: "all",
                 feather: 0,
-                flatten: true,
+                // The Wardens' room keeps its border's step up from the floor
+                flatten: cut !== WARDENS,
+                anchor: cut === WARDENS ? 0 : undefined,
                 height: cut === WARDENS_LAST ? WARDENS_LAST_HEIGHT : FLOOR_HEIGHT,
             },
         );
