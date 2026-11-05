@@ -1,3 +1,4 @@
+import { formatTime } from "./format";
 import { getMapEnemyIds } from "./mapEnemies";
 import { CAMPAIGN_MAPS, MAP_BY_ID, isDevMap, isFunMap } from "./maps";
 import { CombatGoal, CombatTaskDef, CombatTaskType, CombatTier, MapDef } from "./types";
@@ -346,7 +347,7 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "speedy_slumber",
         name: "Speedy Slumber",
-        description: `Kill Phosani's Nightmare in under ${formatSeconds(COMBAT_SPEED_SECONDS.phosani)}.`,
+        description: `Kill Phosani's Nightmare in under ${formatTime(COMBAT_SPEED_SECONDS.phosani)}.`,
         tier: "master",
         type: "speed",
         mapId: "phosani",
@@ -391,9 +392,8 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: {
             kind: "kill",
             bossIds: ZACHARIAH,
-            without: [
-                { attacks: ["Lunge", "Lunges", "Lunge (following)", "Ice barrage, then lunge"] },
-            ],
+            // Not "Ice barrage, then lunge": that's the ice, and its lunge is "Lunge (following)"
+            without: [{ attacks: ["Lunge", "Lunges", "Lunge (following)"] }],
         },
     },
     {
@@ -469,7 +469,7 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "swift_justice",
         name: "Swift Justice",
-        description: `Kill Justiciar Zachariah in under ${formatSeconds(COMBAT_SPEED_SECONDS.zachariah)}.`,
+        description: `Kill Justiciar Zachariah in under ${formatTime(COMBAT_SPEED_SECONDS.zachariah)}.`,
         tier: "master",
         type: "speed",
         mapId: "zachariah",
@@ -604,15 +604,19 @@ export function getCombatPoints(done: readonly string[]): number {
 
 // The points each tier's reward needs: about 80% of every task's points up to and including that
 // tier's, so a few can be skipped, and all of them for Grandmaster. They come from the tasks, so
-// new ones move them (a reward already had stays).
-export function getTierThresholds(): Record<CombatTier, number> {
-    const thresholds = {} as Record<CombatTier, number>;
-    let total = 0;
-    for (const tier of COMBAT_TIERS) {
-        total += COMBAT_TASKS.filter((t) => t.tier === tier.id).length * tier.points;
-        thresholds[tier.id] = tier.id === "grandmaster" ? total : Math.ceil(total * 0.8);
+// new ones move them (a reward already had stays). Worked out once: the tasks don't change.
+let tierThresholds: Readonly<Record<CombatTier, number>> | undefined;
+export function getTierThresholds(): Readonly<Record<CombatTier, number>> {
+    if (!tierThresholds) {
+        const thresholds = {} as Record<CombatTier, number>;
+        let total = 0;
+        for (const tier of COMBAT_TIERS) {
+            total += COMBAT_TASKS.filter((t) => t.tier === tier.id).length * tier.points;
+            thresholds[tier.id] = tier.id === "grandmaster" ? total : Math.ceil(total * 0.8);
+        }
+        tierThresholds = Object.freeze(thresholds);
     }
-    return thresholds;
+    return tierThresholds;
 }
 
 // The tiers whose reward these points have earned
@@ -637,8 +641,10 @@ export function getGoalMaps(
     if (Array.isArray(maps)) {
         return maps;
     }
+    // None for a map that isn't the campaign's, so a wrong id fails the tests rather than
+    // quietly meaning every campaign map
     const from = CAMPAIGN_MAPS.findIndex((m) => m.id === maps.campaignFrom);
-    return CAMPAIGN_MAPS.slice(Math.max(0, from)).map((m) => m.id);
+    return from < 0 ? [] : CAMPAIGN_MAPS.slice(from).map((m) => m.id);
 }
 
 // Whether a run on this map follows the task. Fun and dev maps never do.
@@ -671,8 +677,4 @@ export function canTrackOn(task: CombatTaskDef, map: MapDef): boolean {
 // Whether a goal is counted over every run so far, rather than done in one
 export function isMultiRunGoal(goal: CombatGoal): boolean {
     return goal.kind === "killCount" || (goal.kind === "beatMap" && goal.all === true);
-}
-
-function formatSeconds(seconds: number): string {
-    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }

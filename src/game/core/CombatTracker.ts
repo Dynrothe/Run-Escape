@@ -7,9 +7,9 @@ import { fm } from "./fmath";
 import { SaveData, getCombatProgress } from "./save";
 
 // Follows a solo run for its Combat Achievements (content/combatTasks.ts). It only watches: it
-// reads the sim and the events each tick drains, and never writes to either, so the run plays
-// and hashes exactly as it would without it. Time is the sim's ticks. Co-op runs and runs that
-// don't count get none (forRun).
+// reads the sim and the events each tick or action drains, and never writes to either, so the
+// run plays and hashes exactly as it would without it. Time is the sim's ticks. Co-op runs and
+// runs that don't count get none (forRun).
 
 type Watch = {
     task: CombatTaskDef;
@@ -22,8 +22,9 @@ type Watch = {
     damageAtOpen: number;
     attacksAtOpen: number;
     boss?: Enemy;
-    // stayInReach: ticks out of reach in a row
-    outTicks: number;
+    // stayInReach: the tick they went out of reach, -1 while in it. A tick, not a count of looks,
+    // as it's looked at between ticks too (a casket, an item, the fight's button).
+    outSince: number;
     // killEachWithin: arrival ticks, and the ones killed in time; killTogether: kill ticks;
     // killBeforeNext: the bosses killed
     arrived?: Map<string, number>;
@@ -80,7 +81,7 @@ export class CombatTracker {
             openTick: 0,
             damageAtOpen: 0,
             attacksAtOpen: 0,
-            outTicks: 0,
+            outSince: -1,
         }));
         // A boss there before the first tick (nothing yet, but cheap to be sure of)
         for (const watch of this.watches) {
@@ -435,8 +436,10 @@ export class CombatTracker {
         const player = sim.heroes[sim.focus].player;
         const reach = sim.map.fight!.strikeReach!;
         if (excused || fm.hypot(boss.x - player.x, boss.y - player.y) <= reach) {
-            watch.outTicks = 0;
-        } else if (++watch.outTicks > goal.seconds * TICKS_PER_SECOND) {
+            watch.outSince = -1;
+        } else if (watch.outSince < 0) {
+            watch.outSince = sim.tick;
+        } else if (sim.tick - watch.outSince >= goal.seconds * TICKS_PER_SECOND) {
             watch.failed = true;
         }
         return false;
@@ -448,7 +451,7 @@ export class CombatTracker {
         watch.open = true;
         watch.openTick = sim.tick;
         watch.damageAtOpen = hero.damageTaken;
-        watch.outTicks = 0;
+        watch.outSince = -1;
         if (goal.kind === "kill") {
             const attacks = goal.without?.flatMap((a) => (typeof a === "object" ? a.attacks : []));
             watch.attacksAtOpen = sumAttacks(hero.damageByAttack, attacks ?? []);

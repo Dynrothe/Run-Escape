@@ -352,6 +352,7 @@
     .ui-armoury,
     .ui-quests,
     .ui-log,
+    .ui-ca,
     .ui-settings,
     .ui-changelog,
     .ui-notice,
@@ -401,13 +402,17 @@
 
     .ui-title-menu {
         gap: 6px;
-        width: min(420px, 54vw);
+        width: min(420px, 56vw);
         padding: 6px 8px;
     }
 
-    .ui-title-play,
-    .ui-title-tiles {
+    .ui-title-play {
         gap: 6px;
+    }
+
+    /* Five across, and "Achievements" the widest word in them: it fits down to 640 wide */
+    .ui-title-tiles {
+        gap: 4px;
     }
 
     .ui-button-big {
@@ -418,7 +423,7 @@
 
     .ui-title-tile {
         min-height: 48px;
-        padding: 2px 1px;
+        padding: 2px 0;
         font-size: 14px;
     }
 
@@ -597,6 +602,36 @@
     .ui-log-card,
     .ui-log-tab {
         min-height: 44px;
+    }
+
+    /* Combat Achievements: the list gets what height there is. The points and the next tier
+       on one line, and each tier and task on one too, rather than a narrow window's stack. */
+
+    .ui-ca-list > .ui-subtle {
+        display: none;
+    }
+
+    .ui-ca-next {
+        flex-basis: auto;
+    }
+
+    .ui-ca-tier {
+        grid-template-columns: 36px 84px minmax(90px, 1fr) minmax(0, 1.4fr);
+        padding: 0;
+    }
+
+    .ui-ca-tier-reward {
+        grid-column: auto;
+    }
+
+    .ui-ca-task {
+        grid-template-columns: 84px minmax(0, 1fr) auto 40px;
+    }
+
+    .ui-ca-task-tier,
+    .ui-ca-task-text {
+        grid-row: auto;
+        grid-column: auto;
     }
 
     /* Run HUD: everything at the edges, the middle left to the fight. What's

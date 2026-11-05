@@ -77,8 +77,9 @@ changes the sim directly.
 
 Combat Achievements are for solo runs only. `CombatTracker` watches the `Sim` and each tick's events
 from outside it, and must never write to either: the run's hash has to come out the same with it
-(`CombatTracker.test.ts` checks). `GameClient.drainEvents` hands it every tick's events, so drain
-them through that, not `sim.takeEvents()` on its own.
+(`CombatTracker.test.ts` checks). `GameClient.handleEvents` hands it every batch of events, empty
+ones too, so every `sim.takeEvents()` has to go straight into it. Actions between ticks emit
+events as well: a Smite can kill Zachariah, or move him on a phase, there and then.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in

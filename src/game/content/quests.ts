@@ -1,4 +1,5 @@
 import { getEnemy } from "./enemies";
+import { joinNames } from "./format";
 import { getMapEnemyIds } from "./mapEnemies";
 import { getMap } from "./maps";
 import { MapDef, QuestDef, QuestObjective } from "./types";
@@ -389,10 +390,4 @@ export function describeQuest(objective: QuestObjective): string {
         case "beatMap":
             return `Beat ${getMap(objective.mapId).name}`;
     }
-}
-
-function joinNames(names: string[]): string {
-    return names.length > 1
-        ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
-        : names[0];
 }

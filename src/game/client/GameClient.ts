@@ -10,6 +10,7 @@ import { COMBAT_TASK_BY_ID, getTaskTier } from "../content/combatTasks";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { joinNames } from "../content/format";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -1470,7 +1471,7 @@ export class GameClient implements GameFrameHandler {
                 this.syncOverlay();
                 break;
             case "chest":
-                this.drainEvents(sim);
+                this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
                 break;
             case "reroll":
@@ -1492,7 +1493,7 @@ export class GameClient implements GameFrameHandler {
             // A banished item is alched, which is the casket done
             case "banishChest":
                 if (done) {
-                    this.drainEvents(sim);
+                    this.handleEvents(sim, sim.takeEvents());
                     this.syncOverlay();
                 } else {
                     this.sounds.denied();
@@ -1508,7 +1509,7 @@ export class GameClient implements GameFrameHandler {
                 break;
             case "item":
                 if (done) {
-                    this.drainEvents(sim);
+                    this.handleEvents(sim, sim.takeEvents());
                     if (sim.state !== "playing") {
                         // A lamp's level up, or a blast that killed the boss
                         this.syncOverlay();
@@ -1520,11 +1521,11 @@ export class GameClient implements GameFrameHandler {
                     this.sounds.denied();
                     return;
                 }
-                this.drainEvents(sim);
+                this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
                 break;
             case "leaveEvent":
-                this.drainEvents(sim);
+                this.handleEvents(sim, sim.takeEvents());
                 this.syncOverlay();
                 break;
             case "ability":
@@ -1864,23 +1865,26 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
     }
 
-    // Hands a step's events to the Combat Achievements tracker, which only reads them and the
-    // sim, and then to the screen and sounds
-    private drainEvents(sim: Sim): void {
-        const events = sim.takeEvents();
-        if (this.combat) {
-            for (const task of this.combat.observe(sim, events)) {
-                const tier = getTaskTier(task);
-                this.sounds.taskDone();
-                this.store.toast(
-                    `Combat task complete: ${task.name} (${tier.name}, ` +
-                        `${tier.points} point${tier.points === 1 ? "" : "s"})! ` +
-                        `${tier.coins.toLocaleString()} coins are yours after this run.`,
-                    6000,
-                );
-            }
+    // The Combat Achievements tracker's look at what's just happened (it only reads the sim and
+    // its events). The tasks done together get one toast, so none are pushed off the screen.
+    private observeCombat(sim: Sim, events: readonly SimEvent[]): void {
+        const done = this.combat?.observe(sim, events) ?? [];
+        if (done.length === 0) {
+            return;
         }
-        this.handleEvents(sim, events);
+        const tiers = done.map(getTaskTier);
+        const points = tiers.reduce((sum, tier) => sum + tier.points, 0);
+        const coins = tiers.reduce((sum, tier) => sum + tier.coins, 0);
+        const what =
+            done.length === 1
+                ? `Combat task complete: ${done[0].name} (${tiers[0].name}, `
+                : `Combat tasks complete: ${joinNames(done.map((task) => task.name))} (`;
+        this.sounds.taskDone();
+        this.store.toast(
+            `${what}${points} point${points === 1 ? "" : "s"})! ` +
+                `${coins.toLocaleString()} coins are yours after this run.`,
+            6000,
+        );
     }
 
     // A task or quest done mid-run: the adventurer or item joins, and the
@@ -2023,7 +2027,7 @@ export class GameClient implements GameFrameHandler {
                 this.accumulator -= TICK_MS;
                 const move = this.input.getMoveVector(this.move);
                 sim.step(move.x, move.y);
-                this.drainEvents(sim);
+                this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
                 this.syncOverlay();
@@ -2230,7 +2234,7 @@ export class GameClient implements GameFrameHandler {
             }
             steps++;
             const events = run.stepFrame();
-            this.drainEvents(sim);
+            this.handleEvents(sim, sim.takeEvents());
             for (const event of events) {
                 if (event.action && event.hero === sim.focus) {
                     this.afterCoopAction(sim, event.action);
@@ -2387,7 +2391,10 @@ export class GameClient implements GameFrameHandler {
         this.cameraRig.apply(camera, x, this.grid.getHeight(x, y) / 128 - 0.8, y);
     }
 
+    // Every batch of the sim's events, as it's taken: drain them only through here
     private handleEvents(sim: Sim, events: SimEvent[]): void {
+        // Empty ones too: some goals are watched for, not evented (a win, the boss's reach)
+        this.observeCombat(sim, events);
         if (events.length === 0) {
             return;
         }

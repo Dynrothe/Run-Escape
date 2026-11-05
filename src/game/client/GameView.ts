@@ -2064,11 +2064,6 @@ function withAlpha(hex: string, alpha: number): string {
     return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
-export function formatTime(seconds: number): string {
-    const s = Math.floor(seconds);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
 export { TICKS_PER_SECOND };
 
 // A lunge's strip (BossAttackDef.line) on the ground, the first share of its length

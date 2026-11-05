@@ -166,7 +166,7 @@ function Overview({
     points,
 }: {
     save: SaveData;
-    thresholds: Record<CombatTier, number>;
+    thresholds: Readonly<Record<CombatTier, number>>;
     points: number;
 }): JSX.Element {
     return (

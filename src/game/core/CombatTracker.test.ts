@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
 import { CombatTracker } from "./CombatTracker";
@@ -166,6 +169,36 @@ describe("boss kills", () => {
         expect(done).toContain("in_the_owls_shadow");
         expect(done).not.toContain("objection");
         expect(done).not.toContain("checkmate");
+    });
+
+    test("the verdict's ice barrage isn't a lunge, though a lunge follows it", () => {
+        const sim = createSim("zachariah");
+        const tracker = track(sim);
+        tracker.observe(sim, [spawned("justiciar_zachariah")]);
+        sim.heroes[0].damageByAttack["Ice barrage, then lunge"] = 3;
+        expect(ids(tracker.observe(sim, [killed("justiciar_zachariah")]))).toContain("objection");
+    });
+
+    test("Close Counsel's seconds are the sim's, however often it looks between ticks", () => {
+        const counsel = (outFor: number) => {
+            const sim = createSim("zachariah");
+            const tracker = track(sim);
+            const boss = sim["spawnBoss"](getEnemy("justiciar_zachariah"), "finalBoss", 20)!;
+            tracker.observe(sim, sim.takeEvents());
+            // Well out of Saradomin Strike's reach
+            const player = sim.heroes[0].player;
+            player.x = boss.x + 20;
+            player.y = boss.y;
+            // Caskets, items and the fight's button between ticks: no time goes by
+            for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+                tracker.observe(sim, []);
+            }
+            sim.tick += outFor * TICKS_PER_SECOND;
+            tracker.observe(sim, []);
+            return ids(tracker.observe(sim, [killed("justiciar_zachariah")]));
+        };
+        expect(counsel(2)).toContain("close_counsel");
+        expect(counsel(4)).not.toContain("close_counsel");
     });
 
     test("Zachariah stuck in a pillar, and three Smites while his guard's down", () => {
@@ -377,4 +410,16 @@ describe("watching only", () => {
         expect(sim.bossKills.map((k) => k.enemyId)).toContain("wise_old_man");
         expect(tracker.done).toContain("wise_guy");
     }, 60000);
+
+    // The game shows it every batch it drains, through handleEvents. One drained any other way
+    // would hide what's in it, as a Smite's kill between ticks once was.
+    test("is shown every batch of events the game drains", () => {
+        const source = readFileSync(join(__dirname, "../client/GameClient.ts"), "utf8");
+        const drains = source.split("\n").filter((line) => line.includes("takeEvents()"));
+        expect(drains.length).toBeGreaterThan(0);
+        for (const line of drains) {
+            expect(line.trim()).toBe("this.handleEvents(sim, sim.takeEvents());");
+        }
+        expect(source).toMatch(/handleEvents\(sim: Sim, [^{]*\{[^}]*this\.observeCombat\(/);
+    });
 });

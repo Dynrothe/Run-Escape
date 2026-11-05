@@ -28,9 +28,9 @@ import {
     SlotView,
     UiSnapshot,
 } from "../client/GameStore";
-import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { formatTime } from "../content/format";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
