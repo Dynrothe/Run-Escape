@@ -689,9 +689,156 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
     return go(anchor);
 }
 
+// The Wardens. The first phase from a side's gap (beside the obelisk, so every weapon reaches it,
+// and blocking that side, so the other Warden wakes); the second near the Warden, by its core when
+// it's out, off the obelisk's marks; the last at the floor's north end, off rising slabs, stepping
+// on its siphons, off its lightning
 function wardensMove(sim: Sim): Point | undefined {
-    void sim;
-    return undefined;
+    const fight = sim.tombsWardens!;
+    const places = sim.map.tombs!.wardens!;
+    const player = sim.player;
+    if (fight.phase === 1) {
+        const gap = places.sides.tumeken.gap;
+        return Math.hypot(gap.x - player.x, gap.y - player.y) < 1
+            ? nudge(sim, gap.x, gap.y)
+            : walkTo(sim, gap.x, gap.y);
+    }
+    // The marks about to land (hurts > 0 within the next second or so), tile by tile
+    const soon = sim.tick + 60;
+    const marks = fight.marks
+        .filter((m) => m.hurts > 0 && m.from >= sim.tick && m.from <= soon)
+        .map((m) => ({ x: Math.floor(m.x) + 0.5, y: Math.floor(m.y) + 0.5 }));
+    const onMark = marks.some(
+        (m) => Math.floor(m.x) === Math.floor(player.x) && Math.floor(m.y) === Math.floor(player.y),
+    );
+    if (fight.phase === 2) {
+        const two = fight.two!;
+        const core =
+            two.kneel?.coreUid !== undefined
+                ? sim.enemies.find((e) => e.uid === two.kneel!.coreUid)
+                : undefined;
+        const warden = sim.enemies.find((e) => e.uid === two.wardenUid);
+        const target = core && !core.dead ? core : warden;
+        let to = target ? { x: target.x, y: target.y - (target.radius + 2.5) } : places.arrive;
+        to = clampTo(to, places.floor);
+        if (onMark || marks.length > 0) {
+            return safeStep(sim, to, (x, y) =>
+                marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y),
+            );
+        }
+        return Math.hypot(to.x - player.x, to.y - player.y) < 1
+            ? nudge(sim, to.x, to.y)
+            : walkTo(sim, to.x, to.y);
+    }
+    // The last phase
+    const three = fight.three!;
+    const last = places.last!;
+    const floor = sim.floor!;
+    const danger = (x: number, y: number) => {
+        const i = floor.index(x, y);
+        if (i < 0) {
+            return true;
+        }
+        const warned = floor.warnAt[i] !== -1 && floor.warnAt[i] <= sim.tick + 25;
+        const rising = floor.riseAt[i] !== -1 && floor.riseAt[i] >= sim.tick - 15;
+        return (
+            warned ||
+            rising ||
+            floor.isHurting(x, y, sim.tick) ||
+            floor.isFalling(x, y, sim.tick + 40) ||
+            marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y)
+        );
+    };
+    // The floor's middle columns, which its slams leave alone (or a step from it), at its north
+    // end, near the Warden
+    // Where the next slam won't reach: east, west, then both but the middle three columns, in turn
+    // (a column west of the middle for the east one, east of it for the west)
+    const middle = floor.x0 + Math.floor(floor.sizeX / 2);
+    // The count goes up as a slam starts: that one's safe column is kept till it's down (its
+    // warning, a row a tenth of a second from the north, and its hurt)
+    let seen = slamSeen.get(sim);
+    if (!seen || seen.slam !== three.slam) {
+        seen = { slam: three.slam, tick: sim.tick };
+        slamSeen.set(sim, seen);
+    }
+    const landing = three.slam > 0 && sim.tick - seen.tick < 50 * (1 + floor.sizeY * 0.1 + 0.4);
+    const next = (["east", "west", "both"] as const)[(three.slam - (landing ? 1 : 0)) % 3];
+    const column = next === "east" ? middle - 1 : next === "west" ? middle + 1 : middle;
+    let to: Point = { x: column + 0.5, y: last.floor.y1 - 1.5 };
+    const siphons = three.siphons;
+    if (siphons) {
+        const left = siphons.uids
+            .map((uid) => sim.enemies.find((e) => e.uid === uid))
+            .filter(
+                (e): e is NonNullable<typeof e> => !!e && !e.dead && e.def.id === "wardens_siphon",
+            )
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.x - player.x, a.y - player.y) -
+                    Math.hypot(b.x - player.x, b.y - player.y),
+            );
+        if (left.length > 0) {
+            to = left[0];
+        }
+    }
+    return safeStep(sim, to, danger);
+}
+
+const slamSeen = new WeakMap<Sim, { slam: number; tick: number }>();
+
+function clampTo(to: Point, floor: { x0: number; y0: number; x1: number; y1: number }): Point {
+    return {
+        x: Math.max(floor.x0 + 0.5, Math.min(floor.x1 + 0.5, to.x)),
+        y: Math.max(floor.y0 + 0.5, Math.min(floor.y1 + 0.5, to.y)),
+    };
+}
+
+// Towards a spot by tiles that aren't dangerous: off a dangerous one first, to the nearest safe
+// tile; then round the dangerous ones
+function safeStep(sim: Sim, to: Point, danger: (x: number, y: number) => boolean): Point {
+    const player = sim.player;
+    const px = Math.floor(player.x);
+    const py = Math.floor(player.y);
+    if (danger(px, py)) {
+        let best: Point | undefined;
+        let bestAway = Infinity;
+        for (let r = 1; r <= 5 && !best; r++) {
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if (
+                        Math.max(Math.abs(dx), Math.abs(dy)) !== r ||
+                        danger(px + dx, py + dy) ||
+                        sim.grid.isSolid(px + dx, py + dy)
+                    ) {
+                        continue;
+                    }
+                    const away = Math.hypot(px + dx + 0.5 - to.x, py + dy + 0.5 - to.y) * 0.2 + r;
+                    if (away < bestAway) {
+                        bestAway = away;
+                        best = { x: px + dx + 0.5, y: py + dy + 0.5 };
+                    }
+                }
+            }
+        }
+        if (best) {
+            return walkTo(sim, best.x, best.y);
+        }
+    }
+    const avoid: Point[] = [];
+    for (let dy = -6; dy <= 6; dy++) {
+        for (let dx = -6; dx <= 6; dx++) {
+            if (danger(px + dx, py + dy)) {
+                avoid.push({ x: px + dx + 0.5, y: py + dy + 0.5 });
+            }
+        }
+    }
+    if (
+        Math.hypot(to.x - player.x, to.y - player.y) < 1 &&
+        !danger(Math.floor(to.x), Math.floor(to.y))
+    ) {
+        return nudge(sim, to.x, to.y);
+    }
+    return walkAvoiding(sim, to.x, to.y, avoid, 0);
 }
 
 // The sim tool's account of a Tombs run: when each path was entered, its puzzle done and its boss
