@@ -11,7 +11,16 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { AKKHA, CRONDIS, HET, JUNGLE_JAPES, KEPHRI, SARCOPHAGI, SCABARAS } from "../content/tombs";
+import {
+    AKKHA,
+    CRONDIS,
+    HET,
+    JUNGLE_JAPES,
+    KEPHRI,
+    SARCOPHAGI,
+    SCABARAS,
+    ZEBAK,
+} from "../content/tombs";
 import { EnemyDef } from "../content/types";
 import {
     DEATH_SINK_TICKS,
@@ -571,6 +580,7 @@ export class GameView {
         this.drawScabaras(actors, sim);
         this.drawKephri(actors, sim);
         this.drawCrondis(actors, sim);
+        this.drawZebak(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
@@ -777,6 +787,53 @@ export class GameView {
                     one.y,
                     yaw,
                 );
+            }
+        }
+    }
+
+    // Zebak's island: his acid, a puddle of it on each tile a pool covers, and his tidal waves,
+    // a crest on each tile across but the gap
+    private drawZebak(actors: ActorRenderer, sim: Sim): void {
+        const fight = sim.tombsZebak;
+        if (!fight) {
+            return;
+        }
+        const acid = this.assets.get("loc:" + ZEBAK.acid.loc);
+        if (acid) {
+            const anim = acid.anims[0];
+            for (const pool of fight.acid) {
+                for (let dy = -pool.half; dy <= pool.half; dy++) {
+                    for (let dx = -pool.half; dx <= pool.half; dx++) {
+                        const x = pool.x + dx;
+                        const y = pool.y + dy;
+                        actors.draw(acid, anim, 0, x, this.ground(sim, x, y), y, 0);
+                    }
+                }
+            }
+        }
+        const island = sim.tombsPathRoom?.boss?.island;
+        const look = getEnemy(ZEBAK.waves.look);
+        const crest = this.assets.get(getEnemyModelKey(look, 0));
+        if (island && crest) {
+            const anim = crest.getAnim(look.walkSeq);
+            for (const wave of fight.waves) {
+                if (sim.tick < wave.startTick) {
+                    continue;
+                }
+                for (let x = island.x0 + 0.5; x <= island.x1 + 0.5; x++) {
+                    if (x >= wave.gapX0 && x <= wave.gapX1) {
+                        continue;
+                    }
+                    actors.draw(
+                        crest,
+                        anim,
+                        anim.getFrame(sim.tick, true),
+                        x,
+                        this.ground(sim, x, wave.y),
+                        wave.y,
+                        wave.dir > 0 ? 0 : 1024,
+                    );
+                }
             }
         }
     }

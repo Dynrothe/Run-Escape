@@ -39,6 +39,7 @@ import {
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     SCABARAS,
+    ZEBAK,
 } from "../content/tombs";
 import { EnemyDef, EnemyOutfit, GearSlot, WeaponDef } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -174,6 +175,8 @@ function getSpotAnimIds(): number[] {
     add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
     // The Crondis room's poison, pale and dark, and its water poured
     add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
+    // Zebak's roar, and his jugs breaking and splashing
+    add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
     // The Scabaras room's falling roof
     add(SCABARAS.rockSpotAnim);
     // Akkha's quadrants' elements, which are no attack of his
@@ -593,6 +596,8 @@ export class GameAssets {
         objIds.add(JUNGLE_JAPES.objId);
         // Ba-Ba's sarcophagi, open
         locIds.add(SARCOPHAGI.loc);
+        // Zebak's acid
+        locIds.add(ZEBAK.acid.loc);
         // The Crondis room's spears
         locIds.add(CRONDIS.locs.spear);
         // Kephri's dung, a wall where it's dropped

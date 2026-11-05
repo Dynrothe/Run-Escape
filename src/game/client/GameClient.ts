@@ -2392,6 +2392,8 @@ export class GameClient implements GameFrameHandler {
                     : undefined,
             tombsScabaras: sim.scabarasInfo,
             tombsCrondis: sim.crondisInfo,
+            tombsRoar:
+                sim.zebakRoarSeconds === undefined ? undefined : Math.ceil(sim.zebakRoarSeconds),
             tombsShadows: sim.akkhaShadows
                 ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
                 : undefined,

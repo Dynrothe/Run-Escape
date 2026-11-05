@@ -16,7 +16,8 @@ export type InvocationGroup =
     | "restoration"
     | "baba"
     | "akkha"
-    | "kephri";
+    | "kephri"
+    | "zebak";
 
 export type InvocationDef = {
     id: string;
@@ -49,6 +50,7 @@ export const INVOCATION_GROUPS: InvocationGroupDef[] = [
     { id: "baba", name: "Ba-Ba" },
     { id: "akkha", name: "Akkha" },
     { id: "kephri", name: "Kephri" },
+    { id: "zebak", name: "Zebak" },
 ];
 
 const RAID = "the raid's rooms";
@@ -344,6 +346,39 @@ export const INVOCATIONS: InvocationDef[] = [
         group: "kephri",
         level: 10,
         description: "Her fireballs land harder and further across.",
+    },
+    {
+        id: "not_just_a_head",
+        icon: 4588,
+        name: "Not Just a Head",
+        group: "zebak",
+        level: 15,
+        description:
+            "Blood clouds rise from the water now and then, and heal him if they reach you.",
+    },
+    {
+        id: "arterial_spray",
+        icon: 4588,
+        name: "Arterial Spray",
+        group: "zebak",
+        level: 10,
+        description: "His blood clouds heal him more.",
+    },
+    {
+        id: "blood_thinners",
+        icon: 4588,
+        name: "Blood Thinners",
+        group: "zebak",
+        level: 5,
+        description: "Three blood clouds rise at a time.",
+    },
+    {
+        id: "upset_stomach",
+        icon: 4588,
+        name: "Upset Stomach",
+        group: "zebak",
+        level: 15,
+        description: "His acid spreads 5 by 5, and a jug's water clears less of it.",
     },
 ];
 

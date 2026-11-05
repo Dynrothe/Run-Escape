@@ -143,6 +143,7 @@ import {
     UtilityDef,
     WaveDef,
     WeaponDef,
+    ZebakDef,
     emptyStats,
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
@@ -862,6 +863,30 @@ export type AkkhaFight = {
     stand?: { corner: number; nextTick: number; since: number; hpAt: number };
 };
 
+// Zebak's fight (BossDef.zebak), while he's up: how many specials he's done, his roar if it's
+// coming, his tidal waves (each's row, which way it goes, its gap, when it starts, who it's
+// caught), his acid pools (middles and half widths), how long each hero's stood in one, his jugs
+// (rolling, which way and how far it's got to go), his blood clouds (where each was last, to
+// waste it as it goes) and when the next come
+export type ZebakFight = {
+    uid: number;
+    special: number;
+    roar?: { tick: number };
+    waves: {
+        y: number;
+        dir: 1 | -1;
+        gapX0: number;
+        gapX1: number;
+        startTick: number;
+        hit: number[];
+    }[];
+    acid: { x: number; y: number; half: number }[];
+    acidTicks: number[];
+    jugs: { uid: number; vx: number; vy: number; left: number }[];
+    clouds: { uid: number; x: number; y: number }[];
+    nextCloudTick: number;
+};
+
 // Kephri's fight (BossDef.kephri), while she's up: how many intermissions she's had, whether
 // she's on her last (her swarm gone), the intermission she's in (its swarms still to send, how
 // many have gone, when the next does and from which hole, her overlords), the heroes her flies
@@ -1022,6 +1047,7 @@ export class Sim {
     // Akkha's fight, while he's up
     tombsAkkha?: AkkhaFight;
     tombsKephri?: KephriFight;
+    tombsZebak?: ZebakFight;
     // Rocks Ba-Ba's boulders left, solid, to take cover by (BossAttackDef.leavesCover)
     tombsCover: { x: number; y: number; radius: number; endTick: number; look: string }[] = [];
     // A path boss's arena's sarcophagi, while it's up: open until openUntil, firing next at nextTick
@@ -3273,7 +3299,7 @@ export class Sim {
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
         for (const enemy of this.enemies) {
-            if (!enemy.dead && !enemy.leaving) {
+            if (!enemy.dead && !enemy.leaving && !enemy.def.unhittable) {
                 this.enemyHash.insert(enemy);
             }
         }
@@ -3845,6 +3871,10 @@ export class Sim {
         }
         player.hp -= amount;
         this.damageTaken += amount;
+        // A blood cloud's touch heals Zebak
+        if (enemyId === "zebak_blood_cloud") {
+            this.zebakCloudHit(amount);
+        }
         // A Crondis crocodile's bite spills your water
         if (enemyId === "crondis_crocodile" || enemyId === "crondis_crocodile_hungry") {
             this.crondisSpill("The crocodile's bite spills your water!");
@@ -4689,6 +4719,7 @@ export class Sim {
             this.tombsPeels = [];
             this.tombsAkkha = undefined;
             this.tombsKephri = undefined;
+            this.tombsZebak = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
@@ -4701,6 +4732,7 @@ export class Sim {
             this.tombsPeels = [];
             this.tombsAkkha = undefined;
             this.tombsKephri = undefined;
+            this.tombsZebak = undefined;
             this.tombsCover = [];
             this.tombsSarcophagi = [];
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
@@ -4710,6 +4742,19 @@ export class Sim {
                 const enemy = this.spawnBoss(getEnemy(def.enemyId), "boss", undefined, def.at);
                 if (enemy) {
                     fight.uid = enemy.uid;
+                    if (enemy.def.boss?.zebak) {
+                        this.tombsZebak = {
+                            uid: enemy.uid,
+                            special: 0,
+                            waves: [],
+                            acid: [],
+                            acidTicks: [],
+                            jugs: [],
+                            clouds: [],
+                            nextCloudTick:
+                                this.tick + secondsToTicks(enemy.def.boss.zebak.clouds.every / 2),
+                        };
+                    }
                     if (enemy.def.boss?.kephri) {
                         this.tombsKephri = {
                             uid: enemy.uid,
@@ -4767,6 +4812,7 @@ export class Sim {
         }
         this.stepAkkha(boss);
         this.stepKephri(boss);
+        this.stepZebak(boss);
         this.stepTombsCover();
         this.stepTombsPit(boss);
         this.stepTombsPeels();
@@ -5466,6 +5512,387 @@ export class Sim {
             }
         }
         this.stepApmekenIssue(room, spots!);
+    }
+
+    // ---- Zebak ----
+
+    // His fight, each tick he's up: his specials, his acid, his jugs and his blood clouds
+    private stepZebak(boss: Enemy): void {
+        const fight = this.tombsZebak;
+        const def = boss.def.boss?.zebak;
+        const island = this.tombsPathRoom?.boss?.island;
+        if (!fight || !def || !island || fight.uid !== boss.uid) {
+            return;
+        }
+        const state = boss.bossState;
+        if (
+            !fight.roar &&
+            fight.waves.length === 0 &&
+            fight.special < def.specials.length &&
+            boss.hp <= boss.maxHp * def.specials[fight.special] &&
+            // None once he's enraged (or as he will be this tick)
+            !state?.enraged &&
+            boss.hp > boss.maxHp * (boss.def.boss?.enrage.at ?? 0) &&
+            !state?.windup
+        ) {
+            this.startZebakSpecial(boss, fight, def, island);
+        }
+        this.stepZebakRoar(boss, fight, def);
+        this.stepZebakWaves(fight, def, island);
+        this.stepZebakAcid(fight, def);
+        this.stepZebakJugs(fight, def, island);
+        this.stepZebakClouds(boss, fight, def);
+    }
+
+    // A random tile's middle on his island
+    private zebakSpot(island: { x0: number; y0: number; x1: number; y1: number }): {
+        x: number;
+        y: number;
+    } {
+        for (let attempt = 0; attempt < 20; attempt++) {
+            const x = Math.floor(this.rng.range(island.x0 + 1, island.x1)) + 0.5;
+            const y = Math.floor(this.rng.range(island.y0 + 1, island.y1)) + 0.5;
+            if (this.grid.contains(x, y) && !this.grid.isSolid(x, y)) {
+                return { x, y };
+            }
+        }
+        return { x: (island.x0 + island.x1) / 2, y: (island.y0 + island.y1) / 2 };
+    }
+
+    // His special, turn about: acid and jugs over the island, then his roar or his waves
+    private startZebakSpecial(
+        boss: Enemy,
+        fight: ZebakFight,
+        def: ZebakDef,
+        island: { x0: number; y0: number; x1: number; y1: number },
+    ): void {
+        const roar = fight.special % 2 === 0;
+        fight.special++;
+        const level = this.tombsPathLevel;
+        const half = this.invoked("upset_stomach") ? def.acid.upsetHalf : def.acid.half;
+        for (let i = 0; i < def.acid.count + level; i++) {
+            fight.acid.push({ ...this.zebakSpot(island), half });
+        }
+        for (let i = 0; i < def.jugs.count; i++) {
+            const jug = this.spawnEnemy(
+                getEnemy(def.jugs.enemyId),
+                "normal",
+                this.zebakSpot(island),
+            );
+            if (jug) {
+                jug.noDrops = true;
+                fight.jugs.push({ uid: jug.uid, vx: 0, vy: 0, left: 0 });
+            }
+        }
+        const state = boss.bossState;
+        if (roar) {
+            // Boulders across the island's middle, to shelter behind
+            const y = Math.floor((island.y0 + island.y1) / 2) + 0.5;
+            const across = island.x1 - island.x0;
+            for (let i = 0; i < def.roar.boulders; i++) {
+                const x =
+                    Math.floor(island.x0 + ((i + 1) * across) / (def.roar.boulders + 1)) + 0.5;
+                this.tombsCover.push({
+                    x,
+                    y: y + this.rng.int(3) - 1,
+                    radius: def.roar.radius,
+                    endTick: Number.MAX_SAFE_INTEGER,
+                    look: def.roar.look,
+                });
+            }
+            fight.roar = { tick: this.tick + secondsToTicks(def.roar.seconds) };
+            if (state) {
+                state.channelEnd = Math.max(state.channelEnd, fight.roar.tick + secondsToTicks(1));
+            }
+            this.emit({ type: "notice", message: def.roar.message });
+            return;
+        }
+        const gap = Math.max(def.waves.leastGap, def.waves.gap - Math.floor(level / 2));
+        const height = island.y1 - island.y0 + 1;
+        const between = secondsToTicks(height / def.waves.speed + 1.5);
+        for (let i = 0; i < def.waves.count; i++) {
+            const up = i % 2 === 0;
+            const gapX0 = Math.floor(this.rng.range(island.x0 + 1, island.x1 - gap)) + 0.0;
+            fight.waves.push({
+                y: up ? island.y0 - 0.5 : island.y1 + 1.5,
+                dir: up ? 1 : -1,
+                gapX0,
+                gapX1: gapX0 + gap,
+                startTick: this.tick + secondsToTicks(def.waves.delay) + i * between,
+                hit: [],
+            });
+        }
+        if (state) {
+            boss.anim = "attack";
+            boss.animStart = this.tick;
+            boss.attackSeq = def.waves.seq;
+        }
+        this.emit({ type: "notice", message: def.waves.message });
+    }
+
+    // Whether a boulder shelters a point from him: between them, and close enough to it
+    private zebakSheltered(boss: Enemy, x: number, y: number, def: ZebakDef): boolean {
+        const dx = x - boss.x;
+        const dy = y - boss.y;
+        const length = Math.max(0.001, fm.hypot(dx, dy));
+        return this.tombsCover.some((rock) => {
+            if (rock.look !== def.roar.look) {
+                return false;
+            }
+            // Along the line from him to the point, the boulder short of it, and near the line
+            const along = ((rock.x - boss.x) * dx + (rock.y - boss.y) * dy) / length;
+            const off = Math.abs(((rock.x - boss.x) * dy - (rock.y - boss.y) * dx) / length);
+            return (
+                along < length &&
+                length - along <= def.roar.shelter + rock.radius &&
+                off <= rock.radius + 0.5
+            );
+        });
+    }
+
+    // His Great Roar, once its time's up: everyone not behind a boulder is hit, hard, and thrown back
+    private stepZebakRoar(boss: Enemy, fight: ZebakFight, def: ZebakDef): void {
+        const roar = fight.roar;
+        if (!roar || this.tick < roar.tick) {
+            return;
+        }
+        fight.roar = undefined;
+        boss.anim = "attack";
+        boss.animStart = this.tick;
+        boss.attackSeq = def.roar.seq;
+        this.emit({ type: "notice", message: def.roar.roarMessage });
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            const player = hero.player;
+            this.addEffect(def.roar.spotAnim, player.x, player.y, 0, 40);
+            if (this.zebakSheltered(boss, player.x, player.y, def)) {
+                continue;
+            }
+            this.use(hero);
+            this.damagePlayer(
+                player.maxHp * def.roar.share * def.roar.hits,
+                boss.def.id,
+                false,
+                undefined,
+                true,
+            );
+            this.zebakShove(player, player.x - boss.x, player.y - boss.y, def.roar.knock);
+        }
+        this.use(current);
+        this.tombsCover = this.tombsCover.filter((rock) => rock.look !== def.roar.look);
+    }
+
+    // Pushed the way given, as far as the ground goes
+    private zebakShove(player: Player, dx: number, dy: number, tiles: number): void {
+        const length = Math.max(0.001, fm.hypot(dx, dy));
+        const ux = dx / length;
+        const uy = dy / length;
+        let gone = 0;
+        for (let step = 0.25; step <= tiles; step += 0.25) {
+            const x = player.x + ux * step;
+            const y = player.y + uy * step;
+            if (!this.grid.contains(x, y) || this.grid.isSolid(x, y)) {
+                break;
+            }
+            gone = step;
+        }
+        player.x = player.prevX = player.x + ux * gone;
+        player.y = player.prevY = player.y + uy * gone;
+    }
+
+    // His tidal waves across the island: stand in the gap, or be hurt and shoved along. They
+    // wash his acid away as they go.
+    private stepZebakWaves(
+        fight: ZebakFight,
+        def: ZebakDef,
+        island: { x0: number; y0: number; x1: number; y1: number },
+    ): void {
+        const speed = def.waves.speed / TICKS_PER_SECOND;
+        const damage = def.waves.damage * this.tombsRoomScale().damage;
+        fight.waves = fight.waves.filter((wave) => {
+            if (this.tick < wave.startTick) {
+                return true;
+            }
+            wave.y += wave.dir * speed;
+            fight.acid = fight.acid.filter((pool) => Math.abs(pool.y - wave.y) > 0.6);
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const index = this.hero.index;
+                const inGap = player.x >= wave.gapX0 && player.x <= wave.gapX1;
+                if (wave.hit.includes(index) || inGap || Math.abs(player.y - wave.y) > 0.6) {
+                    return;
+                }
+                wave.hit.push(index);
+                this.damagePlayer(damage, "zebak", false);
+                this.zebakShove(player, 0, wave.dir, def.waves.shove);
+            });
+            return wave.dir > 0 ? wave.y < island.y1 + 2 : wave.y > island.y0 - 1;
+        });
+    }
+
+    // Standing in his acid: hurt every so often, more the longer you stand there, and poisoned
+    private stepZebakAcid(fight: ZebakFight, def: ZebakDef): void {
+        const every = secondsToTicks(0.6);
+        const scale = this.tombsRoomScale().damage;
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            const player = hero.player;
+            const inAcid =
+                this.isUp(hero) &&
+                fight.acid.some(
+                    (pool) =>
+                        Math.abs(player.x - pool.x) <= pool.half + 0.5 &&
+                        Math.abs(player.y - pool.y) <= pool.half + 0.5,
+                );
+            if (!inAcid) {
+                fight.acidTicks[hero.index] = 0;
+                continue;
+            }
+            const ticks = (fight.acidTicks[hero.index] ?? 0) + 1;
+            fight.acidTicks[hero.index] = ticks;
+            if (ticks % every !== 1 % every) {
+                continue;
+            }
+            this.use(hero);
+            const seconds = ticks / TICKS_PER_SECOND;
+            this.damagePlayer(
+                def.acid.damage * scale * (1 + def.acid.ramp * seconds),
+                "zebak",
+                false,
+            );
+            this.applyPlayerEffect(def.acid.poison);
+        }
+        this.use(current);
+    }
+
+    // His jugs: walked into, one rolls off the way it was pushed; it breaks on a boulder, at the
+    // island's edge or at the end of its roll, and its water clears his acid
+    private stepZebakJugs(
+        fight: ZebakFight,
+        def: ZebakDef,
+        island: { x0: number; y0: number; x1: number; y1: number },
+    ): void {
+        const speed = def.jugs.speed / TICKS_PER_SECOND;
+        fight.jugs = fight.jugs.filter((jug) => {
+            const enemy = this.enemies.find((e) => e.uid === jug.uid);
+            if (!enemy) {
+                return false;
+            }
+            if (enemy.dead) {
+                this.breakZebakJug(fight, def, enemy.x, enemy.y);
+                return false;
+            }
+            if (jug.left <= 0) {
+                // At rest: walked into, it's off
+                const hero = this.heroes.find(
+                    (h) =>
+                        this.isUp(h) &&
+                        fm.hypot(h.player.x - enemy.x, h.player.y - enemy.y) <=
+                            h.player.radius + enemy.radius + 0.1,
+                );
+                if (hero) {
+                    const dx = enemy.x - hero.player.x;
+                    const dy = enemy.y - hero.player.y;
+                    const length = Math.max(0.001, fm.hypot(dx, dy));
+                    jug.vx = (dx / length) * speed;
+                    jug.vy = (dy / length) * speed;
+                    jug.left = def.jugs.reach;
+                }
+                return true;
+            }
+            const x = enemy.x + jug.vx;
+            const y = enemy.y + jug.vy;
+            jug.left -= speed;
+            const onBoulder = this.tombsCover.some(
+                (rock) => fm.hypot(rock.x - x, rock.y - y) <= rock.radius + enemy.radius,
+            );
+            const off = x < island.x0 || x > island.x1 + 1 || y < island.y0 || y > island.y1 + 1;
+            if (
+                onBoulder ||
+                off ||
+                jug.left <= 0 ||
+                !this.grid.contains(x, y) ||
+                this.grid.isSolid(x, y)
+            ) {
+                this.breakZebakJug(fight, def, enemy.x, enemy.y);
+                this.vanish(enemy);
+                return false;
+            }
+            enemy.x = enemy.prevX = x;
+            enemy.y = enemy.prevY = y;
+            return true;
+        });
+    }
+
+    // A jug broken: its water splashes out and clears the acid round it
+    private breakZebakJug(fight: ZebakFight, def: ZebakDef, x: number, y: number): void {
+        const reach = this.invoked("upset_stomach") ? def.jugs.upsetWater : def.jugs.water;
+        this.addEffect(def.jugs.breakSpotAnim, x, y, 0, 40);
+        this.addEffect(def.jugs.splashSpotAnim, x, y, 0, 40);
+        fight.acid = fight.acid.filter(
+            (pool) =>
+                Math.abs(pool.x - x) > reach + pool.half ||
+                Math.abs(pool.y - y) > reach + pool.half,
+        );
+    }
+
+    // Not Just a Head: blood clouds up the Rock steps now and then, wasting away as they go
+    private stepZebakClouds(boss: Enemy, fight: ZebakFight, def: ZebakDef): void {
+        const steps = this.tombsPathRoom?.boss?.steps ?? [];
+        if (
+            this.invoked("not_just_a_head") &&
+            steps.length > 0 &&
+            this.tick >= fight.nextCloudTick
+        ) {
+            fight.nextCloudTick = this.tick + secondsToTicks(def.clouds.every);
+            const count = this.invoked("blood_thinners") ? 3 : 1;
+            for (let i = 0; i < count; i++) {
+                const at = steps[(fight.special + i) % steps.length];
+                const cloud = this.spawnEnemy(getEnemy(def.clouds.enemyId), "normal", at);
+                if (cloud) {
+                    cloud.noDrops = true;
+                    fight.clouds.push({ uid: cloud.uid, x: cloud.x, y: cloud.y });
+                }
+            }
+            this.emit({ type: "notice", message: def.clouds.message });
+        }
+        fight.clouds = fight.clouds.filter((cloud) => {
+            const enemy = this.enemies.find((e) => e.uid === cloud.uid && !e.dead);
+            if (!enemy) {
+                return false;
+            }
+            const moved = fm.hypot(enemy.x - cloud.x, enemy.y - cloud.y);
+            cloud.x = enemy.x;
+            cloud.y = enemy.y;
+            enemy.hp -= moved * def.clouds.drain;
+            if (enemy.hp <= 0) {
+                this.vanish(enemy);
+                return false;
+            }
+            return true;
+        });
+        void boss;
+    }
+
+    // A blood cloud's hit heals him (Arterial Spray: more)
+    private zebakCloudHit(amount: number): void {
+        const fight = this.tombsZebak;
+        const boss = fight && this.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        const def = boss?.def.boss?.zebak;
+        if (!boss || !def) {
+            return;
+        }
+        const times = this.invoked("arterial_spray") ? def.clouds.arterial : def.clouds.heal;
+        boss.hp = Math.min(boss.maxHp, boss.hp + amount * times);
+    }
+
+    // For the HUD: seconds till his roar, while one's coming
+    get zebakRoarSeconds(): number | undefined {
+        const roar = this.tombsZebak?.roar;
+        return roar ? Math.max(0, (roar.tick - this.tick) / TICKS_PER_SECOND) : undefined;
     }
 
     // ---- Kephri ----
@@ -9239,7 +9666,7 @@ export class Sim {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // A fight in phases gets harder by the phase instead
-        const enrageAt = this.hard ? HARD_ENRAGE_AT : ENRAGE_AT;
+        const enrageAt = def.enrage.at ?? (this.hard ? HARD_ENRAGE_AT : ENRAGE_AT);
         if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * enrageAt) {
             this.enrage(enemy);
         }
@@ -10478,7 +10905,7 @@ export class Sim {
         mightScale = 1,
         poison = false,
     ): number {
-        if (enemy.dead) {
+        if (enemy.dead || enemy.def.unhittable) {
             return 0;
         }
         // Hit by the player, it's after the player from now on

@@ -7,6 +7,7 @@ import {
     KephriDef,
     PlayerEffectDef,
     WaveDef,
+    ZebakDef,
 } from "./types";
 
 // The Tombs of Amascut (in development: docs/design/tombs-of-amascut.md): its enemies, and what
@@ -1802,3 +1803,256 @@ export const CRONDIS = {
     // The water container, for the HUD
     containerObjId: 27295,
 };
+
+// ---- Zebak, the Path of Crondis's boss ----
+
+// The great crocodile (11730, size 9, model 46399), lying in the water north of his island:
+// he never moves. His magic is a pot that splits into red orbs (2176, 2181), his ranged a rock
+// that splinters (2178, 2182), and he sprays acid (2194). At 85, 70, 55 and 40% he does a special,
+// turn about: his Great Roar or his Tidal Waves, each with acid and jugs spat over the island
+// (ZebakDef; Sim.stepZebak). Below 25% he's enraged and attacks quicker, with no more specials.
+const ZEBAK_SOUNDS = { attack: -1, hit: -1, death: -1 };
+
+export const ZEBAK: ZebakDef = {
+    specials: [0.85, 0.7, 0.55, 0.4],
+    acid: {
+        // Pools spat over the island (more with path levels), each 3 by 3 (5 by 5 with Upset
+        // Stomach), there till a jug's water or a wave clears it; standing in one hurts, more
+        // the longer you stand, and poisons
+        count: 6,
+        half: 1,
+        upsetHalf: 2,
+        damage: 2,
+        ramp: 0.6,
+        poison: { kind: "poison", damage: 2, seconds: 4 },
+        loc: 45570,
+    },
+    jugs: {
+        enemyId: "zebak_jug",
+        count: 3,
+        // Walk into one and it rolls off the way you pushed it, speed tiles a second, up to
+        // reach tiles, breaking on a boulder or the island's edge: its water
+        // clears acid within water tiles each way (less with Upset Stomach)
+        speed: 6,
+        reach: 6,
+        water: 2,
+        upsetWater: 1,
+        breakSpotAnim: 2192,
+        splashSpotAnim: 2193,
+    },
+    roar: {
+        // Boulders across the island, then after seconds the roar: hits times, each hit share of
+        // your hitpoints and a knock back from him, unless a boulder's between you and him within
+        // shelter tiles
+        boulders: 3,
+        seconds: 9,
+        hits: 3,
+        share: 0.2,
+        knock: 2.5,
+        shelter: 3,
+        look: "zebak_boulder",
+        radius: 0.8,
+        spotAnim: 2184,
+        seq: 9628,
+        message: "Zebak spits boulders onto the island: get behind one before he roars!",
+        roarMessage: "Zebak roars!",
+    },
+    waves: {
+        // Waves across the island, the first up from the south and the second down from the
+        // north, each with a gap (tiles wide, a tile narrower each two path levels, least
+        // leastGap) to stand in; speed tiles a second, damage, and a shove the way it's going
+        count: 2,
+        gap: 4,
+        leastGap: 2,
+        speed: 3,
+        delay: 2.5,
+        damage: 6,
+        shove: 2,
+        look: "zebak_wave",
+        seq: 9630,
+        message: "Zebak slams his tail: tidal waves! Find the gap!",
+    },
+    clouds: {
+        // Not Just a Head: blood clouds up the Rock steps every every seconds, after a hero,
+        // losing drain hitpoints a tile they go; a hit from one heals him heal times it (more
+        // with Arterial Spray). Blood Thinners: three.
+        enemyId: "zebak_blood_cloud",
+        every: 16,
+        drain: 3,
+        heal: 2,
+        arterial: 3.5,
+        message: "Blood clouds rise from the water!",
+    },
+};
+
+const ZEBAK_ATTACKS: BossAttackDef[] = [
+    {
+        // A pot up into the air and down on where you stood, splitting into red orbs
+        name: "Magic pot",
+        kind: "blast",
+        damage: 6,
+        windup: 1.6,
+        cooldown: 0,
+        range: 40,
+        weight: 4,
+        radius: 1.1,
+        shadow: {},
+        spotAnim: 2176,
+        impactSpotAnim: 2186,
+        shards: { count: 8, speed: 4, range: 8, radius: 0.4, damage: 4, spotAnim: 2181 },
+        seq: 9624,
+    },
+    {
+        // A rock spat at you that splinters where it lands
+        name: "Rock spit",
+        kind: "blast",
+        damage: 7,
+        windup: 1.4,
+        cooldown: 0,
+        range: 40,
+        weight: 4,
+        radius: 1.2,
+        shadow: {},
+        spotAnim: 2178,
+        impactSpotAnim: 2185,
+        shards: {
+            count: 10,
+            speed: 4.5,
+            range: 8,
+            radius: 0.4,
+            damage: 3,
+            spotAnim: 2182,
+            scale: 3,
+        },
+        seq: 9620,
+    },
+    {
+        // Acid sprayed across the island in a fan, aimed at you
+        name: "Acid spray",
+        kind: "pattern",
+        damage: 4,
+        windup: 0.9,
+        cooldown: 4,
+        range: 40,
+        weight: 3,
+        seq: 9622,
+        spotAnim: 2194,
+        pattern: {
+            shape: "spread",
+            count: 7,
+            volleys: 3,
+            interval: 0.4,
+            speed: 6,
+            range: 30,
+            radius: 0.45,
+            arc: 1.2,
+            track: true,
+        },
+    },
+    {
+        // Enraged: his roar's dust all round, a way through
+        name: "Roar",
+        kind: "pattern",
+        damage: 5,
+        windup: 0.8,
+        cooldown: 3,
+        range: 40,
+        weight: 3,
+        enraged: true,
+        seq: 9628,
+        spotAnim: 2181,
+        pattern: {
+            shape: "ring",
+            count: 26,
+            volleys: 2,
+            interval: 0.5,
+            speed: 5,
+            range: 30,
+            radius: 0.45,
+            gap: 0.6,
+            gapAt: "player",
+        },
+    },
+];
+
+// What draws, but never fights: a boulder to shelter behind, and a tidal wave's crest
+const zebakLook = (id: string, name: string, npcId: number, seq: number): EnemyDef => ({
+    id,
+    name,
+    npcId,
+    idleSeq: seq,
+    walkSeq: seq,
+    attackSeq: seq,
+    deathSeq: seq,
+    hp: 1,
+    damage: 0,
+    speed: 0,
+    radius: 0.5,
+    xp: 0,
+    sounds: ZEBAK_SOUNDS,
+});
+
+TOMBS_ENEMIES.push(
+    {
+        id: "zebak",
+        name: "Zebak",
+        npcId: 11730,
+        idleSeq: 9618,
+        walkSeq: 9618,
+        attackSeq: 9624,
+        deathSeq: 9634,
+        hp: 7000,
+        damage: 0,
+        speed: 0,
+        radius: 4,
+        xp: 1500,
+        knockbackResist: 1,
+        stationary: true,
+        solid: true,
+        sounds: ZEBAK_SOUNDS,
+        spawnMessage: "Zebak rises from the water to guard the path of Crondis!",
+        boss: {
+            attackInterval: 2.6,
+            enrage: { message: "Zebak is enraged!", at: 0.25 },
+            zebak: ZEBAK,
+            attacks: ZEBAK_ATTACKS,
+        },
+    },
+    {
+        // Rolls when walked into (Sim.stepZebakJugs): weapons pass it by
+        id: "zebak_jug",
+        name: "Jug",
+        npcId: 11736,
+        idleSeq: -1,
+        walkSeq: -1,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 5,
+        damage: 0,
+        speed: 0,
+        radius: 0.5,
+        xp: 0,
+        stationary: true,
+        unhittable: true,
+        sounds: ZEBAK_SOUNDS,
+    },
+    {
+        // Chases a hero, wasting away as it goes (Sim.stepZebak); its touch heals him
+        id: "zebak_blood_cloud",
+        name: "Blood Cloud",
+        npcId: 11742,
+        idleSeq: 8102,
+        walkSeq: 8101,
+        attackSeq: 8102,
+        deathSeq: 8102,
+        hp: 60,
+        damage: 5,
+        speed: 2.6,
+        radius: 0.9,
+        xp: 10,
+        flies: true,
+        sounds: ZEBAK_SOUNDS,
+    },
+    zebakLook("zebak_boulder", "Boulder", 11737, -1),
+    zebakLook("zebak_wave", "Wave", 11738, 7877),
+);

@@ -2189,3 +2189,234 @@ describe("the Crondis room", () => {
         expect(crondis_.growth).toBeGreaterThanOrEqual(crondis_.goal / 4);
     });
 });
+
+// Zebak after the Crondis room, in the open field: he lies north of an island 21 tiles across
+const ZEBAK_ISLAND = { x0: 1026, y0: 1030, x1: 1046, y1: 1050 };
+const TEST_ZEBAK: MapDef = {
+    ...TEST_CRONDIS,
+    id: "test_zebak",
+    tombs: {
+        nexus: { x: 1036.5, y: 1036.5 },
+        paths: [
+            {
+                ...TEST_CRONDIS.tombs!.paths[0],
+                room: {
+                    ...TEST_CRONDIS.tombs!.paths[0].room!,
+                    boss: {
+                        enemyId: "zebak",
+                        arrive: { x: 1036.5, y: 1024.5 },
+                        at: { x: 1036.5, y: 1060.5 },
+                        line: { y: 1026 },
+                        island: ZEBAK_ISLAND,
+                        steps: [
+                            { x: 1025.5, y: 1040.5 },
+                            { x: 1047.5, y: 1040.5 },
+                        ],
+                    },
+                },
+            },
+        ],
+    },
+};
+MAP_BY_ID.set(TEST_ZEBAK.id, TEST_ZEBAK);
+
+describe("Zebak", () => {
+    const DEF = getEnemy("zebak").boss!.zebak!;
+    // The island's middle-south, out of the way
+    const SOUTH = { x: 1036.5, y: 1032.5 };
+    function atZebak(invocations: string[] = [], seed = 3): Sim {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_ZEBAK.id,
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            invocations,
+        });
+        sim.weapons = [];
+        sim.player.x = sim.player.prevX = 1042.5;
+        sim.step();
+        expect(sim.devSkipToTombsBoss()).toBe(true);
+        sim.weapons = [];
+        seconds(sim, 0.2, SOUTH);
+        expect(sim.tombsZebak).toBeDefined();
+        return sim;
+    }
+    const zebak = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsZebak!.uid)!;
+    // A tick somewhere, hurt as it comes, his own attacks held off
+    function at(sim: Sim, where: { x: number; y: number }): void {
+        const boss = zebak(sim);
+        boss.bossState!.channelEnd = Math.max(boss.bossState!.channelEnd, sim.tick + 2);
+        sim.player.invulnerable = 0;
+        sim.player.x = sim.player.prevX = where.x;
+        sim.player.y = sim.player.prevY = where.y;
+        sim.step();
+    }
+    // Down to a special's share of his hitpoints
+    function special(sim: Sim, which: number): void {
+        const boss = zebak(sim);
+        sim.tombsZebak!.special = which;
+        boss.hp = Math.floor(boss.maxHp * DEF.specials[which]) - 1;
+        at(sim, SOUTH);
+    }
+
+    it("rises when the party walks in, and lies where he is", () => {
+        const sim = atZebak();
+        const boss = zebak(sim);
+        const { x, y } = boss;
+        seconds(sim, 2, SOUTH);
+        expect([boss.x, boss.y]).toEqual([x, y]);
+    });
+
+    it("spits acid, jugs and boulders, then roars", () => {
+        const sim = atZebak();
+        special(sim, 0);
+        const fight = sim.tombsZebak!;
+        expect(fight.acid).toHaveLength(DEF.acid.count);
+        expect(fight.jugs).toHaveLength(DEF.jugs.count);
+        expect(sim.tombsCover.filter((r) => r.look === DEF.roar.look)).toHaveLength(
+            DEF.roar.boulders,
+        );
+        expect(sim.zebakRoarSeconds).toBeGreaterThan(DEF.roar.seconds - 0.5);
+    });
+
+    it("hurts and throws back whoever isn't behind a boulder when he roars, and not who is", () => {
+        const roarOn = (sheltered: boolean) => {
+            const sim = atZebak();
+            special(sim, 0);
+            const fight = sim.tombsZebak!;
+            fight.acid = [];
+            const boulder = sim.tombsCover.find((r) => r.look === DEF.roar.look)!;
+            // Behind it from him (he's north), or out in the open
+            const spot = sheltered
+                ? { x: boulder.x, y: boulder.y - 1.5 }
+                : { x: boulder.x + 2.5, y: boulder.y - 1.5 };
+            fight.roar!.tick = sim.tick + 2;
+            sim.player.hp = sim.player.maxHp;
+            for (let i = 0; i < 5 && fight.roar; i++) {
+                at(sim, spot);
+            }
+            return { hurt: sim.player.maxHp - sim.player.hp, moved: spot.y - sim.player.y };
+        };
+        const open = roarOn(false);
+        expect(open.hurt).toBeGreaterThan(0);
+        expect(open.moved).toBeGreaterThan(0.5);
+        expect(roarOn(true).hurt).toBe(0);
+    });
+
+    it("sends tidal waves across, a gap in each, that wash his acid away", () => {
+        const sim = atZebak();
+        special(sim, 1);
+        const fight = sim.tombsZebak!;
+        expect(fight.waves).toHaveLength(DEF.waves.count);
+        const wave = fight.waves[0];
+        expect(wave.dir).toBe(1);
+        expect(wave.gapX1 - wave.gapX0).toBe(DEF.waves.gap);
+        // Acid in its way, and you out of its gap
+        fight.acid = [{ x: 1036.5, y: 1036.5, half: 1 }];
+        const outside =
+            wave.gapX0 > ZEBAK_ISLAND.x0 + 3 ? ZEBAK_ISLAND.x0 + 1.5 : ZEBAK_ISLAND.x1 - 0.5;
+        wave.startTick = sim.tick;
+        sim.player.hp = sim.player.maxHp;
+        for (let i = 0; i < 4 * TICKS_PER_SECOND && wave.hit.length === 0; i++) {
+            at(sim, { x: outside, y: 1038.5 });
+        }
+        expect(wave.hit).toEqual([0]);
+        expect(sim.player.hp).toBeLessThan(sim.player.maxHp);
+        expect(fight.acid).toHaveLength(0);
+    });
+
+    it("lets you stand in a wave's gap", () => {
+        const sim = atZebak();
+        special(sim, 1);
+        const wave = sim.tombsZebak!.waves[0];
+        wave.startTick = sim.tick;
+        const gap = { x: (wave.gapX0 + wave.gapX1) / 2, y: 1038.5 };
+        for (let i = 0; i < 6 * TICKS_PER_SECOND && wave.y < 1045; i++) {
+            at(sim, gap);
+        }
+        expect(wave.hit).toEqual([]);
+    });
+
+    it("hurts more the longer you stand in his acid, and poisons you", () => {
+        const sim = atZebak();
+        sim.tombsZebak!.acid = [{ x: 1036.5, y: 1036.5, half: 1 }];
+        const hits: number[] = [];
+        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+            const hp = sim.player.hp;
+            sim.player.hp = sim.player.maxHp;
+            at(sim, { x: 1037.2, y: 1036.5 });
+            if (sim.player.hp < sim.player.maxHp && hp === sim.player.maxHp) {
+                hits.push(sim.player.maxHp - sim.player.hp);
+            }
+        }
+        expect(hits.length).toBeGreaterThan(1);
+        expect(hits[hits.length - 1]).toBeGreaterThan(hits[0]);
+        expect(sim.player.poisonEnd).toBeGreaterThan(sim.tick);
+    });
+
+    it("rolls a jug off when you walk into it, and its water clears acid where it breaks", () => {
+        const sim = atZebak();
+        const fight = sim.tombsZebak!;
+        const jug = sim.spawnEnemy(getEnemy("zebak_jug"), "normal", { x: 1036.5, y: 1036.5 })!;
+        fight.jugs.push({ uid: jug.uid, vx: 0, vy: 0, left: 0 });
+        // Acid where it'll roll to, eastward
+        fight.acid = [{ x: 1043.5, y: 1036.5, half: 1 }];
+        at(sim, { x: 1035.6, y: 1036.5 });
+        expect(fight.jugs[0].vx).toBeGreaterThan(0);
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && fight.jugs.length > 0; i++) {
+            at(sim, SOUTH);
+        }
+        expect(fight.jugs).toHaveLength(0);
+        expect(fight.acid).toHaveLength(0);
+    });
+
+    it("lets weapons pass a jug by, so it's still there to be pushed", () => {
+        const sim = atZebak();
+        const fight = sim.tombsZebak!;
+        const jug = sim.spawnEnemy(getEnemy("zebak_jug"), "normal", { x: 1036.5, y: 1040.5 })!;
+        fight.jugs.push({ uid: jug.uid, vx: 0, vy: 0, left: 0 });
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        expect(sim.damageEnemy(jug, 100, 0, jug.x, jug.y)).toBe(0);
+        at(sim, SOUTH);
+        expect(jug.dead).toBe(false);
+        expect(fight.jugs).toHaveLength(1);
+    });
+
+    it("spreads his acid wider with Upset Stomach", () => {
+        const sim = atZebak(["upset_stomach"]);
+        special(sim, 0);
+        expect(sim.tombsZebak!.acid.every((pool) => pool.half === DEF.acid.upsetHalf)).toBe(true);
+    });
+
+    it("sends blood clouds up the steps with Not Just a Head, wasting as they come, healing him", () => {
+        const sim = atZebak(["not_just_a_head", "blood_thinners"]);
+        const fight = sim.tombsZebak!;
+        fight.nextCloudTick = sim.tick;
+        at(sim, SOUTH);
+        expect(fight.clouds).toHaveLength(3);
+        const cloud = sim.enemies.find((e) => e.uid === fight.clouds[0].uid)!;
+        const hp = cloud.hp;
+        for (let i = 0; i < TICKS_PER_SECOND; i++) {
+            at(sim, SOUTH);
+        }
+        expect(cloud.dead || cloud.hp < hp).toBe(true);
+        const boss = zebak(sim);
+        boss.hp = boss.maxHp / 2;
+        sim["damagePlayer"](4, "zebak_blood_cloud", false);
+        expect(boss.hp).toBeGreaterThan(boss.maxHp / 2);
+    });
+
+    it("stops his specials once he's enraged at a quarter", () => {
+        const sim = atZebak();
+        const boss = zebak(sim);
+        sim.tombsZebak!.special = DEF.specials.length - 1;
+        boss.hp = Math.floor(boss.maxHp * 0.2);
+        at(sim, SOUTH);
+        at(sim, SOUTH);
+        expect(boss.bossState!.enraged).toBe(true);
+        expect(sim.tombsZebak!.acid).toHaveLength(0);
+    });
+});

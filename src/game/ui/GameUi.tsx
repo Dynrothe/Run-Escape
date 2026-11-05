@@ -1975,6 +1975,7 @@ const Hud = memo(function Hud({
                     <TombsShadowsInfo client={client} />
                     <TombsScabarasInfo client={client} />
                     <TombsCrondisInfo client={client} />
+                    <TombsRoarInfo client={client} />
                     <DevGodButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
@@ -2089,6 +2090,15 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
 }
 
 // Akkha's shadows: how many are left, and how long till those still up flood their quarters
+// Zebak's roar coming: how long there is to get behind a boulder
+function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.tombsRoar);
+    if (seconds === undefined) {
+        return null;
+    }
+    return <div className="ui-round">Zebak roars in {seconds}s: get behind a boulder!</div>;
+}
+
 // The Crondis room: your water, and the palm's growth
 function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | null {
     const info = useHudNumber(client, (n) => n.tombsCrondis);

@@ -197,6 +197,9 @@ export type EnemyDef = {
     // The player can't push it: walking into it, they're the one that gives,
     // as with what can't move (Phosani's Nightmare and everything of hers)
     solid?: boolean;
+    // Weapons pass it by: it's there to be walked into, not hit (Zebak's jugs,
+    // which would otherwise break the moment they're down)
+    unhittable?: boolean;
     // The game's hint arrow bobs over it while it's alive, and points the way
     // from the screen's edge when it's off it (Phosani's eggs, to be found)
     hintArrow?: boolean;
@@ -512,6 +515,64 @@ export type AkkhaElementDef = {
     spotAnim: number;
     orb: string;
     symbolLoc: number;
+};
+
+// Zebak's fight (BossDef.zebak; Sim.stepZebak), as content/tombs.ts's ZEBAK says
+export type ZebakDef = {
+    specials: number[];
+    acid: {
+        count: number;
+        half: number;
+        upsetHalf: number;
+        damage: number;
+        ramp: number;
+        poison: PlayerEffectDef;
+        loc: number;
+    };
+    jugs: {
+        enemyId: string;
+        count: number;
+        speed: number;
+        reach: number;
+        water: number;
+        upsetWater: number;
+        breakSpotAnim: number;
+        splashSpotAnim: number;
+    };
+    roar: {
+        boulders: number;
+        seconds: number;
+        hits: number;
+        share: number;
+        knock: number;
+        shelter: number;
+        look: string;
+        radius: number;
+        spotAnim: number;
+        seq: number;
+        message: string;
+        roarMessage: string;
+    };
+    waves: {
+        count: number;
+        gap: number;
+        leastGap: number;
+        speed: number;
+        delay: number;
+        damage: number;
+        shove: number;
+        look: string;
+        seq: number;
+        message: string;
+    };
+    clouds: {
+        enemyId: string;
+        every: number;
+        drain: number;
+        heal: number;
+        arterial: number;
+        message: string;
+    };
 };
 
 // Kephri's fight (BossDef.kephri; Sim.stepKephri), as content/tombs.ts's KEPHRI says
@@ -956,9 +1017,9 @@ export type BossDef = {
     // vampyre doesn't stay down without a stake). into: the enemy it gets up
     // as, looks and attacks and all (the Kalphite Queen's second form).
     rises?: { times: number; hp: number; message: string; into?: string };
-    // Every boss is enraged at half its hitpoints: it attacks and moves
+    // Every boss is enraged at half its hitpoints (or at, a share of them): it attacks and moves
     // faster, and uses its enraged attacks too. What it says when it is.
-    enrage: { message: string; shout?: string };
+    enrage: { message: string; shout?: string; at?: number };
     // Calls in enemies around itself as its hitpoints drop to each fraction
     // (Kree'arra's bodyguards); a form it gets up as (rises.into)
     // calls in its own as it's hurt in turn (Nex's bodyguards)
@@ -1024,6 +1085,7 @@ export type BossDef = {
     // Akkha's fight (the Tombs of Amascut): his quadrants, his specials and his shadows
     akkha?: AkkhaDef;
     kephri?: KephriDef;
+    zebak?: ZebakDef;
     // Ba-Ba's rolling stones (the Tombs of Amascut): at each of these shares of her hitpoints she
     // can't be hurt for seconds, and does only these: boulders rolling across the arena in rows
     rollingStones?: BossOrdealDef & { seconds: number };
@@ -1517,6 +1579,10 @@ export type TombsPathDef = {
             quadrants?: { middle: { x: number; y: number }; half: number };
             // Kephri's swarms' way in, round the arena's edge clockwise (BossDef.kephri)
             swarms?: { x: number; y: number }[];
+            // Zebak's island (where his acid, jugs, boulders and waves go) and the tops of its
+            // Rock steps up from the water (where his blood clouds come in) (BossDef.zebak)
+            island?: { x0: number; y0: number; x1: number; y1: number };
+            steps?: { x: number; y: number }[];
         };
     };
 };
