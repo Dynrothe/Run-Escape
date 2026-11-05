@@ -65,7 +65,9 @@ version and how to run it.
   damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
-  recipe, keeping what it makes as ??? until you've made it.
+  recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
+  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah): the weapons it
+  brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -347,7 +349,9 @@ version and how to run it.
   earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
   from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
   can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
-  against missiles and magic, so melee hits hardest, but there's nowhere safe by them: what they
+  against missiles and magic, so melee hits hardest (their overhead prayer shows it, Nylocas
+  Vasilias's the two styles her colour holds back, and a ranged or magic weapon's level up card says
+  so in red), but there's nowhere safe by them: what they
   fire from themselves starts from their middle, and up close about half of what each boss does is a
   stomp, bite, claws or burst all round it, the bursts marked on the ground first. A line at the top
   of the screen says what the hall wants of you, and whatever bones and coins are still on its floor
@@ -367,11 +371,12 @@ version and how to run it.
       so on expert too).
     - **Beaten on hard**: **expert mode**: hard mode with more of the real raid. The Nylocas only
       take their own style (grey melee, green ranged, blue magic), Nylocas Vasilias's colours too,
-      so it takes all three styles (weapons don't aim at one they can't hurt), the Maiden's Nylocas
-      feed her more, Xarpus stares one way, and a moment before he turns faces where he'll stare and
-      says which side, and hurts whoever hits him from in front, and Verzik's spider throws a ball
-      that kills anyone outside its glowing circle. Twice the coins, and one of Lil' Zik's looks
-      each clear.
+      so it takes all three styles (weapons don't aim at one they can't hurt; the blue ones come in
+      close enough for a magic aura, and the other Nylocas take more from their own colour), the
+      Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he turns faces
+      where he'll stare and says which side, and hurts whoever hits him from in front, and Verzik's
+      spider throws a ball that kills anyone outside its glowing circle. Twice the coins, and one of
+      Lil' Zik's looks each clear.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.

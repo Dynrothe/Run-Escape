@@ -412,7 +412,7 @@ or so; a lightning colour's 40 strikes add nothing to what they were.
 - **The gaze is cast from the court's middle** (he leaps there first, `toMiddle`), not the dais:
   with the pillars round the middle, every spot in the court is within about eight tiles of a
   pillar's shadow from there. From the dais, the south pillars' shadows run off the court.
-- **The camera leans towards him** (`BossLookDef.lean`), as in a raid's boss room, so he isn't
+- **The camera leans towards him** (`BossLookDef.lean`), so he isn't
   under the boss bar when he's north of you.
 - **Strike reach 8.5 tiles**, centre to centre. Further off the strike holds its cast (nothing to
   hit), the boss bar says "Out of reach!" and a faint ring round you shows how far it reaches.
