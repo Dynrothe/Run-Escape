@@ -12,7 +12,7 @@ import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { SaveData, getArmouryStep } from "../core/save";
 import "./ArmouryScreen.css";
 import { Coins } from "./Coins";
-import { DescriptionButton } from "./DescriptionButton";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 
 // The Armoury: every piece of gear caskets give, slot by slot, as the
@@ -98,7 +98,12 @@ function ArmouryTile({
             aria-pressed={selected}
             onUse={onSelect}
             silent={false}
-            description={<ArmouryDescription itemId={piece.id} notFound={!found} />}
+            description={
+                <ArmouryDescription
+                    itemId={piece.id}
+                    notFound={found ? undefined : describeNotFound(save, itemId)}
+                />
+            }
         >
             <ItemIcon objId={piece.objId} size={30} />
             {found && steps > 0 && (
@@ -115,24 +120,27 @@ function ArmouryTile({
     );
 }
 
+// notFound: what it takes to find it, for a piece not found yet
 function ArmouryDescription({
     itemId,
-    notFound = false,
+    notFound,
 }: {
     itemId: string;
-    notFound?: boolean;
+    notFound?: string;
 }): JSX.Element {
-    const item = getItemView(getGear(itemId));
     return (
-        <>
-            <span style={{ color: item.rarity.color }}>{item.name}</span>
-            {item.lines.map((line) => (
-                <span key={line}>{line}</span>
-            ))}
-            {item.set && <span className="ui-armoury-set">{item.set.text}</span>}
-            {notFound && <span>Not found yet: find it in a casket to upgrade it.</span>}
-        </>
+        <ItemDescription item={getItemView(getGear(itemId))} setClassName="ui-armoury-set">
+            {notFound && <span>{notFound}</span>}
+        </ItemDescription>
     );
+}
+
+// A map task can still keep a piece out of caskets
+function describeNotFound(save: SaveData, itemId: string): string {
+    const base = getGear(itemId);
+    return base.unlock && !isAvailable(base, new Set(save.unlockedItems))
+        ? `${describeUnlockTask(base.unlock)} to find it in caskets.`
+        : "Not found yet: find it in a casket to upgrade it.";
 }
 
 function ArmouryDetails({
@@ -152,17 +160,9 @@ function ArmouryDetails({
     const next = step && getGear(step.into);
     const base = getGear(itemId);
     const set = getItemSet(base);
-    // Still locked behind a map task, so caskets don't have it yet
-    const lockedBy = isAvailable(base, new Set(save.unlockedItems)) ? undefined : base.unlock;
     let action: JSX.Element;
     if (!found) {
-        action = (
-            <div className="ui-card-cost">
-                {lockedBy
-                    ? `${describeUnlockTask(lockedBy)} to find it in caskets.`
-                    : "Not found yet: find it in a casket to upgrade it."}
-            </div>
-        );
+        action = <div className="ui-card-cost">{describeNotFound(save, itemId)}</div>;
     } else if (!step || !next) {
         action = (
             <div className="ui-card-style">

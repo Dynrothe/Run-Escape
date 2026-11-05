@@ -73,11 +73,11 @@ import { ChestModal } from "./ChestModal";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
-import { DescriptionButton } from "./DescriptionButton";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
-import { ItemIcon, SpriteIcon } from "./ItemIcon";
+import { ItemIcon } from "./ItemIcon";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
@@ -1879,30 +1879,12 @@ const GearSlots = memo(function GearSlots({
                     aria-label={slot.item?.name ?? `${slot.name} (empty)`}
                     className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
-                    description={
-                        slot.item && (
-                            <>
-                                <span style={{ color: slot.item.rarity.color }}>
-                                    {slot.item.name}
-                                </span>
-                                {slot.item.lines.map((line) => (
-                                    <span key={line}>{line}</span>
-                                ))}
-                                {slot.item.set && (
-                                    <span
-                                        className={slot.item.set.active ? "ui-good" : "ui-subtle"}
-                                    >
-                                        {slot.item.set.text}
-                                    </span>
-                                )}
-                            </>
-                        )
-                    }
+                    description={slot.item && <ItemDescription item={slot.item} />}
                 >
                     {slot.item ? (
                         <ItemIcon objId={slot.item.objId} size={22} />
                     ) : (
-                        <SpriteIcon
+                        <ItemIcon
                             spriteId={GEAR_SLOT_BY_ID.get(slot.slot)!.iconSpriteId}
                             size={22}
                         />

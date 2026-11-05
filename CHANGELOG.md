@@ -7,11 +7,14 @@ the version in the corner).
 
 ### Added
 
-- Hover or hold weapons, passives, worn equipment and Armoury pieces to read their descriptions, including future Armoury upgrades.
+- Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
+  piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
+  passive, worn piece or Armoury piece to read it.
 
 ### Changed
 
-- Empty worn-equipment slots use OSRS's equipment silhouettes instead of letters.
+- Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
+  Smarzaro.
 
 ## 0.27.0 - 2026-11-05
 

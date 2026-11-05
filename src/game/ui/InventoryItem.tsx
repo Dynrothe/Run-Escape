@@ -1,5 +1,5 @@
 import { InventorySlotView } from "../client/GameStore";
-import { DescriptionButton } from "./DescriptionButton";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 
@@ -23,22 +23,13 @@ export function InventoryItem({
     return (
         <DescriptionButton
             itemId={slot?.item.id}
-            className={touch ? "ui-touch-item" : "ui-inv-slot"}
+            className={touch ? "ui-touch-item" : "ui-inv-slot" + (slot ? "" : " ui-inv-slot-empty")}
             style={slot ? { borderColor: slot.item.rarity.color } : undefined}
             disabled={!slot || disabled}
             aria-label={slot?.item.name ?? `Empty item slot ${index + 1}`}
             onUse={onUse}
             touch={touch}
-            description={
-                slot && (
-                    <>
-                        <span style={{ color: slot.item.rarity.color }}>{slot.item.name}</span>
-                        {slot.item.lines.map((line) => (
-                            <span key={line}>{line}</span>
-                        ))}
-                    </>
-                )
-            }
+            description={slot && <ItemDescription item={slot.item} />}
         >
             {!touch && (
                 <KeyHint

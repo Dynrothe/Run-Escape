@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { ItemView } from "../client/GameStore";
 import { TAP_SLOP } from "../client/GameTouch";
 
 const LONG_PRESS_MS = 500;
@@ -45,6 +46,8 @@ export function DescriptionButton({
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
     const [held, setHeld] = useState(false);
+    // A touch or pen is down on it, not yet released or cancelled
+    const [pressed, setPressed] = useState(false);
     const showTip = !disabled && itemId !== undefined && (hovered || focused || held);
     const press = useRef<
         { id: number; x: number; y: number; held: boolean; cancelled: boolean } | undefined
@@ -63,13 +66,19 @@ export function DescriptionButton({
             }, PRESS_CLICK_MS);
         }
         setHeld(false);
+        setPressed(false);
     }, []);
 
     useEffect(() => {
         cancelPress();
     }, [itemId, disabled, cancelPress]);
 
+    // Only while it's shown or pressed: the Armoury has a hundred of these
+    const listening = showTip || pressed;
     useEffect(() => {
+        if (!listening) {
+            return;
+        }
         const dismiss = () => {
             cancelPress();
             setHovered(false);
@@ -80,19 +89,31 @@ export function DescriptionButton({
                 dismiss();
             }
         };
+        // A scroll moves the tile out from under the finger or the mouse. One
+        // that's focused (by keys or a controller, which scrolls to it) keeps
+        // its description, which follows it.
+        const scroll = () => {
+            cancelPress();
+            setHovered(false);
+        };
         window.addEventListener("blur", dismiss);
         window.addEventListener("keydown", escape);
-        // A scrolled tile must not leave a floating description behind.
-        window.addEventListener("scroll", dismiss, true);
+        window.addEventListener("scroll", scroll, true);
         return () => {
             window.removeEventListener("blur", dismiss);
             window.removeEventListener("keydown", escape);
-            window.removeEventListener("scroll", dismiss, true);
+            window.removeEventListener("scroll", scroll, true);
+        };
+    }, [listening, cancelPress]);
+
+    useEffect(
+        () => () => {
             press.current = undefined;
             clearTimeout(timer.current);
             clearTimeout(clickTimer.current);
-        };
-    }, [cancelPress]);
+        },
+        [],
+    );
 
     return (
         <button
@@ -114,7 +135,9 @@ export function DescriptionButton({
                 }
             }}
             onFocus={() => {
-                if (!touch) {
+                // Keys and a controller, not the focus a tap gives (after its
+                // pointerup), which would leave the description up
+                if (!touch && !ignoreClick.current) {
                     setFocused(true);
                 }
             }}
@@ -139,6 +162,7 @@ export function DescriptionButton({
                 clearTimeout(clickTimer.current);
                 e.preventDefault();
                 e.currentTarget.setPointerCapture(e.pointerId);
+                setPressed(true);
                 press.current = {
                     id: e.pointerId,
                     x: e.clientX,
@@ -242,7 +266,12 @@ function DescriptionTip({
         };
         place();
         window.addEventListener("resize", place);
-        return () => window.removeEventListener("resize", place);
+        // A focused tile's description follows it when its list scrolls
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+        };
     }, [anchor, children]);
 
     // Outside the scrolling Armoury and the phone HUD's extra zoom.
@@ -259,18 +288,63 @@ function DescriptionTip({
     );
 }
 
+// Whether getBoundingClientRect includes CSS zoom, as standard zoom does
+// (Chrome 128 on, Firefox), or gives a zoomed element's rectangle unzoomed, as
+// Chrome did before. Measured once, on an element zoomed 2x; tests set it.
+export const zoomedRects: { value?: boolean } = {};
+
+function rectsIncludeZoom(): boolean {
+    if (zoomedRects.value === undefined) {
+        const probe = document.createElement("div");
+        probe.style.cssText = "position: fixed; visibility: hidden; width: 10px; height: 10px";
+        probe.style.zoom = "2";
+        document.body.append(probe);
+        zoomedRects.value = probe.getBoundingClientRect().width > 15;
+        probe.remove();
+    }
+    return zoomedRects.value;
+}
+
+// Where an element is on screen, in the viewport's pixels. The UI and the
+// phone HUD both zoom.
 function screenRect(element: HTMLElement): DOMRect {
     const rect = element.getBoundingClientRect();
-    // Some browsers report unzoomed rectangles. The HUD has its own extra zoom,
-    // so use the effective zoom only when the measured width is still unscaled.
+    if (rectsIncludeZoom()) {
+        return rect;
+    }
     let zoom = 1;
-    if (Math.abs(rect.width - element.offsetWidth) < 1) {
-        for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
-            const value = Number(getComputedStyle(parent).zoom);
-            if (value > 0) {
-                zoom *= value;
-            }
+    for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
+        const value = Number(getComputedStyle(parent).zoom);
+        if (value > 0) {
+            zoom *= value;
         }
     }
     return new DOMRect(rect.x * zoom, rect.y * zoom, rect.width * zoom, rect.height * zoom);
+}
+
+// An item's name in its rarity's colour, what it does, and its set: the bag,
+// worn gear and the Armoury. children add lines after.
+export function ItemDescription({
+    item,
+    setClassName,
+    children,
+}: {
+    item: ItemView;
+    setClassName?: string;
+    children?: ReactNode;
+}): JSX.Element {
+    return (
+        <>
+            <span style={{ color: item.rarity.color }}>{item.name}</span>
+            {item.lines.map((line) => (
+                <span key={line}>{line}</span>
+            ))}
+            {item.set && (
+                <span className={setClassName ?? (item.set.active ? "ui-good" : "ui-subtle")}>
+                    {item.set.text}
+                </span>
+            )}
+            {children}
+        </>
+    );
 }

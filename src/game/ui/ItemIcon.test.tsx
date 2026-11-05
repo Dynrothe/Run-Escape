@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
 
-import { IconCache, ItemIcon, SpriteIcon, iconCache } from "./ItemIcon";
+import { IconCache, ItemIcon, iconCache } from "./ItemIcon";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -69,46 +69,53 @@ describe("ItemIcon", () => {
     });
 });
 
-describe("SpriteIcon", () => {
+describe("ItemIcon with a sprite and no item", () => {
     afterEach(() => {
         cleanup();
         vi.restoreAllMocks();
     });
 
-    test("loads a standalone sprite without requesting an item model", () => {
-        vi.spyOn(iconCache, "getFrame").mockReturnValue(undefined);
+    test("draws the sprite without asking for an item model", () => {
+        vi.spyOn(iconCache, "getSprite").mockReturnValue(undefined);
         let loaded: ((url: string) => void) | undefined;
-        const request = vi
-            .spyOn(iconCache, "requestFrame")
-            .mockImplementation((_id, _frame, callback) => {
-                loaded = callback;
-            });
+        const request = vi.spyOn(iconCache, "requestSprite").mockImplementation((_id, callback) => {
+            loaded = callback;
+        });
         const itemRequest = vi.spyOn(iconCache, "request").mockImplementation(() => {});
-        const { container } = render(<SpriteIcon spriteId={156} size={22} />);
+        const { container } = render(<ItemIcon spriteId={156} size={22} />);
         expect(container.querySelector("img")).toBeNull();
-        expect(request).toHaveBeenCalledWith(156, 0, expect.any(Function));
+        expect(request).toHaveBeenCalledWith(156, expect.any(Function));
         act(() => loaded!("data:image/png;base64,head"));
         const image = container.querySelector("img");
         expect(image).toHaveAttribute("src", "data:image/png;base64,head");
-        expect(image).toHaveAttribute("width", "22");
         expect(image).toHaveAttribute("height", "22");
         expect(image).toHaveAttribute("alt", "");
         expect(itemRequest).not.toHaveBeenCalled();
     });
 
+    test("shows nothing, and asks for no item, when the cache hasn't got it", () => {
+        vi.spyOn(iconCache, "getSprite").mockReturnValue("");
+        vi.spyOn(iconCache, "requestSprite").mockImplementation((_id, callback) => callback(""));
+        const itemRequest = vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        const { container } = render(<ItemIcon spriteId={156} size={22} />);
+        expect(container.querySelector("img")).toBeNull();
+        expect(container.querySelector(".ui-icon")).not.toBeNull();
+        expect(itemRequest).not.toHaveBeenCalled();
+    });
+
     test("changing slots never shows the previous or late-loading sprite", () => {
-        vi.spyOn(iconCache, "getFrame").mockImplementation((id) =>
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) =>
             id === 156 ? "data:image/png;base64,head" : undefined,
         );
         const callbacks = new Map<number, (url: string) => void>();
-        vi.spyOn(iconCache, "requestFrame").mockImplementation((id, _frame, callback) => {
+        vi.spyOn(iconCache, "requestSprite").mockImplementation((id, callback) => {
             callbacks.set(id, callback);
         });
-        const { container, rerender } = render(<SpriteIcon spriteId={156} />);
+        const { container, rerender } = render(<ItemIcon spriteId={156} />);
         expect(container.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,head");
-        rerender(<SpriteIcon spriteId={157} />);
+        rerender(<ItemIcon spriteId={157} />);
         expect(container.querySelector("img")).toBeNull();
-        act(() => callbacks.get(156)!("data:image/png;base64,late-head"));
+        act(() => callbacks.get(156)?.("data:image/png;base64,late-head"));
         expect(container.querySelector("img")).toBeNull();
         act(() => callbacks.get(157)!("data:image/png;base64,cape"));
         expect(container.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,cape");

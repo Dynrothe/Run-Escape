@@ -995,7 +995,7 @@ export function getGear(id: string): GearDef {
 // variant (its piece's stats and a quarter more)
 export function getVariantScale(item: ItemDef): number {
     let scale = 1;
-    for (let piece = item; piece.kind === "gear" && piece.variantOf;) {
+    for (let piece = item; piece.kind === "gear" && piece.variantOf; ) {
         scale *= 1 + VARIANT_BONUS;
         piece = getItem(piece.variantOf);
     }

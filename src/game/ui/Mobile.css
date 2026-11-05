@@ -68,10 +68,6 @@
         touch-action: none;
     }
 
-    .ui-slot {
-        pointer-events: auto;
-    }
-
     /* Keys don't mean anything here */
     .ui-choice-key,
     .ui-inv-key,

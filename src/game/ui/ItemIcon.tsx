@@ -262,61 +262,31 @@ function coinStackCount(count: number): number {
     return Math.max(count, 1);
 }
 
-type Props = {
-    objId: number;
-    // An interface sprite to show instead of the item (Piety's prayer icon),
-    // unless the cache hasn't got it
-    spriteId?: number;
+type Props = (
+    | {
+          objId: number;
+          // An interface sprite to show instead of the item (Piety's prayer
+          // icon), unless the cache hasn't got it
+          spriteId?: number;
+      }
+    // A sprite on its own (an empty gear slot's), or nothing if the cache
+    // hasn't got it
+    | { objId?: undefined; spriteId: number }
+) & {
     // Display height in pixels (icons are 36x32)
     size?: number;
     count?: number;
 };
 
-// An interface sprite on its own, without an item-model fallback.
-export function SpriteIcon({
-    spriteId,
-    size = 32,
-}: {
-    spriteId: number;
-    size?: number;
-}): JSX.Element {
-    const cached = () => iconCache.getFrame(spriteId, 0);
-    const [loaded, setLoaded] = useState(() => ({ spriteId, url: cached() }));
-    const url = loaded.spriteId === spriteId ? loaded.url : cached();
-    useEffect(() => {
-        let cancelled = false;
-        iconCache.requestFrame(spriteId, 0, (url) => {
-            if (!cancelled) {
-                setLoaded({ spriteId, url });
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [spriteId]);
-    const smooth = size * pixelRatio < ICON_HEIGHT;
-    return url ? (
-        <img
-            className={smooth ? "ui-icon ui-icon-smooth" : "ui-icon"}
-            src={url}
-            width={size}
-            height={size}
-            style={{ objectFit: "contain" }}
-            alt=""
-            draggable={false}
-        />
-    ) : (
-        <span className="ui-icon" style={{ width: size, height: size, display: "inline-block" }} />
-    );
-}
-
 export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.Element {
     const stack = objId === 995 ? coinStackCount(count) : 1;
     const sprite =
-        spriteId !== undefined && iconCache.getSprite(spriteId) !== "" ? spriteId : undefined;
-    const key = sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId, stack);
+        spriteId !== undefined && (objId === undefined || iconCache.getSprite(spriteId) !== "")
+            ? spriteId
+            : undefined;
+    const key = sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId!, stack);
     const cached = (): string | undefined =>
-        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId, stack);
+        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId!, stack);
     const [loaded, setLoaded] = useState(() => ({ key, url: cached() }));
     // When the item changes (a reroll), never the last item's icon while the
     // new one is drawn
@@ -333,7 +303,7 @@ export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.
         if (sprite !== undefined) {
             iconCache.requestSprite(sprite, callback);
         } else {
-            iconCache.request(objId, stack, callback);
+            iconCache.request(objId!, stack, callback);
         }
         return () => {
             cancelled = true;

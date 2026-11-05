@@ -6,6 +6,7 @@ import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
+import { describeUnlockTask } from "../content/unlocks";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
@@ -70,10 +71,10 @@ afterEach(() => {
 
 describe("the run's HUD", () => {
     test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {
-        vi.spyOn(iconCache, "getFrame").mockImplementation(
+        vi.spyOn(iconCache, "getSprite").mockImplementation(
             (id) => `data:image/png;base64,slot${id}`,
         );
-        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
         vi.spyOn(iconCache, "get").mockImplementation(() => "data:image/png;base64,equipped");
         vi.spyOn(iconCache, "request").mockImplementation(() => {});
         const { store } = renderHud();
@@ -228,5 +229,38 @@ describe("the run's HUD", () => {
         fireEvent.click(locked);
         expect(locked).toHaveAttribute("aria-pressed", "true");
         expect(save.armoury[base.id]).toBe(1);
+    });
+
+    test("an Armoury piece still behind a map task says what unlocks it", () => {
+        const { store } = renderHud();
+        const piece = CASKET_GEAR.find((g) => g.unlock)!;
+        act(() => store.set({ screen: "armoury", save: createSave() }));
+        const tile = screen.getByRole("button", { name: `${piece.name} (not found yet)` });
+        fireEvent.focus(tile);
+        const tip = screen.getByRole("tooltip");
+        expect(tip).toHaveTextContent(
+            `${describeUnlockTask(piece.unlock!)} to find it in caskets.`,
+        );
+        expect(tip).not.toHaveTextContent("find it in a casket to upgrade it");
+    });
+
+    test("the bag is only dimmed where it's empty, overlay or not", () => {
+        const { store, view } = renderHud();
+        const item = getItemView(CASKET_GEAR[0]);
+        const bag = () => [...view.container.querySelectorAll(".ui-inv-slot")];
+        for (const overlay of ["none", "levelUp"] as const) {
+            act(() =>
+                store.set({
+                    overlay,
+                    hud: { ...hud([]), inventory: [{ item, count: 1 }, null, null, null] },
+                }),
+            );
+            const [full, ...empty] = bag();
+            expect(full).not.toHaveClass("ui-inv-slot-empty");
+            expect(full).toHaveProperty("disabled", overlay !== "none");
+            for (const slot of empty) {
+                expect(slot).toHaveClass("ui-inv-slot-empty");
+            }
+        }
     });
 });
