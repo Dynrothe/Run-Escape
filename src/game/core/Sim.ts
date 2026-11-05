@@ -8988,7 +8988,9 @@ export class Sim {
                     y: this.player.y,
                 });
             }
-            if (fired && !this.player.moving) {
+            // Moving too: the view plays it over the run (only for show,
+            // so it's in no hash)
+            if (fired) {
                 this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
                 this.player.attackStart = this.tick;
             }

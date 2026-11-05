@@ -134,6 +134,76 @@ function bakeAnim(
     };
 }
 
+type InterleavedSource = (frame: number, movementFrame: number) => Model | undefined;
+
+// An attack over the run: a frame wherever either animation moves on to its
+// next, the run looping under it from its start. Undefined if the two can't
+// be put together (a skeletal one, or another skeleton).
+function bakeMovingAnim(
+    state: WorkerState,
+    segments: Segments,
+    getModel: InterleavedSource,
+    seqId: number,
+    runSeqId: number,
+): { anim: BakedAnim; reach: number } | undefined {
+    const seqType = state.seqTypeLoader.load(seqId);
+    const runType = state.seqTypeLoader.load(runSeqId);
+    const attackLengths = (seqType.frameIds ?? []).map((_, i) => seqType.frameLengths?.[i] || 1);
+    const runLengths = (runType.frameIds ?? []).map((_, i) => runType.frameLengths?.[i] || 1);
+    if (attackLengths.length === 0 || runLengths.length === 0) {
+        return undefined;
+    }
+    const pieces: { frame: number; runFrame: number; length: number }[] = [];
+    const total = attackLengths.reduce((sum, length) => sum + length, 0);
+    let tick = 0;
+    let frame = 0;
+    let frameEnd = attackLengths[0];
+    let runFrame = 0;
+    let runEnd = runLengths[0];
+    while (tick < total) {
+        const end = Math.min(frameEnd, runEnd);
+        pieces.push({ frame, runFrame, length: end - tick });
+        tick = end;
+        if (tick === frameEnd && frame + 1 < attackLengths.length) {
+            frame++;
+            frameEnd += attackLengths[frame];
+        }
+        if (tick === runEnd) {
+            runFrame = (runFrame + 1) % runLengths.length;
+            runEnd += runLengths[runFrame];
+        }
+    }
+    const first = getModel(0, 0);
+    if (!first) {
+        return undefined;
+    }
+    const count = pieces.length;
+    const ranges = new Int32Array(count * 4);
+    const frameSegments = new Uint16Array(count);
+    const frameLengths = new Uint16Array(count);
+    let reach = 0;
+    pieces.forEach((piece, i) => {
+        const model = i === 0 ? first : getModel(piece.frame, piece.runFrame);
+        if (model) {
+            reach = Math.max(reach, getModelReach(model));
+            ranges.set(segments.addFrame(model, count - i), i * 4);
+            frameSegments[i] = segments.current;
+        }
+        frameLengths[i] = piece.length;
+    });
+    return {
+        anim: {
+            seqId,
+            ranges,
+            segments: frameSegments,
+            frameLengths,
+            looping: false,
+            moving: true,
+        },
+        reach,
+    };
+}
+
 function bakeSet(
     state: WorkerState,
     segments: Segments,
@@ -236,7 +306,34 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const appearance = request.appearance;
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
-                    sets.push(bakeSet(state, segments, request.key, getModel, request.seqIds));
+                    const set = bakeSet(state, segments, request.key, getModel, request.seqIds);
+                    const moving = request.moving;
+                    if (moving) {
+                        const movementGroups =
+                            state.seqTypeLoader.load(moving.maskSeqId).masks ?? [];
+                        for (const seqId of moving.seqIds) {
+                            const baked = bakeMovingAnim(
+                                state,
+                                segments,
+                                (frame, runFrame) =>
+                                    extra.playerModelLoader.getInterleavedModel(
+                                        appearance,
+                                        seqId,
+                                        frame,
+                                        moving.runSeqId,
+                                        runFrame,
+                                        movementGroups,
+                                    ),
+                                seqId,
+                                moving.runSeqId,
+                            );
+                            if (baked) {
+                                set.anims.push(baked.anim);
+                                set.reach = Math.max(set.reach, baked.reach);
+                            }
+                        }
+                    }
+                    sets.push(set);
                     break;
                 }
                 case "spotanim": {

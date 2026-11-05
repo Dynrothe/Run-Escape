@@ -43,6 +43,12 @@ export const PLAYER_SEQS = {
     death: 836,
 };
 
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
+
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
     casket: 405,
@@ -436,7 +442,8 @@ function getRequestBody(request: BakeRequest): string {
         case "npc":
             return `npc:${request.npcId}:${request.seqIds[0]}`;
         case "player":
-            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
+            // A look with attacks over the run (moving) is the player's own, never merged
+            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}${request.moving ? ":" + JSON.stringify(request.moving) : ""}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
@@ -1038,7 +1045,18 @@ export class GameAssets {
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
                 const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
+                    {
+                        kind: "player",
+                        key: "player",
+                        appearance,
+                        seqIds,
+                        // Each attack again over the run, for while the player moves
+                        moving: {
+                            seqIds: attackSeqs,
+                            runSeqId: stance.run,
+                            maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                        },
+                    },
                     ...getPowerUpLookRequests(appearance),
                 ]);
                 this.renderer.updateTextureArray(bake.loadedTextures);

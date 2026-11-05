@@ -861,6 +861,14 @@ export class GameView {
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
+        const attackTicks = tick - player.attackStart;
+        // On the move, the attack's upper body over the run's legs, which run
+        // on from where it left them so they don't jump when it ends
+        const movingAttack = pose.moving ? model.movingAnims.get(player.attackSeq) : undefined;
+        const runTicks =
+            movingAttack && player.attackStart >= tick - pose.moveTicks
+                ? attackTicks
+                : pose.moveTicks;
         const reviving = sim.heroes.find((downed) => downed.revive?.hero === hero)?.revive?.ticks;
         if (look && lookModel) {
             anim = model.getAnim(pose.moving ? look.moveSeq : look.idleSeq);
@@ -874,18 +882,21 @@ export class GameView {
             // long as they stand there
             anim = model.getAnim(REVIVE_SEQ);
             frame = anim.getFrame(reviving);
+        } else if (movingAttack && attackTicks < movingAttack.totalTicks) {
+            anim = movingAttack;
+            frame = anim.getFrame(attackTicks, false);
         } else if (
             attack &&
             attack.seqId === player.attackSeq &&
             !pose.moving &&
-            tick - player.attackStart < attack.totalTicks
+            attackTicks < attack.totalTicks
         ) {
             anim = attack;
-            frame = anim.getFrame(tick - player.attackStart, false);
+            frame = anim.getFrame(attackTicks, false);
         } else {
             const stance = this.assets.getPlayerStance(hero);
             anim = model.getAnim(pose.moving ? stance.run : stance.idle);
-            frame = anim.getFrame(pose.moveTicks);
+            frame = anim.getFrame(pose.moving ? runTicks : pose.moveTicks);
         }
         const { x, y } = pose;
         let tint = NO_TINT;
