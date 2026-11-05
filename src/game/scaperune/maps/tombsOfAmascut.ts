@@ -50,9 +50,11 @@ function turnedSize(cut: RoomCut): [x: number, y: number] {
     return (cut.turns ?? 0) & 1 ? [cut.sizeY, cut.sizeX] : [cut.sizeX, cut.sizeY];
 }
 
-// The Nexus, in square 55,80: the entry at the south, a path door at each corner. The doors'
-// south-west tiles, from the cut's corner (scripts/cache/dump-square.ts 55,80, locs 46155 to
-// 46167), with their sizes
+// The Nexus, in square 55,80: a path door at each corner (locs 46155 to 46167), the way in by the
+// corridor on the north and the Wardens' doorway (Entry, 46167) on the south. Turned half round, so
+// you come in at the bottom of the screen as in OSRS, with Crondis's door on your right and
+// Apmeken's across from it: a tile (x, y) of the cut lies at (31 - x, 35 - y). The doors' south-west
+// tiles below are the cut's own (scripts/cache/dump-square.ts 55,80), with their sizes.
 const NEXUS: RoomCut = {
     x: 3536,
     y: 5130,
@@ -60,7 +62,9 @@ const NEXUS: RoomCut = {
     sizeY: 36,
     plane: 0,
     cell: [0, 0],
-    arrive: [15, 8],
+    // The north corridor's end, turned
+    arrive: [16, 5],
+    turns: 2,
 };
 
 const NEXUS_DOORS: Record<ToaPathId, [x: number, y: number, sizeX: number, sizeY: number]> = {
@@ -317,6 +321,31 @@ const CRONDIS_ENTRANCES = [
     [13, 23],
 ];
 
+// Zebak's arena, in square 61,84: a sandstone island (a deck on the plane above, local x 19 to
+// 40, y 22 to 42) in the water he lies in on the west, Rock steps (45509) up to it from the water
+// north and south, and the teleport crystal's room on the east. Turned a quarter clockwise, as
+// Kephri's, so he's at the north and you come up from the south: a tile (x, y) of the cut lies at
+// (y, 59 - x).
+const ZEBAK_ARENA: RoomCut = {
+    x: 3904,
+    y: 5384,
+    sizeX: 60,
+    sizeY: 49,
+    plane: 0,
+    cell: [2, 1],
+    arrive: [24, 13],
+    turns: 1,
+};
+// (turned) Where he lies, the line past which (north) he rises, the island's floor, and the two
+// Rock steps' tops, where his blood clouds come in
+const ZEBAK_AT = [24, 48];
+const ZEBAK_LINE = 15;
+const ZEBAK_ISLAND = { x0: 14, y0: 19, x1: 34, y1: 40 };
+const ZEBAK_STEPS = [
+    [13, 30],
+    [35, 30],
+];
+
 // The east barrier: its loc, and its tiles in square 59,82 (one tile across, three long)
 const APMEKEN_BARRIER = APMEKEN_BARRIER_LOC;
 const APMEKEN_GATE = { x: 44, y: [31, 32, 33] };
@@ -333,22 +362,30 @@ const NEXUS_AT = cellCorner(NEXUS);
 const NEXUS_ARRIVE = { x: NEXUS_AT.x + NEXUS.arrive[0], y: NEXUS_AT.y + NEXUS.arrive[1] };
 
 // Every room on the map, where it's stamped and where the party's brought in
-const ROOMS = [NEXUS, APMEKEN, BA_BA_ARENA, HET, AKKHA_ARENA, SCABARAS, KEPHRI_ARENA, CRONDIS].map(
-    (cut) => {
-        const at = cellCorner(cut);
-        return {
-            cut,
-            at,
-            rect: {
-                x0: at.x,
-                y0: at.y,
-                x1: at.x + turnedSize(cut)[0] - 1,
-                y1: at.y + turnedSize(cut)[1] - 1,
-            },
-            arrive: { x: at.x + cut.arrive[0], y: at.y + cut.arrive[1] },
-        };
-    },
-);
+const ROOMS = [
+    NEXUS,
+    APMEKEN,
+    BA_BA_ARENA,
+    HET,
+    AKKHA_ARENA,
+    SCABARAS,
+    KEPHRI_ARENA,
+    CRONDIS,
+    ZEBAK_ARENA,
+].map((cut) => {
+    const at = cellCorner(cut);
+    return {
+        cut,
+        at,
+        rect: {
+            x0: at.x,
+            y0: at.y,
+            x1: at.x + turnedSize(cut)[0] - 1,
+            y1: at.y + turnedSize(cut)[1] - 1,
+        },
+        arrive: { x: at.x + cut.arrive[0], y: at.y + cut.arrive[1] },
+    };
+});
 const APMEKEN_ROOM = ROOMS[1];
 const BA_BA_ROOM = ROOMS[2];
 const HET_ROOM = ROOMS[3];
@@ -356,6 +393,7 @@ const AKKHA_ROOM = ROOMS[4];
 const SCABARAS_ROOM = ROOMS[5];
 const KEPHRI_ROOM = ROOMS[6];
 const CRONDIS_ROOM = ROOMS[7];
+const ZEBAK_ROOM = ROOMS[8];
 
 const worldTile = (x: number, y: number) => ({
     x: MAP_X * MAP_SQUARE_SIZE + x + 0.5,
@@ -370,9 +408,10 @@ export const TOA_PLACES = {
         doors: Object.fromEntries(
             Object.entries(NEXUS_DOORS).map(([id, [x, y, sizeX, sizeY]]) => [
                 id,
+                // Its middle, turned half round with the room
                 {
-                    x: MAP_X * MAP_SQUARE_SIZE + NEXUS_AT.x + x + sizeX / 2,
-                    y: MAP_Y * MAP_SQUARE_SIZE + NEXUS_AT.y + y + sizeY / 2,
+                    x: MAP_X * MAP_SQUARE_SIZE + NEXUS_AT.x + NEXUS.sizeX - (x + sizeX / 2),
+                    y: MAP_Y * MAP_SQUARE_SIZE + NEXUS_AT.y + NEXUS.sizeY - (y + sizeY / 2),
                 },
             ]),
         ) as Record<ToaPathId, { x: number; y: number }>,
@@ -409,6 +448,21 @@ export const TOA_PLACES = {
                 y1: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_FLOOR.y1,
             },
         },
+    },
+    zebak: {
+        arrive: worldTile(ZEBAK_ROOM.arrive.x, ZEBAK_ROOM.arrive.y),
+        at: {
+            x: MAP_X * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.x + ZEBAK_AT[0],
+            y: MAP_Y * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.y + ZEBAK_AT[1],
+        },
+        line: { y: MAP_Y * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.y + ZEBAK_LINE },
+        island: {
+            x0: MAP_X * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.x + ZEBAK_ISLAND.x0,
+            y0: MAP_Y * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.y + ZEBAK_ISLAND.y0,
+            x1: MAP_X * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.x + ZEBAK_ISLAND.x1,
+            y1: MAP_Y * MAP_SQUARE_SIZE + ZEBAK_ROOM.at.y + ZEBAK_ISLAND.y1,
+        },
+        steps: ZEBAK_STEPS.map(([x, y]) => worldTile(ZEBAK_ROOM.at.x + x, ZEBAK_ROOM.at.y + y)),
     },
     crondis: {
         arrive: worldTile(CRONDIS_ROOM.arrive.x, CRONDIS_ROOM.arrive.y),
@@ -788,6 +842,14 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
                         gate: TOA_PLACES.crondis.gate,
                         entrances: TOA_PLACES.crondis.entrances,
                         crondis: TOA_PLACES.crondis.puzzle,
+                        boss: {
+                            enemyId: "zebak",
+                            arrive: TOA_PLACES.zebak.arrive,
+                            at: TOA_PLACES.zebak.at,
+                            line: TOA_PLACES.zebak.line,
+                            island: TOA_PLACES.zebak.island,
+                            steps: TOA_PLACES.zebak.steps,
+                        },
                     },
                 }),
                 ...(id === "scabaras" && {
