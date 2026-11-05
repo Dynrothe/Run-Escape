@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getEnemy } from "../content/enemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { getRoomPoints } from "../content/raids";
-import { EXPERT_HAGIOS_KEEP } from "../content/theatre";
+import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
@@ -374,24 +374,22 @@ const TEST_BOSS_IDS = [
 ];
 
 describe("the Theatre's Nylocas", () => {
-    it("are slower than a player can run, the campaign's as they were", () => {
-        const player = PLAYER_SPEED * TICKS_PER_SECOND;
+    it("are the raid's own copies, slower than the campaign's by RAID_NYLOCAS_SPEED", () => {
         const raid = getMap("theatre_of_blood");
         const ids = new Set(
             raid.raid!.rooms.flatMap((room) =>
                 room.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
             ),
         );
-        // The three that chase you (the Matomenos crawl to the Maiden, slower still)
+        // The three that chase you (the Matomenos crawl to the Maiden)
         const nylocas = [...ids].filter((id) => /ischyros|toxobolos|hagios/.test(id));
         expect(nylocas.length).toBeGreaterThan(0);
         for (const id of nylocas) {
             expect(id.startsWith("tob_"), id).toBe(true);
-            expect(getEnemy(id).speed, id).toBeLessThan(player * 0.7);
+            const campaign = getEnemy(id.slice("tob_".length));
+            expect(getEnemy(id).speed, id).toBeCloseTo(campaign.speed * RAID_NYLOCAS_SPEED);
+            expect(getEnemy(id).speed, id).toBeLessThan(PLAYER_SPEED * TICKS_PER_SECOND);
         }
-        expect(getEnemy("tob_nylocas_ischyros").speed).toBeLessThan(
-            getEnemy("nylocas_ischyros").speed,
-        );
     });
 });
 
@@ -792,14 +790,14 @@ describe("expert mode", () => {
 
     it("lets each colour of Nylocas take only its own style, and only on expert", () => {
         const expert = raid(true);
-        expect(hits(expert, "nylocas_ischyros", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
-        expect(hits(expert, "nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_hagios", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_hagios", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
         // Anywhere else, any style will do
-        expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(raid(false), "tob_nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
     it("has a wave's Nylocas take more from their own style on expert, but not Vasilias", () => {
@@ -818,11 +816,11 @@ describe("expert mode", () => {
         };
         const ratio = (id: string, weapon: string) =>
             dealt(true, id, weapon) / dealt(false, id, weapon);
-        const bonus = getEnemy("nylocas_hagios").expertOwnStyle!;
+        const bonus = getEnemy("tob_nylocas_hagios").expertOwnStyle!;
         expect(bonus).toBeGreaterThan(1);
-        expect(ratio("nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
         expect(ratio("tob_nylocas_toxobolos", "twisted_bow")).toBeCloseTo(bonus, 1);
-        expect(ratio("nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
         // Nylocas Vasilias keeps hers: a colour's own style, no more than off expert
         expect(ratio("nylocas_vasilias_magic", "sanguinesti_staff")).toBeLessThan(1.5);
     });
@@ -1067,6 +1065,13 @@ describe("expert mode", () => {
         expect(boss.hp).toBe(boss.maxHp - 10000 + Math.round(boss.maxHp * smother.heal));
         expect(sim.hazards).not.toContain(left);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
+        // A step's enough: half a second on one smothers it (they come up in threes, tiles apart)
+        const stepped = exhumed(sim.player.x, sim.player.y);
+        for (let t = 0; t < TICKS_PER_SECOND / 2; t++) {
+            sim["stepHazards"]();
+        }
+        expect(sim.hazards).not.toContain(stepped);
+        expect(boss.bossState!.ordeal!.left).toBe(exhumes.count - 1);
         // Each one stood on is smothered, and once they all are he rises
         for (let i = 0; i < exhumes.count; i++) {
             const one = exhumed(sim.player.x, sim.player.y);
@@ -1227,7 +1232,7 @@ describe("expert mode", () => {
 
     it("leaves a Nylocas a weapon can't hurt alone: no aiming at it, and no venom", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 2,
             y: sim.player.y,
         })!;
@@ -1249,7 +1254,7 @@ describe("expert mode", () => {
         sim.weapons = [];
         sim.addWeapon("twisted_bow");
         sim.addWeapon("scythe_of_vitur");
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 1,
             y: sim.player.y,
         })!;
@@ -1273,7 +1278,7 @@ describe("expert mode", () => {
 
     it("stops a weapon's venom once the enemy's colour is one it can't hurt", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 6,
             y: sim.player.y,
         })!;

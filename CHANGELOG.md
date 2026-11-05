@@ -15,7 +15,7 @@ the version in the corner).
 
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
-- The Theatre of Blood's Nylocas are slower, so you can run from them. Changed by Okaeri.
+- Theatre of Blood, by Okaeri: the Nylocas are slower.
 
 ### Fixed
 

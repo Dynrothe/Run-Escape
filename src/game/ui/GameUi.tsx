@@ -901,7 +901,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && " hard"}
+                    {ui.hard &&
+                        (ui.expert && getMap(ui.mapId).raid && ui.coop.status === "offline"
+                            ? " expert"
+                            : " hard")}
                     {ui.endless && !getMap(ui.mapId).fun && " endless"}
                 </button>
             </div>

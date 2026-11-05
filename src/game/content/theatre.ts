@@ -831,7 +831,8 @@ function raidVersion(
         boss: {
             ...base.boss!,
             ...extra,
-            // What it calls in is the raid's: its green and blue Nylocas shoot (RAID_NYLOCAS)
+            // What it calls in is the raid's: its Nylocas, slower, the green and blue ones shooting
+            // (RAID_NYLOCAS)
             attacks: oftener(all, tunedAt, interval).map((attack) =>
                 attack.summon
                     ? {
@@ -891,10 +892,11 @@ const HAGIOS_SHOT: EnemyShotDef = {
     sound: 3605,
     expertKeep: EXPERT_HAGIOS_KEEP,
 };
-const RAID_NYLOCAS_SPEED = 0.85;
+export const RAID_NYLOCAS_SPEED = 0.85;
 
 // The raid's own Nylocas (the campaign's are as they were): its shooters' shots, and all of them
-// slower (RAID_NYLOCAS_SPEED), since Morytania's crawled faster than a player can run
+// slower (RAID_NYLOCAS_SPEED). In its narrow halls they come from every side, and players found
+// themselves caught by them at Morytania's speed.
 const RAID_NYLOCAS: [string, EnemyShotDef | undefined][] = [
     ["nylocas_ischyros", undefined],
     ["big_nylocas_ischyros", undefined],
