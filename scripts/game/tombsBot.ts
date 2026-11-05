@@ -646,6 +646,10 @@ export function dodge(sim: Sim): Point | undefined {
         if (enemy.dead || !windup) {
             continue;
         }
+        // An avalanche is hidden from, not run from (BossAttackDef.takeCover)
+        if (windup.attack.takeCover) {
+            continue;
+        }
         // A swing hits round the boss (or along its line): out of its reach
         if (windup.attack.kind === "swing") {
             const dx = player.x - enemy.x;
@@ -727,7 +731,9 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
     }
     if (def.boulders) {
         const move = babaMove(sim, def, boss);
-        return boss.bossState?.ordeal ? move : dodging(sim, move);
+        // In cover while her avalanche winds up, whatever's coming
+        const avalanche = boss.bossState?.windup?.attack.takeCover !== undefined;
+        return boss.bossState?.ordeal || avalanche ? move : dodging(sim, move);
     }
     // Kephri, and anything else: near enough for every weapon, off what's close
     return dodging(sim, kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5));
