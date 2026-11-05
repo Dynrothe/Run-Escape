@@ -776,6 +776,13 @@ describe("expert mode", () => {
         expect(nearest(false)).toBeGreaterThan(4.5);
     });
 
+    it("has the Maiden slam half as often as the other slams, so melee can stay in", () => {
+        const slam = (id: string, name: string) =>
+            getEnemy(id).boss!.attacks.find((a) => a.name === name)!;
+        expect(slam("maiden_of_sugadinti", "Blood burst").cooldown).toBe(8);
+        expect(slam("xarpus", "Acid burst").cooldown).toBe(4);
+    });
+
     it("warns of a fan with as many lines as it fires, as wide, on hard too", () => {
         for (const expert of [false, true]) {
             const sim = raid(expert);

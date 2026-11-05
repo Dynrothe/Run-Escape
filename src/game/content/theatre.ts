@@ -46,12 +46,15 @@ const SPLAT_FIT = 0.8;
 const CLOSE_REACH = 4.6;
 const CLOSE_WEIGHT = 10;
 const SLAM_RADIUS = 4;
+// Seconds between the Maiden's slams
+const MAIDEN_SLAM_COOLDOWN = 8;
 function slam(
     name: string,
     spotAnim: number,
     sound: number,
     damage: number,
     fit?: number,
+    cooldown = 4,
 ): BossAttackDef {
     return {
         name,
@@ -59,7 +62,7 @@ function slam(
         sound,
         damage,
         windup: 1.5,
-        cooldown: 4,
+        cooldown,
         range: CLOSE_REACH,
         weight: CLOSE_WEIGHT,
         ground: { spots: [{ shape: "under" }], radius: SLAM_RADIUS, spotAnim, fit },
@@ -67,8 +70,9 @@ function slam(
 }
 
 const MAIDEN_ATTACKS: BossAttackDef[] = [
-    // Her blood bursts out round her
-    slam("Blood burst", 1579, 3606, 5, SPLAT_FIT),
+    // Her blood bursts out round her: half as often as the other slams, as nothing else she does
+    // keeps melee away, and stepping out of it every few seconds left them barely hitting her
+    slam("Blood burst", 1579, 3606, 5, SPLAT_FIT, MAIDEN_SLAM_COOLDOWN),
     {
         name: "Blood throw",
         kind: "pattern",

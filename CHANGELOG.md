@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Theatre of Blood: the Maiden's Blood burst comes half as often, so melee can stay in on her.
+
 ### Fixed
 
 - Theatre of Blood expert mode: the green and blue Nylocas come in close to shoot, rather than
