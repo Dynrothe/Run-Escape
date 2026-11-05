@@ -409,60 +409,122 @@ export function additionPick(values: number[], stepped: boolean[], left: number)
     return best ?? [];
 }
 
-// Crondis: fill up at a waterfall that's running, carry it to the palm, again till it's grown;
-// out of a spear's way while it thrusts
+// Crondis: water fetched from a corridor's waterfall to the palm, again till it's grown. A
+// corridor's poison band comes down it from the waterfall faster than you walk, so a trip in
+// starts once the last band's out of it, with time to fill and be off before the next; a spear
+// thrusting across your rows is stepped round to the corridor's other half
+const CLOUD_SPEED = 3.5;
+const CLOUD_BEHIND = 1.1;
+const CLOUD_LENGTH = 3;
+const CLOUD_EVERY = 9;
+const FILL_SECONDS = 1;
+
 function crondisMove(sim: Sim, def: PathRoom): Point {
     const crondis = sim.tombsRoom!.crondis!;
     const places = def.crondis!;
     const hero = sim["hero"].index;
     const player = sim.player;
-    const dodge = spearDodge(sim, def);
+    const lane = places.lanes.findIndex(
+        (l) =>
+            player.x >= l.x0 - 0.5 &&
+            player.x <= l.x1 + 1.5 &&
+            player.y >= l.y0 - 2 &&
+            player.y <= l.y1 + 2,
+    );
+    let to: Point;
+    if (crondis.water[hero] >= 100) {
+        to = places.palm;
+    } else if (lane !== -1 && crondis.water[hero] > 0 && crondis.filling[hero] > 0) {
+        // Filling: stay till it's full
+        to = places.falls[places.lanes[lane].fall].fill;
+    } else {
+        to = crondisFall(sim, def);
+    }
+    const dodge = spearDodge(sim, def, to);
     if (dodge) {
         return dodge;
     }
-    if (crondis.water[hero] >= 100) {
-        return walkTo(sim, places.palm.x, places.palm.y);
-    }
-    // The fall that'll be running soonest by the time it's reached
-    const speed = 0.12;
-    let best: { at: Point; cost: number } | undefined;
-    places.falls.forEach((fall, k) => {
-        const away = Math.hypot(fall.fill.x - player.x, fall.fill.y - player.y);
-        const wait = Math.max(0, crondis.dryUntil[k] - sim.tick) * speed;
-        const cost = Math.max(away, wait);
-        if (!best || cost < best.cost) {
-            best = { at: fall.fill, cost };
-        }
-    });
-    const at = best!.at;
-    return Math.hypot(at.x - player.x, at.y - player.y) < 1.2
-        ? nudge(sim, at.x, at.y)
-        : walkTo(sim, at.x, at.y);
+    return Math.hypot(to.x - player.x, to.y - player.y) < 1.2
+        ? nudge(sim, to.x, to.y)
+        : walkTo(sim, to.x, to.y);
 }
 
-// A spear thrusting (or about to) where the bot stands: along its lane out of the box
-function spearDodge(sim: Sim, def: PathRoom): Point | undefined {
+// Tiles a second the bot walks
+function walkPerSecond(sim: Sim): number {
+    return (2 / 0.6) * (1 + (sim.stats.moveSpeed ?? 0));
+}
+
+// Where to go for water: the waterfall that's soonest running. A band only spills what you're
+// carrying, so the way in's walked empty whatever's coming; at the fall it waits a step off (where
+// it won't fill) for a band to go by, and fills only with time to be well ahead of the next
+function crondisFall(sim: Sim, def: PathRoom): Point {
     const crondis = sim.tombsRoom!.crondis!;
     const places = def.crondis!;
     const player = sim.player;
+    const speed = walkPerSecond(sim);
+    const now = sim.tick / 50;
+    let best: { at: Point; wait: number } | undefined;
+    places.lanes.forEach((lane, i) => {
+        const fall = places.falls[lane.fall];
+        const walkIn = Math.hypot(fall.fill.x - player.x, fall.fill.y - player.y) / speed;
+        const dry = Math.max(0, crondis.dryUntil[lane.fall] / 50 - now - walkIn);
+        // The last band's still over the fall, or the next comes before it'd be filled and away
+        const recent = crondis.clouds.some(
+            (cloud) => cloud.lane === i && now - cloud.startTick / 50 < CLOUD_BEHIND + 0.8,
+        );
+        const release = crondis.nextCloudTick[i] / 50 - now - walkIn;
+        const soon = release < FILL_SECONDS + 0.7;
+        const cloudWait = recent ? 1 : soon ? release + CLOUD_BEHIND + 0.8 : 0;
+        const wait = walkIn + Math.max(dry, cloudWait);
+        const toPalm = lane.fromLow ? 1 : -1;
+        const at =
+            dry > 0 || recent || soon
+                ? { x: fall.fill.x, y: fall.fill.y + toPalm * 2.4 }
+                : fall.fill;
+        if (!best || wait < best.wait) {
+            best = { at, wait };
+        }
+    });
+    return best!.at;
+}
+
+// A spear thrusting, or about to, across rows the bot's in or going into: to the corridor's other
+// half, or, with both halves out, back out of those rows
+function spearDodge(sim: Sim, def: PathRoom, to: Point): Point | undefined {
+    const crondis = sim.tombsRoom!.crondis!;
+    const places = def.crondis!;
+    const player = sim.player;
+    const sides = new Set<string>();
+    let rows: { y0: number; y1: number } | undefined;
+    let lane: (typeof places.lanes)[number] | undefined;
     for (const thrust of crondis.thrusts) {
-        if (sim.tick - thrust.startTick > 50) {
+        if (sim.tick - thrust.startTick >= 50) {
             continue;
         }
         const area = sim.crondisSpearArea(places, thrust);
-        const inside =
-            player.x >= area.x0 - 0.4 &&
-            player.x <= area.x1 + 0.4 &&
-            player.y >= area.y0 - 0.4 &&
-            player.y <= area.y1 + 0.4;
-        if (inside) {
-            const lane = places.lanes[thrust.lane];
-            const up = player.y >= (area.y0 + area.y1) / 2;
-            const y = up ? area.y1 + 0.9 : area.y0 - 0.9;
-            return walkTo(sim, player.x, Math.max(lane.y0 + 0.5, Math.min(lane.y1 + 0.5, y)));
+        if (
+            player.x >= area.x0 - 1 &&
+            player.x <= area.x1 + 1 &&
+            player.y >= area.y0 - 1.2 &&
+            player.y <= area.y1 + 1.2
+        ) {
+            sides.add(thrust.side);
+            rows = area;
+            lane = places.lanes[thrust.lane];
         }
     }
-    return undefined;
+    if (!rows) {
+        return undefined;
+    }
+    if (sides.size === 1 && lane) {
+        // The half it isn't thrusting across, carrying on along the corridor
+        const x = sides.has("low") ? lane.high - 1.5 : lane.low + 1.5;
+        const dy = Math.sign(to.y - player.y);
+        return nudge(sim, x, player.y + dy * (Math.abs(player.x - x) < 0.3 ? 1 : 0.2));
+    }
+    // Both halves: out of their rows, whichever way's nearer
+    const y = player.y > (rows.y0 + rows.y1) / 2 ? rows.y1 + 1.4 : rows.y0 - 1.4;
+    return nudge(sim, player.x, y);
 }
 
 function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
