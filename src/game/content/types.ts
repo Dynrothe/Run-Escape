@@ -1511,9 +1511,31 @@ export type MapDef = {
 // each drawn by the game as a slab, so each can shake, rise and fall on its own. Its front is
 // north, where a boss would stand: slams travel out from it, and rows fall away from the south,
 // the back, towards it. Every hit is warned by the tiles themselves shaking.
+//
+// Everything past rect, slam, drop and script has a default, so a floor of the Wardens' slabs is
+// those and nothing else. To make it your own (scaperune/CLAUDE.md, "Floors that fight back"):
+// shape or ascii for which tiles there are, skins for what they look like, tiles for which skin,
+// type and slab size goes where.
 export type FloorDef = {
-    // World tiles, both ends in
+    // World tiles, both ends in: the box the floor's in. Its tiles are counted from its south-west
+    // corner (floor tiles) by everything below.
     rect: { x0: number; y0: number; x1: number; y1: number };
+    // Which tiles of the box are floor (FloorShapeDef; all of it when unset). The rest is the
+    // pit's dark from the start: blocked, and never there.
+    shape?: FloorShapeDef;
+    // A hand-drawn floor, a row a string, the north row first, from the box's south-west corner:
+    // "." and " " are no floor, any other character is, and tiles rules can pick tiles out by
+    // their character (FloorWhereDef "chars"). With shape too, the floor's where both say.
+    ascii?: string[];
+    // What its tiles look like (FloorSkinDef); tiles rules pick them by index. When unset, one:
+    // the slam's own slab, rising with its animation.
+    skins?: FloorSkinDef[];
+    // Which skin, type, turn and slab size each tile has: every rule that covers a tile is
+    // applied, in order, a later one over an earlier. Every tile starts as skin 0, "normal", unturned,
+    // and a tile on its own.
+    tiles?: FloorTileRuleDef[];
+    // For the tiles rules' shares and weights: the same seed lays the floor out the same way
+    seed?: number;
     slam: {
         // Seconds a tile shakes before it rises
         warn: number;
@@ -1542,6 +1564,12 @@ export type FloorDef = {
         keepRows: number;
         // As tiles fall, and as the player's hurt by one
         sound: number;
+        // A fragile tile's warning is this much of warn (default 0.5), and it falls by itself
+        // after it's risen this many times (default 2)
+        fragile?: { warn?: number; hits?: number };
+        // Holes, falling rows and fragile tiles never cut the floor in two (so nobody's left on
+        // an island) unless this is set
+        islands?: boolean;
     };
     // What it throws up, all spot animations (client/FloorView.ts): dust as a slab comes up and
     // as a tile goes, and a chip of rock (crumbling off a tile about to go, and falling with it)
@@ -1586,6 +1614,80 @@ export type FloorBeatDef = {
 // them and breathing slowly, building to a wide bright glow; for a signature attack whose
 // telegraph is the point.
 export type FloorCue = "subtle" | "bold";
+
+// Which tiles of a floor's box are floor, in floor tiles from its south-west corner (FloorDef).
+// rect: a box, both ends in. ellipse: within rx and ry of a middle (a circle when they're the
+// same). ring: between inner and outer of a middle, round (or square, by square). diamond: within
+// r of a middle, counting steps. cross: the middle's row and column, width tiles wide. union: in
+// any of them. minus: in from, and not in cut. A middle can be in half tiles (11.5 is between
+// 11 and 12); it's the box's middle when unset.
+export type FloorShapeDef =
+    | { kind: "rect"; x0: number; y0: number; x1: number; y1: number }
+    | { kind: "ellipse"; rx: number; ry: number; cx?: number; cy?: number }
+    | { kind: "ring"; inner: number; outer: number; square?: boolean; cx?: number; cy?: number }
+    | { kind: "diamond"; r: number; cx?: number; cy?: number }
+    | { kind: "cross"; width: number; cx?: number; cy?: number }
+    | { kind: "union"; of: FloorShapeDef[] }
+    | { kind: "minus"; from: FloorShapeDef; cut: FloorShapeDef };
+
+// What a floor's tiles look like: a model at a tile's middle, its top at the floor. A spot
+// animation's (its model, recoloured as the cache has it, and its animation as its rise), a loc's,
+// or a model's own. It should be a tile across (a slab more tiles across is stretched to them).
+export type FloorSkinDef = {
+    spotAnim?: number;
+    loc?: number;
+    model?: number;
+    // Colours (the cache's HSL) and textures swapped, after the cache's own swaps
+    recolor?: [from: number, to: number][];
+    retexture?: [from: number, to: number][];
+    // Bigger or smaller (1 as it is), and raised (tiles, up), as baked
+    scale?: number;
+    height?: number;
+    // A tint over it (0xRRGGBB)
+    tint?: number;
+    // How it comes up: its spot animation's own rise ("anim", only a spotAnim skin with one), or
+    // lifted, tipped the way the wave goes and settled back in code ("code", the default for
+    // everything else)
+    rise?: "anim" | "code";
+    // How it falls: tumbling away as drop.spotAnim does ("tumble", only for a 1 by 1 tile of the
+    // slam's slab), or dropping and turning over in code ("code", the default otherwise)
+    fall?: "tumble" | "code";
+    // A steady light along its edges while nothing's coming (0xRRGGBB): a glyph's glow
+    light?: number;
+};
+
+// What a tile does. normal: rises and falls. solid: never rises or falls. reinforced: rises,
+// never falls. fragile: falls faster, and falls by itself after rising a few times (drop.fragile).
+// safe: never rises or falls, as solid does; for the glyphs a floor promises as safe spots.
+export type FloorTileType = "normal" | "solid" | "reinforced" | "fragile" | "safe";
+
+// Where a tiles rule applies (FloorTileRuleDef), in floor tiles. A shape (FloorShapeDef); checker:
+// alternate squares of size tiles (1 when unset), odd ones if odd; border: within width tiles
+// (1) of the floor's edge, or of no floor; stripes: every every tiles along x or y, width wide
+// (1), from offset (0); chars: the ascii map's tiles with any of these characters; all: every
+// tile.
+export type FloorWhereDef =
+    | FloorShapeDef
+    | { kind: "all" }
+    | { kind: "checker"; size?: number; odd?: boolean }
+    | { kind: "border"; width?: number }
+    | { kind: "stripes"; axis: "x" | "y"; every: number; width?: number; offset?: number }
+    | { kind: "chars"; chars: string };
+
+// A rule laying out a floor's tiles (FloorDef.tiles). Only where it says (everywhere when unset),
+// and of those only a share of them (all when unset), picked by the floor's seed.
+// skin: which (FloorDef.skins), or one of several by weight; type: what it does; turn: quarter
+// turns (0 to 3), or any by chance; slab: tiles that rise and fall as one piece, [x, y] tiles
+// across, laid from the south-west wherever the whole of one fits in what the rule covers and
+// isn't in a slab already.
+export type FloorTileRuleDef = {
+    where?: FloorWhereDef;
+    share?: number;
+    skin?: number | { skin: number; weight: number }[];
+    type?: FloorTileType;
+    turn?: number | "random";
+    slab?: [x: number, y: number];
+};
 
 export type FloorPatternDef = (
     | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
