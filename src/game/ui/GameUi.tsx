@@ -832,6 +832,10 @@ function getClassTreasure(style: CombatStyle) {
 }
 
 export function getStartingWeaponIcon(character: CharacterDef): number {
+    if (!character.startingWeapon) {
+        // What they hold instead: their equipment's weapon
+        return character.equipment[3] ?? -1;
+    }
     const weapon = getWeapon(character.startingWeapon);
     return weapon.levels[0].objId ?? weapon.iconObjId;
 }

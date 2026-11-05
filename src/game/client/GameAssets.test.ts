@@ -221,7 +221,7 @@ describe("player bakes", () => {
 
     test("have the swings of the weapons the hero holds", () => {
         const sim = createRun(1);
-        const start = getWeapon(CHARACTERS[0].startingWeapon);
+        const start = getWeapon(CHARACTERS[0].startingWeapon!);
         expect(getRunAttackSeqs(sim)).toEqual([start.playerSeq]);
         const special = WEAPONS.find(
             (w) =>
@@ -276,7 +276,7 @@ describe("player bakes", () => {
 
     test("bake the swings a level-up offers ahead, and not ones held", () => {
         const sim = createRun(1);
-        const start = getWeapon(CHARACTERS[0].startingWeapon);
+        const start = getWeapon(CHARACTERS[0].startingWeapon!);
         const whip = getWeapon("abyssal_whip");
         expect(getOfferedAttackSeqs(sim)).toEqual([]);
         sim.choices = [
@@ -309,6 +309,9 @@ describe("player bakes", () => {
     test("are all in what the slim cache keeps", () => {
         const all = getPlayerAttackSeqs();
         for (const character of CHARACTERS) {
+            if (!character.startingWeapon) {
+                continue;
+            }
             const weapon = getWeapon(character.startingWeapon);
             expect(all).toContain(weapon.playerSeq);
         }

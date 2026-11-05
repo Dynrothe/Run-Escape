@@ -191,6 +191,20 @@ TROPHIES.push(
             hardChance: 1,
         },
     },
+    // The Whisperer's pet (pets.ts)
+    {
+        id: "wisp",
+        name: "Wisp",
+        objId: 28246,
+        how: "1 in 10 for defeating the Whisperer; always on hard mode.",
+        from: {
+            kind: "boss",
+            enemyId: "the_whisperer",
+            mapId: "bellchoir",
+            chance: 1 / 10,
+            hardChance: 1,
+        },
+    },
 );
 
 export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => [t.id, t]));

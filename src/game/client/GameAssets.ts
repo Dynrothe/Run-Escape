@@ -262,7 +262,8 @@ export function getOfferedAttackSeqs(sim: Sim, hero = sim.focus): number[] {
 
 // The swings of a character's starting weapon, what a solo run starts with
 export function getCharacterAttackSeqs(characterId: string): number[] {
-    return getWeaponSeqs([getWeapon(getCharacter(characterId).startingWeapon)]);
+    const start = getCharacter(characterId).startingWeapon;
+    return start ? getWeaponSeqs([getWeapon(start)]) : [];
 }
 
 // The player's look in a run: the character's outfit, the held weapon tier,

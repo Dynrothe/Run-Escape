@@ -2,7 +2,14 @@ import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
+import { SUNKEN_CATHEDRAL, SUNKEN_CATHEDRAL_RECIPE } from "../scaperune/maps/sunkenCathedral";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import {
+    BELL_CHOIR_HITPOINTS,
+    BELL_CHOIR_TOLL,
+    SUNKEN_CATHEDRAL_BOSS_ARENA,
+    SUNKEN_CATHEDRAL_FEATURES,
+} from "./bellchoir";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
@@ -411,6 +418,41 @@ export const MAPS: MapDef[] = [
             ability: ZACHARIAH_SMITE,
         },
         music: "Blade of Forgotten Justice",
+    },
+    {
+        id: "bellchoir",
+        name: "The Bell Choir",
+        description:
+            "The Whisperer leads the Silent Choir in a cathedral sunk under Ice Mountain, and the " +
+            "fight is her song. No waves, no picks and no items: a hand bell, tolled on the " +
+            "beat. Every attack lands on the beat, the tempo quickens, and keeping time is how " +
+            "you hurt her.",
+        // The Wisp's own icon is her pet's; the bell is the fight's: the crier bell
+        iconObjId: 20243,
+        arena: getRecipeArena(SUNKEN_CATHEDRAL_RECIPE),
+        // By the south doorway: she rises in the crossing
+        spawn: {
+            x: SUNKEN_CATHEDRAL.origin.x + SUNKEN_CATHEDRAL.start.x + 0.5,
+            y: SUNKEN_CATHEDRAL.origin.y + SUNKEN_CATHEDRAL.start.y + 0.5,
+        },
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [{ at: 0, kind: "finalBoss", enemyId: "the_whisperer", hp: BELL_CHOIR_HITPOINTS }],
+        finalBossWarning: "",
+        victoryText: "The choir falls silent: the Whisperer is laid to rest!",
+        bossArena: SUNKEN_CATHEDRAL_BOSS_ARENA,
+        features: SUNKEN_CATHEDRAL_FEATURES,
+        scaperune: true,
+        // Beat the Owl, then face the Choir: a step up, as fights over old gods' ruins go
+        fight: {
+            requires: "zachariah",
+            character: "bellringer",
+            weaponLevel: 1,
+            ability: BELL_CHOIR_TOLL,
+        },
+        brightness: 0.85,
+        music: "Song of the Silent Choir",
     },
 ];
 

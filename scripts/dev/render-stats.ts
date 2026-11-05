@@ -732,7 +732,7 @@ async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<
 function getPlayerBakeRequests(): BakeRequest[] {
     const character = CHARACTERS[0];
     const appearance = getCharacterAppearance(character.id);
-    const weapon = getWeapon(character.startingWeapon);
+    const weapon = getWeapon(character.startingWeapon!);
     const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
     const seqIds = [PLAYER_SEQS.walk, stance.idle, stance.run, PLAYER_SEQS.death, weapon.playerSeq];
     return [{ kind: "player", key: "player", appearance, seqIds }];

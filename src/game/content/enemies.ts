@@ -1,4 +1,5 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { BELL_CHOIR_ENEMIES } from "./bellchoir";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
@@ -8344,6 +8345,7 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    ...BELL_CHOIR_ENEMIES,
 ];
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above

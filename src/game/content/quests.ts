@@ -326,6 +326,13 @@ export const QUESTS: QuestDef[] = [
         coins: 4000,
     },
     {
+        id: "the_silent_choir",
+        name: "The Silent Choir",
+        mapId: "bellchoir",
+        objective: { kind: "kill", enemyIds: ["the_whisperer"], count: 1 },
+        coins: 4500,
+    },
+    {
         id: "ratcatchers",
         name: "Ratcatchers",
         objective: {

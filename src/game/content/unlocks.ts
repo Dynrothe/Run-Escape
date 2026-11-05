@@ -102,7 +102,8 @@ export type MapReward = {
 
 export function getMapRewards(mapId: string): MapReward[] {
     const characters = CHARACTERS.flatMap((c): MapReward[] => {
-        if (c.unlock?.mapId !== mapId) {
+        // A character that's unlocked has a weapon to show (a fight's own has neither)
+        if (c.unlock?.mapId !== mapId || !c.startingWeapon) {
             return [];
         }
         const weapon = getWeapon(c.startingWeapon);

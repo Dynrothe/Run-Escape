@@ -1244,9 +1244,12 @@ export class Sim {
         });
         for (const hero of this.heroes) {
             this.use(hero);
-            this.addWeapon(getCharacter(hero.characterId).startingWeapon);
+            const start = getCharacter(hero.characterId).startingWeapon;
+            if (start) {
+                this.addWeapon(start);
+            }
             // A boss fight's kit: the weapon at its level, and nothing more ever
-            if (this.map.fight) {
+            if (this.map.fight && this.weapons[0]) {
                 this.weapons[0].level = this.map.fight.weaponLevel;
             }
             this.updateStats();
@@ -7555,7 +7558,8 @@ export class Sim {
                 break;
             }
             case "echo":
-                // Its marks are laid as its beats come (stepPhrases)
+                // Its first mark now, the rest as its beats come (stepPhrases)
+                this.layEcho(song, phrase, boss);
                 break;
             case "bells": {
                 const bells = this.map.features?.bells ?? [];
@@ -7779,47 +7783,55 @@ export class Sim {
             }
             const tpb = phrase.ticksPerBeat;
             const since = this.tick - phrase.startTick;
-            if (since < 0 || since % tpb !== 0 || since / tpb >= 4) {
+            if (since <= 0 || since % tpb !== 0 || since / tpb >= 4) {
                 continue;
             }
-            const land = this.tick + 4 * tpb + (def.offbeat ? halfBeat(tpb) : 0);
-            const axis = this.songAxis();
-            this.forEachHeroInReach(() => {
-                const player = this.player;
-                const shape: SongShape = {
-                    kind: "circle",
+            this.layEcho(song, phrase, boss);
+        }
+    }
+
+    // An echo's marks, one where each player stands, each landing a bar later (on the half beat
+    // after, syncopated), and the reflection's a bar after that, mirrored
+    private layEcho(song: SongState, phrase: SongPhrase, boss: Enemy): void {
+        const def = phrase.def;
+        const tpb = phrase.ticksPerBeat;
+        const land = this.tick + 4 * tpb + (def.offbeat ? halfBeat(tpb) : 0);
+        const axis = this.songAxis();
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const shape: SongShape = {
+                kind: "circle",
+                x: player.x,
+                y: player.y,
+                r: def.radius ?? 1,
+            };
+            this.addNote(song, phrase, shape, this.tick, this.tick, 4, land, 1, {
+                damage: def.damage,
+            });
+            if (phrase.canon && axis !== undefined) {
+                const bar = 4 * tpb;
+                this.addNote(
+                    song,
+                    phrase,
+                    mirrorShape(shape, axis),
+                    this.tick + bar,
+                    this.tick + bar,
+                    4,
+                    land + bar,
+                    1,
+                    { damage: def.damage, canon: true },
+                );
+            }
+            if (def.countSound !== undefined) {
+                this.emit({
+                    type: "bossAttack",
+                    enemyId: boss.def.id,
+                    sound: def.countSound,
                     x: player.x,
                     y: player.y,
-                    r: def.radius ?? 1,
-                };
-                this.addNote(song, phrase, shape, this.tick, this.tick, 4, land, 1, {
-                    damage: def.damage,
                 });
-                if (phrase.canon && axis !== undefined) {
-                    const bar = 4 * tpb;
-                    this.addNote(
-                        song,
-                        phrase,
-                        mirrorShape(shape, axis),
-                        this.tick + bar,
-                        this.tick + bar,
-                        4,
-                        land + bar,
-                        1,
-                        { damage: def.damage, canon: true },
-                    );
-                }
-                if (def.countSound !== undefined) {
-                    this.emit({
-                        type: "bossAttack",
-                        enemyId: boss.def.id,
-                        sound: def.countSound,
-                        x: player.x,
-                        y: player.y,
-                    });
-                }
-            });
-        }
+            }
+        });
     }
 
     // Each part as its last beat begins (who's in it, for a Grace) and as it lands

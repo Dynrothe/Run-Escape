@@ -586,6 +586,25 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    {
+        id: "bellringer",
+        name: "Bellringer",
+        description:
+            "Made for the Bell Choir, and everyone plays them there, and nowhere else: no " +
+            "weapon, only a hand bell to toll on the beat. Moves 20% faster, has 20% more " +
+            "hitpoints and heals 10 hitpoints a minute.",
+        style: "magic",
+        // The crier bell, and Virtus robes: the Zarosian set her fight's kin drop
+        equipment: {
+            [EquipSlot.WEAPON]: 20243,
+            [EquipSlot.HEAD]: 26241,
+            [EquipSlot.TORSO]: 26243,
+            [EquipSlot.LEGS]: 26245,
+        },
+        // As the Saradominist's. All the damage is the player's own timing (MapDef.fight.ability)
+        bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
+        only: "bellchoir",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));

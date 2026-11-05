@@ -1497,7 +1497,9 @@ export type CharacterDef = {
     description: string;
     // Sets which class weapons they can find
     style: CombatStyle;
-    startingWeapon: string;
+    // None for a fight's own adventurer whose damage is all their own doing (the Bellringer's
+    // Toll, MapDef.fight.ability): they hold what their equipment's weapon slot has
+    startingWeapon?: string;
     // Worn items by equipment slot
     equipment: Partial<Record<number, number>>;
     // Identity kits (hair, jaw, torso, arms, hands, legs, feet) and body
