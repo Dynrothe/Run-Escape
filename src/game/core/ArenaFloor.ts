@@ -35,6 +35,10 @@ export class ArenaFloor {
     // When a fallen tile starts coming back, and when it's back and walked on again
     readonly restoreAt: Int32Array;
     readonly restoredAt: Int32Array;
+    // When the rise or fall to come was known: its pattern's start, which can be well before its
+    // warning (a wave's far rows), so the client can show a pattern's whole shape as it starts.
+    // Cleared as it rises, or as a fallen tile's back.
+    readonly cueAt: Int32Array;
     // Rows fallen from the back so far
     rowsDropped = 0;
     private loopStart = 0;
@@ -67,6 +71,7 @@ export class ArenaFloor {
         this.dropAt = new Int32Array(count).fill(NONE);
         this.restoreAt = new Int32Array(count).fill(NONE);
         this.restoredAt = new Int32Array(count).fill(NONE);
+        this.cueAt = new Int32Array(count).fill(NONE);
         this.slamWarn = this.ticks(def.slam.warn);
         this.hurtFrom = this.ticks(def.slam.hurt[0]);
         this.hurtTo = this.ticks(def.slam.hurt[1]);
@@ -144,6 +149,7 @@ export class ArenaFloor {
                 this.roseAt[i] = tick;
                 this.riseAt[i] = NONE;
                 this.warnAt[i] = NONE;
+                this.cueAt[i] = NONE;
                 rose.push(tileX, tileY);
             }
             if (this.dropAt[i] === tick) {
@@ -156,6 +162,7 @@ export class ArenaFloor {
                 this.dropAt[i] = NONE;
                 this.restoreAt[i] = NONE;
                 this.restoredAt[i] = NONE;
+                this.cueAt[i] = NONE;
             }
         }
         return { rose, fell, messages };
@@ -183,7 +190,7 @@ export class ArenaFloor {
                                   ? x <= middle
                                   : Math.abs(x - middle) > 1;
                         if (rises) {
-                            this.rise(x, y, first + row * step, FLOOR_SOUTH);
+                            this.rise(x, y, first + row * step, FLOOR_SOUTH, tick);
                         }
                     }
                 }
@@ -201,7 +208,7 @@ export class ArenaFloor {
                     }
                     for (let x = 0; x < sizeX; x++) {
                         if (x < gap || x >= gap + width) {
-                            this.rise(x, y, first + row * step, FLOOR_SOUTH);
+                            this.rise(x, y, first + row * step, FLOOR_SOUTH, tick);
                         }
                     }
                 }
@@ -238,7 +245,7 @@ export class ArenaFloor {
                                 : dy >= 0
                                   ? FLOOR_NORTH
                                   : FLOOR_SOUTH;
-                        this.rise(x, y, first + ring * step, dir);
+                        this.rise(x, y, first + ring * step, dir, tick);
                     }
                 }
                 break;
@@ -249,7 +256,7 @@ export class ArenaFloor {
                 for (let r = 0; r < pattern.rows && this.rowsDropped < last; r++) {
                     const y = this.rowsDropped++;
                     for (let x = 0; x < sizeX; x++) {
-                        this.drop(x, y, tick + r * step);
+                        this.drop(x, y, tick + r * step, tick);
                     }
                 }
                 break;
@@ -271,7 +278,7 @@ export class ArenaFloor {
                     const x = i % sizeX;
                     const y = Math.floor(i / sizeX);
                     if (this.isWholeAround(x, y)) {
-                        this.drop(x, y, tick);
+                        this.drop(x, y, tick, tick);
                     }
                 }
                 break;
@@ -294,8 +301,9 @@ export class ArenaFloor {
         }
     }
 
-    // A slab rises at a tick, unless the tile's gone or going, or already has one coming
-    private rise(x: number, y: number, at: number, dir: number): void {
+    // A slab rises at a tick, unless the tile's gone or going, or already has one coming. known is
+    // the tick its pattern started.
+    private rise(x: number, y: number, at: number, dir: number, known: number): void {
         const i = x + y * this.sizeX;
         if (this.dropWarnAt[i] !== NONE || this.riseAt[i] !== NONE) {
             return;
@@ -303,10 +311,12 @@ export class ArenaFloor {
         this.riseAt[i] = at;
         this.warnAt[i] = at - this.slamWarn;
         this.riseDir[i] = dir;
+        this.cueAt[i] = known;
     }
 
-    // A tile falls, warned from a tick: no slab rises on it from then
-    private drop(x: number, y: number, from: number): void {
+    // A tile falls, warned from a tick (known from its pattern's start): no slab rises on it from
+    // then
+    private drop(x: number, y: number, from: number, known: number): void {
         const i = x + y * this.sizeX;
         if (this.dropWarnAt[i] !== NONE) {
             return;
@@ -315,6 +325,13 @@ export class ArenaFloor {
         this.dropAt[i] = from + this.dropWarn;
         this.riseAt[i] = NONE;
         this.warnAt[i] = NONE;
+        this.cueAt[i] = known;
+    }
+
+    // Whether a tile's known to rise or fall, from its pattern's start until it rises or is back:
+    // the tiles to keep off. Ones not marked are safe from everything started so far.
+    isMarked(i: number, tick: number): boolean {
+        return this.cueAt[i] !== NONE && this.cueAt[i] <= tick && !this.isGone(i, tick);
     }
 
     // A tile and all eight round it whole and not going: a hole there cuts nothing off

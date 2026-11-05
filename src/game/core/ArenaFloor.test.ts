@@ -156,6 +156,114 @@ describe("its patterns", () => {
     });
 });
 
+// The tiles marked from a pattern's start (ArenaFloor.cueAt), as the client shows them
+function marked(floor: ArenaFloor, tick: number): Set<string> {
+    const tiles = new Set<string>();
+    for (let i = 0; i < floor.cueAt.length; i++) {
+        if (floor.isMarked(i, tick)) {
+            tiles.add(`${i % floor.sizeX},${Math.floor(i / floor.sizeX)}`);
+        }
+    }
+    return tiles;
+}
+
+describe("its whole shape, known as it starts", () => {
+    test("every tile a wave will raise is marked as it starts, the far rows too, and no other", () => {
+        const { floor, run } = makeFloor(
+            floorWith({ kind: "side", side: "east", rowSeconds: 0.1 }),
+        );
+        run(T);
+        const tiles = marked(floor, T);
+        const rises = riseTicks(floor);
+        expect(tiles).toEqual(new Set(rises.keys()));
+        // The back row, rising long after its own warning starts, is marked from the start
+        const back = MIDDLE_X; // row 0, the back
+        expect(floor.cueAt[back]).toBe(T);
+        expect(floor.warnAt[back]).toBeGreaterThan(T + 2 * T);
+        expect(tiles.has(`${MIDDLE_X - 1},0`)).toBe(false);
+        // Each is unmarked as it comes up
+        run(2 * T, T + 1);
+        expect(marked(floor, 2 * T).has(`${MIDDLE_X},${SIZE_Y - 1}`)).toBe(false);
+        expect(marked(floor, 2 * T).has(`${MIDDLE_X},0`)).toBe(true);
+    });
+
+    test("a sweep's wandering gap and a ripple's spokes are unmarked from the start", () => {
+        const sweep = makeFloor(floorWith({ kind: "sweep", rowSeconds: 0.1, gap: 2 }));
+        sweep.run(T);
+        const sweepTiles = marked(sweep.floor, T);
+        let gaps = 0;
+        for (let y = 0; y < SIZE_Y; y++) {
+            for (let x = 0; x < SIZE_X; x++) {
+                const rises = riseTicks(sweep.floor).has(`${x},${y}`);
+                expect(sweepTiles.has(`${x},${y}`)).toBe(rises);
+                gaps += rises ? 0 : 1;
+            }
+        }
+        expect(gaps).toBe(2 * SIZE_Y);
+
+        const ripple = makeFloor(
+            floorWith({
+                kind: "ripple",
+                at: "player",
+                spokes: "cross",
+                ringSeconds: 0.2,
+                radius: 5,
+            }),
+        );
+        ripple.setPlayer(RECT.x0 + 8.5, RECT.y0 + 9.5);
+        ripple.run(T);
+        // Moving off doesn't move it: it's where they stood as it started
+        ripple.setPlayer(RECT.x0 + 15.5, RECT.y0 + 15.5);
+        ripple.run(T + 10, T + 1);
+        const rippleTiles = marked(ripple.floor, T + 10);
+        expect(rippleTiles.has("8,9")).toBe(true);
+        expect(rippleTiles.has("11,12")).toBe(true);
+        for (const spoke of ["8,10", "8,14", "9,9", "3,9", "14,12", "15,15"]) {
+            expect(rippleTiles.has(spoke)).toBe(false);
+        }
+    });
+
+    test("overlapping patterns mark every tile any of them will hit", () => {
+        const { floor, run } = makeFloor(
+            floorWith({ kind: "side", side: "east", rowSeconds: 0.1 }, [
+                { at: 1.5, pattern: { kind: "side", side: "west", rowSeconds: 0.1 } },
+            ]),
+        );
+        run(1.5 * T);
+        const tiles = marked(floor, 1.5 * T);
+        // Both are on their way: the east from the first, the west from its own start, and
+        // between them every tile
+        expect(tiles.size).toBe(SIZE_X * SIZE_Y);
+        expect(floor.cueAt[SIZE_X - 1]).toBe(T);
+        expect(floor.cueAt[0]).toBe(1.5 * T);
+        // Once the east's front row's up, its tiles are unmarked, and the west's still are
+        run(2 * T + 1, 1.5 * T + 1);
+        const later = marked(floor, 2 * T + 1);
+        expect(later.has(`${SIZE_X - 1},${SIZE_Y - 1}`)).toBe(false);
+        expect(later.has(`0,${SIZE_Y - 1}`)).toBe(true);
+    });
+
+    test("rows to fall are marked from the start, the later rows too, until they're back", () => {
+        const { floor, run } = makeFloor(
+            floorWith({ kind: "dropRows", rows: 3, rowSeconds: 0.4 }, [
+                { at: 6, pattern: { kind: "restore", rowSeconds: 0.05 } },
+            ]),
+        );
+        run(T);
+        const tiles = marked(floor, T);
+        // The third row's warning starts 0.8 s in, and it's marked now
+        expect(floor.dropWarnAt[2 * SIZE_X]).toBe(T + 0.8 * T);
+        expect(tiles.has("4,2")).toBe(true);
+        expect(tiles.has("4,3")).toBe(false);
+        expect(tiles.size).toBe(3 * SIZE_X);
+        // Gone isn't marked: there's nothing there to stand on
+        run(5 * T, T + 1);
+        expect(marked(floor, 5 * T).size).toBe(0);
+        run(10 * T, 5 * T + 1);
+        expect(floor.cueAt.every((at) => at === -1)).toBe(true);
+    });
+});
+
 describe("falling away", () => {
     test("rows go from the back, are blocked once gone, and some are always left", () => {
         const { floor, grid, run } = makeFloor(

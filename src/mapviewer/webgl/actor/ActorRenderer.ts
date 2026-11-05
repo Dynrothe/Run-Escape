@@ -12,7 +12,7 @@ import { Frustum } from "../../Frustum";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
-const TEXELS_PER_INSTANCE = 2;
+const TEXELS_PER_INSTANCE = 3;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 
 // Tiles added to an actor's reach before it's culled, for the depth nudge in its
@@ -101,6 +101,12 @@ export type ActorDrawOptions = {
     // Drawn with an outline: the model this much bigger in a flat colour
     // (ActorRenderer.outlineColor) behind it
     outline?: number;
+    // Light along the edges of a tile-sized model (one tile across, centred), as if from under
+    // it: 0 to 1, how strongly; how far in it reaches, of the way to the middle; and its colour
+    // (the Wardens' floor, client/FloorView.ts)
+    edge?: number;
+    edgeWidth?: number;
+    edgeColor?: number;
 };
 
 class InstanceList {
@@ -131,6 +137,9 @@ class InstanceList {
         flash: number,
         tint: number,
         alpha: number,
+        edge: number,
+        edgeWidth: number,
+        edgeColor: number,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -153,6 +162,10 @@ class InstanceList {
         data[o + 5] = flash;
         data[o + 6] = tint;
         data[o + 7] = alpha;
+        data[o + 8] = edge;
+        data[o + 9] = edgeWidth;
+        data[o + 10] = edgeColor;
+        data[o + 11] = 0;
     }
 
     grow(capacity: number): void {
@@ -443,14 +456,59 @@ export class ActorRenderer {
         const flash = options?.flash ?? 0;
         const tint = options?.tint ?? NO_TINT;
         const alpha = options?.alpha ?? 1;
+        const edge = options?.edge ?? 0;
+        const edgeWidth = options?.edgeWidth ?? 0;
+        const edgeColor = options?.edgeColor ?? NO_TINT;
         const segment = model.page.segments[anim.segments[frame]];
-        segment.instances.push(anim.ranges, frame, x, y, z, yaw, scale, flash, tint, alpha);
+        segment.instances.push(
+            anim.ranges,
+            frame,
+            x,
+            y,
+            z,
+            yaw,
+            scale,
+            flash,
+            tint,
+            alpha,
+            edge,
+            edgeWidth,
+            edgeColor,
+        );
         if (options?.silhouette) {
-            segment.silhouettes.push(anim.ranges, frame, x, y, z, yaw, scale, 0, NO_TINT, 1);
+            segment.silhouettes.push(
+                anim.ranges,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                scale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+            );
         }
         if (options?.outline) {
             const outlineScale = scale * options.outline;
-            segment.outlines.push(anim.ranges, frame, x, y, z, yaw, outlineScale, 0, NO_TINT, 1);
+            segment.outlines.push(
+                anim.ranges,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                outlineScale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+            );
         }
     }
 
