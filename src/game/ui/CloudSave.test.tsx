@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CloudView } from "../client/CloudSave";
 import { GameClient } from "../client/GameClient";
 import { createSave } from "../core/save";
-import { CloudChoicePanel, CloudSaveSettings } from "./CloudSave";
+import { CloudChoicePanel, CloudSaveButton, CloudSaveSettings } from "./CloudSave";
 
 afterEach(cleanup);
 
@@ -105,4 +105,28 @@ test("asks which save to keep, and won't load a newer game's", () => {
     expect(screen.getByText(/newer version of Run Escape/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Later" }));
     expect(cloud.later).toHaveBeenCalledTimes(1);
+});
+
+test("has a button on the title that says how it's doing and opens the way in", () => {
+    const { client, cloud } = mockClient();
+    const open = vi.fn();
+    const { container, rerender } = render(
+        <CloudSaveButton cloud={undefined} client={client} onOpenSettings={open} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    const at = (view: CloudView) =>
+        rerender(<CloudSaveButton cloud={view} client={client} onOpenSettings={open} />);
+    at({ working: false });
+    fireEvent.click(screen.getByRole("button", { name: "Cloud save: off" }));
+    expect(open).toHaveBeenCalledTimes(1);
+    at({ code: CODE, working: false, problem: "offline" });
+    expect(screen.getByRole("button", { name: /^Cloud save: Can't reach/ })).toBeInTheDocument();
+    at({
+        code: CODE,
+        working: false,
+        choice: { newer: false, closed: true, cloud: { revision: 2 } },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cloud save: pick which save to keep" }));
+    expect(cloud.reopenChoice).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledTimes(1);
 });

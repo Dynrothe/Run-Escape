@@ -2,7 +2,9 @@ import { ReactNode, useState } from "react";
 
 import { CloudProblem, CloudSummary, CloudView, summarize } from "../client/CloudSave";
 import { GameClient } from "../client/GameClient";
+import { CLOUD_SAVE_SPRITES } from "../content/titleIcons";
 import { SaveData } from "../core/save";
+import { ItemIcon } from "./ItemIcon";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
 
@@ -22,21 +24,26 @@ function describe(summary: CloudSummary | undefined): string {
     );
 }
 
+// Cloud save's first row in Settings, which its button on the title screen opens at
+export const CLOUD_SETTING_ID = "ui-setting-cloud";
+
 // The Settings row's layout, as GameUi's Setting draws it. wide: its control is a box to type
 // in, which wraps under the label and shrinks to fit a narrow screen.
 function CloudRow({
     name,
     text,
     wide = false,
+    id,
     children,
 }: {
     name: string;
+    id?: string;
     text?: ReactNode;
     wide?: boolean;
     children?: ReactNode;
 }): JSX.Element {
     return (
-        <div className={"ui-setting" + (wide ? " ui-setting-wide" : "")}>
+        <div className={"ui-setting" + (wide ? " ui-setting-wide" : "")} id={id}>
             <div className="ui-setting-label">
                 <div className="ui-setting-name">{name}</div>
                 {text && <div className="ui-setting-text">{text}</div>}
@@ -72,6 +79,7 @@ export function CloudSaveSettings({
             <>
                 <CloudRow
                     name="Cloud save"
+                    id={CLOUD_SETTING_ID}
                     text={
                         problem ??
                         "Keep a copy online, and take it to another device with a code. No account, name or email."
@@ -131,7 +139,7 @@ export function CloudSaveSettings({
     const code = cloud.code;
     return (
         <>
-            <CloudRow name="Cloud save" text={status}>
+            <CloudRow name="Cloud save" text={status} id={CLOUD_SETTING_ID}>
                 <button
                     className="ui-button ui-button-small"
                     disabled={busy}
@@ -283,5 +291,60 @@ export function CloudChoicePanel({
                 </div>
             </div>
         </div>
+    );
+}
+
+// Beside Settings on the title screen, where cloud save's offered: whether it's on, and whether it
+// needs looking at. It opens the choice when one's waiting, and Settings at cloud save otherwise.
+export function CloudSaveButton({
+    cloud,
+    client,
+    onOpenSettings,
+}: {
+    cloud: CloudView | undefined;
+    client: GameClient;
+    onOpenSettings: () => void;
+}): JSX.Element | null {
+    if (!cloud || !client.cloud) {
+        return null;
+    }
+    const badge = cloud.choice
+        ? CLOUD_SAVE_SPRITES.choose
+        : cloud.problem
+          ? CLOUD_SAVE_SPRITES.problem
+          : undefined;
+    const status = !cloud.code
+        ? "off"
+        : cloud.choice
+          ? "pick which save to keep"
+          : cloud.problem
+            ? PROBLEMS[cloud.problem]
+            : cloud.syncedAt
+              ? `on, last synced ${new Date(cloud.syncedAt).toLocaleString()}`
+              : "on";
+    return (
+        <button
+            className={
+                "ui-title-link ui-title-settings ui-title-cloud" +
+                (cloud.code ? "" : " ui-title-cloud-off")
+            }
+            title={`Cloud save: ${status}`}
+            aria-label={`Cloud save: ${status}`}
+            onClick={(e) => {
+                e.currentTarget.blur();
+                if (cloud.choice) {
+                    client.cloud?.reopenChoice();
+                } else {
+                    onOpenSettings();
+                }
+            }}
+        >
+            <ItemIcon objId={-1} spriteId={CLOUD_SAVE_SPRITES.saved} />
+            {badge !== undefined && (
+                <span className="ui-title-cloud-badge">
+                    <ItemIcon objId={-1} spriteId={badge} size={24} />
+                </span>
+            )}
+        </button>
     );
 }

@@ -1665,7 +1665,10 @@ Worker (`server/cloud-saves/`), in a build with `VITE_CLOUD_SAVE_URL` whose Work
 `/v1/health`. An app that doesn't let requests out to it (an older desktop launcher or APK)
 answers something else, so Settings doesn't offer it there. There's no account: Turn on makes a
 sync code, and typing it on another device links that one. The local save stays the main copy,
-and none of this changes `SaveData`.
+and none of this changes `SaveData`. Its button sits beside Settings on the title screen
+(`CloudSaveButton`): the client's storage chest with an up arrow (`CLOUD_SAVE_SPRITES` in
+`content/titleIcons.ts`), faded while it's off, with a "!" in its corner while a choice is
+waiting and a "no" sign while it can't sync. It opens the choice, or Settings at cloud save.
 
 - **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
   from or went up as, and `dirty`: whether it's changed since. It's apart from the save, so it

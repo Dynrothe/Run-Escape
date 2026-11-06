@@ -70,7 +70,12 @@ import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
-import { CloudChoicePanel, CloudSaveSettings } from "./CloudSave";
+import {
+    CLOUD_SETTING_ID,
+    CloudChoicePanel,
+    CloudSaveButton,
+    CloudSaveSettings,
+} from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -582,12 +587,19 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
 }
 
 // Behind the title screen's Settings button
+// at: the id of a setting to open at, rather than the top
 function SettingsPanel({
     ui,
     client,
+    at,
     onClose,
-}: ScreenProps & { onClose: () => void }): JSX.Element {
+}: ScreenProps & { at?: string; onClose: () => void }): JSX.Element {
     const padKind = usePadKind();
+    useEffect(() => {
+        if (at) {
+            document.getElementById(at)?.scrollIntoView({ block: "start" });
+        }
+    }, [at]);
     return (
         <div className="ui-panel rs-border rs-background ui-settings">
             <h2>Settings</h2>
@@ -682,7 +694,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     // The cloud has a different save, and asks which to keep
     const cloudChoice = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     const [changelogOpen, setChangelogOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    // "cloud": opened from cloud save's button, so at its rows
+    const [settingsOpen, setSettingsOpen] = useState<boolean | "cloud">(false);
     // The notice, until it's closed (once for each new one)
     const [notice, setNotice] = useState<Notice>();
     useEffect(() => {
@@ -753,7 +766,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     if (settingsOpen) {
         return (
             <div className="ui-fill ui-center">
-                <SettingsPanel ui={ui} client={client} onClose={() => setSettingsOpen(false)} />
+                <SettingsPanel
+                    ui={ui}
+                    client={client}
+                    at={settingsOpen === "cloud" ? CLOUD_SETTING_ID : undefined}
+                    onClose={() => setSettingsOpen(false)}
+                />
             </div>
         );
     }
@@ -836,6 +854,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <button className="ui-version" onClick={() => setChangelogOpen(true)}>
                     v{GAME_VERSION} · What's new
                 </button>
+                <CloudSaveButton
+                    cloud={ui.cloud}
+                    client={client}
+                    onOpenSettings={() => setSettingsOpen("cloud")}
+                />
                 <button
                     className="ui-title-link ui-title-settings"
                     title="Settings"

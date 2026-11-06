@@ -560,6 +560,23 @@
     background: var(--ui-card-hover);
 }
 
+/* Cloud save's button: faded while it's off, with its "!" or "no" sign in the corner */
+.ui-title-cloud {
+    position: relative;
+}
+
+.ui-title-cloud-off .ui-icon {
+    opacity: 0.55;
+}
+
+.ui-title-cloud-badge {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: flex;
+    pointer-events: none;
+}
+
 .ui-discord {
     background: #5865f2;
     box-shadow: inset 0 0 0 1px #8b93ff;
