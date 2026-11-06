@@ -61,7 +61,10 @@ const sqlite = process.getBuiltinModule?.("node:sqlite") as
 describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration", () => {
     let db: import("node:sqlite").DatabaseSync;
     let env: any;
+    // When the requests are made: now, unless a test moves it on
+    let clock = now;
     beforeEach(() => {
+        clock = now;
         db = new sqlite!.DatabaseSync(":memory:");
         const migrations = new URL("./migrations/", import.meta.url);
         for (const name of readdirSync(migrations).sort()) {
@@ -120,7 +123,7 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
                 body: body === undefined ? undefined : JSON.stringify(body),
             }),
             env,
-            now,
+            clock,
         );
     const newAccount = async () => (await (await request("POST", "account")).json()).code;
     const put = (code: string, baseRevision: number, save = saveText(), force?: boolean) =>
@@ -167,6 +170,31 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
         const behind = await put(code, 1);
         expect(behind.status).toBe(409);
         expect(count("saves")).toBe(3);
+    });
+
+    it("keeps each recent day's last version, so a flood of uploads can't wipe the history", async () => {
+        const code = await newAccount();
+        let revision = 0;
+        const upload = async (day: number, times: number) => {
+            clock = now + day * DAY;
+            for (let i = 0; i < times; i++) {
+                expect((await put(code, revision)).status).toBe(200);
+                revision++;
+            }
+        };
+        const kept = () =>
+            db
+                .prepare("SELECT revision FROM saves ORDER BY revision")
+                .all()
+                .map((row) => row.revision);
+        await upload(0, 3);
+        await upload(1, 3);
+        // A flood: the newest 3 are all its own, but the days before keep their last
+        await upload(2, 10);
+        expect(kept()).toEqual([3, 6, 14, 15, 16]);
+        // A week after the first day, its version goes
+        await upload(7, 1);
+        expect(kept()).toEqual([6, 15, 16, 17]);
     });
 
     it("never writes an older game's save over a newer one's unless told to", async () => {

@@ -20,6 +20,9 @@ const setting = (value, fallback, min, max) => {
 };
 // The newest save and its backups
 const DEFAULT_KEEP_VERSIONS = 6;
+// And each of the last few UTC days' last version, however many uploads came after it: a flood
+// of uploads (from a leaked code, say) can push out the newest few, but not yesterday's
+const DEFAULT_KEEP_DAYS = 7;
 // Caps on what's stored a day, whoever sends it, so a flood can't run through D1's daily write
 // allowance, which the run collector shares if it's on the same account (README, Budget)
 const DEFAULT_MAX_SAVES_PER_DAY = 5000;
@@ -235,6 +238,9 @@ async function putSave(request, env, accountId, now, respond) {
         return respond({ reason: "newer", ...meta(latest) }, 409);
     }
     const keep = setting(env.KEEP_VERSIONS, DEFAULT_KEEP_VERSIONS, 1, 50);
+    // The first UTC day (in days since 1970) whose last version is kept
+    const firstDay =
+        Math.floor(now / DAY_MS) - setting(env.KEEP_DAYS, DEFAULT_KEEP_DAYS, 0, 90) + 1;
     const cap = setting(env.MAX_SAVES_PER_DAY, DEFAULT_MAX_SAVES_PER_DAY, 1, 100_000_000);
     // One transaction. The insert only goes in on top of the revision it was based on, so a
     // device far behind can't write a revision that was pruned and look as if it synced.
@@ -260,8 +266,11 @@ async function putSave(request, env, accountId, now, respond) {
         ),
         env.DB.prepare(
             `DELETE FROM saves WHERE account_id = ?
-            AND revision <= (SELECT MAX(revision) FROM saves WHERE account_id = ?) - ?`,
-        ).bind(accountId, accountId, keep),
+            AND revision <= (SELECT MAX(revision) FROM saves WHERE account_id = ?) - ?
+            AND revision NOT IN (SELECT MAX(revision) FROM saves
+                WHERE account_id = ? AND created_at / ${DAY_MS} >= ?
+                GROUP BY created_at / ${DAY_MS})`,
+        ).bind(accountId, accountId, keep, accountId, firstDay),
     ]);
     if (!insert.meta?.changes) {
         const after = await latestSave(env, accountId);

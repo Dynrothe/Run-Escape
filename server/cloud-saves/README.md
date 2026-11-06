@@ -83,8 +83,10 @@ The code goes in `Authorization: Bearer <code>`, in any case, with or without it
   (`accounts.deleted_at`). Its saves stay untouched for `DELETED_RETENTION_DAYS` (7), and
   meanwhile every request with the code but `POST /v1/account/restore` gets a 410 with
   `restorableUntil`, which restore undoes. The hourly job then removes the code and its saves.
-- **Backups.** `KEEP_VERSIONS` (6) are kept per code: the save and five before it. There's no
-  restore in the game yet. To give a player an older one back, find their account by the code's
+- **Backups.** `KEEP_VERSIONS` (6) are kept per code: the save and five before it. So is the last
+  version of each of the last `KEEP_DAYS` (7) UTC days, however many uploads came after it, so a
+  flood of uploads can push out the newest few but not yesterday's. Both go in the same
+  transaction as each upload. There's no restore in the game yet. To give a player an older one back, find their account by the code's
   hash and read the row, from `server/cloudflare`:
 
     ```sh
@@ -114,16 +116,18 @@ the maps with a victory, and `gameVersion`.
   try again later and keeps its save locally.
 - **Deleting:** Settings in the game deletes the code. Its saves are kept for a week, for the code
   to restore, then removed with it.
-- **What a leaked code can still do:** read the save, and write over it. The 6 versions and the
-  upload rate limit mean an old version outlasts a minute of uploads, not a determined flood.
+- **What a leaked code can still do:** read the save, and write over it. Each day's last version
+  is kept for a week, so the most a flood of uploads can lose is that day's progress, and the
+  owner can give a player an earlier version back (Backups, above).
 
 ## Budget
 
 D1's daily writes and storage are per account, so on the Free plan this shares them with the run
 collector. A save costs about 3 rows written (its row, the day's count, and the oldest version
 deleted), a new code about 3. The default caps come to under 20,000 rows a day, which leaves the
-collector's share of the 100,000. A full save gzips to about 5 KB, so 6 versions are about 30 KB
-per code: around 16,000 codes in D1 Free's 500 MB a database. On Workers Paid, these are far
-past what saves need; lower `KEEP_VERSIONS` before raising the caps on Free.
+collector's share of the 100,000. A full save gzips to about 5 KB. A code keeps 6 versions, and
+up to 7 more for the days before, so 30 to 65 KB a code: around 8,000 to 16,000 codes in D1
+Free's 500 MB a database. On Workers Paid, these are far past what saves need; on Free, lower
+`KEEP_VERSIONS` or `KEEP_DAYS` before raising the caps.
 
 An hourly job deletes the day counts from before yesterday.

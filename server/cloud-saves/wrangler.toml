@@ -8,6 +8,8 @@ compatibility_date = "2025-09-01"
 ALLOWED_ORIGINS = "https://run-escape.invalid,https://appassets.androidplatform.net"
 # The newest save and its backups, per sync code
 KEEP_VERSIONS = "6"
+# And the last version of each of the last few UTC days (0 to 90), however many came after it
+KEEP_DAYS = "7"
 # Saves and new sync codes stored a day at most, to stay inside D1's daily writes (README, Budget)
 MAX_SAVES_PER_DAY = "5000"
 MAX_ACCOUNTS_PER_DAY = "500"
