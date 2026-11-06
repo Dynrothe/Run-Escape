@@ -226,7 +226,14 @@ class Quarry {
             return;
         }
         tiles.forEach((t) => this.taken.add(t));
-        this.ground.grid.locs.push({ id, type: LOC_NORMAL, rotation, level: 0, x: A + x, y: A + y });
+        this.ground.grid.locs.push({
+            id,
+            type: LOC_NORMAL,
+            rotation,
+            level: 0,
+            x: A + x,
+            y: A + y,
+        });
     }
 }
 
