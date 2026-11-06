@@ -27,10 +27,11 @@ export type PlayerBakeRequest = {
     key: string;
     appearance: PlayerAppearance;
     seqIds: number[];
-    // Attacks baked again for while the player runs: each one's upper body
-    // over runSeqId's legs, split where maskSeqId's interleave order splits a
-    // body. Baked as anims with `moving` set, after the rest.
-    moving?: { seqIds: number[]; runSeqId: number; maskSeqId: number };
+    // Poses for while the player runs: each a frame of an attack on the upper
+    // body over every frame of runSeqId on the legs, split where maskSeqId's
+    // interleave order splits a body. Baked as anims with `runPose` set,
+    // under the attack's seqId and timed as the run, after the rest.
+    runPoses?: { poses: { seqId: number; frame: number }[]; runSeqId: number; maskSeqId: number };
 };
 
 // One animation: the spot anim's own sequence
@@ -81,8 +82,9 @@ export type BakedAnim = {
     // Length of each frame in client ticks (20ms)
     frameLengths: Uint16Array;
     looping: boolean;
-    // seqId played over the run (PlayerBakeRequest.moving), not on its own
-    moving?: boolean;
+    // A frame of seqId over the run (PlayerBakeRequest.runPoses), not seqId
+    // itself
+    runPose?: boolean;
 };
 
 export type BakedSet = {

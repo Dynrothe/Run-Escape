@@ -1201,6 +1201,11 @@ export type WeaponDef = {
     iconObjId: number;
     // Player animation when used (played while standing still)
     playerSeq: number;
+    // A frame of playerSeq (its aim) that the upper body takes for a moment
+    // after each attack on the move, over the run's legs, while it's the
+    // weapon in hand: so a shot can be seen while kiting. One frame, baked
+    // over each of the run's, rather than the whole swing over all of them.
+    runPose?: number;
     // Cache sound effect when used, and when it hits (-1 for none)
     sound: number;
     hitSound: number;

@@ -1009,17 +1009,21 @@ more isn't baked again: the ones not picked go at the next re-bake. The menus' l
 starting weapon's swings (`setCharacterLook`), so a solo run starts with it baked.
 `getPlayerAttackSeqs` is every weapon's, for the slim cache.
 
-Each of those swings is baked a second time for running (`PlayerBakeRequest.moving`): the swing on
-the upper body over the stance's run on the legs, a frame wherever either moves on, so the player
-attacks on the move too. The cache's attacks have no interleave order of their own (it's what the
-client uses to play an action over a walk), so they borrow eating's (`PLAYER_INTERLEAVE_SEQ`),
-which lists the groups the walk keeps: the legs and the body's root. The view finds them in
-`ActorModel.movingAnims`, and while one has played since the player set off, the run's legs go
-by the swing's start, so they don't jump when it ends; they jump once at each swing's start
-instead, for a run phase the bake can't know. A skeletal swing or stance can't be put together
-that way and isn't baked, so it shows the run, as every swing did before. The sim records every
-swing (`player.attackSeq`, `attackStart`) whether the player moves or not; it's display only, and
-in no hash.
+A weapon with a `runPose` (the Armadyl crossbow) shows each shot on the move too: the upper body
+takes that one frame of its swing, its aim, for a moment (`RUN_POSE_TICKS`) after each shot, while
+the legs go on with the run. It's baked over each of the stance's run frames
+(`PlayerBakeRequest.runPoses`, from `getHeldRunPoses`) and played on the run's timing
+(`getRunPoseFrame`), so the legs never jump however often it fires (faster with Tome of fire, and a
+swing starts again at every attack). One frame over the run is the run's few frames more per
+player. The whole swing over the run cost its frames times the run's, about three times a player's
+look for the armadyl ranger, and baking it as one timeline instead, the run from the swing's
+start, made the legs jump back to the start of a stride at every shot. Only the weapon in hand
+gets it, and the sim records no other weapon's swing (`player.attackSeq`, `attackStart`) while the
+player moves, so another weapon can't cut it short; standing still, every weapon's shows, as
+before. It's display only, and in no hash. The cache's attacks have no interleave order of their
+own (it's what the client uses to play an action over a walk), so they borrow eating's
+(`PLAYER_INTERLEAVE_SEQ`), which lists the groups the walk keeps: the legs and the body's root. A
+skeletal swing or stance can't be put together that way and isn't baked, so it shows the run.
 
 A baked animation is a posed copy of the model per frame, so what an enemy costs is its triangles
 times its frames. A skeletal animation (the Colosseum's bosses, the gryphon, the naguas) has a pose

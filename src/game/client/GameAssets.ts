@@ -282,6 +282,26 @@ export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
 }
 
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    const held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
+}
+
 // The attack animations a hero's bake needs: their weapons', and in co-op the
 // reviver's emote. A new weapon changes the hero's appearanceVersion, which
 // re-bakes them with its swing.
@@ -442,8 +462,8 @@ function getRequestBody(request: BakeRequest): string {
         case "npc":
             return `npc:${request.npcId}:${request.seqIds[0]}`;
         case "player":
-            // A look with attacks over the run (moving) is the player's own, never merged
-            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}${request.moving ? ":" + JSON.stringify(request.moving) : ""}`;
+            // A look with run poses is the player's own, never merged
+            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}${request.runPoses ? ":" + JSON.stringify(request.runPoses) : ""}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
@@ -1050,9 +1070,10 @@ export class GameAssets {
                         key: "player",
                         appearance,
                         seqIds,
-                        // Each attack again over the run, for while the player moves
-                        moving: {
-                            seqIds: attackSeqs,
+                        // The held weapon's aim over the run, for a moment
+                        // after each shot on the move
+                        runPoses: {
+                            poses: getHeldRunPoses(appearance, attackSeqs),
                             runSeqId: stance.run,
                             maskSeqId: PLAYER_INTERLEAVE_SEQ,
                         },

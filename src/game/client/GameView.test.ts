@@ -7,7 +7,7 @@ import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
 import type { GameAssets } from "./GameAssets";
-import { GameView } from "./GameView";
+import { GameView, RUN_POSE_TICKS, getRunPoseFrame } from "./GameView";
 import type { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
@@ -295,4 +295,38 @@ test("slashes and auras follow the displayed body without moving confirmed effec
     expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(pose.y);
     expect(sim.player.x).toBe(confirmed.x);
     expect(sim.player.y).toBe(confirmed.y);
+});
+
+describe("a weapon's run pose", () => {
+    const anim = (lengths: number[]) =>
+        new ActorAnim(
+            1,
+            new Int32Array(lengths.length * 4),
+            new Uint16Array(lengths.length),
+            Uint16Array.from(lengths),
+            true,
+            true,
+        );
+    const runLengths = [5, 4, 4, 4, 5, 4, 4, 4];
+    const run = anim(runLengths);
+    const runPose = anim(runLengths);
+
+    test("keeps the run's legs going as they were, whenever the shot was", () => {
+        for (const moveTicks of [0, 7, 13, 33, 50, 101]) {
+            for (const attackTicks of [0, 9, RUN_POSE_TICKS - 1]) {
+                expect(getRunPoseFrame(runPose, run, attackTicks, moveTicks)).toBe(
+                    run.getFrame(moveTicks),
+                );
+            }
+        }
+    });
+
+    test("lasts a moment after the shot", () => {
+        expect(getRunPoseFrame(runPose, run, RUN_POSE_TICKS, 3)).toBe(-1);
+        expect(getRunPoseFrame(runPose, run, -1, 3)).toBe(-1);
+    });
+
+    test("isn't played over another run", () => {
+        expect(getRunPoseFrame(runPose, anim([4, 4, 4]), 0, 0)).toBe(-1);
+    });
 });

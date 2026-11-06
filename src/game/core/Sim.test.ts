@@ -3352,6 +3352,40 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(20997);
     });
 
+    // The view plays the held weapon's attacks over the run, and shows none
+    // on the move without them
+    test("on the move, the weapon in hand's attacks are shown, and no other's", () => {
+        const sim = armed("armadyl_crossbow", "ranger");
+        sim.addWeapon("shortbow");
+        const [crossbow, bow] = sim.weapons;
+        expect(sim.getHeldWeapon()).toBe(crossbow);
+        dummy(sim, 5, 0);
+        const fire = (weapon: typeof crossbow, moveY: number) => {
+            for (const other of sim.weapons) {
+                other.cooldown = other === weapon ? 0 : 1e9;
+            }
+            sim.step(0, moveY);
+            const fired = sim
+                .takeEvents()
+                .some((e) => e.type === "weapon" && e.weaponId === weapon.def.id);
+            expect(fired).toBe(true);
+            expect(sim.player.moving).toBe(moveY !== 0);
+        };
+        fire(bow, 1);
+        expect(sim.player.attackSeq).toBe(-1);
+        fire(crossbow, 1);
+        expect(sim.player.attackSeq).toBe(crossbow.def.playerSeq);
+        const start = sim.player.attackStart;
+        expect(start).toBeGreaterThanOrEqual(sim.tick - 1);
+        // Another weapon's doesn't cut it off
+        fire(bow, 1);
+        expect(sim.player.attackStart).toBe(start);
+        // Standing still, every weapon's is shown, as before
+        sim.step(0, 0);
+        fire(bow, 0);
+        expect(sim.player.attackSeq).toBe(bow.def.playerSeq);
+    });
+
     test.each(["toxic_blowpipe", "armadyl_crossbow"])(
         "%s fires a different projectile at each level, bronze to dragon",
         (weaponId) => {

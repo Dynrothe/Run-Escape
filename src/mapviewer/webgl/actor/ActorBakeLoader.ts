@@ -134,71 +134,44 @@ function bakeAnim(
     };
 }
 
-type InterleavedSource = (frame: number, movementFrame: number) => Model | undefined;
-
-// An attack over the run: a frame wherever either animation moves on to its
-// next, the run looping under it from its start. Undefined if the two can't
-// be put together (a skeletal one, or another skeleton).
-function bakeMovingAnim(
+// One frame of an attack over the run: a frame for each of the run's, timed
+// as the run, so the legs go on as they were while the upper body holds the
+// pose. getModel poses run frame r. Undefined if the two can't be put
+// together (a skeletal one, or another skeleton).
+function bakeRunPose(
     state: WorkerState,
     segments: Segments,
-    getModel: InterleavedSource,
+    getModel: (runFrame: number) => Model | undefined,
     seqId: number,
     runSeqId: number,
 ): { anim: BakedAnim; reach: number } | undefined {
-    const seqType = state.seqTypeLoader.load(seqId);
     const runType = state.seqTypeLoader.load(runSeqId);
-    const attackLengths = (seqType.frameIds ?? []).map((_, i) => seqType.frameLengths?.[i] || 1);
-    const runLengths = (runType.frameIds ?? []).map((_, i) => runType.frameLengths?.[i] || 1);
-    if (attackLengths.length === 0 || runLengths.length === 0) {
-        return undefined;
-    }
-    const pieces: { frame: number; runFrame: number; length: number }[] = [];
-    const total = attackLengths.reduce((sum, length) => sum + length, 0);
-    let tick = 0;
-    let frame = 0;
-    let frameEnd = attackLengths[0];
-    let runFrame = 0;
-    let runEnd = runLengths[0];
-    while (tick < total) {
-        const end = Math.min(frameEnd, runEnd);
-        pieces.push({ frame, runFrame, length: end - tick });
-        tick = end;
-        if (tick === frameEnd && frame + 1 < attackLengths.length) {
-            frame++;
-            frameEnd += attackLengths[frame];
-        }
-        if (tick === runEnd) {
-            runFrame = (runFrame + 1) % runLengths.length;
-            runEnd += runLengths[runFrame];
-        }
-    }
-    const first = getModel(0, 0);
+    const count = runType.frameIds?.length ?? 0;
+    const first = count > 0 ? getModel(0) : undefined;
     if (!first) {
         return undefined;
     }
-    const count = pieces.length;
     const ranges = new Int32Array(count * 4);
     const frameSegments = new Uint16Array(count);
     const frameLengths = new Uint16Array(count);
     let reach = 0;
-    pieces.forEach((piece, i) => {
-        const model = i === 0 ? first : getModel(piece.frame, piece.runFrame);
+    for (let i = 0; i < count; i++) {
+        const model = i === 0 ? first : getModel(i);
         if (model) {
             reach = Math.max(reach, getModelReach(model));
             ranges.set(segments.addFrame(model, count - i), i * 4);
             frameSegments[i] = segments.current;
         }
-        frameLengths[i] = piece.length;
-    });
+        frameLengths[i] = runType.frameLengths?.[i] || 1;
+    }
     return {
         anim: {
             seqId,
             ranges,
             segments: frameSegments,
             frameLengths,
-            looping: false,
-            moving: true,
+            looping: true,
+            runPose: true,
         },
         reach,
     };
@@ -307,25 +280,25 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
                     const set = bakeSet(state, segments, request.key, getModel, request.seqIds);
-                    const moving = request.moving;
-                    if (moving) {
+                    const runPoses = request.runPoses;
+                    if (runPoses) {
                         const movementGroups =
-                            state.seqTypeLoader.load(moving.maskSeqId).masks ?? [];
-                        for (const seqId of moving.seqIds) {
-                            const baked = bakeMovingAnim(
+                            state.seqTypeLoader.load(runPoses.maskSeqId).masks ?? [];
+                        for (const { seqId, frame } of runPoses.poses) {
+                            const baked = bakeRunPose(
                                 state,
                                 segments,
-                                (frame, runFrame) =>
+                                (runFrame) =>
                                     extra.playerModelLoader.getInterleavedModel(
                                         appearance,
                                         seqId,
                                         frame,
-                                        moving.runSeqId,
+                                        runPoses.runSeqId,
                                         runFrame,
                                         movementGroups,
                                     ),
                                 seqId,
-                                moving.runSeqId,
+                                runPoses.runSeqId,
                             );
                             if (baked) {
                                 set.anims.push(baked.anim);

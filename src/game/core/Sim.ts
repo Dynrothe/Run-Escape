@@ -2261,13 +2261,18 @@ export class Sim {
     // weapon that has one (the first of them on a tie), so a Twisted bow
     // found later is wielded over the starting knives.
     getHeldObjId(): number {
-        let held = -1;
+        const weapon = this.getHeldWeapon();
+        return weapon ? (this.getLevel(weapon).objId ?? -1) : -1;
+    }
+
+    // The weapon that's in the player's hand (getHeldObjId)
+    getHeldWeapon(): WeaponState | undefined {
+        let held: WeaponState | undefined;
         let heldRarity = -1;
         for (const weapon of this.weapons) {
-            const level = this.getLevel(weapon);
             const rarity = RARITY_ORDER.indexOf(weapon.def.rarity);
-            if (level.objId !== undefined && rarity > heldRarity) {
-                held = level.objId;
+            if (this.getLevel(weapon).objId !== undefined && rarity > heldRarity) {
+                held = weapon;
                 heldRarity = rarity;
             }
         }
@@ -8988,9 +8993,10 @@ export class Sim {
                     y: this.player.y,
                 });
             }
-            // Moving too: the view plays it over the run (only for show,
-            // so it's in no hash)
-            if (fired) {
+            // On the move, only the weapon in hand's: the view plays its
+            // attacks over the run, and another weapon's would cut them off.
+            // Only for show, so it's in no hash.
+            if (fired && (!this.player.moving || weapon === this.getHeldWeapon())) {
                 this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
                 this.player.attackStart = this.tick;
             }

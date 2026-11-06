@@ -22,9 +22,9 @@ the version in the corner).
 ### Fixed
 
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
-- Your adventurer attacks while running too: the upper body swings, casts or fires as the legs
-  keep running, so you can see each shot while you dodge (Phosani's Nightmare's Armadyl crossbow,
-  for one). Before, attacks only showed when you stood still.
+- The Armadyl crossbow shows each shot while you run: your adventurer raises and aims it for a
+  moment as the legs keep running, so you can see it firing while you dodge Phosani's Nightmare.
+  Before, its attack only showed when you stood still. Fixed by trippy22.
 
 ## 0.27.0 - 2026-11-05
 

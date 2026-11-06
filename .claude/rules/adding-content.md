@@ -66,6 +66,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   ways: none of these pointed the way they fly as they come from the cache.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
+- `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
+  shot while running, as the Armadyl crossbow's does. It's for a weapon players hold and kite with,
+  and costs a few frames per player: pick the frame in the browser, running.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
   doesn't say which stance an item has, so the file says where to look it up.
 
