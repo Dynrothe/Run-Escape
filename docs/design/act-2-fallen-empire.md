@@ -5,7 +5,8 @@ was "come up with a campaign expansion, new maps, new unlocks. You can think out
 Treasure II maps, each with a rule, then a finale) came back with: "Map and boss ideas are great, item rewards not so
 much. Soul reaper axe is cool and can stay but think of different rewards. Do the design". This is that design. It's
 design only: no game code. Each map, and each Awakened fight, gets its own pull request and, for the fights, its own
-design doc in the shape of `quarry-colossus.md` before it's built.
+design doc in the shape of `quarry-colossus.md` before it's built. Dynny answered its ten open questions the same
+day on the pull request (#155). His answers are folded in, and listed in section 13.
 
 Every id here was looked up in the game's cache (`osrs-241_2026-09-30`) with `scripts/cache/` and
 `scripts/scaperune/find-prefabs.ts`. Every number is a first pass from arithmetic and the existing maps, not a
@@ -13,9 +14,10 @@ playtest.
 
 ## In short
 
-- **The shape.** Beating the Inferno opens a new screen, the Fallen Empire: four maps in any order (the Stranglewood,
-  the Lassar Undercity, Ghorrock and the Scar), each a normal 15-minute run with **one rule that changes how you
-  play**. Beating one opens its Awakened fight. The act ends when all four Awakened are down.
+- **The shape.** The act needs the first campaign done: beating the Inferno opens a new screen, the Fallen Empire.
+  It has four maps in any order (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar), each a normal
+  15-minute run with **one rule that changes how you play**. Each map is harder the more Act II maps you've already
+  beaten. Beating one opens its Awakened fight. The act ends when all four Awakened are down.
 - **The rules.**
     - **Stranglewood**: roots creep in from the forest's edge, slowing and hurting you. Your hits cut them back, and
       killing a root heart clears a patch. Leave them be and the map shrinks to Vardorvis's clearing.
@@ -25,29 +27,31 @@ playtest.
     - **Ghorrock**: a frozen prison yard. A cold meter rises all the time, and braziers, fire elites and fire weapons
       keep it down. Ice pools slide and freezing gas vents puff.
     - **The Scar**: darkness, with a light round you. Weapons only aim at what's lit. Lanterns, light leeches and fires
-      are the light. It's the hardest to build: it needs lighting the renderer doesn't have (section 6.8).
-- **The finale: four separate Awakened fights, not a gauntlet** (section 7). Each is a boss fight like Zachariah's
-  and the Colossus's, opened by beating its map, and each drops its pet.
+      are the light. It needs real lighting, which the renderer doesn't have, and that's built first (section 6.8).
+- **The finale: four separate Awakened fights, and the Forgotten Four gauntlet** (section 7). Each fight is a boss
+  fight like Zachariah's and the Colossus's, opened by beating its map, played as that map's adventurer, and hard.
+  Each fight's first win drops its pet. The gauntlet is all four in a row, opened by beating all four.
 - **The rewards** (section 8). Out: the Ancient sceptres, the vestige rings and plain stat items.
-    - **Soulreaper axe**: melee. Kills near you give it souls (up to 5), and at 5 it spends 8% of your hitpoints on a
-      big spin. Its four pieces come from the four final bosses.
-    - **Remixes**: each Act II map's rule on an earlier map (Overgrown Lumbridge, Shadow Barrows, Frozen Wilderness,
-      Dark Karamja), with records of their own.
+    - **Soulreaper axe**: melee only. Kills near you give it souls (up to 5), and at 5 it spends 8% of your hitpoints
+      on a big spin. Its four pieces come from the four final bosses.
+    - **Remixes**: each Act II map's rule on any earlier map (shown off as Overgrown Lumbridge, Shadow Barrows, Frozen
+      Wilderness, Dark Karamja). All four can be stacked on one map at once, with records for each combination.
     - **Fighting pets**: Butch, Baron, Wisp and Lil'viathan, one per Awakened fight. Take one into a run and it does a
       small thing.
     - **Five adventurers** with traits rather than stat bumps.
     - Three more that aren't items: **Awakened invasions** on old maps, **Awakener's orbs** that awaken an old final
       boss, and the **weekly Vault**, a seeded run.
-    - Optional and separable: **Invocations** and **Relics** (section 9).
-- **The build order**: Stranglewood with the act's screen first, then Lassar, Ghorrock and the Scar, one map per pull
-  request. Each map's remix follows it, then the Awakened fights and pets (section 10).
+    - **Invocations** and **Relics** (section 9), in the first build.
+- **The build order**: lighting first, then Stranglewood with the act's screen, invocations and relics, then Lassar,
+  Ghorrock and the Scar, one map per pull request. Each map's remix follows it, then the Awakened fights with pets,
+  then the gauntlet (section 10).
 - **Changed from the pitch** (section 12): there's no blood captor NPC (root hearts instead); Ghorrock's prison is too
   cramped to cut (we build it in ScapeRune); and Lassar is better than pitched (the cache has the Shadow Realm as a
   real twin of the city).
 
 ## 1. The shape of the act
 
-**Opening.** Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Bosses tab. The four
+**Opening.** The act needs the first campaign completed. Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Bosses tab. The four
 maps are cards round a fifth in the middle. The middle card fills in as the Awakened are beaten and plays the act's
 ending at the fourth. Each card shows its boss (drawn as the boss bar draws it), its rule in a line, its records, and
 its rewards faded until earned, as map cards do now.
@@ -56,27 +60,41 @@ its rewards faded until earned, as map cards do now.
 `act: { requires: "inferno" }` instead, and the Awakened fights keep `fight.requires` (their own map). Nothing else in
 the chain moves.
 
-**How hard.** The four maps are equally hard, a step past the Inferno (`difficulty: { hp: 4.0, damage: 2.85 }`,
-hard `{ hp: 1.4, damage: 1.2 }` as the Inferno's). The other way would be for each map to get harder with the number
-already beaten, so order never matters. That makes records unfair between players, so it's an open question rather
-than the plan.
+**How hard: harder the more you've beaten.** An Act II map's toughness is set when a run starts, by how many
+**other** Act II maps the player has beaten:
+
+| Other Act II maps beaten | Enemies' hitpoints | Their damage | Coins  |
+| ------------------------ | ------------------ | ------------ | ------ |
+| 0 (the first you play)   | 3.9                | 2.8          | as now |
+| 1                        | 4.05               | 2.9          | +10%   |
+| 2                        | 4.2                | 3.0          | +20%   |
+| 3 (the last)             | 4.35               | 3.1          | +30%   |
+
+The Inferno is 3.75 and 2.7, so the first step is a small one up. Hard mode multiplies on top as the Inferno's does
+(`{ hp: 1.4, damage: 1.2 }`). Whatever the order, the last map is the hardest, and a map you go back to after
+finishing the act is always at step 3, so every player ends up on the same footing.
+
+**Records** are kept per map as now, with the step they were set at. The card's best time is the best at step 3,
+the step everyone gets to, and an earlier, easier record shows below it, marked with its step, until it's beaten at
+step 3. In co-op the host's step counts (everyone in the room has the map, as now). The Awakened fights don't scale:
+each is tuned as one fight. The gauntlet climbs instead (7.3).
 
 **What a map gives.**
 
 | Map               | For beating it                                                                    | For a task on it                                                    |
 | ----------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Stranglewood      | Awakened Vardorvis, Overgrown Lumbridge, the Forester, the Executioner's axe head |                                                                     |
-| Lassar Undercity  | Awakened Whisperer, Shadow Barrows, the Shadow walker, the Siren's staff          | The Treasure hunter (open 5 caskets in the Shadow Realm in one run) |
-| Ghorrock          | Awakened Duke Sucellus, Frozen Wilderness, the Snow ranger, the Eye of the Duke   |                                                                     |
-| The Scar          | Awakened Leviathan, Dark Karamja, the Lantern-bearer, the Leviathan's lure        |                                                                     |
+| Stranglewood      | Awakened Vardorvis, the Overgrown remix, the Forester, the Executioner's axe head |                                                                     |
+| Lassar Undercity  | Awakened Whisperer, the Shadow remix, the Shadow walker, the Siren's staff        | The Treasure hunter (open 5 caskets in the Shadow Realm in one run) |
+| Ghorrock          | Awakened Duke Sucellus, the Frozen remix, the Snow ranger, the Eye of the Duke    |                                                                     |
+| The Scar          | Awakened Leviathan, the Dark remix, the Lantern-bearer, the Leviathan's lure      |                                                                     |
 | Each Awakened     | Its pet (the first win always), an Awakener's orb                                 |                                                                     |
 | All four maps     | The Soulreaper axe (its four pieces), Awakened invasions                          |                                                                     |
-| All four Awakened | The act's ending, and the weekly Vault                                            |                                                                     |
+| All four Awakened | The act's ending, the Forgotten Four gauntlet, the weekly Vault                   |                                                                     |
 
 The pieces are trophies (`trophies.ts`), shown in a new Collection log tab, the Fallen Empire: Executioner's axe head
 28319, Siren's staff 28323, Eye of the Duke 28321, Leviathan's lure 28325.
 
-**Save.** New optional fields only (`remixVictories`, `awakenerOrbs`, `invasions`, relic picks), so no
+**Save.** New optional fields only (`remixVictories`, `gauntlet`, `awakenerOrbs`, `invasions`, `relics`, `invocations`), so no
 `SAVE_VERSION` bump. The pet stays `SaveData.pet`.
 
 ## 2. What carries over
@@ -170,7 +188,7 @@ the guide says.
 
 ### 3.7 Unlocks
 
-Beating it: the Forester (8.5), Overgrown Lumbridge (8.3), the Awakened Vardorvis fight and the Executioner's axe head.
+Beating it: the Forester (8.5), the Overgrown remix (8.3), the Awakened Vardorvis fight and the Executioner's axe head.
 
 ### 3.8 Engine
 
@@ -223,7 +241,7 @@ is drawn.
 | The way back    | Catch 3 lost souls (walk into them; they flee at 80% of your speed); the third opens an Anima Portal (48218) at your feet for 5 s |
 | Sanity 0        | You're thrown back with 25% of your hitpoints gone, and what's lying on the realm's ground is lost                                |
 | The other world | Stands still while you're away: the city's crowd waits, frozen in time, until you come back                                       |
-| Co-op           | The party goes together: the first into a puddle pulls everyone in after 1.5 s (open question 2)                                  |
+| Co-op           | The party goes together: the first into a puddle pulls everyone in after 1.5 s (decided: the whole party)                         |
 
 The choice is how greedy to be. A dive is 25 s of double drops if you catch your souls quickly, and a hit and a lost
 haul if you don't. The city waiting for you means a dive is also a breather from a crowd that's got too big.
@@ -274,7 +292,7 @@ south, the Whisperer's. The middle square (41,99) holds the cathedral, so the fi
 
 ### 4.8 Unlocks
 
-Beating it: the Shadow walker, Shadow Barrows, the Awakened Whisperer and the Siren's staff. The task (open 5 caskets
+Beating it: the Shadow walker, the Shadow remix, the Awakened Whisperer and the Siren's staff. The task (open 5 caskets
 in the realm in one run) brings the Treasure hunter.
 
 ### 4.9 Engine
@@ -291,7 +309,7 @@ in the realm in one run) brings the Treasure hunter.
 
 About two and a half weeks. The risk is the twin: loading two sets of three by three squares doubles the scene's
 bake time and memory at the start (not its triangles). If that's too slow on a phone, the fallback is the palette
-alone (brightness, wash and enemies), which is what Shadow Barrows uses anyway.
+alone (brightness, wash and enemies), which is what the Shadow remix uses on older maps anyway.
 
 ### 4.10 Phones
 
@@ -350,7 +368,7 @@ ice is.
 
 **Ice off a floor box.** The floor system's `ice` only works inside a floor's box, and a whole 192 by 192 yard of floor
 tiles would cost a phone dearly. So this map needs the **effect mask** (section 11): a per-tile effect on any map's
-grid, painted from the recipe. The ice is drawn by the map's own ice overlay, not floor tiles. Frozen Wilderness needs
+grid, painted from the recipe. The ice is drawn by the map's own ice overlay, not floor tiles. The Frozen remix needs
 the same.
 
 ### 5.5 Enemies
@@ -382,7 +400,7 @@ pillars standing in the yard, not shadows painted on the floor.
 
 ### 5.8 Unlocks
 
-Beating it: the Snow ranger, Frozen Wilderness, the Awakened Duke and the Eye of the Duke.
+Beating it: the Snow ranger, the Frozen remix, the Awakened Duke and the Eye of the Duke.
 
 ### 5.9 Engine
 
@@ -467,7 +485,7 @@ game.
 
 ### 6.7 Unlocks
 
-Beating it: the Lantern-bearer, Dark Karamja, the Awakened Leviathan and the Leviathan's lure.
+Beating it: the Lantern-bearer, the Dark remix, the Awakened Leviathan and the Leviathan's lure.
 
 ### 6.8 What it would take, honestly
 
@@ -483,45 +501,36 @@ scene, and fog is by distance from the camera. A light round the player needs:
 | The minimap and the arrows | Only lit enemies on the minimap; faint arrows for what's coming                                                                                                                           | 1 day      |
 | Phones                     | Per-fragment work over 8 lights is cheap, but it's on every pixel: measure on a real phone                                                                                                | 1-2 days   |
 
-About two weeks for the lighting, and three for the map. It's the riskiest piece in the act, so it's built last, but
-**spiked first**: a day's prototype, before Stranglewood is done, using the fog the shaders already have
-(`fogFactorLinear` with a near end and a black sky) to see whether a dark map reads from the play camera at all. If
-it doesn't read, the Scar's rule becomes "the dark is a look, not a rule" (brightness 0.45 and lanterns as a damage
-power-up). That's weaker, and the decision is Dynny's.
+About two weeks, and it's built first (decided), as its own pull request on a dev map, before the Stranglewood. Its
+first step is a day's spike, using the fog the shaders already have (`fogFactorLinear` with a near end and a black
+sky), to see how a dark map reads from the play camera and to settle the light's falloff and how dark the dark is.
+Then the real lights. With the lighting in, the Scar itself is a normal map's work: its enemies, bosses, lanterns,
+light leeches and fires.
 
 A plus: what's in the dark needn't be drawn in detail. Culling the scene past the lights' reach could make the Scar
 one of the cheapest maps on a phone.
 
 ## 7. The finale: the Awakened
 
-### 7.1 Four separate fights, not a gauntlet
+The finale is two things, both built now: **four separate Awakened fights**, each opened by beating its Act II map,
+and **the Forgotten Four**, a gauntlet of all four in a row, opened by beating all four. The act's story ends when the
+fourth separate fight falls; the gauntlet is the act's last test.
 
-**Decision: four boss fights, each on its own, each opened by beating its Act II map.** The act ends when all four are
-down, and the fourth plays the ending.
+### 7.1 Why both
 
-Why not a gauntlet (the four in a row in one run):
+The separate fights are where each boss is learnt and tuned. Zachariah took ten rounds to tune one fight, and a
+gauntlet alone would have each fight's tuning move the others. They ship one per pull request, each playable the day
+it's merged, with Retry and one arena loaded at a time. OSRS does it this way too.
 
-- **Tuning.** Zachariah took ten rounds to tune one fight. In a gauntlet each fight's tuning moves the others: a death
-  at the fourth boss throws away fifteen minutes, so every fight has to be easy enough not to waste that, and none of
-  them gets to be hard.
-- **Retry.** A boss fight's results have Retry. A gauntlet's Retry is the whole thing again, or checkpoints, which is
-  four fights anyway.
-- **Kits.** Each fight is built round one adventurer's kit and its button, as Zachariah's Smite and the Colossus's
-  Shatter are. A gauntlet would need one kit for four bosses, or kits swapped mid-run.
-- **Build order.** Four fights ship one per pull request, each playable the day it's merged. A gauntlet ships
-  nothing until all four exist.
-- **Phones.** One arena loaded at a time.
-- **OSRS does it this way.** The Awakened are separate fights there too, and the ornament kit goes to the fourth.
-
-A gauntlet stays possible later as an extra for players who've beaten all four ("the Forgotten Four", one run,
-checkpoints between bosses). It would reuse the four fights whole. That's open question 1.
+The gauntlet is built from the four fights whole, so it adds no new attacks to tune. It's the place where a run is
+long, the bosses climb, and the order is the player's plan (7.3).
 
 ### 7.2 The four fights, in brief
 
 Each gets its own design doc before it's built, like the Colossus's. All four keep what Dynny said works in
 Zachariah's: an attack about every 1.4 s by phase, the guard down on a miss (double damage), an arena that hurts
 the boss, a button that rewards stepping in, the impacts, no item bar, Retry, the intro pan and a bar for each phase.
-Each fight's kit is its map's adventurer, so you've met them.
+Each fight is played as its map's adventurer (decided).
 
 | Fight                               | Arena                                                                                        | Kit and button                                                                                               | The idea                                                                                                                                       | Pet                 |
 | ----------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
@@ -530,7 +539,38 @@ Each fight's kit is its map's adventurer, so you've met them.
 | Awakened Duke Sucellus (12191, 758) | His room in Ghorrock Prison, cut from the cache (47,100: 568 open tiles, a boss room's size) | The Snow ranger, a shortbow; **Kindle** lights the brazier you're beside                                     | Cold as in the map, compressed: braziers are the only warmth, his gaze puts out the ones not behind a pillar, his gas spits at the vent by you | Baron (12159)       |
 | Awakened Leviathan (12214, 798)     | The Scar's pool (32,99)                                                                      | The Lantern-bearer; **Shadow** stuns it for 3 s (in OSRS shadow spells stun it), its back bared for big hits | The dark, the debris that's your only cover, the pathfinder's circle in the last phase                                                         | Lil'viathan (12160) |
 
-Their hard modes are what a hard mode always is, and each Awakened win gives an Awakener's orb (8.6).
+**They're hard.** The first win always drops the pet (decided), so the fight is the gate, and Dynny's condition was
+"as long as the fight is hard". The bar each fight is tuned to:
+
+- The careful bot (`DODGE=1`, mortal) wins at most 1 seed in 3 on normal, and none on hard. Zachariah's won 1 in 3,
+  so these sit at his level or above.
+- Phase 1 still well under a minute, as Zachariah's round 3 settled: hard means the later phases, not a long first one.
+- A person shouldn't win on the first few tries. Dynny's playtest says whether it's hard; the bot only says it isn't
+  too easy.
+- Hard mode is what a hard mode always is, and its first win gives the pet a look of its own (the follower's
+  recolour, if the cache has one; otherwise a glow).
+
+Each Awakened win gives an Awakener's orb (8.6).
+
+### 7.3 The Forgotten Four: the gauntlet
+
+| What        | How                                                                                                                                                                                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Opens       | Once all four Awakened fights are beaten (on normal), from the middle card of the act's screen                                                                                                                                                                            |
+| Order       | The player's. The gauntlet screen shows the four cards in a row to drag into order before the start, first beaten first by default                                                                                                                                        |
+| It climbs   | Each fight is a step harder than the last, as Act II maps are (section 1): the boss's hitpoints and tempo times 1, 1.05, 1.1 and 1.15. So the order says where the pressure falls: your best fight last, or your worst first                                              |
+| Kits        | Each fight as its map's adventurer (decided), so the run swaps adventurer between fights, each with their own weapon and button                                                                                                                                           |
+| Wounds      | Each adventurer starts their fight at full hitpoints less a fifth of what the last one lost (so at most 20% down). It makes the four one run: a clean fight helps the next                                                                                                |
+| The camp    | Between fights, 45 s in a camp (skippable when ready): the fight just won pays gauntlet points, as a raid room does (a fast kill, little damage taken, guard-downs used), spent on one blessing for the next fight, or kept                                               |
+| Blessings   | **Rest**: clears the wounds. **Saradomin's blessing**: +20% hitpoints. **Second wind**: once, falling leaves you at 30% and untouchable for 3 s. **Ancient focus**: the fight's button 25% quicker. **Steady hands**: guard-downs 0.5 s longer                            |
+| Retry       | Falling ends the fight. The results offer **Retry this fight** (from its start, with the wounds and points you came in with) or **Start over**                                                                                                                            |
+| A clean run | No retries. Only a clean run sets the gauntlet's best time and earns its reward. A run with retries still finishes, and counts as a clear with retries                                                                                                                    |
+| Records     | Total fight time (camps don't count), clean or not, the order it was run in                                                                                                                                                                                               |
+| Reward      | The first clean clear: the Ancient blood ornament kit's look (object 28336), a blood-touched look for the Soulreaper axe and the four fighting pets, the middle card's gold border, and the gauntlet's hard mode. Any first clear: two Awakener's orbs                    |
+| Length      | Four fights of about four minutes and three camps: about 18 to 20 minutes                                                                                                                                                                                                 |
+| Engine      | The Theatre's raid already chains rooms with a supply chest between them (`content/raids.ts`): the gauntlet is four fight maps as rooms, the camp is the supply chest with blessings in place of food, and the kit swaps per room. About 1.5 weeks after the fourth fight |
+
+Pets, items and relics stay out of the gauntlet, as they're out of the fights: each kit is the whole of its fight.
 
 ## 8. Rewards
 
@@ -542,7 +582,7 @@ run is like, not its numbers.
 
 ### 8.2 The Soulreaper axe
 
-A Rare melee class weapon (object 28338). It's made the OSRS way, from four pieces, one from each Act II final boss
+A Rare melee class weapon (object 28338), melee only (decided): only a melee adventurer is ever offered it. It's made the OSRS way, from four pieces, one from each Act II final boss
 the first time you beat its map. With all four it's in the game for every melee run after.
 
 | What      | Number                                                                                                                                                                             |
@@ -564,22 +604,67 @@ them. No evolution, like the Toxic blowpipe.
 
 ### 8.3 Remixes
 
-Beating an Act II map opens its rule on an earlier map, as a switch on that map's card beside Hard and Endless.
+Beating an Act II map opens its rule as a remix on **every** first-campaign map, Lumbridge to the Inferno: a switch on
+the map's card beside Hard and Endless, one switch for each remix opened. **All of them can be on at once**
+(decided). Each remix is a word before the map's name, and all four together is "Fallen":
 
-| Remix               | Rule from        | Why that map                                                            | What else changes                                                                                                                                                                           |
-| ------------------- | ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overgrown Lumbridge | Stranglewood     | Fields, the swamp and Draynor's woods to creep over                     | Roots creep at 0.7 times the speed (an early, bigger arena); Strangled join from 3:00; Count Draynor's bats nest in the root hearts                                                         |
-| Shadow Barrows      | Lassar Undercity | The Barrows' crypts and Mort'ton's shades already belong in shadow      | No twin squares exist here, so the realm is the palette (brightness 0.55, a violet wash) and its enemies; the brothers come out in the realm                                                |
-| Frozen Wilderness   | Ghorrock         | Ghorrock is in the Wilderness                                           | Ice on the Wilderness's water and the Bone Yard's paths (the effect mask), six braziers placed round the arena, ice warriors and spiders join; the King Black Dragon's ice breath adds cold |
-| Dark Karamja        | The Scar         | The volcano's glow and the jungle's fires make lights that belong there | Lava (the volcano's own) is a light; TzHaar glow as light leeches do                                                                                                                        |
+| Remix     | Rule from        | Shown off on (its first look, and the map it's tuned on) | Why that map                                                            |
+| --------- | ---------------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Overgrown | Stranglewood     | Overgrown Lumbridge                                      | Fields, the swamp and Draynor's woods to creep over                     |
+| Shadow    | Lassar Undercity | Shadow Barrows                                           | The Barrows' crypts and Mort'ton's shades already belong in shadow      |
+| Frozen    | Ghorrock         | Frozen Wilderness                                        | Ghorrock is in the Wilderness                                           |
+| Dark      | The Scar         | Dark Karamja                                             | The volcano's glow and the jungle's fires make lights that belong there |
 
-- **Records of their own**: wins, best time, endless best, a tick and a gold tick for hard, kept apart from the map's
-  (`remixVictories`, keyed `mapId:remix`).
-- **One remix at a time.** Remixes stack with Hard and Endless, but not with each other (two at once is an invocation,
-  section 9).
-- **Coins**: 30% more, as a remix is harder. Quests count as they do on the map.
-- **What it changes for someone who's bought everything**: four old maps that play differently, with records to beat,
-  made from the rules the act already built.
+**On any map.** Each rule is map-agnostic (section 2), and its numbers scale with the map's toughness: roots creep at
+0.7 times the Stranglewood's speed on Lumbridge, up to its full speed on the Inferno, and so on for cold's rise, sanity's
+drain and the light's size. Where a rule needs things placed, they're placed by the map's seed on open ground:
+braziers (six, at least 20 tiles apart), puddles (as random events turn up), ice (on paths and open ground, never
+making water walkable), and lights from what's already there (lava, fires, lamps). A map's own enemies stay; each remix
+adds its Act II map's few (Strangled, shadows and lost souls, ice warriors and spiders, scarred imps and leeches). The
+Shadow remix has no twin squares on these maps, so its realm is the palette (brightness 0.55, a violet wash) and its
+enemies.
+
+**How the rules combine.** Every pair has a rule, so nothing is left to chance:
+
+| Together           | What happens                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Overgrown + Frozen | Roots don't grow on ice, and fire elites' embers burn away the roots within 2 tiles                               |
+| Overgrown + Shadow | The realm has no roots, and the city's roots stand still while you're away (the world waits, 4.2)                 |
+| Overgrown + Dark   | Roots in the dark are drawn dark, but their sprouts (the warning) are drawn unlit, as every warning is            |
+| Frozen + Shadow    | Cold rises half as fast again in the realm, and there are no braziers there: a dive is a race against both meters |
+| Frozen + Dark      | A lit brazier and embers are lights (4 tiles and 2)                                                               |
+| Shadow + Dark      | The realm is darker: your light is 4 tiles there, not 5                                                           |
+| All four           | Sanity and cold sit side by side under your hitpoints                                                             |
+
+No rule is softened for being stacked: stacking is the challenge, and the coins pay for it.
+
+**The crowd stays the same size.** With several remixes on, their added enemies share one remix's share of the
+waves, so the cap on enemies doesn't move.
+
+**Coins**: +30% for one remix, and +25% for each more (+105% with all four). Remixes, hard mode, Act II's steps and
+invocations all add together, up to +300% in all.
+
+**Records**: for each set of remixes on each map (`remixVictories`, keyed by the map and its remixes in order, as
+`lumbridge:dark+frozen`): wins, best time, endless best, a tick and a gold tick for hard. The card shows the records
+for the switches that are on, and a badge for the most remixes beaten at once there, the Fallen badge for all four.
+Quests count as they do on the map.
+
+**Phones and the sim with all four on.** The worst case is the heaviest first-campaign map with every remix:
+
+| Cost             | About                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| Roots            | Up to 4k triangles at full cover (3.9)                                                        |
+| Braziers         | Six fire spot animations, about 1.5k when two are in view                                     |
+| Lights           | Per-pixel work, not triangles; and the dark lets the scene past the lights be culled          |
+| The Shadow remix | Nothing: it's the palette on these maps                                                       |
+| The sim          | Roots grow only at their fronts, and while you're in the realm the waiting world isn't ticked |
+
+So the remix pull request after the Scar (section 10) measures every first-campaign map with all four on, with
+`frameProbe.sample` on the phone camera and a bot run for the sim's tick time. A map that goes over 69k gets its root
+cells at 3 by 3 tiles, not 2 by 2.
+
+**What it changes for someone who's bought everything**: fifteen sets of rules on each of twelve old maps, each with
+records, all made from the rules the act already built.
 
 ### 8.4 Fighting pets
 
@@ -628,42 +713,42 @@ For a player who's bought everything, each of these changes what a run is like:
    final boss for one run: 1.6 times its hitpoints, enraged from 75% and 20% faster, drawn darker with a violet glow.
    A win marks the card and always drops a master casket. **What it changes**: every old final boss gets a harder
    version, chosen when the player wants it, and orbs are scarce enough to pick which.
-3. **The weekly Vault.** A seeded run that's the same for everyone each week (its seed from the ISO week): a map, a
-   remix and an adventurer picked by the seed, with a best time and kills kept per week. Co-op parties get the same
+3. **The weekly Vault.** A seeded run that's the same for everyone each week (its seed from the ISO week): a map, its
+   remixes, invocations and an adventurer picked by the seed, with a best time and kills kept per week. Co-op parties get the same
    seed. The sim is deterministic already, so this is mostly a screen. **What it changes**: one fixed challenge, new
    each week, that can be compared with friends.
 
 The act's ending is the last: the middle card's story, told when the fourth Awakened falls.
 
-## 9. Optional: Invocations and Relics
+## 9. Invocations and Relics
 
-Dynny hasn't said yes or no to these. They're separate from everything above, so either can be dropped without
-touching the rest.
+Both are in, and in the first build (decided): they ship with the Stranglewood, before the other maps (section 10).
 
 ### 9.1 Invocations
 
 The Tombs of Amascut's: opt-in handicaps on any map from the Desert on, picked on the map's card, each worth points.
-The run's coins are +1.5% a point, and badges go on the card at 100, 200 and 300 points.
+Act II maps and remixes take them too; boss fights and the gauntlet don't (their hard modes are the handicap). The
+run's coins are +1.5% a point, adding to the other bonuses (8.3), and badges go on the card at 100, 200 and 300 points.
+A record shows the points it was set at.
 
-| Invocation      | Points | What                                                       |
-| --------------- | ------ | ---------------------------------------------------------- |
-| Walk the path   | 10     | Enemies 15% faster                                         |
-| Upset stomach   | 15     | No food drops, and the Sandwich lady doesn't come          |
-| Overly draining | 10     | No rerolls and no banishes                                 |
-| Glass cannon    | 20     | Half your hitpoints                                        |
-| Hardcore        | 15     | No Ring of life, no getting back up                        |
-| Feeling special | 10     | Bosses enrage at 75%, not 50%                              |
-| Aerial assault  | 15     | Bosses' patterns half as many bullets again                |
-| Ancient haste   | 10     | The run's clock 25% faster: the final boss at 12:00        |
-| Double remix    | 25     | A second remix's rule at once (on a map that has two open) |
+| Invocation      | Points | What                                                |
+| --------------- | ------ | --------------------------------------------------- |
+| Walk the path   | 10     | Enemies 15% faster                                  |
+| Upset stomach   | 15     | No food drops, and the Sandwich lady doesn't come   |
+| Overly draining | 10     | No rerolls and no banishes                          |
+| Glass cannon    | 20     | Half your hitpoints                                 |
+| Hardcore        | 15     | No Ring of life, no getting back up                 |
+| Feeling special | 10     | Bosses enrage at 75%, not 50%                       |
+| Aerial assault  | 15     | Bosses' patterns half as many bullets again         |
+| Ancient haste   | 10     | The run's clock 25% faster: the final boss at 12:00 |
+| Blood moon      | 15     | Every boss comes a minute early                     |
 
-Open question: whether hard mode becomes a preset of these. That would be tidier, and would change every map's hard
-records.
+(The pitch's Double remix is gone: remixes stack for free now.)
 
 ### 9.2 Relics
 
-Leagues-style: each Act II map beaten opens the next relic tier. One relic is picked per tier on the adventurer screen
-and stays picked across runs until changed.
+Leagues-style: each Act II map beaten opens the next relic tier, so the first build has tier 1. One relic is picked
+per tier on the adventurer screen and stays picked across runs until changed.
 
 | Tier | Relics                                                                                                                                                                                                                                  |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -672,52 +757,63 @@ and stays picked across runs until changed.
 | 3    | **Bloodthirsty**: every 50 kills heal 5%. **Specialist**: one weapon slot fewer, the others 25% harder. **Grimoire**: start with a second weapon, a Common of your class                                                                |
 | 4    | **Last recall**: once a run, falling takes you back to the spawn with half your hitpoints, and everything near you is stunned. **Reloaded**: two level-up offers kept for later, each once                                              |
 
-Honestly: these sit close to the existing passives and the shop, and they make everything easier, which the game's
-late maps don't need. They're the part of this doc most likely to be cut, or kept off hard mode and remixes.
+**Where they apply.** Relics make runs easier, and Dynny wants the fights hard, so they're on every campaign map,
+Act II map and remix, and **off in boss fights and the gauntlet**. A record shows the relics it was set with, as it
+shows invocation points. Whether some records should be relic-free is a new question (13.2).
+
+Each relic is a small sim rule on the hero (deterministic, in co-op each player's own), and the adventurer screen gets
+a row of four slots. About a week for the two systems, with invocations' card switches.
 
 ## 10. Build order
 
-One map per pull request, Stranglewood first. Each map's pull request has its sims (`MAP=x`), its phone numbers and
-its cache additions listed.
+Lighting first, at Dynny's word, then one map per pull request, Stranglewood first. Each map's pull request has its
+sims (`MAP=x`), its phone numbers and its cache additions listed. Pull requests 1 to 4 are **the first build**, what
+players get first: the lighting under it, the act's screen, the Stranglewood, invocations, relics and the first remix.
 
-| #   | Pull request                                                                                              | Needs      | Rough size  |
-| --- | --------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
-| 0   | The Scar's lighting spike: a day, a dev map, screenshots from the play camera. Not merged; it decides 6.8 | -          | 1 day       |
-| 1   | **Stranglewood**, with the act's screen, `act.requires`, `RunRuleDef`, roots, the Forester                | -          | 3 weeks     |
-| 2   | Overgrown Lumbridge: the first remix, which proves the rules are map-agnostic                             | 1          | 3 days      |
-| 3   | **Lassar Undercity**: the twin, layers, sanity, souls, the Shadow walker and the Treasure hunter          | 1          | 2.5 weeks   |
-| 4   | Shadow Barrows                                                                                            | 3          | 3 days      |
-| 5   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                  | 1          | 3 weeks     |
-| 6   | Frozen Wilderness                                                                                         | 5          | 3 days      |
-| 7   | **The Scar**: lighting, lights, aiming in the light, the Lantern-bearer                                   | 1, spike 0 | 3 weeks     |
-| 8   | Dark Karamja, and the Soulreaper axe (all four pieces now exist)                                          | 7          | 1 week      |
-| 9   | Awakened Vardorvis, with fighting pets (Butch first), and its design doc                                  | 1          | 2 weeks     |
-| 10  | Awakened Whisperer, Wisp                                                                                  | 3, 9       | 2 weeks     |
-| 11  | Awakened Duke Sucellus, Baron                                                                             | 5, 9       | 2 weeks     |
-| 12  | Awakened Leviathan, Lil'viathan, the act's ending                                                         | 7, 9       | 2 weeks     |
-| 13  | Awakened invasions, Awakener's orbs, the weekly Vault                                                     | 12         | 1.5 weeks   |
-| 14  | Optional: Invocations, then Relics                                                                        | -          | 1 week each |
+| #   | Pull request                                                                                                                                                                                   | Needs | Rough size |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---------- |
+| 1   | **Lighting**. Its first step is the one-day spike (the fog the shaders already have, on a dev map, screenshots from the play camera), then the real thing (6.8) on a dev map, `scaperune_dark` | -     | 2 weeks    |
+| 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester                                                                                     | -     | 3 weeks    |
+| 3   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                                                                                | 2     | 1.5 weeks  |
+| 4   | The Overgrown remix, with the remix switches, sets and records                                                                                                                                 | 2     | 4 days     |
+| 5   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                                                                             | 2     | 2.5 weeks  |
+| 6   | The Shadow remix                                                                                                                                                                               | 4, 5  | 3 days     |
+| 7   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                                                                       | 2     | 3 weeks    |
+| 8   | The Frozen remix                                                                                                                                                                               | 4, 7  | 3 days     |
+| 9   | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                                                                              | 1, 2  | 1.5 weeks  |
+| 10  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist)                                                      | 9     | 1.5 weeks  |
+| 11  | Awakened Vardorvis, with fighting pets (Butch first), and its design doc                                                                                                                       | 2     | 2 weeks    |
+| 12  | Awakened Whisperer, Wisp                                                                                                                                                                       | 5, 11 | 2 weeks    |
+| 13  | Awakened Duke Sucellus, Baron                                                                                                                                                                  | 7, 11 | 2 weeks    |
+| 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                                                                              | 9, 11 | 2 weeks    |
+| 15  | **The Forgotten Four** gauntlet                                                                                                                                                                | 11-14 | 1.5 weeks  |
+| 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                                                                          | 14    | 1.5 weeks  |
 
-The Awakened fights can go any time after their map, so fight 9 could follow map 1 if Dynny would rather play a boss
-early. The sizes are reasoned from the code, not prototyped, and leave out playtest rounds: Zachariah took ten.
+The lighting coming first makes the Scar itself short (9). The Awakened fights can go any time after their map, so
+fight 11 could follow the first build if Dynny would rather play a boss early. The sizes are reasoned from the code,
+not prototyped, and leave out playtest rounds: Zachariah took ten, and these are to be harder.
 
 ## 11. Engine work in one place
 
-| Piece                         | New or reuse                                               | Used by                                  |
-| ----------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
-| Act screen, `act.requires`    | New                                                        | All                                      |
-| `RunRuleDef` on `MapDef`      | New, sim-side, map-agnostic                                | All four maps, remixes, invasions        |
-| Effect mask (any map's tiles) | New; reuses the floor's effects and `PlayerMovement`'s ice | Roots, Ghorrock's ice, Frozen Wilderness |
-| Instanced ground layer        | Reuses `FloorView`'s instancing and code rise              | Roots                                    |
-| Twin terrain (`MapDef.twin`)  | New, client only                                           | Lassar, its Awakened fight               |
-| Layers in the sim             | New: enemies, drops and pickups carry a layer              | Lassar                                   |
-| Per-hero meters on the HUD    | New (sanity, cold)                                         | Lassar, Ghorrock, their remixes          |
-| Drawn, changeable locs        | Reuses the fight view's statues                            | Braziers                                 |
-| Lights                        | New, in four shaders and the sim                           | The Scar, Dark Karamja, the Leviathan    |
-| Fighting pets                 | Reuses thralls                                             | Pets                                     |
-| `CharacterDef.trait`          | New                                                        | Adventurers                              |
-| Brightness and wash           | Reuse (the Theatre's halls)                                | Lassar, Shadow Barrows                   |
-| Boss attacks                  | Reuse `BossAttackDef` and `ImpactDef`                      | Every boss                               |
+| Piece                         | New or reuse                                               | Used by                                 |
+| ----------------------------- | ---------------------------------------------------------- | --------------------------------------- |
+| Act screen, `act.requires`    | New                                                        | All                                     |
+| `RunRuleDef` on `MapDef`      | New, sim-side, map-agnostic                                | All four maps, remixes, invasions       |
+| Effect mask (any map's tiles) | New; reuses the floor's effects and `PlayerMovement`'s ice | Roots, Ghorrock's ice, the Frozen remix |
+| Instanced ground layer        | Reuses `FloorView`'s instancing and code rise              | Roots                                   |
+| Twin terrain (`MapDef.twin`)  | New, client only                                           | Lassar, its Awakened fight              |
+| Layers in the sim             | New: enemies, drops and pickups carry a layer              | Lassar                                  |
+| Per-hero meters on the HUD    | New (sanity, cold)                                         | Lassar, Ghorrock, their remixes         |
+| Drawn, changeable locs        | Reuses the fight view's statues                            | Braziers                                |
+| Lights                        | New, in four shaders and the sim, built first              | The Scar, the Dark remix, the Leviathan |
+| Act II's steps                | New: toughness from Act II maps beaten                     | Act II maps, the gauntlet               |
+| Remix sets and their records  | New: several rules on one run, records per set             | Remixes                                 |
+| Invocations and relics        | New: run modifiers on the card and the adventurer screen   | Every campaign map                      |
+| The gauntlet                  | Reuses the raid's rooms and supply chest                   | The Forgotten Four                      |
+| Fighting pets                 | Reuses thralls                                             | Pets                                    |
+| `CharacterDef.trait`          | New                                                        | Adventurers                             |
+| Brightness and wash           | Reuse (the Theatre's halls)                                | Lassar, the Shadow remix                |
+| Boss attacks                  | Reuse `BossAttackDef` and `ImpactDef`                      | Every boss                              |
 
 ## 12. Changed from the pitch, and why
 
@@ -726,29 +822,47 @@ early. The sizes are reasoned from the code, not prototyped, and leave out playt
 - **Ghorrock is built, not cut.** The prison's open ground is corridors (2,985 tiles at most) and the Duke's room is
   568, so the yard is a ScapeRune map with the prison's kit. The Duke's room is kept for his Awakened fight.
 - **Lassar is the real Shadow Realm**, not a palette swap: the cache has the realm as a twin of the city (4.1). The
-  palette version is what Shadow Barrows uses.
+  palette version is what the Shadow remix uses on older maps.
 - **The Scar is a smaller arena** (2 by 2 squares): half its cached squares are filler.
-- **Rewards**: the Ancient sceptres and vestige rings are out. In: Remixes, fighting pets, adventurers with traits,
-  invasions, orbs and the Vault. The Soulreaper axe stays, made from four pieces.
+- **Rewards**: the Ancient sceptres and vestige rings are out. In: Remixes (stacking, on any first-campaign map),
+  fighting pets, adventurers with traits, invasions, orbs, the Vault, invocations and relics. The Soulreaper axe stays, made from four pieces.
 - **Adventurers renamed**: the pitch's Archaeologist, Treasure hunter, Shadow walker and Awakened slayer are now the
   Forester, Shadow walker, Treasure hunter, Snow ranger and Lantern-bearer, one or two a map, so each map has its own.
 - **The Voyage** (the pitch's wildcard) isn't in this act.
 
-## 13. Open questions for Dynny
+## 13. Decided, and what's still open
 
-1. **The finale**: four separate fights (recommended, 7.1), with a gauntlet as a later extra, or not at all?
-2. **Lassar in co-op**: the whole party flips together (simple, recommended), or each player on their own (better,
-   but every spatial query in the sim learns a layer, as `map-depth.md` warned for planes)?
-3. **The Scar's lighting**: about two weeks of renderer work. Spike it first and decide on what it looks like, or go
-   straight to the fallback (dark as a look only)?
-4. **Ghorrock as a ScapeRune map**: fine, or would you rather it be the cramped real prison?
-5. **How hard**: all four maps the same (recommended), or harder the more of them you've beaten?
-6. **Pets**: always on the first Awakened win (recommended: they're a feature now), or 1 in 10 like the Dark squirrel?
-7. **Fight kits**: is each Awakened fight played as its map's adventurer (recommended), or a kit made for the fight,
-   as the Inquisitor and the Saradominist were?
-8. **Remixes**: one at a time (recommended), with hard and endless, and records of their own?
-9. **Invocations and Relics**: in, out, or later? And if invocations are in, should hard mode become a preset of them?
-10. **The Soulreaper axe**: melee only (recommended), or a weapon any class can be offered?
+### 13.1 Decided (Dynny, 2026-11-06, on #155)
+
+1. **The finale**: "Now". The gauntlet is built now too, beside the four separate fights (7.3).
+2. **Lassar in co-op**: "Whole party". The party flips together (4.2).
+3. **The Scar's lighting**: "Do lighting now". Real lighting, built first, with the spike as its first step (6.8, 10).
+4. **Ghorrock as a ScapeRune map**: "Ok" (5.1).
+5. **How hard**: "Harder, is expansion requires the completion of the first campaign". Act II maps get harder the more
+   of them you've beaten, and the act opens only once the Inferno's beaten (section 1).
+6. **Pets**: "Yes, as long as the fight is hard". The first Awakened win always drops the pet, and the fights are
+   tuned hard (7.2).
+7. **Fight kits**: "Yes". Each Awakened fight is played as its map's adventurer, in the gauntlet too.
+8. **Remixes**: "All". Every remix can be on at once, on any first-campaign map (8.3).
+9. **Invocations and Relics**: "In, now". Both are in the first build (section 9, 10).
+10. **The Soulreaper axe**: "Melee only" (8.2).
+
+### 13.2 New questions these raise
+
+1. **The gauntlet in co-op**: a party running it together, each player as the fight's adventurer, or solo only?
+   Phosani's fight takes a party, so the engine can; the camp's blessings and the wounds would be each player's.
+2. **The gauntlet's order**: the player's choice (as designed), or one fixed order for everyone, so times compare?
+3. **Hard mode and invocations**: should hard mode become a preset of invocations? It's tidier, but changes every
+   map's hard records. (The second half of question 9, not yet answered.)
+4. **Remixes on Act II maps**: once the act's done, can the Act II maps take each other's remixes (a Dark
+   Stranglewood, a Frozen Lassar)? The rules allow it; it's 4 more maps of sets to tune and measure.
+5. **Records and relics**: a record shows the relics it was set with (as designed). Or should hard-mode, remix and Vault
+   records be relic-free, so they stay a test of the run?
+6. **The coin cap**: remixes, hard mode, Act II's steps and invocations add together up to +300%. Is that cap right,
+   or should stacking past it pay nothing?
+7. **Act II's steps in co-op**: the host's step counts for the room (as designed), or the highest in the room?
+8. **The gauntlet's wounds**: a fifth of each fight's damage carried to the next adventurer (as designed), or each
+   fight fresh, with the camp only for blessings?
 
 ## 14. Not verified
 
