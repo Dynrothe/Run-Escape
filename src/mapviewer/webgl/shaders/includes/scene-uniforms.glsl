@@ -1,6 +1,3 @@
-// Lights a dark map can have on at once (GameWebGLRenderer.setLights)
-#define MAX_LIGHTS 8
-
 // Per frame
 uniform SceneUniforms {
     mat4 u_viewProjMatrix;
@@ -18,9 +15,9 @@ uniform SceneUniforms {
     vec4 u_playArea;
     // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
     vec4 u_wash;
-    // The dark (MapDef.darkness, includes/lights.glsl), read only by a dark map's programs (their
-    // LIGHTS): x, how many of u_lights are on; y, how bright what's out of them is (0 to 1)
-    vec4 u_lightInfo;
-    // World tiles x and z, one over the radius squared (tiles), warmth (0 to 1)
-    vec4 u_lights[MAX_LIGHTS];
+    // Lights (MapDef.lighting, includes/lights.glsl), read only by a lit map's programs (their
+    // LIGHTS): the ambient's colour times how bright it is; and where u_lightMap is, world tiles
+    // x and z of its corner and one over its size in tiles
+    vec4 u_ambient;
+    vec4 u_lightMapArea;
 };

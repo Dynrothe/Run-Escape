@@ -9,6 +9,7 @@ import PicoGL, {
 } from "picogl";
 
 import { Frustum } from "../../Frustum";
+import { readsLightMap } from "../shaders/ShaderUtil";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
@@ -116,8 +117,8 @@ export type ActorDrawOptions = {
     // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
     // the world: a floor's pillars and raised tiles, which hide the player as walls would
     early?: boolean;
-    // On a dark map (MapDef.darkness), how much it's drawn as if it were in a light, 0 to 1:
-    // warnings and spells, which have to be seen in the dark. Off a dark map it does nothing.
+    // On a lit map (MapDef.lighting), how much it's drawn at full brightness whatever the light,
+    // 0 to 1: warnings and spells, which have to be seen in the dark. Elsewhere it does nothing.
     unlit?: number;
 };
 
@@ -435,16 +436,24 @@ export class ActorRenderer {
     }
 
     private createDrawCall(program: Program, vertexArray: VertexArray): DrawCall {
-        return this.app
+        const drawCall = this.app
             .createDrawCall(program, vertexArray)
             .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
             .texture("u_textures", this.textureArray)
             .texture("u_textureMaterials", this.textureMaterials)
             .texture("u_actorData", this.dataTexture);
+        if (this.lightMap && readsLightMap(program)) {
+            drawCall.texture("u_lightMap", this.lightMap);
+        }
+        return drawCall;
     }
 
+    // A lit map's light map (GameWebGLRenderer), for a program that reads it (setProgram)
+    lightMap?: Texture;
+
     // Draws the actors with another program from now on (a dark map's, with its lights, or back)
-    setProgram(program: Program): void {
+    setProgram(program: Program, lightMap?: Texture): void {
+        this.lightMap = lightMap;
         if (program === this.program) {
             return;
         }

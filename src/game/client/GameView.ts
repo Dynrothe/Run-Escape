@@ -144,7 +144,7 @@ const SHOUT_MS = 3000;
 // A casket thrown out of an elite: up and down, then a little bounce
 const CASKET_HOP_TICKS = 28;
 const CASKET_HOP_HEIGHT = 1.6;
-// A dark map's arrows for what's coming out of the dark (drawDarkArrows): from how far off (tiles),
+// Arrows for what's coming out of the dark under litTargetsOnly (drawDarkArrows): from how far off (tiles),
 // how many ways round, how far past the light's edge, and how strong at most
 const DARK_ARROW_RANGE = 16;
 const DARK_ARROW_SECTORS = 16;
@@ -546,7 +546,7 @@ export class GameView {
             // piles of bones and coins show a little bigger
             const pile = getPileLook(pickup);
             let scale = 0.85;
-            // On a dark map caskets and power-ups show anywhere; bones and coins are in the dark
+            // On a lit map caskets and power-ups show however dark it is; bones and coins don't
             let unlit = 0;
             if (pile) {
                 scale = pile.scale;
@@ -940,12 +940,12 @@ export class GameView {
             tint,
             flash,
         });
-        if (sim.darkness) {
+        if (sim.lighting) {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
         }
     }
 
-    // A dark map's lantern, while its power-up lasts: carried at the player's left hand, swinging
+    // A lantern, while its power-up lasts (on a map with lighting): carried at the player's left hand, swinging
     // a little as they go. Drawn beside them rather than baked into their look, which would bake
     // every player again on every map for it.
     private drawLantern(
@@ -1101,7 +1101,7 @@ export class GameView {
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
         this.drawPickupTimers(overlay, sim, alpha, scale);
-        if (sim.darkness) {
+        if (sim.litTargetsOnly) {
             this.drawDarkArrows(overlay, sim, alpha, scale);
         }
 
@@ -1844,7 +1844,7 @@ export class GameView {
         return distance;
     }
 
-    // On a dark map (MapDef.darkness), a faint arrow just past the edge of the player's light for
+    // Under the rule (LightingDef.litTargetsOnly), a faint arrow just past the edge of the player's light for
     // what's coming at them out of the dark: one a way round (DARK_ARROW_SECTORS), for the nearest
     // that way, fainter the further off it is. Kept on the screen.
     private drawDarkArrows(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
@@ -2251,7 +2251,7 @@ function drawArrow(
     ctx.stroke();
     ctx.restore();
 }
-// Drawn as if lit on a dark map (ActorDrawOptions.unlit): warnings and effects
+// Drawn at full brightness on a lit map (ActorDrawOptions.unlit): warnings and effects
 const UNLIT: ActorDrawOptions = { unlit: 1 };
 // A lantern in hand (drawLantern): tiles out to the left, ahead, and up, and how big
 const LANTERN_SIDE = 0.38;

@@ -45,8 +45,6 @@ import {
 } from "./shaders/Shaders";
 
 const MAX_TEXTURES = 2048;
-// Lights a dark map can have on at once (MAX_LIGHTS in scene-uniforms.glsl)
-export const MAX_LIGHTS = 8;
 // The cache's textures are 128 a side. A phone gets them at half that: from the
 // game's camera a tile is a few dozen pixels on its screen, so the full size is
 // barely sampled, and it's a quarter of the memory.
@@ -189,11 +187,12 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     playArea: vec4 = vec4.fromValues(-1e6, -1e6, 1e6, 1e6);
     // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
     wash: vec4 = vec4.fromValues(1, 1, 1, 1);
-    // The dark (scene-uniforms.glsl): how many lights are on and how bright the dark is; then
-    // each light, x, z, one over its radius squared, and warmth. Only a dark map's programs read
-    // them (GameWebGLRenderer.setDarkness).
-    lightInfo: vec4 = vec4.fromValues(0, 1, 0, 0);
-    lights: Float32Array = new Float32Array(MAX_LIGHTS * 4);
+    // Lights (scene-uniforms.glsl): the ambient's colour times its brightness; and where the light
+    // map is (world tiles x, z of its corner, and one over its size in tiles). Only a lit map's
+    // programs read them, and its light map (GameWebGLRenderer.setLighting).
+    ambient: vec4 = vec4.fromValues(1, 1, 1, 0);
+    lightMapArea: vec4 = vec4.fromValues(0, 0, 1, 0);
+    lightMap?: Texture;
     // World tiles (x0, y0, x1, y1) of the world that map squares keep, see
     // SdMapLoaderInput.keepArea. Unset keeps it all.
     keepArea?: vec4;
@@ -317,8 +316,8 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             PicoGL.FLOAT, // float u_isNewTextureAnim;
             PicoGL.FLOAT_VEC4, // vec4 u_playArea;
             PicoGL.FLOAT_VEC4, // vec4 u_wash;
-            PicoGL.FLOAT_VEC4, // vec4 u_lightInfo;
-            ...new Array(MAX_LIGHTS).fill(PicoGL.FLOAT_VEC4), // vec4 u_lights[MAX_LIGHTS];
+            PicoGL.FLOAT_VEC4, // vec4 u_ambient;
+            PicoGL.FLOAT_VEC4, // vec4 u_lightMapArea;
         ]);
 
         this.initFramebuffers();
@@ -825,6 +824,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
                 mapData,
                 time,
                 frameCount,
+                this.lightMap,
             ),
         );
 
@@ -998,11 +998,9 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             .set(10, this.mapViewer.isNewTextureAnim as any)
             .set(11, this.playArea as Float32Array)
             .set(12, this.wash as Float32Array)
-            .set(13, this.lightInfo as Float32Array);
-        for (let i = 0; i < MAX_LIGHTS; i++) {
-            this.sceneUniformBuffer.set(14 + i, this.lights.subarray(i * 4, i * 4 + 4));
-        }
-        this.sceneUniformBuffer.update();
+            .set(13, this.ambient as Float32Array)
+            .set(14, this.lightMapArea as Float32Array)
+            .update();
 
         const currInteractions = this.interactions[frameCount % this.interactions.length];
 

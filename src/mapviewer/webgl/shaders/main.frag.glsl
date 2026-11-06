@@ -42,7 +42,7 @@ void main() {
 #endif
 #ifdef LIGHTS
     // Only a dark map's programs have this (GameWebGLRenderer.setDarkness)
-    fragColor.rgb *= getLight(v_lightPos.xy, v_lightPos.z);
+    fragColor.rgb = applyLight(fragColor.rgb, v_lightPos.xy, v_lightPos.z);
 #endif
 #ifdef ACTOR_EDGE
     // Light along a tile-sized actor's edges, strongest at the edge and fading in towards the

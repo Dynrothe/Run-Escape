@@ -32,7 +32,7 @@ import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
-import { CombatStyle, Stats, emptyStats } from "../content/types";
+import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
@@ -110,12 +110,14 @@ import {
     getGearViews,
     getInventoryViews,
 } from "./ItemViews";
+import { LightBudget, MAX_SHOWN_LIGHTS } from "./LightBudget";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
 import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
+import { SceneLights } from "./SceneLights";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -212,6 +214,14 @@ const CAMERA_REACH: CameraReach = {
 
 // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
 // has scenery there (scaperune/CLAUDE.md).
+// What to build a map's collision from: its arena, and on a lit map where its glowing scenery is
+// (LightingDef.locs)
+function getRegionInput(map: MapDef): RegionDataInput {
+    const locs = map.lighting?.locs;
+    const region = getArenaRegion(map);
+    return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
+}
+
 function setPlayArea(
     renderer: GameWebGLRenderer,
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number },
@@ -506,14 +516,8 @@ export class GameClient implements GameFrameHandler {
     private shownBrightness = 1;
     // The raid hall's colour wash as last set (RaidRoomDef.hall)
     private shownWash: string | undefined;
-    // A dark map's lights as they're drawn this frame (updateLights)
-    private readonly shownLights: {
-        x: number;
-        y: number;
-        radius: number;
-        warmth: number;
-        away: number;
-    }[] = [];
+    // A lit map's lights (MapDef.lighting), picked each frame for the shaders
+    private readonly sceneLights = new SceneLights(new LightBudget(MAX_SHOWN_LIGHTS));
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
     // Each hero's look, as last baked
@@ -1235,7 +1239,7 @@ export class GameClient implements GameFrameHandler {
                 RegionDataInput,
                 RegionData,
                 RegionDataLoader
-            >(new RegionDataLoader(), getArenaRegion(getMap(mapId)));
+            >(new RegionDataLoader(), getRegionInput(getMap(mapId)));
             grid = new ArenaGrid(region);
             // Only the title screen's and this map's are kept: a phone needn't
             // hold every map played
@@ -1442,7 +1446,8 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = map.brightness ?? 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
-        this.renderer.setDarkness(map.darkness?.ambient);
+        this.renderer.setLighting(map.lighting !== undefined);
+        this.sceneLights.reset();
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
         if (music) {
@@ -1817,7 +1822,7 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
-        this.renderer.setDarkness(undefined);
+        this.renderer.setLighting(false);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2120,8 +2125,20 @@ export class GameClient implements GameFrameHandler {
             py + this.cameraLean.y + pan.y + shake.y,
         );
         this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
-        if (sim.darkness) {
-            this.updateLights(sim, alpha, px, py);
+        const lighting = sim.map.lighting;
+        if (lighting) {
+            this.sceneLights.update(
+                this.renderer,
+                sim,
+                lighting,
+                alpha,
+                this.viewHero,
+                this.view.localPlayerPose,
+                px,
+                py,
+                deltaTimeMs / 1000,
+                this.grid.data.glowLocs,
+            );
         }
         // A raid hall can be drawn darker than the map, and washed with a colour
         // (RaidRoomDef.hall)
@@ -2142,38 +2159,6 @@ export class GameClient implements GameFrameHandler {
         if (brightness !== this.shownBrightness) {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
-        }
-    }
-
-    // A dark map's lights (MapDef.darkness), where what carries them is drawn this frame: the
-    // shown player's first, then the nearest to them, as many as the shaders take (MAX_LIGHTS).
-    // The sim aims by all of them; one too far off to be drawn is off the screen anyway.
-    private updateLights(sim: Sim, alpha: number, px: number, py: number): void {
-        // Reused frame to frame, to keep a phone's garbage collector quiet
-        const pool = this.shownLights;
-        let count = 0;
-        for (const light of sim.lights) {
-            let { x, y } = light;
-            if (light.hero !== undefined) {
-                const pose = getPlayerPose(sim, light.hero, alpha, this.view.localPlayerPose);
-                x = pose.x;
-                y = pose.y;
-            } else if (light.enemy) {
-                x = light.enemy.prevX + (light.enemy.x - light.enemy.prevX) * alpha;
-                y = light.enemy.prevY + (light.enemy.y - light.enemy.prevY) * alpha;
-            }
-            const own = light.hero === this.viewHero;
-            const shown = (pool[count++] ??= { x: 0, y: 0, radius: 0, warmth: 0, away: 0 });
-            shown.x = x;
-            shown.y = y;
-            shown.radius = light.radius;
-            shown.warmth = light.warmth;
-            shown.away = own ? -1 : Math.hypot(x - px, y - py) - light.radius;
-        }
-        const shown = pool.slice(0, count).sort((a, b) => a.away - b.away);
-        this.renderer.clearLights();
-        for (const light of shown) {
-            this.renderer.addLight(light.x, light.y, light.radius, light.warmth);
         }
     }
 

@@ -1,27 +1,45 @@
 import { getEnemy } from "../content/enemies";
 import { ALL_MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { LANTERN_ID, POWER_UPS, getPowerUp } from "../content/powerups";
-import { DarknessDef, EnemyDef, MapDef, emptyStats } from "../content/types";
+import { EnemyDef, LightingDef, MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy } from "./entities";
 import { makeGrid } from "./world/testGrid";
 
-// The dark (MapDef.darkness): lights in the sim, weapons only aiming at what's lit, lanterns,
-// lights carried and left by enemies, and every other map left as it was
+// Lights (MapDef.lighting): sim lights, the rule that weapons only aim at what's lit (on its own,
+// not implied by the dark), lanterns, lights carried and left by enemies, the scene's ambient over
+// time, and every other map left as it was
 
 const SPAWN = { x: 1036.5, y: 1036.5 };
 const FIRE = { x: 1036.5, y: 1050.5, radius: 3 };
 
-const DARKNESS: DarknessDef = {
+const DARKNESS: LightingDef = {
     ambient: 0.16,
-    playerLight: 5,
-    fires: [FIRE],
+    player: { radius: 5 },
+    lights: [FIRE],
+    litTargetsOnly: true,
     lanterns: [{ x: SPAWN.x + 20, y: SPAWN.y - 20 }],
 };
 
 // Lumbridge, dark, as a map of its own for these tests
-const DARK_MAP: MapDef = { ...getMap("lumbridge"), id: "test_dark", darkness: DARKNESS };
+const DARK_MAP: MapDef = { ...getMap("lumbridge"), id: "test_dark", lighting: DARKNESS };
 MAP_BY_ID.set(DARK_MAP.id, DARK_MAP);
+
+// Lumbridge as it is, but for a glowing light: lights without the rule
+const GLOW_MAP: MapDef = {
+    ...getMap("lumbridge"),
+    id: "test_glow",
+    lighting: { lights: [{ x: SPAWN.x + 10, y: SPAWN.y, radius: 3, color: 0x4a8cff }] },
+};
+MAP_BY_ID.set(GLOW_MAP.id, GLOW_MAP);
+
+// The dark, but weapons aim as they always do
+const DIM_MAP: MapDef = {
+    ...getMap("lumbridge"),
+    id: "test_dim",
+    lighting: { ...DARKNESS, litTargetsOnly: false },
+};
+MAP_BY_ID.set(DIM_MAP.id, DIM_MAP);
 
 function openField(): string[] {
     const size = 72;
@@ -71,15 +89,50 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 }
 
 describe("the dark", () => {
-    test("only a dev map is dark, and everywhere else is lit everywhere", () => {
+    test("only dev maps have lights, and everywhere else is lit everywhere", () => {
         for (const map of ALL_MAPS) {
-            expect(map.darkness === undefined || map.dev === true).toBe(true);
+            expect(map.lighting === undefined || map.dev === true).toBe(true);
         }
         const sim = createSim("lumbridge");
-        expect(sim.darkness).toBeUndefined();
+        expect(sim.lighting).toBeUndefined();
+        expect(sim.litTargetsOnly).toBe(false);
         run(sim, 1);
         expect(sim.lights).toEqual([]);
         expect(sim.isLit(sim.player.x + 40, sim.player.y + 40)).toBe(true);
+        expect(sim.ambientAt(sim.tick)).toBe(1);
+    });
+
+    test("lights without the rule: weapons aim at everything, lit or not", () => {
+        for (const mapId of [GLOW_MAP.id, DIM_MAP.id]) {
+            const sim = createSim(mapId);
+            expect(sim.litTargetsOnly).toBe(false);
+            const near = goblin(sim, SPAWN.x + 3, SPAWN.y);
+            const dark = goblin(sim, SPAWN.x, SPAWN.y - 8);
+            run(sim, 0.1, [near, dark]);
+            expect(sim.lights.length).toBeGreaterThan(0);
+            expect(sim.isEnemyLit(dark)).toBe(true);
+            expect(hooks(sim).nearestEnemies(sim.player.x, sim.player.y, 20, 10)).toEqual([
+                near,
+                dark,
+            ]);
+        }
+        // No player light on the glowing one: only the map's
+        const glow = createSim(GLOW_MAP.id);
+        expect(glow.lights.map((light) => light.kind)).toEqual(["map"]);
+        expect(glow.lights[0].look.color).toBe(0x4a8cff);
+    });
+
+    test("the scene's ambient over time, and a boss phase's", () => {
+        const sim = createSim();
+        expect(sim.ambientAt(sim.tick)).toBe(0.16);
+        sim.dimTo(0.04, 2);
+        const start = sim.tick;
+        expect(sim.ambientAt(start + TICKS_PER_SECOND)).toBeCloseTo(0.1);
+        run(sim, 2.5);
+        expect(sim.ambientAt(sim.tick)).toBe(0.04);
+        sim.dimTo(sim.baseAmbient, 1);
+        run(sim, 1.5);
+        expect(sim.ambientAt(sim.tick)).toBe(0.16);
     });
 
     test("a lantern never comes up off a dark map", () => {
@@ -96,7 +149,7 @@ describe("the dark", () => {
         MAP_BY_ID.set("test_dark_lanterns", {
             ...DARK_MAP,
             id: "test_dark_lanterns",
-            darkness: { ...DARKNESS, lanternWeight: 1000 },
+            lighting: { ...DARKNESS, lanternWeight: 1000 },
         });
         const sim = createSim("test_dark_lanterns");
         const rolled = Array.from({ length: 20 }, () => hooks(sim).rollPowerUpId());
@@ -107,7 +160,7 @@ describe("the dark", () => {
         const sim = createSim();
         expect(sim.lights).toEqual([
             expect.objectContaining({ kind: "player", x: SPAWN.x, y: SPAWN.y, radius: 5, hero: 0 }),
-            expect.objectContaining({ kind: "fire", x: FIRE.x, y: FIRE.y, radius: 3 }),
+            expect.objectContaining({ kind: "map", x: FIRE.x, y: FIRE.y, radius: 3 }),
         ]);
         for (let i = 0; i < 20; i++) {
             sim.player.hp = sim.player.maxHp;
@@ -193,14 +246,14 @@ describe("the dark", () => {
         const sim = createSim();
         const leech: EnemyDef = {
             ...getEnemy("goblin"),
-            light: { radius: 2.5, left: { radius: 4, seconds: 20 } },
+            light: { radius: 2.5, color: 0xc8ffb0, left: { radius: 4, seconds: 20 } },
         };
         const carrier = goblin(sim, SPAWN.x + 15, SPAWN.y, leech);
         const beside = goblin(sim, SPAWN.x + 16.5, SPAWN.y);
         beside.hp = beside.maxHp = 1e6;
         run(sim, 0.1, [carrier, beside]);
         expect(sim.lights).toContainEqual(
-            expect.objectContaining({ kind: "enemy", x: carrier.x, radius: 2.5 }),
+            expect.objectContaining({ kind: "enemy", id: carrier.uid, x: carrier.x, radius: 2.5 }),
         );
         expect(sim.isEnemyLit(beside)).toBe(true);
         carrier.hp = 1;
@@ -208,12 +261,37 @@ describe("the dark", () => {
         expect(carrier.dead).toBe(true);
         run(sim, 1, [beside]);
         expect(sim.lights).toContainEqual(
-            expect.objectContaining({ kind: "left", x: carrier.x, radius: 4 }),
+            expect.objectContaining({ kind: "left", id: carrier.uid, x: carrier.x, radius: 4 }),
         );
         expect(sim.isEnemyLit(beside)).toBe(true);
         run(sim, 20, [beside]);
         expect(sim.lights.some((light) => light.kind === "left")).toBe(false);
         expect(sim.isEnemyLit(beside)).toBe(false);
+    });
+
+    test("a lantern where players have no light: a light of its own", () => {
+        const sim = createSim(GLOW_MAP.id);
+        sim.usePowerUp(getPowerUp(LANTERN_ID));
+        run(sim, 0.1);
+        expect(sim.lights[0]).toEqual(expect.objectContaining({ kind: "player", radius: 4 }));
+        run(sim, 31);
+        expect(sim.lights.map((light) => light.kind)).toEqual(["map"]);
+    });
+
+    test("a boss's phase dims the scene, and its fall brings it back", () => {
+        const sim = createSim();
+        const boss = sim.spawnEnemy(getEnemy("goblin"), "boss", { x: SPAWN.x, y: SPAWN.y + 9 })!;
+        (sim as unknown as { phaseLight(p: { light?: number }): void }).phaseLight({ light: 0.05 });
+        run(sim, 2.5, [boss]);
+        expect(sim.ambientAt(sim.tick)).toBe(0.05);
+        // A phase without light leaves it
+        (sim as unknown as { phaseLight(p: { light?: number }): void }).phaseLight({});
+        run(sim, 0.5, [boss]);
+        expect(sim.ambientAt(sim.tick)).toBe(0.05);
+        // Off a map with lighting nothing changes
+        const lit = createSim("lumbridge");
+        (lit as unknown as { phaseLight(p: { light?: number }): void }).phaseLight({ light: 0.05 });
+        expect(lit.ambientAt(lit.tick + 500)).toBe(1);
     });
 
     test("co-op: a light for each player, in the party's order", () => {

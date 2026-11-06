@@ -82,7 +82,7 @@ export type MapRecipe = {
             | "victoryText"
             | "fun"
             | "floor"
-            | "darkness"
+            | "lighting"
         >
     >;
 };

@@ -17,6 +17,9 @@ export type RegionDataInput = {
     // and in some dungeons (the God Wars Dungeon's main cave is on plane 2).
     // 0 when unset.
     plane?: number;
+    // Loc ids to find on the plane, wherever they are (a lit map's glowing scenery,
+    // MapDef.lighting.locs): RegionData.glowLocs
+    glowLocs?: number[];
 };
 
 export type RegionData = {
@@ -42,6 +45,9 @@ export type RegionData = {
     // their model stands on (x0, y0, x1, y1 in world tiles; NaN if not known,
     // an empty box with x1 < x0 if they draw nothing)
     collisionLocs: Float32Array;
+    // Where the locs asked for (RegionDataInput.glowLocs) are: id, then the middle of their tiles
+    // (x, y in world tiles), each. Unset when none were asked for.
+    glowLocs?: Float32Array;
 };
 
 export const COLLISION_LOC_STRIDE = 8;
