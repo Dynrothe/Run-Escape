@@ -9,11 +9,12 @@ MULTIPLAYER_ANY_MAP = "off"
 # "end": a run whose host the run checks catch ends; otherwise it's only logged
 MULTIPLAYER_RUN_CHECKS = "log"
 
-# A row in the run analytics collector for each run the checks find anything in, once the
-# collector's deployed (README, Run checks): uncomment, and set RUN_CHECKS_TOKEN as a secret
-# [[services]]
-# binding = "RUN_CHECKS"
-# service = "run-escape-analytics"
+# The run analytics collector (../analytics), which gets a row for each run the checks find
+# anything in once RUN_CHECKS_TOKEN is set as a secret (its README, Run checks). Deploy the
+# collector first. A relay without one: delete this.
+[[services]]
+binding = "RUN_CHECKS"
+service = "run-escape-analytics"
 
 [[durable_objects.bindings]]
 name = "LOBBY"

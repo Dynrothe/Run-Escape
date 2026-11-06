@@ -136,8 +136,9 @@ bun run wrangler secret put RUN_CHECKS_TOKEN -c ../analytics/wrangler.toml
 bun run wrangler secret put RUN_CHECKS_TOKEN      # the Cloudflare relay
 ```
 
-The Cloudflare relay reaches the collector through a service binding: uncomment `[[services]]`
-in `server/cloudflare/wrangler.toml` and deploy it. The Node relay posts to
+The Cloudflare relay reaches the collector through the service binding in its `wrangler.toml`,
+which names `run-escape-analytics` (change it there if you renamed the collector). The token turns
+it on and off: `wrangler secret delete RUN_CHECKS_TOKEN` stops the rows. The Node relay posts to
 `RUN_CHECKS_URL=https://<the Worker's address>/v1/run-checks`, with `RUN_CHECKS_TOKEN` set in its
 environment. Without both, a relay sends nothing. A row that doesn't arrive is only missed: the
 relay's log has the run's summary too.
