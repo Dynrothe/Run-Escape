@@ -190,6 +190,9 @@ describe("contentSecurityPolicy", () => {
         expect(contentSecurityPolicy(undefined, "https://stats.example/v1/runs")).toBe(
             "connect-src 'self' https://stats.example/v1/runs",
         );
+        expect(contentSecurityPolicy(undefined, undefined, "https://saves.example")).toBe(
+            "connect-src 'self' https://saves.example/v1/",
+        );
         expect(contentSecurityPolicy("https://example.com:8443")).toBe(
             "connect-src 'self' https://example.com:8443 wss://example.com:8443",
         );

@@ -69,7 +69,8 @@ public final class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RelayPolicy relayPolicy =
-            new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL);
+            new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL,
+                    BuildConfig.CLOUD_SAVE_URL);
     private WebView webView;
     private FrameLayout root;
     private TextView loading;

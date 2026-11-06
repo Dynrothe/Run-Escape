@@ -1,0 +1,61 @@
+name = "run-escape-cloud-saves"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+
+[vars]
+# Comma-separated game origins: the desktop app's and the Android app's are already here; add the
+# web game's. localhost belongs in .dev.vars, never here.
+ALLOWED_ORIGINS = "https://run-escape.invalid,https://appassets.androidplatform.net"
+# The newest save and its backups, per sync code
+KEEP_VERSIONS = "6"
+# And the last version of each of the last few UTC days (0 to 90), however many came after it
+KEEP_DAYS = "7"
+# Saves and new sync codes stored a day at most, to stay inside D1's daily writes. Each is above
+# what one address can send in a day at its rate limit below, so no one address can use them up
+# for everyone (README, Limits).
+MAX_SAVES_PER_DAY = "5000"
+MAX_ACCOUNTS_PER_DAY = "2000"
+# Uploads a day at most for each code. The game sends one every 2 minutes at most.
+MAX_UPLOADS_PER_CODE_PER_DAY = "300"
+# A deleted code's saves are kept this long (1 to 90), for the code to restore (README)
+DELETED_RETENTION_DAYS = "7"
+# A code nobody's used for this long goes, with its saves (7 to 3650). The device keeps its own
+# save; a player back after longer turns cloud save on again.
+INACTIVE_DAYS = "25"
+
+# No database_id: the first `wrangler deploy` creates the database by this name, and the d1
+# commands find it by name.
+[[d1_databases]]
+binding = "DB"
+database_name = "run-escape-cloud-saves"
+migrations_dir = "migrations"
+
+# Rate limit namespaces are per account. The run collector has 11501 and 11502: change these if
+# another Worker of yours uses them.
+# Every request, per address
+[[ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "11503"
+simple = { limit = 60, period = 60 }
+
+# New sync codes, and new codes for old ones, per address: 1,440 a day at most, under
+# MAX_ACCOUNTS_PER_DAY
+[[ratelimits]]
+name = "ACCOUNT_LIMITER"
+namespace_id = "11504"
+simple = { limit = 1, period = 60 }
+
+# Uploads, per sync code
+[[ratelimits]]
+name = "UPLOAD_LIMITER"
+namespace_id = "11505"
+simple = { limit = 6, period = 60 }
+
+# Uploads, per address, whatever the code: 4,320 a day at most, under MAX_SAVES_PER_DAY
+[[ratelimits]]
+name = "UPLOAD_IP_LIMITER"
+namespace_id = "11506"
+simple = { limit = 3, period = 60 }
+
+[triggers]
+crons = ["23 * * * *"]
