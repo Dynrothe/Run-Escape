@@ -1,5 +1,5 @@
 // Holds the hand-written loc tables of the maps that build without the cache to the cache: the
-// Sisterhood Sanctuary's and the Owl's Court's. Their tests build them from SOLID_LOCS (each one's
+// Sisterhood Sanctuary's, the Owl's Court's and the Sunken Quarry's. Their tests build them from SOLID_LOCS (each one's
 // size) and WALK_THROUGH (what doesn't block), so a cache update that changes a size or a clip
 // would leave the tests passing on a map that's wrong. Builds each map with the cache, then checks
 // by getCollisionFlags' own rules that every SOLID_LOCS size is the cache's, and that each one
@@ -9,6 +9,7 @@
 import { getLocBlocking } from "../../src/game/scaperune/collision";
 import { LOC_NORMAL } from "../../src/game/scaperune/mapBuild";
 import * as owlsCourt from "../../src/game/scaperune/maps/owlsCourt";
+import * as quarry from "../../src/game/scaperune/maps/quarryColossus";
 import * as sanctuary from "../../src/game/scaperune/maps/sisterhoodSanctuary";
 import type { MapRecipe } from "../../src/game/scaperune/recipe";
 import { createBuildContext } from "../../src/game/scaperune/squares";
@@ -32,6 +33,12 @@ const TABLES: Table[] = [
         recipe: owlsCourt.OWLS_COURT_RECIPE,
         solid: owlsCourt.SOLID_LOCS,
         walkThrough: owlsCourt.WALK_THROUGH,
+    },
+    {
+        name: "The Sunken Quarry's",
+        recipe: quarry.QUARRY_RECIPE,
+        solid: quarry.QUARRY_LOC_SIZES,
+        walkThrough: [],
     },
 ];
 
