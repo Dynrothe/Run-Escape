@@ -1817,8 +1817,8 @@ export type TombsWardensPlaces = {
 
 // The Wardens' first phase (content/tombs.ts's WARDENS; Sim.stepWardens). The obelisk is what's
 // fought. It sends an energy orb down one of three troughs each side every `every` seconds (a step
-// of a tile each stepSeconds, steps of them), each one that gets there charging its Warden; a
-// player on a side's gap or spawn tile (within reach) stops it, for blockDamage an orb. A Warden
+// of a tile each stepSeconds, steps of them), each one that gets there charging its Warden; one a
+// player walks into on the way is soaked (orbs.soak), and charges nothing. A Warden
 // charges perSecond and perOrb more (Ancient Haste: haste), and full, discharges (its seq and seal),
 // paused for pause seconds, its attacks taking turns: pyramids, then a shot.
 export type WardensDef = {

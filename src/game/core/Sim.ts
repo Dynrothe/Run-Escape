@@ -6125,8 +6125,8 @@ export class Sim {
                     );
                 } else {
                     hero.wardenEnergy++;
+                    hero.wardenEnergyTick = this.tick + secondsToTicks(soak.fade);
                 }
-                hero.wardenEnergyTick = this.tick + secondsToTicks(soak.fade);
                 this.use(current);
                 return false;
             }
@@ -6963,8 +6963,10 @@ export class Sim {
     private startWardenSiphons(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three;
         const floor = this.floor;
-        // One more for every player past the first: there's a siphon each and more
-        const count = def.count[three.batch] + this.heroes.filter((hero) => !hero.left).length - 1;
+        // One more for every player up past the first: there's a siphon each and more
+        const count =
+            def.count[three.batch] +
+            Math.max(0, this.heroes.filter((hero) => this.isUp(hero)).length - 1);
         three.batch++;
         this.reform(warden, def.forms[three.side].charging);
         this.animate(warden, def.chargeSeq);
@@ -14415,7 +14417,7 @@ export class Sim {
         // The Wardens' orbs soaked: each more against their obelisk (WARDENS.orbs.soak)
         const wardensFight = this.tombsWardens;
         const soaked =
-            wardensFight?.phase === 1 && enemy.uid === wardensFight.obeliskUid
+            mightScale > 0 && wardensFight?.phase === 1 && enemy.uid === wardensFight.obeliskUid
                 ? 1 + WARDENS.orbs.soak.bonus * this.hero.wardenEnergy
                 : 1;
         const damage = Math.max(

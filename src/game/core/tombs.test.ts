@@ -2748,11 +2748,12 @@ describe("the Wardens' first phase", () => {
         expect(hero.wardenEnergy).toBe(WARDENS.orbs.soak.max);
         const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
         obelisk.hp = obelisk.maxHp;
-        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y, 0);
+        // (a weapon's hit: a fixed share of its hitpoints, mightScale 0, takes no more for it)
+        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y);
         const soaked = obelisk.maxHp - obelisk.hp;
         hero.wardenEnergy = 0;
         obelisk.hp = obelisk.maxHp;
-        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y, 0);
+        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y);
         expect(soaked).toBeGreaterThan((obelisk.maxHp - obelisk.hp) * 1.5);
         // One more while full hurts
         hero.wardenEnergy = WARDENS.orbs.soak.max;

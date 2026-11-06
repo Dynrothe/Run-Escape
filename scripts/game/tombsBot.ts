@@ -1796,7 +1796,10 @@ function wardensMove(sim: Sim): Point | undefined {
         const prey = full
             ? undefined
             : fight.orbs
-                  .filter((orb) => orb.side === starve && orb.step >= 1)
+                  .filter(
+                      (orb) =>
+                          orb.side === starve && orb.step >= 1 && orb.step < WARDENS.orbs.steps,
+                  )
                   .sort((a, b) => {
                       const pa = orbAt(a);
                       const pb = orbAt(b);
@@ -1960,11 +1963,24 @@ function wardensMove(sim: Sim): Point | undefined {
             )
         );
     };
-    // The floor's middle column, which no slam reaches (east and west leave the other half and
-    // it, both leaves the middle three), at its north end, near the Warden: there's no reading
-    // which slam is next, enraged or not
+    // The column the next slam leaves alone, at the floor's north end near the Warden: east takes
+    // x from the middle up and west from the middle down (a column west of the middle for the
+    // east one, east of it for the west), both all but the middle three. The count goes up as a
+    // slam starts: that one's safe column is kept till its rows are down and done hurting, or
+    // till the next's a step away (enraged they come every 3 s)
     const middle = floor.x0 + Math.floor(floor.sizeX / 2);
-    const column = middle;
+    let seen = slamSeen.get(sim);
+    if (!seen || seen.slam !== three.slam) {
+        seen = { slam: three.slam, tick: sim.tick };
+        slamSeen.set(sim, seen);
+    }
+    const landingTicks = Math.min(
+        50 * (1 + floor.sizeY * 0.1 + 0.4),
+        Math.max(25, three.nextSlam - seen.tick - 15),
+    );
+    const landing = three.slam > 0 && sim.tick - seen.tick < landingTicks;
+    const next = (["east", "west", "both"] as const)[(three.slam - (landing ? 1 : 0)) % 3];
+    const column = next === "east" ? middle - 1 : next === "west" ? middle + 1 : middle;
     // As near the Warden (north, past the floor's end) as the weapons need: a melee hero on the
     // floor's last row, anything that reaches further a step or two back
     const warden = sim.enemies.find((e) => e.uid === three.wardenUid);
@@ -2001,7 +2017,7 @@ function wardensMove(sim: Sim): Point | undefined {
                 if (danger(tx, ty) || sim.grid.isSolid(tx, ty)) {
                     continue;
                 }
-                const away = Math.hypot(dx, dy) + (ty > Math.floor(to.y) ? 0.5 : 0);
+                const away = Math.hypot(dx, dy) + (ty < Math.floor(to.y) ? 0.5 : 0);
                 if (away < bestAway) {
                     bestAway = away;
                     best = { x: tx + 0.5, y: ty + 0.5 };
@@ -2014,6 +2030,8 @@ function wardensMove(sim: Sim): Point | undefined {
     // fireball and Ba-Ba's rock, aimed where you stand) as it goes
     return dodging(sim, safeStep(sim, to, danger), (x, y) => danger(Math.floor(x), Math.floor(y)));
 }
+
+const slamSeen = new WeakMap<Sim, { slam: number; tick: number }>();
 
 function clampTo(to: Point, floor: { x0: number; y0: number; x1: number; y1: number }): Point {
     return {

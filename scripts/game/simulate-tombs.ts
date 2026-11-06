@@ -146,13 +146,13 @@ if (!CHARACTERS.some((c) => c.id === characterId)) {
     throw new Error(`No adventurer ${characterId}`);
 }
 
-// The account's state: META=max buys every shop upgrade, META=mid half its ranks (rounded down,
-// so a 3-rank skill has one); ARMOURY=max upgrades every piece to the end of its line, ARMOURY=mid
+// The account's state: META=max buys every shop upgrade, META=mid half its ranks (rounded up, so
+// a one-rank skill is bought); ARMOURY=max upgrades every piece to the end of its line, ARMOURY=mid
 // half way (rounded down). Caskets drop as they always do: the pieces come out as upgraded.
 const metaStats = emptyStats();
 const metaShare = process.env.META === "max" ? 1 : process.env.META === "mid" ? 0.5 : 0;
 for (const upgrade of SHOP_UPGRADES) {
-    metaStats[upgrade.stat] += upgrade.perRank * Math.floor(upgrade.maxRank * metaShare);
+    metaStats[upgrade.stat] += upgrade.perRank * Math.ceil(upgrade.maxRank * metaShare);
 }
 const armouryShare =
     process.env.ARMOURY === "max" ? 1 : process.env.ARMOURY === "mid" ? 0.5 : undefined;

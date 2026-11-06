@@ -557,8 +557,8 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   orb; off a pyramid as its hits come (one side's cells while the other's are hitting); phase two
   by the Warden or its core (a thrower keeps Tumeken's at its weapons' reach all round rather than
   backing to the floor's end into its slash), off the obelisk's marks; phase three at the floor's
-  north end in the middle column, which no slam reaches (so there's no reading which is next,
-  enraged or not), on its siphons, off its lightning, the phantoms' fans, fireballs and rocks,
+  north end in the column the next slam leaves alone (kept from the one landing till the next's a
+  step away), on its siphons, off its lightning, the phantoms' fans, fireballs and rocks,
   and the acid their jugs leave. It waits by the Wardens' door for its hitpoints to come back
   before stepping in, while they do (not with Dehydration, and not for ever).
 - **Crondis at higher path levels**: hungry crocodiles at the palm eat what's poured faster than
