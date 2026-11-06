@@ -118,6 +118,62 @@ export function validateRun(value, now = Date.now()) {
     return READERS.get(value.schemaVersion)?.(value, now);
 }
 
+// What a co-op relay's run checks find (server/coop-checks.mjs's RUN_CHECKS), and the kinds a
+// host can be caught by
+export const CHECK_KINDS = ["ahead", "move", "action", "auto", "desync"];
+const CAUGHT_BY = new Set(CHECK_KINDS.filter((kind) => kind !== "desync"));
+const CHECK_RELAYS = new Set(["node", "cloudflare"]);
+
+// A relay's row for a run its checks found anything in (coop-checks.mjs's checkReport)
+export function validateRunCheck(value, now = Date.now()) {
+    const counts = value?.counts;
+    if (
+        !value ||
+        typeof value !== "object" ||
+        value.schemaVersion !== 1 ||
+        typeof value.checkId !== "string" ||
+        !UUID.test(value.checkId) ||
+        !CHECK_RELAYS.has(value.relay) ||
+        typeof value.build !== "string" ||
+        !/^[a-zA-Z0-9._-]{1,80}$/.test(value.build) ||
+        !isId(value.mapId) ||
+        !isId(value.mode) ||
+        typeof value.endless !== "boolean" ||
+        !number(value.partySize, 4, true) ||
+        value.partySize < 1 ||
+        !Array.isArray(value.characters) ||
+        value.characters.length !== value.partySize ||
+        !value.characters.every(isId) ||
+        !number(value.runSeconds, 7 * 86400) ||
+        !counts ||
+        typeof counts !== "object" ||
+        Array.isArray(counts) ||
+        !Object.entries(counts).every(
+            ([kind, n]) => CHECK_KINDS.includes(kind) && number(n, 1_000_000_000, true),
+        ) ||
+        !(value.caught === null || CAUGHT_BY.has(value.caught)) ||
+        typeof value.ended !== "boolean"
+    ) {
+        return undefined;
+    }
+    return {
+        day: utcDay(now),
+        check_id: value.checkId.toLowerCase(),
+        received_at: now,
+        relay: value.relay,
+        build: value.build,
+        map_id: value.mapId,
+        mode: value.mode,
+        endless: Number(value.endless),
+        characters: [...value.characters].sort().join(","),
+        party_size: value.partySize,
+        run_seconds: value.runSeconds,
+        ...Object.fromEntries(CHECK_KINDS.map((kind) => [kind, counts[kind] ?? 0])),
+        caught: value.caught,
+        ended: Number(value.ended),
+    };
+}
+
 export function leaderboardQuery(params, now = Date.now()) {
     if (
         !knownFilters(params, [

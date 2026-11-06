@@ -497,6 +497,64 @@ describe("Cloudflare co-op room", () => {
             });
         });
 
+        it("sends the collector a row for the run, through its binding, after a restart too", async () => {
+            const sent: any[] = [];
+            env.RUN_CHECKS_TOKEN = "a-relay-token-that-is-long-enough-to-use";
+            env.RUN_CHECKS = {
+                fetch: async (url: string, init: any) => {
+                    sent.push({ url, auth: init.headers.Authorization, ...JSON.parse(init.body) });
+                    return { ok: true, status: 200 };
+                },
+            };
+            try {
+                const { room, host } = await party();
+                const game = {
+                    mapId: "barrows",
+                    hard: true,
+                    endless: false,
+                    heroes: [
+                        { id: "host", characterId: "wizard" },
+                        { id: "guest", characterId: "ranger" },
+                    ],
+                };
+                say(room, host, { t: "start", game });
+                // An honest run sends nothing
+                say(room, host, { t: "end" });
+                expect(sent).toEqual([]);
+                say(room, host, { t: "start", game });
+                await wait(room, 1000);
+                const again = await restart();
+                const [h, g] = again.room.members;
+                resume(again, h.token, new Socket("host"));
+                resume(again, g.token, new Socket("guest"));
+                // Checked again once the frames since the restart can be
+                say(again, h, { t: "down", d: { upTo: 60, events: [] } });
+                await wait(again, 26_000);
+                forged(again, h, 1360);
+                say(again, h, { t: "end" });
+                await Promise.resolve();
+                expect(sent).toEqual([
+                    expect.objectContaining({
+                        url: expect.stringMatching(/\/v1\/run-checks$/),
+                        auth: `Bearer ${env.RUN_CHECKS_TOKEN}`,
+                        relay: "cloudflare",
+                        mapId: "barrows",
+                        mode: "hard",
+                        partySize: 2,
+                        characters: ["ranger", "wizard"],
+                        counts: { move: 1 },
+                        caught: null,
+                        ended: false,
+                    }),
+                ]);
+                // Neither names nor the room
+                expect(JSON.stringify(sent)).not.toMatch(/ABCDEFGH|"host"|"guest"/);
+            } finally {
+                delete env.RUN_CHECKS;
+                delete env.RUN_CHECKS_TOKEN;
+            }
+        });
+
         it("ends the run when it's set to", async () => {
             env.MULTIPLAYER_RUN_CHECKS = "end";
             const { room, host, guest } = await party();

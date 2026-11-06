@@ -1,5 +1,14 @@
 import { cleanAction, cleanMove as gameCleanMove } from "../src/game/core/lockstep";
-import { RunWatch, actionKey, cleanMove, endsCaughtRuns, heroIdsOf } from "./coop-checks.mjs";
+import {
+    RunWatch,
+    actionKey,
+    checkReport,
+    checkReporter,
+    cleanMove,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "./coop-checks.mjs";
 
 describe("the relay's copy of the host's checks", () => {
     it("cleans a move and an action as the game does", () => {
@@ -378,5 +387,60 @@ describe("watching a run", () => {
             watch.up("stranger", d, now);
         }
         expect(reports).toEqual([]);
+    });
+});
+
+describe("the collector's rows", () => {
+    const token = "a-relay-token-that-is-long-enough-to-use";
+    const summary = {
+        build: "0.28.0-abc",
+        ...runOf({ mapId: "barrows", heroes: [{ characterId: "wizard" }] }),
+        party: 1,
+        runSeconds: 12.5,
+        counts: { ahead: 1 },
+        caught: null,
+    };
+
+    it("is sent only when the relay has somewhere to send it and a token", () => {
+        const fetch = vi.fn();
+        expect(checkReporter({ url: "https://c/v1/run-checks", token, fetch: undefined })).toBe(
+            undefined,
+        );
+        expect(checkReporter({ url: undefined, token, fetch })).toBe(undefined);
+        expect(checkReporter({ url: "https://c/v1/run-checks", token: "short", fetch })).toBe(
+            undefined,
+        );
+    });
+
+    it("sends a run's row once, and only notes a row that didn't get there", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const fetch = vi.fn(async () => ({ ok: true, status: 200 }));
+            const report = checkReporter({ url: "https://c/v1/run-checks", token, fetch })!;
+            const row = checkReport(summary, "node", false);
+            await report(row);
+            expect(fetch).toHaveBeenCalledTimes(1);
+            const [url, init] = fetch.mock.calls[0] as any;
+            expect(url).toBe("https://c/v1/run-checks");
+            expect(init.headers.Authorization).toBe(`Bearer ${token}`);
+            expect(JSON.parse(init.body)).toEqual(row);
+            expect(row).toMatchObject({ checkId: expect.any(String), characters: ["wizard"] });
+            expect(warn).not.toHaveBeenCalled();
+            await checkReporter({
+                url: "u",
+                token,
+                fetch: async () => ({ ok: false, status: 401 }),
+            })!(row);
+            await checkReporter({
+                url: "u",
+                token,
+                fetch: async () => {
+                    throw new Error("offline");
+                },
+            })!(row);
+            expect(warn).toHaveBeenCalledTimes(2);
+        } finally {
+            warn.mockRestore();
+        }
     });
 });

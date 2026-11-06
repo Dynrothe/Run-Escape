@@ -1,4 +1,11 @@
-import { DAY_MS, dailyQuery, leaderboardQuery, utcDay, validateRun } from "./schema.mjs";
+import {
+    DAY_MS,
+    dailyQuery,
+    leaderboardQuery,
+    utcDay,
+    validateRun,
+    validateRunCheck,
+} from "./schema.mjs";
 
 const MAX_BODY_BYTES = 4096;
 const isOn = (value) => value === true || value === "true";
@@ -10,6 +17,8 @@ const setting = (value, fallback, min, max) => {
 // Runs stored a day at most, whoever sends them: a flood can't run through D1's daily write
 // allowance (see README, Free-tier budget)
 const DEFAULT_MAX_RUNS_PER_DAY = 10_000;
+// A relay sends a row only for a run its checks found anything in
+const DEFAULT_MAX_CHECKS_PER_DAY = 1000;
 
 function allowedOrigin(request, env) {
     const origin = request.headers.get("Origin");
@@ -34,18 +43,15 @@ function json(value, status, origin) {
     });
 }
 
-async function authorized(request, env) {
-    if (typeof env.ANALYTICS_READ_TOKEN !== "string" || env.ANALYTICS_READ_TOKEN.length < 32)
-        return false;
+// token: the secret the request has to carry, at least 32 characters
+async function authorized(request, token) {
+    if (typeof token !== "string" || token.length < 32) return false;
     const supplied = request.headers.get("Authorization") ?? "";
     if (supplied.length > 512) return false;
     // Compare fixed-length hashes; never send the read token to the game build.
     const digest = async (text) =>
         new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
-    const [a, b] = await Promise.all([
-        digest(supplied),
-        digest(`Bearer ${env.ANALYTICS_READ_TOKEN}`),
-    ]);
+    const [a, b] = await Promise.all([digest(supplied), digest(`Bearer ${token}`)]);
     let difference = 0;
     for (let i = 0; i < a.length; i++) difference |= a[i] ^ b[i];
     return difference === 0;
@@ -76,8 +82,40 @@ async function readBody(request) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// A co-op relay's row for a run its checks found anything in. Only a relay with RUN_CHECKS_TOKEN
+// sends these, never a game, so there's no origin to allow.
+async function collectCheck(request, env, now) {
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+    if (!(await authorized(request, env.RUN_CHECKS_TOKEN))) {
+        return json({ error: "Unauthorized" }, 401);
+    }
+    if (!env.DB) return json({ error: "Analytics is not configured" }, 503);
+    if (request.headers.get("Content-Type")?.split(";")[0].trim() !== "application/json") {
+        return json({ error: "Expected application/json" }, 415);
+    }
+    let value;
+    try {
+        value = await readBody(request);
+    } catch (error) {
+        return json({ error: "Invalid request body" }, error.message === "large" ? 413 : 400);
+    }
+    const row = validateRunCheck(value, now);
+    if (!row) return json({ error: "Invalid run check" }, 400);
+    const fields = Object.keys(row);
+    const cap = setting(env.MAX_CHECKS_PER_DAY, DEFAULT_MAX_CHECKS_PER_DAY, 1, 1_000_000);
+    await env.DB.prepare(
+        `INSERT INTO run_checks (${fields.join(",")}) SELECT ${fields.map(() => "?").join(",")}
+        WHERE COALESCE((SELECT checks FROM daily_check_intake WHERE day = ?), 0) < ?
+        ON CONFLICT(day, check_id) DO NOTHING`,
+    )
+        .bind(...Object.values(row), row.day, cap)
+        .run();
+    return json({ accepted: true });
+}
+
 export async function collect(request, env, now = Date.now()) {
     const url = new URL(request.url);
+    if (url.pathname === "/v1/run-checks") return collectCheck(request, env, now);
     const ingest = url.pathname === "/v1/runs";
     const leaderboard = url.pathname === "/v1/leaderboard";
     const daily = url.pathname === "/v1/daily";
@@ -104,7 +142,7 @@ export async function collect(request, env, now = Date.now()) {
         return respond({ error: "Method not allowed" }, 405);
     if (ingest && !origin) return respond({ error: "Origin required" }, 403);
     // Check this on every request, before touching storage or any cached data.
-    if (!ingest && !publicBoard && !(await authorized(request, env))) {
+    if (!ingest && !publicBoard && !(await authorized(request, env.ANALYTICS_READ_TOKEN))) {
         return respond({ error: "Unauthorized" }, 401);
     }
     if (!env.DB) return respond({ error: "Analytics is not configured" }, 503);
@@ -190,7 +228,15 @@ export async function prune(env, now = Date.now()) {
         ).bind(daily),
         (changes) => changes === 0,
     );
+    await drain(
+        env.DB.prepare(
+            `DELETE FROM run_checks WHERE (day, check_id) IN
+            (SELECT day, check_id FROM run_checks WHERE day < ? LIMIT ${PRUNE_BATCH})`,
+        ).bind(raw),
+        (changes) => changes < PRUNE_BATCH,
+    );
     await env.DB.prepare("DELETE FROM daily_intake WHERE day < ?").bind(daily).run();
+    await env.DB.prepare("DELETE FROM daily_check_intake WHERE day < ?").bind(daily).run();
 }
 
 export default {

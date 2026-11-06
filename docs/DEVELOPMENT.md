@@ -1327,7 +1327,9 @@ this keeps fair players fair rather than stopping a cheat.
 
 Both relays check a run's frames as they pass (`server/coop-checks.mjs`) and log what they find,
 an object an entry with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
-`MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does.
+`MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does. Set up
+for it, a relay also sends the run analytics collector a row for each run they find anything in
+(`server/analytics/README.md`, Run checks).
 
 A room's map, endless and hard mode are the relay's: the host's game sends `settings` and shows
 what comes back in the room update, never a pick of its own, so a refused one changes nothing. A
