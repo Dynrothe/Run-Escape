@@ -2872,6 +2872,7 @@ export class GameClient implements GameFrameHandler {
                 Math.max(0, (sim.xp - thisLevel) / Math.max(1, nextLevel - thisLevel)),
             ),
             seconds: Math.floor(sim.seconds),
+            decisionSeconds: this.coopRun?.decisionSeconds,
             kills: sim.kills,
             coins: sim.coins,
             dps: this.shownDps,

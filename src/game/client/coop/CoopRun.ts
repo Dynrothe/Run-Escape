@@ -133,6 +133,7 @@ export class CoopRun {
     private readonly actionSeqs = new Map<number, { top: number; had: Set<number> }>();
     // The host's: since when the run's been waiting on each hero
     private readonly waitingSince = new Map<number, number>();
+    private decisionDeadline?: number;
     // The copies have gone apart (it's said once)
     desynced = false;
     // A guest's: since when it's seen frames missing, and when it last did
@@ -354,6 +355,27 @@ export class CoopRun {
         }
     }
 
+    private get decisionMs(): number | undefined {
+        const waiting = this.sim.waitingOn;
+        if (waiting.length === 0) {
+            return undefined;
+        }
+        const now = this.now();
+        const deadline = this.isHost
+            ? Math.min(
+                  ...waiting.map(
+                      (hero) => (this.waitingSince.get(hero.index) ?? now) + DECIDE_AFTER_MS,
+                  ),
+              )
+            : this.decisionDeadline;
+        return deadline === undefined ? undefined : Math.max(0, deadline - now);
+    }
+
+    get decisionSeconds(): number | undefined {
+        const ms = this.decisionMs;
+        return ms === undefined ? undefined : Math.ceil(ms / 1000);
+    }
+
     // The host's: a guest left the game
     playerLeft(id: string): void {
         this.loading.delete(id);
@@ -408,6 +430,11 @@ export class CoopRun {
         }
         this.upTo = Math.max(this.upTo, message.upTo);
         this.gapSince = undefined;
+        const ms = message.decisionMs;
+        this.decisionDeadline =
+            typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms <= DECIDE_AFTER_MS
+                ? this.now() + ms
+                : undefined;
     }
 
     // A guest's: frames missing that the host can't send again, so its run
@@ -495,6 +522,7 @@ export class CoopRun {
             upTo: this.upTo,
             events: this.outgoing,
             ...(this.outgoingHash && { hash: this.outgoingHash }),
+            ...(this.decisionMs !== undefined && { decisionMs: this.decisionMs }),
         };
         this.link.sendDown(message);
         this.sent.push(message);
@@ -539,6 +567,7 @@ export class CoopRun {
                 upTo: chunk[chunk.length - 1].upTo,
                 events: chunk.flatMap((m) => m.events),
                 ...(hash && { hash }),
+                ...(this.decisionMs !== undefined && { decisionMs: this.decisionMs }),
             });
             chunk = [];
             events = 0;

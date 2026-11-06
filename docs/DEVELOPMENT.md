@@ -1309,6 +1309,10 @@ and a hit can still arrive after the local picture appears to have moved clear.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
+  Everyone sees the time until the next automatic choice at the top center, even while choosing
+  or after answering. It replaces the run clock until the party finishes.
+  `DownMessage.decisionMs` carries the host's remaining wall-clock time (also on resends);
+  `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
 - **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
   host keeps the run going and a guest keeps up.
 
