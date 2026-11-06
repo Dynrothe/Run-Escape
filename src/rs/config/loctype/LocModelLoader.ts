@@ -21,23 +21,30 @@ export type ContourGroundInfo = {
     entityZ: number;
 };
 
-// A burnt loc's colours (LocType.charred): each face's lightness to CHAR_LIGHT of what it was,
-// its saturation a quarter, so wood goes near black, stone a dark grey and paint a sooty dull
-// version of itself. Textured faces are lit, not coloured: see charColours.
-const CHAR_LIGHT = 0.45;
+// A burnt loc's colours (LocType.charred): each face's lightness to CHAR_LIGHT of what it was and
+// its colour gone (saturation 0), so wood goes near black, stone a dark grey and paint (a
+// stall's awning) soot. Textured faces are lit, not coloured: see charColours.
+const CHAR_LIGHT = 0.42;
 
 export function charColour(hsl: number): number {
     const hue = (hsl >> 10) & 63;
     const saturation = (hsl >> 7) & 7;
     const lightness = hsl & 127;
-    return (hue << 10) | ((saturation >> 2) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
+    return (hue << 10) | ((saturation >> 3) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
 }
 
 // A textured face is lit, not coloured, so a burnt one takes a dark texture instead: wood and
 // anything coloured the darkest planks (5), stone and anything grey a dark cobbled rock (119).
-// See-through textures (leaves, bars, cloth) keep theirs, or they'd go solid.
+// See-through textures keep their holes, so they'd go solid if swapped for one of those: green
+// leaves are swapped for scorched brown ones (33) instead, and the rest (bars, shingles) kept.
 const CHAR_WOOD_TEXTURE = 5;
 const CHAR_STONE_TEXTURE = 119;
+const CHAR_LEAVES_TEXTURE = 33;
+// Hues from yellow-green to green (HSL hue 0 to 63)
+const isGreen = (hsl: number) => {
+    const hue = (hsl >> 10) & 63;
+    return hue >= 8 && hue <= 22 && ((hsl >> 7) & 7) >= 1;
+};
 
 function charColours(model: ModelData, textures: TextureLoader): void {
     const colours = model.faceColors;
@@ -50,7 +57,13 @@ function charColours(model: ModelData, textures: TextureLoader): void {
     }
     for (let i = 0; i < model.faceCount; i++) {
         const texture = faceTextures[i];
-        if (texture === -1 || textures.isTransparent(texture)) {
+        if (texture === -1) {
+            continue;
+        }
+        if (textures.isTransparent(texture)) {
+            if (isGreen(textures.getAverageHsl(texture))) {
+                faceTextures[i] = CHAR_LEAVES_TEXTURE;
+            }
             continue;
         }
         const saturation = (textures.getAverageHsl(texture) >> 7) & 7;

@@ -120,6 +120,11 @@ export function ruinGrid(
             if (overlay !== undefined) {
                 level0.overlays[i] = overlay;
             }
+            // Ground that showed nothing (the hidden overlay, under walls that may fall) shows ash
+            if (level0.overlays[i] === 0 && level0.underlays[i] === 0) {
+                level0.underlays[i] = rules.underlays(1, x, y);
+                level0.shapes[i] = 0;
+            }
         }
     }
     // Upstairs is gone but for a city wall's walkway, which is shown from the ground, and a
@@ -145,6 +150,10 @@ export function ruinGrid(
                     report.breached++;
                     grid.levels[1].flags[i] &= ~TILE_SHOWN;
                     level0.flags[i] &= ~TILE_BLOCKED;
+                    // Its ground is ash like the rest, where the band had none to show
+                    level0.overlays[i] = 0;
+                    level0.shapes[i] = 0;
+                    level0.underlays[i] = rules.underlays(level0.underlays[i] || 1, x, y);
                 }
             }
         }
