@@ -1,3 +1,4 @@
+import { MapDef } from "../../content/types";
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
@@ -16,7 +17,11 @@ import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
 import { SHATTERED_REALM } from "./shatteredRealm";
 import { TERRAIN_TEST } from "./terrainTest";
-import { TOMBS_OF_AMASCUT } from "./tombsOfAmascut";
+import {
+    BENEATH_CURSED_SANDS,
+    BENEATH_CURSED_SANDS_RECIPE,
+    TOMBS_OF_AMASCUT,
+} from "./tombsOfAmascut";
 import { VARDHELM } from "./vardhelm";
 import { WALL_SHEET } from "./wallSheet";
 import { FLOOR_DEMOS, WARDENS_FLOOR } from "./wardensFloor";
@@ -147,4 +152,10 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     ...FLOOR_DEMOS,
     DARK_TEST,
     GLOW_TEST,
+];
+
+// Boss fights still in development (a real MapDef each, so a win's kept: it unlocks what comes
+// after), on the dev server only, with their recipes
+export const SCAPERUNE_DEV_FIGHTS: { recipe: MapRecipe; map: MapDef }[] = [
+    { recipe: BENEATH_CURSED_SANDS_RECIPE, map: BENEATH_CURSED_SANDS },
 ];

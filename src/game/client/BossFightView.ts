@@ -426,7 +426,7 @@ export class BossFightView {
     // statues stand before it rises), and whoever's shown
     private fightBosses(sim: Sim): EnemyDef[] {
         const defs: EnemyDef[] = [];
-        const event = sim.map.events.find((e) => e.kind === "finalBoss");
+        const event = sim.mapEvents.find((e) => e.kind === "finalBoss");
         const final = event && getEnemy(event.enemyId);
         if (final?.boss) {
             defs.push(final);

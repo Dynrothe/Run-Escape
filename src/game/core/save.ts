@@ -78,6 +78,9 @@ export type SaveData = {
     victories: number;
     // Map id -> times beaten; beating a map unlocks the next
     mapVictories: Record<string, number>;
+    // A fight in parts (MapDef.stages): how many of its parts have been beaten, kept between runs
+    // as OSRS keeps a quest's progress
+    fightStages?: Record<string, number>;
     // Map id -> the times of those that were on hard mode
     hardVictories: Record<string, number>;
     // A raid's expert mode wins, which also count as hard ones
@@ -209,6 +212,16 @@ export function migrateSave(raw: unknown): SaveData {
         for (const [id, wins] of Object.entries(data.hardVictories)) {
             if (winnable(id) && num(wins, 0) > 0) {
                 save.hardVictories[id] = num(wins, 0);
+            }
+        }
+    }
+    if (data.fightStages && typeof data.fightStages === "object") {
+        save.fightStages = {};
+        for (const [id, parts] of Object.entries(data.fightStages)) {
+            const stages = MAP_BY_ID.get(id)?.stages;
+            const part = Math.floor(num(parts, 0));
+            if (winnable(id) && stages && part > 0 && part < stages.length) {
+                save.fightStages[id] = part;
             }
         }
     }
@@ -440,6 +453,8 @@ export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): vo
 
 export type RunSummary = {
     mapId: string;
+    // A fight in parts: which this run was (MapDef.stages)
+    stage?: number;
     // An endless run, and the round it got to
     endless?: boolean;
     round?: number;
@@ -472,7 +487,15 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     save.coins += run.coins;
     save.totalCoins += run.coins;
     save.runs++;
-    if (run.victory) {
+    // A fight in parts: a part beaten is kept, the next to play; past the last, from the first
+    // again (the map's beaten for good). Only the last beats the map.
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    if (run.victory && stages && (run.stage ?? 0) === getFightStage(save, run.mapId)) {
+        const next = (run.stage ?? 0) + 1;
+        save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
+    }
+    const beaten = !stages || (run.stage ?? 0) + 1 >= stages.length;
+    if (run.victory && beaten) {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
         if (run.hard) {
@@ -629,10 +652,23 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
     save.unlockedItems.push(...earned.items.map((i) => i.id));
 }
 
+// The part of a fight in parts a run plays next (MapDef.stages): the first not beaten (from the
+// first again once the last has been)
+export function getFightStage(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    const next = save.fightStages?.[mapId] ?? 0;
+    return stages && Number.isInteger(next) && next > 0 && next < stages.length ? next : 0;
+}
+
 // The first map is always open; each after it opens once the one before it
 // has been beaten, or once it's been beaten itself (a co-op guest can win on
 // a map the host had open). The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
+    // Behind another map, whatever this one is (MapDef.requires)
+    const requires = MAP_BY_ID.get(mapId)?.requires;
+    if (requires) {
+        return (save.mapVictories[requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
+    }
     if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
     }

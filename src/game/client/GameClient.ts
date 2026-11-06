@@ -13,6 +13,7 @@ import { toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
+    ALL_MAPS,
     FUN_MAPS,
     MAPS,
     MAP_BY_ID,
@@ -52,6 +53,7 @@ import {
     buyUpgrade,
     exportSave,
     getEarnedUnlocks,
+    getFightStage,
     getFinishedQuests,
     getMetaStats,
     getQuestProgress,
@@ -947,6 +949,7 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            stage: getFightStage(this.save, map.id),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1370,6 +1373,7 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            stage: getFightStage(this.save, mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1457,6 +1461,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            stage: game.stage,
             party,
             focus,
         });
@@ -1904,7 +1909,7 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
+        const locked = ALL_MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !c.only && !this.save.unlockedCharacters.includes(c.id),
         );

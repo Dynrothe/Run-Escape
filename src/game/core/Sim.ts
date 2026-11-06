@@ -156,6 +156,7 @@ import {
     RaidRoomDef,
     RandomEventDef,
     RandomEventEffect,
+    RunEventDef,
     SpecialAttackDef,
     Stats,
     TombsGateDef,
@@ -645,6 +646,8 @@ export type SimOptions = {
     // A raid's expert mode: hard mode, and the Nylocas only hurt by their own style
     // (EnemyDef.onlyStyle, BossDef.colours). Ignored off a raid.
     expert?: boolean;
+    // Which part of a fight in parts this run is (MapDef.stages; 0 when unset)
+    stage?: number;
     // The Tombs of Amascut's invocations (content/invocations.ts), which take hard mode's place
     // there. Ignored anywhere else.
     invocations?: string[];
@@ -693,6 +696,8 @@ export type RunResult = {
     hard: boolean;
     // A raid's expert mode (hard as well)
     expert: boolean;
+    // A fight in parts: which this run was (MapDef.stages)
+    stage?: number;
     // A raid's chest, once it's beaten
     raidChest?: RaidChest;
     // The Tombs of Amascut's board
@@ -1415,6 +1420,8 @@ export class Sim {
     tombsPath: string | undefined;
     // The paths done, in the order they were
     tombsPathsDone: string[] = [];
+    // A fight in parts: the part this run is (MapDef.stages)
+    readonly stage: number;
     // Ticks spent in the Nexus, which the run's clock leaves out (not the Wardens' room's)
     nexusTicks = 0;
     // Dev only: nothing hurts the player (GameClient.toggleDevGod), for watching a fight's mechanics
@@ -1778,6 +1785,10 @@ export class Sim {
         // The Tombs go by their invocations instead
         this.hard = ((options.hard ?? false) || this.expert) && !this.map.tombs;
         this.invocations = this.map.tombs ? cleanInvocations(options.invocations ?? []) : [];
+        const stage = Math.floor(options.stage ?? 0);
+        this.stage = Number.isFinite(stage)
+            ? Math.max(0, Math.min(stage, (this.map.stages?.length ?? 1) - 1))
+            : 0;
         this.raidLevel = getRaidLevel(this.invocations);
         this.testing = options.testing;
         this.raidTeleports = this.map.raid ? (options.raidTeleports ?? 0) : 0;
@@ -2194,12 +2205,18 @@ export class Sim {
         return this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
     }
 
+    // The map's events, or this part's of a fight in parts
+    get mapEvents(): RunEventDef[] {
+        return this.map.stages?.[this.stage]?.events ?? this.map.events;
+    }
+
     getResult(): RunResult {
         return {
             mapId: this.map.id,
             endless: this.endless,
             hard: this.hard,
             expert: this.expert,
+            ...(this.map.stages && { stage: this.stage }),
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
             round: this.round,
@@ -3254,7 +3271,7 @@ export class Sim {
             return;
         }
         const seconds = this.directorSeconds;
-        const events = this.raidRoomDef?.events ?? this.map.events;
+        const events = this.raidRoomDef?.events ?? this.mapEvents;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
             this.useSpawnHero();

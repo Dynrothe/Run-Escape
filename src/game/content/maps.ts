@@ -1,4 +1,4 @@
-import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { SCAPERUNE_DEV_FIGHTS, SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
@@ -414,6 +414,18 @@ export const MAPS: MapDef[] = [
     },
 ];
 
+// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
+// own rather than a slice of the real world (scaperune/CLAUDE.md)
+const showDevMaps =
+    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
+    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
+
+// Boss fights still in development, with the rest of the boss fights on the dev server, so a win's
+// kept and opens what comes after (Beneath Cursed Sands, the Tombs of Amascut)
+if (showDevMaps) {
+    MAPS.push(...SCAPERUNE_DEV_FIGHTS.map((fight) => fight.map));
+}
+
 // The maps that open one after another
 export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter((map) => !map.seasonal && !map.fight);
 
@@ -431,11 +443,6 @@ export { FUN_MAPS };
 // campaign's chain.
 export { RAID_MAPS };
 
-// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
-// own rather than a slice of the real world (scaperune/CLAUDE.md)
-const showDevMaps =
-    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
-    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
 function createDevMap(recipe: MapRecipe): MapDef {
     const play = recipe.play;
     const source = play && MAPS.find((map) => map.id === play.waveSet);
@@ -531,6 +538,7 @@ export function hasPoison(map: MapDef): boolean {
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
+        ...(map.stages ?? []).flatMap((stage) => stage.events.map((event) => event.enemyId)),
     ];
     return enemyIds.some((id) =>
         getEnemy(id).boss?.attacks.some(({ effect }) =>

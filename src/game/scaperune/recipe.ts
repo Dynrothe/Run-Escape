@@ -82,6 +82,7 @@ export type MapRecipe = {
             | "victoryText"
             | "fun"
             | "tombs"
+            | "requires"
             | "floor"
             | "lighting"
         >
