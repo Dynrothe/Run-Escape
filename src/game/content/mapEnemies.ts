@@ -29,7 +29,16 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     // Random events go by their effects: the rest is names and lines of chat
     const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
     collectEnemyIds(
-        [map.waves, map.events, map.fun?.bosses, map.raid, pumpkins, randomEvents],
+        // A floor's plates can drop a load drawn as one (FloorTriggerDef.load)
+        [
+            map.waves,
+            map.events,
+            map.fun?.bosses,
+            map.raid,
+            map.floor?.triggers,
+            pumpkins,
+            randomEvents,
+        ],
         ids,
         seen,
     );

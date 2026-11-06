@@ -695,7 +695,29 @@ export type BossAttackDef = {
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
     // way, and stunned if that's one of the map's pillars (BossDef.guard)
-    line?: { width: number; length: number; dash?: number };
+    line?: { width: number; length: number; dash?: number; smashes?: boolean };
+    // The floor's (MapDef.floor) quarry: its action (floor) aimed from the boss's own feet, not
+    // at the player (a stomp's ripple); its group whichever of floorNearest has floor nearest
+    // the player (the fault line by them); and crushes: landing (a swing, or a dash's end) on
+    // a cracked fragile tile caves it in under the boss (BossDef.sinks). A dash that smashes
+    // (line.smashes) breaks a floor pillar it runs into rather than stopping at it.
+    floorAt?: "boss";
+    floorNearest?: string[];
+    crushes?: boolean;
+    // Blasts: a floor pillar between the boss and a spot takes it instead, cracking
+    // (ArenaFloor.hitPillar): cover, while the pillar stands
+    blocked?: boolean;
+    // Thrown in an arc (a blast's spots) or dropped from high above (a ground attack's marks),
+    // drawn for its last seconds as it comes: a spot animation's model or an NPC's (lookId,
+    // an EnemyDef), height tiles at the top of its arc (BossFightView)
+    arc?: {
+        from: "boss" | "sky";
+        seconds: number;
+        height: number;
+        spotAnim?: number;
+        lookId?: string;
+        scale?: number;
+    };
     // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard)
     opens?: number;
     // Its arena's attack that hurts the boss too, if it's caught in it: a bolt that
@@ -778,6 +800,9 @@ export type FightAbilityDef = {
     impact?: ImpactDef;
     sound?: number;
     playerSeq?: number;
+    // Used while the boss's guard is down, it breaks it open for longer: its guard stays down
+    // seconds from now (BossState.coreEnd), with impact on it and sound
+    opens?: { seconds: number; impact?: ImpactDef; sound?: number };
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -888,6 +913,20 @@ export type BossPhasesDef = {
         ambients?: BossAmbientDef[];
         tempo?: number;
         speed?: number;
+        // Into this phase the arena gives way under them (a terrace): through the threshold
+        // everyone's held, the floor's group falls (warned as a fall is) after delay seconds,
+        // and at seconds the players drop to start (side by side) and the boss to rise, in an
+        // arc over fall seconds; the floor goes to floorPhase (FloorDef.phases). World tiles.
+        descend?: {
+            group: string;
+            delay: number;
+            at: number;
+            fall: number;
+            rise: { x: number; y: number };
+            start: { x: number; y: number };
+            floorPhase?: string;
+            impact?: ImpactDef;
+        };
     }[];
     // After the last blast it stands for seconds more before it falls, using
     // only these attacks (by name) interval seconds apart, opener first, with
@@ -1081,6 +1120,10 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Caught on a cracked fault (BossAttackDef.crushes), the floor caves in under it: it
+    // sinks depth tiles into the hole, stunned for stun seconds (BossDef.guard's), with impact
+    // as it goes and climbSeq as it hauls itself out onto the nearest floor
+    sinks?: { stun: number; depth: number; impact?: ImpactDef; climbSeq?: number; shout?: string };
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -1608,6 +1651,9 @@ export type FloorDef = {
     triggers?: Record<string, FloorTriggerDef>;
     // The floor's phases by name (FloorActionDef "phase"): another script, and skins swapped
     phases?: Record<string, FloorPhaseDef>;
+    // Pillars that break (ArenaFloor.hitPillar): after hits blows (3), falling away over fall
+    // seconds (0.3), and back as a tile that rebuilds is
+    pillars?: { hits?: number; fall?: number };
 };
 
 export type FloorBeatDef = {
@@ -1647,6 +1693,21 @@ export type FloorRebuildDef = { after: number; warn?: number; rise?: number };
 // until something arms it (FloorActionDef "arm"). Only players set them off.
 export type FloorTriggerDef = {
     actions: FloorActionDef[];
+    // Drops a load on the boss (the shown one) where it stands now: it lands seconds later,
+    // hitting it for damage and stunning it (BossDef.guard) if it's still within radius of
+    // where it was; drawn falling from high above (an NPC's model, lookId) with impact
+    load?: {
+        seconds: number;
+        radius: number;
+        damage: number;
+        stun?: number;
+        lookId?: string;
+        height?: number;
+        impact?: ImpactDef;
+        sound?: number;
+        message?: string;
+        missMessage?: string;
+    };
     cooldown?: number;
     once?: boolean;
     armed?: boolean;
@@ -1655,12 +1716,13 @@ export type FloorTriggerDef = {
 
 // Something done to the floor, by a trigger, a beat, a phase or a boss's attack (Sim.floorAct),
 // after delay seconds if it has one. pattern: start one (or one of FloorDef.patterns by name).
-// drop: a group's tiles fall (warned as a fall is); raise: a group's fallen tiles come back;
+// drop: a group's tiles fall (warned as a fall is; whole, all of them, even a piece of the floor
+// entire: a terrace giving way); raise: a group's fallen tiles come back;
 // slam: a group's tiles rise, a warning from now (a trap). dropUnder: the tile under whoever it's
 // aimed at falls (a boss's). arm: a trigger armed or disarmed. phase: one of FloorDef.phases.
 export type FloorActionDef = (
     | { kind: "pattern"; pattern: FloorPatternDef | string }
-    | { kind: "drop"; group: string }
+    | { kind: "drop"; group: string; whole?: boolean }
     | { kind: "raise"; group: string }
     | { kind: "slam"; group: string }
     | { kind: "dropUnder" }
@@ -1823,6 +1885,8 @@ export type FloorPatternDef = (
           ringSeconds: number;
           radius: number;
           spokes: "cross" | "diagonal";
+          // Rings nearer than this stay down: under whatever's stamping (a boss's feet)
+          from?: number;
       }
     | { kind: "dropRows"; rows: number; rowSeconds: number }
     | { kind: "holes"; count: number }
@@ -1830,6 +1894,9 @@ export type FloorPatternDef = (
 ) & {
     // Its own cue (FloorCue), over the floor's
     cue?: FloorCue;
+    // Only this group's tiles (FloorTileRuleDef.group), by the group's own extent and middle:
+    // one terrace of a floor of several
+    group?: string;
 };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into

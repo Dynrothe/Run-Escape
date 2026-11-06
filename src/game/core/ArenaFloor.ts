@@ -32,6 +32,10 @@ export const FRAGILE_HITS = 2;
 // the floor says otherwise
 export const REBUILD_WARN = 1;
 export const REBUILD_RISE = 0.8;
+// A pillar breaks after this many blows, falling away over this many seconds, unless the floor
+// says otherwise (FloorDef.pillars)
+export const PILLAR_HITS = 3;
+const PILLAR_FALL = 0.3;
 // A trigger's rest after it's set off, unless it says otherwise (FloorTriggerDef.cooldown)
 const TRIGGER_COOLDOWN = 5;
 // Heights closer than this are the same, for ledges (floorLayout's height and ramp)
@@ -93,19 +97,26 @@ export class ArenaFloor {
     private readonly hurtTo: number;
     private readonly dropWarn: number;
     private readonly restoreTicks: number;
-    // Whether the pattern starting now is shown bold
+    // Whether the pattern starting now is shown bold, and the tiles it's kept to (its group's)
     private bold = false;
+    private within: Uint8Array | undefined;
     // What's playing: the floor's script, or its phase's
     private script: FloorBeatDef[];
     private loopSeconds: number;
     // Actions waiting for their delay, in the order they're due; and what to say next tick
     private pending: { at: number; action: FloorActionDef }[] = [];
+    // The triggers set off by the last press, by name, for the sim to do what's its (a load
+    // dropped on the boss, FloorTriggerDef.load); it empties it
+    fired: string[] = [];
     private messages: string[] = [];
     // Whether any tile's a pillar (they block shots and sight), or has an effect
     readonly hasPillars: boolean;
     readonly hasEffects: boolean;
     // Whether any tile's raised, sunken or a ramp
     readonly hasLevels: boolean;
+    // Whether the floor's in more than one piece from the start (terraces apart): then holes and
+    // falls keep each piece whole, rather than the floor as one
+    private readonly inPieces: boolean;
 
     constructor(
         readonly def: FloorDef,
@@ -153,6 +164,11 @@ export class ArenaFloor {
         this.hasLevels =
             this.layout.height.some((h) => h !== 0) ||
             this.layout.ramp.some((r) => r !== RAMP_NONE);
+        const open = new Uint8Array(count);
+        for (let i = 0; i < count; i++) {
+            open[i] = this.layout.mask[i] && this.layout.type[i] !== TYPE_PILLAR ? 1 : 0;
+        }
+        this.inPieces = this.countPieces(open) > 1;
         // The grid's kept between runs on a map; what isn't floor is the pit's from the start
         grid.restoreAllTiles();
         // and a pillar blocks the way, as an object would
@@ -285,10 +301,137 @@ export class ArenaFloor {
         return false;
     }
 
-    // Whether a pillar stands on a tile (world tiles)
+    // Whether a pillar stands on a tile (world tiles): not one that's broken and gone
     isPillarTile(tileX: number, tileY: number): boolean {
         const i = this.index(tileX, tileY);
-        return i >= 0 && this.layout.mask[i] === 1 && this.layout.type[i] === TYPE_PILLAR;
+        return (
+            i >= 0 &&
+            this.layout.mask[i] === 1 &&
+            this.layout.type[i] === TYPE_PILLAR &&
+            this.dropWarnAt[i] === NONE
+        );
+    }
+
+    // The first pillar's tile along the line between two points (world tiles), as blocksSight
+    // walks it, or undefined if nothing stands between them
+    pillarBetween(
+        fromX: number,
+        fromY: number,
+        toX: number,
+        toY: number,
+    ): { x: number; y: number } | undefined {
+        if (!this.hasPillars) {
+            return undefined;
+        }
+        let tx = Math.floor(fromX);
+        let ty = Math.floor(fromY);
+        const endX = Math.floor(toX);
+        const endY = Math.floor(toY);
+        const dx = toX - fromX;
+        const dy = toY - fromY;
+        const stepX = dx > 0 ? 1 : -1;
+        const stepY = dy > 0 ? 1 : -1;
+        const tDeltaX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+        const tDeltaY = dy !== 0 ? Math.abs(1 / dy) : Infinity;
+        let tMaxX = dx !== 0 ? (dx > 0 ? tx + 1 - fromX : fromX - tx) * tDeltaX : Infinity;
+        let tMaxY = dy !== 0 ? (dy > 0 ? ty + 1 - fromY : fromY - ty) * tDeltaY : Infinity;
+        for (let n = Math.abs(endX - tx) + Math.abs(endY - ty); n > 0; n--) {
+            if (tMaxX < tMaxY) {
+                tMaxX += tDeltaX;
+                tx += stepX;
+            } else {
+                tMaxY += tDeltaY;
+                ty += stepY;
+            }
+            if (this.isPillarTile(tx, ty)) {
+                return { x: tx, y: ty };
+            }
+        }
+        return undefined;
+    }
+
+    // Of these groups (FloorTileRuleDef.group), the one with a tile still there nearest a
+    // point (world tiles), or undefined if they're all gone
+    nearestGroup(names: string[], x: number, y: number, tick: number): string | undefined {
+        let best: string | undefined;
+        let nearest = Infinity;
+        for (const name of names) {
+            for (const i of this.layout.groups.get(name) ?? []) {
+                if (this.isGone(i, tick) || this.dropWarnAt[i] !== NONE) {
+                    continue;
+                }
+                const dx = this.x0 + (i % this.sizeX) + 0.5 - x;
+                const dy = this.y0 + Math.floor(i / this.sizeX) + 0.5 - y;
+                const d = dx * dx + dy * dy;
+                if (d < nearest) {
+                    nearest = d;
+                    best = name;
+                }
+            }
+        }
+        return best;
+    }
+
+    // A cracked fault under something big caves in (BossDef.sinks): every fragile tile that's
+    // risen at least once, not going already, whose middle is within radius of (x, y), falls
+    // warn ticks from now, never cutting the floor in two. The tiles that go (world tiles).
+    caveIn(x: number, y: number, radius: number, tick: number, warn: number): number[] {
+        const caved: number[] = [];
+        const r = Math.ceil(radius);
+        for (let ty = Math.floor(y) - r; ty <= Math.floor(y) + r; ty++) {
+            for (let tx = Math.floor(x) - r; tx <= Math.floor(x) + r; tx++) {
+                const i = this.index(tx, ty);
+                if (
+                    i < 0 ||
+                    this.layout.type[i] !== TYPE_FRAGILE ||
+                    this.hits[i] < 1 ||
+                    this.dropWarnAt[i] !== NONE ||
+                    !this.layout.mask[i] ||
+                    (tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2 > radius * radius
+                ) {
+                    continue;
+                }
+                const tiles = slabTiles(this.layout, this.layout.anchor[i]);
+                if (!this.def.drop.islands && this.wouldSplit(tiles)) {
+                    continue;
+                }
+                for (const j of tiles) {
+                    this.dropWarnAt[j] = tick;
+                    this.dropAt[j] = tick + Math.max(1, warn);
+                    this.riseAt[j] = NONE;
+                    this.warnAt[j] = NONE;
+                    this.cueAt[j] = tick;
+                    this.cueBold[j] = 0;
+                    caved.push(this.x0 + (j % this.sizeX), this.y0 + Math.floor(j / this.sizeX));
+                }
+            }
+        }
+        return caved;
+    }
+
+    // A blow on a pillar (a boulder, a charge): it cracks, and after FloorDef.pillars' hits it
+    // breaks and falls away like a tile, coming back as a tile that rebuilds does. Whether it broke.
+    hitPillar(tileX: number, tileY: number, tick: number, blows = 1): boolean {
+        const i = this.index(tileX, tileY);
+        if (i < 0 || !this.isPillarTile(tileX, tileY)) {
+            return false;
+        }
+        const anchor = this.layout.anchor[i];
+        const tiles = slabTiles(this.layout, anchor);
+        const hits = Math.min(255, this.hits[anchor] + blows);
+        for (const j of tiles) {
+            this.hits[j] = hits;
+        }
+        if (hits < (this.def.pillars?.hits ?? PILLAR_HITS)) {
+            return false;
+        }
+        const fall = this.ticks(this.def.pillars?.fall ?? PILLAR_FALL);
+        for (const j of tiles) {
+            this.dropWarnAt[j] = tick;
+            this.dropAt[j] = tick + fall;
+            this.cueAt[j] = NONE;
+        }
+        return true;
     }
 
     private ticks(seconds: number): number {
@@ -381,6 +524,10 @@ export class ArenaFloor {
                 this.crack(i, tick);
             }
             if (this.dropAt[i] === tick) {
+                // A broken pillar's a hole now, not an object
+                if (this.layout.type[i] === TYPE_PILLAR) {
+                    this.grid.restoreTile(tileX, tileY);
+                }
                 this.grid.dropTile(tileX, tileY);
                 fell.push(tileX, tileY);
                 // Back by itself, if it's a floor or a tile that rebuilds
@@ -403,6 +550,10 @@ export class ArenaFloor {
             }
             if (this.restoredAt[i] === tick) {
                 this.grid.restoreTile(tileX, tileY);
+                // and back, it's in the way again
+                if (this.layout.type[i] === TYPE_PILLAR) {
+                    this.grid.dropTile(tileX, tileY, true);
+                }
                 this.dropWarnAt[i] = NONE;
                 this.dropAt[i] = NONE;
                 this.restoreAt[i] = NONE;
@@ -503,6 +654,22 @@ export class ArenaFloor {
                 break;
             }
             case "drop":
+                // All of it, whatever it is, pillars and all: a terrace giving way
+                if (action.whole) {
+                    for (const i of this.group(action.group)) {
+                        for (const j of slabTiles(this.layout, i)) {
+                            if (this.layout.mask[j] && this.dropWarnAt[j] === NONE) {
+                                this.dropWarnAt[j] = tick;
+                                this.dropAt[j] = tick + this.dropWarn;
+                                this.riseAt[j] = NONE;
+                                this.warnAt[j] = NONE;
+                                this.cueAt[j] = tick;
+                                this.cueBold[j] = 0;
+                            }
+                        }
+                    }
+                    break;
+                }
                 for (const i of this.group(action.group)) {
                     const tiles = slabTiles(this.layout, i);
                     if (def.drop.islands || !this.wouldSplit(tiles)) {
@@ -622,6 +789,7 @@ export class ArenaFloor {
             }
             const trigger = this.def.triggers![names[t]];
             this.readyAt[t] = tick + this.ticks(trigger.cooldown ?? TRIGGER_COOLDOWN);
+            this.fired.push(names[t]);
             if (trigger.once) {
                 this.armed[t] = 0;
             }
@@ -643,7 +811,9 @@ export class ArenaFloor {
         origin: () => { x: number; y: number },
     ): void {
         const { sizeX, sizeY } = this;
-        const { minX, maxX, minY, maxY } = this.layout;
+        // Only a group's tiles, by the group's own extent (FloorPatternDef.group: a terrace)
+        this.within = pattern.group ? this.groupMask(pattern.group) : undefined;
+        const { minX, maxX, minY, maxY } = this.within ? this.extent(this.within) : this.layout;
         if (maxX < 0) {
             return;
         }
@@ -715,7 +885,7 @@ export class ArenaFloor {
                             (pattern.spokes === "cross"
                                 ? dx === 0 || dy === 0
                                 : Math.abs(dx) === Math.abs(dy));
-                        if (ring > pattern.radius || spoke) {
+                        if (ring > pattern.radius || ring < (pattern.from ?? 0) || spoke) {
                             continue;
                         }
                         // Tipping away from the middle, the way it's going
@@ -783,7 +953,11 @@ export class ArenaFloor {
             case "restore": {
                 const step = this.ticks(pattern.rowSeconds);
                 for (let i = 0; i < this.dropAt.length; i++) {
-                    if (this.dropAt[i] === NONE || this.restoreAt[i] !== NONE) {
+                    if (
+                        this.dropAt[i] === NONE ||
+                        this.restoreAt[i] !== NONE ||
+                        (this.within && !this.within[i])
+                    ) {
                         continue;
                     }
                     const y = Math.floor(i / sizeX);
@@ -796,6 +970,37 @@ export class ArenaFloor {
                 break;
             }
         }
+        this.within = undefined;
+    }
+
+    // A group's tiles as a mask over the box (FloorTileRuleDef.group), every tile of its slabs
+    private groupMask(name: string): Uint8Array {
+        const mask = new Uint8Array(this.sizeX * this.sizeY);
+        for (const i of this.layout.groups.get(name) ?? []) {
+            for (const j of slabTiles(this.layout, this.layout.anchor[i])) {
+                mask[j] = 1;
+            }
+        }
+        return mask;
+    }
+
+    // The extent of a mask's tiles, both ends in (maxX -1 when there are none)
+    private extent(mask: Uint8Array): { minX: number; maxX: number; minY: number; maxY: number } {
+        let minX = this.sizeX;
+        let maxX = -1;
+        let minY = this.sizeY;
+        let maxY = -1;
+        for (let i = 0; i < mask.length; i++) {
+            if (mask[i] && this.layout.mask[i]) {
+                const x = i % this.sizeX;
+                const y = Math.floor(i / this.sizeX);
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
+        }
+        return { minX, maxX, minY, maxY };
     }
 
     // A slab rises at a tick, unless the tile's gone or going, already has one coming from an
@@ -804,7 +1009,7 @@ export class ArenaFloor {
     private rise(x: number, y: number, at: number, dir: number, known: number): void {
         const i = x + y * this.sizeX;
         const { layout } = this;
-        if (!layout.mask[i]) {
+        if (!layout.mask[i] || (this.within && !this.within[i])) {
             return;
         }
         const type = layout.type[i];
@@ -833,6 +1038,9 @@ export class ArenaFloor {
     // Whether a tile can fall: there's floor, and it's not solid, safe or reinforced
     private canFall(i: number): boolean {
         const type = this.layout.type[i];
+        if (this.within && !this.within[i]) {
+            return false;
+        }
         return this.layout.mask[i] === 1 && (type === TYPE_NORMAL || type === TYPE_FRAGILE);
     }
 
@@ -875,10 +1083,10 @@ export class ArenaFloor {
     }
 
     // Whether taking these tiles away would leave the floor that's still there (floor, not gone
-    // or going) in more than one piece, side by side, or leave none
+    // or going) in more pieces than it's in now, side by side, or a piece of it gone, or none. A
+    // floor that's in pieces from the start (terraces) keeps to its pieces.
     wouldSplit(tiles: number[]): boolean {
-        const { sizeX, sizeY } = this;
-        const count = sizeX * sizeY;
+        const count = this.sizeX * this.sizeY;
         const open = new Uint8Array(count);
         let total = 0;
         for (let i = 0; i < count; i++) {
@@ -891,6 +1099,7 @@ export class ArenaFloor {
                 total++;
             }
         }
+        const before = this.inPieces ? this.countPieces(open.slice()) : 1;
         for (const i of tiles) {
             if (open[i]) {
                 open[i] = 0;
@@ -900,29 +1109,36 @@ export class ArenaFloor {
         if (total <= 0) {
             return true;
         }
-        const start = open.indexOf(1);
-        const queue = [start];
-        open[start] = 2;
-        let reached = 0;
-        while (queue.length > 0) {
-            const i = queue.pop()!;
-            reached++;
-            const x = i % sizeX;
-            const y = Math.floor(i / sizeX);
-            for (const [nx, ny] of [
-                [x + 1, y],
-                [x - 1, y],
-                [x, y + 1],
-                [x, y - 1],
-            ]) {
-                const n = nx + ny * sizeX;
-                if (nx >= 0 && ny >= 0 && nx < sizeX && ny < sizeY && open[n] === 1) {
-                    open[n] = 2;
-                    queue.push(n);
+        return this.countPieces(open) !== before;
+    }
+
+    // How many pieces the open tiles (1s) are in, side by side; marks them as it goes
+    private countPieces(open: Uint8Array): number {
+        const { sizeX, sizeY } = this;
+        let pieces = 0;
+        for (let start = open.indexOf(1); start >= 0; start = open.indexOf(1, start + 1)) {
+            pieces++;
+            const queue = [start];
+            open[start] = 2;
+            while (queue.length > 0) {
+                const i = queue.pop()!;
+                const x = i % sizeX;
+                const y = Math.floor(i / sizeX);
+                for (const [nx, ny] of [
+                    [x + 1, y],
+                    [x - 1, y],
+                    [x, y + 1],
+                    [x, y - 1],
+                ]) {
+                    const n = nx + ny * sizeX;
+                    if (nx >= 0 && ny >= 0 && nx < sizeX && ny < sizeY && open[n] === 1) {
+                        open[n] = 2;
+                        queue.push(n);
+                    }
                 }
             }
         }
-        return reached < total;
+        return pieces;
     }
 
     // A tile falls, warned from a tick (known from its pattern's start): no slab rises on it from

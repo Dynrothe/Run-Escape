@@ -13,6 +13,7 @@ import {
     FLOOR_SOUTH,
     FLOOR_WEST,
     FRAGILE_HITS,
+    PILLAR_HITS,
 } from "../core/ArenaFloor";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { RAMP_NONE, TYPE_FRAGILE, TYPE_PILLAR } from "../core/floorLayout";
@@ -369,6 +370,7 @@ export class FloorView {
             this.assets.get(getFloorLidKey(skin)),
         );
         const fragileHits = def.drop.fragile?.hits ?? FRAGILE_HITS;
+        const pillarHits = def.pillars?.hits ?? PILLAR_HITS;
         this.drawing = floor;
         const whole = wholeTiles();
         for (let i = 0; i < floor.riseAt.length; i++) {
@@ -382,8 +384,14 @@ export class FloorView {
             const h = layout.slabY[i];
             const x = floor.x0 + col + w / 2;
             const y = floor.y0 + row + h / 2;
-            // A fragile tile that's risen shows it (FloorSkinDef.stages), if it has stages
-            const hits = layout.type[i] === TYPE_FRAGILE ? Math.min(floor.hits[i], fragileHits) : 0;
+            // A fragile tile that's risen shows it (FloorSkinDef.stages), if it has stages, and a
+            // pillar that's been struck (ArenaFloor.hitPillar)
+            const hits =
+                layout.type[i] === TYPE_FRAGILE
+                    ? Math.min(floor.hits[i], fragileHits)
+                    : layout.type[i] === TYPE_PILLAR
+                      ? Math.min(floor.hits[i], pillarHits - 1)
+                      : 0;
             let skinIndex = layout.skin[i];
             const stages = skinDefs[skinIndex]?.stages;
             if (hits > 0 && stages && stages.length > 0) {
