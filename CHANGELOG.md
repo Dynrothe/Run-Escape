@@ -15,6 +15,9 @@ the version in the corner).
 
 ### Changed
 
+- Stat icons, by Giordano: stats show the same icon from the game's cache wherever they appear:
+  the descriptions of weapons, passives and worn gear, the pause menu, level ups, caskets, random
+  events, the Armoury and the adventurer and skill screens.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it

@@ -29,6 +29,7 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
@@ -160,6 +161,7 @@ export function getGameSpriteIds(): number[] {
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),

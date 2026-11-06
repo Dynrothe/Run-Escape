@@ -15,6 +15,7 @@ import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { emptyStats } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
@@ -502,6 +503,11 @@ describe("sprites", () => {
         ]);
         expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
         expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
+    });
+
+    test("the slim cache keeps every stat icon's sprite", () => {
+        const ids = getGameSpriteIds();
+        expect(ids).toEqual(expect.arrayContaining(STAT_ICON_SPRITE_IDS));
     });
 
     test("the slim cache keeps every passive's icon", () => {
