@@ -1181,6 +1181,13 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
 request (without the game's cache, so `generator.test.ts` skips its long map check there).
 
+The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
+a whole checkout, and watching them all held up the first load after every start by tens of
+seconds. Add anything else big that sits inside the checkout to `server.watch.ignored` in
+`vite.config.ts` (`node_modules` and `dist` are left out already). A package that only a worker
+imports goes in `optimizeDeps.include`, as `threads/worker` and `jszip` do: Vite's startup scan
+doesn't follow workers, so it would find the package mid-load and reload the page.
+
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids). F3
