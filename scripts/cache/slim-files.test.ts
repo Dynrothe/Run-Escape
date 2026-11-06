@@ -97,41 +97,241 @@ describe("pruneChunks", () => {
 });
 
 describe("hashInputs", () => {
-    test("changes with any file's contents or name, and nothing else", () => {
-        fs.mkdirSync(path.join(dir, "src", "deep"), { recursive: true });
-        fs.writeFileSync(path.join(dir, "src", "deep", "a.ts"), "a");
-        fs.writeFileSync(path.join(dir, "lock"), "1");
+    const entries = ["src/entry.ts", "scripts/worker.ts", "scripts/boot.mjs"];
+    const files = ["bun.lock", "tsconfig.json", "cache.json"];
+    const hash = () => hashInputs(entries, files, "cache-1");
+    const write = (file: string, text: string) => {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, text);
+    };
+    const packageJson = (changes: Record<string, unknown> = {}) =>
+        JSON.stringify({
+            name: "game",
+            version: "1",
+            type: "module",
+            dependencies: { pako: "1" },
+            ...changes,
+        });
+    async function project(run: () => Promise<void>) {
         const cwd = process.cwd();
         process.chdir(dir);
         try {
-            const hash = () => hashInputs(["src"], ["lock"], "cache-1");
-            const first = hash();
-            expect(hash()).toBe(first);
-            expect(hashInputs(["src"], ["lock"], "cache-2")).not.toBe(first);
-
-            fs.writeFileSync(path.join("src", "deep", "a.ts"), "b");
-            const changed = hash();
-            expect(changed).not.toBe(first);
-
-            fs.renameSync(path.join("src", "deep", "a.ts"), path.join("src", "deep", "c.ts"));
-            expect(hash()).not.toBe(changed);
-
-            const renamed = hash();
-            fs.writeFileSync("lock", "2");
-            const locked = hash();
-            expect(locked).not.toBe(renamed);
-
-            fs.writeFileSync(path.join("src", "new.ts"), "");
-            const added = hash();
-            expect(added).not.toBe(locked);
-
-            // What it isn't given doesn't count
-            fs.writeFileSync("notes.txt", "anything");
-            expect(hash()).toBe(added);
+            write("package.json", packageJson());
+            write("bun.lock", "dependency resolutions");
+            write("tsconfig.json", '{"compilerOptions":{"target":"ES2022"}}');
+            write("cache.json", '{"name":"cache-1"}');
+            write(
+                "src/entry.ts",
+                `export { asset } from "./assets";
+                 export { default as data } from "./data.json?url";
+                 export type { Shape } from "./types";
+                 export const lazy = () => import("./lazy");
+                 throw new Error("Tracing must not execute this module");`,
+            );
+            write("src/assets.ts", 'export { asset } from "./model";');
+            write("src/model.ts", "export const asset = 2570;");
+            write("src/data.json", '{"asset":2570}');
+            write("src/lazy.ts", "export const sound = 1;");
+            write("src/types.ts", "export type Shape = number;");
+            write("scripts/worker.ts", 'import "pako"; export const worker = 1;');
+            write(
+                "scripts/boot.mjs",
+                'import { workerData } from "node:worker_threads"; await import(workerData.entry);',
+            );
+            await run();
         } finally {
             process.chdir(cwd);
         }
+    }
+
+    test("is repeatable without executing modules or writing build output", async () => {
+        await project(async () => {
+            const first = await hash();
+            expect(await hash()).toBe(first);
+            expect(await hashInputs(entries, files, "cache-2")).not.toBe(first);
+            expect(fs.existsSync("slim-inputs")).toBe(false);
+        });
     });
+
+    test("doesn't depend on the checkout's absolute path", async () => {
+        await project(async () => {
+            const first = await hash();
+            const copy = fs.mkdtempSync(path.join(tmpdir(), "slim-files-copy-"));
+            try {
+                fs.cpSync(dir, copy, { recursive: true });
+                process.chdir(copy);
+                expect(await hash()).toBe(first);
+            } finally {
+                process.chdir(dir);
+                fs.rmSync(copy, { recursive: true, force: true });
+            }
+        });
+    });
+
+    test.each([
+        ["src/model.ts", "export const asset = 2571;"],
+        ["src/lazy.ts", "export const sound = 2;"],
+        ["src/data.json", '{"asset":2571}'],
+        ["scripts/worker.ts", 'import "pako"; export const worker = 2;'],
+        ["scripts/boot.mjs", 'import "./worker";'],
+        ["bun.lock", "different dependency resolutions"],
+        ["tsconfig.json", '{"compilerOptions":{"target":"ES2020"}}'],
+        ["cache.json", '{"name":"cache-2"}'],
+    ])("invalidates when runtime input %s changes", async (file, text) => {
+        await project(async () => {
+            const first = await hash();
+            write(file, text);
+            expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("follows added imports and their dependencies", async () => {
+        await project(async () => {
+            const first = await hash();
+            write("src/new.ts", "export const asset = 1;");
+            expect(await hash()).toBe(first);
+            write("src/assets.ts", 'export { asset } from "./new";');
+            const added = await hash();
+            expect(added).not.toBe(first);
+            write("src/new.ts", "export const asset = 2;");
+            expect(await hash()).not.toBe(added);
+        });
+    });
+
+    test.each([
+        "src/ui.tsx",
+        "src/game.css",
+        "src/model.test.ts",
+        "src/types.ts",
+        "scripts/find-items.ts",
+        "README.md",
+    ])("ignores unrelated or type-only file %s", async (file) => {
+        await project(async () => {
+            const first = await hash();
+            write(file, "unrelated");
+            expect(await hash()).toBe(first);
+        });
+    });
+
+    test("ignores package release metadata but retains dependency and runtime settings", async () => {
+        await project(async () => {
+            const first = await hash();
+            write(
+                "package.json",
+                packageJson({
+                    version: "2",
+                    description: "A new release",
+                    author: "Contributor",
+                    scripts: { build: "vite build" },
+                }),
+            );
+            expect(await hash()).toBe(first);
+            write("package.json", packageJson({ dependencies: { pako: "2" } }));
+            expect(await hash()).not.toBe(first);
+            write("package.json", packageJson({ packageManager: "bun@1.3.14" }));
+            expect(await hash()).not.toBe(first);
+            write("package.json", packageJson({ type: "commonjs" }));
+            expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("still hashes package metadata if the asset code actually imports it", async () => {
+        await project(async () => {
+            write(
+                "src/assets.ts",
+                'import pkg from "../package.json"; export const asset = pkg.version;',
+            );
+            const first = await hash();
+            write("package.json", packageJson({ version: "2" }));
+            expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("captures transforms from inherited TypeScript configuration", async () => {
+        await project(async () => {
+            write("tsconfig.json", '{"extends":"./base.json"}');
+            write("base.json", '{"compilerOptions":{"useDefineForClassFields":true}}');
+            write("src/model.ts", "class Model { value = 1; } export const asset = new Model();");
+            const first = await hash();
+            write("base.json", '{"compilerOptions":{"useDefineForClassFields":false}}');
+            expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("follows TypeScript path aliases", async () => {
+        await project(async () => {
+            write("tsconfig.json", '{"compilerOptions":{"paths":{"@assets":["./src/model.ts"]}}}');
+            write("src/assets.ts", 'export { asset } from "@assets";');
+            const first = await hash();
+            write("src/model.ts", "export const asset = 2571;");
+            expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("rejects incomplete configuration even if esbuild can continue with a warning", async () => {
+        await project(async () => {
+            write("tsconfig.json", '{"extends":"./missing.json"}');
+            await expect(hash()).rejects.toThrow("Couldn't trace asset inputs reliably");
+        });
+    });
+
+    test.each(["src/model.ts", "bun.lock", "package.json"])(
+        "rejects missing required input %s instead of returning a reusable fingerprint",
+        async (file) => {
+            await project(async () => {
+                fs.rmSync(file);
+                await expect(hash()).rejects.toThrow();
+            });
+        },
+    );
+
+    test("a checked run survives a release bump, but not an asset change", async () => {
+        await project(async () => {
+            const { bytes, files } = await chunks("asset data");
+            storeRun("checked", await hash(), info(files), files, bytes);
+            write("package.json", packageJson({ version: "2" }));
+            expect(await findReusable("checked", await hash())).toMatchObject({
+                name: "slim",
+            });
+            write("src/model.ts", "export const asset = 2571;");
+            expect(await findReusable("checked", await hash())).toBeUndefined();
+        });
+    });
+
+    test("traces the shipped pipeline, including workers, loaders and content, not the UI", async () => {
+        const read = vi.spyOn(fs, "readFileSync");
+        try {
+            const fingerprint = await hashInputs(
+                [
+                    "scripts/cache/slim-cache.ts",
+                    "scripts/cache/slim-cache-worker.ts",
+                    "scripts/cache/slim-cache-boot.mjs",
+                ],
+                ["bun.lock", "tsconfig.json"],
+                "cache-1",
+            );
+            expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+            const inputs = read.mock.calls.map(([file]) => String(file));
+            expect(inputs).toEqual(
+                expect.arrayContaining([
+                    "scripts/cache/slim-load.ts",
+                    "scripts/cache/slim-cache-worker.ts",
+                    "scripts/cache/slim-cache-boot.mjs",
+                    "src/game/client/GameAssets.ts",
+                    "src/game/client/GameSounds.ts",
+                    "src/game/content/items.ts",
+                    "src/rs/scene/SceneBuilder.ts",
+                    "src/rs/cache/ChunkedCache.ts",
+                ]),
+            );
+            expect(inputs).not.toContain("src/game/ui/GameUi.tsx");
+            expect(inputs).not.toContain("src/game/ui/GameUi.css");
+            expect(inputs).not.toContain("src/game/client/GameClient.test.ts");
+            expect(inputs).not.toContain("scripts/cache/find-objs.ts");
+        } finally {
+            read.mockRestore();
+        }
+    }, 30000);
 });
 
 describe("storeRun and findReusable", () => {

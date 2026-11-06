@@ -42,10 +42,18 @@ what they read, sorted, and each map takes out the ScapeRune squares an earlier 
 anything's published, the chunks in the out dir are read back, and every group has to come out of
 them as it went in; the check then loads it all from those same chunks.
 
-A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if nothing it
-reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock`, `tsconfig.json`,
-and the full cache's `info.json`, `keys.json` and the size of each of its files. Chunks are
-written under a temporary name and renamed into place (tried again for a few seconds while Windows
+A checked run is kept in `caches/slim/`, and the next one reuses it if its inputs haven't changed.
+esbuild traces runtime imports from `slim-cache.ts`, `slim-cache-worker.ts` and
+`slim-cache-boot.mjs`, without running them or writing a bundle. Their source files and imported
+data count, along with TypeScript transforms, `tsconfig.json`, the full `bun.lock`, package
+dependency/runtime settings, and the full cache's `info.json`, `keys.json` and file sizes.
+Unimported UI, CSS, tests and tools don't count, nor package version, description or scripts.
+The full lockfile is deliberately conservative: any dependency resolution change invalidates reuse.
+New worker entry points or files read outside imports must be included in `hashSlimInputs`.
+If tracing or hashing fails, the script warns and rebuilds without saving a reusable result.
+Chunks still have their hashes checked, and a reused cache gets the current build's metadata.
+This doesn't persist `caches/slim/` between CI jobs; that needs a separate workflow cache.
+Chunks are written under a temporary name and renamed into place (tried again for a few seconds while Windows
 holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
 doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
 registers it.

@@ -1,5 +1,6 @@
 // slim-cache.ts's files: writing chunks so a stopped run can't leave a broken
 // one, and keeping a checked run to reuse while nothing it read has changed
+import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -53,27 +54,62 @@ export function pruneChunks(dir: string, files: string[]): void {
     }
 }
 
-// A hash of every file in these folders and these files, by path and contents.
-// A link to a folder is followed.
-export function hashInputs(dirs: string[], files: string[], salt: string): string {
-    const all = [...files];
-    const walk = (dir: string) => {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            const file = path.posix.join(dir, entry.name);
-            if (
-                entry.isDirectory() ||
-                (entry.isSymbolicLink() && fs.statSync(file).isDirectory())
-            ) {
-                walk(file);
-            } else {
-                all.push(file);
-            }
-        }
-    };
-    dirs.forEach(walk);
-    const hash = createHash("sha256").update(salt);
-    for (const file of all.sort()) {
+// Trace runtime imports without executing the loaders or writing a bundle.
+// The lockfile covers external packages; release metadata doesn't decide which assets they read.
+export async function hashInputs(
+    entryPoints: string[],
+    files: string[],
+    salt: string,
+): Promise<string> {
+    const result = await build({
+        absWorkingDir: process.cwd(),
+        entryPoints,
+        bundle: true,
+        write: false,
+        metafile: true,
+        platform: "node",
+        format: "esm",
+        packages: "external",
+        treeShaking: false,
+        outdir: "slim-inputs",
+        logLevel: "silent",
+    });
+    if (result.warnings.length > 0) {
+        throw new Error(
+            `Couldn't trace asset inputs reliably: ${result.warnings.map((warning) => warning.text).join("; ")}`,
+        );
+    }
+    const manifest: Record<string, unknown> = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    const packageInputs = Object.fromEntries(
+        [
+            "type",
+            "imports",
+            "exports",
+            "packageManager",
+            "engines",
+            "dependencies",
+            "devDependencies",
+            "optionalDependencies",
+            "peerDependencies",
+            "overrides",
+            "resolutions",
+        ].map((key) => [key, manifest[key]]),
+    );
+    const relative = (file: string) =>
+        path.relative(process.cwd(), path.resolve(file)).split(path.sep).join("/");
+    // esbuild keeps URL suffixes in its input names, but they're not part of the file on disk.
+    const all = new Set(
+        [...files, ...Object.keys(result.metafile.inputs).map((file) => file.split(/[?#]/)[0])].map(
+            relative,
+        ),
+    );
+    const hash = createHash("sha256").update(JSON.stringify({ salt, packageInputs }));
+    for (const file of [...all].sort()) {
         hash.update(file).update("\0").update(fs.readFileSync(file)).update("\0");
+    }
+    // Also capture transforms from inherited/nested tsconfigs, which aren't metafile inputs.
+    for (const output of result.outputFiles.sort((a, b) => a.path.localeCompare(b.path))) {
+        hash.update(relative(output.path)).update("\0").update(output.contents).update("\0");
     }
     return hash.digest("hex");
 }
