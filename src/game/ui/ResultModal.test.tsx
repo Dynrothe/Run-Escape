@@ -6,7 +6,7 @@ import { GameStore, PlayerResultView, UiSnapshot } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { ResultModal } from "./GameUi";
 
-function createUi(solo = false, hard = false): UiSnapshot {
+function createUi(solo = false, hard = false, expert = false): UiSnapshot {
     const players: PlayerResultView[] = ["Alice", "Bob", "Charlie", "Dana"].map((name, i) => ({
         name,
         characterName: ["Warrior", "Wizard", "Ranger", "Monk"][i],
@@ -48,7 +48,7 @@ function createUi(solo = false, hard = false): UiSnapshot {
             mapId: "lumbridge",
             endless: false,
             hard,
-            expert: false,
+            expert,
             round: 1,
             victory: false,
             seconds: 123,
@@ -168,4 +168,19 @@ test("hard mode shows with the run's totals", () => {
     expect(stat("Party totals", "Difficulty")).toBe("Hard");
     const individual = screen.getByRole("table", { name: "Individual stats" });
     expect(within(individual).queryByText("Difficulty")).toBeNull();
+});
+
+test("a raid's expert mode says so, not hard, dead or victorious", () => {
+    // Expert is hard and more (Sim.hard is set too), so it's named for what it is
+    render(<ResultModal ui={createUi(true, true, true)} client={client} />);
+    expect(stat("Run totals", "Difficulty")).toBe("Expert");
+    cleanup();
+    const won = createUi(true, true, true);
+    render(
+        <ResultModal
+            ui={{ ...won, overlay: "victory", result: { ...won.result!, victory: true } }}
+            client={client}
+        />,
+    );
+    expect(stat("Run totals", "Difficulty")).toBe("Expert");
 });

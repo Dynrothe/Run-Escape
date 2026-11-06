@@ -466,9 +466,10 @@ environment variables.
 never in an app store, and the app never checks for, downloads or installs a new version. That's
 by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
 first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built), and so do the app's About and Save help, whose New
-versions button opens the releases page. Unlike desktop players, whose launcher updates the game,
-Android players on an older APK can't join rooms on the current build until they install it.
+job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
+the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
+players, whose launcher updates the game, Android players on an older APK can't join rooms on the
+current build until they install it.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
@@ -519,7 +520,7 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
-| `release-files.ts`     | Makes the game zips, the chunks, the manifest and the notes       |
+| `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
 
 ### Where things are kept
@@ -620,7 +621,11 @@ It builds on Windows, with the OSRS cache kept between runs by `actions/cache` u
 `CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
-[GitHub builds and releases](#github-builds-and-releases)).
+[GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
+the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
+to the zip, and to the APK when it's built. The links only work once the draft is published, so the
+`publish` job links the names it uploads: a renamed file fails the upload rather than leaving a
+dead link.
 **Publishing the draft by hand is what releases it to players**, and the tag only exists from then
 on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
@@ -694,6 +699,15 @@ src/rs/audio/               the client's sound effect synth: instruments, envelo
 src/rs/model/player/         player models from identity kits and worn items
 ```
 
+A loc blocks only the ground its model stands on (below about waist height, from
+`RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
+loc that stands on its own to it, a signpost to its post. Locs that share a tile, like the God
+Wars entrance rock and its base, are a stack, and shrink together to the ground they all stand on,
+on the sides of their tiles that face open ground. Either way the open ground round them has to be
+one piece, walls counted, so nobody gets round the end of a fence. A loc with no model to go by
+keeps its tiles, as does a stack with one, or with one that draws nothing; so do a stack's tiles
+with walls or blocked floor on them, or another blocker beside them.
+
 Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.iconSpriteId` in
 `content/items.ts`), drawn by `ItemIcon` given a `spriteId` and no item. They are in
 `client/GameAssets.ts`'s `getGameSpriteIds`, so `scripts/cache/sprites.ts check` and the
@@ -706,12 +720,6 @@ learned the rev 241 opcodes, the map loader can take extra map squares as plain 
 gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
-
-Collision uses the cache models' ground footprints, not their overhanging tops. In `ArenaGrid`,
-overlapping scenery (such as the God Wars entrance rock and its base) can fit their combined
-footprint on exposed sides. Contacts with other blockers, walls and blocked floor stay unchanged;
-an unknown or invisible model keeps the group's original bounds. This is done when the grid is
-built, before its pathfinding steps, and changes neither the scenery nor its shading.
 
 Selected blocking jungle plants have low wooden bases, made from the cache's Tree stump
 (loc 1354, model 1635). `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static render
@@ -926,7 +934,11 @@ a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its b
 gap between its `RaidRoomDef.at` and the last room's later, or at once when the portal's taken. So a
 quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
 hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
-boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' hits are
+boss time before it, so a long fight doesn't make later rooms tougher either. A room's waves
+(`roomWaves`) keep Lumbridge's pace for where it is in the raid; the Nylocas hall's are scaled by
+`NYLOCAS_HALL_CROWD` (spawn rate, the numbers alive and its ring), as most of its Nylocas shoot and
+at the full pace it cost a player far more than the halls either side. The hall gives fewer kills
+for it, and so less experience before Sotetseg's. Raid bosses' hits are
 lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`), and their bullets can hit
 again after `BULLET_GRACE` rather than a second. The Maiden, the first boss, is the exception: her
 hits are scaled down by `MAIDEN_HIT_SCALE`, and her `bulletGrace` is a full second. Every one has an
@@ -940,11 +952,12 @@ more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
-exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`,
-`tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
-calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
-healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
-of them within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of
+exhumed by `stepExhumed`). The raid's six Nylocas are copies (`RAID_NYLOCAS`, `tob_` ids), slower
+by `RAID_NYLOCAS_SPEED`, the green and blue ones shooting, so Morytania's play as they did;
+`raidVersion` swaps them in for whatever a raid boss calls. A summon that doesn't fit `distance`
+out (a wall) comes on nearer the boss, so the Maiden's healers all come. A room's speed points go
+by its `par`, the seconds its fight's tuned to take (all of them within it, none by `SLOW_PAR`
+times it). On expert, a weapon's targeting skips an enemy of
 another style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass
 none and go for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias
 turns (needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back

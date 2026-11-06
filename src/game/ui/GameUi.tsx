@@ -881,6 +881,8 @@ function TitleHint(): JSX.Element {
 // Adventurers on the left and maps on the right, so the adventurer picked
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
+    // A raid's expert mode, solo only for now (GameClient.toggleExpert)
+    const expertShown = getMap(ui.mapId).raid !== undefined && ui.coop.status === "offline";
     return (
         <div className="ui-fill ui-select">
             <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(getMap(ui.mapId))} />
@@ -893,15 +895,13 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 {/* A raid ends with its last room: no endless */}
                 {!getMap(ui.mapId).raid && <EndlessSwitch ui={ui} client={client} />}
                 <HardSwitch ui={ui} client={client} />
-                {getMap(ui.mapId).raid && ui.coop.status === "offline" && (
-                    <ExpertSwitch ui={ui} client={client} />
-                )}
+                {expertShown && <ExpertSwitch ui={ui} client={client} />}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && " hard"}
+                    {ui.hard && (ui.expert && expertShown ? " expert" : " hard")}
                     {ui.endless && !getMap(ui.mapId).fun && " endless"}
                 </button>
             </div>
@@ -2892,7 +2892,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {result.hard && (
                                         <tr>
                                             <td>Difficulty</td>
-                                            <td>Hard</td>
+                                            <td>{result.expert ? "Expert" : "Hard"}</td>
                                         </tr>
                                     )}
                                     {result.endless && (

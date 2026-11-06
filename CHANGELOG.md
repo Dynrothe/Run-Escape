@@ -28,6 +28,10 @@ the version in the corner).
   names, whether or not Share run stats is on. The setting now says so.
 - Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
   game's cache again.
+- The release page, by trippy22: the Windows and Android downloads are linked at the top, above
+  the long list of the game's files.
+- Theatre of Blood, by Okaeri: the Nylocas are slower, and half as many come in their hall before
+  Nylocas Vasilias: there were too many to fight through.
 
 ### Fixed
 
@@ -39,10 +43,16 @@ the version in the corner).
   with a message instead of freezing everyone. Fixed by trippy22.
 - The Armadyl crossbow shows each shot while you run, not only when you stand still: your
   adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
-- Overlapping scenery, including the God Wars entrance rock, blocks less empty ground beyond its visible base. Fixed by @braiansmarzaro.
 - Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
   it: they waited for its middle to come into reach. Auras, spells, arrows and the rest hit its
   edge every time too, not only some of the time. Fixed by Okaeri.
+- Scenery made of overlapping pieces, like the God Wars entrance rock, blocks less of the empty
+  ground round its base. Fixed by Deivid Smarzaro.
+- Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
+  you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
+  by Okaeri.
+- The results screen and the map screen's Enter button say Expert for a Theatre of Blood run on
+  expert mode, not Hard. Fixed by Okaeri.
 
 ## 0.27.0 - 2026-11-05
 
