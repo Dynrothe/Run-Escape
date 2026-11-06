@@ -1806,8 +1806,9 @@ export type TombsWardensPlaces = {
     >;
     troughs: number[];
     floor: { x0: number; y0: number; x1: number; y1: number };
-    // The last phase's room: where the party's brought in, where the Warden stands (north of the
-    // floor, which is the map's MapDef.floor), and the floor
+    // The last phase's room (OSRS's own, square 61,80): where the party's brought in, where the
+    // Warden stands (on its platform in the floor's middle, where the obelisk was, at the mouth of
+    // the crater behind it: FloorDef.holes), and the floor (the map's MapDef.floor)
     last?: {
         arrive: { x: number; y: number };
         at: { x: number; y: number };
@@ -1978,8 +1979,9 @@ export type WardensPhaseTwoDef = {
 // then both. At each of `at`, it charges: siphons (count[i]) land over the floor, each stopped by
 // a player stepping on it within window seconds (Insanity: insanityWindow); all stopped, it
 // staggers for a share of its hitpoints; any left, the floor erupts. The second and third bring
-// a path boss's phantom each (east, then west). At enrage, it heals heal of its hitpoints, a row
-// of the floor tears away every rowEvery seconds, and lightning walks the floor.
+// a path boss's phantom each (east, then west, phantomOffset tiles off it at the floor's edges).
+// At enrage, it heals heal of its hitpoints, its slams stop, lightning strikes the floor instead,
+// and a row of it tears away from the back every rowEvery seconds, till the row in front of it.
 export type WardensPhaseThreeDef = {
     hp: number;
     forms: Record<WardenSide, { form: string; charging: string; phantoms: [string, string] }>;
@@ -2007,28 +2009,25 @@ export type WardensPhaseThreeDef = {
     stagger: number;
     restart: number;
     phantomSpotAnim: number;
+    phantomOffset: number;
     enrage: {
         at: number;
         heal: number;
         seq: number;
         rowEvery: number;
         firstRow: number;
-        // Enraged, its slams come this often and the lightning's walks this often, this long
-        slamEvery: number;
-        lightningEvery: number;
-        lightningCount: number;
+        // Lightning in the slams' place: a walk of count bolts every every seconds, each bolt's
+        // shadow warn seconds before it strikes, for damage of a player's hitpoints
+        lightning: {
+            first: number;
+            every: number;
+            warn: number;
+            count: number;
+            shadowSpotAnim: number;
+            spotAnim: number;
+            damage: number;
+        };
         message: string;
-    };
-    // Lightning walking the floor the whole phase: a walk of count bolts every every seconds
-    // (quicker under half its hitpoints), each bolt's shadow warn seconds before it strikes
-    lightning: {
-        every: number;
-        quicker: number;
-        warn: number;
-        count: number;
-        shadowSpotAnim: number;
-        spotAnim: number;
-        damage: number;
     };
     message: string;
     siphonMessage: string;
@@ -2135,6 +2134,9 @@ export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reac
 export type FloorDef = {
     // World tiles, both ends in
     rect: { x0: number; y0: number; x1: number; y1: number };
+    // Tiles of the rectangle that aren't floor (the Wardens' crater): gone from the start, never
+    // drawn, risen or put back. Row spans in world tiles, both ends in.
+    holes?: { y: number; x0: number; x1: number }[];
     slam: {
         // Seconds a tile shakes before it rises
         warn: number;
@@ -2159,7 +2161,8 @@ export type FloorDef = {
         // The slab tumbling, and how long it's drawn falling into the dark
         spotAnim: number;
         fall: number;
-        // Rows that never fall: the last row in front of the boss
+        // Rows a script's dropRows never takes: the last in front of the boss (a fight's own
+        // dropRows can say otherwise, with keep)
         keepRows: number;
         // As tiles fall, and as the player's hurt by one
         sound: number;
@@ -2183,14 +2186,16 @@ export type FloorBeatDef = {
 };
 
 // side: one half of the floor rises, row by row away from the front, the middle column with it
-// (east or west), or all of it but the middle three columns (both). sweep: every row from the
+// (east or west), or all of it but the middle three columns (both); outward, row by row away from
+// the origin's row instead, both ways (a boss standing in the floor's middle). sweep: every row from the
 // front, each with a gap of gap tiles that wanders a tile at a time. ripple: square rings out from
 // a tile (the player's, or the middle), with spokes along which nothing rises (a cross, or the
-// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
+// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another
+// (never past the floor's keepRows, or the pattern's own keep).
 // holes: single tiles fall away at random, never next to another hole or the floor's edge.
 // restore: everything that's fallen comes back up, front first.
 export type FloorPatternDef =
-    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
+    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number; outward?: boolean }
     | { kind: "sweep"; rowSeconds: number; gap: number }
     | {
           kind: "ripple";
@@ -2199,7 +2204,7 @@ export type FloorPatternDef =
           radius: number;
           spokes: "cross" | "diagonal";
       }
-    | { kind: "dropRows"; rows: number; rowSeconds: number }
+    | { kind: "dropRows"; rows: number; rowSeconds: number; keep?: number }
     | { kind: "holes"; count: number }
     | { kind: "restore"; rowSeconds: number };
 

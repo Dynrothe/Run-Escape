@@ -25,8 +25,8 @@ import {
 } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
-import { createWardensFloor } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
+import { Sim, TICKS_PER_SECOND, wardenFrontRow } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
 
@@ -56,8 +56,9 @@ function field(): string[] {
 
 const lumbridge = getMap("lumbridge");
 
-// The Wardens' last room's floor, which the fight moves
-const LAST_FLOOR = { x0: 1025, y0: 1040, x1: 1047, y1: 1062 };
+// The Wardens' last room's floor, which the fight moves: OSRS's, 29 by 31, the Warden in its
+// middle at the crater's mouth
+const LAST_FLOOR = { x0: 1022, y0: 1036, x1: 1050, y1: 1066 };
 
 // A Nexus in an open field, with a door 6 tiles east of where the party starts
 const TEST_TOMBS: MapDef = {
@@ -65,7 +66,12 @@ const TEST_TOMBS: MapDef = {
     id: "test_tombs",
     waves: [],
     events: [],
-    floor: { ...createWardensFloor(LAST_FLOOR), script: [], loopSeconds: 1e7 },
+    floor: {
+        ...createWardensFloor(LAST_FLOOR),
+        holes: wardensCrater(LAST_FLOOR.x0, LAST_FLOOR.y0),
+        script: [],
+        loopSeconds: 1e7,
+    },
     tombs: {
         nexus: { x: 1036.5, y: 1036.5 },
         // The way to the Wardens, 6 tiles south
@@ -91,8 +97,11 @@ const TEST_TOMBS: MapDef = {
             troughs: [1048.5, 1050.5, 1052.5],
             floor: { x0: 1025, y0: 1038, x1: 1047, y1: 1062 },
             last: {
-                arrive: { x: 1036.5, y: 1044.5 },
-                at: { x: 1036.5, y: 1066.5 },
+                arrive: { x: 1036.5, y: 1040.5 },
+                at: {
+                    x: LAST_FLOOR.x0 + WARDENS_CRATER_WARDEN.x,
+                    y: LAST_FLOOR.y0 + WARDENS_CRATER_WARDEN.y,
+                },
                 floor: LAST_FLOOR,
             },
         },
@@ -3026,20 +3035,20 @@ describe("the Wardens' second and last phases", () => {
         expect(warden.def.id).toBe("tumeken_warden_last");
     });
 
-    it("brings its phantoms with the first two charges, and enrages at its last hitpoints", () => {
+    it("brings its phantoms with the second and third charges, and enrages at its last hitpoints", () => {
         const sim = atPhaseTwo();
         const fight = sim.tombsWardens!;
         find(sim, fight.two!.wardenUid).hp = 0;
         step(sim, WARDENS.two.toLast + 0.2);
         const three = fight.three!;
         const warden = find(sim, three.wardenUid);
-        // Lightning walks the floor from the start
-        step(sim, WARDENS.three.lightning.every + 1);
-        expect(fight.marks.some((m) => m.hurts > 0)).toBe(true);
+        // No lightning before it's enraged: the slams are the floor's danger
+        step(sim, 10);
+        expect(fight.marks.some((m) => m.hurts > 0)).toBe(false);
         for (let i = 0; i < 4; i++) {
             hit(sim, warden, "dark_bow", warden.maxHp);
             step(sim, 0.1);
-            expect(three.phantoms).toHaveLength(Math.min(2, i + 1));
+            expect(three.phantoms).toHaveLength(Math.min(2, i));
             // Left to go off
             step(sim, WARDENS.three.window + 0.2);
             expect(three.siphons).toBeUndefined();
@@ -3048,20 +3057,30 @@ describe("the Wardens' second and last phases", () => {
             "zebaks_phantom",
             "babas_phantom",
         ]);
-        // Both quickened by the third charge
-        expect(three.phantoms.every((uid) => find(sim, uid).bossState?.enraged)).toBe(true);
+        expect(three.phantoms.every((uid) => find(sim, uid).bossState?.enraged)).toBe(false);
         hit(sim, warden, "dark_bow", warden.maxHp);
         expect(warden.hp).toBeCloseTo(warden.maxHp * WARDENS.three.enrage.at, 0);
         step(sim, 0.1);
         expect(three.enraged).toBe(true);
         expect(warden.hp).toBeGreaterThan(warden.maxHp * 0.2);
-        // Rows torn away, from the back, and its slams go on
+        // Its phantoms quickened, its slams stopped, lightning in their place, and rows torn
+        // away from the back
+        expect(three.phantoms.every((uid) => find(sim, uid).bossState?.enraged)).toBe(true);
         const slams = three.slam;
+        sim.devGod = true;
         step(sim, WARDENS.three.enrage.firstRow + 3);
         expect(sim.floor!.rowsDropped).toBeGreaterThan(0);
-        expect(three.slam).toBeGreaterThan(slams);
+        expect(three.slam).toBe(slams);
+        expect(fight.marks.some((m) => m.hurts > 0)).toBe(true);
+        // Down to the row in front of it, and no further: it and what's beside it are left
+        const floor = sim.floor!;
+        step(sim, WARDENS.three.enrage.rowEvery * floor.sizeY + 5);
+        const front = wardenFrontRow(warden);
+        expect(floor.rowsDropped).toBe(front - floor.y0);
+        expect(sim.grid.isSolid(Math.floor(warden.x), front)).toBe(false);
+        expect(sim.grid.isSolid(Math.floor(warden.x), front - 1)).toBe(true);
+        expect(sim.grid.isSolid(floor.x0 + 2, Math.floor(warden.y))).toBe(false);
         // And it can be beaten
-        sim.devGod = true;
         for (let i = 0; i < 20 && !warden.dead; i++) {
             hit(sim, warden, "dark_bow", warden.maxHp);
         }

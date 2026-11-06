@@ -285,7 +285,7 @@ function getSpotAnimIds(): number[] {
         add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
         add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
         add(WARDENS.three.phantomSpotAnim);
-        add(WARDENS.three.lightning.shadowSpotAnim, WARDENS.three.lightning.spotAnim);
+        add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
         // Zebak's roar, and his jugs breaking and splashing
         add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
         // The Scabaras room's falling roof

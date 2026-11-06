@@ -9,6 +9,8 @@ export const FLOOR_SOUTH = 2;
 export const FLOOR_WEST = 3;
 
 const NONE = -1;
+// A hole's fall, long before anything: gone, and never drawn falling
+const HOLE = -1e9;
 
 // Seconds a fallen tile takes to come back up into place (FloorPatternDef restore)
 export const RESTORE_SECONDS = 0.6;
@@ -35,6 +37,8 @@ export class ArenaFloor {
     // When a fallen tile starts coming back, and when it's back and walked on again
     readonly restoreAt: Int32Array;
     readonly restoredAt: Int32Array;
+    // Tiles of the rectangle that aren't floor (FloorDef.holes)
+    readonly hole: Uint8Array;
     // Rows fallen from the back so far
     rowsDropped = 0;
     private loopStart = 0;
@@ -74,6 +78,30 @@ export class ArenaFloor {
         this.restoreTicks = this.ticks(RESTORE_SECONDS);
         // The grid's kept between runs on a map
         grid.restoreAllTiles();
+        // Its holes are never floor, so never drawn; they're cut from the grid as a fight starts on
+        // it (openHoles), as the rest of the map's ground is walked till then
+        this.hole = new Uint8Array(count);
+        for (const span of def.holes ?? []) {
+            for (let x = span.x0; x <= span.x1; x++) {
+                const i = this.index(x, span.y);
+                if (i >= 0) {
+                    this.hole[i] = 1;
+                    this.dropWarnAt[i] = this.dropAt[i] = HOLE;
+                }
+            }
+        }
+    }
+
+    // The floor's holes, gone from the grid: walked round from now
+    openHoles(): void {
+        for (let i = 0; i < this.hole.length; i++) {
+            if (this.hole[i]) {
+                this.grid.dropTile(
+                    this.x0 + (i % this.sizeX),
+                    this.y0 + Math.floor(i / this.sizeX),
+                );
+            }
+        }
     }
 
     private ticks(seconds: number): number {
@@ -170,8 +198,12 @@ export class ArenaFloor {
         switch (pattern.kind) {
             case "side": {
                 const step = this.ticks(pattern.rowSeconds);
-                for (let row = 0; row < sizeY; row++) {
-                    const y = sizeY - 1 - row;
+                // From the front (the north row), or both ways from the origin's row
+                const from = pattern.outward
+                    ? Math.min(Math.max(Math.floor(origin().y) - this.y0, 0), sizeY - 1)
+                    : sizeY - 1;
+                for (let y = 0; y < sizeY; y++) {
+                    const row = Math.abs(from - y);
                     for (let x = 0; x < sizeX; x++) {
                         const rises =
                             pattern.side === "east"
@@ -180,7 +212,12 @@ export class ArenaFloor {
                                   ? x <= middle
                                   : Math.abs(x - middle) > 1;
                         if (rises) {
-                            this.rise(x, y, first + row * step, FLOOR_SOUTH);
+                            this.rise(
+                                x,
+                                y,
+                                first + row * step,
+                                y > from ? FLOOR_NORTH : FLOOR_SOUTH,
+                            );
                         }
                     }
                 }
@@ -242,7 +279,7 @@ export class ArenaFloor {
             }
             case "dropRows": {
                 const step = this.ticks(pattern.rowSeconds);
-                const last = sizeY - this.def.drop.keepRows;
+                const last = sizeY - (pattern.keep ?? this.def.drop.keepRows);
                 for (let r = 0; r < pattern.rows && this.rowsDropped < last; r++) {
                     const y = this.rowsDropped++;
                     for (let x = 0; x < sizeX; x++) {
@@ -276,7 +313,7 @@ export class ArenaFloor {
             case "restore": {
                 const step = this.ticks(pattern.rowSeconds);
                 for (let i = 0; i < this.dropAt.length; i++) {
-                    if (this.dropAt[i] === NONE || this.restoreAt[i] !== NONE) {
+                    if (this.hole[i] || this.dropAt[i] === NONE || this.restoreAt[i] !== NONE) {
                         continue;
                     }
                     const y = Math.floor(i / sizeX);

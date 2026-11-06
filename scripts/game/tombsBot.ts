@@ -6,7 +6,7 @@ import { getItem } from "../../src/game/content/items";
 import { BA_BA, CRONDIS, WARDENS, ZEBAK } from "../../src/game/content/tombs";
 import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
-import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
+import { PLAYER_SPEED, type Sim, wardenFrontRow } from "../../src/game/core/Sim";
 import { FlowField, canStep } from "../../src/game/core/world/FlowField";
 
 type Point = { x: number; y: number };
@@ -1954,20 +1954,14 @@ function wardensMove(sim: Sim): Point | undefined {
             rising ||
             floor.isHurting(x, y, sim.tick) ||
             floor.isFalling(x, y, sim.tick + 40) ||
-            marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y) ||
-            // Zebak's phantom's acid, where its jugs broke
-            sim.pools.some(
-                (pool) =>
-                    pool.endTick > sim.tick &&
-                    Math.hypot(x + 0.5 - pool.x, y + 0.5 - pool.y) <= pool.radius + 0.6,
-            )
+            marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y)
         );
     };
-    // The column the next slam leaves alone, at the floor's north end near the Warden: east takes
+    // The column the next slam leaves alone, in front of the Warden: east takes
     // x from the middle up and west from the middle down (a column west of the middle for the
     // east one, east of it for the west), both all but the middle three. The count goes up as a
     // slam starts: that one's safe column is kept till its rows are down and done hurting, or
-    // till the next's a step away (enraged they come every 3 s)
+    // till the next's a step away (enraged there are none: the lightning's dodged instead)
     const middle = floor.x0 + Math.floor(floor.sizeX / 2);
     let seen = slamSeen.get(sim);
     if (!seen || seen.slam !== three.slam) {
@@ -1981,13 +1975,15 @@ function wardensMove(sim: Sim): Point | undefined {
     const landing = three.slam > 0 && sim.tick - seen.tick < landingTicks;
     const next = (["east", "west", "both"] as const)[(three.slam - (landing ? 1 : 0)) % 3];
     const column = next === "east" ? middle - 1 : next === "west" ? middle + 1 : middle;
-    // As near the Warden (north, past the floor's end) as the weapons need: a melee hero on the
-    // floor's last row, anything that reaches further a step or two back
+    // In front of the Warden (it's in the floor's middle, the crater behind it), as near as the
+    // weapons need: a melee hero on the row before it, anything that reaches further back, but
+    // never on the rows the enrage has torn away
     const warden = sim.enemies.find((e) => e.uid === three.wardenUid);
+    const front = wardenFrontRow(warden ?? { y: last.at.y, radius: 2.5 });
     const reachY = warden
         ? warden.y - warden.radius - Math.max(0.8, heroReach(sim) - 0.6)
-        : last.floor.y1 - 1.5;
-    const y = Math.min(last.floor.y1 + 0.4, Math.max(last.floor.y1 - 1.5, reachY));
+        : front + 0.5;
+    const y = Math.min(front + 0.5, Math.max(floor.y0 + floor.rowsDropped + 0.5, reachY));
     let to: Point = { x: column + 0.5, y };
     const siphons = three.siphons;
     if (siphons) {
@@ -2005,7 +2001,7 @@ function wardensMove(sim: Sim): Point | undefined {
             to = left[0];
         }
     }
-    // The spot itself a danger (a pool of the phantom's acid, a bolt's shadow): the nearest tile
+    // The spot itself a danger (a bolt's shadow, a rising slab): the nearest tile
     // by it that isn't, the Warden's way first
     if (danger(Math.floor(to.x), Math.floor(to.y))) {
         let best: Point | undefined;

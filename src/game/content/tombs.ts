@@ -2140,7 +2140,8 @@ export const WARDENS: WardensDef = {
             strikeAfter: 2.4,
             half: 3,
         },
-        message: "The obelisk crackles with power. Only one style hurts the Warden: watch its bar!",
+        message:
+            "The obelisk crackles with power. Fill the Warden's shield with the style it's open to, then hit its core!",
         kneelMessage: "The Warden's core is exposed! Hit the core!",
         standMessage: "The Warden takes its core back, and its defences shift!",
         endMessage: "uses the last of its power to restore",
@@ -2193,26 +2194,30 @@ export const WARDENS: WardensDef = {
         stagger: 0.05,
         restart: 5.4,
         phantomSpotAnim: 2219,
-        // Enraged: everything at once, quicker, on a floor that's going: stay calm or die
+        // Either side of it, at the floor's edges (it's in the floor's middle)
+        phantomOffset: 15,
+        // Enraged, as OSRS has it: the slams stop, red lightning strikes the floor instead (a
+        // shadow on each tile first), Amascut tears the floor away row by row from the back till
+        // there's a row left at its feet, and the phantoms keep on, quicker: stay calm or die
         enrage: {
             at: 0.05,
             heal: 0.2,
             seq: 9684,
-            rowEvery: 7.2,
+            // A row every 3 s from the back, down to the one in front of it: you're in its reach
+            // or you're off (Sim.stepWardenEnrage)
+            rowEvery: 3,
             firstRow: 3.6,
-            slamEvery: 3,
-            lightningEvery: 2.4,
-            lightningCount: 12,
+            lightning: {
+                // The first walk this soon after it's enraged
+                first: 1.2,
+                every: 2.4,
+                warn: 1.8,
+                count: 10,
+                shadowSpotAnim: 1446,
+                spotAnim: 2197,
+                damage: 0.12,
+            },
             message: "The Warden is enraged! Amascut tears the floor away!",
-        },
-        lightning: {
-            every: 7.2,
-            quicker: 5.4,
-            warn: 1.8,
-            count: 6,
-            shadowSpotAnim: 1446,
-            spotAnim: 2197,
-            damage: 0.12,
         },
         message: "rises again! Keep off the half of the floor it slams.",
         siphonMessage: "The Warden is charging! Step on the energy siphons to stop them!",
@@ -2615,8 +2620,8 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         unhittable: true,
         sounds: { attack: -1, hit: -1, death: -1 },
     },
-    // Zebak's: a fan of his magic, or of his ranged, or a jug lobbed onto you that leaves his acid
-    // where it breaks, for a while (ZEBAK.acid: the same loc, the same poison)
+    // Zebak's: a fan of his magic, or of his ranged (his usual attacks, as OSRS has the phantoms:
+    // no acid, no jugs, that's his room)
     phantom(
         "zebaks_phantom",
         "Zebak's Phantom",
@@ -2625,19 +2630,6 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         [
             phantomShot("Phantom magic", 9626, 2176),
             phantomShot("Phantom ranged", 9626, 2178, { damage: 5 }),
-            phantomDrop("Phantom jug", 9624, 1.6, 2176, ZEBAK.jugs.splashSpotAnim, {
-                damage: 5,
-                radius: 1.2,
-                // Long enough to cost a melee hero its spot at the Warden's feet, not to own it
-                pool: {
-                    seconds: 10,
-                    radius: 1.2,
-                    damage: ZEBAK.acid.damage,
-                    interval: 0.6,
-                    effect: ZEBAK.acid.poison,
-                    locId: ZEBAK.acid.loc,
-                },
-            }),
         ],
         0.8,
     ),

@@ -116,8 +116,8 @@ The waves no longer run on a clock, but they're still where experience and caske
     2. The Warden, with the obelisk's converging, windmill and lightning-skull patterns, style
        changes, the freezing projectile, and its core thrown out for five times the damage.
     3. Floor slams, energy siphons to destroy, two path bosses' phantoms (Akkha and Kephri with
-       Elidinis' Warden, Zebak and Ba-Ba with Tumeken's), everything at once, and at 5% the floor
-       falling away row by row.
+       Elidinis' Warden, Zebak and Ba-Ba with Tumeken's), and at 5% the enrage: lightning in the
+       slams' place and the floor falling away row by row.
 
 ### The Wardens' third phase floor (for when they're built)
 
@@ -477,14 +477,21 @@ raid's ranges.
       own spot animations (2234, 2235) barely show from this camera, so the beam's tiles glow (2236)
       as the kill video shows and the windmill's strikes are the Wardens' red lightning (2197).
     - Its last hitpoint: it collapses (9662) and restores the other.
-- **The Wardens, phase three** (`WARDENS.three`, `Sim.stepWardensThree`): the last room (the same
-  room cut again, unturned, cell 4,1), the Warden that fell back up north of the floor, which is the
-  map's `MapDef.floor` (PR 133's), moved by the fight through `ArenaFloor.start` rather than a
-  script. Amascut (11767) watches from behind.
-    - Slams: half the floor rises in a wave away from it, east, then west, then both but the middle
-      three columns, every 4.2 s (3.6 below half; Overclocked 3, Overclocked 2 2.4, Insanity 1.8).
-    - Lightning walks the floor the whole phase: a walk of 6 bolts every 7.2 s (5.4 below half),
-      each bolt's shadow (1446) 1.8 s before it strikes (2197), siphons or not.
+- **The Wardens, phase three** (`WARDENS.three`, `Sim.stepWardensThree`): OSRS's own room for it,
+  square 61,80 (cell 4,1, unturned), where the screen goes black after phase two and the party's
+  brought. A floor of plates 29 by 31 round a crater: the Warden that fell comes back on its
+  platform in the floor's middle (where the obelisk stands in the first room; the viewer's spawn
+  list has it at 3934,5152), the crater torn open behind it, floor in front, down both sides and in
+  a row behind. The floor's the map's `MapDef.floor` (PR 133's), the crater its `holes`
+  (`WARDENS_CRATER` in `content/wardensFloor.ts`, cut from the grid as the phase starts), moved by
+  the fight through `ArenaFloor.start` rather than a script. Amascut (11767) watches from the
+  crater. An earlier cut stood the Warden past the north end of the first room's floor, cut again:
+  not OSRS's.
+    - The order's OSRS's, from a kill video and the Wiki: slams alone first, then the siphons,
+      then slams with the phantoms and the siphons, then the enrage, where the slams stop and
+      lightning comes down on a floor that's going.
+    - Slams: half the floor rises in a wave out from its row, north and south, east, then west,
+      then both but the middle three columns, every 4.2 s (3.6 below half; Overclocked 3, Overclocked 2 2.4, Insanity 1.8).
     - At 80, 60, 40 and 20% (no hit takes it past one), it charges (11763/11764): 3, 4, 4, then 5
       siphons (11772) for one player, one more each for every other (seven for one, four tiles
       apart, couldn't be reached in time: every fourth charge was a ripple nobody could help),
@@ -492,15 +499,18 @@ raid's ranges.
       (reversed, 11773) within 10.8 s (Insanity 4.8). All stopped, it staggers for 5% of its
       hitpoints; any left, the floor erupts out from the middle. The slams start again from east
       (Insanity: where they left off).
-    - The first charge brings a path boss's phantom east of it, the second another west, and the
-      third quickens them both: Zebak's (fans of his magic or ranged, and a jug lobbed onto you
-      that leaves his acid where it breaks for 10 s, the room's loc and poison) and Ba-Ba's (a
-      rock on where you stand) with Tumeken's; Akkha's (three of his ranged or magic) and Kephri's
-      (a fireball lobbed onto you, wider with Aerial Assault) with Elidinis'. They can't be hit.
-    - At 5% it enrages, and everything comes at once, quicker: it heals 20%, Amascut opens her
-      mouth (11768), a row of the floor tears away from the back every 7.2 s, the slams go on
-      every 3 s, the lightning's walks are 12 bolts every 2.4 s, and the phantoms are quickened.
-      Stay calm or die. Its death ends the raid, and the chest's opened (below).
+    - The second charge (60%) brings a path boss's phantom east of it and the third (40%) another
+      west, each at the floor's edge level with it, as OSRS has them, each with its boss's usual attacks: Zebak's (fans of his magic or
+      ranged: no acid, no jugs, that's his room) and Ba-Ba's (a rock on where you stand) with
+      Tumeken's; Akkha's (three of his ranged or magic) and Kephri's (a fireball lobbed onto you,
+      wider with Aerial Assault) with Elidinis'. They can't be hit.
+    - At 5% it enrages, as OSRS has it: it heals 20%, Amascut opens her mouth (11768), the slams
+      stop, red lightning strikes the floor in their place (a walk of 10 bolts every 2.4 s, each
+      bolt's shadow (1446) on its tile 1.8 s before it strikes (2197), for 12% of your
+      hitpoints), a row of the floor tears away from the back (the south) every 3 s till the row
+      in front of it is all that's left before it, with the floor beside and behind it (you're in
+      its reach or you're off), and the phantoms are quickened. Stay calm or die. Its death ends
+      the raid, and the chest's opened (below).
     - Invocations: Ancient Haste, Acceleration (the Warden attacks and the obelisk opens sooner),
       Penetration (the obelisk's specials hit harder), Overclocked, Overclocked 2 and Insanity.
     - Not in: Divine Projectile (it's about prayer, which the run hasn't got).
@@ -556,10 +566,10 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   walking to each orb's next tile along its trough till it holds the most, then a step off every
   orb; off a pyramid as its hits come (one side's cells while the other's are hitting); phase two
   by the Warden or its core (a thrower keeps Tumeken's at its weapons' reach all round rather than
-  backing to the floor's end into its slash), off the obelisk's marks; phase three at the floor's
-  north end in the column the next slam leaves alone (kept from the one landing till the next's a
-  step away), on its siphons, off its lightning, the phantoms' fans, fireballs and rocks,
-  and the acid their jugs leave. It waits by the Wardens' door for its hitpoints to come back
+  backing to the floor's end into its slash), off the obelisk's marks; phase three in front of
+  the Warden, as near as its weapons need, in the column the next slam leaves alone (kept from the
+  one landing till the next's a step away), on its siphons, off the enrage's lightning, the phantoms' fans, fireballs and
+  rocks. It waits by the Wardens' door for its hitpoints to come back
   before stepping in, while they do (not with Dehydration, and not for ever).
 - **Crondis at higher path levels**: hungry crocodiles at the palm eat what's poured faster than
   the trips bring it, so with nothing in hand a melee hero goes for them (and for any crocodile
@@ -599,13 +609,12 @@ after a wipe). How far each lost run got: paths cleared, then the Wardens' phase
 | Expert (300) | 0 of 9 (none)                     | 2 of 9 (4 paths phase 3, 4 paths phase 2, 3 paths x2, 2 paths x3) | 8 of 9 (4 paths phase 2)                  |
 | 500          | 0 of 9 (none)                     | 0 of 9 (their first path, one the second)                         | 0 of 9 (their first path, one the second) |
 
-That table is from before the Wardens' second pass (orb soaking, the busier third phase: section
-11). After it, with everything bought at Expert, 3 seeds each: the wizard 3 of 3 (the Wardens
-room alone 3 of 3 with no wipes), the ranger 1 of 3 (both losses at Kephri, its second path, 35
-wipes each: not the Wardens), the warrior 0 of 3 (two in the third phase, one stuck in Crondis).
-The third phase is harder by design now, and a melee hero's spot at the Warden's feet is where
-Zebak's phantom's acid lands: the bot stands in it or stands off and can't hit, and the floor's
-hits come on top. That's the bot's next pass, not a reason to soften the phase.
+That table is from before the Wardens' second pass (orb soaking, the third phase in OSRS's
+order: section 11). After it, with everything bought at Expert, 3 seeds each, the raid up to the
+Wardens and through them: the wizard 3 of 3 (no wipes), the warrior 2 of 3 (the loss stuck in
+Crondis, its third path; both Wardens runs won), the ranger 1 of 3 (both losses at Kephri, its
+second path, 35 wipes each: not the Wardens). The Wardens' room is no longer where a run with
+the best of everything dies; Kephri for the ranger and Crondis's corridor are.
 
 The curve asked for: Entry with nothing, Normal with the shop and better gear, Expert with the
 best of everything, and 500 past all three (with everything bought they stall in the Apmeken

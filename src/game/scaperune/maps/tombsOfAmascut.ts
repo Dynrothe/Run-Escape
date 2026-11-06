@@ -1,12 +1,16 @@
 import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
-import { createWardensFloor } from "../../content/wardensFloor";
+import {
+    WARDENS_CRATER_WARDEN,
+    createWardensFloor,
+    wardensCrater,
+} from "../../content/wardensFloor";
 import { Ground } from "../Ground";
 import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
 import { BuildContext, MapRecipe } from "../recipe";
-import { BROKEN_PIT, digFloorPit } from "./wardensFloor";
+import { digFloorPit } from "./wardensFloor";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
 // walled off in the dark. The Nexus is the hub, with a door to each of the four paths. In
@@ -401,22 +405,35 @@ const WARDENS_SHOWN_UNDER = [11, 194];
 // The plane under it's pieces that stand up to the border, under it
 export const WARDENS_TALL_PIECES = [45590, 45591, 45592, 45599, 45601, 45603];
 
-// The Wardens' last phase: the same room again, unturned (the Warden at the north, as OSRS has it,
-// slamming the floor away from it) and cut further north for it to stand over the floor, whose
-// tiles the game draws as slabs that rise and fall (MapDef.floor, as maps/wardensFloor.ts has it):
-// a bridge over a pit
+// The Wardens' last phase: OSRS's own room for it, square 61,80, where the screen goes black
+// after the second phase and the party's brought. Its plates (level 0, 45650 to 45710) are a floor
+// 29 by 31 round a crater, the Warden on its platform in the middle (where the obelisk is in the
+// first room: the viewer's spawn list has it at 3934,5152) and the crater torn open behind it.
+// Level 1 is the dark round it, drawn only where the floor is: brought down, unturned (the crater's
+// north, as the camera looks), with the game drawing the floor's tiles as slabs that rise and fall
+// (MapDef.floor, as maps/wardensFloor.ts has it), a bridge over a pit. The plates' rim and the
+// pillars at the south come too, and the platform, on the bridge.
 const WARDENS_LAST: RoomCut = {
-    x: 3788,
-    y: 5140,
-    sizeX: 42,
-    sizeY: 34,
+    x: 3914,
+    y: 5128,
+    sizeX: 45,
+    sizeY: 49,
     plane: 1,
     cell: [4, 1],
-    arrive: [20, 7],
+    // In front of the Warden, eleven rows south of it
+    arrive: [22, 15],
 };
-// (its own tiles) The floor the game moves, and where the Warden stands, north of it
-const WARDENS_LAST_FLOOR = { x0: 9, y0: 2, x1: 31, y1: 26 };
-const WARDENS_LAST_AT = [20.5, 30.5];
+// (its own tiles) The floor the game moves (the plates' rectangle), and where the Warden stands
+const WARDENS_LAST_FLOOR = { x0: 8, y0: 11, x1: 36, y1: 41 };
+const WARDENS_LAST_AT = [
+    WARDENS_LAST_FLOOR.x0 + WARDENS_CRATER_WARDEN.x,
+    WARDENS_LAST_FLOOR.y0 + WARDENS_CRATER_WARDEN.y,
+];
+// Level 0's pieces: the plates and the rubble on the rows in front of the Warden (45643 to 45710:
+// the game draws the floor) stay out; the rest come along: the rim, the south's broken edge, the
+// Warden's platform (45718 to 45720, which stands on the bridge)
+const WARDENS_LAST_PLATES = [45643, 45710];
+const WARDENS_LAST_PLATFORM = [45718, 45719, 45720];
 // The floor's height in its cell, a bridge over a pit nine tiles down
 const WARDENS_LAST_HEIGHT = 200;
 const WARDENS_LAST_PIT = 56;
@@ -846,18 +863,6 @@ function build(context: BuildContext): TileGrid {
                 !(cut === CRONDIS && loc.id === APMEKEN_BARRIER && loc.x === CRONDIS_GATE.x) &&
                 !(cut === CRONDIS && loc.id === CRONDIS_WATERFALL) &&
                 !(cut === WARDENS && loc.id === WARDENS_CHARGING) &&
-                // The last room's floor is the game's: its decoration and the broken pit in its
-                // middle go (it's whole to begin with), and so do the charging circles
-                !(
-                    cut === WARDENS_LAST &&
-                    (loc.id === WARDENS_CHARGING ||
-                        (loc.level === 0 &&
-                            (loc.type === LOC_FLOOR_DECORATION || loc.id === BROKEN_PIT) &&
-                            loc.x >= WARDENS_LAST_FLOOR.x0 &&
-                            loc.x <= WARDENS_LAST_FLOOR.x1 &&
-                            loc.y >= WARDENS_LAST_FLOOR.y0 &&
-                            loc.y <= WARDENS_LAST_FLOOR.y1))
-                ) &&
                 !(
                     cut === AKKHA_ARENA &&
                     (loc.id === AKKHA_BARRIER ||
@@ -872,6 +877,19 @@ function build(context: BuildContext): TileGrid {
                         (loc.id === 85 && loc.x === 12 && loc.y >= 11 && loc.y <= 13))
                 ),
         );
+        // The last room's pieces on level 0, but its plates and rubble (the game draws the floor)
+        // and the platform (put on the bridge, below)
+        if (cut === WARDENS_LAST) {
+            prefab.locs.push(
+                ...cutOut.locs.filter(
+                    (loc) =>
+                        loc.level === 0 &&
+                        loc.type !== LOC_FLOOR_DECORATION &&
+                        !(loc.id >= WARDENS_LAST_PLATES[0] && loc.id <= WARDENS_LAST_PLATES[1]) &&
+                        !WARDENS_LAST_PLATFORM.includes(loc.id),
+                ),
+            );
+        }
         // The Wardens' room's floor, from the plane under it: what's on the floor, and the tall
         // pieces under the raised border
         if (cut === WARDENS) {
@@ -955,6 +973,17 @@ function build(context: BuildContext): TileGrid {
                 WARDENS_LAST_PIT,
                 inLastFloor,
             );
+            // The Warden's platform, on the bridge (level 1 there) as the floor is
+            for (const loc of cutOut.locs) {
+                if (loc.level === 0 && WARDENS_LAST_PLATFORM.includes(loc.id)) {
+                    ground.grid.locs.push({
+                        ...loc,
+                        level: 1,
+                        x: room.at.x + loc.x,
+                        y: room.at.y + loc.y,
+                    });
+                }
+            }
         }
         // The Crondis room's waterfalls, out of the map to be drawn: still solid
         if (cut === CRONDIS) {
@@ -1063,6 +1092,10 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         // script of its own
         floor: {
             ...createWardensFloor(TOA_PLACES.wardens.last.floor),
+            holes: wardensCrater(
+                TOA_PLACES.wardens.last.floor.x0,
+                TOA_PLACES.wardens.last.floor.y0,
+            ),
             script: [],
             loopSeconds: 1e7,
         },

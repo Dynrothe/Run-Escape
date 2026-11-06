@@ -1076,6 +1076,20 @@ export type WardensThree = {
     over: boolean;
 };
 
+// The last floor's row in front of the Warden (in its middle, the crater behind it): the last
+// the enrage leaves before it, and where a melee hero stands
+export function wardenFrontRow(warden: { y: number; radius: number }): number {
+    return Math.floor(warden.y - warden.radius) - 1;
+}
+
+// The rows of the last floor the enrage leaves: from the one in front of the Warden north
+function wardenFrontKeep(
+    floor: { y0: number; sizeY: number },
+    warden: { y: number; radius: number },
+): number {
+    return Math.max(1, floor.y0 + floor.sizeY - wardenFrontRow(warden));
+}
+
 export type ZebakFight = {
     uid: number;
     special: number;
@@ -6353,7 +6367,7 @@ export class Sim {
                 phase: 2,
                 stage: "shield",
                 fraction: two.shield / two.shieldMax,
-                status: `Only ${style} hurts it (${percent} left)`,
+                status: `Only ${style} fills its shield (${percent} left)`,
             };
         }
         const three = fight.three;
@@ -6496,7 +6510,7 @@ export class Sim {
                 two.kneel = undefined;
                 this.emit({
                     type: "notice",
-                    message: `${def.standMessage} Only ${forms.styles[two.form]} hurts it now.`,
+                    message: `${def.standMessage} Only ${forms.styles[two.form]} fills its shield now.`,
                 });
             }
         }
@@ -6564,7 +6578,7 @@ export class Sim {
             secondsToTicks(def.obelisk.firstOpen * (this.invoked("acceleration") ? 0.78 : 1));
         this.emit({
             type: "notice",
-            message: `${def.message} Only ${forms.styles[0]} hurts it now.`,
+            message: `${def.message} Only ${forms.styles[0]} fills its shield now.`,
         });
     }
 
@@ -6848,6 +6862,8 @@ export class Sim {
         fight.marks = [];
         fight.shots = [];
         fight.phase = 3;
+        // The crater round the Warden's platform, cut from the floor
+        this.floor?.openHoles();
         this.moveParty(last.arrive);
         this.wardensFood();
         const warden = this.spawnEnemy(
@@ -6874,8 +6890,7 @@ export class Sim {
             pausedUntil: 0,
             enraged: false,
             nextRow: 0,
-            // Its first walk of lightning a little after it's up
-            nextLightning: this.tick + secondsToTicks(WARDENS.three.lightning.every),
+            nextLightning: 0,
             over: false,
         };
         this.emit({ type: "notice", message: `${WARDENS.wardens[side].name} ${def.message}` });
@@ -6893,7 +6908,7 @@ export class Sim {
     }
 
     // The last phase, each tick: its slams, its siphons when it charges, the phantoms joining,
-    // and once enraged, the floor torn away and lightning
+    // and once enraged, lightning in the slams' place and the floor torn away
     private stepWardensThree(fight: WardensFight): void {
         const three = fight.three!;
         const def = WARDENS.three;
@@ -6915,20 +6930,17 @@ export class Sim {
         if (!three.enraged && warden.hp <= warden.maxHp * def.enrage.at) {
             this.enrageWardenThree(three, warden);
         }
-        // Lightning walks the floor the whole phase, siphons or not; enraged, the rows go too
+        // Enraged, it doesn't slam: the lightning and the rows going are the floor's dangers
         if (three.enraged) {
             this.stepWardenEnrage(three, warden);
+            this.stepWardenLightning(fight, three, warden);
+            return;
         }
-        this.stepWardenLightning(fight, three, warden);
         if (three.siphons) {
             this.stepWardenSiphons(three, warden, forms.form);
             return;
         }
-        if (
-            !three.enraged &&
-            three.batch < def.at.length &&
-            warden.hp <= warden.maxHp * def.at[three.batch]
-        ) {
+        if (three.batch < def.at.length && warden.hp <= warden.maxHp * def.at[three.batch]) {
             this.startWardenSiphons(three, warden);
             return;
         }
@@ -6939,10 +6951,12 @@ export class Sim {
         const sides = ["east", "west", "both"] as const;
         const side = sides[three.slam % sides.length];
         three.slam++;
-        this.floor?.start({ kind: "side", side, rowSeconds: def.rowSeconds }, this.tick, () => ({
-            x: warden.x,
-            y: warden.y,
-        }));
+        // Out from its row both ways: it stands in the floor's middle
+        this.floor?.start(
+            { kind: "side", side, rowSeconds: def.rowSeconds, outward: true },
+            this.tick,
+            () => ({ x: warden.x, y: warden.y }),
+        );
         this.animate(warden, def.slamSeqs[side]);
         const every = this.invoked("insanity")
             ? def.invoked.insanity
@@ -6953,13 +6967,10 @@ export class Sim {
                 : warden.hp < warden.maxHp / 2
                   ? def.quicker
                   : def.every;
-        three.nextSlam =
-            this.tick +
-            secondsToTicks(three.enraged ? Math.min(every, def.enrage.slamEvery) : every);
+        three.nextSlam = this.tick + secondsToTicks(every);
     }
 
-    // It charges: siphons land over the floor, and with the first and second a phantom joins; the
-    // third quickens them both
+    // It charges: siphons land over the floor, and with the second and third a phantom joins
     private startWardenSiphons(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three;
         const floor = this.floor;
@@ -6972,9 +6983,15 @@ export class Sim {
         this.animate(warden, def.chargeSeq);
         const spots: { x: number; y: number }[] = [];
         if (floor) {
+            // In front of it and beside it, not behind the crater, where getting to one and back
+            // is a walk round it
+            const rows = Math.max(
+                1,
+                Math.min(floor.sizeY - 4, Math.floor(warden.y) - floor.y0 - 1),
+            );
             for (let tries = 0; tries < 200 && spots.length < count; tries++) {
                 const x = floor.x0 + 2 + this.rng.int(floor.sizeX - 4) + 0.5;
-                const y = floor.y0 + 2 + this.rng.int(floor.sizeY - 4) + 0.5;
+                const y = floor.y0 + 2 + this.rng.int(rows) + 0.5;
                 if (
                     !floor.isFalling(Math.floor(x), Math.floor(y), this.tick) &&
                     spots.every((spot) => fm.hypot(spot.x - x, spot.y - y) >= 4)
@@ -6999,19 +7016,14 @@ export class Sim {
             nextBeam: this.tick,
         };
         this.emit({ type: "notice", message: def.siphonMessage });
-        // A phantom with the first charge (east of it) and the second (west); the third quickens both
-        const which = three.batch - 1;
-        if (which === 2) {
-            for (const uid of three.phantoms) {
-                const phantom = this.enemies.find((e) => e.uid === uid);
-                if (phantom?.bossState) {
-                    phantom.bossState.enraged = true;
-                }
-            }
-        }
+        // A phantom with the second charge (east of it) and the third (west), as OSRS has them
+        const which = three.batch - 2;
         if (which === 0 || which === 1) {
             const id = def.forms[three.side].phantoms[which];
-            const at = { x: warden.x + (which === 0 ? 9 : -9), y: warden.y - 1 };
+            const at = {
+                x: warden.x + (which === 0 ? def.phantomOffset : -def.phantomOffset),
+                y: warden.y,
+            };
             const phantom = this.spawnEnemy(getEnemy(id), "boss", at, 1);
             if (phantom) {
                 three.phantoms.push(phantom.uid);
@@ -7100,7 +7112,8 @@ export class Sim {
         }
     }
 
-    // At its last few hitpoints: it heals, its phantoms quicken, and Amascut tears at the floor
+    // At its last few hitpoints: it heals, stops slamming, its phantoms quicken, lightning comes
+    // down, and Amascut tears at the floor
     private enrageWardenThree(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three;
         three.enraged = true;
@@ -7127,14 +7140,13 @@ export class Sim {
             this.reform(amascut, def.amascut.enragedId);
         }
         three.nextRow = this.tick + secondsToTicks(def.enrage.firstRow);
-        three.nextLightning = Math.min(three.nextLightning, this.tick + secondsToTicks(1.2));
-        three.nextSlam = Math.min(three.nextSlam, this.tick + secondsToTicks(1.8));
-        three.pausedUntil = Math.min(three.pausedUntil, this.tick);
+        three.nextLightning = this.tick + secondsToTicks(def.enrage.lightning.first);
         this.emit({ type: "notice", message: def.enrage.message });
     }
 
-    // Enraged: a row of the floor torn away from the back every so often (its slams and the
-    // lightning go on, quicker: stepWardensThree, stepWardenLightning)
+    // Enraged: a row of the floor torn away from the back every so often, till the one in front
+    // of the Warden is all that's left before it (and what's beside and behind it); the
+    // lightning's stepWardenLightning
     private stepWardenEnrage(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three.enrage;
         const floor = this.floor;
@@ -7142,47 +7154,44 @@ export class Sim {
             return;
         }
         three.nextRow = this.tick + secondsToTicks(def.rowEvery);
-        floor.start({ kind: "dropRows", rows: 1, rowSeconds: 0.4 }, this.tick, () => ({
+        const keep = wardenFrontKeep(floor, warden);
+        if (floor.rowsDropped >= floor.sizeY - keep) {
+            return;
+        }
+        floor.start({ kind: "dropRows", rows: 1, rowSeconds: 0.4, keep }, this.tick, () => ({
             x: warden.x,
             y: warden.y,
         }));
     }
 
-    // Lightning walking the floor, each bolt's shadow first: a walk every so often, more often
-    // under half its hitpoints, and most of all enraged
+    // Enraged, lightning in the slams' place: a walk of bolts over the floor every so often, each
+    // bolt's shadow on its tile first. Where the party can be: the rows left, up to beside the
+    // Warden (not over the crater or behind it), and never on a tile that's gone
     private stepWardenLightning(fight: WardensFight, three: WardensThree, warden: Enemy): void {
-        const def = WARDENS.three;
         const floor = this.floor;
         if (!floor || this.tick < three.nextLightning) {
             return;
         }
-        const lightning = def.lightning;
-        const every = three.enraged
-            ? def.enrage.lightningEvery
-            : warden.hp < warden.maxHp / 2
-              ? lightning.quicker
-              : lightning.every;
-        const count = three.enraged ? def.enrage.lightningCount : lightning.count;
-        three.nextLightning = this.tick + secondsToTicks(every);
+        const lightning = WARDENS.three.enrage.lightning;
+        three.nextLightning = this.tick + secondsToTicks(lightning.every);
         const warn = secondsToTicks(lightning.warn);
+        const top = Math.min(floor.y0 + floor.sizeY - 1, Math.floor(warden.y));
+        const bottom = Math.min(top, floor.y0 + floor.rowsDropped);
         // Each bolt a step or two on from the last
         let x = floor.x0 + this.rng.int(floor.sizeX);
-        let y =
-            floor.y0 +
-            floor.rowsDropped +
-            this.rng.int(Math.max(1, floor.sizeY - floor.rowsDropped));
-        for (let i = 0; i < count; i++) {
+        let y = bottom + this.rng.int(top - bottom + 1);
+        for (let i = 0; i < lightning.count; i++) {
             const angle = this.rng.int(8) * (Math.PI / 4);
             const step = this.rng.int(4) === 0 ? 2 : 1;
             x = Math.min(
                 Math.max(x + Math.round(fm.cos(angle) * step), floor.x0),
                 floor.x0 + floor.sizeX - 1,
             );
-            y = Math.min(
-                Math.max(y + Math.round(fm.sin(angle) * step), floor.y0 + floor.rowsDropped),
-                floor.y0 + floor.sizeY - 1,
-            );
-            const at = this.tick + Math.floor((i * warn) / count);
+            y = Math.min(Math.max(y + Math.round(fm.sin(angle) * step), bottom), top);
+            if (floor.isFalling(x, y, this.tick)) {
+                continue;
+            }
+            const at = this.tick + Math.floor((i * warn) / lightning.count);
             fight.marks.push({
                 x: x + 0.5,
                 y: y + 0.5,
