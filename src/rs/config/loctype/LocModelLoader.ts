@@ -22,21 +22,39 @@ export type ContourGroundInfo = {
 };
 
 // A burnt loc's colours (LocType.charred): each face's lightness to CHAR_LIGHT of what it was,
-// its saturation halved, so wood goes near black, stone a dark grey and paint a sooty dull
-// version of itself. Textured faces' colours are their light, so they darken the same way.
-const CHAR_LIGHT = 0.36;
+// its saturation a quarter, so wood goes near black, stone a dark grey and paint a sooty dull
+// version of itself. Textured faces are lit, not coloured: see charColours.
+const CHAR_LIGHT = 0.45;
 
 export function charColour(hsl: number): number {
     const hue = (hsl >> 10) & 63;
     const saturation = (hsl >> 7) & 7;
     const lightness = hsl & 127;
-    return (hue << 10) | ((saturation >> 1) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
+    return (hue << 10) | ((saturation >> 2) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
 }
 
-function charColours(model: ModelData): void {
+// A textured face is lit, not coloured, so a burnt one takes a dark texture instead: wood and
+// anything coloured the darkest planks (5), stone and anything grey a dark cobbled rock (119).
+// See-through textures (leaves, bars, cloth) keep theirs, or they'd go solid.
+const CHAR_WOOD_TEXTURE = 5;
+const CHAR_STONE_TEXTURE = 119;
+
+function charColours(model: ModelData, textures: TextureLoader): void {
     const colours = model.faceColors;
     for (let i = 0; i < model.faceCount; i++) {
         colours[i] = charColour(colours[i]);
+    }
+    const faceTextures = model.faceTextures;
+    if (!faceTextures) {
+        return;
+    }
+    for (let i = 0; i < model.faceCount; i++) {
+        const texture = faceTextures[i];
+        if (texture === -1 || textures.isTransparent(texture)) {
+            continue;
+        }
+        const saturation = (textures.getAverageHsl(texture) >> 7) & 7;
+        faceTextures[i] = saturation >= 2 ? CHAR_WOOD_TEXTURE : CHAR_STONE_TEXTURE;
     }
 }
 
@@ -199,7 +217,7 @@ export class LocModelLoader {
         }
 
         if (locType.charred) {
-            charColours(copy);
+            charColours(copy, this.textureLoader);
         }
 
         if (hasResize) {
