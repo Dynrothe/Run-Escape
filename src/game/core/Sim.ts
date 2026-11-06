@@ -3008,7 +3008,7 @@ export class Sim {
         ) {
             const amount = player.poisonDamage;
             player.hp -= amount;
-            this.damageTaken += amount;
+            this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
             this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
@@ -5003,8 +5003,8 @@ export class Sim {
         );
     }
 
-    // Food round the party as a Wardens phase ends (TOMBS_BOSS_FOOD.phase), below Expert: there's
-    // nothing else to heal with between them
+    // Food round the party as a Wardens phase ends (TOMBS_BOSS_FOOD.phase, fewer as the raid level
+    // nears untilLevel, none from it): there's nothing else to heal with between them
     private wardensFood(): void {
         const share = Math.max(0, 1 - this.raidLevel / TOMBS_BOSS_FOOD.untilLevel);
         const count = this.invoked("on_a_diet") ? 0 : Math.round(TOMBS_BOSS_FOOD.phase * share);

@@ -28,6 +28,7 @@ import { INVOCATIONS, cleanInvocations, getRaidLevel } from "../../src/game/cont
 import { CASKET_GEAR } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
+import { WARDENS } from "../../src/game/content/tombs";
 import { CombatStyle, emptyStats } from "../../src/game/content/types";
 import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
@@ -176,7 +177,9 @@ const CHOICE_ORDER: UpgradeChoice["kind"][] = [
 // The styles the Wardens' second phase takes, one at a time (WARDENS.two.forms): a hero without a
 // weapon of each gets nowhere on the other's form, so a new weapon of a style it lacks comes first,
 // as a player who's read "Only ranged hurts it" picks
-const WARDENS_STYLES: CombatStyle[] = ["ranged", "magic"];
+const WARDENS_STYLES: CombatStyle[] = [
+    ...new Set(Object.values(WARDENS.two.forms).flatMap((form) => form.styles)),
+];
 
 function coversWardensStyle(sim: Sim, choice: UpgradeChoice): boolean {
     if (choice.kind !== "newWeapon") {

@@ -2646,6 +2646,36 @@ describe("a wipe on the Wardens", () => {
         };
         expect(food([])).toBe(TOMBS_BOSS_FOOD.phase);
         expect(food(["on_a_diet"])).toBe(0);
+        // Fewer as the raid level climbs: a third of them at Expert (one), none past untilLevel
+        const expert = [
+            "jungle_japes",
+            "lively_larvae",
+            "blood_thinners",
+            "mind_the_gap",
+            "gotta_have_faith",
+            "keep_back",
+            "blowing_mud",
+            "arterial_spray",
+            "aerial_assault",
+            "need_some_help",
+            "quiet_prayers",
+            "shaking_things_up",
+            "boulderdash",
+            "stay_vigilant",
+            "more_overlords",
+            "not_just_a_head",
+            "upset_stomach",
+            "medic",
+            "pathseeker",
+            "double_trouble",
+            "feeling_special",
+            "ancient_haste",
+            "acceleration",
+            "penetration",
+            "overclocked",
+        ];
+        expect(getRaidLevel(expert)).toBe(300);
+        expect(food(expert)).toBe(Math.round(TOMBS_BOSS_FOOD.phase / 3));
     });
 
     it("ends the raid once an Attempts invocation's deaths are spent", () => {
