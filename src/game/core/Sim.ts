@@ -8142,6 +8142,9 @@ export class Sim {
                     if (ability.spotAnim !== undefined) {
                         this.addEffect(ability.spotAnim, cell.x, cell.y, 0, 60);
                     }
+                    if (ability.cellImpact) {
+                        this.addImpactSpot(ability.cellImpact, cell.x, cell.y);
+                    }
                     this.queryTouching(cell.x, cell.y, size, (enemy) => {
                         if (
                             Math.abs(enemy.x - cell.x) <= size / 2 &&

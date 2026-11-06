@@ -2117,23 +2117,36 @@ const Hud = memo(function Hud({
     damagePanel: boolean;
     disabled: boolean;
 }): JSX.Element {
+    // A map to walk round (FunMapDef.explore) has no run to keep track of: no level, no clock,
+    // no kills, coins, rounds, damage or quests, only the minimap and the hero's own buttons
+    const explore = getMap(hud.mapId).fun?.explore === true;
     return (
         <>
-            <XpBar level={hud.level} client={client} />
+            {!explore && <XpBar level={hud.level} client={client} />}
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                    <GearSlots gear={hud.gear} disabled={disabled} />
+                    {!explore && (
+                        <>
+                            <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
+                            <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
+                            <GearSlots gear={hud.gear} disabled={disabled} />
+                        </>
+                    )}
                 </div>
-                <RunTimer client={client} />
+                {!explore && <RunTimer client={client} />}
                 <div className="ui-hud-right">
                     <Minimap client={client} />
-                    <KillsAndCoins client={client} />
-                    {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
-                    <RaidRoomInfo client={client} />
-                    <HudQuests open={questTracker} client={client} />
-                    <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                    {!explore && (
+                        <>
+                            <KillsAndCoins client={client} />
+                            {hud.round !== undefined && (
+                                <div className="ui-round">Round {hud.round}</div>
+                            )}
+                            <RaidRoomInfo client={client} />
+                            <HudQuests open={questTracker} client={client} />
+                            <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                        </>
+                    )}
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />

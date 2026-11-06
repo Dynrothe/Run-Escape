@@ -115,6 +115,9 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         size: 3,
         markSpotAnim: 1800,
         spotAnim: 1796,
+        // His blue light bursting on each cell as it's struck: the bolt alone barely shows from
+        // the play camera over the ash
+        cellImpact: { spotAnim: BLUE_IMPACT, fit: 1.2 },
         seq: RAISE_SEQ,
         strikeAt: RAISE_AT,
         windupSound: 4364,
