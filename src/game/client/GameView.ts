@@ -5,6 +5,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getCharacter } from "../content/characters";
 import { REVIVE_SECONDS, REVIVE_SEQ } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
@@ -17,7 +18,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { EnemyDef } from "../content/types";
+import { EnemyDef, HeroNpcLookDef } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -981,6 +982,12 @@ export class GameView {
 
     private drawPlayer(actors: ActorRenderer, sim: Sim, hero: number, alpha: number): void {
         const pose = getPlayerPose(sim, hero, alpha, this.localPlayerPose);
+        // A hero drawn as an NPC (CharacterDef.npcLook: Justiciar Zachariah)
+        const character = getCharacter(sim.heroes[hero].characterId);
+        if (character.npcLook) {
+            this.drawHeroNpc(actors, sim, hero, pose, character.id, character.npcLook);
+            return;
+        }
         // A power-up's look replaces the player's usual model and everything it does
         const powerUp = sim.as(hero, () => sim.wornPowerUp);
         const look = powerUp?.look;
@@ -1087,6 +1094,53 @@ export class GameView {
             yaw,
             LANTERN_OPTIONS,
         );
+    }
+
+    // A hero drawn as an NPC: its idle and walk, its abilities' animations (held on their first
+    // frame until they're due, so the blow falls as it lands, then played out on the move too),
+    // and its own swing for a weapon's
+    private drawHeroNpc(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        pose: PlayerPose,
+        characterId: string,
+        look: HeroNpcLookDef,
+    ): void {
+        const model = this.assets.getHeroLook(characterId);
+        if (!model) {
+            return;
+        }
+        const player = sim.heroes[hero].player;
+        const tick = sim.tick;
+        const seq = player.attackSeq;
+        let anim = model.getAnim(pose.moving ? look.walkSeq : look.idleSeq);
+        let frame = anim.getFrame(pose.moveTicks);
+        if (seq !== -1) {
+            const own = model.getAnim(seq);
+            const attack = own.seqId === seq ? own : model.getAnim(look.swingSeq);
+            const ticks = tick - player.attackStart;
+            // A weapon's swing shows standing still; his own moves on the move too
+            if (ticks < attack.totalTicks && (own.seqId === seq || !pose.moving)) {
+                anim = attack;
+                frame = anim.getFrame(Math.max(0, ticks), false);
+            }
+        }
+        let tint = NO_TINT;
+        if (player.flash > 0) {
+            tint = PLAYER_HIT_TINT;
+        }
+        if (player.frozen > 0) {
+            tint = FROZEN_TINT;
+        }
+        const flash = player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0 ? 0.5 : 0;
+        const { x, y } = pose;
+        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
+            silhouette: true,
+            tint,
+            flash,
+            scale: look.scale ?? 1,
+        });
     }
 
     private drawEnemy(actors: ActorRenderer, sim: Sim, enemy: Enemy, alpha: number): void {

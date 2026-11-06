@@ -1455,6 +1455,65 @@ export type CharacterDef = {
     only?: string;
     // A way to play rather than a bonus (CharacterTraitDef)
     trait?: CharacterTraitDef;
+    // Drawn as an NPC rather than a player (Justiciar Zachariah, the Battle for Varrock's): its
+    // model, its own idle and walk, and every animation its abilities play (HeroAbilityDef.seq),
+    // which have to be on the NPC's skeleton
+    npcLook?: HeroNpcLookDef;
+    // Buttons of their own (HeroAbilityDef), in place of a map's one (MapDef.fight.ability):
+    // Space and 1 to 5 on a keyboard, the touch screen's buttons. Each goes off wherever they
+    // face, with or without anything to hit.
+    abilities?: HeroAbilityDef[];
+};
+
+export type HeroNpcLookDef = {
+    npcId: number;
+    idleSeq: number;
+    walkSeq: number;
+    // What it plays for a weapon's swing, which is a player's animation it hasn't got
+    swingSeq: number;
+    // How big it's drawn, 1 as the cache has it
+    scale?: number;
+};
+
+// A hero's own button (CharacterDef.abilities), played out by Sim.useAbility: the hero plays
+// `seq` (held on its first frame and timed so its `strikeAt` seconds falls as it lands), and
+// `windup` seconds after the press it lands, by its kind, along the way they face:
+// - lunge: they dash `length` tiles straight ahead (stopping at a wall), hitting what's within
+//   `width` / 2 of the strip, with `impact.trail` laid along it
+// - wave: `spotAnim` flies `length` tiles at `speed` a second, hitting what it passes within
+//   `width` / 2, each once
+// - square: a `size` by `size` square on the nearest enemy within `length` (`length` / 2 ahead
+//   if none), `spotAnim` on each of its tiles
+// - checker: every `size` by `size` cell of one colour within `length` of them, each marked by
+//   `markSpotAnim` from the press and struck by `spotAnim` as it lands
+// - gaze: everything within `length` of them
+// `freeze` holds what it hits for that many seconds; `impact` is shown where it lands (a
+// lunge's at its end, a wave's where it's cast).
+export type HeroAbilityDef = {
+    id: string;
+    name: string;
+    kind: "lunge" | "wave" | "square" | "checker" | "gaze";
+    iconObjId: number;
+    damage: number;
+    cooldown: number;
+    windup: number;
+    length: number;
+    width?: number;
+    size?: number;
+    speed?: number;
+    spotAnim?: number;
+    // Turns the wave's spot animation this much (2048 a turn) from the way it flies
+    spotYaw?: number;
+    markSpotAnim?: number;
+    freeze?: number;
+    seq?: number;
+    strikeAt?: number;
+    windupSound?: number;
+    sound?: number;
+    shout?: string;
+    impact?: ImpactDef;
+    // What the HUD's button says it does
+    description: string;
 };
 
 // An adventurer's trait (CharacterDef.trait), which the sim plays out for their hero.
@@ -2087,6 +2146,9 @@ export type FunMapDef = {
     // Lines the player says now and then, every few seconds (between every[0]
     // and every[1])
     playerChat?: { lines: string[]; every: [number, number] };
+    // A map to walk round and nothing more: no waves (the map's are empty), no bosses (an empty
+    // pool), no random events, and nothing hurts (the Battle for Varrock)
+    explore?: boolean;
 };
 
 // Where a piece of gear is worn. The client's equipment slots, plus the ring

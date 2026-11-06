@@ -67,7 +67,7 @@ import {
     isMapUnlocked,
 } from "../core/save";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
-import { AbilityButton } from "./AbilityButton";
+import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -922,6 +922,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             </div>
         );
     }
+    if (getMap(ui.mapId).fun?.explore) {
+        return (
+            <div
+                className="ui-endless"
+                title="Nothing comes here: walk round it for as long as you like."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No enemies</span>
+            </div>
+        );
+    }
     if (getMap(ui.mapId).fun) {
         return (
             <div
@@ -1322,7 +1333,18 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
     {
         id: "fun",
         name: "Fun",
-        groups: [{ name: "Fun maps", hint: "endless, open from the start", maps: FUN_MAPS }],
+        groups: [
+            {
+                name: "Fun maps",
+                hint: "endless, open from the start",
+                maps: FUN_MAPS.filter((map) => !map.fun?.explore),
+            },
+            {
+                name: "To explore",
+                hint: "nothing to fight, open from the start",
+                maps: FUN_MAPS.filter((map) => map.fun?.explore),
+            },
+        ],
     },
     {
         id: "dev",
@@ -1584,9 +1606,11 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                     <div className="ui-card-title">{map.name}</div>
                     <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
                         {map.fun
-                            ? map.fun.character
-                                ? `Fun map, endless. You play as ${getCharacter(map.fun.character).name}.`
-                                : "Fun map, endless"
+                            ? map.fun.explore && map.fun.character
+                                ? `A map to explore. You play as ${getCharacter(map.fun.character).name}.`
+                                : map.fun.character
+                                  ? `Fun map, endless. You play as ${getCharacter(map.fun.character).name}.`
+                                  : "Fun map, endless"
                             : !unlocked
                               ? `Beat ${getMap(map.act?.requires ?? map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
                               : map.fight
@@ -2116,11 +2140,13 @@ const Hud = memo(function Hud({
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
-                    {/* A boss fight has no items, only its own button */}
-                    {!getMap(hud.mapId).fight && (
+                    {/* A boss fight has no items, only its own button, and a map to walk round
+                        has none either (FunMapDef.explore), only the hero's own buttons */}
+                    {!getMap(hud.mapId).fight && !getMap(hud.mapId).fun?.explore && (
                         <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
+                    <KitButtons client={client} />
                 </div>
                 <HpBar client={client} />
             </div>

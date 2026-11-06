@@ -1305,12 +1305,16 @@ export class GameClient implements GameFrameHandler {
         }
         // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
         const petsBaked = this.assets.loadPets(pets);
+        // A hero the map has everyone play, drawn as an NPC (Justiciar Zachariah)
+        const mapCharacter = getMapCharacter(map);
+        const heroBaked = mapCharacter ? this.assets.loadHeroLook(mapCharacter) : undefined;
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
             await petsBaked;
+            await heroBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1754,13 +1758,24 @@ export class GameClient implements GameFrameHandler {
     }
 
     // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
-    // screen's. Out of reach, or not ready, it says no.
-    useAbility(): void {
+    // screen's. Out of reach, or not ready, it says no. A hero with buttons of their own
+    // (CharacterDef.abilities) has slot for which: Space is the first, and 1 to 4 the others.
+    useAbility(slot = 0): void {
         const sim = this.sim;
-        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+        if (!sim || (this.paused && !this.coopRun)) {
             return;
         }
-        this.act({ kind: "ability" });
+        if (this.hasKit(sim)) {
+            this.act({ kind: "ability", index: slot });
+        } else if (sim.map.fight?.ability) {
+            this.act({ kind: "ability" });
+        }
+    }
+
+    // Whether the hero this player plays has buttons of their own (CharacterDef.abilities)
+    private hasKit(sim: Sim): boolean {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        return getCharacter(hero.characterId).abilities !== undefined;
     }
 
     // The opening animation's sounds, timed by the UI
@@ -2035,6 +2050,9 @@ export class GameClient implements GameFrameHandler {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
             this.skip();
+        } else if (overlay === "none" && code.startsWith("Digit") && this.hasKit(sim)) {
+            // A hero's own buttons: 1 to 4 after Space's (CharacterDef.abilities)
+            this.useAbility(parseInt(code.slice(5)));
         } else if (overlay === "none" && code.startsWith("Digit")) {
             // The casket screen has its own keys (it knows when its animation
             // is done)
@@ -2192,6 +2210,25 @@ export class GameClient implements GameFrameHandler {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
+    }
+
+    // A hero's own buttons, for the HUD (CharacterDef.abilities): always in reach, as they go
+    // off with or without anything to hit
+    private getKitViews(sim: Sim): AbilityView[] | undefined {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        const kit = getCharacter(hero.characterId).abilities;
+        return kit?.map((ability, slot) => {
+            const left = sim.kitSecondsLeft(slot, hero);
+            return {
+                name: ability.name,
+                iconObjId: ability.iconObjId,
+                charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+                inReach: true,
+                opened: false,
+                keyLabel: slot === 0 ? "Space" : String(slot),
+                description: ability.description,
+            };
+        });
     }
 
     // The fight's own button, for the HUD (MapDef.fight.ability)
@@ -2927,6 +2964,7 @@ export class GameClient implements GameFrameHandler {
             buffs: getBuffViews(sim),
             boss,
             ability: this.getAbilityView(sim),
+            abilities: this.getKitViews(sim),
             quests: getQuestTrackViews(this.save, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows

@@ -190,6 +190,8 @@ export type HudNumbers = {
     // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
     // whether the boss is in its reach, and whether its guard's down, when it's worth most
     ability?: AbilityView;
+    // A hero's own buttons (CharacterDef.abilities), in their order, in place of a fight's one
+    abilities?: AbilityView[];
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -268,6 +270,9 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // A hero's own button (CharacterDef.abilities): its key, and what it does
+    keyLabel?: string;
+    description?: string;
 };
 
 // One player's own numbers for the results screen (a teammate who fell or

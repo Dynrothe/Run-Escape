@@ -110,6 +110,7 @@ import {
     FloorActionDef,
     GearSlot,
     GroundPatternDef,
+    HeroAbilityDef,
     ImpactDef,
     ImpactSpotDef,
     LightLook,
@@ -397,6 +398,10 @@ const ABILITY_BUFFER_SECONDS = 0.3;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
+// A hero's lunge (CharacterDef.abilities, kind lunge), tiles a second down its strip
+const KIT_DASH_SPEED = 24;
+// What a hero's wave binds an enemy in: the justiciars' blue impact
+const BLUE_BIND_SPOT = 1458;
 // Tiles from the player that what holds them turns up
 const SUMMON_BESIDE = 1.8;
 // Tiles from a boss that what's walking to it is absorbed
@@ -813,6 +818,29 @@ export type Hero = {
     // that couldn't go off yet is held till this one (ABILITY_BUFFER_SECONDS)
     abilityReadyTick: number;
     abilityHeldUntil: number;
+    // A hero's own buttons (CharacterDef.abilities): the tick each can be used again from
+    kitReadyTicks: number[];
+};
+
+// A hero's own move on its way (CharacterDef.abilities, useKitAbility): it lands at landTick,
+// along the way they faced as they pressed it. A lunge then carries them down its strip, and a
+// wave flies on, a tick at a time (stepKit).
+type KitCast = {
+    hero: number;
+    ability: HeroAbilityDef;
+    landTick: number;
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    // Landed: a lunge's or a wave's tiles so far, and what it's hit (enemy uids)
+    landed: boolean;
+    done: number;
+    hit: number[];
+    // A wave's flying spot animation
+    effect?: Effect;
+    // A checker's cells, their middles
+    cells?: { x: number; y: number }[];
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -913,6 +941,7 @@ export class Sim {
     pools: GroundPool[] = [];
     // Hits still to land, a moment after their swing
     private pendingHits: PendingHit[] = [];
+    private kitCasts: KitCast[] = [];
     // Enemies that died lately, for revivers (oldest first)
     private deaths: Death[] = [];
 
@@ -1450,6 +1479,7 @@ export class Sim {
             immuneEndTick: 0,
             abilityReadyTick: 0,
             abilityHeldUntil: -1,
+            kitReadyTicks: (getCharacter(options.characterId).abilities ?? []).map(() => 0),
         };
     }
 
@@ -2503,6 +2533,9 @@ export class Sim {
             this.stepRevives();
         }
         this.stepHeldAbilities();
+        if (this.kitCasts.length > 0) {
+            this.stepKit();
+        }
         // Each hero's on a tick of its own, so a party's don't all come at once
         for (const hero of this.heroes) {
             if ((this.tick + hero.index * 2) % FLOW_FIELD_INTERVAL === 0 && this.isUp(hero)) {
@@ -3851,6 +3884,10 @@ export class Sim {
         // Once the run's over nothing more lands, so a win can't turn into a
         // death (or spend a revive) later in the tick it's won
         if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
+            return 0;
+        }
+        // Nothing hurts on a map to walk round (FunMapDef.explore)
+        if (this.map.fun?.explore) {
             return 0;
         }
         const armor = ignoreArmor
@@ -7824,7 +7861,11 @@ export class Sim {
     // A press a moment too soon (the button still charging, or the boss just out of reach) is
     // held for ABILITY_BUFFER_SECONDS and goes off as soon as it can, rather than lost; one that
     // couldn't in that time says no. Whether it went off, or is held.
-    useAbility(): boolean {
+    useAbility(slot = 0): boolean {
+        const kit = getCharacter(this.hero.characterId).abilities;
+        if (kit) {
+            return this.useKitAbility(kit, slot);
+        }
         const ability = this.map.fight?.ability;
         const hero = this.hero;
         if (!ability || this.state !== "playing" || !this.isUp(hero)) {
@@ -7848,6 +7889,292 @@ export class Sim {
             return true;
         }
         return false;
+    }
+
+    // ---- A hero's own buttons (CharacterDef.abilities: Justiciar Zachariah's) ----
+
+    // Goes off where the current hero faces, anything to hit or not, unless it's still charging or
+    // another of theirs is on its way: whether it went
+    private useKitAbility(kit: HeroAbilityDef[], slot: number): boolean {
+        const ability = kit[slot];
+        const hero = this.hero;
+        if (
+            !ability ||
+            this.state !== "playing" ||
+            !this.isUp(hero) ||
+            this.tick < (hero.kitReadyTicks[slot] ?? 0) ||
+            this.kitCasts.some((cast) => cast.hero === hero.index && !cast.landed)
+        ) {
+            return false;
+        }
+        hero.kitReadyTicks[slot] = this.tick + secondsToTicks(ability.cooldown);
+        const player = this.player;
+        let dirX = player.facingX;
+        let dirY = player.facingY;
+        if (dirX === 0 && dirY === 0) {
+            dirY = -1;
+        }
+        const landTick = this.tick + secondsToTicks(ability.windup);
+        if (ability.seq !== undefined) {
+            // Held on its first frame until it's strikeAt from landing
+            player.attackSeq = ability.seq;
+            player.attackStart = landTick - secondsToTicks(ability.strikeAt ?? 0);
+        }
+        if (ability.windupSound !== undefined) {
+            this.emitKitSound(ability, ability.windupSound, player.x, player.y);
+        }
+        if (ability.shout) {
+            this.emit({ type: "playerShout", text: ability.shout });
+        }
+        const cast: KitCast = {
+            hero: hero.index,
+            ability,
+            landTick,
+            x: player.x,
+            y: player.y,
+            dirX,
+            dirY,
+            landed: false,
+            done: 0,
+            hit: [],
+        };
+        const windupTicks = landTick - this.tick;
+        if (ability.kind === "square") {
+            // On the nearest enemy in reach, or halfway out ahead
+            const target = this.nearestEnemies(player.x, player.y, ability.length, 1)[0];
+            cast.x = target ? target.x : player.x + dirX * (ability.length / 2);
+            cast.y = target ? target.y : player.y + dirY * (ability.length / 2);
+        } else if (ability.kind === "checker") {
+            cast.cells = this.kitCheckerCells(ability, player.x, player.y);
+            for (const cell of cast.cells) {
+                const mark = ability.markSpotAnim;
+                const effect =
+                    mark !== undefined &&
+                    this.addEffect(mark, cell.x, cell.y, 0, windupTicks, 0, true);
+                if (effect) {
+                    effect.fitRadius = ((ability.size ?? 1) / 2) * 0.85;
+                }
+            }
+        }
+        this.kitCasts.push(cast);
+        return true;
+    }
+
+    // Every size by size cell of the colour he isn't standing on, with its middle within length
+    // of him: cells of the world's own grid, so a cell's always in the same place
+    private kitCheckerCells(
+        ability: HeroAbilityDef,
+        x: number,
+        y: number,
+    ): { x: number; y: number }[] {
+        const size = ability.size ?? 3;
+        const own = (Math.floor(x / size) + Math.floor(y / size)) & 1;
+        const cells: { x: number; y: number }[] = [];
+        const reach = Math.ceil(ability.length / size) + 1;
+        const cx0 = Math.floor(x / size);
+        const cy0 = Math.floor(y / size);
+        for (let cy = cy0 - reach; cy <= cy0 + reach; cy++) {
+            for (let cx = cx0 - reach; cx <= cx0 + reach; cx++) {
+                if (((cx + cy) & 1) === own) {
+                    continue;
+                }
+                const mx = (cx + 0.5) * size;
+                const my = (cy + 0.5) * size;
+                if (fm.hypot(mx - x, my - y) <= ability.length) {
+                    cells.push({ x: mx, y: my });
+                }
+            }
+        }
+        return cells;
+    }
+
+    private emitKitSound(ability: HeroAbilityDef, sound: number, x: number, y: number): void {
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: "",
+            sound,
+            x,
+            y,
+            opened: false,
+        });
+    }
+
+    // Hits an enemy once with a kit move, holding it if the move freezes
+    private kitHit(cast: KitCast, enemy: Enemy): void {
+        if (enemy.dead || cast.hit.includes(enemy.uid)) {
+            return;
+        }
+        cast.hit.push(enemy.uid);
+        const ability = cast.ability;
+        this.damageSource = `ability:${ability.id}`;
+        this.damageEnemy(enemy, ability.damage, 0, this.player.x, this.player.y);
+        if (ability.freeze && !enemy.boss && !enemy.dead) {
+            enemy.frozen = Math.max(enemy.frozen, secondsToTicks(ability.freeze));
+        }
+    }
+
+    private stepKit(): void {
+        const current = this.hero;
+        this.kitCasts = this.kitCasts.filter((cast) => {
+            if (this.tick < cast.landTick) {
+                return true;
+            }
+            this.useHeroAt(cast.hero);
+            const keep = this.landKit(cast);
+            return keep;
+        });
+        this.use(current);
+    }
+
+    // A kit move landing, or a lunge or a wave going on: whether there's more of it
+    private landKit(cast: KitCast): boolean {
+        const ability = cast.ability;
+        const player = this.player;
+        const first = !cast.landed;
+        cast.landed = true;
+        if (first && ability.sound !== undefined) {
+            this.emitKitSound(ability, ability.sound, cast.x, cast.y);
+        }
+        const half = (ability.width ?? 1) / 2;
+        switch (ability.kind) {
+            case "lunge": {
+                // Down the strip at KIT_DASH_SPEED, stopping where a wall stops them
+                const step = Math.min(
+                    KIT_DASH_SPEED / TICKS_PER_SECOND,
+                    ability.length - cast.done,
+                );
+                const fromX = player.x;
+                const fromY = player.y;
+                moveCircle(this.grid, player, cast.dirX * step, cast.dirY * step, player.radius);
+                const moved = fm.hypot(player.x - fromX, player.y - fromY);
+                cast.done += step;
+                this.queryTouching(player.x, player.y, half + 1, (enemy) => {
+                    if (fm.hypot(enemy.x - player.x, enemy.y - player.y) <= half + enemy.radius) {
+                        this.kitHit(cast, enemy);
+                    }
+                });
+                const over = cast.done >= ability.length - 1e-6 || moved < step * 0.5;
+                if (over) {
+                    const length = fm.hypot(player.x - cast.x, player.y - cast.y);
+                    if (ability.impact?.trail) {
+                        this.showImpact({ trail: ability.impact.trail }, cast.x, cast.y, {
+                            dirX: cast.dirX,
+                            dirY: cast.dirY,
+                            length,
+                        });
+                    }
+                    this.showImpact({ ...ability.impact, trail: undefined }, player.x, player.y);
+                }
+                return !over;
+            }
+            case "wave": {
+                if (first) {
+                    this.showImpact(ability.impact, cast.x, cast.y);
+                    const flyTicks = Math.ceil(
+                        (ability.length / (ability.speed ?? 6)) * TICKS_PER_SECOND,
+                    );
+                    if (ability.spotAnim !== undefined) {
+                        const effect = this.addEffect(
+                            ability.spotAnim,
+                            cast.x,
+                            cast.y,
+                            0,
+                            flyTicks,
+                            0,
+                            true,
+                        );
+                        if (effect) {
+                            effect.yaw =
+                                (yawFromVector(cast.dirX, cast.dirY) + (ability.spotYaw ?? 0)) &
+                                2047;
+                            cast.effect = effect;
+                        }
+                    }
+                }
+                const step = (ability.speed ?? 6) / TICKS_PER_SECOND;
+                cast.done += step;
+                const x = cast.x + cast.dirX * cast.done;
+                const y = cast.y + cast.dirY * cast.done;
+                if (cast.effect) {
+                    cast.effect.x = x;
+                    cast.effect.y = y;
+                }
+                this.queryTouching(x, y, half + 1, (enemy) => {
+                    if (fm.hypot(enemy.x - x, enemy.y - y) <= half + enemy.radius) {
+                        this.kitHit(cast, enemy);
+                        if (ability.freeze && !enemy.boss) {
+                            this.addEffect(BLUE_BIND_SPOT, enemy.x, enemy.y, 0, 60, enemy.uid);
+                        }
+                    }
+                });
+                return cast.done < ability.length;
+            }
+            case "square": {
+                const size = ability.size ?? 3;
+                const x0 = Math.floor(cast.x) - Math.floor(size / 2);
+                const y0 = Math.floor(cast.y) - Math.floor(size / 2);
+                for (let ty = y0; ty < y0 + size; ty++) {
+                    for (let tx = x0; tx < x0 + size; tx++) {
+                        // As a boss's square blast lands (squareImpact)
+                        if (ability.spotAnim !== undefined) {
+                            this.addEffect(ability.spotAnim, tx + 0.5, ty + 0.5, 0, 40);
+                        }
+                    }
+                }
+                this.queryTouching(x0 + size / 2, y0 + size / 2, size, (enemy) => {
+                    if (
+                        enemy.x + enemy.radius >= x0 &&
+                        enemy.x - enemy.radius <= x0 + size &&
+                        enemy.y + enemy.radius >= y0 &&
+                        enemy.y - enemy.radius <= y0 + size
+                    ) {
+                        this.kitHit(cast, enemy);
+                    }
+                });
+                this.showImpact(ability.impact, x0 + size / 2, y0 + size / 2);
+                return false;
+            }
+            case "checker": {
+                const size = ability.size ?? 3;
+                for (const cell of cast.cells ?? []) {
+                    // As a boss's ground marks land
+                    if (ability.spotAnim !== undefined) {
+                        this.addEffect(ability.spotAnim, cell.x, cell.y, 0, 60);
+                    }
+                    this.queryTouching(cell.x, cell.y, size, (enemy) => {
+                        if (
+                            Math.abs(enemy.x - cell.x) <= size / 2 &&
+                            Math.abs(enemy.y - cell.y) <= size / 2
+                        ) {
+                            this.kitHit(cast, enemy);
+                        }
+                    });
+                }
+                this.showImpact(ability.impact, cast.x, cast.y);
+                return false;
+            }
+            case "gaze": {
+                this.showImpact(ability.impact, player.x, player.y);
+                this.queryTouching(player.x, player.y, ability.length + 1, (enemy) => {
+                    if (
+                        fm.hypot(enemy.x - player.x, enemy.y - player.y) <=
+                        ability.length + enemy.radius
+                    ) {
+                        this.kitHit(cast, enemy);
+                        if (ability.spotAnim !== undefined) {
+                            this.addImpactSpot({ spotAnim: ability.spotAnim }, enemy.x, enemy.y);
+                        }
+                    }
+                });
+                return false;
+            }
+        }
+    }
+
+    // Seconds until a hero's own button (CharacterDef.abilities) can be used again
+    kitSecondsLeft(slot: number, hero: Hero = this.hero): number {
+        return Math.max(0, (hero.kitReadyTicks[slot] ?? 0) - this.tick) / TICKS_PER_SECOND;
     }
 
     // Each hero's held press, tried again each tick till it goes off or runs out
@@ -12243,7 +12570,9 @@ export class Sim {
             // Nobody drops by in the middle of a phased boss's fight, or a raid's boss room
             !this.intro &&
             !this.shownBoss?.def.boss?.phases &&
-            !(this.map.raid && this.raidStage !== "waves")
+            !(this.map.raid && this.raidStage !== "waves") &&
+            // A map to walk round has no visitors (FunMapDef.explore)
+            !this.map.fun?.explore
         ) {
             this.useVisitorHero();
             // (none to pick or nowhere to put one: it's due again in a moment)

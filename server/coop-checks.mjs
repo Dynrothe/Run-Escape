@@ -146,6 +146,10 @@ export function actionKey(value) {
     if (INDEXED.has(kind)) {
         return Number.isInteger(index) && index >= 0 && index < 64 ? `${kind}:${index}` : undefined;
     }
+    // A hero's own button by its place (CharacterDef.abilities); the fight's has none
+    if (kind === "ability" && index !== undefined) {
+        return Number.isInteger(index) && index >= 0 && index < 64 ? `${kind}:${index}` : undefined;
+    }
     if (PLAIN.has(kind)) {
         return kind;
     }

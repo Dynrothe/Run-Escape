@@ -225,7 +225,11 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
                   ? GameAssets.getEnemyRequests(ENEMIES)
                   : // Pets are baked as they're picked, not with the base: every one of them
                     group === "pets"
-                    ? GameAssets.getPetRequests(PETS)
+                    ? [
+                          ...GameAssets.getPetRequests(PETS),
+                          // Heroes drawn as NPCs, which are baked as their map's played
+                          ...GameAssets.getHeroLookRequests(CHARACTERS),
+                      ]
                     : getPlayerRequests();
         bakeRequests.set(group, requests);
     }

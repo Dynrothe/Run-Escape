@@ -22,6 +22,7 @@ import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
@@ -31,6 +32,7 @@ import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import {
+    CharacterDef,
     EnemyDef,
     EnemyOutfit,
     FloorSkinDef,
@@ -232,6 +234,13 @@ function getSpotAnimIds(): number[] {
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
     }
+    // A hero's own buttons (CharacterDef.abilities): what they land as, and mark first
+    for (const character of CHARACTERS) {
+        for (const ability of character.abilities ?? []) {
+            addImpact(ability.impact);
+            add(ability.spotAnim, ability.markSpotAnim);
+        }
+    }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
@@ -430,6 +439,11 @@ export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): strin
 }
 
 // A piece of what's under a floor (FloorDef.under)
+// A hero drawn as an NPC (CharacterDef.npcLook)
+export function getHeroLookKey(characterId: string): string {
+    return "heroLook:" + characterId;
+}
+
 export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
 }
@@ -594,6 +608,7 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    private readonly heroLookBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -681,6 +696,23 @@ export class GameAssets {
 
     static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
         return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // A hero drawn as an NPC (CharacterDef.npcLook, Justiciar Zachariah's): baked with the map
+    // that has everyone play them (travelTo), not with every run
+    static getHeroLookRequests(characters: readonly CharacterDef[]): BakeRequest[] {
+        return characters.flatMap((character): BakeRequest[] =>
+            character.npcLook
+                ? [
+                      {
+                          kind: "npc",
+                          key: getHeroLookKey(character.id),
+                          npcId: character.npcLook.npcId,
+                          seqIds: getHeroNpcSeqs(character),
+                      },
+                  ]
+                : [],
+        );
     }
 
     // Pets aren't in every run's bake, as most players haven't found one: they're baked as
@@ -900,6 +932,32 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // Bakes a hero's NPC look (CharacterDef.npcLook), unless it's baked or on its way
+    loadHeroLook(characterId: string): Promise<void> {
+        const character = getCharacter(characterId);
+        if (!character.npcLook) {
+            return Promise.resolve();
+        }
+        let baking = this.heroLookBakes.get(characterId);
+        if (!baking) {
+            baking = this.bakeInTasks(
+                GameAssets.getHeroLookRequests([character]),
+                this.loadBake,
+            ).catch((e) => console.error("Couldn't bake", characterId, e));
+            this.heroLookBakes.set(characterId, baking);
+        }
+        return baking;
+    }
+
+    // A hero's NPC look, or nothing yet: it's baked now, and shows up when it's ready
+    getHeroLook(characterId: string): ActorModel | undefined {
+        const model = this.models.get(getHeroLookKey(characterId));
+        if (!model && !this.heroLookBakes.has(characterId)) {
+            void this.loadHeroLook(characterId);
+        }
+        return model;
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready

@@ -1721,7 +1721,14 @@
     top: -4px;
 }
 
+/* A hero's own buttons (KitButtons), in a row with their keys */
+.ui-kit {
+    display: flex;
+    gap: 6px;
+}
+
 /* Only on a touch screen (Mobile.css) */
+.ui-touch-kit,
 .ui-touch-ability {
     display: none;
 }
