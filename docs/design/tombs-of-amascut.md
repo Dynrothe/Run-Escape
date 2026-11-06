@@ -496,7 +496,7 @@ raid's ranges.
       siphons (11772) for one player, one more each for every other (seven for one, four tiles
       apart, couldn't be reached in time: every fourth charge was a ripple nobody could help),
       land over the floor, beamed (2227), each stopped by a player stepping on it
-      (reversed, 11773) within 10.8 s (Insanity 4.8). All stopped, it staggers for 5% of its
+      (reversed, 11773) within 10.8 s (Insanity 4.8). Nothing hurts the Warden while they're out. All stopped, it staggers for 5% of its
       hitpoints; any left, the floor erupts out from the middle. The slams start again from east
       (Insanity: where they left off).
     - The second charge (60%) brings a path boss's phantom east of it and the third (40%) another

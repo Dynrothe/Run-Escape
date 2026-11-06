@@ -6377,7 +6377,7 @@ export class Sim {
                 stage: "hp",
                 fraction: left,
                 status: three.siphons
-                    ? "Step on its siphons!"
+                    ? "It can't be hurt: step on its siphons!"
                     : three.enraged
                       ? "Enraged! The floor's going!"
                       : "Keep off the side it slams!",
@@ -14388,6 +14388,11 @@ export class Sim {
             style !== undefined &&
             style !== enemy.def.onlyStyle
         ) {
+            this.showBlocked(enemy);
+            return 0;
+        }
+        // The last phase: nothing gets at the Warden while it charges, its siphons out
+        if (three?.siphons && enemy.uid === three.wardenUid) {
             this.showBlocked(enemy);
             return 0;
         }

@@ -2220,7 +2220,8 @@ export const WARDENS: WardensDef = {
             message: "The Warden is enraged! Amascut tears the floor away!",
         },
         message: "rises again! Keep off the half of the floor it slams.",
-        siphonMessage: "The Warden is charging! Step on the energy siphons to stop them!",
+        siphonMessage:
+            "The Warden is charging, and nothing can hurt it! Step on the energy siphons to stop them!",
         staggerMessage: "The siphons reverse, and the Warden staggers!",
         releaseMessage: "The Warden releases its stored energy!",
         phantomMessage: "A phantom of a path's boss joins the fight!",

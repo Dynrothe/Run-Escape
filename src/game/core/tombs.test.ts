@@ -3023,6 +3023,10 @@ describe("the Wardens' second and last phases", () => {
         const siphons = three.siphons!;
         expect(siphons.uids).toHaveLength(WARDENS.three.count[0]);
         expect(warden.def.id).toBe("tumeken_warden_charging");
+        // Nothing gets at it while they're out
+        const charging = warden.hp;
+        hit(sim, warden, "dark_bow", warden.maxHp);
+        expect(warden.hp).toBe(charging);
         for (const uid of siphons.uids) {
             const siphon = find(sim, uid);
             step(sim, 0.1, () => {
