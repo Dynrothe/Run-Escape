@@ -247,7 +247,7 @@ function nexusMove(sim: Sim): Point {
     const tombs = sim.map.tombs!;
     const self = sim.heroes.find((hero) => hero.player === sim.player)!;
     if (tombs.spirit && sim.tombsSpiritBundles(self.index) > 0) {
-        return tombs.spirit;
+        return walkTo(sim, tombs.spirit.x, tombs.spirit.y);
     }
     const next = PATH_ORDER.map((id) => tombs.paths.find((p) => p.id === id)).find(
         (path) => path?.room && !sim.tombsPathsDone.includes(path.id),
@@ -570,9 +570,48 @@ function stepOn(sim: Sim, plate: Point, boards: NonNullable<PathRoom["scabaras"]
     return walkAvoiding(sim, plate.x, plate.y, plates, 0);
 }
 
-// Off a plate, to the gap beside it
-function stepOff(sim: Sim, plate: Point): Point {
-    return nudge(sim, plate.x + 1, plate.y + 1);
+// Every plate on the room's boards
+function allPlates(boards: NonNullable<PathRoom["scabaras"]>): Point[] {
+    return [
+        ...boards.sequence,
+        ...boards.lights,
+        ...boards.addition,
+        ...boards.matching.north,
+        ...boards.matching.south,
+    ];
+}
+
+// A tile beside a plate that isn't one (a diagonal one first, then the sides)
+function besidePlate(plate: Point, boards: NonNullable<PathRoom["scabaras"]>): Point {
+    const plates = allPlates(boards);
+    const offsets = [
+        [1, 1],
+        [-1, 1],
+        [1, -1],
+        [-1, -1],
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+    ];
+    for (const [dx, dy] of offsets) {
+        const x = plate.x + dx;
+        const y = plate.y + dy;
+        if (
+            !plates.some(
+                (p) => Math.floor(p.x) === Math.floor(x) && Math.floor(p.y) === Math.floor(y),
+            )
+        ) {
+            return { x, y };
+        }
+    }
+    return { x: plate.x + 2, y: plate.y };
+}
+
+// Off a plate, to a gap beside it
+function stepOff(sim: Sim, plate: Point, boards: NonNullable<PathRoom["scabaras"]>): Point {
+    const to = besidePlate(plate, boards);
+    return nudge(sim, to.x, to.y);
 }
 
 function scabarasMove(sim: Sim, def: PathRoom): Point {
@@ -595,16 +634,21 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         const i = m.north.findIndex((s) => !m.matched[s]);
         return i === -1 ? { x: 0, y: 0 } : stepOn(sim, boards.matching.north[i], boards);
     }
-    // Sequence: its plates in order, once it's been shown
+    // Sequence: the Ancient button pushed (walked up to) for its order, then its plates in it
     if (!solved("sequence")) {
         const seq = scab.sequence;
-        const shown = seq.showFrom + seq.order.length * Math.round(0.85 * 50);
+        if (seq.order.length === 0) {
+            const button = boards.button;
+            // Pushed as it's come up to: off it and back, when it's to be pushed again
+            return on === "b0" ? nudge(sim, button.x + 2.5, button.y) : stepOn(sim, button, boards);
+        }
+        const shown = sim["scabarasShowEnd"](seq);
         const index = seq.order[seq.step];
         const plate = boards.sequence[index];
         if (sim.tick < shown + 5) {
-            return stepOn(sim, { x: plate.x + 1, y: plate.y + 1 }, boards);
+            return stepOn(sim, besidePlate(plate, boards), boards);
         }
-        return on === `s${index}` ? stepOff(sim, plate) : stepOn(sim, plate, boards);
+        return on === `s${index}` ? stepOff(sim, plate, boards) : stepOn(sim, plate, boards);
     }
     // Lights out: the fewest presses that light them all, nearest first
     if (!solved("lights")) {
@@ -619,12 +663,119 @@ function scabarasMove(sim: Sim, def: PathRoom): Point {
         if (!next) {
             return { x: 0, y: 0 };
         }
-        return on === `l${next.i}` ? stepOff(sim, next.plate) : stepOn(sim, next.plate, boards);
+        return on === `l${next.i}`
+            ? stepOff(sim, next.plate, boards)
+            : stepOn(sim, next.plate, boards);
     }
-    // Addition: plates that make up exactly what's left
+    // Addition: a way across the board, tile to touching tile, that makes up exactly what's left
+    // (the wiki's chart is such ways), from the plate it's on or onto the board from its edge
     const add = scab.addition;
-    const pick = additionPick(add.values, add.stepped, add.target - add.sum);
-    return pick.length === 0 ? { x: 0, y: 0 } : stepOn(sim, boards.addition[pick[0]], boards);
+    const current = on?.startsWith("a") ? Number(on.slice(1)) : undefined;
+    const path = additionPath(
+        boards.addition,
+        add.values,
+        add.stepped,
+        add.target - add.sum,
+        current,
+    );
+    if (path.length === 0) {
+        // No way on from here: off the board, to come on again elsewhere
+        if (current !== undefined) {
+            return stepOff(sim, boards.addition[current], boards);
+        }
+        // None from the edge either: onto its biggest left, to go past and start over
+        let biggest = -1;
+        add.values.forEach((value, i) => {
+            if (!add.stepped[i] && (biggest === -1 || value > add.values[biggest])) {
+                biggest = i;
+            }
+        });
+        return stepOn(sim, boards.addition[biggest], boards);
+    }
+    const next = boards.addition[path[0]];
+    if (current === undefined) {
+        return stepOn(sim, next, boards);
+    }
+    // Square on the plate it's on first, so a diagonal step crosses no other
+    const here = boards.addition[current];
+    const player = sim.player;
+    // (once on its way to the next, it keeps going)
+    const along =
+        ((player.x - here.x) * (next.x - here.x) + (player.y - here.y) * (next.y - here.y)) /
+        Math.hypot(next.x - here.x, next.y - here.y);
+    if (along < 0.05 && Math.hypot(here.x - player.x, here.y - player.y) > 0.2) {
+        return nudge(sim, here.x, here.y);
+    }
+    return nudge(sim, next.x, next.y);
+}
+
+// Addition's way across: plates not stepped on, each touching the last (sides or corners), that
+// add up to exactly what's left, from the plate it's on, or from one on the board's edge
+export function additionPath(
+    plates: Point[],
+    values: number[],
+    stepped: boolean[],
+    left: number,
+    from?: number,
+): number[] {
+    // The same board, stepped the same, has the same answer: worked out once, not every tick
+    const key = `${from}|${left}|${stepped.map(Number).join("")}|${values.join(",")}`;
+    const known = additionPaths.get(key);
+    if (known) {
+        return known;
+    }
+    if (additionPaths.size > 2000) {
+        additionPaths.clear();
+    }
+    const path = searchAdditionPath(plates, values, stepped, left, from);
+    additionPaths.set(key, path);
+    return path;
+}
+
+const additionPaths = new Map<string, number[]>();
+// How many plates the search tries before it gives up
+const ADDITION_SEARCH_LIMIT = 200_000;
+
+function searchAdditionPath(
+    plates: Point[],
+    values: number[],
+    stepped: boolean[],
+    left: number,
+    from?: number,
+): number[] {
+    let tried = 0;
+    const touching = (a: number, b: number) =>
+        a !== b &&
+        Math.abs(plates[a].x - plates[b].x) < 1.5 &&
+        Math.abs(plates[a].y - plates[b].y) < 1.5;
+    const edge = (i: number) => plates.filter((_, j) => touching(i, j)).length < 8;
+    let found: number[] | undefined;
+    const search = (at: number, sum: number, path: number[]) => {
+        if (found || ++tried > ADDITION_SEARCH_LIMIT) {
+            return;
+        }
+        if (sum === left) {
+            found = [...path];
+            return;
+        }
+        for (let j = 0; j < plates.length; j++) {
+            if (!stepped[j] && !path.includes(j) && touching(at, j) && sum + values[j] <= left) {
+                path.push(j);
+                search(j, sum + values[j], path);
+                path.pop();
+            }
+        }
+    };
+    if (from !== undefined) {
+        search(from, 0, []);
+        return found ?? [];
+    }
+    for (let i = 0; i < plates.length && !found; i++) {
+        if (!stepped[i] && edge(i) && values[i] <= left) {
+            search(i, values[i], [i]);
+        }
+    }
+    return found ?? [];
 }
 
 // Lights out's presses: pressing i toggles i - 1, i and i + 1 round the ring; the fewest that
@@ -649,31 +800,6 @@ export function lightsPresses(lights: boolean[]): number[] {
             }
         }
     }
-    return best ?? [];
-}
-
-// Addition's plates not stepped on yet that make up exactly what's left, fewest first
-export function additionPick(values: number[], stepped: boolean[], left: number): number[] {
-    let best: number[] | undefined;
-    const search = (from: number, sum: number, chosen: number[]) => {
-        if (sum === left) {
-            if (!best || chosen.length < best.length) {
-                best = [...chosen];
-            }
-            return;
-        }
-        if (sum > left || (best && chosen.length >= best.length)) {
-            return;
-        }
-        for (let i = from; i < values.length; i++) {
-            if (!stepped[i]) {
-                chosen.push(i);
-                search(i + 1, sum + values[i], chosen);
-                chosen.pop();
-            }
-        }
-    };
-    search(0, 0, []);
     return best ?? [];
 }
 

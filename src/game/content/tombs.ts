@@ -1252,18 +1252,24 @@ export function getScabarasTrickle(wave: number): WaveDef {
     };
 }
 
-// The Scabaras room's puzzles, all four to solve (OSRS's solo takes one a side and the last):
-//  - Sequence, Simon says: the plates light up in an order (steps, one more each path level, up
-//    to most), each for flash seconds with gap after, and you step on them in it. A wrong plate
-//    brings the roof down on you, and a new order's shown retry seconds later.
+// The Scabaras room's puzzles, all four to solve (OSRS's solo takes one a side and the last), as
+// the wiki's strategy page has them (Tombs of Amascut/Strategies, Path of Scabaras):
+//  - Sequence, Simon says: nine plates in a diamond. Push the Ancient button beside them and they
+//    light up in an order (steps, one more each path level, up to most), each for flash seconds
+//    with gap after; step on them in it. Push it again for another order. A wrong plate brings
+//    the roof down on you, and the button's to be pushed again.
 //  - Lights out: a ring of eight plates, each toggling itself and its two neighbours when stepped
 //    on, scrambled by scramble presses (more with path levels). Light them all. Every darken
 //    seconds (less with path levels) one goes dark again: a scarab's knocked it.
-//  - Addition: symbol plates worth 1 to 9 (Line to Foot), and the Ancient tablet's number to make
-//    exactly by stepping on them, each once. Over it, the roof comes down and they reset.
+//  - Addition, once Sequence and Lights out are solved: OSRS's own board of 25 symbols
+//    (additionBoard, the exit at its top), each worth 1 to 9 (Line to Foot: the slates by the way
+//    in say which), and the Ancient tablet's number, targetLeast to targetMost, to make exactly by
+//    walking over them, each once. Over it, the roof comes down and they reset. The wiki's chart
+//    of a way across for every number works on it as it does in OSRS.
 //  - Matching, last, once the others are done: two boards of nine hidden symbols, the same nine
 //    on each. Step on one on each board: the same, they stay; not, the roof comes down and they
-//    hide again. preSolved pairs (fewer with path levels) are done as it starts.
+//    hide again. Solo, preSolved pairs (fewer with path levels) are done as it starts, as OSRS's
+//    four are; in a party none.
 // A mistake's rock takes wrongShare of your hitpoints and breaks into shards. Rocks fall on
 // everyone meanwhile, every rockEvery seconds (less with path levels), for rockDamage within
 // rockRadius once they land (rockWarn after they start, as 302's roof falls), breaking into
@@ -1276,8 +1282,8 @@ export const SCABARAS = {
     sequenceMost: 6,
     flash: 0.8,
     gap: 0.25,
-    showAfter: 1.5,
-    retry: 2.5,
+    // From the button's push to the first plate lighting
+    showAfter: 0.8,
     scramble: 3,
     darken: 14,
     darkenLeast: 6,
@@ -1298,10 +1304,24 @@ export const SCABARAS = {
     shardDamage: 3,
     shardLook: "rolling_boulder",
     shardScale: 0.35,
-    // Tiles from a plate's middle that count as standing on it, and from a slate's that's near
-    // enough to read it
-    plateReach: 0.55,
+    // Tiles from a slate's, the tablet's or the button's middle that's near enough to read or push
+    // it (a plate's stood on by standing on its tile)
     slateReach: 2,
+    buttonReach: 1.2,
+    // A plate's stepped onto within this of its middle (each way), and off by leaving its tile
+    plateInside: 0.35,
+    // Seconds between the same reminder ("push the button", "solve the others first")
+    hintEvery: 4,
+    // Addition's board, row by row from the exit's side, west to east: each symbol's index in
+    // symbolNames (its worth less one). Read off OSRS's (the wiki's screenshot), and checked
+    // against its chart of solutions.
+    additionBoard: [
+        [8, 0, 4, 3, 2],
+        [1, 0, 7, 1, 3],
+        [6, 3, 2, 6, 4],
+        [2, 5, 5, 1, 8],
+        [8, 6, 7, 5, 0],
+    ].flat(),
     rockSpotAnim: 302,
     locs: {
         // Sequence: as it stands, lit by the game, stepped on
@@ -1319,6 +1339,8 @@ export const SCABARAS = {
         shown: [45365, 45366, 45367, 45368, 45369, 45370, 45371, 45372, 45373],
         matched: 45387,
         tablet: 45339,
+        // Sequence's Ancient button
+        button: 45338,
     },
     symbolNames: [
         "Line",

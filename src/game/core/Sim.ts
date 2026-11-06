@@ -916,7 +916,8 @@ export type CrondisRoom = {
 type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
 type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
 // The Scabaras room's puzzles (SCABARAS in tombs.ts): which are solved; Sequence's order, when
-// it's shown from and how far through it the party is; Lights out's ring and when a light next
+// it's shown from and how far through it the party is (no order, shown from -1, till its button's
+// pushed); Lights out's ring and when a light next
 // goes out; Addition's values, its number, what's been stepped on and what that makes;
 // Matching's symbol on each tile of its two boards, which are matched, the tile turned up on each
 // and when an unmatched pair hides again; the plate each hero's on; the rocks falling and their
@@ -1126,9 +1127,6 @@ export function formationSpots(
     }
     return spots;
 }
-
-// What the Scabaras room's slates say: each of Addition's symbols and its worth
-const SCABARAS_SLATE = SCABARAS.symbolNames.map((name, i) => `${name} ${i + 1}`).join(", ");
 
 // The rows of the last floor the enrage leaves: from the one in front of the Warden north
 function wardenFrontKeep(
@@ -1382,6 +1380,8 @@ export class Sim {
     private tombsSpiritOffer = new Map<number, EventOption[]>();
     // Said once the party's back in the Nexus with a bundle to come
     private tombsSpiritReady = false;
+    // When each of the Scabaras room's reminders was last said (Sim.scabarasHint)
+    private scabarasHintTicks = new Map<string, number>();
     // Each path taken, when it was entered and how long it took, for the result's board
     private tombsTimes: { id: string; startTick: number; seconds?: number }[] = [];
     // When the party first came to the Wardens, for the board's time (wipes and all)
@@ -8556,7 +8556,7 @@ export class Sim {
         const level = this.tombsPathLevel;
         room.scabaras = {
             solved: [],
-            sequence: this.newScabarasSequence(def, SCABARAS.showAfter),
+            sequence: { order: [], showFrom: -1, step: 0 },
             lights: this.scrambleScabarasLights(def, SCABARAS.scramble + level),
             nextDarkTick: this.tick + secondsToTicks(this.scabarasDarkenEvery()),
             addition: this.layOutScabarasAddition(def),
@@ -8570,14 +8570,14 @@ export class Sim {
         this.emit({
             type: "notice",
             message:
-                "Four puzzles: follow the plates' order (east, by the way in), light the ring " +
-                "(west, by the way in), make the tablet's number (east, further on), then match " +
-                "the symbols (at the far end).",
+                "Four puzzles: push the Ancient button and follow the plates' order (east, by " +
+                "the way in), light the ring (west, by the way in), make the tablet's number " +
+                "(further on), then match the symbols (at the far end).",
         });
         this.emit({
             type: "notice",
             message:
-                "The slates by the way in say what each symbol's worth: stand by one to read it.",
+                "The slates by the way in say what each symbol's worth: stand by one to read them.",
         });
     }
 
@@ -8630,22 +8630,18 @@ export class Sim {
         }
     }
 
-    // Addition's symbols, and a number some of them make, from targetLeast to targetMost
+    // Addition: OSRS's board's symbols, and the tablet's number, targetLeast to targetMost (the
+    // board makes every one of them, as the wiki's chart shows)
     private layOutScabarasAddition(def: ScabarasDef): ScabarasRoom["addition"] {
-        const values = def.addition.map(() => 1 + this.rng.int(9));
-        let target = 0;
-        for (let attempt = 0; attempt < 40; attempt++) {
-            const plates = values.map((_, i) => i);
-            const take = 4 + this.rng.int(3);
-            let sum = 0;
-            for (let i = 0; i < take; i++) {
-                sum += values[plates.splice(this.rng.int(plates.length), 1)[0]];
-            }
-            target = sum;
-            if (sum >= SCABARAS.targetLeast && sum <= SCABARAS.targetMost) {
-                break;
-            }
+        const board = SCABARAS.additionBoard;
+        if (def.addition.length !== board.length) {
+            throw new Error(
+                `Addition's board needs ${board.length} plates, not ${def.addition.length}`,
+            );
         }
+        const values = board.map((symbol) => symbol + 1);
+        const target =
+            SCABARAS.targetLeast + this.rng.int(SCABARAS.targetMost - SCABARAS.targetLeast + 1);
         return { values, target, stepped: values.map(() => false), sum: 0 };
     }
 
@@ -8662,7 +8658,8 @@ export class Sim {
         const north = shuffled();
         const south = shuffled();
         const matched = north.map(() => false);
-        const solved = Math.max(0, SCABARAS.preSolved - level);
+        const party = this.heroes.filter((hero) => !hero.left).length;
+        const solved = party > 1 ? 0 : Math.max(0, SCABARAS.preSolved - level);
         for (let i = 0; i < solved; i++) {
             matched[north[i]] = true;
         }
@@ -8692,7 +8689,7 @@ export class Sim {
     // The Sequence's plate lit now while its order's shown, if any
     get scabarasLitPlate(): number | undefined {
         const sequence = this.tombsRoom?.scabaras?.sequence;
-        if (!sequence || this.tick < sequence.showFrom) {
+        if (!sequence || sequence.showFrom === -1 || this.tick < sequence.showFrom) {
             return undefined;
         }
         const each = secondsToTicks(SCABARAS.flash + SCABARAS.gap);
@@ -8704,27 +8701,41 @@ export class Sim {
         return sequence.order[i];
     }
 
-    // The room's puzzles for the HUD: how many solved, Addition's number and what's made, and
-    // what a slate by the way in says, for whoever's stood by one
+    // The room's puzzles for the HUD: how many solved; Addition's number and what's made, once
+    // the tablet can be read (Sequence and Lights out solved); and whether whoever's playing is
+    // by a slate (what the symbols are worth) or the tablet, for its screen
     get scabarasInfo():
-        | { solved: number; of: number; target: number; sum: number; slate?: string }
+        | {
+              solved: number;
+              of: number;
+              target: number;
+              sum: number;
+              readable: boolean;
+              reading?: "slate" | "tablet";
+          }
         | undefined {
         const scabaras = this.tombsRoom?.scabaras;
-        if (!scabaras || this.tombsRoom?.doneTick !== undefined) {
+        const def = this.tombsPathRoom?.scabaras;
+        if (!scabaras || !def || this.tombsRoom?.doneTick !== undefined) {
             return undefined;
         }
-        const slates = this.tombsPathRoom?.scabaras?.slates ?? [];
         const player = this.player;
-        const reading = slates.some(
-            (slate) => fm.hypot(slate.x - player.x, slate.y - player.y) <= SCABARAS.slateReach,
-        );
+        const near = (p: { x: number; y: number }) =>
+            fm.hypot(p.x - player.x, p.y - player.y) <= SCABARAS.slateReach;
         return {
             solved: scabaras.solved.length,
             of: 4,
             target: scabaras.addition.target,
             sum: scabaras.addition.sum,
-            slate: reading ? SCABARAS_SLATE : undefined,
+            readable: this.scabarasTabletReadable(scabaras),
+            reading: def.slates.some(near) ? "slate" : near(def.tablet) ? "tablet" : undefined,
         };
+    }
+
+    // The Ancient tablet's read, and Addition's board works, once Sequence and Lights out are
+    // solved, as OSRS's is once the puzzles before it are
+    private scabarasTabletReadable(scabaras: ScabarasRoom): boolean {
+        return scabaras.solved.includes("sequence") && scabaras.solved.includes("lights");
     }
 
     private stepScabaras(room: TombsRoom, def: ScabarasDef): void {
@@ -8773,17 +8784,33 @@ export class Sim {
                 continue;
             }
             const { x, y } = hero.player;
+            const tileX = Math.floor(x);
+            const tileY = Math.floor(y);
+            // Onto a plate by coming well into its tile (within plateInside of its middle), and
+            // off it by leaving its tile, as OSRS's go by tiles: so a diagonal step from plate to
+            // plate, through the corner, touches neither of the two beside it
+            const was = scabaras.standing[hero.index];
             let on: string | undefined;
             for (const [board, plates] of boards) {
                 const i = plates.findIndex(
                     (p) =>
-                        Math.abs(p.x - x) <= SCABARAS.plateReach &&
-                        Math.abs(p.y - y) <= SCABARAS.plateReach,
+                        Math.abs(p.x - x) <= SCABARAS.plateInside &&
+                        Math.abs(p.y - y) <= SCABARAS.plateInside,
                 );
                 if (i !== -1) {
                     on = board + i;
                     break;
                 }
+            }
+            if (!on && was && was[0] !== "b") {
+                const plates = boards.find(([board]) => board === was[0])![1];
+                const p = plates[Number(was.slice(1))];
+                if (Math.floor(p.x) === tileX && Math.floor(p.y) === tileY) {
+                    on = was;
+                }
+            }
+            if (!on && fm.hypot(def.button.x - x, def.button.y - y) <= SCABARAS.buttonReach) {
+                on = "b0";
             }
             if (on === scabaras.standing[hero.index]) {
                 continue;
@@ -8809,18 +8836,41 @@ export class Sim {
         plate: number,
     ): void {
         const solved = (puzzle: ScabarasPuzzle) => scabaras.solved.includes(puzzle);
-        if (board === "s" && !solved("sequence")) {
+        if (board === "b") {
+            // The Ancient button: an order shown now (another, pushed again), not mid-show
+            // (nor once someone's part way through it)
             const sequence = scabaras.sequence;
-            // Nothing while it's being shown, or on a plate already done
             if (
-                this.tick < this.scabarasShowEnd(sequence) ||
-                sequence.order.indexOf(plate) < sequence.step
+                solved("sequence") ||
+                sequence.step > 0 ||
+                (sequence.showFrom !== -1 && this.tick < this.scabarasShowEnd(sequence))
             ) {
                 return;
             }
+            scabaras.sequence = this.newScabarasSequence(def, SCABARAS.showAfter);
+            this.emit(
+                { type: "notice", message: "You push the button. Watch the plates..." },
+                true,
+            );
+            return;
+        }
+        if (board === "s" && !solved("sequence")) {
+            const sequence = scabaras.sequence;
+            if (sequence.order.length === 0) {
+                this.scabarasHint("Nothing happens. Push the Ancient button to see the order.");
+                return;
+            }
+            // Nothing while it's being shown, or on a plate already done (one not in the order
+            // at all is wrong)
+            const at = sequence.order.indexOf(plate);
+            if (this.tick < this.scabarasShowEnd(sequence) || (at !== -1 && at < sequence.step)) {
+                return;
+            }
             if (sequence.order[sequence.step] !== plate) {
-                this.scabarasWrong("The plate gives way: the roof comes down on you!");
-                scabaras.sequence = this.newScabarasSequence(def, SCABARAS.retry);
+                this.scabarasWrong(
+                    "The plate gives way: the roof comes down on you! Push the button again.",
+                );
+                scabaras.sequence = { order: [], showFrom: -1, step: 0 };
                 return;
             }
             sequence.step++;
@@ -8838,6 +8888,12 @@ export class Sim {
         }
         if (board === "a" && !solved("addition")) {
             const addition = scabaras.addition;
+            if (!this.scabarasTabletReadable(scabaras)) {
+                this.scabarasHint(
+                    "The symbols are dull: solve the plates' order and the ring first.",
+                );
+                return;
+            }
             if (addition.stepped[plate]) {
                 return;
             }
@@ -8896,8 +8952,20 @@ export class Sim {
     }
 
     // A mistake: a rock on whoever made it, for a share of their hitpoints, breaking into shards
+    // A reminder of what a puzzle wants, said once in a while, not for every plate crossed
+    private scabarasHint(message: string): void {
+        const last = this.scabarasHintTicks.get(message);
+        if (last !== undefined && this.tick - last < secondsToTicks(SCABARAS.hintEvery)) {
+            return;
+        }
+        this.scabarasHintTicks.set(message, this.tick);
+        this.emit({ type: "notice", message }, true);
+    }
+
     private scabarasWrong(message: string): void {
         const player = this.player;
+        const scabaras = this.tombsRoom!.scabaras!;
+        const { x, y } = player;
         this.emit({ type: "notice", message });
         this.addEffect(
             SCABARAS.rockSpotAnim,
@@ -8913,7 +8981,10 @@ export class Sim {
             undefined,
             true,
         );
-        this.scabarasShards(this.tombsRoom!.scabaras!, player.x, player.y);
+        // Not if that was the end of them, and the room's started over
+        if (this.tombsRoom?.scabaras === scabaras) {
+            this.scabarasShards(scabaras, x, y);
+        }
     }
 
     private solveScabaras(room: TombsRoom, scabaras: ScabarasRoom, puzzle: ScabarasPuzzle): void {

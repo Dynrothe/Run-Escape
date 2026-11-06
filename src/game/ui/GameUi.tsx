@@ -59,6 +59,7 @@ import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
@@ -2243,6 +2244,7 @@ const Hud = memo(function Hud({
                     <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
+                <TombsScabarasReading client={client} />
                 <div className="ui-hud-right">
                     <Minimap client={client} />
                     <KillsAndCoins client={client} />
@@ -2440,7 +2442,7 @@ function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// The Scabaras room's puzzles: how many are solved, and the Ancient tablet's number
+// The Scabaras room's Ancient tablet's number, once it's read (the puzzles solved are the wave line's)
 function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | null {
     const info = useHudNumber(client, (n) => n.tombsScabaras);
     if (!info) {
@@ -2448,11 +2450,55 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
     }
     return (
         <>
-            <div className="ui-round">
-                The tablet says {info.target}: made {info.sum}
-            </div>
-            {info.slate && <div className="ui-round">The slate reads: {info.slate}</div>}
+            {info.readable && (
+                <div className="ui-round">
+                    The tablet says {info.target}: made {info.sum}
+                </div>
+            )}
         </>
+    );
+}
+
+// What a slate or the Ancient tablet in the Scabaras room says, on a screen of its own while
+// you're stood by it: the slates' nine symbols (the floor's own, from above) with what each is
+// worth, or the tablet's number
+function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsScabaras);
+    if (!info?.reading) {
+        return null;
+    }
+    if (info.reading === "tablet") {
+        return (
+            <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+                <div className="ui-scabaras-title">Ancient tablet</div>
+                {info.readable ? (
+                    <>
+                        <div className="ui-scabaras-number">{info.target}</div>
+                        <div>
+                            Walk over symbols that add up to it, each once. Made so far: {info.sum}
+                        </div>
+                    </>
+                ) : (
+                    <div>
+                        Its markings are dark. Solve the plates&apos; order and the ring first.
+                    </div>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+            <div className="ui-scabaras-title">Ancient slate</div>
+            <div className="ui-scabaras-symbols">
+                {SCABARAS.symbolNames.map((name, i) => (
+                    <div key={name} className="ui-scabaras-symbol">
+                        <ItemIcon locId={SCABARAS.locs.symbols[i]} size={40} />
+                        <span className="ui-scabaras-value">{i + 1}</span>
+                        <span className="ui-scabaras-name">{name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 }
 

@@ -2104,8 +2104,11 @@ export type TombsPathDef = {
             lights: { x: number; y: number }[];
             addition: { x: number; y: number }[];
             matching: { north: { x: number; y: number }[]; south: { x: number; y: number }[] };
-            // The slates by the way in that say what Addition's symbols are worth
+            // The slates by the way in that say what Addition's symbols are worth, Addition's
+            // Ancient tablet with its number, and Sequence's Ancient button
             slates: { x: number; y: number }[];
+            tablet: { x: number; y: number };
+            button: { x: number; y: number };
         };
         // The barrier between the safe corridor and the room: the party comes in behind it, and
         // the room starts once someone walks through. It's the sim's: a line at world x (the

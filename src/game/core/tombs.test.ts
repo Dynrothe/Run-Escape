@@ -1709,7 +1709,18 @@ describe("Akkha", () => {
 const grid3 = (xs: number[], ys: number[]) =>
     xs.flatMap((x) => ys.map((y) => ({ x: x + 0.5, y: y + 0.5 })));
 const SCABARAS_DEF = {
-    sequence: grid3([1030, 1032, 1034, 1036], [1050, 1052, 1054]),
+    // OSRS's diamond of nine round 1033,1052
+    sequence: [
+        [0, 0],
+        [-2, 0],
+        [2, 0],
+        [0, -2],
+        [0, 2],
+        [-1, -1],
+        [-1, 1],
+        [1, -1],
+        [1, 1],
+    ].map(([dx, dy]) => ({ x: 1033.5 + dx, y: 1052.5 + dy })),
     lights: [
         [1050, 1048],
         [1052, 1048],
@@ -1720,12 +1731,17 @@ const SCABARAS_DEF = {
         [1050, 1052],
         [1050, 1050],
     ].map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 })),
-    addition: grid3([1030, 1032, 1034, 1036], [1020, 1022, 1024]),
+    // OSRS's 5 by 5, row by row from the north, west to east
+    addition: [0, 1, 2, 3, 4].flatMap((r) =>
+        [0, 1, 2, 3, 4].map((c) => ({ x: 1030.5 + c, y: 1024.5 - r })),
+    ),
     matching: {
         north: grid3([1050, 1052, 1054], [1020, 1022, 1024]),
         south: grid3([1050, 1052, 1054], [1010, 1012, 1014]),
     },
     slates: [{ x: 1040.5, y: 1030.5 }],
+    tablet: { x: 1032.5, y: 1016.5 },
+    button: { x: 1027.5, y: 1048.5 },
 };
 const TEST_SCABARAS: MapDef = {
     ...TEST_TOMBS,
@@ -1808,26 +1824,41 @@ describe("the Scabaras room", () => {
     }
     const caskets = (sim: Sim) => sim.pickups.filter((p) => p.kind === "casket").length;
 
-    it("has slates by the way in that say what the symbols are worth, to whoever's by one", () => {
+    // Sequence's order, shown by pushing its button
+    const push = (sim: Sim) => step(sim, SCABARAS_DEF.button);
+    // The two puzzles before the tablet can be read
+    const beforeTablet = (sim: Sim) => room(sim).solved.push("sequence", "lights");
+
+    it("has slates by the way in and the Ancient tablet, read by whoever's by one", () => {
         const sim = scabaras();
-        expect(sim.scabarasInfo!.slate).toBeUndefined();
+        expect(sim.scabarasInfo!.reading).toBeUndefined();
         const slate = SCABARAS_DEF.slates[0];
         sim.player.x = sim.player.prevX = slate.x + 1;
         sim.player.y = sim.player.prevY = slate.y;
-        expect(sim.scabarasInfo!.slate).toContain("Line 1");
-        expect(sim.scabarasInfo!.slate).toContain("Foot 9");
+        expect(sim.scabarasInfo!.reading).toBe("slate");
+        const tablet = SCABARAS_DEF.tablet;
+        sim.player.x = sim.player.prevX = tablet.x;
+        sim.player.y = sim.player.prevY = tablet.y - 1;
+        expect(sim.scabarasInfo!.reading).toBe("tablet");
+        // Its number only once the plates' order and the ring are done
+        expect(sim.scabarasInfo!.readable).toBe(false);
+        beforeTablet(sim);
+        expect(sim.scabarasInfo!.readable).toBe(true);
     });
 
     it("lays out every board as it begins", () => {
         const sim = scabaras();
         const scabaras_ = room(sim);
-        expect(scabaras_.sequence.order).toHaveLength(SCABARAS.sequenceSteps);
-        expect(new Set(scabaras_.sequence.order).size).toBe(SCABARAS.sequenceSteps);
+        // Nothing's shown till the button's pushed
+        expect(scabaras_.sequence.order).toHaveLength(0);
+        push(sim);
+        expect(room(sim).sequence.order).toHaveLength(SCABARAS.sequenceSteps);
+        expect(new Set(room(sim).sequence.order).size).toBe(SCABARAS.sequenceSteps);
         expect(scabaras_.lights.every((lit) => lit)).toBe(false);
         const { target, values } = scabaras_.addition;
         expect(target).toBeGreaterThanOrEqual(20);
         expect(target).toBeLessThanOrEqual(45);
-        expect(values.every((v) => v >= 1 && v <= 9)).toBe(true);
+        expect(values).toEqual(SCABARAS.additionBoard.map((s) => s + 1));
         expect([...scabaras_.matching.north].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
         expect(scabaras_.matching.matched.filter((m) => m)).toHaveLength(4);
         expect(sim.tombsRoom!.wave).toBe(0);
@@ -1835,6 +1866,7 @@ describe("the Scabaras room", () => {
 
     it("makes everything harder with the path level", () => {
         const sim = scabaras(["pathmaster"]);
+        push(sim);
         // A plate more every two path levels (Pathmaster's is 3), up to six
         expect(room(sim).sequence.order).toHaveLength(
             Math.min(
@@ -1847,8 +1879,13 @@ describe("the Scabaras room", () => {
     });
 
     describe("Sequence", () => {
-        it("lights its plates one at a time, in its order", () => {
+        it("lights its plates one at a time, in its order, once its button's pushed", () => {
             const sim = scabaras();
+            for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                stand(sim, AWAY);
+                expect(sim.scabarasLitPlate).toBeUndefined();
+            }
+            push(sim);
             const lit: number[] = [];
             for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
                 const plate = sim.scabarasLitPlate;
@@ -1862,6 +1899,7 @@ describe("the Scabaras room", () => {
 
         it("is solved by stepping on its plates in order, for a casket and the next wave", () => {
             const sim = scabaras();
+            push(sim);
             shown(sim);
             const before = caskets(sim);
             for (const plate of room(sim).sequence.order) {
@@ -1872,8 +1910,12 @@ describe("the Scabaras room", () => {
             expect(sim.tombsRoom!.wave).toBe(1);
         });
 
-        it("does nothing while it's being shown", () => {
+        it("does nothing while it's being shown, or before the button", () => {
             const sim = scabaras();
+            sim.player.hp = sim.player.maxHp;
+            step(sim, SCABARAS_DEF.sequence[0]);
+            expect(sim.player.hp).toBe(sim.player.maxHp);
+            push(sim);
             const order = [...room(sim).sequence.order];
             const wrong = SCABARAS_DEF.sequence.findIndex((_, i) => i !== order[0]);
             sim.player.hp = sim.player.maxHp;
@@ -1882,8 +1924,20 @@ describe("the Scabaras room", () => {
             expect(room(sim).sequence.order).toEqual(order);
         });
 
-        it("brings the roof down on a wrong plate, and shows a new order", () => {
+        it("won't take a new order from the button part way through one", () => {
             const sim = scabaras();
+            push(sim);
+            shown(sim);
+            const order = [...room(sim).sequence.order];
+            step(sim, SCABARAS_DEF.sequence[order[0]]);
+            push(sim);
+            expect(room(sim).sequence.order).toEqual(order);
+            expect(room(sim).sequence.step).toBe(1);
+        });
+
+        it("brings the roof down on a wrong plate, and wants the button again", () => {
+            const sim = scabaras();
+            push(sim);
             shown(sim);
             const old = room(sim).sequence;
             const wrong = SCABARAS_DEF.sequence.findIndex((_, i) => i !== old.order[0]);
@@ -1892,8 +1946,10 @@ describe("the Scabaras room", () => {
             expect(sim.player.maxHp - sim.player.hp).toBeGreaterThanOrEqual(
                 Math.round(sim.player.maxHp * 0.25),
             );
-            expect(room(sim).sequence).not.toBe(old);
+            expect(room(sim).sequence.order).toHaveLength(0);
             expect(room(sim).sequence.step).toBe(0);
+            push(sim);
+            expect(room(sim).sequence.order.length).toBeGreaterThan(0);
             expect(room(sim).shards.length).toBeGreaterThan(0);
         });
     });
@@ -1947,20 +2003,53 @@ describe("the Scabaras room", () => {
             return find(0, n);
         }
 
+        it("is OSRS's board: the wiki's chart's ways across make their numbers", () => {
+            const values = SCABARAS.additionBoard.map((s) => s + 1);
+            const at = (r: number, c: number) => values[r * 5 + c];
+            // From the chart, the exit at the top: 20, 24, 30 and 45
+            expect(at(2, 3) + at(3, 2) + at(4, 1)).toBe(20);
+            expect(at(1, 4) + at(2, 3) + at(3, 2) + at(4, 1)).toBe(24);
+            expect([0, 1, 2, 3, 4].reduce((n, r) => n + at(r, 2), 0)).toBe(30);
+            expect(
+                [0, 1, 2, 3, 4].reduce((n, r) => n + at(r, 3), 0) + at(4, 0) + at(4, 1) + at(4, 2),
+            ).toBe(45);
+        });
+
+        it("counts a diagonal step through a corner as the two plates, not those beside", () => {
+            const sim = scabaras();
+            beforeTablet(sim);
+            const [a, b] = [SCABARAS_DEF.addition[0], SCABARAS_DEF.addition[6]];
+            stand(sim, AWAY);
+            for (let t = 0; t <= 20; t++) {
+                // A hair off the true diagonal, as moving freely is
+                stand(sim, { x: a.x + t * 0.05, y: a.y - t * 0.05 + 0.00002 });
+            }
+            const stepped = room(sim).addition.stepped.flatMap((on, i) => (on ? [i] : []));
+            expect(stepped).toEqual([0, 6]);
+        });
+
+        it("does nothing till the plates' order and the ring are solved", () => {
+            const sim = scabaras();
+            step(sim, SCABARAS_DEF.addition[0]);
+            expect(room(sim).addition.sum).toBe(0);
+        });
+
         it("is solved by making the tablet's number", () => {
             const sim = scabaras();
+            beforeTablet(sim);
             const { values, target } = room(sim).addition;
             const plates = making(values, target)!;
             expect(plates).toBeDefined();
             for (const plate of plates) {
                 step(sim, SCABARAS_DEF.addition[plate]);
             }
-            expect(room(sim).solved).toEqual(["addition"]);
+            expect(room(sim).solved).toEqual(["sequence", "lights", "addition"]);
             expect(sim.scabarasInfo!.sum).toBe(target);
         });
 
         it("brings the roof down past it, and starts over", () => {
             const sim = scabaras();
+            beforeTablet(sim);
             const addition = room(sim).addition;
             addition.target = 20;
             addition.values = addition.values.map(() => 9);

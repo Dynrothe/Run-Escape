@@ -282,6 +282,7 @@ raid's ranges.
 - **The Wardens' last floor**: its slabs and rubble 45585 to 45645 (`LocOverrides.ts`).
 - **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455 to 45457, its barriers 45458 to 45464; Zebak's
   waterfall 45398/45399; pillars 45530/45531; pressure plates 45340/45344 and tiles 45356 to 45364;
+  the Ancient button 45338 and Ancient tablet 45339;
   Ba-Ba's throne 45756 and sarcophagi 45752/46044; the invocation board 46073.
 - **Spot animations** about 2114 to 2271: the puzzle rooms 2114 to 2140, Kephri 2141 to 2171,
   Zebak 2172 to 2192, the Wardens 2201 to 2241, Ba-Ba 2242 to 2246, Akkha's elements 2249 to 2255.
@@ -364,22 +365,33 @@ raid's ranges.
   the cut's north hall now the east and its south hall the west. The map's constants stay in the
   cut's own tiles, turned by `scabarasTile`. OSRS spawns its plates as the room starts, so the
   boards are drawn by the client (`GameView.drawScabaras`) with the cache's own plates, on tiles
-  whose patterned floor decoration (45380) the map leaves out. All four puzzles are needed (OSRS's
-  solo takes one a side, then the last), each a casket and the next wave:
-    - **The slates** by the way in, one on each wall, as OSRS's: stand by one and the HUD says what
-      each of Addition's symbols is worth (drawn with the Ancient tablet, 45339).
-    - **Sequence** (the east hall, by the way in): 12 plates light one at a time (0.8 s each), 4
-      steps, one more every two path levels, up to 6 (it was 5 plus one a level, up to 9: too
-      many). Step on them in order; a wrong plate drops the roof on you and a new order's shown.
+  whose patterned floor decoration (45380) the map leaves out. The boards follow the wiki's
+  strategy page (Tombs of Amascut/Strategies, Path of Scabaras), its screenshots and its text. All
+  four puzzles are needed (OSRS's solo takes one a side, then the last), each a casket and the next
+  wave. A plate's stood on by standing on its tile, so a diagonal step crosses no other:
+    - **The slates** by the way in, one on each wall, as OSRS's: stand by one and a screen shows
+      Addition's nine symbols, the floor's own models seen from above (`ItemIcon`'s `locId`,
+      `ItemIconLoader.renderLocIcon`), each with what it's worth (drawn with the Ancient tablet,
+      45339).
+    - **Sequence** (the east hall, by the way in): OSRS's nine plates in a diamond, and its Ancient
+      button (45338) on the wall beside them. Push it (walk up to it) and they light one at a time
+      (0.8 s each), 4 steps, one more every two path levels, up to 6; push it again for another
+      order. Step on them in order; a wrong plate, one not in the order included, drops the roof on
+      you, and the button's to be pushed again.
     - **Lights out** (the west hall, by the way in): a ring of 8, each toggling itself and its
       neighbours, scrambled by 3 presses plus the path level. A scarab knocks a light out every 14 s
       (less with levels).
-    - **Addition** (the east hall's middle room): 12 symbols worth 1 to 9 (Line to Foot), on the
-      room's patterned floor (a column of them stood a tile off it, on the walkway, before), and
-      the tablet's number, 20 to 45, shown on the HUD. Past it, the roof comes down and they reset.
-    - **Matching** (the far, north room, last): two boards of the same nine hidden symbols either side of
-      the chasm. A pair that matches stays; one that doesn't drops the roof and hides again. 4 are
-      done as it starts, one fewer each path level.
+    - **Addition** (the east hall's middle room), once Sequence and Lights out are solved: OSRS's
+      own 5 by 5 board (`SCABARAS.additionBoard`, read off the wiki's screenshot and checked
+      against its chart), symbols worth 1 to 9 (Line to Foot), laid with the exit at its top so the
+      wiki's chart of a way across for every number reads as it's seen. The Ancient tablet in the
+      corner south-west of it shows its number, 20 to 45, on a screen while you're by it (and the
+      HUD keeps it), dark till the two before are solved. Walk over symbols that add up to it, each
+      once; past it, the roof comes down and they reset.
+    - **Matching** (the far, north room, last): two boards of the same nine hidden symbols either
+      side of the chasm. A pair that matches stays; one that doesn't drops the roof and hides
+      again. Solo, 4 are done as it starts, as OSRS's are, one fewer each path level; in a party
+      none.
     - A mistake takes a quarter of your hitpoints, through armour. Meanwhile rocks fall near
       everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
@@ -586,8 +598,9 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   barrier's circle till it crumbles, then stands in the seal's ring while it's open; out of an Orb of
   Darkness's line whatever it's doing. It steps off anything solid it's against before finding
   its way round (the tiles round each are walls to its way, its own tile walled in with them).
-- **Scabaras**: the Sequence in order once shown, the fewest Lights out presses, the Addition's
-  exact plates, then Matching, every plate reached round the others.
+- **Scabaras**: the Ancient button, then the Sequence in order once shown, the fewest Lights out
+  presses, a way across the Addition board, tile to touching tile, that makes the tablet's number
+  (`additionPath`), then Matching, every plate reached round the others.
 - **Crondis**: water fetched empty-handed (a band only spills what you carry), filled once a band's
   gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
   half.

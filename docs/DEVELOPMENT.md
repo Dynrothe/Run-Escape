@@ -642,7 +642,7 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon (an item's model, or an interface sprite), DescriptionButton (hover,
+            offer), ItemIcon (an item's model, an interface sprite, or a loc's model from above), DescriptionButton (hover,
             focus and hold descriptions), CountryFlag (a co-op player's flag), CoopScreen (the
             rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)

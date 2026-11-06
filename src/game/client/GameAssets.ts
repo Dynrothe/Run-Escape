@@ -808,6 +808,7 @@ export class GameAssets {
                 scabaras.lightsPlate,
                 scabaras.hidden,
                 scabaras.tablet,
+                scabaras.button,
                 ...scabaras.symbols,
                 ...scabaras.shown,
             ]) {

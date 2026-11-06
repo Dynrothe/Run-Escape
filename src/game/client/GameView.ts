@@ -1239,10 +1239,13 @@ export class GameView {
                 put(locs.stepped, p.x, p.y, true);
             }
         });
-        // The slates by the way in: what the symbols are worth (the HUD says, by one)
+        // The slates by the way in (what the symbols are worth), Addition's Ancient tablet and
+        // Sequence's Ancient button: their screens are the HUD's, by one
         for (const p of def.slates) {
             put(locs.tablet, p.x, p.y);
         }
+        put(locs.tablet, def.tablet.x, def.tablet.y);
+        put(locs.button, def.button.x, def.button.y);
         const matching = scabaras.matching;
         for (const side of ["north", "south"] as const) {
             def.matching[side].forEach((p, i) => {

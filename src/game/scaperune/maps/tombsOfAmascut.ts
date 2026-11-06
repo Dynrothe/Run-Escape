@@ -236,7 +236,20 @@ const SCABARAS_SLATES = [
 // tile so a plate's stepped on by itself: Sequence in the east room of the north hall, Lights out
 // in the east room of the south, Addition in the middle room of the north, and Matching's two
 // boards either side of the west room's chasm, the last
-const SCABARAS_SEQUENCE = [48, 50, 52, 54].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
+// Sequence: OSRS's nine plates in a diamond, every other tile round its middle (51,18), and its
+// Ancient button to the side by the way up
+const SCABARAS_SEQUENCE = [
+    [0, 0],
+    [-2, 0],
+    [2, 0],
+    [0, -2],
+    [0, 2],
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
+].map(([dx, dy]) => [51 + dx, 18 + dy]);
+const SCABARAS_BUTTON = [54, 15];
 // Round the ring, from its south-west corner
 const SCABARAS_LIGHTS = [
     [49, 4],
@@ -248,8 +261,13 @@ const SCABARAS_LIGHTS = [
     [49, 8],
     [49, 6],
 ];
-// On its room's patterned floor (x 36 to 42), every other tile
-const SCABARAS_ADDITION = [36, 38, 40, 42].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
+// Addition: OSRS's 5 by 5 board on its room's patterned floor, row by row from the exit's side
+// (north once turned, so the wiki's chart reads as it's seen), west to east; and the Ancient
+// tablet with its number, in the open corner south-west of it, off the way up
+const SCABARAS_ADDITION = [37, 38, 39, 40, 41].flatMap((x) =>
+    [16, 17, 18, 19, 20].map((y) => [x, y]),
+);
+const SCABARAS_TABLET = [42, 15];
 const SCABARAS_MATCHING = {
     north: [5, 7, 9].flatMap((x) => [16, 18, 20].map((y) => [x, y])),
     south: [5, 7, 9].flatMap((x) => [4, 6, 8].map((y) => [x, y])),
@@ -656,6 +674,8 @@ export const TOA_PLACES = {
                 south: SCABARAS_MATCHING.south.map(([x, y]) => scabarasTile(x, y)),
             },
             slates: SCABARAS_SLATES.map(([x, y]) => scabarasTile(x, y)),
+            tablet: scabarasTile(SCABARAS_TABLET[0], SCABARAS_TABLET[1]),
+            button: scabarasTile(SCABARAS_BUTTON[0], SCABARAS_BUTTON[1]),
         },
     },
     // Akkha's arena: where the party comes in, where he rises (its middle), the line past which

@@ -2663,3 +2663,55 @@
         flex: none;
     }
 }
+
+/* The Scabaras room's slates and Ancient tablet, read while you're stood by one: over the play
+   area, not in the way of touching it */
+.ui-scabaras-reading {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(360px, calc(92vw / var(--ui-scale)));
+    padding: 10px 14px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.ui-scabaras-title {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    margin-bottom: 6px;
+}
+
+.ui-scabaras-number {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 48px;
+    line-height: 1.1;
+    color: #ffff00;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.ui-scabaras-symbols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.ui-scabaras-symbol {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-scabaras-value {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 22px;
+    color: #ffff00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-scabaras-name {
+    font-size: 13px;
+    opacity: 0.85;
+}
