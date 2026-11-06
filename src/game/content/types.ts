@@ -1789,6 +1789,18 @@ export type TombsDef = {
     wardens?: TombsWardensPlaces;
     // The way to the Wardens in the Nexus, in world tiles: open once every path's done
     wardensDoor?: { x: number; y: number };
+    // Where the Helpful Spirit stands in the Nexus, in world tiles
+    spirit?: { x: number; y: number };
+};
+
+// One of the Helpful Spirit's bundles (the Tombs of Amascut's), free, one taken each time: what's
+// in it, each supply so many (least to most), some only by chance
+export type TombsBundleDef = {
+    id: string;
+    name: string;
+    description: string;
+    objId: number;
+    contents: { supplyId: string; count: [least: number, most: number]; chance?: number }[];
 };
 
 // Which Warden: Elidinis' or Tumeken's
@@ -2370,7 +2382,9 @@ export type ItemUse =
     | { kind: "xp"; levels: number }
     // Co-op: a teammate can revive the player once more. Taken from the
     // casket at once, never kept, and only found in co-op.
-    | { kind: "revive" };
+    | { kind: "revive" }
+    // One of a raid's supplies (the Tombs of Amascut's, from its Helpful Spirit): does what it does
+    | { kind: "supply"; supplyId: string };
 
 // Carried in the inventory and used when the player wants (1-4); copies of
 // the same item stack in one slot

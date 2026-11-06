@@ -100,9 +100,10 @@ const APMEKEN: RoomCut = {
 };
 
 // The Het room, in square 57,82: Apmeken's room's twin, the entry on the west (local 11,30) and the
-// exit on the east (51,30), each behind a barrier (45135 at x 21 and 43, y 31 to 33). Turned half
-// round, as it's cut, so it's entered from the east as Apmeken's is: the entry's barrier is the
-// sim's line. In the cut's own tiles a tile (x, y) lies at (36 - x, 27 - y) once turned.
+// exit on the east (51,30), each behind a barrier (45135 at x 21 and 43, y 31 to 33). Turned three
+// quarters clockwise, so it's walked up the screen as the rest of the raid is: in from the south
+// behind the entry's barrier (the sim's line), out at the north. In the cut's own tiles a tile
+// (x, y) lies at (27 - y, x) once turned.
 const HET: RoomCut = {
     x: 3662,
     y: 5267,
@@ -110,27 +111,29 @@ const HET: RoomCut = {
     sizeY: 28,
     plane: 0,
     cell: [3, 0],
-    arrive: [32, 14],
-    turns: 2,
+    arrive: [14, 4],
+    turns: 3,
 };
 // Its entry barrier, in the cut's own tiles (local x 21 in square 57,82)
 const HET_GATE = { x: 7, y: [12, 13, 14] };
 // Its puzzle, in tiles from the turned cut's corner (OSRS places these as the room starts, so
 // they're not in the map). The room's a round floor about 21 across, its middle a 3 by 3 mound
-// where Het's Seal stands. The Caster statue (45486) stands in the north alcove and fires south;
-// the Shielded statue (45485) in the south one, the beam's target. Straight down, the seal's in
-// the way: mirrors take it round.
-const HET_CASTER = [17, 22];
-const HET_TARGET = [17, 4];
-const HET_SEAL = [18.5, 14.5];
+// where Het's Seal stands. The Caster statue (45486) stands in the east alcove and fires west;
+// the Shielded statue (45485) in the west one, the beam's target (each a 3 by 3, its south-west
+// tile here, turned to face the other). Straight across, the seal's in the way: mirrors take it
+// round.
+const HET_CASTER = [22, 17];
+const HET_TARGET = [4, 17];
+const HET_STATUE_ROTATION = { caster: 1, target: 3 };
+const HET_SEAL = [14.5, 18.5];
 // Where mirrors can go and Orbs of Darkness cross, and where its enemies come in
-const HET_FLOOR = { x0: 9, y0: 5, x1: 27, y1: 23 };
+const HET_FLOOR = { x0: 5, y0: 9, x1: 23, y1: 27 };
 const HET_ENTRANCES = [
-    [10, 14],
-    [12, 20],
-    [12, 8],
-    [24, 20],
-    [24, 8],
+    [14, 26],
+    [20, 24],
+    [8, 24],
+    [20, 12],
+    [8, 12],
 ];
 const HET_SOURCE_LOC = 45486;
 const HET_TARGET_LOC = 45485;
@@ -527,18 +530,18 @@ export const TOA_PLACES = {
     // Ba-Ba's arena: where the party comes in, where she rises, and the line past which she does
     het: {
         arrive: worldTile(HET_ROOM.arrive.x, HET_ROOM.arrive.y),
-        // The barrier's line (its tiles' west edge) and its tiles' middles, as Apmeken's
+        // Across the way in, turned: a line at the barrier tiles' north edge
         gate: {
-            x: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + (36 - HET_GATE.x),
+            y: worldTile(HET_ROOM.at.x, HET_ROOM.at.y + HET_GATE.x).y + 0.5,
             locId: APMEKEN_BARRIER_LOC,
             tiles: HET_GATE.y.map((y) =>
-                worldTile(HET_ROOM.at.x + 36 - HET_GATE.x, HET_ROOM.at.y + 27 - y),
+                worldTile(HET_ROOM.at.x + 27 - y, HET_ROOM.at.y + HET_GATE.x),
             ),
         },
         entrances: HET_ENTRANCES.map(([x, y]) => worldTile(HET_ROOM.at.x + x, HET_ROOM.at.y + y)),
         puzzle: {
-            // The beam leaves the caster's south side, heading south (world -y)
-            beam: worldTile(HET_ROOM.at.x + HET_CASTER[0] + 1, HET_ROOM.at.y + HET_CASTER[1] - 1),
+            // The beam leaves the caster's west side, heading west to the Shielded statue
+            beam: worldTile(HET_ROOM.at.x + HET_CASTER[0] - 1, HET_ROOM.at.y + HET_CASTER[1] + 1),
             target: {
                 x0: MAP_X * MAP_SQUARE_SIZE + HET_ROOM.at.x + HET_TARGET[0],
                 y0: MAP_Y * MAP_SQUARE_SIZE + HET_ROOM.at.y + HET_TARGET[1],
@@ -1013,12 +1016,12 @@ function build(context: BuildContext): TileGrid {
         }
         // The Het room's statues, which OSRS places as the room starts
         if (cut === HET) {
-            for (const [id, [x, y]] of [
-                [HET_SOURCE_LOC, HET_CASTER],
-                [HET_TARGET_LOC, HET_TARGET],
+            for (const [id, [x, y], rotation] of [
+                [HET_SOURCE_LOC, HET_CASTER, HET_STATUE_ROTATION.caster],
+                [HET_TARGET_LOC, HET_TARGET, HET_STATUE_ROTATION.target],
             ] as const) {
                 ground.place(
-                    { id, type: 10, rotation: 0, level: 0, x: room.at.x + x, y: room.at.y + y },
+                    { id, type: 10, rotation, level: 0, x: room.at.x + x, y: room.at.y + y },
                     3,
                     3,
                 );
@@ -1117,6 +1120,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             nexus: TOA_PLACES.nexus.arrive,
             // The Nexus's north end, as OSRS's way to the Wardens is
             wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),
+            // The Helpful Spirit, on the open floor west of the way up from the entrance
+            spirit: worldTile(NEXUS_ARRIVE.x - 4, NEXUS_ARRIVE.y + 9),
             wardens: {
                 arrive: TOA_PLACES.wardens.arrive,
                 obelisk: TOA_PLACES.wardens.obelisk,

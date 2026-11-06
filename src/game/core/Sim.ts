@@ -102,8 +102,8 @@ import {
     TOMBS_POINTS,
     TOMBS_PUZZLE_LEVELS,
     TOMBS_SPIRIT,
+    TOMBS_SPIRIT_BUNDLES,
     TOMBS_SPIRIT_SHARE,
-    TOMBS_SUPPLIES,
     TOMBS_TIME_LIMITS,
     WARDENS,
     WARDENS_WINDMILL,
@@ -150,7 +150,6 @@ import {
     PowerUpEffect,
     QuartersDef,
     RaidRoomDef,
-    RaidSupplyDef,
     RandomEventDef,
     RandomEventEffect,
     SpecialAttackDef,
@@ -1188,17 +1187,24 @@ export type KephriFight = {
 // Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
 const AKKHA_VANISH_SEQ = 9784;
 
-// The Het room: its mirrors, the spots the loose ones go on, its barriers (worn ones to be mined
-// through, with what they've left), and the way that works (which spot wants a mirror, turned
-// which way: the bot's); the next pulse, the last one's way corner to corner and whether it
-// reached the statue; the seal, open (mined) until a tick or -1; the Orbs of Darkness; each
-// hero's next mining swing
+// The Het room: its mirrors, the spots the loose ones go on, its barriers (a worn one's circle to
+// stand in to break it, and the ticks it's been stood in), the seal's ring of circles, and the way
+// that works (which spot wants a mirror, turned which way: the bot's); the next pulse, the last
+// one's way corner to corner and whether it reached the statue; the seal, open (mined) until a
+// tick or -1; the Orbs of Darkness; each hero's next mining swing
 export type HetRoom = {
     // The seal's hitpoints as it started (more for each of the party)
     sealHp: number;
     mirrors: HetMirror[];
     spots: { x: number; y: number }[];
-    barriers: { x: number; y: number; worn: boolean; hp: number }[];
+    barriers: {
+        x: number;
+        y: number;
+        worn: boolean;
+        stand?: { x: number; y: number };
+        mined: number;
+    }[];
+    ring: { x: number; y: number }[];
     solution: { spot: number; turn: 0 | 1 }[];
     nextBeamTick: number;
     beam?: { points: { x: number; y: number }[]; tick: number; hit: boolean };
@@ -1368,8 +1374,14 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
-    // The Helpful Spirit's due as the party's back in the Nexus
-    private tombsSpiritDue = false;
+    // The Helpful Spirit's bundles each hero's had, or let go by (of two), and who's stood by it
+    private tombsSpiritTaken = new Map<number, number>();
+    private tombsSpiritNear = new Set<number>();
+    // What's in the Spirit's bundles for each hero's next one, rolled the first time they look, so
+    // walking off and back doesn't roll them again
+    private tombsSpiritOffer = new Map<number, EventOption[]>();
+    // Said once the party's back in the Nexus with a bundle to come
+    private tombsSpiritReady = false;
     // Each path taken, when it was entered and how long it took, for the result's board
     private tombsTimes: { id: string; startTick: number; seconds?: number }[] = [];
     // When the party first came to the Wardens, for the board's time (wipes and all)
@@ -2766,6 +2778,9 @@ export class Sim {
                 break;
             case "xp":
                 this.xp += (this.xpForNextLevel - this.xpForThisLevel) * use.levels;
+                break;
+            case "supply":
+                this.useRaidSupply(use.supplyId);
                 break;
         }
     }
@@ -4943,6 +4958,9 @@ export class Sim {
         if (!tombs || this.runOver || this.state !== "playing" || this.tombsPath !== undefined) {
             return;
         }
+        if (tombs.spirit && !this.tombsWardens && this.stepTombsSpirit(tombs.spirit)) {
+            return;
+        }
         const current = this.hero;
         // The way to the Wardens, once every path's done
         const door = tombs.wardensDoor;
@@ -5006,6 +5024,7 @@ export class Sim {
         this.tombsPath = id;
         this.tombsTimes.push({ id, startTick: this.tick });
         this.tombsDoors.clear();
+        this.forfeitTombsBundles();
         this.gatherHall();
         this.moveParty(arrive);
         this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
@@ -6080,6 +6099,7 @@ export class Sim {
         this.gatherHall();
         this.moveParty(this.map.tombs!.wardens!.arrive);
         this.startWardens();
+        this.forfeitTombsBundles();
     }
 
     // Into the Wardens' fight: the obelisk and the two Wardens on their platforms, the first orbs a
@@ -9031,22 +9051,56 @@ export class Sim {
         this.emit({
             type: "notice",
             message:
-                "Pick up the loose mirrors and set them on the marked spots, turned to bring the " +
-                "beam round to the Shielded statue. Mine through the worn barriers in its way.",
+                "Pick up the glowing mirrors and set them on the marked spots, turned to bring the " +
+                "beam round to the Shielded statue. Stand in a barrier's circle to break it.",
         });
     }
 
-    // A way round the seal for the beam: down from the caster, across one side of the seal, down
-    // past it and back to the beam's column, then on down into the Shielded statue. A mirror's
-    // needed at each of its four turns: some fixed there already, the rest (1 to 4) spots for the
-    // loose mirrors to go on, as OSRS's room always takes 1 to 3 of its 3. A worn barrier or two
-    // stand in the way to be mined; whole ones, more fixed mirrors and spare spots elsewhere.
-    private layOutHet(def: HetDef): Pick<HetRoom, "mirrors" | "spots" | "barriers" | "solution"> {
+    // Which way the caster fires: towards the Shielded statue, along whichever way it's further
+    private hetBeamWay(def: HetDef): { dx: number; dy: number } {
+        const tx = (def.target.x0 + def.target.x1) / 2 - def.beam.x;
+        const ty = (def.target.y0 + def.target.y1) / 2 - def.beam.y;
+        return Math.abs(tx) >= Math.abs(ty)
+            ? { dx: Math.sign(tx), dy: 0 }
+            : { dx: 0, dy: Math.sign(ty) };
+    }
+
+    // A way round the seal for the beam: on from the caster, across one side of the seal, on past
+    // it and back to the beam's line, then on into the Shielded statue. A mirror's needed at each
+    // of its four turns: some fixed there already (turned right), the rest (1 to 3) a spot for one
+    // of the loose mirrors, as OSRS's room always takes 1 to 3 of its 3. A worn barrier or two stand
+    // in the way, each with a circle beside it to stand in to break it; whole ones elsewhere. Laid
+    // out along the beam: v back towards the caster, u across it, (0, 0) the caster's tile.
+    private layOutHet(
+        def: HetDef,
+    ): Pick<HetRoom, "mirrors" | "spots" | "barriers" | "solution" | "ring"> {
         const bx = Math.floor(def.beam.x);
         const by = Math.floor(def.beam.y);
+        const way = this.hetBeamWay(def);
+        // Back towards the caster, and across
+        const back = { x: -way.dx, y: -way.dy };
+        const across = { x: back.y, y: -back.x };
+        const world = (u: number, v: number): [number, number] => [
+            bx + u * across.x + v * back.x,
+            by + u * across.y + v * back.y,
+        ];
+        const local = (x: number, y: number) => ({
+            u: (x - bx) * across.x + (y - by) * across.y,
+            v: (x - bx) * back.x + (y - by) * back.y,
+        });
         const sealX = Math.floor(def.seal.x);
         const sealY = Math.floor(def.seal.y);
-        const targetTop = Math.floor(def.target.y1) - 1;
+        const seal = local(sealX, sealY);
+        // The statue's nearest row of tiles to the caster (its bounds are tile edges)
+        const { x0, y0, x1, y1 } = def.target;
+        const targetTop = Math.max(
+            ...[
+                [x0, y0],
+                [x1 - 1, y0],
+                [x0, y1 - 1],
+                [x1 - 1, y1 - 1],
+            ].map(([x, y]) => local(Math.floor(x), Math.floor(y)).v),
+        );
         const heroes = this.heroes.length;
         const level = this.tombsPathLevel;
         const mirror = (x: number, y: number, turn: 0 | 1, fixed: boolean): HetMirror => ({
@@ -9059,59 +9113,63 @@ export class Sim {
         });
         const open = (x: number, y: number) => this.grid.contains(x, y) && !this.grid.isSolid(x, y);
         let corners: [number, number][] = [];
-        let turns: (0 | 1)[] = [];
-        // The way's straight runs, tile by tile, its corners left out
         let runs: [number, number][] = [];
         // Every tile of the beam's way round, which nothing else is put on
         const onWay = new Set<string>();
         for (let attempt = 0; attempt < 40; attempt++) {
             const side = this.rng.chance(0.5) ? 1 : -1;
-            const across = bx + side * (3 + this.rng.int(4));
-            const top = sealY + 2 + this.rng.int(Math.max(1, by - sealY - 2));
-            const bottom = sealY - 2 - this.rng.int(Math.max(1, sealY - 2 - targetTop - 1));
-            const way: [number, number][] = [];
-            const line = (x0: number, y0: number, x1: number, y1: number) => {
-                const dx = Math.sign(x1 - x0);
-                const dy = Math.sign(y1 - y0);
-                for (let x = x0, y = y0; ; x += dx, y += dy) {
-                    way.push([x, y]);
-                    if (x === x1 && y === y1) {
+            const u = side * (3 + this.rng.int(4));
+            // Its near crossing, between the caster and the seal, and its far one, past the seal
+            const near = seal.v + 2 + this.rng.int(Math.max(1, -seal.v - 2));
+            const far = seal.v - 2 - this.rng.int(Math.max(1, seal.v - 2 - targetTop - 1));
+            const tiles: [number, number][] = [];
+            const line = (u0: number, v0: number, u1: number, v1: number) => {
+                const du = Math.sign(u1 - u0);
+                const dv = Math.sign(v1 - v0);
+                for (let a = u0, b = v0; ; a += du, b += dv) {
+                    tiles.push(world(a, b));
+                    if (a === u1 && b === v1) {
                         break;
                     }
                 }
             };
-            line(bx, by, bx, top);
-            line(bx, top, across, top);
-            line(across, top, across, bottom);
-            line(across, bottom, bx, bottom);
-            line(bx, bottom, bx, targetTop + 1);
-            const clear = way.every(
+            line(0, 0, 0, near);
+            line(0, near, u, near);
+            line(u, near, u, far);
+            line(u, far, 0, far);
+            line(0, far, 0, targetTop + 1);
+            const clear = tiles.every(
                 ([x, y]) => open(x, y) && (Math.abs(x - sealX) > 1 || Math.abs(y - sealY) > 1),
             );
             if (!clear) {
                 continue;
             }
-            corners = [
-                [bx, top],
-                [across, top],
-                [across, bottom],
-                [bx, bottom],
-            ];
-            for (const [x, y] of way) {
+            corners = [world(0, near), world(u, near), world(u, far), world(0, far)];
+            for (const [x, y] of tiles) {
                 onWay.add(x + "," + y);
             }
             // Its straight runs, a tile clear of its corners, the caster and the statue
-            runs = way.filter(
-                ([x, y]) =>
+            runs = tiles.filter(([x, y]) => {
+                const at = local(x, y);
+                return (
                     corners.every(([cx, cy]) => Math.abs(cx - x) + Math.abs(cy - y) > 1) &&
-                    Math.abs(y - by) > 1 &&
-                    y > targetTop + 2,
-            );
-            // "/" turns south into west and west into south, "\" south into east and east into
-            // south (Sim.traceHetBeam)
-            turns = side > 0 ? [1, 1, 0, 0] : [0, 0, 1, 1];
+                    at.v < -1 &&
+                    at.v > targetTop + 2
+                );
+            });
             break;
         }
+        // Each corner's mirror, as the beam meets it: "/" sends (dx, dy) on as (dy, dx), "\" as
+        // (-dy, -dx) (Sim.traceHetBeam)
+        const turns: (0 | 1)[] = corners.map(([x, y], i) => {
+            const [px, py] = i === 0 ? [bx, by] : corners[i - 1];
+            const [nx, ny] = i === corners.length - 1 ? world(0, targetTop) : corners[i + 1];
+            const inX = Math.sign(x - px);
+            const inY = Math.sign(y - py);
+            const outX = Math.sign(nx - x);
+            const outY = Math.sign(ny - y);
+            return outX === inY && outY === inX ? 0 : 1;
+        });
         // Which of its turns are spots for the loose mirrors: 1 to 3, one more from path level 2
         const placed = Math.min(
             corners.length,
@@ -9136,20 +9194,52 @@ export class Sim {
                 mirrors.push(mirror(x, y, turns[i], true));
             }
         });
-        // Worn barriers on its straight runs
+        // Worn barriers on its straight runs, each with its circle on a free tile beside it
         const barriers: HetRoom["barriers"] = [];
         const worn = Math.min(runs.length, HET.wornLeast + this.rng.int(2));
-        for (let n = 0; n < worn; n++) {
+        for (let n = 0; n < worn && runs.length > 0; n++) {
             const pick = runs.splice(this.rng.int(runs.length), 1)[0];
-            barriers.push({ x: pick[0] + 0.5, y: pick[1] + 0.5, worn: true, hp: HET.barrierHp });
+            // Off the run to one side: across a run along the beam, back or on along a crossing
+            // (the tiles along the run itself are on the way, so never chosen)
+            const stand = [
+                [across.x, across.y],
+                [-across.x, -across.y],
+                [back.x, back.y],
+                [-back.x, -back.y],
+            ]
+                .map(([ox, oy]) => [pick[0] + ox, pick[1] + oy] as [number, number])
+                .find(([x, y]) => open(x, y) && !onWay.has(x + "," + y));
+            if (!stand) {
+                continue;
+            }
+            barriers.push({
+                x: pick[0] + 0.5,
+                y: pick[1] + 0.5,
+                worn: true,
+                stand: { x: stand[0] + 0.5, y: stand[1] + 0.5 },
+                mined: 0,
+            });
             // Not next to another
             runs = runs.filter(([x, y]) => Math.abs(x - pick[0]) + Math.abs(y - pick[1]) > 2);
-            if (runs.length === 0) {
-                break;
+        }
+        // The seal's ring: the tiles round its mound, where it's mined from
+        const ring: { x: number; y: number }[] = [];
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                const x = sealX + dx;
+                const y = sealY + dy;
+                // Not on the beam's way, where a mirror, spot or barrier may stand
+                if (
+                    Math.max(Math.abs(dx), Math.abs(dy)) === 2 &&
+                    open(x, y) &&
+                    !onWay.has(x + "," + y)
+                ) {
+                    ring.push({ x: x + 0.5, y: y + 0.5 });
+                }
             }
         }
-        // Everything else on open floor off the way, the beam's column and the seal, and a tile
-        // clear of everything put down
+        // Everything else on open floor off the way, the beam's line, the seal and its ring, and a
+        // tile clear of everything put down
         const floor = def.floor;
         const close = (m: { x: number; y: number }, x: number, y: number) =>
             Math.abs(m.x - 0.5 - x) <= 1 && Math.abs(m.y - 0.5 - y) <= 1;
@@ -9160,13 +9250,13 @@ export class Sim {
                 const near =
                     mirrors.some((m) => close(m, x, y)) ||
                     spots.some((m) => close(m, x, y)) ||
-                    barriers.some((m) => close(m, x, y));
+                    barriers.some((b) => close(b, x, y) || (b.stand && close(b.stand, x, y)));
                 if (
                     near ||
                     onWay.has(x + "," + y) ||
                     !open(x, y) ||
-                    (Math.abs(x - sealX) <= 2 && Math.abs(y - sealY) <= 2) ||
-                    x === bx
+                    (Math.abs(x - sealX) <= 3 && Math.abs(y - sealY) <= 3) ||
+                    local(x, y).u === 0
                 ) {
                     continue;
                 }
@@ -9174,17 +9264,13 @@ export class Sim {
                 n++;
             }
         };
-        // The loose mirrors (three, as OSRS's, or as many as the spots want), lying where they
-        // were left
-        free(Math.max(HET.movable, placed), (x, y) => mirrors.push(mirror(x, y, 0, false)));
-        free(HET.spareSpots + level, (x, y) => spots.push({ x: x + 0.5, y: y + 0.5 }));
-        free(HET.decoys + level, (x, y) =>
-            mirrors.push(mirror(x, y, this.rng.chance(0.5) ? 1 : 0, true)),
-        );
+        // The loose mirrors, just as many as the spots want, lying where they were left: set down,
+        // they're there for good (turned as you like), so there's no spot that doesn't want one
+        free(placed, (x, y) => mirrors.push(mirror(x, y, 0, false)));
         free(HET.walls + level, (x, y) =>
-            barriers.push({ x: x + 0.5, y: y + 0.5, worn: false, hp: HET.barrierHp }),
+            barriers.push({ x: x + 0.5, y: y + 0.5, worn: false, mined: 0 }),
         );
-        return { mirrors, spots, barriers, solution };
+        return { mirrors, spots, barriers, solution, ring };
     }
 
     // Whether a mirror's stood up where the beam meets it: fixed, or set on a spot (not lying
@@ -9201,8 +9287,7 @@ export class Sim {
     ): { points: { x: number; y: number }[]; hit: boolean } {
         let x = Math.floor(def.beam.x);
         let y = Math.floor(def.beam.y);
-        let dx = 0;
-        let dy = -1;
+        let { dx, dy } = this.hetBeamWay(def);
         const sealX = Math.floor(def.seal.x);
         const sealY = Math.floor(def.seal.y);
         const t = def.target;
@@ -9271,7 +9356,8 @@ export class Sim {
             seal.shieldEnd = 0;
             this.emit({
                 type: "notice",
-                message: "The beam hits the statue: Het's Seal is open! Stand by it to mine it!",
+                message:
+                    "The beam hits the statue: Het's Seal is open! Stand in its ring to mine it!",
             });
             if (!this.tombsReplaying) {
                 const player = this.hero.player;
@@ -9316,34 +9402,34 @@ export class Sim {
         }
     }
 
-    // The mirrors, by walking: into a loose one picks it up (one at a time); carried and stopped
-    // on an empty spot, it's set there, facing "/"; into one set down turns it to "\", and into
-    // it again lifts it back off (or turns it back, for someone carrying one already); into a
-    // dirty one cleans it. Fixed ones only clean. Mirrors (but a carried one) and barriers are
-    // solid, so nobody stands in one.
+    // The mirrors, by walking: into a loose one picks it up (as many as there are); stopped on an
+    // empty spot, carrying one, it's set there, facing "/", for good; into one set down turns it,
+    // as often as you like; into a dirty one cleans it. Fixed ones only clean. Mirrors (but
+    // carried ones) and barriers are solid, so nobody stands in one.
     private stepHetMirrors(het: HetRoom): void {
         for (const hero of this.heroes) {
             const player = hero.player;
             const up = this.isUp(hero);
-            let carried = het.mirrors.find((m) => m.carrier === hero.index);
-            if (carried && !up) {
-                // Down: dropped where they fell, set on the spot there if it's empty, or lying on
-                // the nearest tile with nothing on it
-                this.dropHetMirror(het, carried, player);
-                carried = undefined;
+            const held = () => het.mirrors.filter((m) => m.carrier === hero.index);
+            if (!up) {
+                // Down: what they carried is dropped where they fell
+                for (const mirror of held()) {
+                    this.dropHetMirror(het, mirror, player);
+                }
             }
             const moving = player.x !== player.prevX || player.y !== player.prevY;
-            if (carried) {
-                carried.x = player.x;
-                carried.y = player.y;
-                // Stopped on an empty spot (walked over, it's carried on): set there, facing "/"
-                const spot = moving
-                    ? -1
-                    : het.spots.findIndex(
-                          (s, i) =>
-                              fm.hypot(s.x - player.x, s.y - player.y) <= HET.placeReach &&
-                              !het.mirrors.some((m) => m.spot === i),
-                      );
+            for (const mirror of held()) {
+                mirror.x = player.x;
+                mirror.y = player.y;
+            }
+            // Stopped on an empty spot (walked over, they're carried on): one set there
+            const carried = held()[0];
+            if (carried && !moving) {
+                const spot = het.spots.findIndex(
+                    (s, i) =>
+                        fm.hypot(s.x - player.x, s.y - player.y) <= HET.placeReach &&
+                        !het.mirrors.some((m) => m.spot === i),
+                );
                 if (spot !== -1) {
                     carried.carrier = undefined;
                     carried.spot = spot;
@@ -9351,8 +9437,7 @@ export class Sim {
                     carried.y = het.spots[spot].y;
                     carried.turn = 0;
                     carried.touching[hero.index] = true;
-                    this.emit({ type: "notice", message: "You set the mirror down." }, true);
-                    carried = undefined;
+                    this.emit({ type: "notice", message: "You set down the mirror." }, true);
                 }
             }
             for (const mirror of het.mirrors) {
@@ -9367,24 +9452,13 @@ export class Sim {
                     if (mirror.dirty) {
                         mirror.dirty = false;
                         this.emit({ type: "notice", message: "You clean the mirror." }, true);
-                    } else if (!mirror.fixed && mirror.spot === undefined && !carried) {
+                    } else if (!mirror.fixed && mirror.spot === undefined) {
                         mirror.carrier = hero.index;
-                        carried = mirror;
                         this.emit({ type: "notice", message: "You pick up the mirror." }, true);
-                    } else if (!mirror.fixed && mirror.spot !== undefined) {
-                        if (mirror.turn === 1 && !carried) {
-                            // Its second bump: lifted back off
-                            mirror.spot = undefined;
-                            mirror.carrier = hero.index;
-                            mirror.touching[hero.index] = false;
-                            carried = mirror;
-                            this.emit(
-                                { type: "notice", message: "You lift the mirror back up." },
-                                true,
-                            );
-                            continue;
-                        }
+                        continue;
+                    } else if (!mirror.fixed) {
                         mirror.turn = (1 - mirror.turn) as 0 | 1;
+                        this.emit({ type: "notice", message: "You rotate the mirror." }, true);
                     }
                 }
                 mirror.touching[hero.index] = touching;
@@ -9463,40 +9537,47 @@ export class Sim {
         );
     }
 
-    // Mining, by standing against what's to be mined: a worn barrier, or the seal while it's open.
-    // A swing every so often, for what the hero's Mining (the shop's) makes it: OSRS's damage by
-    // level and pickaxe, so a run with none takes three openings, one with the best one.
+    // Whether someone's stood in one of the Het room's glowing circles (a barrier's, or a tile of
+    // the seal's ring)
+    private inHetCircle(player: { x: number; y: number }, at: { x: number; y: number }): boolean {
+        return fm.hypot(at.x - player.x, at.y - player.y) <= HET.mine.circle;
+    }
+
+    // Mining, by standing in a glowing circle: a worn barrier's breaks after mine.barrier seconds
+    // in it (anyone in it counts); the seal's ring, while it's open, takes a swing every so often
+    // for what the hero's Mining (the shop's) makes it: OSRS's damage by level and pickaxe, so a
+    // run with none takes three openings, one with the best. Nothing else touches either.
     private stepHetMining(het: HetRoom, seal: Enemy): void {
-        const reach = HET.mine.reach;
-        for (const hero of this.heroes) {
-            const player = hero.player;
-            if (!this.isUp(hero) || this.tick < het.nextMine[hero.index]) {
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        for (const barrier of het.barriers) {
+            if (!barrier.worn || !barrier.stand) {
                 continue;
             }
-            const barrier = het.barriers.find(
-                (b) =>
-                    b.worn &&
-                    fm.hypot(b.x - player.x, b.y - player.y) <= 0.5 + player.radius + reach,
-            );
-            const atSeal =
-                het.openUntil !== -1 &&
-                fm.hypot(seal.x - player.x, seal.y - player.y) <=
-                    seal.radius + player.radius + reach;
-            if (!barrier && !atSeal) {
+            if (up.some((hero) => this.inHetCircle(hero.player, barrier.stand!))) {
+                barrier.mined++;
+                if (barrier.mined % secondsToTicks(HET.mine.every) === 0) {
+                    this.emit({ type: "impact", sound: 6183, x: barrier.x, y: barrier.y });
+                }
+                if (barrier.mined >= secondsToTicks(HET.mine.barrier)) {
+                    het.barriers = het.barriers.filter((b) => b !== barrier);
+                    this.emit({ type: "notice", message: "The barrier crumbles!" }, true);
+                }
+            }
+        }
+        if (het.openUntil === -1) {
+            return;
+        }
+        for (const hero of up) {
+            const player = hero.player;
+            if (
+                this.tick < het.nextMine[hero.index] ||
+                !het.ring.some((tile) => this.inHetCircle(player, tile))
+            ) {
                 continue;
             }
             het.nextMine[hero.index] = this.tick + secondsToTicks(HET.mine.every);
             const [least, most] = this.hetMineHit(hero);
             const hit = least + this.rng.int(most - least + 1);
-            if (barrier) {
-                barrier.hp -= hit;
-                this.emit({ type: "impact", sound: 6183, x: barrier.x, y: barrier.y });
-                if (barrier.hp <= 0) {
-                    het.barriers = het.barriers.filter((b) => b !== barrier);
-                    this.emit({ type: "notice", message: "The barrier crumbles!" }, true);
-                }
-                continue;
-            }
             seal.hp -= hit;
             seal.flash = 5;
             this.emit({
@@ -9512,6 +9593,19 @@ export class Sim {
                 return;
             }
         }
+    }
+
+    // The Het room for the HUD: the mirrors you're holding, and how far the caster's charged
+    get hetInfo(): { held: number; charge: number } | undefined {
+        const het = this.tombsRoom?.het;
+        if (!het || this.tombsRoom?.doneTick !== undefined) {
+            return undefined;
+        }
+        const every = secondsToTicks(HET.beamEvery);
+        return {
+            held: het.mirrors.filter((m) => m.carrier === this.hero.index).length,
+            charge: Math.max(0, Math.min(1, 1 - (het.nextBeamTick - this.tick) / every)),
+        };
     }
 
     // What's been mined of Het's Seal, of its hitpoints, for the HUD
@@ -9572,11 +9666,16 @@ export class Sim {
             }
         }
         const damage = HET.orbDamage * this.tombsHazardScale();
+        const party = this.heroes.filter((hero) => !hero.left).length;
         het.orbs = het.orbs.filter((orb) => {
             orb.x += orb.vx;
             orb.y += orb.vy;
-            for (const mirror of het.mirrors) {
-                if (fm.hypot(orb.x - mirror.x, orb.y - mirror.y) < 0.5) {
+            // In a party only, as OSRS's: a mirror crossed is dirtied
+            for (const mirror of party > 1 ? het.mirrors : []) {
+                if (
+                    mirror.carrier === undefined &&
+                    fm.hypot(orb.x - mirror.x, orb.y - mirror.y) < 0.5
+                ) {
                     mirror.dirty = true;
                 }
             }
@@ -9870,10 +9969,9 @@ export class Sim {
         this.rescaleParty();
         if (this.tombsPath && !this.tombsPathsDone.includes(this.tombsPath)) {
             this.tombsPathsDone.push(this.tombsPath);
-            // The Helpful Spirit, after the second path and the fourth: each player's turn
             const done = this.tombsPathsDone.length;
             if (done === 2 || done === 4) {
-                this.tombsSpiritDue = true;
+                this.tombsSpiritReady = true;
             }
         }
         const time = this.tombsTimes.find(
@@ -9893,12 +9991,9 @@ export class Sim {
         this.gatherHall();
         this.moveParty(tombs.nexus);
         this.emit({ type: "notice", message: "Back in the Nexus." });
-        if (this.tombsSpiritDue) {
-            this.tombsSpiritDue = false;
-            this.raidShopQueue = this.heroes
-                .filter((hero) => this.isUp(hero))
-                .map((hero) => hero.index);
-            this.openNextRaidShop();
+        if (this.tombsSpiritReady && this.map.tombs?.spirit) {
+            this.tombsSpiritReady = false;
+            this.emit({ type: "notice", message: "The Helpful Spirit has supplies for you." });
         }
     }
 
@@ -10262,10 +10357,9 @@ export class Sim {
             return;
         }
         this.use(this.heroes[index]);
-        const tombs = this.map.tombs !== undefined;
         this.openOffer(
-            tombs ? TOMBS_SPIRIT : RAID_SUPPLY_CHEST,
-            (tombs ? this.tombsSpiritSupplies() : RAID_SUPPLIES).map((supply) => ({
+            RAID_SUPPLY_CHEST,
+            RAID_SUPPLIES.map((supply) => ({
                 kind: "supply",
                 supplyId: supply.id,
                 price: supply.price,
@@ -10274,19 +10368,121 @@ export class Sim {
         );
     }
 
-    // What the Helpful Spirit has: fewer with Need Some Help and the rest (picked on the event
-    // roll, so they don't move the run's), none that heal with Dehydration, and always one
-    private tombsSpiritSupplies(): RaidSupplyDef[] {
-        const dry = this.invoked("dehydration");
-        const pool = TOMBS_SUPPLIES.filter((supply) => !dry || supply.effect.kind !== "heal");
-        const share = Object.entries(TOMBS_SPIRIT_SHARE).find(([id]) => this.invoked(id))?.[1] ?? 1;
-        const count = Math.max(1, Math.round(pool.length * share));
-        const left = [...pool];
-        const picked: RaidSupplyDef[] = [];
-        while (picked.length < count && left.length > 0) {
-            picked.push(left.splice(this.eventRng.int(left.length), 1)[0]);
+    // The Helpful Spirit's bundles each hero has to come: one after any two paths, one more after
+    // all four, less what they've had or let go by
+    tombsSpiritBundles(index: number): number {
+        const earned = Math.min(2, Math.floor(this.tombsPathsDone.length / 2));
+        return Math.max(0, earned - (this.tombsSpiritTaken.get(index) ?? 0));
+    }
+
+    // The Helpful Spirit in the Nexus: walked up to, it offers its bundles to a hero with one to
+    // come (or says when they will), once each time they come up to it. True when it's opened.
+    private stepTombsSpirit(at: { x: number; y: number }): boolean {
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            const near =
+                this.isUp(hero) &&
+                fm.hypot(at.x - hero.player.x, at.y - hero.player.y) <= VISITOR_REACH;
+            if (!near) {
+                this.tombsSpiritNear.delete(hero.index);
+                continue;
+            }
+            if (this.tombsSpiritNear.has(hero.index)) {
+                continue;
+            }
+            this.tombsSpiritNear.add(hero.index);
+            this.use(hero);
+            if (this.tombsSpiritBundles(hero.index) > 0) {
+                let options = this.tombsSpiritOffer.get(hero.index);
+                if (!options) {
+                    options = this.rollTombsBundles();
+                    this.tombsSpiritOffer.set(hero.index, options);
+                }
+                this.openOffer(TOMBS_SPIRIT, options);
+                return true;
+            }
+            const message =
+                this.tombsPathsDone.length < 2
+                    ? "The Helpful Spirit will have supplies for you after two paths."
+                    : this.tombsPathsDone.length < 4
+                      ? "The Helpful Spirit will have more for you after the other two paths."
+                      : "The Helpful Spirit has nothing more for you.";
+            this.emit({ type: "notice", message }, true);
         }
-        return pool.filter((supply) => picked.includes(supply));
+        this.use(current);
+        return false;
+    }
+
+    // The Spirit's three bundles, what's in each rolled now (on the event roll, so they don't
+    // move the run's): fewer with Need Some Help and the rest, never none, and nothing that heals
+    // with Dehydration
+    private rollTombsBundles(): EventOption[] {
+        const dry = this.invoked("dehydration");
+        const share = Object.entries(TOMBS_SPIRIT_SHARE).find(([id]) => this.invoked(id))?.[1] ?? 1;
+        const options: EventOption[] = [];
+        for (const bundle of TOMBS_SPIRIT_BUNDLES) {
+            const contents = bundle.contents.filter(
+                (c) => !dry || getRaidSupply(c.supplyId).effect.kind !== "heal",
+            );
+            const items = contents.map((c) => {
+                const [least, most] = c.count;
+                const rolled = least + this.eventRng.int(most - least + 1);
+                const had = c.chance === undefined || this.eventRng.chance(c.chance);
+                return { supplyId: c.supplyId, count: had ? Math.round(rolled * share) : 0 };
+            });
+            // Never empty: one of the first it's sure to have
+            const sure = contents.findIndex((c) => c.chance === undefined);
+            if (items.every((item) => item.count === 0) && sure !== -1) {
+                items[sure].count = 1;
+            }
+            // No more kinds than the inventory has slots (Chaos's lucky ones the first to go)
+            const kept = items.filter((item) => item.count > 0).slice(0, MAX_INVENTORY);
+            if (kept.length > 0) {
+                options.push({ kind: "bundle", bundleId: bundle.id, items: kept });
+            }
+        }
+        return options;
+    }
+
+    // A bundle of the Spirit's taken: its supplies in the inventory, any there's no room for used
+    // now, and the hero's due one fewer
+    private takeTombsBundle(items: { supplyId: string; count: number }[]): void {
+        const index = this.hero.index;
+        this.tombsSpiritTaken.set(index, (this.tombsSpiritTaken.get(index) ?? 0) + 1);
+        this.tombsSpiritOffer.delete(index);
+        const used: string[] = [];
+        for (const { supplyId, count } of items) {
+            for (let i = 0; i < count; i++) {
+                if (!this.stash(supplyId)) {
+                    this.useUtility(getItem(supplyId) as UtilityDef);
+                    if (!used.includes(supplyId)) {
+                        used.push(supplyId);
+                    }
+                }
+            }
+        }
+        if (used.length > 0) {
+            const names = used.map((id) => getItem(id).name.toLowerCase()).join(", ");
+            this.emit(
+                { type: "notice", message: `No room for it all: used the ${names} now.` },
+                true,
+            );
+        }
+    }
+
+    // Through a door from the Nexus: a bundle of the Spirit's not taken by now is gone (the first
+    // once a third path's begun, either once the Wardens have)
+    private forfeitTombsBundles(): void {
+        const gone = this.tombsWardens
+            ? 2
+            : Math.min(2, Math.floor(this.tombsPathsDone.length / 2));
+        for (const hero of this.heroes) {
+            const had = this.tombsSpiritTaken.get(hero.index) ?? 0;
+            if (gone > had) {
+                this.tombsSpiritTaken.set(hero.index, gone);
+                this.tombsSpiritOffer.delete(hero.index);
+            }
+        }
     }
 
     // The chest once the raid's done, each of the party their own: a purple, more likely the more
@@ -17858,13 +18054,19 @@ export class Sim {
 
     private rollRandomEvent(): RandomEventDef | undefined {
         const bossOut = this.enemies.some((enemy) => enemy.boss && !enemy.dead);
+        // In the Tombs of Amascut only a visitor with a casket comes, and may come again
+        const tombs = this.map.tombs !== undefined;
         const index = this.eventRng.weightedIndex(
             RANDOM_EVENTS.map((event) =>
-                event.id === this.lastRandomEventId ||
-                this.seconds < (event.minSeconds ?? 0) ||
-                (event.effect.kind === "ambush" && bossOut)
-                    ? 0
-                    : event.weight,
+                tombs
+                    ? event.effect.kind === "casket"
+                        ? event.weight
+                        : 0
+                    : event.id === this.lastRandomEventId ||
+                        this.seconds < (event.minSeconds ?? 0) ||
+                        (event.effect.kind === "ambush" && bossOut)
+                      ? 0
+                      : event.weight,
             ),
         );
         return RANDOM_EVENTS[index];
@@ -18089,6 +18291,9 @@ export class Sim {
             const funds = option.kind === "supply" ? this.hero.raidPoints : this.coins;
             return !option.sold && funds >= option.price;
         }
+        if (option.kind === "bundle") {
+            return this.tombsSpiritBundles(this.hero.index) > 0;
+        }
         return true;
     }
 
@@ -18118,10 +18323,22 @@ export class Sim {
             // A bought nuke can finish off a final boss
             if (
                 this.runOver ||
-                offer.options.every((o) => o.kind !== "answer" && o.kind !== "teleport" && o.sold)
+                offer.options.every(
+                    (o) =>
+                        o.kind !== "answer" &&
+                        o.kind !== "teleport" &&
+                        o.kind !== "bundle" &&
+                        o.sold,
+                )
             ) {
                 this.leaveEvent();
             }
+            return true;
+        }
+        if (option.kind === "bundle") {
+            this.emit({ type: "visitor", message: "", sound: SOUNDS.buy }, true);
+            this.takeTombsBundle(option.items);
+            this.leaveEvent();
             return true;
         }
         if (option.kind === "teleport") {

@@ -19,6 +19,7 @@ import {
     KEPHRI,
     SARCOPHAGI,
     SCABARAS,
+    TOMBS_SPIRIT,
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
@@ -267,6 +268,8 @@ export class GameView {
     private enemiesByUid = new Map<number, Enemy>();
     private readonly hitsplatImages = new HitsplatImages();
     private readonly glowImages = new Map<string, HTMLCanvasElement>();
+    // The Tombs' Helpful Spirit, drawn as a visitor that never goes
+    private tombsSpirit?: Visitor;
     // The hero the camera's on: the focus, or in co-op while they're down, a
     // teammate (GameClient sets it)
     viewHero = 0;
@@ -475,6 +478,7 @@ export class GameView {
         if (sim.visitor) {
             this.drawVisitor(actors, sim, sim.visitor);
         }
+        this.drawTombsSpirit(actors, sim);
 
         for (const turret of sim.turrets) {
             const model = this.assets.get(CANNON_MODEL_KEY);
@@ -779,15 +783,24 @@ export class GameView {
                 });
             }
         };
+        const glowAt = (x: number, y: number, scale: number, lift = 0) =>
+            this.drawGlowCircle(actors, sim, x, y, scale, lift);
         for (const p of het.spots) {
             put(spot, p.x, p.y);
         }
+        // Each hero's carried mirrors, stacked over their head
+        const stacked = new Map<number, number>();
         for (const mirror of het.mirrors) {
             const model = mirror.dirty ? (dirty ?? clean) : mirror.fixed ? (fixed ?? clean) : clean;
             if (mirror.carrier !== undefined) {
-                // Held up over whoever carries it
-                put(model, mirror.x, mirror.y, 0, 1.6, 0.6);
+                const n = stacked.get(mirror.carrier) ?? 0;
+                stacked.set(mirror.carrier, n + 1);
+                put(model, mirror.x, mirror.y, 0, 1.6 + n * 0.35, 0.6);
             } else {
+                // A loose one glows: it can be picked up
+                if (!mirror.fixed && mirror.spot === undefined) {
+                    glowAt(mirror.x, mirror.y, 2);
+                }
                 put(model, mirror.x, mirror.y, mirror.turn * 512);
             }
         }
@@ -795,6 +808,22 @@ export class GameView {
         const worn = this.assets.get("loc:" + HET.wornLoc);
         for (const b of het.barriers) {
             put(b.worn ? (worn ?? barrier) : barrier, b.x, b.y);
+            // Its circle, to stand in to break it
+            if (b.stand) {
+                glowAt(b.stand.x, b.stand.y, 0.9);
+            }
+        }
+        // The seal's ring, to stand in to mine it, while it's open
+        if (het.openUntil !== -1) {
+            for (const tile of het.ring) {
+                glowAt(tile.x, tile.y, 0.9);
+            }
+        }
+        // The caster charging: a glow at its face, growing over the last of the wait
+        const room = sim.tombsPathRoom?.het;
+        const charge = sim.hetInfo?.charge ?? 0;
+        if (room && charge > 0.6) {
+            glowAt(room.beam.x, room.beam.y, 0.6 + (charge - 0.6) * 2.5, 0.5);
         }
         const beam = het.beam;
         if (beam && sim.tick - beam.tick < Math.round(HET.beamShow * TICKS_PER_SECOND)) {
@@ -1483,6 +1512,48 @@ export class GameView {
             y,
             pet.yaw,
         );
+    }
+
+    // The Tombs of Amascut's Helpful Spirit, in the Nexus: a visitor that never goes, standing in
+    // a glowing circle while it has a bundle for this player
+    private drawTombsSpirit(actors: ActorRenderer, sim: Sim): void {
+        const at = sim.map.tombs?.spirit;
+        if (!at || sim.tombsPath !== undefined || sim.tombsWardens) {
+            return;
+        }
+        if (this.tombsSpirit?.x !== at.x || this.tombsSpirit.y !== at.y) {
+            this.tombsSpirit = {
+                uid: -1,
+                def: TOMBS_SPIRIT,
+                x: at.x,
+                y: at.y,
+                startTick: 0,
+                endTick: Infinity,
+                nextShoutTick: 0,
+            };
+        }
+        this.drawVisitor(actors, sim, this.tombsSpirit);
+        if (sim.tombsSpiritBundles(sim.focus ?? 0) > 0) {
+            this.drawGlowCircle(actors, sim, at.x, at.y, 2);
+        }
+    }
+
+    // The glowing circle (HET.circleSpotAnim, Verzik's) on the ground at a spot: Het's circles to
+    // stand in, the glow under a loose mirror, the Helpful Spirit with something for you
+    private drawGlowCircle(
+        actors: ActorRenderer,
+        sim: Sim,
+        x: number,
+        y: number,
+        scale: number,
+        lift = 0,
+    ): void {
+        const glow = this.assets.get("spot:" + HET.circleSpotAnim);
+        if (glow) {
+            const anim = glow.anims[0];
+            const ground = this.ground(sim, x, y) + lift;
+            actors.draw(glow, anim, anim.getFrame(sim.tick, true), x, ground, y, 0, { scale });
+        }
     }
 
     // Facing the player, and blinking when they're about to go

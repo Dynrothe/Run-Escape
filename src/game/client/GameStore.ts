@@ -170,6 +170,8 @@ export type HudNumbers = {
     tombsShadows?: { left: number; seconds: number };
     // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
     tombsScabaras?: { solved: number; of: number; target: number; sum: number; slate?: string };
+    // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
+    tombsHet?: { held: number; charge: number };
     // The Crondis room: your water, and the palm's growth against what it needs
     tombsCrondis?: { water: number; growth: number; goal: number };
     // Seconds till Zebak roars, while he's about to

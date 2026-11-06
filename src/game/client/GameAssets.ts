@@ -45,6 +45,7 @@ import {
     SARCOPHAGUS_BLAST,
     SCABARAS,
     TOMBS_ENEMIES,
+    TOMBS_SPIRIT,
     TOMBS_SPOTANIMS,
     WARDENS,
     ZEBAK,
@@ -285,6 +286,8 @@ function getSpotAnimIds(): number[] {
         add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
         add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
         add(WARDENS.three.phantomSpotAnim);
+        // The Het room's circles to stand in, and the glow under a loose mirror
+        add(HET.circleSpotAnim);
         add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
         // Zebak's roar, and his jugs breaking and splashing
         add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
@@ -761,7 +764,8 @@ export class GameAssets {
                 });
             }
         }
-        for (const { id, npcId, idleSeq } of RANDOM_EVENTS) {
+        // The visitors, and the Tombs' Helpful Spirit drawn as one
+        for (const { id, npcId, idleSeq } of [...RANDOM_EVENTS, TOMBS_SPIRIT]) {
             if (npcId !== undefined && idleSeq !== undefined) {
                 requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }

@@ -13,6 +13,7 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
+import { getRaidSupply } from "../content/raids";
 import { SHOP_UPGRADES } from "../content/shop";
 import {
     APMEKEN,
@@ -23,7 +24,7 @@ import {
     TOMBS_BOSSES,
     TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
-    TOMBS_SUPPLIES,
+    TOMBS_SPIRIT_BUNDLES,
     WARDENS,
 } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -79,6 +80,8 @@ const TEST_TOMBS: MapDef = {
         nexus: { x: 1036.5, y: 1036.5 },
         // The way to the Wardens, 6 tiles south
         wardensDoor: { x: 1036.5, y: 1030.5 },
+        // The Helpful Spirit, 3 tiles south-west
+        spirit: { x: 1033.5, y: 1033.5 },
         // The Wardens' room in the same field: the obelisk north of the Nexus, a Warden either side
         wardens: {
             arrive: { x: 1036.5, y: 1040.5 },
@@ -1159,83 +1162,104 @@ describe("the Het room", () => {
         sim.player.y = sim.player.prevY = y;
     };
 
-    it("lays out a way round the seal: fixed mirrors, spots for the loose ones, barriers", () => {
+    it("lays out a way round the seal: fixed mirrors turned right, a spot for each loose one", () => {
         const ways = new Set<string>();
         for (let seed = 1; seed <= 6; seed++) {
             const sim = het([], seed);
             const het_ = room(sim);
             ways.add(JSON.stringify(het_.solution.map((w) => het_.spots[w.spot])));
-            // 1 to 3 spots on the way, three loose mirrors at least, a worn barrier on the way
             expect(het_.solution.length).toBeGreaterThanOrEqual(HET.placedLeast);
             expect(het_.solution.length).toBeLessThanOrEqual(HET.placedMost);
-            expect(het_.mirrors.filter((m) => !m.fixed).length).toBeGreaterThanOrEqual(
-                Math.max(HET.movable, het_.solution.length),
-            );
-            expect(het_.barriers.some((b) => b.worn)).toBe(true);
+            // As many loose mirrors as spots, and no spot that isn't wanted
+            expect(het_.mirrors.filter((m) => !m.fixed)).toHaveLength(het_.solution.length);
+            expect(het_.spots).toHaveLength(het_.solution.length);
+            // A worn barrier on the way with its circle, whole ones about, the seal's ring
+            expect(het_.barriers.some((b) => b.worn && b.stand)).toBe(true);
             expect(het_.barriers.some((b) => !b.worn)).toBe(true);
-            expect(het_.spots.length).toBeGreaterThan(het_.solution.length);
-            // Not done as it starts; done once the answer's set and the barriers mined
+            expect(het_.ring.length).toBeGreaterThan(8);
+            // Not done as it starts; done once the answer's set and the barriers broken
             expect(trace(sim).hit).toBe(false);
             solve(sim);
             expect(trace(sim).hit).toBe(true);
         }
-        // and it's not the same way each time
         expect(ways.size).toBeGreaterThan(1);
     });
 
-    it("picks a loose mirror up, sets it on a spot, turns it, and lifts it back off", () => {
-        const sim = het();
+    it("picks up as many loose mirrors as there are, sets one down on a spot, and turns it", () => {
+        const sim = het([], 2);
         const het_ = room(sim);
-        const mirror = het_.mirrors.find((m) => !m.fixed)!;
-        // Walked into: carried
-        stand(sim, mirror.x + 0.9, mirror.y);
-        sim.step();
-        expect(mirror.carrier).toBe(0);
-        // A second one isn't
-        const other = het_.mirrors.find((m) => !m.fixed && m !== mirror)!;
-        stand(sim, other.x + 0.9, other.y);
-        sim.step();
-        expect(other.carrier).toBeUndefined();
-        // Walked over a spot, it's carried on; stopped on it, set there
+        const loose = het_.mirrors.filter((m) => !m.fixed);
+        for (const mirror of loose) {
+            stand(sim, mirror.x + 0.9, mirror.y);
+            sim.step();
+            // Off it, somewhere clear of every spot
+            stand(sim, 1046.5, 1033.5);
+            sim.step();
+        }
+        expect(loose.every((m) => m.carrier === 0)).toBe(true);
+        expect(sim.hetInfo!.held).toBe(loose.length);
+        // Walked over a spot, they're carried on; stopped on it, one's set there
         const spot = het_.spots[0];
         sim.player.x = spot.x;
         sim.player.y = spot.y;
         sim.player.prevX = spot.x - 0.2;
         sim.player.prevY = spot.y;
         sim["stepHetMirrors"](het_);
-        expect(mirror.carrier).toBe(0);
+        expect(het_.mirrors.some((m) => m.spot === 0)).toBe(false);
         stand(sim, spot.x, spot.y);
         sim.step();
-        expect(mirror.carrier).toBeUndefined();
-        expect(mirror.spot).toBe(0);
-        expect(mirror.turn).toBe(0);
-        // Stood still beside it, it stays
-        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
-            stand(sim, spot.x + 0.9, spot.y);
-            sim.step();
-        }
-        expect(mirror.spot).toBe(0);
-        // Into it again (after stepping off): turned; and again: lifted back off
+        const set = het_.mirrors.find((m) => m.spot === 0)!;
+        expect(set.carrier).toBeUndefined();
+        expect(sim.hetInfo!.held).toBe(loose.length - 1);
+        // Into it: turned, as often as you like, and never lifted back off
         const bump = () => {
             stand(sim, spot.x + 4, spot.y);
             sim.step();
             stand(sim, spot.x + 0.9, spot.y);
             sim.step();
         };
-        bump();
-        expect(mirror.turn).toBe(1);
-        expect(mirror.spot).toBe(0);
-        bump();
-        expect(mirror.spot).toBeUndefined();
-        expect(mirror.carrier).toBe(0);
-        // Its carrier down: dropped where they fell
-        sim.player.hp = 0;
-        sim.heroes[0].down = true;
-        sim["stepHetMirrors"](het_);
-        expect(mirror.carrier).toBeUndefined();
+        for (let i = 1; i <= 4; i++) {
+            bump();
+            expect(set.turn).toBe(i % 2);
+            expect(set.spot).toBe(0);
+        }
     });
 
-    it("leaves a fixed mirror be, but cleans a dirty one walked into", () => {
+    it("always puts a worn barrier on the way, and keeps the seal's ring off it", () => {
+        for (let seed = 1; seed <= 30; seed++) {
+            const het_ = room(het([], seed));
+            const solids = [...het_.mirrors, ...het_.spots, ...het_.barriers];
+            expect(het_.barriers.some((b) => b.worn && b.stand)).toBe(true);
+            for (const tile of het_.ring) {
+                expect(solids.some((m) => m.x === tile.x && m.y === tile.y)).toBe(false);
+            }
+        }
+    });
+
+    it("drops what a hero carried where they go down, and cleans a dirty mirror walked into", () => {
+        const sim = het([], 2);
+        const het_ = room(sim);
+        const loose = het_.mirrors.filter((m) => !m.fixed);
+        for (const mirror of loose) {
+            mirror.carrier = 0;
+        }
+        stand(sim, 1046.5, 1033.5);
+        sim.heroes[0].down = true;
+        sim["stepHetMirrors"](het_);
+        sim.heroes[0].down = false;
+        expect(loose.every((m) => m.carrier === undefined)).toBe(true);
+        // Each on a tile of its own
+        expect(new Set(loose.map((m) => m.x + "," + m.y)).size).toBe(loose.length);
+        const fixed = het_.mirrors.find((m) => m.fixed) ?? het_.mirrors[0];
+        fixed.dirty = true;
+        stand(sim, fixed.x + 4, fixed.y);
+        sim.step();
+        stand(sim, fixed.x + 0.9, fixed.y);
+        sim.step();
+        expect(fixed.dirty).toBe(false);
+    });
+
+    it("leaves a fixed mirror be: turned right, never moved", () => {
         const sim = het();
         const mirror = room(sim).mirrors.find((m) => m.fixed)!;
         const turn = mirror.turn;
@@ -1243,33 +1267,28 @@ describe("the Het room", () => {
         sim.step();
         expect(mirror.turn).toBe(turn);
         expect(mirror.carrier).toBeUndefined();
-        stand(sim, mirror.x + 4, mirror.y);
-        sim.step();
-        mirror.dirty = true;
-        stand(sim, mirror.x + 0.9, mirror.y);
-        sim.step();
-        expect(mirror.dirty).toBe(false);
-        expect(mirror.turn).toBe(turn);
     });
 
-    it("mines through a worn barrier stood against, not a whole one", () => {
+    it("breaks a worn barrier stood in its circle a few seconds, not a whole one", () => {
         const sim = het();
         const het_ = room(sim);
         const worn = het_.barriers.find((b) => b.worn)!;
-        for (let i = 0; i < 20 * TICKS_PER_SECOND && het_.barriers.includes(worn); i++) {
-            stand(sim, worn.x + 1, worn.y);
+        const circle = worn.stand!;
+        // Beside it but out of its circle: nothing
+        for (let i = 0; i < 4 * TICKS_PER_SECOND; i++) {
+            stand(sim, circle.x + (circle.x - worn.x) * 1.5, circle.y + (circle.y - worn.y) * 1.5);
+            sim.step();
+        }
+        expect(het_.barriers.includes(worn)).toBe(true);
+        for (let i = 0; i < (HET.mine.barrier + 0.2) * TICKS_PER_SECOND; i++) {
+            stand(sim, circle.x, circle.y);
             sim.step();
         }
         expect(het_.barriers.includes(worn)).toBe(false);
-        const whole = het_.barriers.find((b) => !b.worn)!;
-        for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
-            stand(sim, whole.x + 1, whole.y);
-            sim.step();
-        }
-        expect(het_.barriers.includes(whole)).toBe(true);
+        expect(het_.barriers.some((b) => !b.worn)).toBe(true);
     });
 
-    it("opens the seal when the beam reaches the statue, to be mined: weapons never touch it", () => {
+    it("opens the seal when the beam reaches the statue, mined only from its ring", () => {
         const sim = het();
         solve(sim);
         stand(sim, 1046.5, 1033.5);
@@ -1280,16 +1299,20 @@ describe("the Het room", () => {
         sim.step();
         const target = seal(sim)!;
         expect(target.maxHp).toBe(HET.sealHp);
-        expect(target.shieldEnd).toBe(0);
         expect(room(sim).openUntil).toBeGreaterThan(sim.tick);
         expect(sim.tombsRoom!.wave).toBe(wave + 1);
         expect(sim.pickups.filter((p) => p.kind === "casket").length).toBe(caskets + 1);
         sim["damageSource"] = "weapon:scythe_of_vitur";
         expect(sim.damageEnemy(target, 500, 0, target.x, target.y)).toBe(0);
-        // Beside it: mined, a swing at a time, by the hero's Mining (none: the least)
-        const [least, most] = HET.mine.hits[0];
+        // Off the ring: nothing
         const hp = target.hp;
-        stand(sim, target.x, target.y - 2);
+        stand(sim, target.x + 4, target.y + 4);
+        sim.step();
+        expect(target.hp).toBe(hp);
+        // In it: a swing, by the hero's Mining (none: the least)
+        const [least, most] = HET.mine.hits[0];
+        const tile = room(sim).ring[0];
+        stand(sim, tile.x, tile.y);
         sim.step();
         expect(hp - target.hp).toBeGreaterThanOrEqual(least);
         expect(hp - target.hp).toBeLessThanOrEqual(most);
@@ -1309,15 +1332,16 @@ describe("the Het room", () => {
         expect(sim["hetMineHit"](sim.heroes[0])).toEqual(HET.mine.hits[mining.maxRank]);
     });
 
-    it("sends Orbs of Darkness across that hurt and dirty the mirrors they cross", () => {
+    it("sends Orbs of Darkness across that hurt", () => {
         const sim = het(["pathfinder"]);
-        const mirror = room(sim).mirrors.find((m) => m.fixed)!;
+        // Solo, an orb crossing a mirror leaves it clean (in a party it dirties it, as OSRS's)
+        const mirror = room(sim).mirrors[0];
         room(sim).orbs.push({ x: mirror.x - 3, y: mirror.y, vx: 0.2, vy: 0 });
         room(sim).nextOrbTick = sim.tick + 10_000;
         for (let i = 0; i < 20; i++) {
             sim.step();
         }
-        expect(mirror.dirty).toBe(true);
+        expect(mirror.dirty).toBe(false);
         // and into the player
         sim.player.invulnerable = 0;
         const hp = sim.player.hp;
@@ -3353,36 +3377,113 @@ describe("the Helpful Spirit", () => {
         sim["leaveTombsPath"]();
         return sim;
     };
+    // Up to the Spirit, from a step off
+    const meet = (sim: Sim) => {
+        const at = sim.map.tombs!.spirit!;
+        sim.player.x = sim.player.prevX = at.x;
+        sim.player.y = sim.player.prevY = at.y - 3;
+        sim.step();
+        sim.player.x = sim.player.prevX = at.x;
+        sim.player.y = sim.player.prevY = at.y;
+        sim.step();
+    };
+    const supplies = (sim: Sim) =>
+        Object.fromEntries(sim.inventory.filter((s) => s).map((s) => [s!.itemId, s!.count]));
 
-    it("comes after the second path and the fourth, its supplies bought with raid points", () => {
-        expect(back([], 0).state).toBe("playing");
+    it("stands in the Nexus with a free bundle after two paths and after four", () => {
+        const early = back([], 0);
+        meet(early);
+        expect(early.state).toBe("playing");
         const sim = back([], 1);
+        // It waits to be walked up to
+        expect(sim.state).toBe("playing");
+        sim.heroes[0].raidPoints = 0;
+        meet(sim);
         expect(sim.state).toBe("event");
         expect(sim.offer!.def.id).toBe("helpful_spirit");
-        expect(sim.offer!.options).toHaveLength(TOMBS_SUPPLIES.length);
-        // Points to spend, which the chest doesn't miss
-        sim.heroes[0].raidPoints = 1000;
-        sim.heroes[0].tombsPoints = 1000;
-        const nectar = sim.offer!.options.findIndex(
-            (o) => o.kind === "supply" && o.supplyId === "nectar",
+        expect(sim.offer!.options.map((o) => o.kind === "bundle" && o.bundleId)).toEqual(
+            TOMBS_SPIRIT_BUNDLES.map((b) => b.id),
         );
-        expect(sim.chooseEventOption(nectar)).toBe(true);
-        expect(sim.raidPoints).toBe(700);
-        expect(sim.heroes[0].tombsPoints).toBe(1000);
-        sim.leaveEvent();
+        // Free: taken with no points to spend
+        const life = sim.offer!.options.findIndex(
+            (o) => o.kind === "bundle" && o.bundleId === "life",
+        );
+        expect(sim.chooseEventOption(life)).toBe(true);
         expect(sim.state).toBe("playing");
-        expect(back([], 3).state).toBe("event");
+        expect(supplies(sim)).toEqual({
+            nectar: 3,
+            tears_of_elidinis: 2,
+            blessed_crystal_scarab: expect.any(Number),
+            ambrosia: 1,
+        });
+        expect(sim.tombsSpiritBundles(0)).toBe(0);
+        // Nothing more until the other two paths
+        meet(sim);
+        expect(sim.state).toBe("playing");
+        // (the test map has two paths: the other two by name)
+        sim.tombsPathsDone.push("crondis", "scabaras");
+        expect(sim.tombsSpiritBundles(0)).toBe(1);
+        meet(sim);
+        expect(sim.state).toBe("event");
     });
 
-    it("has fewer supplies with Need Less Help, and none that heal with Dehydration", () => {
-        const less = back(["need_less_help"], 1).offer!.options;
-        expect(less).toHaveLength(Math.round(TOMBS_SUPPLIES.length / 3));
-        const dry = back(["dehydration"], 1).offer!.options;
-        for (const option of dry) {
-            const supply = TOMBS_SUPPLIES.find(
-                (s) => option.kind === "supply" && s.id === option.supplyId,
+    it("keeps what's in its bundles when walked away from and back to", () => {
+        const sim = back([], 1);
+        meet(sim);
+        const first = JSON.stringify(sim.offer!.options);
+        sim.leaveEvent();
+        meet(sim);
+        expect(JSON.stringify(sim.offer!.options)).toBe(first);
+    });
+
+    it("lets a bundle not taken go once the next door's gone through", () => {
+        const sim = back([], 1);
+        expect(sim.tombsSpiritBundles(0)).toBe(1);
+        const path = sim.map.tombs!.paths[1];
+        sim["enterTombsPath"](path.id, path.room!.arrive);
+        expect(sim.tombsSpiritBundles(0)).toBe(0);
+    });
+
+    it("puts its supplies in the inventory, and uses what there's no room for", () => {
+        const sim = back([], 1);
+        sim.inventory = ["shark", "stamina_potion", "red_chinchompa", null].map((id) =>
+            id ? { itemId: id, count: 1 } : null,
+        );
+        sim.player.hp = 1;
+        sim["takeTombsBundle"]([
+            { supplyId: "nectar", count: 2 },
+            { supplyId: "ambrosia", count: 1 },
+        ]);
+        expect(supplies(sim).nectar).toBe(2);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        // Used from the inventory, a supply does what it says
+        sim.player.hp = 1;
+        expect(sim.useItem(3)).toBe(true);
+        expect(sim.player.hp).toBeCloseTo(1 + sim.player.maxHp * 0.25, 5);
+    });
+
+    it("gives less with Need Less Help, and nothing that heals with Dehydration", () => {
+        const count = (invocations: string[]) => {
+            const sim = back(invocations, 1);
+            meet(sim);
+            const life = sim.offer!.options.find(
+                (o) => o.kind === "bundle" && o.bundleId === "life",
             )!;
-            expect(supply.effect.kind).not.toBe("heal");
+            return life.kind === "bundle" ? life.items : [];
+        };
+        const full = count([]).reduce((n, i) => n + i.count, 0);
+        const less = count(["need_less_help"]);
+        expect(less.reduce((n, i) => n + i.count, 0)).toBeLessThan(full);
+        expect(less.length).toBeGreaterThan(0);
+        for (const item of count(["dehydration"])) {
+            expect(getRaidSupply(item.supplyId).effect.kind).not.toBe("heal");
+        }
+    });
+
+    it("leaves only visitors with a casket to come by in the Tombs", () => {
+        const sim = back([], 0);
+        for (let i = 0; i < 40; i++) {
+            expect(sim["rollRandomEvent"]()!.effect.kind).toBe("casket");
         }
     });
 });

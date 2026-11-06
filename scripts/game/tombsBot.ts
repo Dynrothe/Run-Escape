@@ -3,6 +3,7 @@
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
 import { getItem } from "../../src/game/content/items";
+import { getRaidSupply } from "../../src/game/content/raids";
 import { BA_BA, CRONDIS, HET, WARDENS, ZEBAK } from "../../src/game/content/tombs";
 import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
@@ -186,6 +187,22 @@ export function useItems(sim: Sim): void {
             return;
         }
         const use = item.use.kind;
+        // The Helpful Spirit's supplies: heals when hurt, Tears when poisoned or drained, the
+        // rest once a boss is out
+        if (item.use.kind === "supply") {
+            const effect = getRaidSupply(item.use.supplyId).effect;
+            const boss = sim.enemies.some((enemy) => enemy.boss && !enemy.dead);
+            if (
+                effect.kind === "heal"
+                    ? player.hp < player.maxHp * 0.5
+                    : effect.cures
+                      ? player.poisonEnd !== -1 || sim.debuffs.length > 0
+                      : boss
+            ) {
+                sim.useItem(index);
+            }
+            return;
+        }
         if (
             (use === "heal" && player.hp < player.maxHp * 0.5) ||
             (use === "blast" && near >= 15) ||
@@ -224,9 +241,14 @@ function casketMove(sim: Sim): Point | undefined {
     return best && walkTo(sim, best.x, best.y);
 }
 
-// The Nexus: the next path's door, then the way to the Wardens
+// The Nexus: the Helpful Spirit while it has a bundle for this hero, the next path's door, then
+// the way to the Wardens
 function nexusMove(sim: Sim): Point {
     const tombs = sim.map.tombs!;
+    const self = sim.heroes.find((hero) => hero.player === sim.player)!;
+    if (tombs.spirit && sim.tombsSpiritBundles(self.index) > 0) {
+        return tombs.spirit;
+    }
     const next = PATH_ORDER.map((id) => tombs.paths.find((p) => p.id === id)).find(
         (path) => path?.room && !sim.tombsPathsDone.includes(path.id),
     );
@@ -426,9 +448,10 @@ function apmekenMove(sim: Sim, def: PathRoom): Point {
     return dodging(sim, kite(sim, middle));
 }
 
-// Het: the loose mirrors carried to the spots the beam's way wants (the room's own answer, as a
-// person works it out) and turned there, whatever stops the beam on the way cleaned or mined
-// through, then beside the seal, mining it while the beam holds it open
+// Het: every loose mirror picked up, each set on a spot the beam's way wants (the room's own
+// answer, as a person works it out) and turned there, whatever stops the beam cleaned, each worn
+// barrier's circle stood in till it breaks, then the seal's ring while it's open; out of an Orb
+// of Darkness's line whatever it's doing
 function hetMove(sim: Sim, def: PathRoom): Point {
     const het = sim.tombsRoom!.het!;
     const hero = sim["hero"].index;
@@ -450,6 +473,23 @@ function hetMove(sim: Sim, def: PathRoom): Point {
         }
         return walkAvoiding(sim, x, y, avoid);
     };
+    // Onto a spot or into a circle, and still there
+    const standOn = (at: Point, avoid: Point[]): Point =>
+        Math.hypot(at.x - player.x, at.y - player.y) < 0.3
+            ? { x: 0, y: 0 }
+            : walkHet(at.x, at.y, avoid);
+    // Into a mirror once, stepping back to go in again
+    const bump = (mirror: { x: number; y: number; touching: boolean[] }): Point => {
+        const away = Math.hypot(mirror.x - player.x, mirror.y - player.y) || 1;
+        if (mirror.touching[hero]) {
+            return walkHet(
+                mirror.x + ((player.x - mirror.x) / away) * 2.2,
+                mirror.y + ((player.y - mirror.y) / away) * 2.2,
+                solids(mirror as never),
+            );
+        }
+        return walkHet(mirror.x, mirror.y, solids(mirror as never));
+    };
     // An Orb of Darkness coming at it: out of its line, whatever it was doing
     for (const orb of het.orbs) {
         const speed = Math.hypot(orb.vx, orb.vy) || 1;
@@ -462,108 +502,56 @@ function hetMove(sim: Sim, def: PathRoom): Point {
             return { x: -uy * sign, y: ux * sign };
         }
     }
-    const carried = het.mirrors.find((m) => m.carrier === hero);
-    const wanted = het.solution.filter((want) => !het.mirrors.some((m) => m.spot === want.spot));
-    if (carried) {
-        // Onto a spot the way wants, or any empty one to be rid of it
-        const spot =
-            wanted.length > 0
-                ? het.spots[wanted[0].spot]
-                : het.spots.find((_, i) => !het.mirrors.some((m) => m.spot === i));
-        if (spot) {
-            // Stopped on it, it's set down
-            if (Math.hypot(spot.x - player.x, spot.y - player.y) < 0.3) {
-                return { x: 0, y: 0 };
-            }
-            return walkHet(spot.x, spot.y, solids());
-        }
+    // Every loose mirror, the nearest first
+    const loose = lying
+        .filter((m) => !m.fixed && m.spot === undefined)
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+        )[0];
+    if (loose) {
+        return walkHet(loose.x, loose.y, solids(loose));
     }
-    // Into a mirror on the way that's turned wrong or dirty: once, stepping back between
+    // Each carried onto a spot that wants one
+    const carried = het.mirrors.some((m) => m.carrier === hero);
+    const wanted = het.solution.find((want) => !het.mirrors.some((m) => m.spot === want.spot));
+    if (carried && wanted) {
+        return standOn(het.spots[wanted.spot], solids());
+    }
+    // A mirror on the way turned wrong, or one dirty where the beam stops
     const traced = sim["traceHetBeam"](het, def.het!);
     const end = traced.points[traced.points.length - 1];
-    const stopping = het.mirrors.find(
+    const stopping = lying.find(
         (m) =>
-            m.carrier === undefined &&
             m.dirty &&
             Math.floor(m.x) === Math.floor(end.x) &&
             Math.floor(m.y) === Math.floor(end.y),
     );
     const wrong = het.solution
         .map((want) => ({ want, mirror: het.mirrors.find((m) => m.spot === want.spot) }))
-        .filter(({ want, mirror }) => mirror && (mirror.dirty || mirror.turn !== want.turn))
-        .map(({ mirror }) => mirror!);
-    const fix = stopping ?? wrong[0];
+        .find(({ want, mirror }) => mirror && (mirror.dirty || mirror.turn !== want.turn))?.mirror;
+    const fix = stopping ?? wrong;
     if (fix) {
-        const away = Math.hypot(fix.x - player.x, fix.y - player.y) || 1;
-        if (fix.touching[hero]) {
-            return walkHet(
-                fix.x + ((player.x - fix.x) / away) * 2.2,
-                fix.y + ((player.y - fix.y) / away) * 2.2,
-                solids(fix),
-            );
-        }
-        return walkHet(fix.x, fix.y, solids(fix));
+        return bump(fix);
     }
-    // A loose mirror for a spot that wants one
-    if (wanted.length > 0) {
-        const loose = lying
-            .filter((m) => !m.fixed && m.spot === undefined)
-            .sort(
-                (a, b) =>
-                    Math.hypot(a.x - player.x, a.y - player.y) -
-                    Math.hypot(b.x - player.x, b.y - player.y),
-            )[0];
-        if (loose) {
-            return walkHet(loose.x, loose.y, solids(loose));
-        }
-        // None loose: one set on a spot the way doesn't want, walked into till it lifts ("/",
-        // then "\", then off), stepping back between
-        const spare = lying.find(
-            (m) =>
-                !m.fixed &&
-                m.spot !== undefined &&
-                !het.solution.some((want) => want.spot === m.spot),
-        );
-        if (spare) {
-            const away = Math.hypot(spare.x - player.x, spare.y - player.y) || 1;
-            if (spare.touching[hero]) {
-                return walkHet(
-                    spare.x + ((player.x - spare.x) / away) * 2.2,
-                    spare.y + ((player.y - spare.y) / away) * 2.2,
-                    solids(spare),
-                );
-            }
-            return walkHet(spare.x, spare.y, solids(spare));
-        }
-    }
-    // A worn barrier the beam stops at: stood against, mining
-    const barrier = het.barriers.find(
-        (b) =>
-            b.worn &&
-            Math.floor(b.x) === Math.floor(end.x) &&
-            Math.floor(b.y) === Math.floor(end.y),
-    );
+    // A worn barrier: its circle stood in till it breaks
+    const barrier = het.barriers.find((b) => b.worn && b.stand);
     if (barrier) {
-        const away = Math.hypot(barrier.x - player.x, barrier.y - player.y) || 1;
-        if (away <= 1.2) {
-            return dodging(sim, { x: 0, y: 0 });
-        }
-        return walkHet(
-            barrier.x + ((player.x - barrier.x) / away) * 0.9,
-            barrier.y + ((player.y - barrier.y) / away) * 0.9,
-            solids(barrier),
-        );
+        return standOn(barrier.stand!, solids());
     }
-    // The way's right: beside the seal, mining it whenever it's open
-    const seal = def.het!.seal;
-    const spot = { x: seal.x, y: seal.y - 2 };
+    // The way's right: the nearest tile of the seal's ring, stood in while it's open
+    const ring = [...het.ring].sort(
+        (a, b) =>
+            Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y),
+    )[0];
+    if (!ring) {
+        return { x: 0, y: 0 };
+    }
     if (het.openUntil !== -1) {
-        // Still while it's mined, but out of an orb's or a shot's way
-        return Math.hypot(spot.x - player.x, spot.y - player.y) < 0.5
-            ? dodging(sim, { x: 0, y: 0 })
-            : walkHet(spot.x, spot.y, solids());
+        return standOn(ring, solids());
     }
-    return dodging(sim, kite(sim, spot, 2));
+    return dodging(sim, kite(sim, ring, 1.5));
 }
 
 // Scabaras: a plate stepped on round every other plate on the boards, so none's pressed on the way

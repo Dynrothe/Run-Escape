@@ -792,6 +792,9 @@ export type EventOption =
     | { kind: "supply"; supplyId: string; price: number; sold: boolean }
     // A raid's teleporter: on to this room's boss now
     | { kind: "teleport" }
+    // The Helpful Spirit's bundles (the Tombs of Amascut's): free, one of them taken, its supplies
+    // into the inventory
+    | { kind: "bundle"; bundleId: string; items: { supplyId: string; count: number }[] }
     | { kind: "answer"; itemId: string; correct: boolean };
 
 export type EventOffer = {

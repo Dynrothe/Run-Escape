@@ -2251,6 +2251,7 @@ const Hud = memo(function Hud({
                     <TombsWaveInfo client={client} />
                     <TombsShadowsInfo client={client} />
                     <TombsScabarasInfo client={client} />
+                    <TombsHetInfo client={client} />
                     <TombsCrondisInfo client={client} />
                     <TombsRoarInfo client={client} />
                     <DevGodButton client={client} />
@@ -2420,6 +2421,21 @@ function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | nul
     return (
         <div className="ui-round">
             Water {info.water}: the palm has {info.growth} of {info.goal}
+        </div>
+    );
+}
+
+// The Het room: the mirrors you're holding, and the caster's charge till its beam goes
+function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsHet);
+    if (!info) {
+        return null;
+    }
+    const filled = Math.round(info.charge * 10);
+    return (
+        <div className="ui-round">
+            Mirrors held: {info.held} · Beam {"▰".repeat(filled)}
+            {"▱".repeat(10 - filled)}
         </div>
     );
 }

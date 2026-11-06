@@ -535,7 +535,7 @@ function eventChoice(sim: Sim): number {
     let best = -1;
     let bestPrice = -1;
     options.forEach((option, index) => {
-        if (option.kind === "teleport") {
+        if (option.kind === "teleport" || option.kind === "bundle") {
             return;
         }
         if (option.kind === "answer") {

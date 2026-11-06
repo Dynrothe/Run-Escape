@@ -8,6 +8,7 @@ import {
     PlayerEffectDef,
     RaidSupplyDef,
     RandomEventDef,
+    TombsBundleDef,
     WardensDef,
     WaveDef,
     ZebakDef,
@@ -711,18 +712,18 @@ export function getHetTrickle(wave: number): WaveDef {
 // seconds at orbSpeed tiles a second, hitting for orbDamage, more and quicker with the path
 // level; one that crosses a mirror dirties it. Everything a room's enemies are scaled by
 // (tombsRoomScale) scales the hurt too.
-//  - The way round the seal turns four times: some turns have a fixed mirror, the rest
-//    (placedLeast to placedMost, one more from path level 2) a spot for a loose mirror. There are
-//    movable loose mirrors (OSRS's three), spareSpots more spots, decoys more fixed mirrors, and
-//    walls whole barriers, each more with the path level; wornLeast or one more worn barriers
-//    stand on the way, barrierHp to mine through.
-//  - Walk into a loose mirror to pick it up (one at a time), stop on an empty spot (placeReach
-//    of it) to set it down (facing "/"), into one set down to turn it ("\"), and into it again to
-//    lift it back off.
-//  - Mining: a swing every mine.every seconds against a worn barrier or the open seal, within
-//    mine.reach, for a hit in mine.hits by the hero's Mining (the shop's ranks): OSRS's damage by
-//    level and pickaxe, so the seal (sealHp, more for each of the party) takes three openings
-//    with none, one with the best (eight swings an opening).
+//  - The way round the seal turns four times: some turns have a fixed mirror, turned right, the
+//    rest (placedLeast to placedMost, one more from path level 2) a spot for one of as many loose
+//    mirrors, which glow. walls whole barriers (more with the path level); wornLeast or one more
+//    worn ones stand on the way, each with a glowing circle beside it.
+//  - Walk into a loose mirror to pick it up (as many as you like; the HUD counts them), stop on
+//    an empty spot (placeReach of it) to set one down (facing "/"), for good, and walk into it to
+//    turn it, as often as you like.
+//  - Mining, by standing in a circle (mine.circle of its middle): a worn barrier's breaks after
+//    mine.barrier seconds; the seal's ring, round its mound while it's open, takes a swing every
+//    mine.every seconds for a hit in mine.hits by the hero's Mining (the shop's ranks): OSRS's
+//    damage by level and pickaxe, so the seal (sealHp, more for each of the party) takes three
+//    openings with none, one with the best (eight swings an opening).
 export const HET = {
     beamEvery: 5.4,
     beamShow: 0.8,
@@ -732,16 +733,13 @@ export const HET = {
     sealHp: 119,
     placedLeast: 1,
     placedMost: 3,
-    movable: 3,
-    spareSpots: 2,
     wornLeast: 1,
     walls: 3,
-    barrierHp: 20,
     placeReach: 0.6,
     mine: {
         every: 1.1,
-        // Past the seal's edge (it's solid, and keeps you a step off it)
-        reach: 1.2,
+        circle: 0.6,
+        barrier: 3,
         hits: [
             [5, 7],
             [8, 10],
@@ -761,8 +759,10 @@ export const HET = {
     decoys: 3,
     // Tiles from a mirror's middle that count as walking into it (once, till you step off)
     touchReach: 1,
-    // A set-down spot's mark, a fixed mirror (the loose ones are mirrorLoc), and the barriers:
-    // whole, and worn
+    // A set-down spot's mark, a fixed mirror (the loose ones are mirrorLoc), the barriers (whole,
+    // and worn), and the glowing circle (Verzik's, round the safe spot from her Doom ball) to stand
+    // in, under a loose mirror too
+    circleSpotAnim: 1581,
     spotLoc: 45340,
     fixedLoc: 45455,
     barrierLoc: 45458,
@@ -2957,17 +2957,61 @@ export const TOMBS_POINTS = {
     full: 4 * (500 + 1000) + 500 + 1000 + 1500,
 };
 
-// The Helpful Spirit, in the Nexus after the second path and again after the fourth (Sim's
-// openNextRaidShop): supplies bought with raid points, as the Theatre of Blood's chest's are, the
-// points the party's earned spent (the chest's chance goes by what's earned, not what's left).
-// Need Some Help and the rest leave fewer of them, and Dehydration none that heal.
+// The Helpful Spirit, standing in the Nexus (Sim's stepTombsSpirit): walked up to, it gives each
+// player a bundle of supplies, free, as OSRS's does: once after any two paths, and once more after
+// the other two, before the Wardens. One not taken by the time they go through the next door is
+// gone. The supplies go in the inventory (TOMBS_SUPPLY_ITEMS, items.ts), as many as there's room
+// for; the rest are used at once.
 export const TOMBS_SPIRIT: RandomEventDef = {
     id: "helpful_spirit",
     name: "Helpful Spirit",
     weight: 0,
-    speech: "I can help you on your way. Spend your raid points on supplies.",
+    npcId: 11694,
+    idleSeq: 2906,
+    speech: "Take what you need for the way ahead. Choose one.",
     effect: { kind: "shop", leaveLabel: "Back to the Nexus" },
 };
+
+// Its three bundles, OSRS's Life, Chaos and Power, cut to the inventory's four slots (Life's silk
+// dressings are left out). Need Some Help and the rest leave fewer of each (TOMBS_SPIRIT_SHARE,
+// never an empty bundle), and Dehydration none that heal.
+export const TOMBS_SPIRIT_BUNDLES: TombsBundleDef[] = [
+    {
+        id: "life",
+        name: "Life",
+        description: "Survival: healing, cures and protection.",
+        objId: 27347,
+        contents: [
+            { supplyId: "nectar", count: [3, 3] },
+            { supplyId: "tears_of_elidinis", count: [2, 2] },
+            { supplyId: "blessed_crystal_scarab", count: [1, 2] },
+            { supplyId: "ambrosia", count: [1, 1] },
+        ],
+    },
+    {
+        id: "chaos",
+        name: "Chaos",
+        description: "A gamble between Life and Power.",
+        objId: 27339,
+        contents: [
+            { supplyId: "nectar", count: [1, 4] },
+            { supplyId: "tears_of_elidinis", count: [0, 3] },
+            { supplyId: "smelling_salts", count: [0, 1] },
+            { supplyId: "ambrosia", count: [1, 1], chance: 0.15 },
+            { supplyId: "liquid_adrenaline", count: [1, 1], chance: 0.15 },
+        ],
+    },
+    {
+        id: "power",
+        name: "Power",
+        description: "Pure damage, and speed.",
+        objId: 27343,
+        contents: [
+            { supplyId: "smelling_salts", count: [2, 2] },
+            { supplyId: "liquid_adrenaline", count: [1, 1] },
+        ],
+    },
+];
 
 export const TOMBS_SUPPLIES: RaidSupplyDef[] = [
     {
@@ -3028,11 +3072,11 @@ export const TOMBS_SUPPLIES: RaidSupplyDef[] = [
     },
 ];
 
-// How many of the Spirit's supplies each of its invocations leaves (of all of them)
+// How much of each of the Spirit's bundles each of its invocations leaves
 export const TOMBS_SPIRIT_SHARE: Record<string, number> = {
-    need_some_help: 2 / 3,
-    need_less_help: 1 / 3,
-    no_help_needed: 0.15,
+    need_some_help: 0.66,
+    need_less_help: 0.33,
+    no_help_needed: 0.1,
 };
 
 // The time limit invocations: the raid's clock past this many minutes, and the chest goes by a

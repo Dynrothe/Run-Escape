@@ -532,8 +532,16 @@ function runOnce(seed: number): Outcome {
                     } else if (sim.state === "chest") {
                         // Wears it if it's better, keeps food and the like, as simulate-run's bot
                         sim.resolveChest(chestAction(sim));
+                    } else if (sim.offer?.options.some((o) => o.kind === "bundle")) {
+                        // The Helpful Spirit: its Life bundle, to get through
+                        const life = sim.offer.options.findIndex(
+                            (o) => o.kind === "bundle" && o.bundleId === "life",
+                        );
+                        if (!sim.chooseEventOption(life)) {
+                            sim.leaveEvent();
+                        }
                     } else {
-                        // The Helpful Spirit: the dearest supply it can afford, as simulate-run's
+                        // A supply chest: the dearest supply it can afford, as simulate-run's
                         // bot buys
                         const options = sim.offer?.options ?? [];
                         let best = -1;

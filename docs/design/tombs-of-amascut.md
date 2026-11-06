@@ -41,8 +41,9 @@ the map screen's Dev tab, dev server only), and each piece goes in as a pull req
 - **A path**: its puzzle room, then its boss in its real arena, then back to the Nexus.
 - **Rooms grow with the raid**: the third or fourth path done is tougher than the first, so any
   order plays fair (and Walk the Path levels them up further).
-- **The Helpful Spirit**: in the Nexus after two paths and again after four, a supply pick bought
-  with raid points, as the Theatre of Blood's chest is.
+- **The Helpful Spirit**: stands in the Nexus. Walk up to it for a free bundle of supplies, as
+  OSRS's, once after any two paths and once after the other two, before the Wardens.
+- **Random events**: in the raid only a visitor with a casket comes by (Rick Turpentine).
 - **The Wardens**, once all four paths are done, then the chest.
 
 ## 4. Level-ups and gear without timed waves
@@ -62,19 +63,22 @@ The waves no longer run on a clock, but they're still where experience and caske
   baboons unless killed first, volatiles explode into their own pack, venom baboons leave poison
   lanes. In co-op, corrupted teammates gather to be cleansed.
 - **Het** (`HET` in `content/tombs.ts`, `Sim.stepHet`), as OSRS's: the caster statue's beam, to be
-  brought round the seal onto the Shielded statue. Its way turns four times: some turns have a
-  fixed mirror (45455), the rest (1 to 3, one more from path level 2) a marked spot (45340) for
-  one of the loose mirrors (45456, three of them, OSRS's). Walk into a loose mirror to pick it up
-  (one at a time, held over your head), stop on an empty spot to set it down, walk into one set
-  down to turn it, stand still against it to pick it back up. Fixed mirrors stay as they are. Whole
-  barriers (45458) stand about and block the beam; a worn one or two (45462) stand on its way and
-  are mined through by standing against them. More fixed mirrors, spots and barriers with path
-  levels. The beam burns enemies as well as you; Orbs of Darkness cross in straight lines and
-  dirty the mirrors they cross (walk into one to clean it). The beam on the statue opens the seal
-  for 9 seconds, and it's mined, never hit: standing beside it, a swing a second, for OSRS's
-  damage by Mining level and pickaxe, here the shop's Mining (5 to 7 with none, 17 to 19 at its
-  last rank), so the seal (119, more for each of the party) takes three openings with none and
-  one with the best. The HUD counts what's mined of it.
+  brought round the seal onto the Shielded statue. The room's turned so it's walked north, in at
+  the south and out at the north; the caster's in the east alcove and the statue in the west. Its
+  way turns four times: some turns have a fixed mirror (45455), always turned right, the rest (1 to
+  3, one more from path level 2) a marked spot (45340) for one of as many loose mirrors (45456).
+  Loose mirrors glow. Walk into one to pick it up (as many as you like; the HUD counts them), stop
+  on an empty spot to set one down, for good, and walk into one set down to turn it, as often as
+  you like. Whole barriers (45458) stand about and block the beam. A worn one or two (45462) stand
+  on its way, each with a glowing circle beside it: stand in it 3 seconds and it crumbles. The
+  beam burns enemies as well as you. Orbs of Darkness cross in straight lines; in a party they
+  dirty the mirrors they cross (walk into one to clean it). The HUD's bar shows the caster
+  charging. The beam on the statue opens the seal for 9 seconds, and a ring of glowing circles
+  lights up round it: it's mined, never hit, only by those standing in the ring, a swing a
+  second, for OSRS's damage by Mining level and pickaxe, here the shop's Mining (5 to 7 with none,
+  17 to 19 at its last rank), so the seal (119, more for each of the party) takes three openings
+  with none and one with the best. The HUD counts what's mined of it. The circles are Verzik's
+  safe circle (spot animation 1581).
 - **Scabaras.** Three of four puzzles in a random order, then the number tablet, with scarab
   swarms chasing throughout: memory tiles (walk the sequence), Lights Out plates (enemies can knock
   you onto the wrong one), obelisk order (your weapons hit the nearest), and the tablet (walk over
@@ -181,8 +185,8 @@ The raid level's scaling works now, for every invocation (the sim's `hardScale` 
 level's there), and so does what each does besides: the board's "Not in yet" (`comes`) is gone from
 all of them. The time limits (Walk for It to Sprint for It) are on the run's clock, which stops in
 the Nexus: past it, the chest goes by a raid level lower by the drop (`TOMBS_TIME_LIMITS`), and the
-board says so. The Helpful Spirit's three leave two thirds, a third and almost none of its supplies
-(`TOMBS_SPIRIT_SHARE`), and Dehydration none that heal.
+board says so. The Helpful Spirit's three leave 66%, 33% and 10% of each bundle, as OSRS's, never
+an empty one (`TOMBS_SPIRIT_SHARE`), and Dehydration none that heal.
 
 ## 8. Loot
 
@@ -273,8 +277,8 @@ raid's ranges.
 - **The chest's uniques** (`trophies.ts`): Osmumten's fang 26219, Lightbearer 25975, Elidinis'
   ward 25985, the Masori mask, body and chaps 27226/27229/27232, Tumeken's shadow 27277, Tumeken's
   guardian 27352, the thread of Elidinis 27279, the breach of the scarab 27283, the eye of the
-  corruptor 27285, the jewel of the sun 27289 and the jewel of Amascut 30893. The Helpful Spirit's
-  supplies are 27315 to 27347 (`TOMBS_SUPPLIES`).
+  corruptor 27285, the jewel of the sun 27289 and the jewel of Amascut 30893. The Helpful Spirit
+  is NPC 11694 (idle 2906), and its supplies are 27315 to 27347 (`TOMBS_SUPPLIES`).
 - **The Wardens' last floor**: its slabs and rubble 45585 to 45645 (`LocOverrides.ts`).
 - **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455 to 45457, its barriers 45458 to 45464; Zebak's
   waterfall 45398/45399; pillars 45530/45531; pressure plates 45340/45344 and tiles 45356 to 45364;
@@ -543,11 +547,16 @@ raid's ranges.
     - Not in: Divine Projectile (it's about prayer, which the run hasn't got).
 - **The way to the Wardens** (`TombsDef.wardensDoor`): the Nexus's north end, as OSRS's is, open
   once every path's done (it says so before); the dev button still skips there with the best kit.
-- **The Helpful Spirit** (`TOMBS_SPIRIT`, `TOMBS_SUPPLIES`): after the second path and again the
-  fourth, back in the Nexus, each player's turn at its supplies (OSRS's own: Nectar, Silk dressing,
-  Ambrosia, Tears of Elidinis, Liquid adrenaline, Smelling salts, a Blessed crystal scarab), bought
-  with raid points as the Theatre's supply chest's are. What's spent is whole points earned
-  alongside the chest's (`Hero.tombsGross`): spending doesn't lower the chest's chance.
+- **The Helpful Spirit** (`TOMBS_SPIRIT`, `TOMBS_SPIRIT_BUNDLES`, `Sim.stepTombsSpirit`): stands
+  in the Nexus (`TombsDef.spirit`), in a glowing circle while it has something for you. Walked up
+  to, it offers each player OSRS's three bundles, free, one to take: Life (Nectar, Tears of
+  Elidinis, Blessed crystal scarabs, Ambrosia), Chaos (Nectar and Tears, maybe Smelling salts, now
+  and then Ambrosia or Liquid adrenaline) and Power (Smelling salts, Liquid adrenaline). Life's
+  silk dressings are left out, for the inventory's four slots. Once after any two paths, once
+  after the other two; one not taken before the next door is gone. The supplies go in the
+  inventory as items (`TOMBS_SUPPLY_ITEMS`, never in caskets), and any there's no room for are
+  used at once.
+- **Random events**: in the Tombs only those that drop a casket can roll (`Sim.rollRandomEvent`).
 - **Points, the chest and the board** (`TOMBS_POINTS`, `Sim.openTombsChest`, `TombsSummary`):
   each player's points are a puzzle room done (500, everyone in the raid) and each boss's
   hitpoints taken (a path boss 1000, the obelisk 500, the Warden 1000 then 1500), shared by damage
@@ -568,12 +577,13 @@ this map. It only moves, reading the sim as it likes, and imports nothing of Nod
 the dev console can drive the real game with it (`await import("/scripts/game/tombsBot.ts")`, then
 `tombsMove(game.sim)` each tick).
 
-- **The Nexus**: each path's door in turn (the open tile nearest a door set in a wall), then the way
-  to the Wardens. **A room**: through its barrier, then its puzzle; **a boss**: past its line.
+- **The Nexus**: the Helpful Spirit while it has a bundle (Life, its supplies used as a player
+  would: heals when hurt, Tears when poisoned, the rest once a boss is out), each path's door in
+  turn (the open tile nearest a door set in a wall), then the way to the Wardens. **A room**: through its barrier, then its puzzle; **a boss**: past its line.
 - **Apmeken**: stands at each issue till it's fixed, and fights round the room's middle.
-- **Het**: carries the loose mirrors to the spots the beam's way wants (the room's own answer)
-  and turns them there, cleans whatever dirty mirror stops the beam and mines through a worn
-  barrier it stops at, then mines the seal from beside it while it's open; out of an Orb of
+- **Het**: picks up every loose mirror, sets them on the spots the beam's way wants (the room's
+  own answer) and turns them there, cleans whatever dirty mirror stops the beam, stands in a worn
+  barrier's circle till it crumbles, then stands in the seal's ring while it's open; out of an Orb of
   Darkness's line whatever it's doing. It steps off anything solid it's against before finding
   its way round (the tiles round each are walls to its way, its own tile walled in with them).
 - **Scabaras**: the Sequence in order once shown, the fewest Lights out presses, the Addition's
@@ -637,12 +647,12 @@ wipe only starts the room or boss again, and the only revive is the shop's Ring 
 raid, not given back after a wipe). How far each lost run got: paths cleared, then the Wardens'
 phase reached.
 
-| Invo Difficulty | Fresh Account                                  | Mid-game                              | End-game                                                       |
-| --------------- | ---------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| Entry (0-149)   | 7/9 (warrior lost 2: 4 paths, Wardens phase 2) | 8/9 (ranger lost 1: 4 paths, phase 2) | 9/9                                                            |
-| Normal (150+)   | 0/9 (all stuck on their first path's boss)     | 7/9 (lost: 3 paths; 4 paths, phase 2) | 6/9 (lost: 4 paths, phase 2; 2 paths; 1 path)                  |
-| Expert (300+)   | 0/9 (their first path)                         | 0/9 (none past 2 paths)               | 5/9 (wizard 3/3; warrior and ranger 1/3, lost on paths 1 to 3) |
-| Max invo (500)  | 0/9 (their first path)                         | 0/9 (their first path)                | 0/9 (none past 2 paths)                                        |
+| Invo Difficulty | Fresh Account                             | Mid-game                                                     | End-game                                                                  |
+| --------------- | ----------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Entry (0-149)   | 7/9 won (2 lost at the Wardens' phase 2)  | 8/9 won (1 lost at the Wardens' phase 2)                     | 9/9 won                                                                   |
+| Normal (150+)   | 0/9 won (furthest: the first path's boss) | 7/9 won (lost: 1 at 3 of 4 paths, 1 at the Wardens' phase 2) | 6/9 won (lost: 1 at the Wardens' phase 2, 1 at 2 of 4 paths, 1 at 1 of 4) |
+| Expert (300+)   | 0/9 won (furthest: the first path)        | 0/9 won (furthest: 2 of 4 paths)                             | 5/9 won (lost on paths 1 to 3)                                            |
+| Max invo (500)  | 0/9 won (furthest: the first path)        | 0/9 won (furthest: the first path)                           | 0/9 won (furthest: 2 of 4 paths)                                          |
 
 - Fresh account indicates anywhere from zero to a bought skills, but no upgraded armory
 - Mid-game indicates a decent amount of bought skills and mid-gear in armory

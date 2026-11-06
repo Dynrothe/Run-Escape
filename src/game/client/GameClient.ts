@@ -2913,6 +2913,7 @@ export class GameClient implements GameFrameHandler {
                               }
                     : undefined,
             tombsScabaras: sim.scabarasInfo,
+            tombsHet: sim.hetInfo,
             tombsCrondis: sim.crondisInfo,
             tombsRoar:
                 sim.zebakRoarSeconds === undefined ? undefined : Math.ceil(sim.zebakRoarSeconds),

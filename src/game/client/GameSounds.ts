@@ -30,6 +30,7 @@ const USE_SOUNDS: Record<ItemUse["kind"], number> = {
     blast: SOUNDS.chinchompa,
     xp: SOUNDS.lamp,
     revive: SOUNDS.revive,
+    supply: SOUNDS.potion,
 };
 
 // Every sound effect a run can play, to synthesize up front
