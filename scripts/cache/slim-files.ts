@@ -54,16 +54,27 @@ export function pruneChunks(dir: string, files: string[]): void {
     }
 }
 
-// Trace runtime imports without executing the loaders or writing a bundle.
-// The lockfile covers external packages; release metadata doesn't decide which assets they read.
+// A hash of what these entry points run: every file esbuild traces from their
+// imports (without running them or writing a bundle), what it makes of them, these
+// files, the packages' settings and salt. The lockfile covers external packages;
+// release metadata doesn't decide which assets they read.
 export async function hashInputs(
     entryPoints: string[],
     files: string[],
     salt: string,
 ): Promise<string> {
+    return (await hashInputSets([entryPoints], files, salt))[0];
+}
+
+// The same for several sets of entry points, from one esbuild run
+export async function hashInputSets(
+    entrySets: string[][],
+    files: string[],
+    salt: string,
+): Promise<string[]> {
     const result = await build({
         absWorkingDir: process.cwd(),
-        entryPoints,
+        entryPoints: [...new Set(entrySets.flat())],
         bundle: true,
         write: false,
         metafile: true,
@@ -72,6 +83,8 @@ export async function hashInputs(
         packages: "external",
         treeShaking: false,
         outdir: "slim-inputs",
+        // Each output's path, which is hashed, mustn't depend on the other entry points
+        outbase: ".",
         logLevel: "silent",
     });
     if (result.warnings.length > 0) {
@@ -97,21 +110,35 @@ export async function hashInputs(
     );
     const relative = (file: string) =>
         path.relative(process.cwd(), path.resolve(file)).split(path.sep).join("/");
-    // esbuild keeps URL suffixes in its input names, but they're not part of the file on disk.
-    const all = new Set(
-        [...files, ...Object.keys(result.metafile.inputs).map((file) => file.split(/[?#]/)[0])].map(
-            relative,
-        ),
-    );
-    const hash = createHash("sha256").update(JSON.stringify({ salt, packageInputs }));
-    for (const file of [...all].sort()) {
-        hash.update(file).update("\0").update(fs.readFileSync(file)).update("\0");
-    }
-    // Also capture transforms from inherited/nested tsconfigs, which aren't metafile inputs.
-    for (const output of result.outputFiles.sort((a, b) => a.path.localeCompare(b.path))) {
-        hash.update(relative(output.path)).update("\0").update(output.contents).update("\0");
-    }
-    return hash.digest("hex");
+    const contents = new Map(result.outputFiles.map((output) => [relative(output.path), output]));
+    const outputs = Object.entries(result.metafile.outputs).map(([file, output]) => ({
+        file: relative(file),
+        entryPoint: output.entryPoint === undefined ? undefined : relative(output.entryPoint),
+        inputs: Object.keys(output.inputs),
+    }));
+    return entrySets.map((entryPoints) => {
+        const wanted = new Set(entryPoints.map(relative));
+        const mine = outputs
+            .filter((output) => output.entryPoint !== undefined && wanted.has(output.entryPoint))
+            .sort((a, b) => a.file.localeCompare(b.file));
+        // esbuild keeps URL suffixes in its input names, but they're not part of the file on disk.
+        const all = new Set(
+            [
+                ...files,
+                ...mine.flatMap((output) => output.inputs).map((file) => file.split(/[?#]/)[0]),
+            ].map(relative),
+        );
+        const hash = createHash("sha256").update(JSON.stringify({ salt, packageInputs }));
+        for (const file of [...all].sort()) {
+            hash.update(file).update("\0").update(fs.readFileSync(file)).update("\0");
+        }
+        // Also capture transforms from inherited/nested tsconfigs, which aren't metafile inputs.
+        for (const output of mine) {
+            hash.update(output.file).update("\0").update(contents.get(output.file)!.contents);
+            hash.update("\0");
+        }
+        return hash.digest("hex");
+    });
 }
 
 type Stored = { inputs: string; info: CacheInfo };

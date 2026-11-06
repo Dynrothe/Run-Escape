@@ -2,23 +2,22 @@
 // reads, in chunks (src/rs/cache/ChunkedCache.ts), so a first visit downloads a
 // few MB instead of the whole cache, and an update only the chunks that changed.
 //
-// What the game reads is found by loading what it loads, with its own loaders
-// (slim-plan.ts resolves inputs; slim-load.ts executes them): textures, models (enemies, spot
-// animations, pickups and power-ups, the player in every outfit and every
-// wearable item), its sounds and sprites, an icon for every item in the
-// content, and each map's arena with the map squares around it. The chunks are
-// written to the out dir and read back, and every group has to come out of them
-// as it went in. Then it all gets loaded again from those chunks, and a group
-// that's missing fails the script. Both loads run in worker threads, a unit (a
-// map, a batch of bakes) at a time. A checked run also keeps each unit's reads,
-// so a content change extracts only units whose resolved inputs changed.
+// What the game reads is found by loading what it loads, with its own loaders:
+// textures, models (enemies, spot animations, pickups and power-ups, the player
+// in every outfit and every wearable item), its sounds and sprites, an icon for
+// every item in the content, and each map's arena with the map squares around
+// it. slim-plan.ts splits that into units (a map, a batch of bakes) and
+// slim-load.ts loads them, in worker threads. The chunks are written to the out
+// dir and read back, and every group has to come out of them as it went in.
+// Then it all gets loaded again from those chunks, and a group that's missing
+// fails the script.
 //
 //   bun run tsx scripts/cache/slim-cache.ts [out dir]
 //
 //   SLIM_WORKERS=n    worker threads, each holding a copy of the full cache;
 //                     the cores less one, up to 4, unless it's set
 //   SLIM_CHECK=0      skip loading it again from the slim cache (local runs only)
-//   SLIM_REUSE=0      do both full-cache extraction and validation, without reusing unit reads
+//   SLIM_REUSE=0      load it all, reusing neither the last run nor its units
 //
 // The out dir (dist/caches by default, so run it after the build) gets the
 // chunks in chunks/, each named after its sha256, and a caches.json listing
@@ -26,7 +25,9 @@
 // another build's. The same cache and content always give the same chunks.
 // Make it again after every build. A checked run is kept in caches/slim/, and
 // when its runtime dependencies, configuration and full cache haven't changed,
-// the next run reuses it rather than loading it all.
+// the next run reuses it rather than loading it all. When they have, it keeps
+// what each unit read, and the next run loads only the units whose own inputs
+// changed (slim-unit-cache.ts).
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -49,17 +50,16 @@ import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
 import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
 import { loadCache, loadCacheInfos } from "./load-util";
 import type { WorkerData, WorkerReply } from "./slim-cache-worker";
-import { findReusable, hashInputs, pruneChunks, storeRun, writeChunks } from "./slim-files";
+import { findReusable, hashInputSets, pruneChunks, storeRun, writeChunks } from "./slim-files";
 import type { SlimUnit } from "./slim-plan";
 import {
     UnitReads,
+    checkUnitIds,
     mergeUnitReads,
     reusableUnitReads,
     storeUnitReads,
     unitId,
 } from "./slim-unit-cache";
-
-const readGroup = MemoryStore.prototype.read;
 
 const outDir = (process.argv[2] ?? "dist/caches").replace(/\/?$/, "/");
 const chunkDir = outDir + CHUNK_DIR;
@@ -185,7 +185,7 @@ function readGroups(full: CacheFiles, keys: string[]): { groups: CacheGroup[]; a
             absent.push(key);
             continue;
         }
-        const data = readGroup.call(store, indexId, archiveId);
+        const data = store.read(indexId, archiveId);
         groups.push({
             indexId,
             archiveId,
@@ -217,30 +217,42 @@ function readBuildId(): string | undefined {
     }
 }
 
-// The extraction pipeline's runtime imports, configuration and full cache
-// (its listing, keys and file lengths, which change when a download fills one in).
+// What the slim cache is made from, as three fingerprints, from the runtime
+// imports esbuild traces, the configuration and the full cache (its listing,
+// keys and file lengths, which change when a download fills one in):
+// - run: the whole script, for reusing the last run as it is
+// - units: what any unit's reads depend on besides its own inputs (the workers'
+//   code), for reusing units
+// - recipes: ScapeRune's recipe code, which the workers import by address, part
+//   of the inputs of each map with a recipe (slim-plan.ts)
 // Undefined, with a warning, if one can't be read: then the run is neither
 // reused nor kept.
-async function hashSlimInputs(
-    fullInfo: CacheInfo,
-    entryPoints = [
-        "scripts/cache/slim-cache.ts",
-        // Worker entry points are passed through URLs and workerData, not static imports.
-        "scripts/cache/slim-cache-worker.ts",
-        "scripts/cache/slim-cache-boot.mjs",
-    ],
-): Promise<string | undefined> {
+type SlimInputs = { run: string; units: string; recipes: string };
+
+async function hashSlimInputs(fullInfo: CacheInfo): Promise<SlimInputs | undefined> {
     const cacheDir = `caches/${GAME_CACHE_NAME}/`;
+    // Worker entry points are passed through URLs and workerData, not static imports.
+    const workers = ["scripts/cache/slim-cache-worker.ts", "scripts/cache/slim-cache-boot.mjs"];
     try {
         const cacheFiles = fs
             .readdirSync(cacheDir)
             .sort()
             .map((file) => [file, fs.statSync(cacheDir + file).size]);
-        return await hashInputs(
-            entryPoints,
+        const [run, units, recipes] = await hashInputSets(
+            [
+                ["scripts/cache/slim-cache.ts", ...workers],
+                [...workers, "scripts/cache/slim-unit-cache.ts"],
+                ["src/game/scaperune/squares.ts"],
+            ],
             ["bun.lock", "tsconfig.json", cacheDir + "info.json", cacheDir + "keys.json"],
-            JSON.stringify({ cache: fullInfo, files: cacheFiles }),
+            JSON.stringify({
+                cache: fullInfo,
+                files: cacheFiles,
+                // It adds ScapeRune's dev maps to the content (content/maps.ts)
+                devMaps: process.env.DEV_MAPS === "1",
+            }),
         );
+        return { run, units, recipes };
     } catch (e) {
         console.warn(`Couldn't hash what the slim cache is made from, so it's not reused: ${e}`);
         return undefined;
@@ -322,34 +334,97 @@ function checkGroups(full: CacheFiles, info: CacheInfo, written: Uint8Array[], k
     const slim = MemoryStore.fromFiles(assembleChunkedCache(info, written, false).files);
     const fullStore = MemoryStore.fromFiles(full);
     for (const [indexId, archiveId] of keys.map(parseKey)) {
-        const expected = readGroup.call(fullStore, indexId, archiveId);
-        const actual = readGroup.call(slim, indexId, archiveId);
+        const expected = fullStore.read(indexId, archiveId);
+        const actual = slim.read(indexId, archiveId);
         if (Buffer.compare(Buffer.from(expected), Buffer.from(actual)) !== 0) {
             throw new Error(`Group ${indexId}:${archiveId} was written wrong`);
         }
     }
 }
 
-// Loads what the game loads again, from the chunks in the out dir, and fails if
-// that reads a group the full cache has and the slim one doesn't
+type SlimCache = { info: CacheInfo; files: string[]; chunks: Uint8Array[]; keys: string[] };
+
+// Packs the groups the units read into chunks, writes them to the out dir and
+// reads them back
+async function makeSlimCache(
+    fullInfo: CacheInfo,
+    full: CacheFiles,
+    results: UnitReads,
+    build: string | undefined,
+): Promise<SlimCache> {
+    const reads = mergeUnitReads(results);
+    const metaEntries = full.files.get(CacheFiles.META_FILE_NAME)!.byteLength;
+    for (let indexId = 0; indexId < metaEntries / SectorCluster.SIZE; indexId++) {
+        // The reference tables, for every index there is
+        if (getGroupSize(full, CacheIndex.META_INDEX_ID, indexId) > 0) {
+            reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
+        }
+    }
+    const sorted = [...reads].sort((a, b) => {
+        const [indexA, archiveA] = parseKey(a);
+        const [indexB, archiveB] = parseKey(b);
+        return indexA - indexB || archiveA - archiveB;
+    });
+    const { groups, absent } = readGroups(full, sorted);
+    const keys = groups.map((group) => group.indexId + ":" + group.archiveId);
+    printSummary(full, keys);
+    if (absent.length > 0) {
+        // The loaders went on without them. A download of the same cache with
+        // them would give a different slim cache.
+        console.warn(
+            `${absent.length} groups the game asked for aren't in ${GAME_CACHE_NAME}: ` +
+                absent.slice(0, 20).join(", ") +
+                (absent.length > 20 ? ", ..." : ""),
+        );
+    }
+    const chunks = packChunks(groups);
+    const files = await Promise.all(chunks.map(getChunkFileName));
+    const indexSizes = getIndexSizes(full);
+    const xteas: Record<string, number[]> = JSON.parse(
+        fs.readFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, "utf8"),
+    );
+    // Named after what's in it, not the build, so it's the same wherever it's made
+    const hash = createHash("sha256")
+        .update(JSON.stringify({ files, indexSizes, xteas }))
+        .digest("hex");
+    // The build goes last, where a reused run puts it, so both write the same caches.json
+    const info: CacheInfo = {
+        ...fullInfo,
+        name: `${GAME_CACHE_NAME}-slim-${hash.slice(0, 8)}`,
+        size: chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0),
+        slimOf: GAME_CACHE_NAME,
+        indexSizes,
+        xteas,
+        chunks: files.map((file, i) => ({ file, size: chunks[i].byteLength })),
+        build,
+    };
+    // Until caches.json is written, the out dir still says to load the chunks it had
+    const written = await writeShippedChunks(files, chunks);
+    checkGroups(full, info, written, keys);
+    return { info, files, chunks, keys };
+}
+
+// Loads what the game loads again, from the chunks in the out dir. Gives back
+// what each unit read, and the groups read that the full cache has and the
+// slim one doesn't.
 async function checkSlimCache(
     full: CacheFiles,
-    info: CacheInfo,
-    keys: string[],
+    slim: SlimCache,
     pass: Pass,
-): Promise<void> {
-    const reads = mergeUnitReads(
-        await runPass("Loaded it again from the slim cache", { info, chunkDir }, pass),
+): Promise<{ reads: UnitReads; missing: string[] }> {
+    console.log(`Checking ${slim.info.name}...`);
+    const reads = await runPass(
+        "Loaded it again from the slim cache",
+        { info: slim.info, chunkDir },
+        pass,
     );
-    const kept = new Set(keys);
+    const kept = new Set(slim.keys);
     // Including reads whose error a loader caught and went on from
-    const missing = [...reads].filter((key) => {
+    const missing = [...mergeUnitReads(reads)].filter((key) => {
         const [indexId, archiveId] = parseKey(key);
         return !kept.has(key) && getGroupSize(full, indexId, archiveId) > 0;
     });
-    if (missing.length > 0) {
-        throw new Error(`Missing from the slim cache: ${missing.join(", ")}`);
-    }
+    return { reads, missing };
 }
 
 async function main(): Promise<void> {
@@ -368,7 +443,7 @@ async function main(): Promise<void> {
     }
 
     const inputs = await hashSlimInputs(fullInfo);
-    const reusable = REUSE && inputs ? await findReusable(STORE_DIR, inputs) : undefined;
+    const reusable = REUSE && inputs ? await findReusable(STORE_DIR, inputs.run) : undefined;
     if (reusable) {
         const info: CacheInfo = { ...reusable, build };
         const files = reusable.chunks!.map((chunk) => chunk.file);
@@ -387,97 +462,64 @@ async function main(): Promise<void> {
 
     // The game's content and loaders, only when there's loading to do
     const { describeUnit, getSlimUnits } = await import("./slim-plan");
-    const pass: Pass = { workers, units: getSlimUnits(), describe: describeUnit };
-    // Planner/content changes are represented by each resolved unit's payload.
-    // Shared loader/recipe code, dependencies and cache changes invalidate every unit.
-    const unitInputs = inputs
-        ? await hashSlimInputs(fullInfo, [
-              "scripts/cache/slim-cache-worker.ts",
-              "scripts/cache/slim-cache-boot.mjs",
-              "scripts/cache/slim-unit-cache.ts",
-          ])
-        : undefined;
-    const results =
-        REUSE && unitInputs
-            ? reusableUnitReads(STORE_DIR, unitInputs, pass.units)
-            : new Map<string, string[]>();
-    const pending = pass.units.filter((unit) => !results.has(unitId(unit)));
-    console.log(`Reused extraction results for ${results.size} / ${pass.units.length} units`);
+    // Without fingerprints nothing is reused or kept, so the recipes' doesn't matter
+    const units = getSlimUnits(inputs?.recipes ?? "");
+    checkUnitIds(units);
+    const pass: Pass = { workers, units, describe: describeUnit };
+    const reused: UnitReads =
+        REUSE && inputs ? reusableUnitReads(STORE_DIR, inputs.units, units) : new Map();
+    console.log(`Reused what ${reused.size} of ${units.length} units read last time`);
     const full = loadCache(fullInfo);
-    console.log(`Loading what the game loads from ${GAME_CACHE_NAME}...`);
-    const extracted = await runPass(
-        "Loaded what the game loads",
-        { info: fullInfo },
-        { ...pass, units: pending },
-    );
-    for (const [id, reads] of extracted) {
-        results.set(id, reads);
-    }
-    const reads = mergeUnitReads(results);
-    const metaEntries = full.files.files.get(CacheFiles.META_FILE_NAME)!.byteLength;
-    for (let indexId = 0; indexId < metaEntries / SectorCluster.SIZE; indexId++) {
-        // The reference tables, for every index there is
-        if (getGroupSize(full.files, CacheIndex.META_INDEX_ID, indexId) > 0) {
-            reads.add(CacheIndex.META_INDEX_ID + ":" + indexId);
-        }
-    }
-    const sorted = [...reads].sort((a, b) => {
-        const [indexA, archiveA] = parseKey(a);
-        const [indexB, archiveB] = parseKey(b);
-        return indexA - indexB || archiveA - archiveB;
-    });
-    const { groups, absent } = readGroups(full.files, sorted);
-    const keys = groups.map((group) => group.indexId + ":" + group.archiveId);
-    printSummary(full.files, keys);
-    if (absent.length > 0) {
-        // The loaders went on without them. A download of the same cache with
-        // them would give a different slim cache.
-        console.warn(
-            `${absent.length} groups the game asked for aren't in ${GAME_CACHE_NAME}: ` +
-                absent.slice(0, 20).join(", ") +
-                (absent.length > 20 ? ", ..." : ""),
-        );
-    }
-    const chunks = packChunks(groups);
-    const files = await Promise.all(chunks.map(getChunkFileName));
-    const indexSizes = getIndexSizes(full.files);
-    const xteas: Record<string, number[]> = JSON.parse(
-        fs.readFileSync(`./caches/${GAME_CACHE_NAME}/keys.json`, "utf8"),
-    );
-    // Named after what's in it, not the build, so it's the same wherever it's made
-    const hash = createHash("sha256")
-        .update(JSON.stringify({ files, indexSizes, xteas }))
-        .digest("hex");
-    const name = `${GAME_CACHE_NAME}-slim-${hash.slice(0, 8)}`;
-    const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-    // The build goes last, where a reused run puts it, so both write the same caches.json
-    const info: CacheInfo = {
-        ...fullInfo,
-        name,
-        size,
-        slimOf: GAME_CACHE_NAME,
-        indexSizes,
-        xteas,
-        chunks: files.map((file, i) => ({ file, size: chunks[i].byteLength })),
-        build,
+    const extract = (only: SlimUnit[]) => {
+        console.log(`Loading what the game loads from ${GAME_CACHE_NAME}...`);
+        return runPass("Loaded what the game loads", { info: fullInfo }, { ...pass, units: only });
     };
+    const extracted = await extract(units.filter((unit) => !reused.has(unitId(unit))));
+    let slim = await makeSlimCache(fullInfo, full.files, new Map([...reused, ...extracted]), build);
 
-    // Until caches.json is written, the out dir still says to load the chunks it had
-    const written = await writeShippedChunks(files, chunks);
-    checkGroups(full.files, info, written, keys);
+    // What each unit read from the checked slim cache, to keep for the next run
+    let checked: UnitReads | undefined;
     if (CHECK) {
-        console.log(`Checking ${name}...`);
-        await checkSlimCache(full.files, info, keys, pass);
+        // A loader that doesn't catch a missing group stops the check instead
+        let check = await checkSlimCache(full.files, slim, pass).catch((error: unknown) => ({
+            error,
+        }));
+        if (reused.size > 0 && ("error" in check || check.missing.length > 0)) {
+            // Something changed that the fingerprints don't cover, so reused
+            // reads can be short: load those units again rather than stop
+            console.warn(
+                ("error" in check
+                    ? `The check failed: ${check.error instanceof Error ? check.error.message : check.error}`
+                    : `Missing from the slim cache: ${check.missing.join(", ")}`) +
+                    `\nLoading the ${reused.size} reused units again...`,
+            );
+            const again = await extract(units.filter((unit) => reused.has(unitId(unit))));
+            slim = await makeSlimCache(
+                fullInfo,
+                full.files,
+                new Map([...extracted, ...again]),
+                build,
+            );
+            check = await checkSlimCache(full.files, slim, pass);
+        }
+        if ("error" in check) {
+            throw check.error;
+        }
+        if (check.missing.length > 0) {
+            throw new Error(`Missing from the slim cache: ${check.missing.join(", ")}`);
+        }
+        checked = check.reads;
     } else {
         console.warn("SLIM_CHECK=0: not loaded again from the slim cache, and not kept for reuse");
     }
-    finishPublish(info, files);
-    if (CHECK && inputs) {
+    finishPublish(slim.info, slim.files);
+    if (checked && inputs) {
         try {
-            storeRun(STORE_DIR, inputs, info, files, chunks);
-            if (unitInputs) {
-                storeUnitReads(STORE_DIR, unitInputs, pass.units, results);
-            }
+            storeRun(STORE_DIR, inputs.run, slim.info, slim.files, slim.chunks);
+            // With nothing missing, each unit read the same from the slim cache as
+            // from the full one, and these were checked unit by unit, so a short
+            // read list reused this time isn't kept
+            storeUnitReads(STORE_DIR, inputs.units, units, checked);
         } catch (e) {
             console.warn(`Couldn't keep this run in ${STORE_DIR} for the next to reuse: ${e}`);
         }
@@ -485,8 +527,8 @@ async function main(): Promise<void> {
 
     const seconds = ((performance.now() - started) / 1000).toFixed(0);
     console.log(
-        `Wrote ${outDir}caches.json: ${name}, ${files.length} chunks ` +
-            `(${formatMb(size).trim()}), for build ${build ?? "(none)"}, in ${seconds}s`,
+        `Wrote ${outDir}caches.json: ${slim.info.name}, ${slim.files.length} chunks ` +
+            `(${formatMb(slim.info.size).trim()}), for build ${build ?? "(none)"}, in ${seconds}s`,
     );
 }
 

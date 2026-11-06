@@ -24,8 +24,8 @@ the version in the corner).
   told an integrity check failed.
 - Cheat checks on co-op relays, by trippy22: a relay can note a run its checks flag, with no
   names, whether or not Share run stats is on. The setting now says so.
-- Game updates, by @braiansmarzaro: preparing unchanged game assets can now skip rebuilding them after interface-only changes.
-- Game updates, by @braiansmarzaro: preparing changed assets now reuses unchanged maps and asset groups.
+- Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
+  game's cache again.
 
 ### Fixed
 

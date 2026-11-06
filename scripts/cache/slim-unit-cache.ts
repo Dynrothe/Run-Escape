@@ -1,3 +1,6 @@
+// The groups each unit of slim-cache.ts's plan read in the last checked run, in
+// caches/slim/units.json, so a run whose whole fingerprint changed still loads
+// only the units whose own inputs changed
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,14 +18,30 @@ const fingerprint = (inputs: string, unit: SlimUnit) => digest({ inputs, unit })
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
 
+// Batches are named after their first key (slim-plan.ts's batchByKey), not
+// their place, so one's name lasts while its requests do
 export function unitId(unit: SlimUnit): string {
     switch (unit.kind) {
         case "map":
             return `map:${unit.id}`;
         case "bake":
-            return `bake:${unit.group}:${unit.from}`;
+            return `bake:${unit.group}:${unit.requests[0].key}`;
+        case "icons":
+            return `icons:${unit.objIds[0]}`;
         default:
             return unit.kind;
+    }
+}
+
+// Two units with one name would lose one's reads, so a plan with them stops
+export function checkUnitIds(units: SlimUnit[]): void {
+    const seen = new Set<string>();
+    for (const unit of units) {
+        const id = unitId(unit);
+        if (seen.has(id)) {
+            throw new Error(`Two extraction units are both ${id}`);
+        }
+        seen.add(id);
     }
 }
 

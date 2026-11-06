@@ -4,16 +4,26 @@ import path from "node:path";
 
 import { hashInputs } from "./slim-files";
 import type { SlimUnit } from "./slim-plan";
-import { mergeUnitReads, reusableUnitReads, storeUnitReads, unitId } from "./slim-unit-cache";
+import {
+    checkUnitIds,
+    mergeUnitReads,
+    reusableUnitReads,
+    storeUnitReads,
+    unitId,
+} from "./slim-unit-cache";
 
 let dir: string;
 const units: SlimUnit[] = [
     { kind: "map", id: "one", region: { baseX: 3200, baseY: 3200, sizeX: 8, sizeY: 8 } },
-    { kind: "map", id: "two", region: { baseX: 3264, baseY: 3200, sizeX: 8, sizeY: 8 } },
+    {
+        kind: "map",
+        id: "two",
+        region: { baseX: 3264, baseY: 3200, sizeX: 8, sizeY: 8 },
+        recipe: "recipes-1",
+    },
     {
         kind: "bake",
         group: "base",
-        from: 0,
         requests: [{ kind: "obj", key: "ring", objId: 2570, count: 1 }],
     },
     { kind: "sounds", ids: [1] },
@@ -62,9 +72,24 @@ test.each([0, 1, 2, 3, 4, 5])("invalidates only changed payload %i", (index) => 
     expect([...reused.keys()]).toEqual(units.filter((_, i) => i !== index).map(unitId));
 });
 
-test("shared loader, recipe, dependency or full-cache changes invalidate all units", () => {
+test("a change to ScapeRune's recipes invalidates only the maps that have one", () => {
+    storeUnitReads(dir, "runtime-and-cache", units, results());
+    const changed = structuredClone(units);
+    (changed[1] as Extract<SlimUnit, { kind: "map" }>).recipe = "recipes-2";
+    const reused = reusableUnitReads(dir, "runtime-and-cache", changed);
+    expect([...reused.keys()]).toEqual(units.filter((_, i) => i !== 1).map(unitId));
+});
+
+test("shared loader, dependency or full-cache changes invalidate all units", () => {
     storeUnitReads(dir, "runtime-and-cache", units, results());
     expect(reusableUnitReads(dir, "changed-runtime-or-cache", units).size).toBe(0);
+});
+
+test("a plan with two units of one name stops", () => {
+    expect(() => checkUnitIds(units)).not.toThrow();
+    expect(() => checkUnitIds([...units, { kind: "icons", objIds: [2570, 1] }])).toThrow(
+        "icons:2570",
+    );
 });
 
 test("new units miss, removed units disappear, and scheduling order doesn't matter", () => {
@@ -146,10 +171,15 @@ test("the execution fingerprint excludes the planner and content resolved into p
     );
     const files = read.mock.calls.map(([file]) => String(file));
     expect(files).toContain("scripts/cache/slim-load.ts");
+    expect(files).toContain("scripts/cache/slim-squares.ts");
     expect(files).toContain("src/rs/scene/SceneBuilder.ts");
-    expect(files).toContain("src/game/scaperune/squares.ts");
     expect(files).not.toContain("scripts/cache/slim-plan.ts");
     expect(files).not.toContain("src/game/content/weapons.ts");
     expect(files).not.toContain("src/game/content/items.ts");
     expect(files).not.toContain("src/game/content/maps.ts");
+    // The recipes have their own fingerprint, in their maps' inputs
+    expect(files).not.toContain("src/game/scaperune/squares.ts");
+    expect(files).not.toContain("src/game/content/waves.ts");
+    expect(files).not.toContain("src/game/content/phosani.ts");
+    expect(files.filter((file) => file.startsWith("src/game/"))).toEqual([]);
 }, 30000);

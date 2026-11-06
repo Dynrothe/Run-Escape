@@ -1,5 +1,10 @@
-// Resolve content into the exact inputs each extraction unit will load.
-// Workers don't import this module: content changes invalidate only changed payloads.
+// What slim-cache.ts loads to find out which groups the game reads, resolved
+// from the content into plain units that can run apart (in worker threads,
+// slim-load.ts): each map, batches of bakes and of item icons, and the textures,
+// sounds and sprites. Workers don't import this, so a content change only
+// changes the units whose inputs it changes, and only those are loaded again.
+import { createHash } from "node:crypto";
+
 import {
     GameAssets,
     PICKUP_OBJS,
@@ -24,6 +29,7 @@ import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
+import { getRecipe } from "../../src/game/scaperune/squares";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
 import { RegionDataInput } from "../../src/mapviewer/worker/RegionData";
 import {
@@ -31,17 +37,22 @@ import {
     PlayerAppearance,
     createAppearance,
 } from "../../src/rs/model/player/PlayerModelLoader";
-import { MAP_MARGIN, getMapSquares } from "./slim-load";
+import { MAP_MARGIN, getMapSquares } from "./slim-squares";
 
-// Bake requests to put through one buffer
+// The most bake requests put through one buffer. The game bakes a map's worth
+// at a time: everything in one buffer is more than an array can hold (Invalid
+// array length).
 const BAKE_BATCH = 25;
+// Icons fill no buffer, so their batches can be bigger
+const ICON_BATCH = 64;
 
 type BakeGroup = "base" | "enemies" | "pets" | "players";
 
-// A piece of what the game loads. Plain data, to be sent to a worker.
+// A piece of what the game loads. Plain data, to be sent to a worker. A map
+// with a ScapeRune recipe carries the fingerprint of the recipes' code.
 export type SlimUnit =
-    | { kind: "map"; id: string; region: RegionDataInput }
-    | { kind: "bake"; group: BakeGroup; from: number; requests: BakeRequest[] }
+    | { kind: "map"; id: string; region: RegionDataInput; recipe?: string }
+    | { kind: "bake"; group: BakeGroup; requests: BakeRequest[] }
     | { kind: "textures" }
     | { kind: "sounds"; ids: number[] }
     | { kind: "sprites"; ids: number[] }
@@ -52,10 +63,42 @@ export function describeUnit(unit: SlimUnit): string {
         case "map":
             return `map ${unit.id}`;
         case "bake":
-            return `${unit.group} bakes from ${unit.from}`;
+            return `${unit.group} bakes from ${unit.requests[0].key}`;
+        case "icons":
+            return `icons from ${unit.objIds[0]}`;
         default:
             return unit.kind;
     }
+}
+
+// Cuts items into batches by their keys rather than their places in the
+// content, so that adding or taking out one changes only the batch it's in (or
+// two, at a full one), and every other batch's reads are reused. They're sorted
+// by a hash of the key, and a batch ends after a key whose hash is a multiple
+// of `every`, or when it's full. Items with the same key stay together, so each
+// batch's first key names it.
+export function batchByKey<T>(
+    items: T[],
+    getKey: (item: T) => string,
+    every: number,
+    max: number,
+): T[][] {
+    const keyed = items.map((item) => {
+        const key = getKey(item);
+        return { item, key, hash: createHash("sha256").update(key).digest().readUInt32BE(0) };
+    });
+    keyed.sort((a, b) => a.hash - b.hash || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    const batches: T[][] = [];
+    let batch: T[] = [];
+    keyed.forEach(({ item, key, hash }, i) => {
+        batch.push(item);
+        const next = keyed[i + 1];
+        if (!next || (next.key !== key && (hash % every === 0 || batch.length >= max))) {
+            batches.push(batch);
+            batch = [];
+        }
+    });
+    return batches;
 }
 
 // Every item the player can wear, in its slot: the outfits, held weapons, the
@@ -190,35 +233,39 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
 }
 
 // Everything the game loads, as units: the maps first, biggest first, as they
-// take longest, so that a pool of workers finishes about together
-export function getSlimUnits(): SlimUnit[] {
+// take longest, so that a pool of workers finishes about together. recipes is
+// the fingerprint of ScapeRune's recipe code (slim-cache.ts hashes it), for the
+// maps that have one.
+export function getSlimUnits(recipes: string): SlimUnit[] {
     const squares = (region: RegionDataInput) => {
         const { firstX, firstY, lastX, lastY } = getMapSquares(region);
         return (lastX - firstX + 1 + 2 * MAP_MARGIN) * (lastY - firstY + 1 + 2 * MAP_MARGIN);
     };
-    const maps = ALL_MAPS.map((map): Extract<SlimUnit, { kind: "map" }> => ({
-        kind: "map",
-        id: map.id,
-        region: getArenaRegion(map),
-    })).sort((a, b) => squares(b.region) - squares(a.region));
+    const maps = ALL_MAPS.map(
+        (map): Extract<SlimUnit, { kind: "map" }> => ({
+            kind: "map",
+            id: map.id,
+            region: getArenaRegion(map),
+            ...(getRecipe(map.id) && { recipe: recipes }),
+        }),
+    ).sort((a, b) => squares(b.region) - squares(a.region));
     const bakes: SlimUnit[] = [];
     for (const group of ["enemies", "players", "base", "pets"] as const) {
-        const requests = getBakeRequests(group);
-        for (let from = 0; from < requests.length; from += BAKE_BATCH) {
-            bakes.push({
-                kind: "bake",
-                group,
-                from,
-                requests: requests.slice(from, from + BAKE_BATCH),
-            });
+        // The same request twice reads the same groups
+        const requests = new Map(
+            getBakeRequests(group).map((request) => [JSON.stringify(request), request]),
+        );
+        for (const batch of batchByKey([...requests.values()], (r) => r.key, 16, BAKE_BATCH)) {
+            bakes.push({ kind: "bake", group, requests: batch });
         }
     }
+    const icons = batchByKey(getContentObjIds(), String, 32, ICON_BATCH);
     return [
         ...maps,
         ...bakes,
         { kind: "textures" },
         { kind: "sounds", ids: getGameSoundIds() },
         { kind: "sprites", ids: getGameSpriteIds() },
-        { kind: "icons", objIds: getContentObjIds() },
+        ...icons.map((objIds): SlimUnit => ({ kind: "icons", objIds })),
     ];
 }

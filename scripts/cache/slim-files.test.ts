@@ -6,6 +6,7 @@ import { CacheInfo } from "../../src/rs/cache/CacheInfo";
 import { getChunkFileName } from "../../src/rs/cache/ChunkedCache";
 import {
     findReusable,
+    hashInputSets,
     hashInputs,
     pruneChunks,
     renameWithRetry,
@@ -182,6 +183,22 @@ describe("hashInputs", () => {
             const first = await hash();
             write(file, text);
             expect(await hash()).not.toBe(first);
+        });
+    });
+
+    test("hashes several sets of entry points from one trace, each as on its own", async () => {
+        await project(async () => {
+            const sets = [["src/entry.ts"], ["scripts/worker.ts", "scripts/boot.mjs"], entries];
+            const each = async () => Promise.all(sets.map((set) => hashInputs(set, files, "s")));
+            const first = await hashInputSets(sets, files, "s");
+            expect(first).toEqual(await each());
+            expect(new Set(first).size).toBe(3);
+            // Only the sets that run it change with it
+            write("src/model.ts", "export const asset = 2571;");
+            const changed = await hashInputSets(sets, files, "s");
+            expect(changed[0]).not.toBe(first[0]);
+            expect(changed[1]).toBe(first[1]);
+            expect(changed[2]).not.toBe(first[2]);
         });
     });
 

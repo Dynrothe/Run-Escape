@@ -4,15 +4,21 @@ import path from "node:path";
 import { Worker } from "node:worker_threads";
 
 import { GAME_CACHE_NAME } from "../../src/game/cache";
+import { getRecipe } from "../../src/game/scaperune/squares";
+import { LoadedCache } from "../../src/mapviewer/Caches";
+import { createTypeLoaders } from "../../src/mapviewer/worker/WorkerState";
 import { CacheFiles } from "../../src/rs/cache/CacheFiles";
+import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { CacheGroup, buildCacheFiles, packChunks } from "../../src/rs/cache/ChunkedCache";
+import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
 import { MemoryStore } from "../../src/rs/cache/store/MemoryStore";
 import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
+import { ArchiveTypeLoader } from "../../src/rs/config/TypeLoader";
 import { Hasher } from "../../src/util/Hasher";
 import { loadCache, loadCacheInfos } from "./load-util";
 import type { WorkerReply } from "./slim-cache-worker";
 import { extractUnit } from "./slim-load";
-import { SlimUnit, getSlimUnits } from "./slim-plan";
+import { SlimUnit, batchByKey, getSlimUnits } from "./slim-plan";
 import { mergeUnitReads, reusableUnitReads, storeUnitReads, unitId } from "./slim-unit-cache";
 
 // Vite prefers browser codecs; extraction workers run the Node variants.
@@ -22,24 +28,70 @@ vi.mock("../../src/rs/compression/Bzip2", () =>
 );
 
 test("the plan has unique, serializable payloads and separate asset groups", () => {
-    const units = getSlimUnits();
+    const units = getSlimUnits("recipes");
     expect(new Set(units.map(unitId)).size).toBe(units.length);
     expect(structuredClone(units)).toEqual(units);
     expect(units.filter((unit) => unit.kind === "map").length).toBeGreaterThan(1);
-    for (const kind of ["textures", "sounds", "sprites", "icons"]) {
+    for (const kind of ["textures", "sounds", "sprites"]) {
         expect(units.filter((unit) => unit.kind === kind)).toHaveLength(1);
     }
+    expect(units.filter((unit) => unit.kind === "icons").length).toBeGreaterThan(1);
     for (const unit of units) {
         if (unit.kind === "bake") {
             expect(unit.requests.length).toBeGreaterThan(0);
             expect(unit.requests.length).toBeLessThanOrEqual(25);
         }
+        // Only a ScapeRune map's reads depend on the recipes
+        if (unit.kind === "map") {
+            expect(unit.recipe).toBe(getRecipe(unit.id) ? "recipes" : undefined);
+        }
     }
+});
+
+describe("batchByKey", () => {
+    const keys = Array.from({ length: 500 }, (_, i) => `item-${i}`);
+    const batch = (items: string[]) => batchByKey(items, (key) => key, 16, 25);
+    const changed = (before: string[][], after: string[][]) => {
+        const kept = new Set(before.map((items) => items.join()));
+        return after.filter((items) => !kept.has(items.join())).length;
+    };
+
+    test("keeps every item once, in full batches at most, whatever order they come in", () => {
+        const batches = batch(keys);
+        expect(batches.flat().sort()).toEqual([...keys].sort());
+        expect(Math.max(...batches.map((items) => items.length))).toBeLessThanOrEqual(25);
+        expect(batch([...keys].reverse())).toEqual(batches);
+    });
+
+    test("adding or taking out an item changes only the batches around it", () => {
+        const before = batch(keys);
+        for (const after of [batch([...keys, "item-new"]), batch(keys.slice(1))]) {
+            expect(changed(before, after)).toBeGreaterThan(0);
+            expect(changed(before, after)).toBeLessThanOrEqual(2);
+        }
+    });
+
+    test("keeps items with the same key together", () => {
+        const items = [...keys, ...keys.slice(0, 100)];
+        for (const group of batch(items)) {
+            for (const key of new Set(group)) {
+                expect(group.filter((item) => item === key)).toHaveLength(
+                    items.filter((item) => item === key).length,
+                );
+            }
+        }
+    });
 });
 
 const hasCache = fs.existsSync(`caches/${GAME_CACHE_NAME}/main_file_cache.dat2`);
 
 describe.skipIf(!hasCache)("independent extraction with the game cache", () => {
+    let cache: LoadedCache;
+    beforeAll(async () => {
+        await Hasher.init();
+        cache = loadCache(loadCacheInfos().find((info) => info.name === GAME_CACHE_NAME)!);
+    }, 60000);
+
     const map: SlimUnit = {
         kind: "map",
         id: "lumbridge",
@@ -49,13 +101,10 @@ describe.skipIf(!hasCache)("independent extraction with the game cache", () => {
     const bake: SlimUnit = {
         kind: "bake",
         group: "base",
-        from: 0,
         requests: [{ kind: "obj", key: "bones", objId: 526, count: 1 }],
     };
 
     test("incremental and cold extraction give identical chunks, independent of unit order", async () => {
-        await Hasher.init();
-        const cache = loadCache(loadCacheInfos().find((info) => info.name === GAME_CACHE_NAME)!);
         const extract = async (unit: SlimUnit, from = cache) => {
             const reads = await extractUnit(from, unit);
             // Keep a long cache-backed test responsive on a busy release runner.
@@ -165,12 +214,46 @@ describe.skipIf(!hasCache)("independent extraction with the game cache", () => {
         }
     }, 60000);
 
+    // What lets a worker make them once for every unit
+    test("the type loaders a worker shares read nothing after they're made", () => {
+        const factory = getCacheLoaderFactory(
+            cache.info,
+            CacheSystem.fromFiles(cache.type, cache.files),
+        );
+        const shared = Object.values(createTypeLoaders(factory)).filter(
+            (loader) => loader instanceof ArchiveTypeLoader,
+        );
+        expect(shared.length).toBeGreaterThan(0);
+        const reads: string[] = [];
+        const read = MemoryStore.prototype.read;
+        MemoryStore.prototype.read = function (indexId, archiveId) {
+            reads.push(`${indexId}:${archiveId}`);
+            return read.call(this, indexId, archiveId);
+        };
+        try {
+            for (const loader of shared) {
+                for (let id = 0; id < loader.getCount(); id += 13) {
+                    loader.load(id);
+                }
+            }
+        } finally {
+            MemoryStore.prototype.read = read;
+        }
+        expect(reads).toEqual([]);
+    }, 60000);
+
+    test("extracts one unit at a time", async () => {
+        const first = extractUnit(cache, icons);
+        await expect(extractUnit(cache, icons)).rejects.toThrow("one at a time");
+        expect((await first).length).toBeGreaterThan(0);
+    }, 30000);
+
     test("a failed extraction restores read tracking", async () => {
-        const cache = loadCache(loadCacheInfos().find((info) => info.name === GAME_CACHE_NAME)!);
         const read = MemoryStore.prototype.read;
         await expect(
             extractUnit({ ...cache, files: new CacheFiles(new Map()) }, icons),
         ).rejects.toThrow();
         expect(MemoryStore.prototype.read).toBe(read);
-    });
+        expect((await extractUnit(cache, icons)).length).toBeGreaterThan(0);
+    }, 30000);
 });

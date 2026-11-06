@@ -36,52 +36,55 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
-`scripts/cache/slim-plan.ts` resolves the content into plain inputs: each map's region, batches of
-model requests, and separate texture, sound, sprite and item-icon groups. Workers run those inputs
-through `slim-load.ts`, each holding the full cache. Every unit gets fresh loader state, including
-its initialization reads: a warm model or type cache mustn't hide a dependency on a previous unit,
-and a map mustn't keep an earlier map's ScapeRune squares. Before
-anything's published, the chunks in the out dir are read back, and every group has to come out of
-them as it went in; the check then loads it all from those same chunks.
+`scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
+bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
+full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
+what making them read, so what it reads doesn't depend on what ran before it in that worker: a warm
+model cache would hide a group an earlier unit read, and a map would keep an earlier map's
+ScapeRune squares. The one exception is the config type loaders made from an archive, which take
+a while to make and read nothing after: a worker makes those once, and every unit gets the reads
+that made them. Before anything's published, the chunks in the out dir are read back, and every
+group has to come out of them as it went in; the check then loads it all from those same chunks.
 
-A checked run is kept in `caches/slim/`, and the next one reuses it if its inputs haven't changed.
-esbuild traces runtime imports from `slim-cache.ts`, `slim-cache-worker.ts` and
-`slim-cache-boot.mjs`, without running them or writing a bundle. Their source files and imported
-data count, along with TypeScript transforms, `tsconfig.json`, the full `bun.lock`, package
-dependency/runtime settings, and the full cache's `info.json`, `keys.json` and file sizes.
-Unimported UI, CSS, tests and tools don't count, nor package version, description or scripts.
-The full lockfile is deliberately conservative: any dependency resolution change invalidates reuse.
-New worker entry points or files read outside imports must be included in `hashSlimInputs`.
-If tracing or hashing fails, the script warns and rebuilds without saving a reusable result.
-Chunks still have their hashes checked, and a reused cache gets the current build's metadata.
-This doesn't persist `caches/slim/` between CI jobs; that needs a separate workflow cache.
-Chunks are written under a temporary name and renamed into place (tried again for a few seconds while Windows
-holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
-doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
-registers it.
+A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
+changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
+`slim-cache-boot.mjs` without running them: their files and what esbuild makes of them count, with
+`tsconfig.json`, `bun.lock` (all of it, so any change to the packages counts), the dependency and
+runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`, `keys.json` and
+file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
+version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
+be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
+reused cache still has its chunks' hashes checked and gets the current build. `caches/slim/` isn't
+kept between CI jobs. Chunks are written under a temporary name and renamed into place (tried again
+for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
+chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
+`slim-cache-boot.mjs`, which registers it.
 
-When the whole-run fingerprint changes, `caches/slim/units.json` can still reuse individual
-extraction results. Each entry fingerprints its resolved payload together with the worker/loader
-dependency graph, package/configuration settings and full-cache metadata. Changing one map's
-region or a batch's models invalidates that unit, not the others. Changing a shared loader,
-ScapeRune recipe code, dependency or the full cache conservatively invalidates all units.
-Planner changes that produce identical payloads can reuse their reads. Bake batches are positional,
-so inserting a request can invalidate later batches in that group.
+When something it's made from has changed, `caches/slim/units.json` still has what each unit read
+last time, fingerprinted with the unit's inputs and the workers' code, configuration and full
+cache. Only units without a match are loaded from the full cache, so a content change loads again
+only the units whose inputs it changes. Bakes and icons are batched by a hash of their keys, not
+their places in the content, so adding a weapon or an enemy changes only the batch or two it lands
+in. The workers import ScapeRune's recipes by address, so esbuild doesn't trace them into every
+unit: instead each map with a recipe carries the recipes' own fingerprint, and changing a recipe,
+or the waves and bosses one imports, loads only those maps again. A change to a shared loader, a
+package or the full cache loads every unit again.
 
-Only missing or changed units are extracted from the full cache. Their read lists are merged
-with the reused ones, then **every unit still runs against the finished slim cache** and every
-stored group is compared with the full cache. Only a successful checked run saves the new unit
-manifest. It is one atomic file, with checksums for its read lists, and replaces the previous
-run's units rather than accumulating files. Missing entries are extracted normally; damaged
-entries or manifests are reported and re-extracted. This saves extraction work, not the final
-validation pass, and doesn't change the shipped chunk format.
+**Every unit still loads again from the finished slim cache**, so reuse saves loading from the full
+cache, not the check. What each unit read in the check is what's kept for the next run: with
+nothing missing it's the same as from the full one, and it's checked unit by unit, so a read list
+that came up short last time (from a change the fingerprints don't cover) isn't kept. If the check
+finds something missing, or a unit fails on it, and units were reused, it loads those units again
+from the full cache and checks once more, rather than stop. `units.json` is one file, written whole, with a checksum for
+each read list, and has only the current plan's units. A damaged entry, or file, is reported and
+loaded again.
 
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.
 - `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
   chunks are still read back and compared group by group. Leave the check on for anything players
-  get. An unchecked run saves neither whole-run nor per-unit reuse results.
-- `SLIM_REUSE=0`: does it all even when nothing has changed, ignoring both whole-run and unit reuse.
+  get. An unchecked run keeps nothing for reuse.
+- `SLIM_REUSE=0`: loads it all, reusing neither the last run nor its units.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
