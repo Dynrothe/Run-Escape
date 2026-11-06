@@ -21,7 +21,14 @@
 // frames a guest missed meanwhile (see CoopRun).
 import { DurableObject } from "cloudflare:workers";
 
-import { RunWatch, endsCaughtRuns, heroIdsOf } from "../../coop-checks.mjs";
+import {
+    RunWatch,
+    checkReport,
+    checkReporter,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "../../coop-checks.mjs";
 import { playerName } from "../../name-gen.mjs";
 import {
     IDLE_MS,
@@ -69,6 +76,12 @@ export class Room extends DurableObject {
         super(ctx, env);
         this.anyMap = isAnyMapOn(env);
         this.endsCaught = endsCaughtRuns(env);
+        // The run analytics collector, through a service binding (README)
+        this.reportCheck = checkReporter({
+            url: "https://run-checks/v1/run-checks",
+            token: env.RUN_CHECKS_TOKEN,
+            fetch: env.RUN_CHECKS && ((url, init) => env.RUN_CHECKS.fetch(url, init)),
+        });
         // The run's checks (coop-checks.mjs), made again from room.heroIds
         // after a restart
         this.watch = undefined;
@@ -831,6 +844,7 @@ export class Room extends DurableObject {
                     }
                     room.started = true;
                     room.heroIds = heroIdsOf(message.game, MAX_PARTY);
+                    room.runInfo = room.heroIds && runOf(message.game);
                     this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
@@ -846,6 +860,7 @@ export class Room extends DurableObject {
                 if (isHost && room.started) {
                     room.started = false;
                     room.heroIds = undefined;
+                    room.runInfo = undefined;
                     this.watch?.finish();
                     this.watch = undefined;
                     this.persist(true);
@@ -890,10 +905,17 @@ export class Room extends DurableObject {
         const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(room.heroIds, room.hostId, {
             resumed,
-            run: { room: this.code, map: room.mapId, build: host?.build },
+            // (a run started before rooms kept runInfo has only its map)
+            run: { room: this.code, ...(room.runInfo ?? { map: room.mapId }), build: host?.build },
             names: new Map(room.members.map((m) => [m.id, m.name])),
-            // An object, which Workers Logs keeps field by field
-            log: (entry) => console.warn(entry),
+            log: (entry) => {
+                // An object, which Workers Logs keeps field by field
+                console.warn(entry);
+                if (entry.kind === "summary") {
+                    const ended = this.endsCaught && entry.caught !== null;
+                    this.reportCheck?.(checkReport(entry, "cloudflare", ended));
+                }
+            },
             caught: () => {
                 watch.end = this.endsCaught;
             },

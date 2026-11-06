@@ -96,6 +96,10 @@ address.
     bun run wrangler deploy
     ```
 
+    Its `RUN_CHECKS` binding names the run analytics collector, so deploy that first
+    ([its README](../analytics/README.md)), or delete the `[[services]]` block from
+    `wrangler.toml` if you aren't running one.
+
     The first time, Cloudflare may ask you to pick a `workers.dev` subdomain (the deploy prints a
     link to the dashboard page for it). It prints the relay's address when it's done:
     `https://run-escape-coop.<your-subdomain>.workers.dev`. A new subdomain can take a few minutes
@@ -157,7 +161,10 @@ phone locking, a lost signal) has no close to answer, and still ends abnormally.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
 they haven't unlocked, as on the Node relay. `MULTIPLAYER_RUN_CHECKS = "end"` ends a run whose host
-the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged. The other limits
+the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged. With the
+`RUN_CHECKS_TOKEN` secret set, the `RUN_CHECKS` binding sends the run analytics collector a row
+for each run they find anything in ([Run checks](../analytics/README.md#run-checks)). The other
+limits
 are at the top of `src/shared.mjs`, the same numbers as `coop-relay.mjs`.
 
 **The run checks' log**: an object for each entry, with `event: "coop_run_check"` and its `kind`,

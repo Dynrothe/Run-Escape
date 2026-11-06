@@ -112,6 +112,37 @@ Party composition is in the raw rows only. `daily_stats` is keyed by every colum
 so a new dimension there means a new table; composition would multiply its rows. Query raw rows
 for composition, within their retention.
 
+## Run checks
+
+The co-op relays check a run's frames as they pass (`server/coop-checks.mjs`). For each run they
+find anything in, a relay can send the collector a row of its own in `run_checks`: the host's
+game can't leave it out, and it's sent whether or not the players share their run stats. It holds
+no names, room codes or addresses: the run's build, map, mode, endless, party size and
+adventurers (as the host's game gave them, `unknown` where that was nothing a game sends), how far
+it got, a count of each kind found, the kind its host was caught by, and whether the relay ended
+it. An honest run sends nothing. `MAX_CHECKS_PER_DAY` caps the rows a day, and they expire with
+raw runs.
+
+Nothing joins a row to the host's report in `runs`, but the two share their day, build, map,
+mode, endless, party and adventurers, and a run the relay didn't end reaches the collector from
+both within moments, with about the same length. A run the relay ended goes on alone on the
+host's game, which reports it later. The viewer's SQL examples include the query.
+
+To turn it on, once the collector's deployed, choose a token (a random string of at least 32
+characters) and give it to the collector and the relay:
+
+```sh
+bun run wrangler secret put RUN_CHECKS_TOKEN -c ../analytics/wrangler.toml
+bun run wrangler secret put RUN_CHECKS_TOKEN      # the Cloudflare relay
+```
+
+The Cloudflare relay reaches the collector through the service binding in its `wrangler.toml`,
+which names `run-escape-analytics` (change it there if you renamed the collector). The token turns
+it on and off: `wrangler secret delete RUN_CHECKS_TOKEN` stops the rows. The Node relay posts to
+`RUN_CHECKS_URL=https://<the Worker's address>/v1/run-checks`, with `RUN_CHECKS_TOKEN` set in its
+environment. Without both, a relay sends nothing. A row that doesn't arrive is only missed: the
+relay's log has the run's summary too.
+
 ## Query by day
 
 `GET /v1/daily?from=2026-11-01&to=2026-11-04&play=multiplayer&endless=false` needs
@@ -208,9 +239,9 @@ Check rows written per run in the D1 dashboard, and set `MAX_RUNS_PER_DAY` to wh
 writes allow; the default leaves room on Free. When the cap or a quota is reached, reports are
 lost and the game carries on.
 
-An hourly job deletes expired rows: raw runs in batches until none are left (`PRUNE_BATCH` and
-`PRUNE_BATCHES` in `worker.mjs` allow many times the daily cap an hour), and expired summaries a
-day at a time. `RAW_RETENTION_DAYS`
+An hourly job deletes expired rows: raw runs and run checks in batches until none are left
+(`PRUNE_BATCH` and `PRUNE_BATCHES` in `worker.mjs` allow many times the daily cap an hour), and
+expired summaries a day at a time. `RAW_RETENTION_DAYS`
 defaults to 30 and `DAILY_RETENTION_DAYS` to 365 (UTC days, 2 at least). Rankings cover the
 retained raw days; deleting a raw run doesn't take it out of its daily totals. Raise the
 retention, or export before rows expire, for longer history.

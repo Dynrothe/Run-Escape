@@ -24,7 +24,15 @@ import {
     viaProxy,
     watchCloudflareRanges,
 } from "./client-ip.mjs";
-import { RUN_CHECKS, RunWatch, endsCaughtRuns, heroIdsOf } from "./coop-checks.mjs";
+import {
+    RUN_CHECKS,
+    RunWatch,
+    checkReport,
+    checkReporter,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "./coop-checks.mjs";
 import { playerName, roomName } from "./name-gen.mjs";
 
 export const RELAY_PATH = "/coop";
@@ -632,6 +640,13 @@ export function createRelay(limits = {}) {
         anyMap = isAnyMapOn(),
         // A run whose host the run checks catch ends (see endsCaughtRuns)
         endCaughtRuns = endsCaughtRuns(process.env),
+        // Sends a run the checks found anything in to the run analytics
+        // collector (server/analytics), when RUN_CHECKS_URL and its token are set
+        reportCheck = checkReporter({
+            url: process.env.RUN_CHECKS_URL,
+            token: process.env.RUN_CHECKS_TOKEN,
+            fetch: globalThis.fetch,
+        }),
         metrics = isMetricsOn(),
         metricsPort = metricsPortSetting(),
     } = limits;
@@ -1157,13 +1172,14 @@ export function createRelay(limits = {}) {
     }
 
     // The run's checks (coop-checks.mjs), for a start every game would play
-    function newWatch(room, heroIds) {
+    function newWatch(room, game) {
+        const heroIds = heroIdsOf(game, MAX_PARTY);
         if (!heroIds) {
             return undefined;
         }
         const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(heroIds, room.hostId, {
-            run: { room: room.code, map: room.mapId, build: host?.build },
+            run: { room: room.code, ...runOf(game), build: host?.build },
             names: new Map(room.members.map((m) => [m.id, m.name])),
             log: (entry) => {
                 if (entry.kind === "caught") {
@@ -1173,6 +1189,10 @@ export function createRelay(limits = {}) {
                 }
                 // One line of JSON, for whatever reads the relay's output
                 console.warn(JSON.stringify(entry));
+                if (entry.kind === "summary") {
+                    const ended = endCaughtRuns && entry.caught !== null;
+                    reportCheck?.(checkReport(entry, "node", ended));
+                }
             },
             caught: () => {
                 watch.end = endCaughtRuns;
@@ -1449,7 +1469,7 @@ export function createRelay(limits = {}) {
                         return;
                     }
                     room.started = true;
-                    room.watch = newWatch(room, heroIdsOf(message.game, MAX_PARTY));
+                    room.watch = newWatch(room, message.game);
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),

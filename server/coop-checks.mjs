@@ -44,6 +44,75 @@ export function heroIdsOf(game, maxParty) {
     return ids.every((id) => typeof id === "string" && id.length <= 64) ? ids : undefined;
 }
 
+// ---- What the run analytics collector keeps (server/analytics, run_checks) ----
+
+// The collector's formats. Whatever a host sends fits them, so a host can't
+// keep its run's row out by sending something the collector refuses.
+const ID = /^[a-z0-9_]{1,40}$/;
+const BUILD = /^[a-zA-Z0-9._-]{1,80}$/;
+const fits = (format, value) =>
+    typeof value === "string" && format.test(value) ? value : "unknown";
+
+// The run as the host's start says it is (the same as its run report says, if
+// the host's honest), for the entries and the collector's row
+export function runOf(game) {
+    const heroes = Array.isArray(game?.heroes) ? game.heroes : [];
+    return {
+        map: fits(ID, game?.mapId),
+        mode: game?.hard === true ? "hard" : "normal",
+        endless: game?.endless === true,
+        characters: heroes.map((hero) => fits(ID, hero?.characterId)).sort(),
+    };
+}
+
+// A run's summary entry as the collector's row, without names or the room.
+// ended: the checks ended the run.
+export function checkReport(summary, relay, ended) {
+    const party = summary.party;
+    const characters = Array.isArray(summary.characters) ? summary.characters : [];
+    return {
+        schemaVersion: 1,
+        checkId: crypto.randomUUID(),
+        relay,
+        build: fits(BUILD, summary.build),
+        mapId: fits(ID, summary.map),
+        mode: summary.mode === "hard" ? "hard" : "normal",
+        endless: summary.endless === true,
+        partySize: party,
+        characters:
+            characters.length === party
+                ? characters.map((id) => fits(ID, id))
+                : Array(party).fill("unknown"),
+        runSeconds: summary.runSeconds,
+        counts: summary.counts,
+        caught: summary.caught,
+        ended,
+    };
+}
+
+// What sends a row to the collector, if the relay's set up for it: once, and
+// a row that doesn't arrive is only missed (its summary's in the log)
+export function checkReporter({ url, token, fetch }) {
+    if (!url || !fetch || typeof token !== "string" || token.length < 32) {
+        return undefined;
+    }
+    return async (report) => {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(report),
+                signal: AbortSignal.timeout(5000),
+            });
+            if (!response.ok) {
+                console.warn(`Run checks: the collector refused a run's row (${response.status})`);
+            }
+        } catch (error) {
+            console.warn(`Run checks: a run's row wasn't sent (${error?.message ?? error})`);
+        }
+    };
+}
+
 // ---- What a guest sent, as the host takes it (core/lockstep.ts) ----
 
 const MOVE_STEPS = 127;

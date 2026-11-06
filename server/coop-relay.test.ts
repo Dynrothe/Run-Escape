@@ -485,12 +485,17 @@ describe("co-op relay", () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         try {
             for (const endCaughtRuns of [false, true]) {
-                await restart({ endCaughtRuns });
+                // What it sends the run analytics collector
+                const rows: any[] = [];
+                await restart({ endCaughtRuns, reportCheck: (row: any) => rows.push(row) });
                 warn.mockClear();
                 const { host, guests } = await party(1);
                 const { room } = await host.room();
-                const heroes = room.members.map((m: any) => ({ id: m.id }));
-                host.send({ t: "start", game: { heroes } });
+                const heroes = room.members.map((m: any) => ({
+                    id: m.id,
+                    characterId: "wizard",
+                }));
+                host.send({ t: "start", game: { mapId: "lumbridge", heroes } });
                 await guests[0].next("start");
                 // Moves the guest never sent
                 for (let frame = 1; frame <= 3; frame++) {
@@ -515,7 +520,20 @@ describe("co-op relay", () => {
                 } else {
                     host.send({ t: "down", d: { upTo: 4, events: [] } });
                     expect((await guests[0].next("down")).d.upTo).toBe(4);
+                    expect(rows).toEqual([]);
+                    host.send({ t: "end" });
                 }
+                await vi.waitFor(() => expect(rows).toHaveLength(1));
+                expect(rows[0]).toMatchObject({
+                    relay: "node",
+                    mapId: "lumbridge",
+                    mode: "normal",
+                    partySize: 2,
+                    characters: ["wizard", "wizard"],
+                    counts: { move: 3 },
+                    caught: "move",
+                    ended: endCaughtRuns,
+                });
             }
         } finally {
             warn.mockRestore();

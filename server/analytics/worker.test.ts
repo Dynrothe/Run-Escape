@@ -1,8 +1,18 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ALL_MAPS } from "../../src/game/content/maps";
-import { DAY_MS, ID, dailyQuery, leaderboardQuery, utcDay, validateRun } from "./schema.mjs";
+import { RUN_CHECKS, checkReport, runOf } from "../coop-checks.mjs";
+import {
+    CHECK_KINDS,
+    DAY_MS,
+    ID,
+    dailyQuery,
+    leaderboardQuery,
+    utcDay,
+    validateRun,
+    validateRunCheck,
+} from "./schema.mjs";
 import worker, { collect, prune } from "./worker.mjs";
 
 const origin = "https://game.example";
@@ -37,6 +47,34 @@ const payload = (changes = {}) => ({
     playersLeft: 0,
     ...changes,
 });
+const checksToken = "a-private-relay-token-only-for-these-tests";
+// A relay's row, as coop-checks.mjs makes it from a run's summary
+const check = (changes = {}, summary = {}) => ({
+    ...checkReport(
+        {
+            build: "0.25.0-abc123",
+            ...runOf({ mapId: "barrows", hard: true, heroes: [{ characterId: "wizard" }, {}] }),
+            party: 2,
+            runSeconds: 312.4,
+            counts: { move: 3, desync: 1 },
+            caught: "move",
+            ...summary,
+        },
+        "cloudflare",
+        false,
+    ),
+    ...changes,
+});
+const postCheck = (value: unknown, headers: Record<string, string> = {}) =>
+    new Request("https://collector.example/v1/run-checks", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${checksToken}`,
+            ...headers,
+        },
+        body: JSON.stringify(value),
+    });
 const post = (value: unknown, headers = {}) =>
     new Request("https://collector.example/v1/runs", {
         method: "POST",
@@ -120,6 +158,55 @@ it("rejects invalid dimensions, numbers and old replays", () => {
     }
 });
 
+it("takes the relays' rows in the shape they send, whatever the host's game said", () => {
+    expect(CHECK_KINDS).toEqual(RUN_CHECKS);
+    expect(validateRunCheck(check(), now)).toMatchObject({
+        day,
+        relay: "cloudflare",
+        map_id: "barrows",
+        mode: "hard",
+        characters: "unknown,wizard",
+        party_size: 2,
+        move: 3,
+        desync: 1,
+        ahead: 0,
+        caught: "move",
+        ended: 0,
+    });
+    // A host can't keep its run's row out with a start no game would send
+    const odd = check(
+        {},
+        {
+            build: "<b>",
+            ...runOf({ mapId: "Not A Map", hard: "yes", heroes: [{ characterId: 7 }] }),
+            party: 1,
+        },
+    );
+    expect(validateRunCheck(odd, now)).toMatchObject({
+        build: "unknown",
+        map_id: "unknown",
+        mode: "normal",
+        characters: "unknown",
+    });
+    expect(validateRunCheck(check({}, { characters: undefined }), now)?.characters).toBe(
+        "unknown,unknown",
+    );
+    for (const change of [
+        { schemaVersion: 2 },
+        { checkId: "not-a-uuid" },
+        { relay: "none" },
+        { partySize: 3 },
+        { counts: { move: -1 } },
+        { counts: { speed: 1 } },
+        { counts: [] },
+        { caught: "desync" },
+        { ended: "no" },
+        { runSeconds: NaN },
+    ]) {
+        expect(validateRunCheck(check(change), now), JSON.stringify(change)).toBeUndefined();
+    }
+});
+
 // Wrangler and CI use Node 22+. The rest of the game also runs under Node 20.
 const sqlite = process.getBuiltinModule?.("node:sqlite") as
     | typeof import("node:sqlite")
@@ -129,11 +216,15 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
     let env: any;
     beforeEach(() => {
         db = new sqlite!.DatabaseSync(":memory:");
-        db.exec(readFileSync(new URL("./migrations/0001_runs.sql", import.meta.url), "utf8"));
+        const migrations = new URL("./migrations/", import.meta.url);
+        for (const name of readdirSync(migrations).sort()) {
+            db.exec(readFileSync(new URL(name, migrations), "utf8"));
+        }
         const allow = { limit: async () => ({ success: true }) };
         env = {
             ALLOWED_ORIGINS: origin,
             ANALYTICS_READ_TOKEN: token,
+            RUN_CHECKS_TOKEN: checksToken,
             PUBLIC_LEADERBOARD: "false",
             INGEST_LIMITER: allow,
             QUERY_LIMITER: allow,
@@ -327,5 +418,46 @@ describe.skipIf(!sqlite)("analytics Worker with the production SQLite migration"
         expect((await rows(`daily?from=${day}`))[0].runs).toBe(1);
         await prune(env, now + 367 * DAY_MS);
         expect(await rows(`daily?from=${day}`)).toEqual([]);
+    });
+    it("stores the relays' rows only with their token, up to the day's cap", async () => {
+        const sendCheck = (value: unknown, headers = {}, at = now) =>
+            collect(postCheck(value, headers), env, at);
+        expect((await sendCheck(check(), { Authorization: `Bearer ${token}` })).status).toBe(401);
+        expect((await sendCheck(check(), { Authorization: "" })).status).toBe(401);
+        expect((await collect(read("run-checks", access), env)).status).toBe(405);
+        expect((await sendCheck({ ...check(), counts: { speed: 1 } })).status).toBe(400);
+        env.MAX_CHECKS_PER_DAY = "2";
+        const first = check();
+        expect((await sendCheck(first)).status).toBe(200);
+        expect((await sendCheck(first)).status).toBe(200);
+        expect(count("run_checks")).toBe(1);
+        for (let i = 0; i < 2; i++) {
+            expect((await sendCheck(check())).status).toBe(200);
+        }
+        expect(count("run_checks")).toBe(2);
+        // A game's run reports don't count against it, nor it against them
+        expect((await send(payload())).status).toBe(200);
+        expect(count("runs")).toBe(1);
+        expect(db.prepare("SELECT caught, ended, move FROM run_checks").all()[0]).toEqual({
+            caught: "move",
+            ended: 0,
+            move: 3,
+        });
+        // A token that's too short is no token
+        env.RUN_CHECKS_TOKEN = "short";
+        expect((await sendCheck(check(), { Authorization: "Bearer short" })).status).toBe(401);
+    });
+
+    it("expires the relays' rows with the raw runs", async () => {
+        const old = now - 40 * DAY_MS;
+        await collect(postCheck(check()), env, old);
+        await collect(postCheck(check()), env, now);
+        expect(count("run_checks")).toBe(2);
+        await prune(env, now);
+        expect(count("run_checks")).toBe(1);
+        expect(count("daily_check_intake")).toBe(2);
+        await prune(env, now + 400 * DAY_MS);
+        expect(count("run_checks")).toBe(0);
+        expect(count("daily_check_intake")).toBe(0);
     });
 });
