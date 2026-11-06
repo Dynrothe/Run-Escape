@@ -1645,7 +1645,7 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+**Exports are the only backup** unless cloud save is on. Clearing the browser's data (or uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
 `ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
@@ -1659,6 +1659,30 @@ the player's local ones, and an export dated ahead of the clock doesn't count. N
 day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
 reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
 the save.
+
+**Cloud save** (`client/CloudSave.ts`, `ui/CloudSave.tsx`) keeps a copy with the cloud-save
+Worker (`server/cloud-saves/`), in a build with `VITE_CLOUD_SAVE_URL` whose Worker answers
+`/v1/health`. An app that doesn't let requests out to it (an older desktop launcher or APK)
+answers something else, so Settings doesn't offer it there. There's no account: Turn on makes a
+sync code, and typing it on another device links that one. The local save stays the main copy,
+and none of this changes `SaveData`.
+
+- **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
+  from or went up as, and `dirty`: whether it's changed since. It's apart from the save, so it
+  never goes out in an export. Never rename it.
+- **Uploads follow `persist()`,** so they only happen where the save's written at all (the lock,
+  not a newer game's, room to keep it). A change marks the save dirty and uploads 15 seconds
+  later, or straight away when the tab's hidden. A save that didn't get up stays dirty, and goes
+  on the next change or check. An import is a change; a download isn't.
+- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every 30
+  seconds at most). The cloud's revision being this device's means only local changes are news.
+  A different one is taken silently when nothing changed here, or the save has no runs (the player
+  who cleared their browser). Otherwise, and when an upload's refused as stale, the title screen
+  asks which to keep, showing both summaries; nothing syncs until the player picks (Later puts it
+  in Settings). Keeping this device's uploads with `force`.
+- **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
+  Worker refuses an older game's upload over it, so the choice says why, and only Keep this
+  device's (losing what's new) or Later.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

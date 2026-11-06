@@ -436,6 +436,32 @@
     flex-shrink: 0;
 }
 
+/* Cloud save's rows hold a code and a box to type one, so they wrap on a narrow screen */
+.ui-setting-cloud {
+    flex-wrap: wrap;
+}
+
+.ui-cloud-link {
+    display: flex;
+    gap: 8px;
+}
+
+.ui-cloud-code-input {
+    width: 300px;
+    max-width: 100%;
+    font-family: "OSRS Bold", sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ui-cloud-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ui-yellow);
+    user-select: all;
+}
+
 .ui-toggle {
     min-width: 52px;
     color: #e04040;

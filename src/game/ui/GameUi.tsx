@@ -70,6 +70,7 @@ import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
+import { CloudChoicePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -632,6 +633,7 @@ function SettingsPanel({
                 <section className="ui-settings-section">
                     <h3>Save</h3>
                     <SaveSetting ui={ui} client={client} />
+                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
                     <UnreadableSaveSettings ui={ui} client={client} />
                 </section>
             </div>
@@ -677,6 +679,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     // The panel saying the game isn't saving is over everything, so the title's
     // own wait till it's gone
     const savePanel = ui.saveBlock !== undefined && !ui.saveBlockClosed;
+    // The cloud has a different save, and asks which to keep
+    const cloudChoice = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     const [changelogOpen, setChangelogOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     // The notice, until it's closed (once for each new one)
@@ -702,6 +706,10 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         const onKey = (e: KeyboardEvent) => {
             if (savePanel) {
                 return;
+            } else if (cloudChoice) {
+                if (e.code === "Escape") {
+                    client.cloud?.later();
+                }
             } else if (ui.unreadableSave) {
                 if (e.code === "Escape") {
                     client.closeUnreadableNotice();
@@ -725,7 +733,16 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [client, changelogOpen, settingsOpen, notice, closeNotice, ui.unreadableSave, savePanel]);
+    }, [
+        client,
+        changelogOpen,
+        settingsOpen,
+        notice,
+        closeNotice,
+        ui.unreadableSave,
+        savePanel,
+        cloudChoice,
+    ]);
     if (changelogOpen) {
         return (
             <div className="ui-fill ui-center">
@@ -829,7 +846,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
-            {savePanel ? null : ui.unreadableSave ? (
+            {savePanel ? null : cloudChoice && ui.cloud ? (
+                <CloudChoicePanel cloud={ui.cloud} save={save} client={client} />
+            ) : ui.unreadableSave ? (
                 <UnreadableSavePanel keptAs={ui.unreadableSave} client={client} />
             ) : (
                 notice && <NoticePanel notice={notice} onClose={closeNotice} />

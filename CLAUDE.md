@@ -47,6 +47,7 @@ go stale. Add anything that cost you time to work out.
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
+| Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
