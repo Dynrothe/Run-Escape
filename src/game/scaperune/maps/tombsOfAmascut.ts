@@ -1116,8 +1116,9 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
         requires: "beneath_cursed_sands",
         lighting: TOMBS_LIGHTING,
         description:
-            "In development. The Nexus, with a door to each of the four paths, and the " +
-            "invocations' raid level in place of hard mode.",
+            "Amascut's tomb beneath the desert: four paths from the Nexus, each a puzzle and its " +
+            "guardian, in any order, then the Wardens. The invocations set the raid level, and " +
+            "the chest pays out by it.",
         // Osmumten's fang
         iconObjId: 26219,
         // As a first map's: the raid level's scale (getRaidLevelScale) makes it what it is, from

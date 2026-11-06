@@ -2396,10 +2396,10 @@ function RaidRoomInfo({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// Dev server only: god mode, for watching a fight's mechanics without dying to them
+// Dev server only, with ?devtools: god mode, for watching a fight's mechanics without dying to them
 function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
     const on = useHudNumber(client, (n) => n.devGod);
-    if (!import.meta.env.DEV || on === undefined) {
+    if (!client.devTools || on === undefined) {
         return null;
     }
     return (
@@ -2409,7 +2409,7 @@ function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// Dev server only, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
+// Dev server only, with ?devtools, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
 // God mode, without dying to them). The path bosses as the run is, with the dev skip's bow; the
 // Wardens with the best of everything, or as the run is. Gone before the raid ships.
 const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
@@ -2421,7 +2421,7 @@ const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
 
 function DevWardensButton({ client }: { client: GameClient }): JSX.Element | null {
     const shown = useHudNumber(client, (n) => n.devWardens);
-    if (!import.meta.env.DEV || !shown) {
+    if (!client.devTools || !shown) {
         return null;
     }
     return (
@@ -2463,8 +2463,8 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
                       ? "Through the barrier to begin"
                       : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
             </div>
-            {/* Dev server only: straight to the boss, for testing it */}
-            {import.meta.env.DEV && !wave.done && (
+            {/* Dev server only, with ?devtools: straight to the boss, for testing it */}
+            {client.devTools && !wave.done && (
                 <button
                     className="ui-button ui-button-small"
                     onClick={() => client.devSkipToTombsBoss()}

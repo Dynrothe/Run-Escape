@@ -222,6 +222,8 @@ desktop build.
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
+- `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
+  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the
