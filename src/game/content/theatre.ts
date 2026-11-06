@@ -1082,7 +1082,8 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                     // nothing
                     at: [0.8, 0.4],
                     count: 8,
-                    // Not forever, for whoever doesn't know to: he rises the better for each left
+                    // Not forever, for whoever doesn't know to: he rises the better for each left,
+                    // twice what one missed heals (smother.heal), as leaving them costs the most
                     seconds: 30,
                     leftHeal: 0.04,
                     attacks: ["Exhumeds", "Exhumeds", "Acid"],

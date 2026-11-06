@@ -1,12 +1,14 @@
 import { afterAll, describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
+import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
-import { getRoomPoints } from "../content/raids";
+import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
 import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
+import { LUMBRIDGE_WAVES } from "../content/waves";
 import { getWeapon } from "../content/weapons";
 import { yawFromVector } from "./PlayerMovement";
 import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
@@ -375,15 +377,12 @@ const TEST_BOSS_IDS = [
 
 describe("the Theatre's Nylocas", () => {
     it("are the raid's own copies, slower than the campaign's by RAID_NYLOCAS_SPEED", () => {
-        const raid = getMap("theatre_of_blood");
-        const ids = new Set(
-            raid.raid!.rooms.flatMap((room) =>
-                room.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
-            ),
-        );
+        // Everything the raid can bring on: its waves, elites, rings, and its bosses' summons and
+        // splits
+        const ids = getMapEnemies(getMap("theatre_of_blood")).map((def) => def.id);
         // The three that chase you (the Matomenos crawl to the Maiden)
-        const nylocas = [...ids].filter((id) => /ischyros|toxobolos|hagios/.test(id));
-        expect(nylocas.length).toBeGreaterThan(0);
+        const nylocas = ids.filter((id) => /ischyros|toxobolos|hagios/.test(id));
+        expect(nylocas.length).toBe(6);
         for (const id of nylocas) {
             expect(id.startsWith("tob_"), id).toBe(true);
             const campaign = getEnemy(id.slice("tob_".length));
@@ -392,23 +391,24 @@ describe("the Theatre's Nylocas", () => {
         }
     });
 
-    it("come fewer to their hall than to the Bloat's before it, wave for wave and in the ring", () => {
+    it("come to their hall NYLOCAS_HALL_CROWD as many as the raid's pace, and to its ring", () => {
         // Most of them shoot, so the raid's pace for the third hall swamped players with them
+        expect(NYLOCAS_HALL_CROWD).toBeLessThan(1);
         const rooms = getMap("theatre_of_blood").raid!.rooms;
-        const bloat = rooms.find((room) => room.boss === "tob_pestilent_bloat")!;
-        const nylocas = rooms.find((room) => room.boss === "nylocas_vasilias")!;
-        expect(nylocas.waves.length).toBe(bloat.waves.length);
-        nylocas.waves.forEach((wave, i) => {
-            expect(wave.spawnRate, `wave ${i}`).toBeLessThan(bloat.waves[i].spawnRate);
-            expect(wave.minAlive, `wave ${i}`).toBeLessThan(bloat.waves[i].minAlive);
-            expect(wave.maxAlive, `wave ${i}`).toBeLessThan(bloat.waves[i].maxAlive);
+        const index = rooms.findIndex((room) => room.boss === "nylocas_vasilias");
+        const hall = rooms[index];
+        hall.waves.forEach((wave, i) => {
+            // The pace roomWaves keeps: room n starts at Lumbridge's wave 2.5n
+            const pace =
+                LUMBRIDGE_WAVES[Math.min(Math.round(index * 2.5) + i, LUMBRIDGE_WAVES.length - 1)];
+            expect(wave.spawnRate, `wave ${i}`).toBeCloseTo(pace.spawnRate * NYLOCAS_HALL_CROWD);
+            expect(wave.minAlive, `wave ${i}`).toBe(Math.round(pace.minAlive * NYLOCAS_HALL_CROWD));
+            expect(wave.maxAlive, `wave ${i}`).toBe(Math.round(pace.maxAlive * NYLOCAS_HALL_CROWD));
         });
-        const ring = (room: RaidRoomDef) => {
-            const event = room.events.find((e) => e.kind === "ring");
-            return event?.kind === "ring" ? event.count : 0;
-        };
-        expect(ring(nylocas)).toBeGreaterThan(0);
-        expect(ring(nylocas)).toBeLessThan(ring(bloat));
+        const ring = hall.events.find((e) => e.kind === "ring");
+        expect(ring?.kind === "ring" && ring.count).toBe(
+            Math.round(NYLOCAS_RING * NYLOCAS_HALL_CROWD),
+        );
     });
 });
 
@@ -1084,15 +1084,21 @@ describe("expert mode", () => {
         expect(boss.hp).toBe(boss.maxHp - 10000 + Math.round(boss.maxHp * smother.heal));
         expect(sim.hazards).not.toContain(left);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
-        // A step's enough: half a second on one smothers it (they come up in threes, tiles apart)
-        const stepped = exhumed(sim.player.x, sim.player.y);
-        for (let t = 0; t < TICKS_PER_SECOND / 2; t++) {
-            sim["stepHazards"]();
+        // A step's enough: walked across at a player's speed, even off its middle, one's smothered
+        // (they come up in threes, tiles apart)
+        const home = { x: sim.player.x, y: sim.player.y };
+        for (const off of [0, 0.8]) {
+            const stepped = exhumed(home.x, home.y + off);
+            for (let x = home.x - 3; x <= home.x + 3; x += PLAYER_SPEED) {
+                sim.player.x = x;
+                sim["stepHazards"]();
+            }
+            expect(sim.hazards, `${off} off its middle`).not.toContain(stepped);
         }
-        expect(sim.hazards).not.toContain(stepped);
-        expect(boss.bossState!.ordeal!.left).toBe(exhumes.count - 1);
+        sim.player.x = home.x;
         // Each one stood on is smothered, and once they all are he rises
-        for (let i = 0; i < exhumes.count; i++) {
+        for (let still = exhumes.count - 2; still > 0; still--) {
+            expect(boss.bossState!.ordeal!.left).toBe(still);
             const one = exhumed(sim.player.x, sim.player.y);
             for (let t = 0; t <= Math.round(smother.seconds * TICKS_PER_SECOND); t++) {
                 sim["stepHazards"]();

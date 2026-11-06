@@ -367,11 +367,11 @@ version and how to run it.
       and feed her unless you kill them on the way; the Bloat only really takes damage while he's
       down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
       drags you into his shadow realm, where he can't be hurt and there's only his maze to get
-      through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
-      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      through; Xarpus sinks into his pool, and can't be hurt until you've stepped on his exhumeds
+      to smother them, those left healing him; and Verzik gets up twice, and as the great spider
       throws her yellows, which only miss you in the glowing pool that comes with each. The
-      raid's green and blue Nylocas shoot from range, so fewer come in their hall than the raid's
-      pace would bring.
+      raid's Nylocas are a little slower than Morytania's, and its green and blue ones shoot from
+      range, so fewer come in their hall than the raid's pace would bring.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.

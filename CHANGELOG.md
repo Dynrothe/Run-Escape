@@ -49,8 +49,8 @@ the version in the corner).
 - Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
   you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
   by Okaeri.
-- The results screen says Expert for a Theatre of Blood run on expert mode, not Hard. Fixed by
-  Okaeri.
+- The results screen and the map screen's Enter button say Expert for a Theatre of Blood run on
+  expert mode, not Hard. Fixed by Okaeri.
 
 ## 0.27.0 - 2026-11-05
 

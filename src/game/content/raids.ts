@@ -160,7 +160,8 @@ function roomWaves(room: number, enemies: WaveDef["enemies"][], crowd = 1): Wave
 // times what the halls either side cost, and players took the portal past it. On expert, where
 // two colours in three don't take a player's style, those pile up to the cap.
 export const NYLOCAS_HALL_CROWD = 0.5;
-const NYLOCAS_RING = 40;
+// Its ring at the pace's full numbers
+export const NYLOCAS_RING = 40;
 
 // Elites through the room, and a ring of its commonest enemy late on
 function roomEvents(elite: string, ring: string, count: number): RunEventDef[] {
