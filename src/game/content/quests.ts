@@ -326,6 +326,13 @@ export const QUESTS: QuestDef[] = [
         coins: 4000,
     },
     {
+        id: "rock_bottom",
+        name: "Rock Bottom",
+        mapId: "quarry_colossus",
+        objective: { kind: "kill", enemyIds: ["quarry_colossus"], count: 1 },
+        coins: 4000,
+    },
+    {
         id: "ratcatchers",
         name: "Ratcatchers",
         objective: {

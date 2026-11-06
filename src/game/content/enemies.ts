@@ -2,6 +2,7 @@ import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBak
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { COLOSSUS_ENEMIES } from "./quarryColossus";
 import { getTheatreBosses } from "./theatre";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
@@ -8355,6 +8356,7 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    ...COLOSSUS_ENEMIES,
 ];
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above

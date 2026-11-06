@@ -586,6 +586,27 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    {
+        id: "prospector",
+        name: "Prospector",
+        description:
+            "Made for the Quarry Colossus, and everyone plays them there, and nowhere else: " +
+            "starts with the Dragon warhammer, moves 20% faster, has 20% more hitpoints and " +
+            "heals 10 hitpoints a minute.",
+        style: "melee",
+        startingWeapon: "dragon_warhammer",
+        // The Motherlode Mine's prospector kit
+        equipment: {
+            [EquipSlot.HEAD]: 12013,
+            [EquipSlot.TORSO]: 12014,
+            [EquipSlot.LEGS]: 12015,
+            [EquipSlot.FEET]: 12016,
+        },
+        // As the Saradominist's: feet, hitpoints to learn him on, and a little back over the
+        // fight. The damage is the warhammer's alone, from right by him.
+        bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
+        only: "quarry_colossus",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));

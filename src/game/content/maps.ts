@@ -1,11 +1,18 @@
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
+import { QUARRY, QUARRY_BOSS_ARENA, QUARRY_RECIPE } from "../scaperune/maps/quarryColossus";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
+import {
+    COLOSSUS_HITPOINTS,
+    COLOSSUS_SHATTER,
+    COLOSSUS_WEAPON_LEVEL,
+    QUARRY_FLOOR,
+} from "./quarryColossus";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { EnemyDef, MapDef } from "./types";
@@ -411,6 +418,41 @@ export const MAPS: MapDef[] = [
             ability: ZACHARIAH_SMITE,
         },
         music: "Blade of Forgotten Justice",
+    },
+    {
+        id: "quarry_colossus",
+        name: "The Quarry Colossus",
+        description:
+            "A stone colossus wakes in the quarry it cut, shelves stepping down a cliff over a " +
+            "chasm. No waves, no picks and no items: a dragon warhammer, a pickaxe, and him. The " +
+            "quarry is his weapon and can be yours: read its floor, hide behind its pillars, lure " +
+            "him onto its cracks, and when the shelf gives way, follow it down.",
+        // The dragon pickaxe
+        iconObjId: 12797,
+        arena: getRecipeArena(QUARRY_RECIPE),
+        // The top shelf's south edge, with the next shelf in sight below
+        spawn: {
+            x: QUARRY.origin.x + QUARRY.starts[0].x + 0.5,
+            y: QUARRY.origin.y + QUARRY.starts[0].y + 0.5,
+        },
+        // His hitpoints come from the event, and his hits are tuned to the Prospector's
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [{ at: 0, kind: "finalBoss", enemyId: "quarry_colossus", hp: COLOSSUS_HITPOINTS }],
+        finalBossWarning: "",
+        victoryText: "The Quarry Colossus crumbles into the chasm!",
+        bossArena: QUARRY_BOSS_ARENA,
+        floor: QUARRY_FLOOR,
+        scaperune: true,
+        // After the Owl's court, the quarry
+        fight: {
+            requires: "zachariah",
+            character: "prospector",
+            weaponLevel: COLOSSUS_WEAPON_LEVEL,
+            ability: COLOSSUS_SHATTER,
+        },
+        music: "The Plundered Tomb",
     },
 ];
 
