@@ -1,4 +1,5 @@
 import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
+import { MapDef } from "../../content/types";
 import {
     WARDENS_CRATER_WARDEN,
     createWardensFloor,
@@ -9,7 +10,7 @@ import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
-import { BuildContext, MapRecipe } from "../recipe";
+import { BuildContext, MapRecipe, getRecipeArena } from "../recipe";
 import { digFloorPit } from "./wardensFloor";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
@@ -1111,6 +1112,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
     build,
     mapDef: {
         name: "Tombs of Amascut",
+        // Behind the quest, as OSRS's is
+        requires: "beneath_cursed_sands",
         description:
             "In development. The Nexus, with a door to each of the four paths, and the " +
             "invocations' raid level in place of hard mode.",
@@ -1225,4 +1228,69 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             })),
         },
     },
+};
+
+// Beneath Cursed Sands (content/cursedSands.ts): the quest's four fights as a boss fight in parts,
+// in a tomb under the sands. It's the raid's own squares under another id (the recipe's the
+// same), fought in Akkha's arena, and the Tombs of Amascut opens once it's done. On the dev server
+// only while the raid is (devMaps.ts' SCAPERUNE_DEV_FIGHTS).
+export const BENEATH_CURSED_SANDS_RECIPE: MapRecipe = {
+    ...TOMBS_OF_AMASCUT,
+    id: "beneath_cursed_sands",
+    mapDef: undefined,
+};
+
+const SANDS_MIDDLE = TOA_PLACES.akkha.quadrants.middle;
+const SANDS_ARENA = {
+    baseX: Math.floor(SANDS_MIDDLE.x) - AKKHA_HALF,
+    baseY: Math.floor(SANDS_MIDDLE.y) - AKKHA_HALF,
+    size: AKKHA_HALF * 2,
+};
+
+const SANDS_DONE = "The Menaphite Akh is slain! The Tombs of Amascut are open to you.";
+
+export const BENEATH_CURSED_SANDS: MapDef = {
+    id: "beneath_cursed_sands",
+    name: "Beneath Cursed Sands",
+    description:
+        "A quest, as a boss fight in four parts, each kept once it's won: Coenus the Head " +
+        "Menaphite Guard, the Scarab Mages, the Champion of Scabaras and the Menaphite Akh, in a " +
+        "tomb beneath the desert. Done, it opens the Tombs of Amascut.",
+    // The desert shirt
+    iconObjId: 1833,
+    arena: getRecipeArena(BENEATH_CURSED_SANDS_RECIPE),
+    spawn: { x: SANDS_MIDDLE.x, y: SANDS_MIDDLE.y - 7 },
+    difficulty: { hp: 1, damage: 1 },
+    waves: [],
+    events: [],
+    stages: [
+        {
+            name: "Coenus, the Head Menaphite Guard",
+            events: [{ at: 0, kind: "finalBoss", enemyId: "coenus", hp: 6000 }],
+            victoryText: "Coenus falls! Return when you're ready for what's below.",
+        },
+        {
+            name: "the Scarab Mages",
+            events: [
+                { at: 0, kind: "boss", enemyId: "scarab_mage", hp: 3500 },
+                { at: 0, kind: "finalBoss", enemyId: "scarab_mage_elder", hp: 4000 },
+            ],
+            victoryText: "The Scarab Mages are dust! The Champion waits below.",
+        },
+        {
+            name: "the Champion of Scabaras",
+            events: [{ at: 0, kind: "finalBoss", enemyId: "champion_of_scabaras", hp: 8000 }],
+            victoryText: "The Champion of Scabaras is defeated! One more stands in your way.",
+        },
+        {
+            name: "the Menaphite Akh",
+            events: [{ at: 0, kind: "finalBoss", enemyId: "menaphite_akh", hp: 9000 }],
+            victoryText: SANDS_DONE,
+        },
+    ],
+    finalBossWarning: "",
+    victoryText: SANDS_DONE,
+    bossArena: SANDS_ARENA,
+    scaperune: true,
+    fight: { requires: "desert", character: "sands_delver", weaponLevel: 4 },
 };

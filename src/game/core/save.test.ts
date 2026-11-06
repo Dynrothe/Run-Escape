@@ -1,8 +1,10 @@
+import { afterAll, beforeAll } from "vitest";
+
 import { ARMOURY_COSTS } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
-import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
 import { SHOP_UPGRADES } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -20,6 +22,7 @@ import {
     exportSave,
     getArmouryStep,
     getEarnedUnlocks,
+    getFightStage,
     getFinishedQuests,
     getMetaStats,
     getNextUpgradeCost,
@@ -1435,5 +1438,73 @@ describe("the save in the browser", () => {
         expect(stored.get(KEY)).toBe("{");
         store.deleteUnreadable(key);
         expect(store.getUnreadable()).toEqual([]);
+    });
+});
+
+describe("a fight in parts, and a map behind another", () => {
+    // A stand-in for Beneath Cursed Sands (a dev map, not here): two parts, behind the desert, and
+    // a map behind it, as the Tombs of Amascut is
+    const fight = {
+        ...getMap("phosani"),
+        id: "test_quest",
+        fight: { requires: "desert", character: "inquisitor", weaponLevel: 1 },
+        stages: [
+            { name: "the first", events: [], victoryText: "One down." },
+            { name: "the second", events: [], victoryText: "Done." },
+        ],
+    };
+    const behind = { ...getMap("lumbridge"), id: "test_behind", requires: "test_quest" };
+    beforeAll(() => {
+        MAPS.push(fight, behind);
+        MAP_BY_ID.set(fight.id, fight);
+        MAP_BY_ID.set(behind.id, behind);
+    });
+    afterAll(() => {
+        MAPS.splice(MAPS.indexOf(fight), 2);
+        MAP_BY_ID.delete(fight.id);
+        MAP_BY_ID.delete(behind.id);
+    });
+
+    it("keeps each part won, and beats the map only with the last", () => {
+        const save = createSave();
+        save.mapVictories.desert = 1;
+        expect(getFightStage(save, fight.id)).toBe(0);
+        recordRun(save, run(fight.id, { victory: true, stage: 0 }));
+        expect(save.fightStages?.[fight.id]).toBe(1);
+        expect(save.mapVictories[fight.id]).toBeUndefined();
+        expect(getFightStage(save, fight.id)).toBe(1);
+        // A loss keeps what's won
+        recordRun(save, run(fight.id, { victory: false, stage: 1 }));
+        expect(getFightStage(save, fight.id)).toBe(1);
+        recordRun(save, run(fight.id, { victory: true, stage: 1 }));
+        expect(save.mapVictories[fight.id]).toBe(1);
+        // All done: from the start again, and round to the map's beaten once more
+        expect(getFightStage(save, fight.id)).toBe(0);
+        recordRun(save, run(fight.id, { victory: true, stage: 0 }));
+        expect(getFightStage(save, fight.id)).toBe(1);
+        recordRun(save, run(fight.id, { victory: true, stage: 1 }));
+        expect(save.mapVictories[fight.id]).toBe(2);
+    });
+
+    it("plays the first part for anything odd in the save", () => {
+        const save = createSave();
+        for (const odd of [1.5, -1, 7, Number.NaN]) {
+            save.fightStages = { [fight.id]: odd };
+            expect(getFightStage(save, fight.id)).toBe(0);
+        }
+    });
+
+    it("keeps a map shut till the one it requires is beaten", () => {
+        const save = createSave();
+        expect(isMapUnlocked(save, behind.id)).toBe(false);
+        save.mapVictories.test_quest = 1;
+        expect(isMapUnlocked(save, behind.id)).toBe(true);
+    });
+
+    it("keeps a fight's parts in the save", () => {
+        const save = createSave();
+        save.fightStages = { [fight.id]: 1, nowhere: 3 };
+        const loaded = migrateSave(JSON.parse(JSON.stringify(save)));
+        expect(loaded.fightStages).toEqual({ [fight.id]: 1 });
     });
 });

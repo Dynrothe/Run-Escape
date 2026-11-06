@@ -16,6 +16,7 @@
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
+//   STAGE=1 ...     # a fight in parts (MapDef.stages): the second, as a run that's won the first
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
@@ -569,6 +570,8 @@ function runOnce(characterId: string, seed: number) {
         expert,
         armoury,
         invocations,
+        // A fight in parts (MapDef.stages): which, STAGE=0 for the first
+        stage: parseInt(process.env.STAGE ?? "0"),
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {

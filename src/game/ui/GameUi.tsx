@@ -69,6 +69,7 @@ import type { RaidChest, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
+    getFightStage,
     getNextUpgradeCost,
     getSkillCoins,
     importSave,
@@ -1720,9 +1721,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
+function stageVictoryText(map: MapDef, stage: number | undefined): string {
+    return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
+}
+
 function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element {
     const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
+    const stage = getFightStage(save, map.id);
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
@@ -1738,15 +1745,19 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                                 ? `Fun map, endless. You play as ${getCharacter(map.fun.character).name}.`
                                 : "Fun map, endless"
                             : !unlocked
-                              ? `Beat ${getMap(map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
-                              : map.fight
-                                ? `Boss fight. You play as the ${getCharacter(map.fight.character).name}` +
-                                  (wins > 0
-                                      ? `, beaten ${wins === 1 ? "once" : `${wins} times`}.`
-                                      : ".")
-                                : wins > 0
-                                  ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
-                                  : "Not beaten yet"}
+                              ? `Beat ${getMap(map.requires ?? map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
+                              : map.stages
+                                ? `Part ${stage + 1} of ${map.stages.length}: ` +
+                                  `${map.stages[stage].name}.` +
+                                  (wins > 0 ? " Complete." : "")
+                                : map.fight
+                                  ? `Boss fight. You play as the ${getCharacter(map.fight.character).name}` +
+                                    (wins > 0
+                                        ? `, beaten ${wins === 1 ? "once" : `${wins} times`}.`
+                                        : ".")
+                                  : wins > 0
+                                    ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
+                                    : "Not beaten yet"}
                     </div>
                     {endless && (
                         <div className="ui-card-style">
@@ -3212,7 +3223,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-result">
                 <h2 className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
-                        ? getMap(result.mapId).victoryText
+                        ? stageVictoryText(getMap(result.mapId), result.stage)
                         : (result?.endedEarly ?? "Oh dear, you are dead!")}
                 </h2>
                 {result?.party && (

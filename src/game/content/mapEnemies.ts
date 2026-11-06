@@ -32,7 +32,16 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     // The Tombs' rooms aren't waves, so their enemies are listed as they are
     const tombs = map.tombs ? TOMBS_ENEMIES.map((enemy) => enemy.id) : [];
     collectEnemyIds(
-        [map.waves, map.events, map.fun?.bosses, map.raid, pumpkins, randomEvents, tombs],
+        [
+            map.waves,
+            map.events,
+            map.stages,
+            map.fun?.bosses,
+            map.raid,
+            pumpkins,
+            randomEvents,
+            tombs,
+        ],
         ids,
         seen,
     );

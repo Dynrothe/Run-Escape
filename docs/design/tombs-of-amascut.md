@@ -46,6 +46,38 @@ the map screen's Dev tab, dev server only), and each piece goes in as a pull req
 - **Random events**: in the raid only a visitor with a casket comes by (Rick Turpentine).
 - **The Wardens**, once all four paths are done, then the chest.
 
+### Behind a quest: Beneath Cursed Sands
+
+The raid's locked behind its quest, as OSRS's is (`MapDef.requires`, checked first in
+`isMapUnlocked`), and the quest behind the campaign's desert map. Nobody comes to the Tombs with
+nothing bought, so a fresh account clearing Entry isn't a target.
+
+- **The quest** (`beneath_cursed_sands`; `content/cursedSands.ts`, its map at the end of
+  `maps/tombsOfAmascut.ts`) is a boss fight in four parts (`MapDef.stages`): Coenus the Head
+  Menaphite Guard (11529), the two Scarab Mages (11508), the Champion of Scabaras (11483) and the
+  Menaphite Akh (11493, her own animations). Each part's a run of its own, kept once it's won
+  (`SaveData.fightStages`), so you can leave and come back to the next, as OSRS keeps a quest's
+  progress; only the last beats the map, and that's what opens the Tombs.
+- **Its fights**, after the wiki's: Coenus cleaves, charges and from half his hitpoints stamps
+  round himself; the mages bolt, fan and call scarab swarms, the second quicker; the Champion's
+  shadow bolts, Shadow Burst (four tiles round him), Shadow Rift (bursting where you stood) and
+  Shadow Flames (a swarm), and a ring of shadow in his last phase; the Akh's spear, her cone of
+  lightning (step beside or behind her), her shadow (11462) shooting from afar, and a storm of
+  lightning in her last phase. Each is in phases (two or three), a pause between.
+- **The kit's ours**: everyone plays the Sands Delver (`characters.ts`, the desert robes, the
+  Crystal bow at level 4, faster and with more hitpoints), so a fight lasts as long as its
+  hitpoints make it, about 29 damage a second kiting: Coenus 6000, the mages 3500 and 4000, the
+  Champion 8000, the Akh 9000, three to five minutes each.
+- **Where**: the raid's own squares under its own id (the recipe's the same), fought in Akkha's
+  arena (`bossArena`), a tomb beneath the sands.
+- **Dev only, for now**: it's in `MAPS` on the dev server alone (`SCAPERUNE_DEV_FIGHTS` in
+  `devMaps.ts`, empty in a build), so a win's kept and opens the raid there, and a build has
+  neither.
+- **The bot** (`FLAT=1 MAP=beneath_cursed_sands DODGE=1 STAGE=0..3`, sands_delver) lasts about
+  1:15 against Coenus and the mages, 25 seconds against the Champion and 19 against the Akh, where
+  it lasts 25 to 34 against Phosani's Nightmare: hard, the last the hardest, and it doesn't kite a
+  melee boss as a ranged player does. Playtest it.
+
 ## 4. Level-ups and gear without timed waves
 
 The waves no longer run on a clock, but they're still where experience and caskets come from.

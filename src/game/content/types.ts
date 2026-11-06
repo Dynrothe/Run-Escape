@@ -1722,6 +1722,13 @@ export type MapDef = {
     // totems' corners, its surges' lanes), in world tiles; all of the arena
     // when unset
     bossArena?: { baseX: number; baseY: number; size: number };
+    // A map beaten before this one opens, whatever else it is (a raid, a dev map): the Tombs of
+    // Amascut behind Beneath Cursed Sands
+    requires?: string;
+    // A fight in parts, each a run of its own (a quest's bosses one after another, as OSRS's are):
+    // a run plays the next part not beaten yet, its events in place of the map's, and the map's
+    // beaten once the last is (SaveData.fightStages)
+    stages?: { name: string; events: RunEventDef[]; victoryText: string }[];
     // What its boss's attacks read from the arena: pillars, rows, statues
     features?: ArenaFeatures;
     // The plane (level) the arena is on: 0, the ground floor, when unset. Some
