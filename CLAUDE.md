@@ -227,6 +227,8 @@ desktop build.
   as well, and don't report an effect as seen unless you saw it.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,
   and the failed load can leave a bad cache in the browser profile for that port.
+- A slow first load after the dev server starts, or a page that reloads itself mid-load, is
+  usually down to Vite's file watcher or its dependency scan: see Scripts in `docs/DEVELOPMENT.md`.
 
 ## Conventions
 
