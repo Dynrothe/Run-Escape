@@ -6,6 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # "on": rooms take players whatever maps they've unlocked (MULTIPLAYER_ANY_MAP)
 MULTIPLAYER_ANY_MAP = "off"
+# "end": a run whose host the run checks catch ends; otherwise it's only logged
+MULTIPLAYER_RUN_CHECKS = "log"
 
 [[durable_objects.bindings]]
 name = "LOBBY"

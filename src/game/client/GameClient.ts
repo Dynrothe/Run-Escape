@@ -362,6 +362,12 @@ for (const upgrade of SHOP_UPGRADES) {
     SHOP_MAX[upgrade.stat] = (SHOP_MAX[upgrade.stat] ?? 0) + upgrade.perRank * upgrade.maxRank;
 }
 
+// A guest's run that's stopped matching the host's, on its results. Its game
+// can't tell why (a bug, a modified game, theirs or the host's), so it says
+// only what failed.
+const OUT_OF_STEP_TEXT =
+    "Integrity check failed: your game and the host's stopped matching, so your run ended.";
+
 // Why a co-op run ended early, on its results
 const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
     idle: "The room closed after half an hour with nothing happening.",
@@ -2317,7 +2323,7 @@ export class GameClient implements GameFrameHandler {
             // Nothing brings the copies back together, so this one stops
             // rather than everyone waiting on it
             this.coop.leave();
-            this.endCoopRunEarly("Your game fell out of step with the host's, so your run ended.");
+            this.endCoopRunEarly(OUT_OF_STEP_TEXT);
             return;
         }
         // Choices and caskets come and go with the frames

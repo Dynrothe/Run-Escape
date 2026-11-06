@@ -649,6 +649,7 @@ src/game/
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
+  coop-checks.mjs  both relays' checks on a run's frames
   cloudflare/  the same relay on Cloudflare Durable Objects, each room near its host (README.md)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per segment and pass (without
@@ -1231,7 +1232,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
-  run, rather than everyone waiting on a copy that can't recover.
+  run, rather than everyone waiting on a copy that can't recover. It tells the relay first
+  (`outOfStep`), for the relay's log; the host ignores it.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
@@ -1334,6 +1336,10 @@ hard mode goes out in `GameStart`, like endless, so every player's copy plays th
 `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone into any room instead, and a win then opens
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.
+
+Both relays check a run's frames as they pass (`server/coop-checks.mjs`) and log what they find,
+an object an entry with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
+`MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does.
 
 A room's map, endless and hard mode are the relay's: the host's game sends `settings` and shows
 what comes back in the room update, never a pick of its own, so a refused one changes nothing. A

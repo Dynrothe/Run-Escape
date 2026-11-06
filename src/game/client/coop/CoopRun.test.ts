@@ -244,6 +244,20 @@ describe("co-op lockstep", () => {
         expect(guest.stepFrame().map((e) => e.frame)).toEqual([4]);
     });
 
+    it("a guest whose run stops matching the host's says so once, for the relay", () => {
+        const ups: UpMessage[] = [];
+        const link: CoopLink = { sendUp: (m) => ups.push(m), sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => 0);
+        guest.receiveDown({ from: 0, upTo: 100, events: [], hash: [50, -1] });
+        guest.receiveDown({ from: 100, upTo: 150, events: [], hash: [100, -1] });
+        while (guest.canStep()) {
+            guest.stepFrame();
+        }
+        expect(guest.desynced).toBe(true);
+        expect(ups).toEqual([{ outOfStep: 50 }]);
+    });
+
     it("a guest takes frames once, and asks for any that went missing", () => {
         const ups: UpMessage[] = [];
         const link: CoopLink = { sendUp: (m) => ups.push(m), sendDown: () => {} };

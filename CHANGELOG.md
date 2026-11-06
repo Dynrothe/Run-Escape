@@ -20,6 +20,8 @@ the version in the corner).
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
   levels.
 - The Dragon hunter crossbow fires the same clearer bolts: dragon bolts.
+- Co-op's out-of-step message, by trippy22: a guest whose game stops matching the host's is now
+  told an integrity check failed.
 
 ### Fixed
 

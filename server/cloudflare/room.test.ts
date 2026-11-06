@@ -40,7 +40,7 @@ class Socket {
     }
 }
 
-const env = {
+const env: Record<string, any> = {
     MULTIPLAYER_ANY_MAP: "on",
     LOBBY: {
         idFromName: (name: string) => name,
@@ -439,5 +439,108 @@ describe("Cloudflare co-op room", () => {
         await wait(room, 10_000);
         expect(socket.closes).toEqual([1008]);
         warn.mockRestore();
+    });
+
+    describe("run checks", () => {
+        let warn: any;
+        beforeEach(() => {
+            warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        });
+        afterEach(() => {
+            warn.mockRestore();
+            delete env.MULTIPLAYER_RUN_CHECKS;
+        });
+        // What the run checks logged: an object each, which Workers Logs keeps
+        // field by field
+        const checked = () =>
+            warn.mock.calls
+                .map(([entry]: [any]) => entry)
+                .filter((entry: any) => entry?.event === "coop_run_check");
+        const heroes = [{ id: "host" }, { id: "guest" }];
+        // Frames giving the guest a move they never sent
+        const forged = (room: any, host: any, frame: number) =>
+            say(room, host, {
+                t: "down",
+                d: { upTo: frame, events: [{ frame, hero: 1, move: [127, 0] }] },
+            });
+
+        it("logs a host's frames giving a guest moves they didn't send, and goes on", async () => {
+            const { room, host, guest } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            say(room, guest, { t: "up", d: { move: [0, 127] } });
+            say(room, host, {
+                t: "down",
+                d: { upTo: 1, events: [{ frame: 1, hero: 1, move: [0, 127] }] },
+            });
+            expect(checked()).toEqual([]);
+            for (let frame = 2; frame <= 5; frame++) {
+                forged(room, host, frame);
+            }
+            expect(checked()[0]).toMatchObject({
+                kind: "move",
+                room: "ABCDEFGH",
+                host: "host",
+                guest: "guest",
+                hero: 1,
+                frame: 2,
+                move: [127, 0],
+                sent: [[0, 127]],
+            });
+            expect(guest.socket.sent.at(-1)).toMatchObject({ t: "down", d: { upTo: 5 } });
+            expect(room.room.started).toBe(true);
+            // And sums it up when the run's over
+            say(room, host, { t: "end" });
+            expect(checked().at(-1)).toMatchObject({
+                kind: "summary",
+                counts: { move: 4 },
+                caught: "move",
+            });
+        });
+
+        it("ends the run when it's set to", async () => {
+            env.MULTIPLAYER_RUN_CHECKS = "end";
+            const { room, host, guest } = await party();
+            const guestSocket = guest.socket;
+            say(room, host, { t: "start", game: { heroes } });
+            for (let frame = 1; frame <= 3; frame++) {
+                forged(room, host, frame);
+            }
+            expect(guestSocket.sent.at(-1)).toMatchObject({ t: "gone", reason: "hostLeft" });
+        });
+
+        it("doesn't take what it can't know after a restart for the host's word", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            await wait(room, 1000);
+            // Cloudflare restarting it, as a deploy does: everyone comes back
+            const again = await restart();
+            const [h, g] = again.room.members;
+            resume(again, h.token, new Socket("host"));
+            resume(again, g.token, new Socket("guest"));
+            // Frames the host held through it carry a move from before
+            forged(again, h, 100);
+            await wait(again, 20_000);
+            forged(again, h, 1100);
+            expect(checked()).toEqual([]);
+            // Then it checks again, as it kept who the heroes are
+            await wait(again, 6000);
+            forged(again, h, 1500);
+            expect(checked()).toHaveLength(1);
+        });
+
+        it("leaves a run that began before the room kept its heroes alone", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            // As one saved by the relay before this one was deployed
+            delete saved.heroIds;
+            const again = await loadRoom();
+            const [h, g] = again.room.members;
+            await wait(again, 30_000);
+            for (let frame = 1; frame <= 5; frame++) {
+                forged(again, h, frame);
+            }
+            expect(checked()).toEqual([]);
+            expect(g.socket.sent.at(-1)).toMatchObject({ t: "down", d: { upTo: 5 } });
+        });
     });
 });
