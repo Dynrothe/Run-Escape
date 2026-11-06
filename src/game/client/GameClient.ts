@@ -367,6 +367,10 @@ for (const upgrade of SHOP_UPGRADES) {
 // only what failed.
 const OUT_OF_STEP_TEXT =
     "Integrity check failed: your game and the host's stopped matching, so your run ended.";
+// A co-op run that can't go on: a frame that won't step (an error in the
+// game), or a guest that missed more of the host's frames than it still has
+const STUCK_TEXT = "Something went wrong in the run, so it ended.";
+const CANT_CATCH_UP_TEXT = "Your connection dropped for too long to catch up, so your run ended.";
 
 // Why a co-op run ended early, on its results
 const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
@@ -949,7 +953,22 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // A guest's run that can't go on: what was done counts, as if they'd quit
+    // A co-op run that can't go on (stuck, or cantCatchUp): out of the room,
+    // which for the host ends it for everyone rather than leaving them waiting
+    private endBrokenCoopRun(run: CoopRun): void {
+        const why = run.stuck ? STUCK_TEXT : CANT_CATCH_UP_TEXT;
+        console.error(
+            `Co-op run ended: ${run.stuck ? "a frame kept failing to step" : "frames missing for good"}`,
+        );
+        this.coop.leave();
+        if (this.runRecorded) {
+            // Its results are up already, so they'd not say why
+            this.store.toast(why, 6000);
+        }
+        this.endCoopRunEarly(why);
+    }
+
+    // A co-op run that can't go on for this player: what was done counts, as if they'd quit
     private endCoopRunEarly(why: string): void {
         // Nothing more of it is stepped, frames still to come included
         this.coopStopped = true;
@@ -2284,6 +2303,11 @@ export class GameClient implements GameFrameHandler {
         if (this.coopStopped) {
             return;
         }
+        this.coop.keepAlive();
+        if (run.stuck || run.cantCatchUp) {
+            this.endBrokenCoopRun(run);
+            return;
+        }
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
@@ -2293,32 +2317,37 @@ export class GameClient implements GameFrameHandler {
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
         const started = performance.now();
         let steps = 0;
-        while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
-            if (this.accumulator >= TICK_MS) {
-                this.accumulator -= TICK_MS;
-            } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
-                break;
-            }
-            steps++;
-            const events = run.stepFrame();
-            this.handleEvents(sim, sim.takeEvents());
-            for (const event of events) {
-                if (event.action && event.hero === sim.focus) {
-                    this.afterCoopAction(sim, event.action);
-                    if (event.auto) {
-                        this.store.toast(
-                            "Everyone was waiting, so that was decided for you.",
-                            4000,
-                        );
+        try {
+            while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
+                if (this.accumulator >= TICK_MS) {
+                    this.accumulator -= TICK_MS;
+                } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
+                    break;
+                }
+                steps++;
+                const events = run.stepFrame();
+                this.handleEvents(sim, sim.takeEvents());
+                for (const event of events) {
+                    if (event.action && event.hero === sim.focus) {
+                        this.afterCoopAction(sim, event.action);
+                        if (event.auto) {
+                            this.store.toast(
+                                "Everyone was waiting, so that was decided for you.",
+                                4000,
+                            );
+                        }
                     }
                 }
             }
+        } finally {
+            if (!run.canStep()) {
+                // Waiting on the host: no time to make up once it's back
+                this.accumulator = Math.min(this.accumulator, TICK_MS);
+            }
+            // What was stepped goes out even if something after a step threw,
+            // or everyone else waits on frames that never come
+            run.flush();
         }
-        if (!run.canStep()) {
-            // Waiting on the host: no time to make up once it's back
-            this.accumulator = Math.min(this.accumulator, TICK_MS);
-        }
-        run.flush();
         if (run.desynced && !this.runRecorded) {
             // Nothing brings the copies back together, so this one stops
             // rather than everyone waiting on it

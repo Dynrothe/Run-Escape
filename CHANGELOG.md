@@ -30,6 +30,12 @@ the version in the corner).
 ### Fixed
 
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
+- Co-op on the Cloudflare server: a connection that dies without closing (a laptop asleep, a
+  network that went away) is found within seconds and reconnected, instead of leaving everyone
+  frozen until the room closed after half an hour. A host who's really gone ends the run within
+  a few minutes.
+- Co-op: a guest who missed too much of the run to catch up is told so, rather than left frozen,
+  and a run that hits an error in the game ends instead of freezing everyone.
 
 ## 0.27.0 - 2026-11-05
 

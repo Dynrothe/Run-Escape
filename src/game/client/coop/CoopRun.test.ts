@@ -4,7 +4,7 @@ import { Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import { fm, usePortableMath } from "../../core/fmath";
 import { cleanFrameEvent, cleanMove, hasBadNumber, syncHash } from "../../core/lockstep";
 import { makeGrid } from "../../core/world/testGrid";
-import { CoopLink, CoopRun, DECIDE_AFTER_MS } from "./CoopRun";
+import { CoopLink, CoopRun, DECIDE_AFTER_MS, GIVE_UP_GAP_MS, MAX_FAILED_STEPS } from "./CoopRun";
 import { DownMessage, UpMessage, isGameStart } from "./protocol";
 
 function openField(): string[] {
@@ -282,6 +282,75 @@ describe("co-op lockstep", () => {
         // Then they come, together
         guest.receiveDown({ from: 2, upTo: 10, events: [] });
         expect(guest.behind).toBe(10);
+    });
+
+    it("a guest gives up on frames the host's kept sending without, but not on a short gap", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        // A gap that's filled in a few seconds, as a resend fills one
+        let upTo = 10;
+        for (let ms = 0; ms < 5000; ms += 40, upTo += 2) {
+            clock.now += 40;
+            guest.receiveDown({ from: upTo - 2, upTo, events: [] });
+        }
+        guest.receiveDown({ from: 2, upTo, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        // One that's never filled, with the host's frames coming all the while
+        const missingFrom = upTo;
+        upTo += 10;
+        for (let ms = 0; ms <= GIVE_UP_GAP_MS + 40; ms += 40, upTo += 2) {
+            expect(guest.cantCatchUp).toBe(false);
+            clock.now += 40;
+            guest.receiveDown({ from: upTo - 2, upTo, events: [] });
+        }
+        expect(guest.behind).toBe(missingFrom);
+        expect(guest.cantCatchUp).toBe(true);
+    });
+
+    it("a guest doesn't give up on frames while the host's sending nothing", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        guest.receiveDown({ from: 4, upTo: 6, events: [] });
+        // The host's away (reconnecting, say), then its resend comes
+        clock.now += GIVE_UP_GAP_MS * 2;
+        expect(guest.cantCatchUp).toBe(false);
+        guest.receiveDown({ from: 2, upTo: 8, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        expect(guest.behind).toBe(8);
+    });
+
+    it("says it's stuck on a frame that keeps failing to step, and not on one that fails once", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const run = new CoopRun(createSim(0), true, link, heroes, "host", () => 0);
+        run.receiveUp("guest1", { loaded: true });
+        run.receiveUp("guest2", { loaded: true });
+        const step = run.sim.step.bind(run.sim);
+        let failing = 1;
+        run.sim.step = () => {
+            if (failing > 0) {
+                failing--;
+                throw new Error("a bug");
+            }
+            step();
+        };
+        expect(() => run.stepFrame()).toThrow("a bug");
+        run.stepFrame();
+        expect(run.frame).toBe(1);
+        expect(run.stuck).toBe(false);
+        failing = Infinity;
+        for (let i = 0; i < MAX_FAILED_STEPS; i++) {
+            expect(run.stuck).toBe(false);
+            expect(() => run.stepFrame()).toThrow("a bug");
+        }
+        expect(run.stuck).toBe(true);
+        expect(run.frame).toBe(1);
     });
 
     // A host's run, on a clock the test moves, with what it sends kept

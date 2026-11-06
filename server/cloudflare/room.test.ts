@@ -22,6 +22,8 @@ class Socket {
     // Listed by getWebSockets: still so once the room's closed it, until
     // the other end answers (playerCloses), which a dead one never does
     connected = true;
+    // When Cloudflare last answered its ping without waking the room
+    pingedAt: Date | null = null;
     private attachment: any;
     constructor(private readonly who: string) {}
     serializeAttachment(value: unknown) {
@@ -81,6 +83,7 @@ async function loadRoom(): Promise<any> {
         acceptWebSocket: (socket: Socket) => sockets.push(socket),
         getWebSockets: () => sockets.filter((socket) => socket.connected),
         setWebSocketAutoResponse: () => {},
+        getWebSocketAutoResponseTimestamp: (socket: Socket) => socket.pingedAt,
         blockConcurrencyWhile: (load: () => Promise<unknown>) => (ready = ready.then(load)),
     };
     const room = new Room(ctx, env);
@@ -389,6 +392,81 @@ describe("Cloudflare co-op room", () => {
         await wait(again, 1000);
         expect(again.room?.started).toBe(true);
         expect(back.sent.map((m: any) => m.t)).not.toContain("gone");
+    });
+
+    // Time passing with some players' games pinging (answered without waking
+    // the room) every `every` ms, as a hidden tab's can slow to
+    async function pinging(room: any, ms: number, players: any[], every = 30_000) {
+        for (let t = 0; t < ms; t += every) {
+            for (const player of players) {
+                player.socket && (player.socket.pingedAt = new Date());
+            }
+            await wait(room, Math.min(every, ms - t));
+        }
+    }
+
+    it("lets go of a player it's heard nothing from for five minutes, as if they'd dropped", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        const guestSocket = guest.socket;
+        // Their connection died without closing; the host's game pings
+        await pinging(room, 5 * 60_000, [host]);
+        expect(guestSocket.closes).toEqual([]);
+        await pinging(room, 61_000, [host]);
+        expect(guestSocket.closes).toEqual([1001]);
+        // Held for a moment, as for a closed connection, then out
+        expect(room.room.members).toHaveLength(2);
+        await pinging(room, 16_000, [host], 4000);
+        expect(room.room.members.map((m: any) => m.id)).toEqual(["host"]);
+        expect(host.socket.sent.at(-1)).toMatchObject({ t: "room" });
+        expect(host.socket.closes).toEqual([]);
+        // Coming back after that, they're told why
+        const late = new Socket("guest");
+        resume(room, guest.token, late);
+        expect(late.sent.at(-1).message).toBe("You were away too long, so you're out of the room.");
+    });
+
+    it("ends the run for everyone when the host's gone quiet, not half an hour later", async () => {
+        const { room, guest } = await party();
+        const guestSocket = guest.socket;
+        await say(room, room.room.members[0], { t: "start", game: {} });
+        await pinging(room, 6 * 60_000 + 16_000, [guest]);
+        expect(guestSocket.sent.at(-1)).toMatchObject({ t: "gone", reason: "hostLeft" });
+        expect(room.room).toBeUndefined();
+    });
+
+    it("keeps players whose games only ping, once a minute, for as long as the room's going", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        // A run with nothing sent but pings (only possible from a frozen
+        // host, which then pings too), until just before it's idle
+        await pinging(room, 29 * 60_000, [host, guest], 60_000);
+        expect(room.room.members).toHaveLength(2);
+        expect(host.socket.closes).toEqual([]);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("counts what players say as hearing from them", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        for (let i = 0; i < 12 * 10; i++) {
+            say(room, host, { t: "down", f: i });
+            say(room, guest, { t: "up", i });
+            await wait(room, 5000);
+        }
+        expect(room.room.members).toHaveLength(2);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("remembers when it last heard from someone through being out of memory", async () => {
+        const { room, host, guest } = await party();
+        const guestSocket = guest.socket;
+        await pinging(room, 3 * 60_000, [host]);
+        // Made again, which mustn't start their quiet over
+        const again = await loadRoom();
+        const [h] = again.room.members;
+        await pinging(again, 2 * 60_000 + 61_000, [h]);
+        expect(guestSocket.closes).toEqual([1001]);
     });
 
     it("doesn't take a connection it's closed for its player's, once it's made again", async () => {
