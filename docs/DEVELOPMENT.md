@@ -1648,7 +1648,7 @@ from being lost:
 **Exports are the only backup** unless cloud save is on. Clearing the browser's data (or uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
-`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save is on. It comes after the
 menu so a controller's highlight still starts on Singleplayer. The file Export gives has
 `SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
 as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
@@ -1678,8 +1678,9 @@ and none of this changes `SaveData`.
   seconds at most). The cloud's revision being this device's means only local changes are news.
   A different one is taken silently when nothing changed here, or the save has no runs (the player
   who cleared their browser). Otherwise, and when an upload's refused as stale, the title screen
-  asks which to keep, showing both summaries; nothing syncs until the player picks (Later puts it
-  in Settings). Keeping this device's uploads with `force`.
+  asks which to keep, showing both summaries, unless the two hold the same progress (`sameSave`
+  leaves out `gameVersion` and `lastExported`). Nothing syncs until the player picks (Later puts
+  it in Settings). Keeping this device's uploads with `force`.
 - **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
   Worker refuses an older game's upload over it, so the choice says why, and only Keep this
   device's (losing what's new) or Later.

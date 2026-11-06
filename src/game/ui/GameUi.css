@@ -436,19 +436,29 @@
     flex-shrink: 0;
 }
 
-/* Cloud save's rows hold a code and a box to type one, so they wrap on a narrow screen */
-.ui-setting-cloud {
+/* A box to type in (cloud save's code): it goes under the label when there isn't room beside it,
+   and shrinks to what's left */
+.ui-setting-wide {
     flex-wrap: wrap;
+}
+
+.ui-setting-wide .ui-setting-control {
+    flex: 1 1 260px;
+    min-width: 0;
+    justify-content: flex-end;
 }
 
 .ui-cloud-link {
     display: flex;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    max-width: 340px;
 }
 
+/* Grows from nothing, so its own width never counts towards the panel's and scrolls it sideways */
 .ui-cloud-code-input {
-    width: 300px;
-    max-width: 100%;
+    width: 0;
     font-family: "OSRS Bold", sans-serif;
     letter-spacing: 1px;
     text-transform: uppercase;

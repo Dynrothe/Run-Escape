@@ -819,7 +819,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 </div>
                 {/* Under the menu, so a controller's highlight still starts on
                     Singleplayer; not while nothing's saving, as that panel comes first */}
-                {!ui.saveBlock && <ExportReminder save={save} client={client} />}
+                {/* Cloud save keeps a copy already */}
+                {!ui.saveBlock && !ui.cloud?.code && <ExportReminder save={save} client={client} />}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">

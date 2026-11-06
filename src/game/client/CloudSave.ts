@@ -87,6 +87,20 @@ export function normalizeCode(text: string): string | undefined {
     return /^[0-9A-HJKMNP-TV-Z]{24}$/.test(code) ? code.match(/.{4}/g)!.join("-") : undefined;
 }
 
+// Whether two saves hold the same progress: what's marked on them when they're written or
+// exported doesn't count
+export function sameSave(a: SaveData, b: SaveData): boolean {
+    const text = (save: SaveData) =>
+        JSON.stringify(
+            { ...save, gameVersion: undefined, lastExported: undefined },
+            (_key, value) =>
+                value && typeof value === "object" && !Array.isArray(value)
+                    ? Object.fromEntries(Object.entries(value).sort(([x], [y]) => (x < y ? -1 : 1)))
+                    : value,
+        );
+    return text(a) === text(b);
+}
+
 function readState(storage: Store | undefined): CloudState | undefined {
     try {
         const raw = JSON.parse(storage?.getItem(CLOUD_STATE_KEY) ?? "null");
@@ -359,14 +373,16 @@ export class CloudSync {
             compareGameVersions(meta.summary.gameVersion, this.host.gameVersion) > 0;
         // The player who cleared their browser's data: an untouched save takes the cloud's
         const fresh = this.host.save().runs === 0;
-        if (!newer && (!state.dirty || fresh)) {
-            await this.download();
+        if (newer) {
+            this.choice = { cloud: meta, newer, closed: false };
             return;
         }
-        this.choice = { cloud: meta, newer, closed: false };
+        // Both changed: ask, unless they're the same save after all (a code linked again, say)
+        await this.download(state.dirty && !fresh);
     }
 
-    private async download(): Promise<void> {
+    // ifSame: only if it's the same as this device's, and if not, ask which to keep
+    private async download(ifSame = false): Promise<void> {
         const state = this.state!;
         const got = await this.request("GET", "save");
         if (!got) {
@@ -390,9 +406,17 @@ export class CloudSync {
             }
             return;
         }
+        if (ifSame && !sameSave(save, this.host.save())) {
+            const { revision, summary, updatedAt } = got;
+            this.choice = { cloud: { revision, summary, updatedAt }, newer: false, closed: false };
+            return;
+        }
         this.applying = true;
         try {
-            this.host.apply(save);
+            // The same save needn't go in again
+            if (!ifSame) {
+                this.host.apply(save);
+            }
         } finally {
             this.applying = false;
         }

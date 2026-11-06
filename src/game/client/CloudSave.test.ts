@@ -216,6 +216,15 @@ it("asks before a code's save replaces one with progress, either way", async () 
     expect(state()).toMatchObject({ revision: 3, dirty: false });
 });
 
+it("doesn't ask when a code's save is the same as this device's", async () => {
+    worker.put({ ...withRuns(8), lastExported: 5 });
+    await start({ ...withRuns(8), lastExported: 9 }).useCode(CODE);
+    expect(view()?.choice).toBeUndefined();
+    expect(state()).toMatchObject({ revision: 1, dirty: false });
+    expect(current.lastExported).toBe(9);
+    expect(worker.uploads()).toBe(0);
+});
+
 it("takes another device's newer save on coming back, if nothing changed here", async () => {
     link(1, false);
     worker.put(withRuns(1));

@@ -22,18 +22,21 @@ function describe(summary: CloudSummary | undefined): string {
     );
 }
 
-// The Settings row's layout, as GameUi's Setting draws it, wrapping on a narrow screen
+// The Settings row's layout, as GameUi's Setting draws it. wide: its control is a box to type
+// in, which wraps under the label and shrinks to fit a narrow screen.
 function CloudRow({
     name,
     text,
+    wide = false,
     children,
 }: {
     name: string;
     text?: ReactNode;
+    wide?: boolean;
     children?: ReactNode;
 }): JSX.Element {
     return (
-        <div className="ui-setting ui-setting-cloud">
+        <div className={"ui-setting" + (wide ? " ui-setting-wide" : "")}>
             <div className="ui-setting-label">
                 <div className="ui-setting-name">{name}</div>
                 {text && <div className="ui-setting-text">{text}</div>}
@@ -85,7 +88,11 @@ export function CloudSaveSettings({
                         Turn on
                     </button>
                 </CloudRow>
-                <CloudRow name="Have a code?" text="From another device, to bring its save here">
+                <CloudRow
+                    name="Have a code?"
+                    text="From another device, to bring its save here"
+                    wide
+                >
                     <form
                         className="ui-cloud-link"
                         onSubmit={(e) => {
@@ -96,7 +103,7 @@ export function CloudSaveSettings({
                         <input
                             className="ui-coop-input ui-cloud-code-input"
                             value={typed}
-                            placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                            placeholder="Sync code"
                             spellCheck={false}
                             autoCapitalize="characters"
                             autoComplete="off"
