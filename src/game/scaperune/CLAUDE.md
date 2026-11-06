@@ -1458,6 +1458,26 @@ view, so at the default zoom it sees about 27 by 16 tiles. So:
   the bottom of the screen to 48° at the top, so a tall ridge can hide a tile or two near the top until you get closer.
 - **It doesn't clip** over any slope within that limit. It'd lurch at creases on tall ground, so on dev maps it eases after
   the ground (`CAMERA_GROUND_EASE`).
+- **It rides with the player**, so whatever level they're on looks the same, and other levels are nearer or further. Ground
+  h tiles higher to the north shows 0.36h further up the screen (0.9h near its top), so it pushes what's on it off the top:
+  past a rise of 65 a phone sees about 4 tiles onto it, and past 125 under one. A level 65 down is drawn at 0.8 of the size,
+  125 down at 0.7. Depth doesn't fog or darken.
+- **How much it takes**, from `scaperune_depth` (`maps/depthTest.ts`: slopes, cliffs, platforms and pits of 30, 60, 65, 125
+  and 128, desktop and phone): up to 65 (a Sepulchre level, 4 tiles) reads well up or down. Past that, keep it for what's
+  only looked at, as the Owl's Court's lower walkway is. A bare face of terrain is one tile stretched over its height: a
+  plain overlay reads as a flat band, and a textured one streaks, so hang walls on a tall one, as the court does.
+- **Scenery round the arena** (`scaperune_backdrop`, `maps/backdropTest.ts`). Only faces that look south are seen, so:
+    - **A drop reads by what faces the camera.** A drop to the south shows its face. A drop to the east or west shows
+      nothing, and a flat floor seen down a drop to the north looks like a floor at your own level, however deep. Give a
+      chasm to the north a far rim back up (its face is what looks deep), ledges stepping down the near side, or black
+      void with a lit ledge below it. Past 16 tiles it looks no deeper. Deeper than the byte is a bridge deck on level 1
+      (another 255) or a `LocOverride` height.
+    - **What rises to the north is cut off by the top of the screen**: about 10 tiles of it are ever seen on a desktop and 8
+      on a phone, with the player at its foot. Anything taller is triangles nobody sees. A cut-off column still reads as
+      tall.
+    - **What rises east or west leans out over the screen**, more the taller it is. Keep it under about 6 tiles, or it
+      looms. To the south, behind the camera, keep it under about 2 tiles, or let the ground fall away.
+    - **Terraces read best of all**: steps of 32 every 4 tiles, with trees on them getting smaller as they go down.
 
 **Walkable.** A tile steeper than `walkSlope` is blocked with the same floor flag as water, going by the rounded heights in the
 grid, so `getCollisionFlags` and the game's scene agree. To the flow field a cliff's a wall, and enemies only turn up where they
