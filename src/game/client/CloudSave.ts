@@ -15,11 +15,11 @@ export const CLOUD_SAVE_URL = cloudSaveUrl(
 // The sync code and how far this device has synced, kept apart from the save so it never goes
 // out in an export. Never rename it, as with the save's own key.
 export const CLOUD_STATE_KEY = "rune-survivors-cloud";
-// After the last change before uploading, so a run's results and the shopping after them go up
-// together
-export const UPLOAD_DELAY_MS = 15_000;
+// Uploads are this far apart at least. A save point within it (runs ended back to back, say)
+// waits for it to pass, and whatever's changed by then goes up once.
+export const UPLOAD_COOLDOWN_MS = 120_000;
 // Coming back to the tab checks for a save from another device, this often at most
-const CHECK_EVERY_MS = 30_000;
+const CHECK_EVERY_MS = 60_000;
 
 // What the Worker says about a save (readSave in server/cloud-saves/worker.mjs)
 export type CloudSummary = {
@@ -37,8 +37,9 @@ type CloudState = {
     code: string;
     // The cloud's revision this device's save came from, or last went up as
     revision: number;
-    // This device's save has changed since then
-    dirty: boolean;
+    // The save's fingerprint then: a save that still has it hasn't changed. None when this
+    // device's save has never been in step with the cloud's.
+    hash?: string;
     syncedAt?: number;
 };
 
@@ -87,18 +88,28 @@ export function normalizeCode(text: string): string | undefined {
     return /^[0-9A-HJKMNP-TV-Z]{24}$/.test(code) ? code.match(/.{4}/g)!.join("-") : undefined;
 }
 
-// Whether two saves hold the same progress: what's marked on them when they're written or
-// exported doesn't count
-export function sameSave(a: SaveData, b: SaveData): boolean {
-    const text = (save: SaveData) =>
-        JSON.stringify(
-            { ...save, gameVersion: undefined, lastExported: undefined },
-            (_key, value) =>
-                value && typeof value === "object" && !Array.isArray(value)
-                    ? Object.fromEntries(Object.entries(value).sort(([x], [y]) => (x < y ? -1 : 1)))
-                    : value,
-        );
-    return text(a) === text(b);
+// What a save's progress comes to, as a short hash: two saves with the same progress have the
+// same one. What's marked on a save when it's written or exported doesn't count, and nor does
+// the order of its keys.
+export function fingerprint(save: SaveData): string {
+    const text = JSON.stringify(
+        { ...save, gameVersion: undefined, lastExported: undefined },
+        (_key, value) =>
+            value && typeof value === "object" && !Array.isArray(value)
+                ? Object.fromEntries(Object.entries(value).sort(([x], [y]) => (x < y ? -1 : 1)))
+                : value,
+    );
+    // cyrb53: 53 bits is plenty to tell one save from the last
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 & 0x1fffff).toString(16) + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 
 function readState(storage: Store | undefined): CloudState | undefined {
@@ -108,7 +119,7 @@ function readState(storage: Store | undefined): CloudState | undefined {
             raw &&
             typeof raw.code === "string" &&
             Number.isInteger(raw.revision) &&
-            typeof raw.dirty === "boolean"
+            (raw.hash === undefined || typeof raw.hash === "string")
         ) {
             return raw;
         }
@@ -126,8 +137,9 @@ function localStore(): Store | undefined {
     }
 }
 
-// Keeps the save in step with the cloud's. The local save stays the main copy: uploads follow
-// the game's own writes, and a download goes in through importSave, as a file would.
+// Keeps the save in step with the cloud's. The local save stays the main copy: uploads happen at
+// save points, when the progress has changed, and a download goes in through importSave, as a
+// file would.
 export class CloudSync {
     private state?: CloudState;
     // The Worker answered, so cloud save can be offered
@@ -137,11 +149,9 @@ export class CloudSync {
     private choice?: CloudChoice;
     // One request at a time
     private queue: Promise<void> = Promise.resolve();
+    // An upload waiting out the cooldown
     private uploadTimer?: ReturnType<typeof setTimeout>;
-    // Counts changes, so one made while an upload's on its way isn't taken as uploaded
-    private changes = 0;
-    // A download going in, whose own write isn't a change to upload
-    private applying = false;
+    private lastUpload = -Infinity;
     private lastCheck = -Infinity;
 
     constructor(
@@ -183,8 +193,9 @@ export class CloudSync {
         return this.queue;
     }
 
-    // Looks for a newer save from another device, and uploads this one's if it's changed
-    check(): Promise<void> {
+    // Looks for a newer save from another device, and uploads this one's if it's changed: at
+    // once when the player asked (Sync now), or as a save point would
+    check(now = false): Promise<void> {
         return this.run(async () => {
             // Another tab may have linked or synced since
             this.state = readState(this.storage);
@@ -194,34 +205,30 @@ export class CloudSync {
             this.lastCheck = Date.now();
             const meta = await this.request("GET", "save/meta");
             if (meta) {
-                await this.settle(meta);
+                await this.settle(meta, now);
             }
         });
     }
 
-    // The game's saved: upload in a while
-    changed(): void {
-        if (!this.state || this.applying) {
+    // A save point (a run's results, leaving Skills or the Armoury, an import, leaving the tab):
+    // uploads if the progress has changed. Within the cooldown it waits, and whatever's changed
+    // by then goes up once. Nothing goes up while the player's deciding which save to keep.
+    savePoint(): void {
+        if (!this.state || this.choice || this.uploadTimer !== undefined || !this.changedHere()) {
             return;
         }
-        this.changes++;
-        if (!this.state.dirty) {
-            this.state.dirty = true;
-            this.write();
-        }
-        // Nothing goes up while the player's deciding which save to keep
-        if (!this.choice) {
-            clearTimeout(this.uploadTimer);
-            this.uploadTimer = setTimeout(() => this.upload(), UPLOAD_DELAY_MS);
+        const wait = this.lastUpload + UPLOAD_COOLDOWN_MS - Date.now();
+        if (wait > 0) {
+            this.uploadTimer = setTimeout(() => this.upload(), wait);
+        } else {
+            this.upload();
         }
     }
 
-    // Leaving the tab sends a waiting upload now, and coming back looks for one from elsewhere
+    // Leaving the tab is a save point, and coming back looks for a save from elsewhere
     onVisibility(hidden: boolean): void {
         if (hidden) {
-            if (this.uploadTimer !== undefined) {
-                this.upload();
-            }
+            this.savePoint();
         } else if (Date.now() - this.lastCheck > CHECK_EVERY_MS) {
             this.check();
         }
@@ -237,7 +244,7 @@ export class CloudSync {
             if (typeof created?.code !== "string") {
                 return;
             }
-            this.state = { code: created.code, revision: 0, dirty: true };
+            this.state = { code: created.code, revision: 0 };
             this.write();
             await this.put(false);
         });
@@ -266,7 +273,7 @@ export class CloudSync {
                 this.problem = "offline";
                 return;
             }
-            this.state = { code, revision: 0, dirty: true };
+            this.state = { code, revision: 0 };
             this.problem = undefined;
             this.write();
             linked = true;
@@ -350,21 +357,28 @@ export class CloudSync {
         this.uploadTimer = undefined;
         return this.run(async () => {
             this.state = readState(this.storage);
-            if (this.state?.dirty && !this.choice && this.host.canWrite()) {
+            if (this.state && !this.choice && this.host.canWrite() && this.changedHere()) {
                 await this.put(false);
             }
         });
     }
 
+    // Whether the save's progress has changed since it was last in step with the cloud's
+    private changedHere(): boolean {
+        return this.state !== undefined && fingerprint(this.host.save()) !== this.state.hash;
+    }
+
     // What to do once the cloud's revision is known
-    private async settle(meta: CloudMeta): Promise<void> {
+    private async settle(meta: CloudMeta, now = false): Promise<void> {
         const state = this.state!;
         if (meta.revision === state.revision || meta.revision === 0) {
             // In step (or the cloud has nothing), so only this device's changes are news
             state.revision = meta.revision;
             this.choice = undefined;
-            if (state.dirty) {
+            if (now && this.changedHere()) {
                 await this.put(false);
+            } else {
+                this.savePoint();
             }
             return;
         }
@@ -378,7 +392,7 @@ export class CloudSync {
             return;
         }
         // Both changed: ask, unless they're the same save after all (a code linked again, say)
-        await this.download(state.dirty && !fresh);
+        await this.download(this.changedHere() && !fresh);
     }
 
     // ifSame: only if it's the same as this device's, and if not, ask which to keep
@@ -406,44 +420,39 @@ export class CloudSync {
             }
             return;
         }
-        if (ifSame && !sameSave(save, this.host.save())) {
+        const hash = fingerprint(save);
+        if (ifSame && hash !== fingerprint(this.host.save())) {
             const { revision, summary, updatedAt } = got;
             this.choice = { cloud: { revision, summary, updatedAt }, newer: false, closed: false };
             return;
         }
-        this.applying = true;
-        try {
-            // The same save needn't go in again
-            if (!ifSame) {
-                this.host.apply(save);
-            }
-        } finally {
-            this.applying = false;
-        }
-        Object.assign(state, { revision: got.revision, dirty: false, syncedAt: Date.now() });
+        // In step before it goes in, so going in isn't a change to upload
+        Object.assign(state, { revision: got.revision, hash, syncedAt: Date.now() });
         this.write();
         this.choice = undefined;
+        // The same save needn't go in again
+        if (!ifSame) {
+            this.host.apply(save);
+        }
     }
 
     private async put(force: boolean): Promise<void> {
         const state = this.state!;
-        const changes = this.changes;
+        const save = this.host.save();
+        // What goes up: a change made while it's on its way is left for the next save point
+        const hash = fingerprint(save);
+        this.lastUpload = Date.now();
         const response = await this.call("PUT", "save", state.code, {
             baseRevision: state.revision,
-            save: exportSave(this.host.save(), this.host.gameVersion),
+            save: exportSave(save, this.host.gameVersion),
             ...(force && { force }),
         });
         const { status, data } = response;
         if (status === 200) {
-            // A change while it was on its way still needs to go up
-            const dirty = this.changes !== changes;
-            Object.assign(state, { revision: data.revision, dirty, syncedAt: Date.now() });
+            Object.assign(state, { revision: data.revision, hash, syncedAt: Date.now() });
             this.write();
             this.choice = undefined;
             this.problem = undefined;
-            if (dirty) {
-                this.uploadTimer = setTimeout(() => this.upload(), UPLOAD_DELAY_MS);
-            }
         } else if (status === 409) {
             const newer =
                 data?.reason === "newer" ||

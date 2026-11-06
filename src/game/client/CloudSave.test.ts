@@ -4,7 +4,8 @@ import {
     CloudHost,
     CloudSync,
     CloudView,
-    UPLOAD_DELAY_MS,
+    UPLOAD_COOLDOWN_MS,
+    fingerprint,
     normalizeCode,
 } from "./CloudSave";
 
@@ -102,10 +103,10 @@ function start(save: SaveData, gameVersion = "0.28.0"): CloudSync {
         gameVersion,
         save: () => current,
         canWrite: () => writable,
-        // As GameClient.replaceSave does: the save's written, which tells cloud save it changed
+        // As GameClient.replaceSave does: it's a save point, which mustn't send the download back
         apply: (next) => {
             current = next;
-            sync.changed();
+            sync.savePoint();
         },
         onView: (view) => views.push(view),
     };
@@ -120,8 +121,12 @@ function start(save: SaveData, gameVersion = "0.28.0"): CloudSync {
 
 const view = () => views.at(-1);
 const state = () => JSON.parse(storage.get(CLOUD_STATE_KEY) ?? "null");
-const link = (revision: number, dirty: boolean) =>
-    storage.set(CLOUD_STATE_KEY, JSON.stringify({ code: CODE, revision, dirty }));
+// Linked, and in step at that revision with this save (or never in step, with none)
+const link = (revision: number, inStepWith?: SaveData) =>
+    storage.set(
+        CLOUD_STATE_KEY,
+        JSON.stringify({ code: CODE, revision, hash: inStepWith && fingerprint(inStepWith) }),
+    );
 
 beforeEach(() => {
     worker = new FakeWorker();
@@ -151,32 +156,53 @@ it("is offered only once the Worker answers", async () => {
 it("turns on with this device's save as the code's first, kept apart from the save", async () => {
     await start(withRuns(3)).turnOn();
     expect(worker.latest).toMatchObject({ runs: 3, gameVersion: "0.28.0" });
-    expect(state()).toMatchObject({ code: CODE, revision: 1, dirty: false });
+    expect(state()).toMatchObject({ code: CODE, revision: 1, hash: fingerprint(current) });
     expect(view()).toMatchObject({ code: CODE, problem: undefined });
     expect(JSON.stringify(current)).not.toContain(CODE);
 });
 
-it("uploads a while after the game saves, and keeps a change made meanwhile", async () => {
-    vi.useFakeTimers();
-    await start(withRuns(1)).turnOn();
-    current = withRuns(2);
-    sync.changed();
-    current = withRuns(3);
-    sync.changed();
-    expect(state().dirty).toBe(true);
-    expect(worker.uploads()).toBe(1);
-    await vi.advanceTimersByTimeAsync(UPLOAD_DELAY_MS);
-    await sync.idle();
-    expect(worker.uploads()).toBe(2);
-    expect(worker.latest?.runs).toBe(3);
-    expect(state()).toMatchObject({ revision: 2, dirty: false });
+it("tells saves apart by their progress, not their stamps or key order", () => {
+    const save = withRuns(3);
+    const reordered = Object.fromEntries(Object.entries(save).reverse()) as SaveData;
+    expect(fingerprint({ ...reordered, gameVersion: "9.9.9", lastExported: 1 })).toBe(
+        fingerprint(save),
+    );
+    expect(fingerprint(withRuns(4))).not.toBe(fingerprint(save));
+    expect(fingerprint({ ...save, mapVictories: { lumbridge: 1 } })).not.toBe(fingerprint(save));
 });
 
-it("sends a waiting upload when the tab's left", async () => {
+it("uploads at a save point only when the progress changed, at most once a cooldown", async () => {
     vi.useFakeTimers();
     await start(withRuns(1)).turnOn();
+    // Written again, nothing new: nothing goes up
+    current = { ...withRuns(1), lastExported: 5 };
+    sync.savePoint();
+    await vi.advanceTimersByTimeAsync(UPLOAD_COOLDOWN_MS);
+    expect(worker.uploads()).toBe(1);
+
     current = withRuns(2);
-    sync.changed();
+    sync.savePoint();
+    await sync.idle();
+    expect(worker.uploads()).toBe(2);
+    // Save points back to back wait out the cooldown, and go up once, as they are by then
+    current = withRuns(3);
+    sync.savePoint();
+    current = withRuns(4);
+    sync.savePoint();
+    await vi.advanceTimersByTimeAsync(UPLOAD_COOLDOWN_MS - 1000);
+    expect(worker.uploads()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    await sync.idle();
+    expect(worker.uploads()).toBe(3);
+    expect(worker.latest?.runs).toBe(4);
+    expect(state()).toMatchObject({ revision: 3, hash: fingerprint(current) });
+});
+
+it("takes leaving the tab as a save point", async () => {
+    vi.useFakeTimers();
+    await start(withRuns(1)).turnOn();
+    await vi.advanceTimersByTimeAsync(UPLOAD_COOLDOWN_MS);
+    current = withRuns(2);
     sync.onVisibility(true);
     await sync.idle();
     expect(worker.latest?.runs).toBe(2);
@@ -187,8 +213,8 @@ it("gives a fresh device the cloud's save: the player who cleared their browser"
     const linked = await start(createSave()).useCode(CODE.toLowerCase());
     expect(linked).toBe(true);
     expect(current.runs).toBe(40);
-    expect(state()).toMatchObject({ revision: 1, dirty: false });
-    // Its own write of the download isn't news to upload
+    expect(state()).toMatchObject({ revision: 1, hash: fingerprint(current) });
+    // Going in isn't news to upload
     expect(worker.uploads()).toBe(0);
 });
 
@@ -198,9 +224,9 @@ it("asks before a code's save replaces one with progress, either way", async () 
     expect(current.runs).toBe(5);
     expect(view()?.choice).toMatchObject({ newer: false, cloud: { revision: 1 } });
     // Nothing goes up meanwhile
-    vi.useFakeTimers();
-    sync.changed();
-    await vi.advanceTimersByTimeAsync(UPLOAD_DELAY_MS);
+    sync.savePoint();
+    sync.onVisibility(true);
+    await sync.idle();
     expect(worker.uploads()).toBe(0);
     await sync.keepLocal();
     expect(worker.latest?.runs).toBe(5);
@@ -208,25 +234,24 @@ it("asks before a code's save replaces one with progress, either way", async () 
 
     worker.put(withRuns(60));
     current = withRuns(6);
-    sync.changed();
     await sync.check();
     expect(view()?.choice).toBeDefined();
     await sync.useCloud();
     expect(current.runs).toBe(60);
-    expect(state()).toMatchObject({ revision: 3, dirty: false });
+    expect(state()).toMatchObject({ revision: 3, hash: fingerprint(current) });
 });
 
 it("doesn't ask when a code's save is the same as this device's", async () => {
     worker.put({ ...withRuns(8), lastExported: 5 });
     await start({ ...withRuns(8), lastExported: 9 }).useCode(CODE);
     expect(view()?.choice).toBeUndefined();
-    expect(state()).toMatchObject({ revision: 1, dirty: false });
+    expect(state()).toMatchObject({ revision: 1, hash: fingerprint(current) });
     expect(current.lastExported).toBe(9);
     expect(worker.uploads()).toBe(0);
 });
 
 it("takes another device's newer save on coming back, if nothing changed here", async () => {
-    link(1, false);
+    link(1, withRuns(1));
     worker.put(withRuns(1));
     worker.put(withRuns(9));
     await start(withRuns(1)).check();
@@ -235,7 +260,7 @@ it("takes another device's newer save on coming back, if nothing changed here", 
 });
 
 it("asks when both devices played since they synced, and a stale upload asks too", async () => {
-    link(1, true);
+    link(1, withRuns(1));
     worker.put(withRuns(1));
     worker.put(withRuns(9));
     await start(withRuns(4)).check();
@@ -245,19 +270,18 @@ it("asks when both devices played since they synced, and a stale upload asks too
     expect(view()?.choice?.closed).toBe(true);
 
     // In step, then another device gets there first
-    link(2, false);
+    link(2, withRuns(4));
     start(withRuns(4));
     worker.put(withRuns(12));
     current = withRuns(5);
-    sync.changed();
-    sync.onVisibility(true);
+    sync.savePoint();
     await sync.idle();
     expect(view()?.choice).toMatchObject({ cloud: { revision: 3 } });
     expect(worker.latest?.runs).toBe(12);
 });
 
 it("never loads a newer game's save, and only writes over it when the player says", async () => {
-    link(1, false);
+    link(1, withRuns(1));
     worker.put(withRuns(1));
     worker.put(withRuns(30), "0.29.0");
     await start(withRuns(1)).check();
@@ -271,7 +295,7 @@ it("never loads a newer game's save, and only writes over it when the player say
 });
 
 it("does nothing in a tab that isn't saving", async () => {
-    link(1, true);
+    link(1);
     worker.put(withRuns(9));
     writable = false;
     await start(withRuns(1)).check();
@@ -281,16 +305,20 @@ it("does nothing in a tab that isn't saving", async () => {
 });
 
 it("keeps playing offline, and catches up once it can", async () => {
+    vi.useFakeTimers();
     await start(withRuns(1)).turnOn();
     worker.down = true;
     current = withRuns(2);
-    sync.changed();
-    sync.onVisibility(true);
+    sync.savePoint();
+    await vi.advanceTimersByTimeAsync(UPLOAD_COOLDOWN_MS);
     await sync.idle();
     expect(view()?.problem).toBe("offline");
-    expect(state().dirty).toBe(true);
+    expect(state().hash).not.toBe(fingerprint(current));
     worker.down = false;
+    // A check within the cooldown leaves it for later; Sync now sends it at once
     await sync.check();
+    expect(worker.latest?.runs).toBe(1);
+    await sync.check(true);
     expect(worker.latest?.runs).toBe(2);
     expect(view()?.problem).toBeUndefined();
 });

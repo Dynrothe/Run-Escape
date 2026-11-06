@@ -1671,19 +1671,24 @@ and none of this changes `SaveData`. Its button sits beside Settings on the titl
 waiting and a "no" sign while it can't sync. It opens the choice, or Settings at cloud save.
 
 - **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
-  from or went up as, and `dirty`: whether it's changed since. It's apart from the save, so it
-  never goes out in an export. Never rename it.
-- **Uploads follow `persist()`,** so they only happen where the save's written at all (the lock,
-  not a newer game's, room to keep it). A change marks the save dirty and uploads 15 seconds
-  later, or straight away when the tab's hidden. A save that didn't get up stays dirty, and goes
-  on the next change or check. An import is a change; a download isn't.
-- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every 30
-  seconds at most). The cloud's revision being this device's means only local changes are news.
-  A different one is taken silently when nothing changed here, or the save has no runs (the player
-  who cleared their browser). Otherwise, and when an upload's refused as stale, the title screen
-  asks which to keep, showing both summaries, unless the two hold the same progress (`sameSave`
-  leaves out `gameVersion` and `lastExported`). Nothing syncs until the player picks (Later puts
-  it in Settings). Keeping this device's uploads with `force`.
+  from or went up as, and the save's `fingerprint` then (a hash of its progress that leaves out
+  `gameVersion`, `lastExported` and key order). A save with a different one has changed. It's
+  apart from the save, so it never goes out in an export. Never rename it.
+- **Uploads happen at save points only** (`CloudSync.savePoint`): a run's results, leaving
+  Skills or the Armoury, an import, and leaving the tab. Not on every write: buying ranks one
+  after another goes up once, on leaving Skills. A save point uploads only if the fingerprint's
+  changed, and only where the save's written at all (the lock, not a newer game's, room to keep
+  it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a save point within it waits
+  for it to pass, and whatever's changed by then goes up once. A save that didn't get up is still
+  changed, so the next save point or check sends it. Sync now in Settings sends it at once. A
+  download is in step as it goes in, so it doesn't come back up.
+- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every
+  minute at most). They only read. The cloud's revision being this device's means only local
+  changes are news. A different one is taken silently when nothing changed here, or the save has
+  no runs (the player who cleared their browser). Otherwise, and when an upload's refused as
+  stale, the title screen asks which to keep, showing both summaries, unless the two hold the
+  same progress (the same fingerprint). Nothing syncs until the player picks (Later puts it in
+  Settings). Keeping this device's uploads with `force`.
 - **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
   Worker refuses an older game's upload over it, so the choice says why, and only Keep this
   device's (losing what's new) or Later.

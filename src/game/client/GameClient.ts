@@ -667,7 +667,12 @@ export class GameClient implements GameFrameHandler {
     // ---- UI actions ----
 
     showScreen(screen: Screen): void {
+        const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
+        // Done shopping: a save point for cloud save
+        if ((was === "shop" || was === "armoury") && screen !== was) {
+            this.cloud?.savePoint();
+        }
     }
 
     // The adventurer the game starts on (or none, to start on the first again)
@@ -1223,6 +1228,8 @@ export class GameClient implements GameFrameHandler {
     replaceSave(save: SaveData): void {
         this.useSave(save, true);
         this.persist();
+        // An import's a save point; a download from the cloud is in step already
+        this.cloud?.savePoint();
     }
 
     // Plays on with this save. toFavourite: go to its favourite, as it would
@@ -1255,7 +1262,6 @@ export class GameClient implements GameFrameHandler {
         // Played without saving, it carries on in memory
         if (this.saveLock.held && !this.newerSave && !this.saveNoRoom) {
             this.saveStore.save(this.save);
-            this.cloud?.changed();
         }
         // A fresh object so React sees the change
         this.store.set({ save: structuredClone(this.save) });
@@ -1907,6 +1913,8 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
+        // A run's results: a save point for cloud save
+        this.cloud?.savePoint();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),

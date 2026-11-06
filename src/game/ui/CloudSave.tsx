@@ -145,7 +145,7 @@ export function CloudSaveSettings({
                     disabled={busy}
                     onClick={(e) => {
                         blur(e);
-                        sync.check();
+                        sync.check(true);
                     }}
                 >
                     Sync now
