@@ -49,6 +49,9 @@ export type RuinRules = {
     underlays: (underlay: number, x: number, y: number) => number;
     // Overlays (paving, paths, wooden floors) to darker ones; what isn't listed stays
     overlays: Record<number, number>;
+    // What a walkway's or a bridge's deck is paved with, burnt as dark as the walls it's on (pale
+    // paving up there reads as a white path); its own overlay, through `overlays`, if unset
+    walkways?: number;
     // Trees, by tiles across: what stands there burnt (a list, picked by place)
     burntTrees: Record<number, number[]>;
     // The share of trees that stand, burnt (the rest burnt to nothing)
@@ -63,15 +66,11 @@ export type RuinRules = {
     // A city wall stands, burnt, but for breaches: where the walls' noise is over this, the wall's
     // band is down to the ground and open, both faces, walkway and rails gone
     breaches?: number;
-    // What's left in a breach: piles of the wall's stone (`ends`, which block) at its ends
-    // against the wall still standing, for share of those tiles, and loose stone (`loose`, locs
-    // and their types, which block nothing) for looseShare of the rest
-    breachRubble?: {
-        ends: number[];
-        share: number;
-        loose: [id: number, type: number][];
-        looseShare: number;
-    };
+    // A breach's broken ends: where a run of a wall's face came down, its first and last tile
+    // are `wall` (a jagged broken end, a straight wall loc, turned as the face was) with `bricks`
+    // fallen in front of them (blocking nothing), when the run's long enough to leave a way
+    // through between them; a shorter one gets the bricks alone
+    breachEnds?: { wall: number; bricks: number };
     // The share of a city wall's walkway and rails (upstairs, shown from the ground) still up
     wallTopsKept?: number;
     // Where a straight run of wall fell, some of it's still burning: this loc (a wall of fire)
@@ -156,13 +155,16 @@ export function ruinGrid(
         }
     }
     // Upstairs is gone but for a city wall's walkway, which is shown from the ground, and a
-    // bridge's deck (a bridge is its level 1, brought down)
+    // bridge's deck (a bridge is its level 1, brought down); their paving's burnt (`walkways`)
     const bridged = (i: number) => (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;
     for (let level = 1; level < LEVELS; level++) {
         const tiles = grid.levels[level];
         for (let i = 0; i < sizeX * sizeY; i++) {
             if ((tiles.flags[i] & TILE_SHOWN) === 0 && !(level === 1 && bridged(i))) {
                 tiles.overlays[i] = tiles.underlays[i] = 0;
+            } else if (tiles.overlays[i] !== 0) {
+                tiles.overlays[i] =
+                    rules.walkways ?? rules.overlays[tiles.overlays[i]] ?? tiles.overlays[i];
             }
         }
     }
@@ -188,8 +190,15 @@ export function ruinGrid(
     }
     const out: PlacedLoc[] = [];
     const down = new Uint8Array(sizeX * sizeY);
+    // The breaches' faces, for their broken ends
+    const fell: PlacedLoc[] = [];
+    // Where a wall stands whole (charred as it was), level by level, for what stands on it
+    const whole = Array.from({ length: LEVELS }, () => new Uint8Array(sizeX * sizeY));
     for (const loc of grid.locs) {
         if (breach[loc.x + loc.y * sizeX]) {
+            if (loc.level === 0 && loc.type === 0) {
+                fell.push(loc);
+            }
             report.removed++;
             continue;
         }
@@ -202,10 +211,15 @@ export function ruinGrid(
             out.push(kept);
         }
         // Where a wall's down or broken, for what rested on it
-        if (loc.level === 0 && WALL_TYPES.has(loc.type) && kept?.id !== getCharredLoc(loc.id)) {
-            down[loc.x + loc.y * sizeX] = 1;
+        if (WALL_TYPES.has(loc.type)) {
+            if (kept?.id === getCharredLoc(loc.id)) {
+                whole[loc.level][loc.x + loc.y * sizeX] = 1;
+            } else if (loc.level === 0) {
+                down[loc.x + loc.y * sizeX] = 1;
+            }
         }
     }
+    unfloat(grid, whole, out, report);
     if (rules.tops) {
         const tops = new Set(rules.tops.map(getCharredLoc));
         const unsupported = (loc: PlacedLoc) => {
@@ -226,48 +240,88 @@ export function ruinGrid(
         );
         report.removed += before - out.length;
     }
-    if (rules.breachRubble) {
-        fillBreaches(grid, breach, rules.breachRubble, out, report);
+    if (rules.breachEnds) {
+        breakEnds(fell, rules.breachEnds, out, report);
     }
     grid.locs = out;
     return report;
 }
 
-// The wall's stone where it came down: a pile at a breach's ends, against what still stands,
-// and loose stones across the rest of it, which block nothing, so it's still a way through
-function fillBreaches(
-    grid: TileGrid,
-    breach: Uint8Array,
-    rubble: NonNullable<RuinRules["breachRubble"]>,
+// Nothing upstairs floats: a shown tile (a walkway's deck) stays only over a wall standing whole
+// on the level under it, or over a city wall's solid middle (level 0 blocked) or another shown
+// tile, and what's on an upper level (a walkway's rails) only on a tile that's still shown. A
+// bridge's deck is its own support.
+function unfloat(grid: TileGrid, whole: Uint8Array[], out: PlacedLoc[], report: RuinReport): void {
+    const { sizeX, sizeY } = grid;
+    const level0 = grid.levels[0];
+    const count = sizeX * sizeY;
+    const bridged = (i: number) => (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;
+    for (let level = 1; level < LEVELS; level++) {
+        const tiles = grid.levels[level];
+        const below = grid.levels[level - 1];
+        for (let i = 0; i < count; i++) {
+            if ((tiles.flags[i] & TILE_SHOWN) === 0 || bridged(i)) {
+                continue;
+            }
+            const held =
+                whole[level - 1][i] === 1 ||
+                (level === 1
+                    ? (level0.flags[i] & TILE_BLOCKED) !== 0
+                    : (below.flags[i] & TILE_SHOWN) !== 0);
+            if (!held) {
+                tiles.flags[i] &= ~TILE_SHOWN;
+                tiles.overlays[i] = tiles.underlays[i] = 0;
+            }
+        }
+    }
+    const kept = out.filter((loc) => {
+        const i = loc.x + loc.y * sizeX;
+        return (
+            loc.level === 0 ||
+            (loc.level === 1 && bridged(i)) ||
+            (grid.levels[loc.level].flags[i] & TILE_SHOWN) !== 0
+        );
+    });
+    report.removed += out.length - kept.length;
+    out.splice(0, out.length, ...kept);
+}
+
+// A breach's broken ends: along each face that came down, a run of its straight walls in a line,
+// the first and last are a jagged broken end with its bricks fallen in front, if there's a way
+// through between them; a run too short for that gets the bricks alone
+function breakEnds(
+    fell: PlacedLoc[],
+    ends: NonNullable<RuinRules["breachEnds"]>,
     out: PlacedLoc[],
     report: RuinReport,
 ): void {
-    const { sizeX, sizeY } = grid;
-    const standing = (x: number, y: number) =>
-        x >= 0 && y >= 0 && x < sizeX && y < sizeY && isCityWallTile(grid, x, y);
-    const place = (id: number, type: number, x: number, y: number) => {
-        const rotation = Math.floor(tileHash(x, y, 42) * 4);
-        out.push({ id, type, rotation, level: 0, x, y });
-        report.rubble++;
-    };
-    const pick = <T>(list: T[], x: number, y: number) =>
-        list[Math.floor(tileHash(x, y, 41) * list.length)];
-    for (let y = 0; y < sizeY; y++) {
-        for (let x = 0; x < sizeX; x++) {
-            if (!breach[x + y * sizeX]) {
+    // A face runs along x (turned 1 or 3: north or south) or along y (0 or 2)
+    const along = (loc: PlacedLoc) => (loc.rotation & 1) === 1;
+    const lines = new Map<string, PlacedLoc[]>();
+    for (const loc of fell) {
+        const key = along(loc) ? `x${loc.y},${loc.rotation}` : `y${loc.x},${loc.rotation}`;
+        const line = lines.get(key) ?? [];
+        line.push(loc);
+        lines.set(key, line);
+    }
+    for (const line of lines.values()) {
+        const at = (loc: PlacedLoc) => (along(loc) ? loc.x : loc.y);
+        line.sort((a, b) => at(a) - at(b));
+        let start = 0;
+        for (let k = 1; k <= line.length; k++) {
+            if (k < line.length && at(line[k]) === at(line[k - 1]) + 1) {
                 continue;
             }
-            const end =
-                standing(x - 1, y) ||
-                standing(x + 1, y) ||
-                standing(x, y - 1) ||
-                standing(x, y + 1);
-            const roll = tileHash(x, y, 40);
-            if (end && roll < rubble.share) {
-                place(pick(rubble.ends, x, y), LOC_NORMAL, x, y);
-            } else if (!end && roll < rubble.looseShare) {
-                const [id, type] = pick(rubble.loose, x, y);
-                place(id, type, x, y);
+            const run = line.slice(start, k);
+            start = k;
+            const tips = run.length > 1 ? [run[0], run[run.length - 1]] : [run[0]];
+            for (const tip of tips) {
+                if (run.length >= 4) {
+                    out.push({ ...tip, id: ends.wall });
+                    report.rubble++;
+                }
+                out.push({ ...tip, id: ends.bricks, type: LOC_NORMAL });
+                report.rubble++;
             }
         }
     }

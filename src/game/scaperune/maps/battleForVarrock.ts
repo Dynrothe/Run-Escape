@@ -1,4 +1,8 @@
-import { LOOSE_RUBBLE, getCharredLoc } from "../../../rs/config/loctype/LocOverrides";
+import {
+    BREACH_BRICKS,
+    BROKEN_CITY_WALL,
+    getCharredLoc,
+} from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
 import { assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, type PlacedLoc, TILE_BLOCKED, type TileGrid } from "../format";
@@ -91,9 +95,9 @@ const YAMA_SIZE = { x: 5, y: 3 };
 // His npc is 7 tiles across; at 0.6 he's about 4
 export const YAMA_SCALE = 0.6;
 
-// What the conversion leaves standing, by name: the square's fountain, the churches' altars,
-// the market's stalls and the like are what make it Varrock
-const LANDMARK = /fountain|statue|stall|anvil|altar|well|bank booth|staircase|ladder|sign/i;
+// What the conversion leaves standing, by name: the square's fountain, the churches' altars and
+// the like are what make it Varrock (the market's stalls burnt: burnFabric)
+const LANDMARK = /fountain|statue|anvil|altar|well|bank booth|staircase|ladder|sign/i;
 
 // Fires: burning timber (Burning driftwood, 2 by 2) and a fire on its logs; burning bones; and
 // a wall of flame (a wall loc) where a wall burnt down
@@ -129,10 +133,13 @@ const STONE_PILE = 14631;
 const NAMELESS_PLANTS = [2732, 2781, 4496, 4498, 4499, 23617, 23618, 23619, 23620];
 // The palace's front steps, which the ground under them climbs
 const PALACE_STEPS = 23884;
-// The decks over the city's and the palace's gateways (23784 to 23793) and lintels over doors,
-// which rest on the walls round them
+// What rests on or hangs from the walls round it, off the ground: the decks over the city's and
+// the palace's gateways (23784 to 23793), lintels over doors, a beam (11540), shelves (3030,
+// 3031) and a mounted dragon's head (17485). Found by their models' lowest points: every loc
+// that's off the ground is in this list or beside walls standing whole.
 const WALL_TOPS = [
     23784, 23785, 23786, 23787, 23788, 23789, 23790, 23791, 23792, 23793, 3189, 9585, 23752, 23909,
+    11540, 3030, 3031, 17485,
 ];
 
 const RULES = {
@@ -143,15 +150,8 @@ const RULES = {
     crumbled: CRUMBLED,
     fallenStones: { ids: FALLEN_STONES, share: 0.5 },
     breaches: 0.5,
-    breachRubble: {
-        ends: [STONE_PILE],
-        share: 0.6,
-        loose: [
-            ...LOOSE_RUBBLE.map((id): [number, number] => [id, LOC_NORMAL]),
-            ...FALLEN_STONES.map((id): [number, number] => [id, LOC_FLOOR_DECORATION]),
-        ],
-        looseShare: 0.35,
-    },
+    // Falador's broken west wall, burnt (LocOverrides.ts BROKEN_CITY_WALL)
+    breachEnds: { wall: BROKEN_CITY_WALL, bricks: BREACH_BRICKS },
     steps: [PALACE_STEPS],
     tops: WALL_TOPS,
     wallTopsKept: 0.5,
@@ -188,6 +188,8 @@ const RULES = {
         42: 0,
         61: 0,
     } as Record<number, number>,
+    // The walls' walkways and the bridges' decks charred, as dark as the walls
+    walkways: 90,
     // A burnt tree for each: the cache's Burnt trees (Morytania's), a third of them burnt to
     // nothing (each is hundreds of triangles, and the country round the city's thick with them)
     burntTrees: { 1: [30854], 2: [30852, 30853] },
@@ -604,12 +606,119 @@ function dressPalace(grid: TileGrid, report: VarrockDressing): void {
     }
 }
 
+// What was made of cloth burnt: Gypsy Aris's tent in the square (its striped walls, 2460 to
+// 2463, its roof and all in it) is a fire as big as it was; the market's stalls are their bare
+// counters (Empty Stall, 6944), burnt, with a fire on what's left of their awnings' tiles; a tent
+// is a great fire on logs (4265, twice a fire's size) and a covered wagon (23615) burning timber.
+// Banners, curtains and cloth are the ruin rules' `gone`.
+const ARIS_TENT = { ...toGrid(3201, 3421), x1: 3206 - REAL_X, y1: 3427 - REAL_Y };
+const FABRIC = /stall|tent/i;
+const COVERED_WAGON = 23615;
+const EMPTY_STALL = 6944;
+export const GREAT_FIRE = 4265;
+// The cache's big fire (25155, 2 by 2) and a small one that blocks nothing (5249)
+export const BLAZE = 25155;
+export const LOW_FIRE = 5249;
+// Aris's tent burning down, from its south-west corner: [id, dx, dy, type, rotation]
+const ARIS_FIRE: [number, number, number, number, number][] = [
+    [GREAT_FIRE, 1, 2, 10, 0],
+    [BLAZE, 3, 4, 10, 0],
+    [BURNING_TIMBER, 3, 0, 10, 1],
+    [LOW_FIRE, 0, 5, 10, 0],
+    [LOW_FIRE, 5, 2, 10, 0],
+    [LOW_FIRE, 1, 0, 10, 0],
+    [BURNING_BONES, 0, 3, 10, 2],
+    // Its walls going up on two sides
+    [WALL_OF_FLAME, 2, 0, 0, 1],
+    [WALL_OF_FLAME, 5, 5, 0, 3],
+    [WALL_OF_FLAME, 2, 6, 0, 3],
+];
+
+type Fabric = { loc: PlacedLoc; sizeX: number; sizeY: number; wagon: boolean; stall: boolean };
+
+// Takes the cloth out before the ruin rules see it (a tent's walls would break into stone)
+function takeFabric(grid: TileGrid, locs: (id: number) => LocInfo): Fabric[] {
+    const taken: Fabric[] = [];
+    const inTent = (x: number, y: number) =>
+        x >= ARIS_TENT.x && x <= ARIS_TENT.x1 && y >= ARIS_TENT.y && y <= ARIS_TENT.y1;
+    grid.locs = grid.locs.filter((loc) => {
+        if (inTent(loc.x, loc.y)) {
+            return false;
+        }
+        if (loc.level !== 0 || (loc.type !== LOC_NORMAL && loc.type !== 11)) {
+            return true;
+        }
+        const info = locs(loc.id);
+        const shown = info.shows !== undefined && info.shows !== -1 ? locs(info.shows) : info;
+        const wagon = loc.id === COVERED_WAGON;
+        if (!wagon && !FABRIC.test(shown.name ?? "")) {
+            return true;
+        }
+        const turned = (loc.rotation & 1) === 1;
+        taken.push({
+            loc,
+            sizeX: turned ? shown.sizeY : shown.sizeX,
+            sizeY: turned ? shown.sizeX : shown.sizeY,
+            wagon,
+            stall: /stall/i.test(shown.name ?? ""),
+        });
+        return false;
+    });
+    return taken;
+}
+
+// The fires where the cloth was, and its ground burnt black
+function burnFabric(grid: TileGrid, taken: Fabric[], report: VarrockDressing): void {
+    const level0 = grid.levels[0];
+    const scorch = (x0: number, y0: number, x1: number, y1: number) => {
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                const i = x + y * SIZE;
+                level0.overlays[i] = level0.shapes[i] = 0;
+                level0.underlays[i] = tileHash(x, y, 61) < 0.4 ? CRATER_SCORCH : CRATER_SOOT[0];
+            }
+        }
+    };
+    const put = (id: number, x: number, y: number, type = LOC_NORMAL, rotation = 0) => {
+        grid.locs.push({ id, type, rotation, level: 0, x, y });
+        report.fires++;
+    };
+    scorch(ARIS_TENT.x, ARIS_TENT.y, ARIS_TENT.x1, ARIS_TENT.y1);
+    for (const [id, dx, dy, type, rotation] of ARIS_FIRE) {
+        put(id, ARIS_TENT.x + dx, ARIS_TENT.y + dy, type, rotation);
+    }
+    for (const { loc, sizeX, sizeY, wagon, stall } of taken) {
+        const { x, y } = loc;
+        scorch(x, y, x + sizeX - 1, y + sizeY - 1);
+        if (stall) {
+            // Its counter along its longer side, and a fire on the rest
+            put(getCharredLoc(EMPTY_STALL), x, y, LOC_NORMAL, loc.rotation);
+            put(
+                LOW_FIRE,
+                (loc.rotation & 1) === 1 ? x + 1 : x,
+                (loc.rotation & 1) === 1 ? y : y + 1,
+            );
+        } else {
+            put(wagon ? BURNING_TIMBER : GREAT_FIRE, x, y);
+            // What's past a 2 by 2 fire of a longer one
+            for (let ty = y; ty < y + sizeY; ty++) {
+                for (let tx = x; tx < x + sizeX; tx++) {
+                    if (tx >= x + 2 || ty >= y + 2) {
+                        put(LOW_FIRE, tx, ty);
+                    }
+                }
+            }
+        }
+    }
+}
+
 export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
     dressing: VarrockDressing;
 } {
     const ground = new Ground(SIZE, SIZE);
     const city = cutPrefab(context.maps, REAL_X, REAL_Y, SIZE, SIZE);
     clearPalace(city);
+    const fabric = takeFabric(city, context.locs);
     const ruins = ruinGrid(city, context.locs, {
         ...RULES,
         landmark: LANDMARK,
@@ -622,6 +731,7 @@ export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
         crater: 0,
         ruins,
     };
+    burnFabric(city, fabric, dressing);
     dress(city, context.locs, dressing);
     dressPalace(city, dressing);
     makeCrater(city, context.locs, dressing);

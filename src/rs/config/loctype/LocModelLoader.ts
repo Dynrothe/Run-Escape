@@ -26,11 +26,11 @@ export type ContourGroundInfo = {
 // stall's awning) soot. Textured faces are lit, not coloured: see charColours.
 const CHAR_LIGHT = 0.42;
 
-export function charColour(hsl: number): number {
+export function charColour(hsl: number, light = CHAR_LIGHT): number {
     const hue = (hsl >> 10) & 63;
     const saturation = (hsl >> 7) & 7;
     const lightness = hsl & 127;
-    return (hue << 10) | ((saturation >> 3) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
+    return (hue << 10) | ((saturation >> 3) << 7) | Math.max(2, Math.round(lightness * light));
 }
 
 // A textured face is lit, not coloured, so a burnt one takes a dark texture instead: wood and
@@ -46,10 +46,10 @@ const isGreen = (hsl: number) => {
     return hue >= 8 && hue <= 22 && ((hsl >> 7) & 7) >= 1;
 };
 
-function charColours(model: ModelData, textures: TextureLoader): void {
+function charColours(model: ModelData, textures: TextureLoader, light?: number): void {
     const colours = model.faceColors;
     for (let i = 0; i < model.faceCount; i++) {
-        colours[i] = charColour(colours[i]);
+        colours[i] = charColour(colours[i], light);
     }
     const faceTextures = model.faceTextures;
     if (!faceTextures) {
@@ -230,7 +230,7 @@ export class LocModelLoader {
         }
 
         if (locType.charred) {
-            charColours(copy, this.textureLoader);
+            charColours(copy, this.textureLoader, locType.charLight);
         }
 
         if (hasResize) {

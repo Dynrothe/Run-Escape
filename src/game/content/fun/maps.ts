@@ -1,7 +1,10 @@
 import {
     BATTLE_FOR_VARROCK,
+    BLAZE,
     BRAZIER,
     CRATER_HEART,
+    GREAT_FIRE,
+    LOW_FIRE,
     PALACE_FLOOR_ASCII,
     WALL_OF_FLAME,
     YAMA_SCALE,
@@ -824,6 +827,10 @@ export const FUN_MAPS: MapDef[] = [
                 [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
                 // Either side of Yama's throne
                 [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
+                // What was cloth: Gypsy Aris's tent burning down, the tents and the stalls
+                [GREAT_FIRE]: { radius: 5.5, color: 0xff7022, intensity: 1, flicker: 0.45 },
+                [BLAZE]: { radius: 5, color: 0xff6a1a, intensity: 0.9, flicker: 0.5 },
+                [LOW_FIRE]: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
                 // The crater's molten heart, where the square's fountain stood
                 [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
             },

@@ -19,8 +19,10 @@ export type LocOverride = {
     sizeX?: number;
     sizeY?: number;
     seq?: number;
-    // Burnt: every colour of its models darkened and greyed (see CHARRED_LOCS)
+    // Burnt: every colour of its models darkened and greyed (see CHARRED_LOCS), to charLight of
+    // its lightness if set (a pale stone burnt as dark as a darker one)
     charred?: boolean;
+    charLight?: number;
 };
 
 // Locs of our own, past every id the cache has. They're placed by ScapeRune maps only, so nothing
@@ -30,9 +32,13 @@ export type LocOverride = {
 export const CHARRED_LOCS = 1 << 20;
 // Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base
 export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
-// Rubble, burnt, that blocks nothing (the cache's Rubble, 12812 to 12814): what's left in a ruined
-// city wall's breach, which is still a way through (scaperune/ruins.ts)
-export const LOOSE_RUBBLE = [DERIVED_LOCS, DERIVED_LOCS + 1, DERIVED_LOCS + 2];
+// A ruined city wall's breach (scaperune/ruins.ts), from Falador's: its west wall's broken gap
+// (the Crumbling wall shortcut, 24222, at 2935, 3355), whose jagged ends (24220) and fallen
+// bricks (24218) are its pale stone burnt to the dark of a burnt grey wall (Varrock's, 23795,
+// comes out at about 15 of 127). The bricks block nothing, so a breach is still a way through.
+export const BROKEN_CITY_WALL = DERIVED_LOCS;
+export const BREACH_BRICKS = DERIVED_LOCS + 1;
+const FALADOR_STONE_BURNT = 0.18;
 
 export function getCharredLoc(id: number): number {
     return CHARRED_LOCS + id;
@@ -83,7 +89,6 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // units up from the floor, one in a plane with the raised edge of the stone tile under it
     // (38198, 6 units up), so they z-fought (check-coplanar.ts). An odd lift keeps every step off it.
     [38542, { height: 1 }],
-    [LOOSE_RUBBLE[0], { base: 12812, charred: true, walkable: true }],
-    [LOOSE_RUBBLE[1], { base: 12813, charred: true, walkable: true }],
-    [LOOSE_RUBBLE[2], { base: 12814, charred: true, walkable: true }],
+    [BROKEN_CITY_WALL, { base: 24220, charred: true, charLight: FALADOR_STONE_BURNT }],
+    [BREACH_BRICKS, { base: 24218, charred: true, charLight: FALADOR_STONE_BURNT, walkable: true }],
 ]);

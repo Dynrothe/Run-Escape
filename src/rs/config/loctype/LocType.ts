@@ -95,6 +95,8 @@ export class LocType extends Type {
 
     // A loc of our own burnt black (LocOverrides.ts CHARRED_LOCS): LocModelLoader darkens its colours
     charred = false;
+    // A burnt loc's lightness, of what it was (LocOverride.charLight; LocModelLoader's own if unset)
+    charLight?: number;
 
     constructor(id: number, cacheInfo: CacheInfo) {
         super(id, cacheInfo);
@@ -601,6 +603,7 @@ export class LocType extends Type {
             }
             if (override.charred) {
                 this.charred = true;
+                this.charLight = override.charLight;
                 // A burnt loc that changes with a varbit changes into burnt ones
                 this.transforms = this.transforms?.map((id) =>
                     id === -1 || id >= CHARRED_LOCS ? id : CHARRED_LOCS + id,
