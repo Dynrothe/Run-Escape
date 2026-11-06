@@ -3,6 +3,7 @@ import {
     BRAZIER,
     PALACE_FLOOR_ASCII,
     WALL_OF_FLAME,
+    YAMA_SCALE,
 } from "../../scaperune/maps/battleForVarrock";
 import { FLOOR_SKINS } from "../floorSkins";
 import { MapDef, RunEventDef } from "../types";
@@ -799,6 +800,16 @@ export const FUN_MAPS: MapDef[] = [
             script: [],
             loopSeconds: 60,
         },
+        // Yama on his throne at the north end of the palace, facing down it: npc 15645 sitting
+        // (12153), small
+        props: [
+            {
+                npcId: 15645,
+                seq: 12153,
+                ...BATTLE_FOR_VARROCK.yama,
+                scale: YAMA_SCALE,
+            },
+        ],
         // A smoky, dimmed city lit by its fires
         lighting: {
             ambient: 0.92,

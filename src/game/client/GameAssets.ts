@@ -38,6 +38,7 @@ import {
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    MapDef,
     RootsRuleDef,
     WeaponDef,
 } from "../content/types";
@@ -238,7 +239,7 @@ function getSpotAnimIds(): number[] {
     for (const character of CHARACTERS) {
         for (const ability of character.abilities ?? []) {
             addImpact(ability.impact);
-            add(ability.spotAnim, ability.markSpotAnim);
+            add(ability.spotAnim, ability.markSpotAnim, ability.cellImpact?.spotAnim);
         }
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
@@ -439,6 +440,11 @@ export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): strin
 }
 
 // A piece of what's under a floor (FloorDef.under)
+// An NPC posed on a map (MapDef.props)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
+}
+
 // A hero drawn as an NPC (CharacterDef.npcLook)
 export function getHeroLookKey(characterId: string): string {
     return "heroLook:" + characterId;
@@ -609,6 +615,7 @@ export class GameAssets {
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
     private readonly heroLookBakes = new Map<string, Promise<void>>();
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -932,6 +939,38 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // A map's NPCs posed as scenery (MapDef.props): baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            const list = seqs.get(prop.npcId) ?? [];
+            if (!list.includes(prop.seq)) {
+                list.push(prop.seq);
+            }
+            seqs.set(prop.npcId, list);
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    loadProps(map: MapDef): Promise<void> {
+        if (!map.props?.length) {
+            return Promise.resolve();
+        }
+        let baking = this.propBakes.get(map.id);
+        if (!baking) {
+            baking = this.bakeInTasks(GameAssets.getPropRequests([map]), this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            this.propBakes.set(map.id, baking);
+        }
+        return baking;
     }
 
     // Bakes a hero's NPC look (CharacterDef.npcLook), unless it's baked or on its way

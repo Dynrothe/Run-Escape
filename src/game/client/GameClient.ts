@@ -1308,6 +1308,8 @@ export class GameClient implements GameFrameHandler {
         // A hero the map has everyone play, drawn as an NPC (Justiciar Zachariah)
         const mapCharacter = getMapCharacter(map);
         const heroBaked = mapCharacter ? this.assets.loadHeroLook(mapCharacter) : undefined;
+        // And its NPCs posed as scenery (MapDef.props)
+        const propsBaked = this.assets.loadProps(map);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
@@ -1315,6 +1317,7 @@ export class GameClient implements GameFrameHandler {
             });
             await petsBaked;
             await heroBaked;
+            await propsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);

@@ -229,6 +229,8 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
                           ...GameAssets.getPetRequests(PETS),
                           // Heroes drawn as NPCs, which are baked as their map's played
                           ...GameAssets.getHeroLookRequests(CHARACTERS),
+                          // and maps' NPCs posed as scenery
+                          ...GameAssets.getPropRequests(ALL_MAPS),
                       ]
                     : getPlayerRequests();
         bakeRequests.set(group, requests);

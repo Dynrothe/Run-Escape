@@ -18,7 +18,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { EnemyDef, HeroNpcLookDef } from "../content/types";
+import { EnemyDef, HeroNpcLookDef, MapPropDef } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -54,6 +54,7 @@ import {
     getEnemyModelKey,
     getPickupModelKey,
     getPileLook,
+    getPropKey,
     getShieldedModelKey,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -640,6 +641,10 @@ export class GameView {
             this.drawRampage(actors, sim, rampage, alpha);
         }
 
+        for (const prop of sim.map.props ?? []) {
+            this.drawProp(actors, sim, prop, alpha);
+        }
+
         for (const ring of sim.rings) {
             this.drawRing(actors, sim, ring);
         }
@@ -762,6 +767,28 @@ export class GameView {
 
     // Black cats are lost on the darker maps, so always with the silhouette and
     // lit up a little
+    // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
+    private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
+        const model = this.assets.get(getPropKey(prop.npcId));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(prop.seq);
+        const { x, y } = prop;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick + alpha),
+            x,
+            this.ground(sim, x, y),
+            y,
+            prop.yaw ?? 0,
+            {
+                scale: prop.scale ?? 1,
+            },
+        );
+    }
+
     private drawRampage(actors: ActorRenderer, sim: Sim, rampage: Rampage, alpha: number): void {
         const model = this.assets.get("rampage:" + rampage.powerUpId);
         // The clock runs on when the run's over, but nothing moves

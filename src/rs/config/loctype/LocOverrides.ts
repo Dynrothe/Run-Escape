@@ -31,12 +31,8 @@ export type LocOverride = {
 export const CHARRED_LOCS = 1 << 20;
 export const LOWERED_LOCS = CHARRED_LOCS + (1 << 17);
 export const LOWERED_HEIGHT = 0.45;
-// Others made from a cache loc, listed in LOC_OVERRIDES with a base
+// Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base (none yet)
 export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
-
-// Yama on his throne (the cache's npc 15645, Yama seated: his throne 9832 and him 9434, sitting
-// with 12153), as a loc for the Battle for Varrock's palace, made small: 0.6 of his size
-export const YAMA_ON_HIS_THRONE = DERIVED_LOCS;
 
 export function getCharredLoc(id: number): number {
     return CHARRED_LOCS + id;
@@ -63,19 +59,6 @@ export function getLocOverride(id: number): LocOverride | undefined {
 }
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
-    // Yama's throne loc (56265, 9 by 5) with him on it, at 0.6 of their size
-    [
-        YAMA_ON_HIS_THRONE,
-        {
-            base: 56265,
-            models: [9832, 9434],
-            seq: 12153,
-            size: 77,
-            sizeX: 5,
-            sizeY: 3,
-            solid: true,
-        },
-    ],
     // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5
     // here, for a field that didn't all ripen at once
     [46263, { models: [2591], size: 320, solid: true }],

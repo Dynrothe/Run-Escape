@@ -1505,6 +1505,8 @@ export type HeroAbilityDef = {
     // Turns the wave's spot animation this much (2048 a turn) from the way it flies
     spotYaw?: number;
     markSpotAnim?: number;
+    // Shown on each of a checker's cells as it lands, with spotAnim
+    cellImpact?: ImpactSpotDef;
     freeze?: number;
     seq?: number;
     strikeAt?: number;
@@ -1642,6 +1644,10 @@ export type MapDef = {
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and
     // events are then every room's, for what bakes and checks a map's enemies.
     raid?: RaidDef;
+    // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
+    // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
+    // can't play a skeletal animation (Yama on his throne, the Battle for Varrock's).
+    props?: MapPropDef[];
     // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
     // it fall away. A prototype, on a dev map only.
     floor?: FloorDef;
@@ -1751,6 +1757,18 @@ export type LightingDef = {
     // everywhere else), and lanterns lying on the ground as the run starts, world tiles
     lanternWeight?: number;
     lanterns?: { x: number; y: number }[];
+};
+
+// An NPC posed on a map as scenery (MapDef.props): npcId playing seq over and over, its middle at
+// x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and drawn scale times its size.
+// Give it a loc that blocks where it stands, as it blocks nothing itself.
+export type MapPropDef = {
+    npcId: number;
+    seq: number;
+    x: number;
+    y: number;
+    yaw?: number;
+    scale?: number;
 };
 
 // A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut

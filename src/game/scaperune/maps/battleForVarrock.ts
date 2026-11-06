@@ -1,4 +1,4 @@
-import { YAMA_ON_HIS_THRONE, getCharredLoc } from "../../../rs/config/loctype/LocOverrides";
+import { getCharredLoc } from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
 import { assertReachable, sealFrom } from "../collision";
 import { MAP_SQUARE_SIZE, type PlacedLoc, TILE_BLOCKED, type TileGrid } from "../format";
@@ -86,10 +86,14 @@ export const PALACE_FLOOR_ASCII: string[] = [
     "..######################...",
 ];
 
-// Yama on his throne, at the north end of the palace's floor, facing south down it: his
-// throne and him on it (the cache's npc 15645, models 9832 and 9434, sitting with 12153), made
-// small (LocOverrides.ts YAMA_ON_HIS_THRONE)
+// Yama on his throne, at the north end of the palace's floor, facing south down it: the cache's
+// npc 15645 (his throne 9832 and him 9434, sitting with 12153), made small. The game draws him
+// (MapDef.props: his sitting is skeletal, which a loc can't play); the map blocks where he sits,
+// YAMA_SIZE tiles from YAMA.
 const YAMA = toGrid(3211, 3494);
+const YAMA_SIZE = { x: 5, y: 3 };
+// His npc is 7 tiles across; at 0.6 he's about 4
+export const YAMA_SCALE = 0.6;
 
 // What the conversion leaves standing, by name: the square's fountain, the churches' altars,
 // the market's stalls and the like are what make it Varrock
@@ -122,7 +126,8 @@ const RULES = {
             return ASH[Math.floor(n * ASH.length)];
         };
     })(),
-    // Varrock's paving (171) and paths (173) to soot, wooden floors (81) charred
+    // Varrock's paving (171) and paths (173) to soot, wooden floors (81) charred, and nothing
+    // left hidden
     overlays: {
         171: 82,
         173: 83,
@@ -139,6 +144,9 @@ const RULES = {
         4: 10,
         3: 2,
         8: 2,
+        // The hidden floor (it draws nothing), under walls that may have fallen
+        42: 0,
+        61: 0,
     } as Record<number, number>,
     // A burnt tree for each: the cache's Burnt trees (Morytania's), a third of them burnt to
     // nothing (each is hundreds of triangles, and the country round the city's thick with them)
@@ -391,14 +399,12 @@ function dress(grid: TileGrid, locs: (id: number) => LocInfo, report: VarrockDre
 // The palace's floor: its own fires and dead along the walls, rubble where its rooms stood, and
 // Yama on his throne at the north end
 function dressPalace(grid: TileGrid, report: VarrockDressing): void {
-    grid.locs.push({
-        id: YAMA_ON_HIS_THRONE,
-        type: LOC_NORMAL,
-        rotation: 0,
-        level: 0,
-        x: YAMA.x,
-        y: YAMA.y,
-    });
+    // Where he sits is blocked ground, as he blocks nothing himself
+    for (let y = YAMA.y; y < YAMA.y + YAMA_SIZE.y; y++) {
+        for (let x = YAMA.x; x < YAMA.x + YAMA_SIZE.x; x++) {
+            grid.levels[0].flags[x + y * SIZE] |= TILE_BLOCKED;
+        }
+    }
     // A burning brazier either side of him, so he's lit
     for (const dx of [-2, 6]) {
         grid.locs.push({
@@ -528,5 +534,9 @@ export const BATTLE_FOR_VARROCK = {
         x1: PALACE_FLOOR_RECT_REAL.x1 + WORLD_X,
         y1: PALACE_FLOOR_RECT_REAL.y1 + WORLD_Y,
     },
-    yama: { x: MAP_X * MAP_SQUARE_SIZE + YAMA.x, y: MAP_Y * MAP_SQUARE_SIZE + YAMA.y },
+    // Yama's middle, where the game draws him
+    yama: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA.x + YAMA_SIZE.x / 2,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA.y + YAMA_SIZE.y / 2,
+    },
 };
