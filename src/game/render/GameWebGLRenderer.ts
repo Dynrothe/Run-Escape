@@ -1,5 +1,5 @@
 import { vec4 } from "gl-matrix";
-import { Program, Texture } from "picogl";
+import PicoGL, { Program, Texture } from "picogl";
 
 import { Camera } from "../../mapviewer/Camera";
 import { MapViewer } from "../../mapviewer/MapViewer";
@@ -8,8 +8,17 @@ import { WebGLMapViewerRenderer } from "../../mapviewer/webgl/WebGLMapViewerRend
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import actorSilhouetteFragShader from "../../mapviewer/webgl/actor/actor-silhouette.frag.glsl";
 import actorVertShader from "../../mapviewer/webgl/actor/actor.vert.glsl";
-import { createProgram } from "../../mapviewer/webgl/shaders/Shaders";
+import { prependDefines } from "../../mapviewer/webgl/shaders/ShaderUtil";
+import {
+    createMainProgram,
+    createNpcProgram,
+    createProgram,
+} from "../../mapviewer/webgl/shaders/Shaders";
 import mainFragShader from "../../mapviewer/webgl/shaders/main.frag.glsl";
+import { LIGHT_MAP_SIZE, LIGHT_MAP_TILES, LightMap } from "./LightMap";
+
+// The programs a map's drawn with: every map's, or a lit map's with its lights (setLighting)
+type ProgramSet = { main: Program; mainAlpha: Program; npc: Program; actor: Program };
 
 // What the renderer calls into each frame, in this order.
 export interface GameFrameHandler {
@@ -127,6 +136,106 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.wash[2] = (hex & 0xff) / 255;
     }
 
+    // Whether the map has lights (MapDef.lighting). A map with them draws with programs of its own
+    // (LIGHTS in the shaders), made the first time one's wanted, so every other map pays nothing
+    // for them; changing over loads the map squares again. Off, every colour's drawn as it always
+    // is.
+    setLighting(on: boolean): void {
+        this.beginLights(0, 0);
+        this.endLights();
+        this.setAmbient(1, 0xffffff);
+        if (on === this.wantsLights) {
+            return;
+        }
+        this.wantsLights = on;
+        if (on) {
+            this.litPrograms ??= this.createProgramSet(true);
+            this.litPrograms.then((programs) => this.useProgramSet(programs, true));
+        } else if (this.unlitPrograms) {
+            this.useProgramSet(this.unlitPrograms, false);
+        }
+    }
+
+    // Whether a lit map's programs are wanted, and are what's drawing
+    private wantsLights = false;
+    private drawsLights = false;
+    private unlitPrograms?: ProgramSet;
+    private litPrograms?: Promise<ProgramSet>;
+
+    private async createProgramSet(lights: boolean): Promise<ProgramSet> {
+        if (lights) {
+            this.lightMap ??= this.app.createTexture2D(
+                this.lightMapData.bytes,
+                LIGHT_MAP_SIZE,
+                LIGHT_MAP_SIZE,
+                {
+                    minFilter: PicoGL.LINEAR,
+                    magFilter: PicoGL.LINEAR,
+                    wrapS: PicoGL.CLAMP_TO_EDGE,
+                    wrapT: PicoGL.CLAMP_TO_EDGE,
+                },
+            );
+        }
+        const multiDraw = this.hasMultiDraw;
+        const [main, mainAlpha, npc, actor] = await this.app.createPrograms(
+            createMainProgram(multiDraw, false, lights),
+            createMainProgram(multiDraw, true, lights),
+            createNpcProgram(multiDraw, true, lights),
+            createProgram(
+                actorVertShader,
+                prependDefines(mainFragShader, ["ACTOR_EDGE"]),
+                multiDraw,
+                true,
+                lights,
+            ),
+        );
+        return { main, mainAlpha, npc, actor };
+    }
+
+    // Draws with these from now on, unless it's been changed back meanwhile
+    private useProgramSet(programs: ProgramSet, lights: boolean): void {
+        if (lights !== this.wantsLights || lights === this.drawsLights) {
+            return;
+        }
+        this.drawsLights = lights;
+        this.mainProgram = programs.main;
+        this.mainAlphaProgram = programs.mainAlpha;
+        this.npcProgram = programs.npc;
+        this.actorProgram = programs.actor;
+        this.actorRenderer?.setProgram(programs.actor, lights ? this.lightMap : undefined);
+        // Map squares keep the programs they were loaded with
+        this.clearMaps();
+    }
+
+    // How bright what's out of every light is (0 to 1), and its tint (0xRRGGBB)
+    setAmbient(level: number, color: number): void {
+        this.ambient[0] = (((color >> 16) & 0xff) / 255) * level;
+        this.ambient[1] = (((color >> 8) & 0xff) / 255) * level;
+        this.ambient[2] = ((color & 0xff) / 255) * level;
+    }
+
+    // This frame's lights, round (x, y) in world tiles (LightMap): each at world tiles, radius in
+    // tiles, and colour times strength (0 to 1 a channel at strength 1), then sent to the GPU
+    beginLights(x: number, y: number): void {
+        this.lightMapData.begin(x, y);
+    }
+
+    addLight(x: number, z: number, radius: number, r: number, g: number, b: number): void {
+        this.lightMapData.add(x, z, radius, r, g, b);
+    }
+
+    endLights(): void {
+        const map = this.lightMapData;
+        this.lightMapArea[0] = map.x0;
+        this.lightMapArea[1] = map.y0;
+        this.lightMapArea[2] = 1 / LIGHT_MAP_TILES;
+        if (map.end() && this.lightMap) {
+            this.lightMap.data(map.bytes);
+        }
+    }
+
+    private readonly lightMapData = new LightMap();
+
     getActorRenderer(): Promise<ActorRenderer> {
         return this.actorRendererReady;
     }
@@ -151,7 +260,12 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
     override async initShaders(): Promise<Program[]> {
         const programs = await super.initShaders();
         const [actorProgram, actorSilhouetteProgram] = await this.app.createPrograms(
-            createProgram(actorVertShader, mainFragShader, this.hasMultiDraw, true),
+            createProgram(
+                actorVertShader,
+                prependDefines(mainFragShader, ["ACTOR_EDGE"]),
+                this.hasMultiDraw,
+                true,
+            ),
             createProgram(actorVertShader, actorSilhouetteFragShader, this.hasMultiDraw, false),
         );
         this.actorProgram = actorProgram;
@@ -165,6 +279,18 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             this.textureMaterials!,
             this.sceneUniformBuffer!,
         );
+        this.unlitPrograms = {
+            main: this.mainProgram!,
+            mainAlpha: this.mainAlphaProgram!,
+            npc: this.npcProgram!,
+            actor: actorProgram,
+        };
+        // A lit map asked for its programs before these were made: they go in over these
+        if (this.wantsLights) {
+            this.drawsLights = false;
+            this.litPrograms ??= this.createProgramSet(true);
+            this.litPrograms.then((lit) => this.useProgramSet(lit, true));
+        }
         this.resolveActorRenderer(this.actorRenderer);
         return [...programs, actorProgram, actorSilhouetteProgram];
     }
@@ -212,6 +338,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             return;
         }
         actors.renderOutlines();
+        actors.renderEarly();
         actors.renderSilhouettes();
         actors.renderOpaque();
     }

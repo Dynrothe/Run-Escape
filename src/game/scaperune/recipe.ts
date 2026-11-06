@@ -83,6 +83,7 @@ export type MapRecipe = {
             | "fun"
             | "tombs"
             | "floor"
+            | "lighting"
         >
     >;
 };

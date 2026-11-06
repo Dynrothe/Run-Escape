@@ -67,6 +67,10 @@ export function getGameSoundIds(): number[] {
     }
     for (const map of ALL_MAPS) {
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
+        for (const skin of map.floor?.skins ?? []) {
+            const { rise, fall, crack } = skin.material ?? {};
+            ids.push(rise?.sound ?? -1, fall?.sound ?? -1, crack?.sound ?? -1);
+        }
     }
     ids.push(VISITOR_SOUND);
     for (const { effect } of RANDOM_EVENTS) {

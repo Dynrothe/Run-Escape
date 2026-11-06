@@ -939,8 +939,11 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   a run starts.
 - `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
   hidden floor, so each can move on its own and a fallen one opens onto the pit under it. The
-  warnings are the tiles' own movement, with no colour of their own: a tremor (rattling up off
-  its bed and twisting) before a rise, the same tremor with a sag and a darkening before a fall.
+  warnings are the tiles' own movement and the light under them: a tremor (rattling up off its
+  bed and twisting) before a rise, the same tremor with a sag and a darkening before a fall, and
+  under each such tile the floor's gold light (`FloorDef.glow`), which shows only through the
+  seams the tremor opens and grows as the moment nears. It's the slab again just under the tile,
+  drawn with a negative `flash`, which `actor.vert.glsl` takes as a glow in the tint's colour.
   The cache's rising slabs (2220 to 2223, seqs 9697 to 9700) are the rise itself, tipped three
   ways (2223 moves as 2221 does), and there's no tremor among them, so it's in code. Hits are a share of the player's hitpoints, so any
   adventurer can try it.
@@ -948,12 +951,28 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   no state: dust as slabs rise, grit falling off a tile about to go, and chips and dust with a
   falling tile. Each is on a share of the tiles, to keep a phone's triangles down. A tile beside a
   hole has its thickness drawn under it (the slab again, lower and darker each time), so every
-  hole, one tile or most of the floor, has the same cut edge going down into the dark.
+  hole, one tile or most of the floor, has the same cut edge going down into the dark. Under the
+  floor (`FloorDef.under`) is one structure on a grid symmetric about the floor's middle: the
+  Tombs' gold-banded pillars every six tiles both ways, beams between them, the engraved wall
+  going down round the floor's edge, and a dim amber glow far below. Only what's within a few
+  tiles of a hole is drawn.
   `FloorDef.shake` has the sim shake the camera (`bossImpact`) for a slab beside a player or a
   tile going near one, which Settings can turn off.
 - The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
-  bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing in it, and the
+  bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing of the map's in it, and the
   player walks the deck (`ArenaGrid.getHeight`'s bridge heights).
+- What else a floor can do is all optional on `FloorDef` (the map-making guide, "Floors that fight
+  back"): tile effects (`Sim.stepFloorEffects`, and `PlayerMovement`'s `floor` rule for haste, slow
+  and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
+  `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
+  which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+- Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
+  silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
+  raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top
+  alone: a tile at rest among others is drawn as that. `window.floorWholeTiles = true` (dev) draws
+  them whole, to compare.
+- The floor preview, `?floorpreview` on the dev server (`ui/FloorPreview.tsx`, checks in
+  `core/floorLint.ts`), draws a floor flat and plays its script on a timeline.
 
 ### Pets
 
@@ -1079,6 +1098,83 @@ the item reaches as it turns, not over its top. The Power-up timers setting
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
 
+### Lights
+
+Any map can have lights (`MapDef.lighting`, a `LightingDef`), and a map without them pays nothing:
+its programs are built without them (`LIGHTS` in the shaders) and its sim never makes one. Three
+things are separate, each optional:
+
+- **Lights**: anything can give off light, each a `LightLook` (radius in tiles, colour as
+  `0xRRGGBB`, intensity, and drawn-only `flicker` and `pulse`).
+- **How bright the rest is**: `ambient` (1, as the map always is, when unset; about 0.2 is the
+  dark) and `ambientColor`. It can change over a run: `sim.dimTo(level, seconds)` from anything in
+  the sim, or a boss phase's `light` (`BossPhasesDef`), which goes back to the map's own as the boss
+  falls.
+- **The rule**: `litTargetsOnly` (the Scar's). Weapons only pick targets within half a tile of a sim
+  light's edge (`nearestEnemies`, which every weapon, thrall, cannon and power-up aims with), and
+  the minimap only shows what's lit. Shots carry on and hit whatever they meet. The balance bot
+  only walks at what's lit, and faint arrows show what's coming out of the dark. A dark map without
+  it is only dark; a lit one with glowing lights is cheap.
+
+**Sim lights and drawn lights.** Lights that can matter to play are made by the sim each tick
+(`Sim.stepLights`, after the enemies move, before the weapons fire) from squared distances only, so
+every co-op copy has the same ones: each player's, the map's own, what enemies carry and what they
+leave. Everything else is only drawn (`client/SceneLights.ts`), and never touches the sim or its
+hashes: glowing scenery, spells and effects, a floor's tiles, bosses' windups and marks, and
+flicker and pulse on any light.
+
+**Drawing them.** Every frame `SceneLights` offers every light there is to `LightBudget`, which
+keeps the `MAX_SHOWN_LIGHTS` (24) that tell most: the shown player's own, then the brightest and
+biggest for how near the middle of the view each is. A light coming in fades in and one leaving fades
+out (a quarter of a second), so a map can have any number and none pops. Those are added into a
+light map on the CPU (`render/LightMap.ts`: two texels a tile, 64 tiles round the view, its corner
+moving a whole texel at a time so the light doesn't swim), and the shaders read it once a pixel
+(`lights.glsl`): its colour times the ambient plus the light there, with a faint haze of the light's
+colour added. So a pixel costs the same however many lights there are. `GameWebGLRenderer.setLighting`
+changes the programs over as a run starts (the first time, it builds the lit set and the light
+map's texture; changing over loads the map squares again and remakes the actors' draw calls).
+
+**Drawn at full brightness** (`ActorDrawOptions.unlit`): projectiles, spot animations, power-ups and
+caskets on the ground, power-ups' effects, bosses' hazards and everything the boss fight's view draws
+(`ActorRenderer.unlitAtLeast`). A hit's flash shows too. The overlay (hitsplats, health bars,
+windups, loot beams) was never lit.
+
+**How to add a light**, by what gives it off:
+
+- **A map's own, that stays put** (a sim light):
+  `lighting: { lights: [{ x: 2003.5, y: 6370.5, radius: 3, color: 0xff9a4a, flicker: 0.15 }] }`
+- **Scenery that glows** (drawn only), every loc of these ids on the map, found as the map's
+  collision is built (`RegionDataInput.glowLocs`):
+  `lighting: { locs: { 43475: { radius: 3.5, color: 0xff9a4a, intensity: 0.9, flicker: 0.3 } } }`.
+  A fire that weapons should aim by goes in `lights` too.
+- **Each player's**: `lighting: { player: { radius: 5, color: WARM_LIGHT, intensity: 0.95 } }`.
+- **A power-up**: `effect: { kind: "light", bonus: 4, seconds: 30, fade: 5 }` adds to the player's
+  light, or is a light of its own that big where players have none (the Abyssal lantern,
+  `LANTERN_ID`, drops at a map's `lanternWeight`, and lies at its `lanterns` from the start).
+- **An enemy or boss** (a sim light): `light: { radius: 2.5, color: 0xc8ffb0, left: { radius: 4, seconds: 20 } }`
+  on its `EnemyDef`; `left` stays where it died.
+- **A spell, projectile or effect** (drawn only), by spot animation id in `SPOT_LIGHTS`
+  (`content/lights.ts`): `[100, { radius: 2.5, color: 0xff8a3a, intensity: 0.9, flicker: 0.25 }]`.
+- **A floor's tiles** (drawn only), by their effect in `FLOOR_LIGHTS`:
+  `burn: { radius: 2, color: 0xff6a1a, intensity: 0.7 }`.
+- **A boss's attack**: `light: { radius: 2, color: 0xff3030 }` on the `BossAttackDef` glows on
+  each spot as it winds up, growing as the hit comes; on a `GroundPatternDef`, on each mark while
+  it's down. `look: { exposedLight: { radius: 3, color: 0xffe08a, pulse: { amount: 0.3, seconds: 1 } } }`
+  on a boss lights it while its guard's down (a core exposed).
+- **The scene getting darker**: `phases: [{ ... }, { ..., light: 0.1 }]` on a boss, or
+  `sim.dimTo(0.1, 2)` and back with `sim.dimTo(sim.baseAmbient, 2)`.
+
+`scaperune_dark` is a dark map with the rule, fires and lanterns; `scaperune_glow` is a map at its
+usual brightness with glowing scenery, a blue light of its own and the wizard's fire spells.
+
+**Cost**: only a map with `lighting` pays, and it pays about the same however many lights it has:
+one texture read a pixel, and the light map's few thousand texels on the CPU. In the headless
+renderer, a lit map's programs took about a tenth longer a frame than the same view without them
+(Lumbridge at 844×390: 94 ms without, 101 with none or 8 lights, 108 with 24), and Lumbridge
+itself, without lighting, took as long as before there were lights. A real phone hasn't been
+measured. Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
+many triangles as a lit one.
+
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS
 Wiki's [list of in-game sound IDs](https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs).
 A sound's samples are let go once it's first played and its `AudioBuffer` holds them
@@ -1187,6 +1283,13 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
 request (without the game's cache, so `generator.test.ts` skips its long map check there).
+
+The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
+a whole checkout, and watching them all held up the first load after every start by tens of
+seconds. Add anything else big that sits inside the checkout to `server.watch.ignored` in
+`vite.config.ts` (`node_modules` and `dist` are left out already). A package that only a worker
+imports goes in `optimizeDeps.include`, as `threads/worker` and `jszip` do: Vite's startup scan
+doesn't follow workers, so it would find the package mid-load and reload the page.
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a

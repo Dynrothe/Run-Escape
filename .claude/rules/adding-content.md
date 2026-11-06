@@ -218,6 +218,14 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   the panel it scrolls.
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
+- Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
+  map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
+  (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
+  spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
+  (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
+  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
+  has an example of each. Off a map with `lighting`, none of it does anything.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.

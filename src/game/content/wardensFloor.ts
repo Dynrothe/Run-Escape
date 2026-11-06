@@ -14,7 +14,7 @@ import type { FloorBeatDef, FloorDef, FloorPatternDef } from "./types";
 
 // The slab rising: 1 by 1 tile, up about half a tile and back in 0.36 s (seq 9697, 0.6 s with
 // its rest). 2221 to 2223 are the same slab tipping other ways; FloorView turns this one instead.
-const RISING_SLAB = 2220;
+export const RISING_SLAB = 2220;
 // The slab tumbling (seq 9722, 1 s), for a tile that falls away
 const FALLING_SLAB = 2228;
 // toa_pos_p3_rocks_hit and toa_amp_rocks_fall_02 (the OSRS Wiki's sound ids)
@@ -25,6 +25,13 @@ const FALL_SOUND = 6572;
 const SLAB_DUST = 2699;
 const FALL_DUST = 2184;
 const ROCK_CHIP = 2210;
+// Under the floor, all the Tombs' own: the room's gold-banded pillar (2 by 2, 4.4 tiles tall), the
+// wall of its upper level as beams, and the engraved wall the room's walled with, round the edge
+const UNDER_PILLAR = 45582;
+const UNDER_BEAM = 45085;
+const UNDER_WALL = 45120;
+// The Tombs' gold, as the light under the floor
+const GLOW = 0xffb040;
 
 // The crater in OSRS's last room (square 61,80, the plates 45650 to 45710 round it, the Warden's
 // platform 45718 to 45720 in it): the Warden's
@@ -49,26 +56,33 @@ export function wardensCrater(x0: number, y0: number): FloorDef["holes"] {
     return WARDENS_CRATER.map((row) => ({ y: y0 + row.y, x0: x0 + row.x0, x1: x0 + row.x1 }));
 }
 
-const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
+export const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
     kind: "side",
     side,
     rowSeconds,
 });
-const sweep = (rowSeconds: number, gap = 2): FloorPatternDef => ({
+export const sweep = (rowSeconds: number, gap = 2): FloorPatternDef => ({
     kind: "sweep",
     rowSeconds,
     gap,
 });
-const ripple = (
+export const ripple = (
     at: "player" | "middle",
     spokes: "cross" | "diagonal",
     ringSeconds: number,
     radius: number,
 ): FloorPatternDef => ({ kind: "ripple", at, spokes, ringSeconds, radius });
-const dropRows = (rows: number): FloorPatternDef => ({ kind: "dropRows", rows, rowSeconds: 0.4 });
-const holes = (count: number): FloorPatternDef => ({ kind: "holes", count });
+// The both-halves slam is the signature one, shown bold from its start (FloorCue): the rest are
+// subtle, the floor's own
+export const bold = (pattern: FloorPatternDef): FloorPatternDef => ({ ...pattern, cue: "bold" });
+export const dropRows = (rows: number): FloorPatternDef => ({
+    kind: "dropRows",
+    rows,
+    rowSeconds: 0.4,
+});
+export const holes = (count: number): FloorPatternDef => ({ kind: "holes", count });
 
-const beat = (at: number, pattern: FloorPatternDef, message?: string): FloorBeatDef => ({
+export const beat = (at: number, pattern: FloorPatternDef, message?: string): FloorBeatDef => ({
     at,
     pattern,
     message,
@@ -82,7 +96,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(9, side("west", 0.15)),
     beat(15, side("east", 0.15)),
     beat(21, side("west", 0.15)),
-    beat(27, side("both", 0.15)),
+    beat(27, bold(side("both", 0.15))),
     beat(34, sweep(0.15, 3)),
     beat(41, dropRows(3), "The floor crumbles away behind you!"),
     // A little faster, and ripples
@@ -90,7 +104,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(51, side("east", 0.12)),
     beat(55, side("west", 0.12)),
     beat(59, ripple("middle", "diagonal", 0.14, 12)),
-    beat(65, side("both", 0.12)),
+    beat(65, bold(side("both", 0.12))),
     beat(70, sweep(0.12)),
     beat(75, dropRows(3)),
     beat(76, holes(3)),
@@ -98,7 +112,7 @@ const SCRIPT: FloorBeatDef[] = [
     beat(80, side("west", 0.1), "The floor quickens!"),
     beat(83.5, side("east", 0.1)),
     beat(87, ripple("player", "diagonal", 0.13, 8)),
-    beat(91, side("both", 0.1)),
+    beat(91, bold(side("both", 0.1))),
     beat(94.5, sweep(0.1)),
     beat(99, holes(4)),
     beat(100, ripple("player", "cross", 0.12, 10)),
@@ -106,14 +120,14 @@ const SCRIPT: FloorBeatDef[] = [
     // As fast as it gets
     beat(108, side("east", 0.08), "The floor is breaking apart!"),
     beat(110.5, side("west", 0.08)),
-    beat(113, side("both", 0.08)),
+    beat(113, bold(side("both", 0.08))),
     beat(116, ripple("player", "cross", 0.1, 10)),
     beat(119, sweep(0.08)),
     beat(122, holes(4)),
     beat(123, side("west", 0.08)),
     beat(125.5, side("east", 0.08)),
     beat(128, ripple("player", "diagonal", 0.1, 10)),
-    beat(131, side("both", 0.08)),
+    beat(131, bold(side("both", 0.08))),
     beat(134, sweep(0.08)),
     beat(139, { kind: "restore", rowSeconds: 0.08 }, "The floor knits itself back together."),
 ];
@@ -145,6 +159,9 @@ export function createWardensFloor(rect: FloorDef["rect"]): FloorDef {
             fallDust: FALL_DUST,
             rock: ROCK_CHIP,
         },
+        under: { pillar: UNDER_PILLAR, beam: UNDER_BEAM, wall: UNDER_WALL },
+        glow: GLOW,
+        cue: "subtle",
         shake: { slam: 0.1, drop: 0.25 },
         script: SCRIPT,
         loopSeconds: 144,

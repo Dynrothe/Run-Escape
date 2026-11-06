@@ -43,6 +43,7 @@ import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
+    LANTERN_ID,
     POWER_UPS,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
@@ -139,11 +140,14 @@ import {
     EnemySpawnsDef,
     EnemyTag,
     FightAbilityDef,
+    FloorActionDef,
     GearSlot,
     GroundPatternDef,
     ImpactDef,
     ImpactSpotDef,
     KephriDef,
+    LightLook,
+    LightingDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -183,7 +187,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
-import { movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
+import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -236,6 +240,8 @@ import {
     GroundFire,
     GroundHazard,
     GroundPool,
+    LeftLight,
+    Light,
     PassiveState,
     PendingHit,
     Pickup,
@@ -256,6 +262,14 @@ import {
     projectileSource,
     quarterOf,
 } from "./entities";
+import {
+    EFFECT_BURN,
+    EFFECT_HASTE,
+    EFFECT_HEAL,
+    EFFECT_ICE,
+    EFFECT_SLOW,
+    TYPE_FRAGILE,
+} from "./floorLayout";
 import { fm } from "./fmath";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -317,6 +331,12 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
+// (litTargetsOnly), seconds over which a light an enemy left goes out, and over which a boss's
+// phase changes the scene's ambient (and back as it falls)
+const LIGHT_GRACE = 0.5;
+const LEFT_LIGHT_FADE = 3;
+const PHASE_LIGHT_SECONDS = 2;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
@@ -556,6 +576,17 @@ const FLEE_LOOKAHEAD = 1;
 
 // What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
 export const FLOOR_SOURCE = "floor";
+// What a floor's tiles do (FloorEffect), unless the floor says otherwise (FloorDef.tileEffects):
+// burn's share of the player's hitpoints and how often (seconds), and its hit on an enemy; heal's
+// share and how often; haste's and slow's change to speed; ice's grip
+const FLOOR_BURN_DAMAGE = 0.04;
+const FLOOR_BURN_EVERY = 0.5;
+const FLOOR_BURN_ENEMY = 3;
+const FLOOR_HEAL_AMOUNT = 0.03;
+const FLOOR_HEAL_EVERY = 0.5;
+const FLOOR_HASTE = 0.4;
+const FLOOR_SLOW = 0.45;
+const FLOOR_ICE_GRIP = 0.06;
 // Tiles from a player that a slab coming up, or a tile going, shakes the camera (FloorDef.shake)
 const FLOOR_SLAM_SHAKE_REACH = 1.5;
 const FLOOR_DROP_SHAKE_REACH = 2.5;
@@ -822,6 +853,11 @@ export type Hero = {
     bulletGraceEnd: number;
     // The floor (MapDef.floor) can't hit them again until this tick
     floorGraceEnd: number;
+    // A floor tile's burn or heal (FloorEffect) next acts on them from this tick; and how far they
+    // went last tick, kept on ice
+    floorEffectNext: number;
+    glideX: number;
+    glideY: number;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -1260,6 +1296,15 @@ export class Sim {
     // The Tombs of Amascut: the invocations on, and the raid level they come to
     readonly invocations: string[];
     readonly raidLevel: number;
+    // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
+    readonly lighting: LightingDef | undefined;
+    readonly litTargetsOnly: boolean;
+    // On a map with lighting, this tick's sim lights (stepLights): each player's, the map's, and
+    // what enemies carry and leave. Empty on any other map.
+    lights: Light[] = [];
+    private leftLights: LeftLight[] = [];
+    // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
+    private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -1713,6 +1758,9 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
+        this.lighting = this.map.lighting;
+        this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
+        this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
@@ -1796,6 +1844,13 @@ export class Sim {
             this.updateFlowField();
         }
         this.use(this.heroes[this.focus]);
+        if (this.lighting) {
+            for (const at of this.lighting.lanterns ?? []) {
+                const spot = this.walkableSpot(at.x, at.y);
+                this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: LANTERN_ID });
+            }
+            this.stepLights();
+        }
     }
 
     // A hero at the spawn, or for a party's others, around it
@@ -1894,6 +1949,9 @@ export class Sim {
             drowsyInterval: 1,
             bulletGraceEnd: 0,
             floorGraceEnd: 0,
+            floorEffectNext: 0,
+            glideX: 0,
+            glideY: 0,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -2981,6 +3039,9 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
+        if (this.lighting) {
+            this.stepLights();
+        }
         for (const hero of this.heroes) {
             // On your own, weapons still fire in the tick the player falls in
             if (this.isUp(hero) || this.heroes.length === 1) {
@@ -3060,7 +3121,12 @@ export class Sim {
             curse: this.curse,
             arena: this.confinedToArena ? this.bossArena : undefined,
             faces: this.introFacing,
+            floor: this.floor?.hasEffects && !frozen ? this.floorMovement() : undefined,
         });
+        if (this.floor?.hasEffects) {
+            this.hero.glideX = player.x - player.prevX;
+            this.hero.glideY = player.y - player.prevY;
+        }
         if (moving !== player.moving) {
             player.moving = moving;
             player.moveStart = this.tick;
@@ -4014,8 +4080,10 @@ export class Sim {
                     (!touching || healTarget) &&
                     !(fighting && dirX === 0 && dirY === 0)
                 ) {
-                    moveX += dirX * enemy.speed;
-                    moveY += dirY * enemy.speed;
+                    // Faster or slower on a floor's plates (FloorEffect haste, slow)
+                    const pace = this.floor?.hasEffects ? this.floorPace(enemy.x, enemy.y) : 1;
+                    moveX += dirX * enemy.speed * pace;
+                    moveY += dirY * enemy.speed * pace;
                 }
                 moveX += sepX * 0.25;
                 moveY += sepY * 0.25;
@@ -4052,7 +4120,11 @@ export class Sim {
                     !bossState &&
                     !lapping &&
                     enemy.attackCooldown === 0 &&
-                    distance <= enemy.def.shot.range
+                    distance <= enemy.def.shot.range &&
+                    !(
+                        this.floor?.hasPillars &&
+                        this.floor.blocksSight(enemy.x, enemy.y, player.x, player.y)
+                    )
                 ) {
                     this.enemyShoot(enemy, enemy.def.shot);
                 }
@@ -4292,6 +4364,8 @@ export class Sim {
         elite: boolean,
         sound?: number,
         ignoreArmor = false,
+        // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
+        grace = true,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -4333,7 +4407,9 @@ export class Sim {
             this.crondisSpill("The crocodile's bite spills your water!");
         }
         player.flash = 6;
-        player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+        if (grace) {
+            player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+        }
         this.emit({ type: "playerHit", amount, enemyId, elite, sound });
         if (player.hp <= 0) {
             this.playerDied();
@@ -11016,9 +11092,17 @@ export class Sim {
         });
     }
 
+    // A phase that changes the scene's light (BossPhasesDef light), on a map with lighting
+    private phaseLight(phase: { light?: number }): void {
+        if (this.lighting && phase.light !== undefined) {
+            this.dimTo(phase.light, PHASE_LIGHT_SECONDS);
+        }
+    }
+
     // Its first shield, and its totems standing idle in the corners; or with no
     // totems, its hitpoints to get through, a phase at a time
     private startPhases(boss: Enemy, phases: BossPhasesDef): void {
+        this.phaseLight(phases.phases[0]);
         const totemsDef = phases.totems;
         if (!totemsDef) {
             boss.speed *= phases.phases[0].speed ?? 1;
@@ -11164,6 +11248,7 @@ export class Sim {
         // Quicker on its feet with each phase (BossPhasesDef speed)
         boss.speed *= (next.speed ?? 1) / (phases.phases[phase.index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.stage = "shield";
         // The new phase's dream from its first tick (the old one's bullets fly on)
         phase.ambientNext = this.tick;
@@ -11204,6 +11289,7 @@ export class Sim {
         const next = phases.phases[index + 1];
         boss.speed *= (next.speed ?? 1) / (phases.phases[index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.startTick = this.tick;
         phase.ambientNext = this.tick;
         phase.ambientsNext = undefined;
@@ -11295,6 +11381,10 @@ export class Sim {
             }
         }
         this.clearBossAttacks();
+        // Its phases' light goes back to the map's
+        if (this.lighting && boss.def.boss?.phases?.phases.some((p) => p.light !== undefined)) {
+            this.dimTo(this.baseAmbient, PHASE_LIGHT_SECONDS);
+        }
     }
 
     // Everything a boss had in the air and on the ground, and on the players
@@ -12349,29 +12439,44 @@ export class Sim {
             return;
         }
         const def = floor.def;
-        const { rose, fell, messages } = floor.step(this.tick, () => {
-            const target =
-                this.heroes.length > 1
-                    ? this.nearestHero(floor.x0 + floor.sizeX / 2, floor.y0 + floor.sizeY / 2)
-                    : this.hero;
-            return target.player;
-        });
+        const origin = () => this.floorTarget().player;
+        const { rose, fell, back, messages } = floor.step(this.tick, origin);
         for (const message of messages) {
             this.emit({ type: "notice", message });
         }
-        // A sound where the tiles going this tick are, in the middle of them
-        for (const [tiles, sound] of [
-            [rose, def.slam.sound],
-            [fell, def.drop.sound],
+        // A sound where the tiles going this tick are, in the middle of them: the floor's, or each
+        // skin's own (FloorSkinDef.material), and a fragile tile's crack as it rises
+        const skins = def.skins;
+        const material = (tiles: number[], k: number) =>
+            skins?.[floor.layout.skin[floor.index(tiles[k], tiles[k + 1])]]?.material;
+        for (const [tiles, fallback, kind] of [
+            [rose, def.slam.sound, "rise"],
+            [fell, def.drop.sound, "fall"],
         ] as const) {
-            if (tiles.length > 0) {
+            const groups = new Map<number, number[]>();
+            for (let k = 0; k < tiles.length; k += 2) {
+                const sound = material(tiles, k)?.[kind]?.sound ?? fallback;
+                const group = groups.get(sound) ?? [];
+                group.push(tiles[k], tiles[k + 1]);
+                groups.set(sound, group);
+                const crack = material(tiles, k)?.crack?.sound;
+                if (kind === "rise" && crack !== undefined && this.isCracking(tiles, k)) {
+                    this.emit({
+                        type: "impact",
+                        sound: crack,
+                        x: tiles[k] + 0.5,
+                        y: tiles[k + 1] + 0.5,
+                    });
+                }
+            }
+            for (const [sound, group] of groups) {
                 let x = 0;
                 let y = 0;
-                for (let i = 0; i < tiles.length; i += 2) {
-                    x += tiles[i] + 0.5;
-                    y += tiles[i + 1] + 0.5;
+                for (let i = 0; i < group.length; i += 2) {
+                    x += group[i] + 0.5;
+                    y += group[i + 1] + 0.5;
                 }
-                const count = tiles.length / 2;
+                const count = group.length / 2;
                 this.emit({ type: "impact", sound, x: x / count, y: y / count });
             }
         }
@@ -12381,7 +12486,7 @@ export class Sim {
             this.shakeNear(rose, FLOOR_SLAM_SHAKE_REACH, def.shake.slam);
             this.shakeNear(fell, FLOOR_DROP_SHAKE_REACH, def.shake.drop);
         }
-        if (fell.length > 0) {
+        if (fell.length > 0 || back.length > 0) {
             // Enemies on a tile that's gone go to the nearest that isn't
             for (const enemy of this.enemies) {
                 if (!enemy.dead && this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))) {
@@ -12390,6 +12495,7 @@ export class Sim {
                     enemy.y = to.y;
                 }
             }
+            // and the way round is worked out again, for what's gone and what's back
             const current = this.hero;
             for (const hero of this.heroes) {
                 if (this.isUp(hero)) {
@@ -12422,6 +12528,119 @@ export class Sim {
                 this.hitByFloor(def.slam.damage, def.slam.sound, false);
             }
         });
+        // Pressure plates (FloorDef.triggers): what players have stepped onto
+        if (floor.layout.triggerNames.length > 0) {
+            const tiles: number[] = [];
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    tiles.push(Math.floor(hero.player.x), Math.floor(hero.player.y));
+                }
+            }
+            for (const message of floor.press(tiles, this.tick, origin)) {
+                this.emit({ type: "notice", message });
+            }
+        }
+        if (floor.hasEffects) {
+            this.stepFloorEffects(floor);
+        }
+    }
+
+    // Who the floor's aimed at (a ripple "at the player", a dropUnder): the hero, or in co-op the
+    // one nearest its middle
+    private floorTarget(): Hero {
+        const floor = this.floor!;
+        return this.heroes.length > 1
+            ? this.nearestHero(floor.x0 + floor.sizeX / 2, floor.y0 + floor.sizeY / 2)
+            : this.hero;
+    }
+
+    // Whether a fragile tile rising (tiles' k-th) is nearer giving way, but not gone yet
+    private isCracking(tiles: number[], k: number): boolean {
+        const floor = this.floor!;
+        const i = floor.index(tiles[k], tiles[k + 1]);
+        return floor.layout.type[i] === TYPE_FRAGILE && floor.dropWarnAt[i] === -1;
+    }
+
+    // Something done to the floor (FloorActionDef), from a boss's attack (BossAttackDef.floor) or
+    // anything else: dropping the tile under someone, starting a pattern, a phase. at is who it's
+    // aimed at (the floor's target when unset). Nothing on a map with no floor.
+    floorAct(action: FloorActionDef, at?: { x: number; y: number }): void {
+        const floor = this.floor;
+        if (!floor) {
+            return;
+        }
+        floor.act(action, this.tick, () => at ?? this.floorTarget().player);
+    }
+
+    // The floor's tiles that do something to whoever's on them (FloorEffect): burning and healing
+    // players every so often, and burning enemies
+    private stepFloorEffects(floor: ArenaFloor): void {
+        const tuning = floor.def.tileEffects;
+        const burn = tuning?.burn;
+        const heal = tuning?.heal;
+        const burnEvery = Math.max(1, secondsToTicks(burn?.every ?? FLOOR_BURN_EVERY));
+        const healEvery = Math.max(1, secondsToTicks(heal?.every ?? FLOOR_HEAL_EVERY));
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const effect = floor.effectAt(Math.floor(player.x), Math.floor(player.y), this.tick);
+            if (
+                (effect !== EFFECT_BURN && effect !== EFFECT_HEAL) ||
+                this.tick < this.hero.floorEffectNext
+            ) {
+                return;
+            }
+            if (effect === EFFECT_BURN) {
+                this.hero.floorEffectNext = this.tick + burnEvery;
+                const share = burn?.damage ?? FLOOR_BURN_DAMAGE;
+                const damage = Math.max(1, Math.round(player.maxHp * share));
+                this.damagePlayer(damage, FLOOR_SOURCE, false, -1, true, false);
+            } else if (player.hp < player.maxHp) {
+                this.hero.floorEffectNext = this.tick + healEvery;
+                this.heal(
+                    Math.max(1, Math.round(player.maxHp * (heal?.amount ?? FLOOR_HEAL_AMOUNT))),
+                );
+            }
+        });
+        // Enemies burn on the floor's own beat
+        if (this.tick % burnEvery === 0) {
+            const damage = burn?.enemyDamage ?? FLOOR_BURN_ENEMY;
+            for (const enemy of this.enemies) {
+                if (
+                    !enemy.dead &&
+                    !enemy.def.flies &&
+                    floor.effectAt(Math.floor(enemy.x), Math.floor(enemy.y), this.tick) ===
+                        EFFECT_BURN
+                ) {
+                    this.damageSource = "other";
+                    this.damageEnemy(enemy, damage, 0, enemy.x, enemy.y, 0);
+                }
+            }
+        }
+    }
+
+    // How a floor's tile moves the player on it (FloorEffect haste, slow and ice), or nothing
+    private floorMovement(): MovementRules["floor"] {
+        const floor = this.floor!;
+        const player = this.player;
+        const effect = floor.effectAt(Math.floor(player.x), Math.floor(player.y), this.tick);
+        if (effect === EFFECT_ICE) {
+            const grip = floor.def.tileEffects?.ice?.grip ?? FLOOR_ICE_GRIP;
+            return { pace: 1, glide: { x: this.hero.glideX, y: this.hero.glideY, grip } };
+        }
+        const pace = this.floorPace(player.x, player.y);
+        return pace !== 1 ? { pace } : undefined;
+    }
+
+    // Faster or slower on a floor's tile (FloorEffect haste, slow), 1 elsewhere
+    private floorPace(x: number, y: number): number {
+        const floor = this.floor!;
+        const effect = floor.effectAt(Math.floor(x), Math.floor(y), this.tick);
+        const tuning = floor.def.tileEffects;
+        return effect === EFFECT_HASTE
+            ? 1 + (tuning?.haste ?? FLOOR_HASTE)
+            : effect === EFFECT_SLOW
+              ? 1 - (tuning?.slow ?? FLOOR_SLOW)
+              : 1;
     }
 
     // One shake for the first of these tiles (x then y) within reach of a hero who's up
@@ -13473,6 +13692,10 @@ export class Sim {
             for (const { x, y } of windup.targets) {
                 this.addEffect(debris, x, y, 0, landTick - startTick);
             }
+        }
+        // What it does to the floor as it starts, at the player it's after
+        if (attack.floor) {
+            this.floorAct(attack.floor, player);
         }
         this.animateStatues(attack, windup.from, attack.statues?.windupSeq);
         // Somewhere safe from it, there from the start (GroundPatternDef.safe)
@@ -14766,6 +14989,13 @@ export class Sim {
             }
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
+            if (
+                this.floor?.hasPillars &&
+                this.floor.isPillarTile(Math.floor(projectile.x), Math.floor(projectile.y))
+            ) {
+                projectile.life = 0;
+                continue;
+            }
             if (projectile.attack.blockable && this.hitsGlyph(projectile)) {
                 projectile.life = 0;
                 continue;
@@ -15311,6 +15541,18 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
+        // A light it carried stays where it fell for a while (EnemyDef.light)
+        const leaves = this.lighting && enemy.def.light?.left;
+        if (leaves) {
+            this.leftLights.push({
+                id: enemy.uid,
+                x: enemy.x,
+                y: enemy.y,
+                look: leaves,
+                startTick: this.tick,
+                endTick: this.tick + Math.round(leaves.seconds * TICKS_PER_SECOND),
+            });
+        }
         const byEnemy = cause === "enemy";
         // Co-op: a boss's copies are one boss, killed when the last one falls
         const lastCopy = !this.encounterLeft(enemy);
@@ -16227,6 +16469,137 @@ export class Sim {
         this.stealLife(def, dealt);
     }
 
+    // ---- Lights (MapDef.lighting) ----
+
+    // This tick's sim lights, from where everything that carries one is now: the players' first,
+    // in the party's order, then the map's, then enemies' and what they left. All in the same
+    // order on every co-op player's copy. Squared distances only, nothing from Math.
+    private stepLights(): void {
+        const lighting = this.lighting!;
+        const lights: Light[] = [];
+        for (const hero of this.heroes) {
+            if (hero.left) {
+                continue;
+            }
+            const own = this.heroLight(hero.index, lighting);
+            if (own) {
+                const { x, y } = hero.player;
+                lights.push({ kind: "player", id: hero.index, x, y, ...own, hero: hero.index });
+            }
+        }
+        (lighting.lights ?? []).forEach((look, id) => {
+            lights.push({ kind: "map", id, x: look.x, y: look.y, radius: look.radius, look });
+        });
+        for (const enemy of this.enemies) {
+            const look = enemy.def.light;
+            if (look && !enemy.dead) {
+                const { x, y } = enemy;
+                lights.push({
+                    kind: "enemy",
+                    id: enemy.uid,
+                    x,
+                    y,
+                    radius: look.radius,
+                    look,
+                    enemy,
+                });
+            }
+        }
+        this.leftLights = this.leftLights.filter((left) => left.endTick > this.tick);
+        for (const left of this.leftLights) {
+            // Going out over its last LEFT_LIGHT_FADE seconds
+            const fade = Math.min(
+                1,
+                (left.endTick - this.tick) / (LEFT_LIGHT_FADE * TICKS_PER_SECOND),
+            );
+            lights.push({
+                kind: "left",
+                id: left.id,
+                x: left.x,
+                y: left.y,
+                radius: left.look.radius * fade,
+                look: left.look,
+            });
+        }
+        this.lights = lights;
+    }
+
+    // A hero's light: the map's round each player, and a light power-up's (the lantern) on top
+    // while it lasts, shrinking back over its last seconds. None if they have neither.
+    private heroLight(
+        heroIndex: number,
+        lighting: LightingDef,
+    ): { radius: number; look: LightLook } | undefined {
+        let bonus = 0;
+        let look = lighting.player;
+        for (const active of this.powerUps) {
+            if (active.hero !== heroIndex) {
+                continue;
+            }
+            const effect = getPowerUp(active.id).effect;
+            if (effect.kind === "light") {
+                const fade = Math.min(
+                    1,
+                    (active.endTick - this.tick) / (effect.fade * TICKS_PER_SECOND),
+                );
+                bonus = Math.max(bonus, effect.bonus * fade);
+                look ??= effect.look ?? { radius: effect.bonus };
+            }
+        }
+        const radius = (lighting.player?.radius ?? 0) + bonus;
+        return look && radius > 0 ? { radius, look } : undefined;
+    }
+
+    // Whether a spot's in a sim light, or near enough to its edge (LIGHT_GRACE): always, on a map
+    // without the rule (LightingDef.litTargetsOnly)
+    isLit(x: number, y: number): boolean {
+        if (!this.litTargetsOnly) {
+            return true;
+        }
+        for (const light of this.lights) {
+            const reach = light.radius + LIGHT_GRACE;
+            const dx = x - light.x;
+            const dy = y - light.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // What weapons can aim at under the rule, by where it stands
+    isEnemyLit(enemy: Enemy): boolean {
+        return this.isLit(enemy.x, enemy.y);
+    }
+
+    // How bright the scene is (LightingDef.ambient) at a tick, fractions too, as it changes over
+    // time (dimTo). 1 on a map without lighting.
+    ambientAt(tick: number): number {
+        const dim = this.dim;
+        if (tick >= dim.endTick) {
+            return dim.to;
+        }
+        const t = Math.max(0, (tick - dim.startTick) / Math.max(1, dim.endTick - dim.startTick));
+        return dim.from + (dim.to - dim.from) * t;
+    }
+
+    // The scene's ambient to this, over seconds (a boss's phase, an event): from wherever it is
+    // now. Drawn only, and only on a map with lighting.
+    dimTo(ambient: number, seconds: number): void {
+        const from = this.ambientAt(this.tick);
+        this.dim = {
+            from,
+            to: ambient,
+            startTick: this.tick,
+            endTick: this.tick + Math.round(seconds * TICKS_PER_SECOND),
+        };
+    }
+
+    // The map's own ambient, when nothing's changed it
+    get baseAmbient(): number {
+        return this.lighting?.ambient ?? 1;
+    }
+
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
@@ -16246,13 +16619,18 @@ export class Sim {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
         const styled = style !== undefined && this.expert;
+        // Not behind a floor's pillar, which blocks the way and the view
+        const pillars = this.floor?.hasPillars ? this.floor : undefined;
+        // Under the rule (LightingDef.litTargetsOnly), only what's lit
+        const dark = this.litTargetsOnly;
         for (const enemy of this.enemies) {
             // An unhittable one (Zebak's jugs) is never aimed at, any more than it's hit
             if (
                 enemy.dead ||
                 enemy.def.unhittable ||
                 enemy.shieldEnd > this.tick ||
-                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
+                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style) ||
+                (dark && !this.isEnemyLit(enemy))
             ) {
                 continue;
             }
@@ -16264,7 +16642,7 @@ export class Sim {
                 const gap = Math.max(0, Math.sqrt(distSq) - (enemy.radius - 1));
                 distSq = gap * gap;
             }
-            if (distSq <= rangeSq) {
+            if (distSq <= rangeSq && !pillars?.blocksSight(x, y, enemy.x, enemy.y)) {
                 found.push({ enemy, distSq });
             }
         }
@@ -16898,6 +17276,14 @@ export class Sim {
             }
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
+            // A floor's pillar stops it (FloorTileType "pillar")
+            if (
+                this.floor?.hasPillars &&
+                this.floor.isPillarTile(Math.floor(projectile.x), Math.floor(projectile.y))
+            ) {
+                projectile.life = 0;
+                continue;
+            }
 
             // An axe that has bounced is on its way to the next one
             let bounced = false;
@@ -17748,8 +18134,12 @@ export class Sim {
     }
 
     private rollPowerUpId(): string {
+        // A lantern is the one power-up a map's own weight brings in (LightingDef)
+        const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
-            POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            POWER_UPS.map((p) =>
+                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+            ),
         );
         return POWER_UPS[index].id;
     }
@@ -17859,6 +18249,10 @@ export class Sim {
                 break;
             case "pumpkin":
                 message = this.openPumpkin();
+                break;
+            case "light":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                message = `Your ${def.name.toLowerCase()} lights up the dark!`;
                 break;
             case "laps":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);

@@ -9,10 +9,11 @@ import PicoGL, {
 } from "picogl";
 
 import { Frustum } from "../../Frustum";
+import { readsLightMap } from "../shaders/ShaderUtil";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
-const TEXELS_PER_INSTANCE = 2;
+const TEXELS_PER_INSTANCE = 4;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 
 // Tiles added to an actor's reach before it's culled, for the depth nudge in its
@@ -93,6 +94,7 @@ export class ActorModel {
 
 export type ActorDrawOptions = {
     scale?: number;
+    // 0 to 1, towards white; negative, towards the tint's own colour (a glow)
     flash?: number;
     tint?: number;
     alpha?: number;
@@ -100,6 +102,24 @@ export type ActorDrawOptions = {
     // Drawn with an outline: the model this much bigger in a flat colour
     // (ActorRenderer.outlineColor) behind it
     outline?: number;
+    // Light along the edges of a tile-sized model (one tile across, centred), as if from under
+    // it: 0 to 1, how strongly; how far in it reaches, of the way to the middle; and its colour
+    // (the Wardens' floor, client/FloorView.ts)
+    edge?: number;
+    edgeWidth?: number;
+    edgeColor?: number;
+    // Stretched along x and z (a floor's slab of several tiles), and tipped over about x and z
+    // before it's turned (RS angle units), from its origin
+    stretchX?: number;
+    stretchZ?: number;
+    pitch?: number;
+    roll?: number;
+    // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
+    // the world: a floor's pillars and raised tiles, which hide the player as walls would
+    early?: boolean;
+    // On a lit map (MapDef.lighting), how much it's drawn at full brightness whatever the light,
+    // 0 to 1: warnings and spells, which have to be seen in the dark. Elsewhere it does nothing.
+    unlit?: number;
 };
 
 class InstanceList {
@@ -130,6 +150,14 @@ class InstanceList {
         flash: number,
         tint: number,
         alpha: number,
+        edge: number,
+        edgeWidth: number,
+        edgeColor: number,
+        stretchX: number,
+        stretchZ: number,
+        pitch: number,
+        roll: number,
+        unlit: number,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -152,6 +180,14 @@ class InstanceList {
         data[o + 5] = flash;
         data[o + 6] = tint;
         data[o + 7] = alpha;
+        data[o + 8] = edge;
+        data[o + 9] = edgeWidth;
+        data[o + 10] = edgeColor;
+        data[o + 11] = unlit;
+        data[o + 12] = stretchX;
+        data[o + 13] = stretchZ;
+        data[o + 14] = pitch;
+        data[o + 15] = roll;
     }
 
     grow(capacity: number): void {
@@ -242,11 +278,13 @@ export class ActorSegment {
     readonly instances = new InstanceList();
     readonly silhouettes = new InstanceList();
     readonly outlines = new InstanceList();
-    readonly lists = [this.instances, this.silhouettes, this.outlines];
+    readonly early = new InstanceList();
+    readonly lists = [this.instances, this.silhouettes, this.outlines, this.early];
 
     constructor(
         readonly vertexArray: VertexArray,
-        readonly drawCall: DrawCall,
+        // Made again with the other program as a map goes dark or light (ActorRenderer.setProgram)
+        public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
     ) {}
@@ -270,7 +308,7 @@ export class ActorPage {
     get instanceCount(): number {
         let count = 0;
         for (const segment of this.segments) {
-            count += segment.instances.count;
+            count += segment.instances.count + segment.early.count;
         }
         return count;
     }
@@ -307,13 +345,17 @@ export class ActorRenderer {
 
     private frustum?: Frustum;
 
+    // Every draw's unlit (ActorDrawOptions.unlit) is at least this, while a caller's drawing only
+    // warnings (a boss fight's view)
+    unlitAtLeast = 0;
+
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
 
     constructor(
         readonly app: PicoApp,
         readonly hasMultiDraw: boolean,
-        readonly program: Program,
+        public program: Program,
         readonly silhouetteProgram: Program,
         readonly textureArray: Texture,
         readonly textureMaterials: Texture,
@@ -344,12 +386,7 @@ export class ActorRenderer {
         );
 
         const createDrawCall = (program: Program, vertexArray: VertexArray) =>
-            app
-                .createDrawCall(program, vertexArray)
-                .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
-                .texture("u_textures", this.textureArray)
-                .texture("u_textureMaterials", this.textureMaterials)
-                .texture("u_actorData", this.dataTexture);
+            this.createDrawCall(program, vertexArray);
 
         const segments = Array.from(bake.segmentStarts, (start) => {
             const vertexArray = app
@@ -398,6 +435,36 @@ export class ActorRenderer {
         return models;
     }
 
+    private createDrawCall(program: Program, vertexArray: VertexArray): DrawCall {
+        const drawCall = this.app
+            .createDrawCall(program, vertexArray)
+            .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
+            .texture("u_textures", this.textureArray)
+            .texture("u_textureMaterials", this.textureMaterials)
+            .texture("u_actorData", this.dataTexture);
+        if (this.lightMap && readsLightMap(program)) {
+            drawCall.texture("u_lightMap", this.lightMap);
+        }
+        return drawCall;
+    }
+
+    // A lit map's light map (GameWebGLRenderer), for a program that reads it (setProgram)
+    lightMap?: Texture;
+
+    // Draws the actors with another program from now on (a dark map's, with its lights, or back)
+    setProgram(program: Program, lightMap?: Texture): void {
+        this.lightMap = lightMap;
+        if (program === this.program) {
+            return;
+        }
+        this.program = program;
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                segment.drawCall = this.createDrawCall(program, segment.vertexArray);
+            }
+        }
+    }
+
     removePage(page: ActorPage): void {
         const index = this.pages.indexOf(page);
         if (index !== -1) {
@@ -415,6 +482,7 @@ export class ActorRenderer {
                 segment.instances.reset();
                 segment.silhouettes.reset();
                 segment.outlines.reset();
+                segment.early.reset();
             }
         }
     }
@@ -432,8 +500,11 @@ export class ActorRenderer {
         options?: ActorDrawOptions,
     ): void {
         const scale = options?.scale ?? 1;
+        const stretchX = options?.stretchX ?? 1;
+        const stretchZ = options?.stretchZ ?? 1;
         if (this.frustum) {
-            const biggest = scale * Math.max(options?.outline ?? 1, 1);
+            const biggest =
+                scale * Math.max(options?.outline ?? 1, 1) * Math.max(stretchX, stretchZ, 1);
             const reach = (model.reach * biggest) / 128 + CULL_MARGIN;
             if (!this.frustum.intersectsSphere(x, y, z, reach)) {
                 return;
@@ -442,14 +513,74 @@ export class ActorRenderer {
         const flash = options?.flash ?? 0;
         const tint = options?.tint ?? NO_TINT;
         const alpha = options?.alpha ?? 1;
+        const edge = options?.edge ?? 0;
+        const edgeWidth = options?.edgeWidth ?? 0;
+        const edgeColor = options?.edgeColor ?? NO_TINT;
         const segment = model.page.segments[anim.segments[frame]];
-        segment.instances.push(anim.ranges, frame, x, y, z, yaw, scale, flash, tint, alpha);
+        (options?.early ? segment.early : segment.instances).push(
+            anim.ranges,
+            frame,
+            x,
+            y,
+            z,
+            yaw,
+            scale,
+            flash,
+            tint,
+            alpha,
+            edge,
+            edgeWidth,
+            edgeColor,
+            stretchX,
+            stretchZ,
+            options?.pitch ?? 0,
+            options?.roll ?? 0,
+            Math.max(options?.unlit ?? 0, this.unlitAtLeast),
+        );
         if (options?.silhouette) {
-            segment.silhouettes.push(anim.ranges, frame, x, y, z, yaw, scale, 0, NO_TINT, 1);
+            segment.silhouettes.push(
+                anim.ranges,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                scale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+            );
         }
         if (options?.outline) {
             const outlineScale = scale * options.outline;
-            segment.outlines.push(anim.ranges, frame, x, y, z, yaw, outlineScale, 0, NO_TINT, 1);
+            segment.outlines.push(
+                anim.ranges,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                outlineScale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+            );
         }
     }
 
@@ -552,13 +683,25 @@ export class ActorRenderer {
         }
     }
 
+    // Expects depth test on, blending off: what's drawn early (ActorDrawOptions.early), before
+    // the silhouettes, so they show through it as through the world.
+    renderEarly(): void {
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                const list = segment.early;
+                this.drawList(segment.drawCall, list, list.opaqueOffsets, list.opaqueCounts);
+            }
+        }
+    }
+
     // Expects blending on.
     renderAlpha(): void {
         for (const page of this.pages) {
             for (const segment of page.segments) {
-                const list = segment.instances;
-                if (list.alphaElements > 0) {
-                    this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                for (const list of [segment.early, segment.instances]) {
+                    if (list.alphaElements > 0) {
+                        this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                    }
                 }
             }
         }
