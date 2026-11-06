@@ -254,8 +254,8 @@ export function createStoneHall(rect: Rect): FloorDef {
 }
 
 // Fire and ice: tiles that do something to whoever's on them (FloorSkinDef.effect). Ice down the
-// west side, where you slide; strips of lava in the east, which burn; a patch of mud in the
-// south, slow going; a lane of speed plates up the middle; and three green glyphs that heal and
+// west side, where you slide; strips of lava in the east, which burn; patches of mud in the
+// south and sand in the north, slow going; a lane of speed plates up the middle; and three green glyphs that heal and
 // never rise. What falls rebuilds itself (FloorDef.rebuild), and each material has its own dust
 // and sounds (FloorSkinDef.material).
 export function createFireAndIce(rect: Rect): FloorDef {
@@ -270,6 +270,7 @@ export function createFireAndIce(rect: Rect): FloorDef {
             FLOOR_SKINS.mud,
             FLOOR_SKINS.speedPlate,
             { ...FLOOR_SKINS.healGlyph, under: 0 },
+            FLOOR_SKINS.sand,
         ],
         tiles: [
             { skin: 0 },
@@ -278,6 +279,7 @@ export function createFireAndIce(rect: Rect): FloorDef {
             { where: { kind: "stripes", axis: "y", every: 5, width: 3 }, skin: 0 },
             { where: { kind: "rect", x0: 0, y0: 0, x1: 5, y1: 24 }, skin: 2 },
             { where: { kind: "ellipse", rx: 3, ry: 2, cx: 11, cy: 4 }, skin: 3 },
+            { where: { kind: "ellipse", rx: 2, ry: 1.5, cx: 8, cy: 20 }, skin: 6 },
             {
                 where: {
                     kind: "minus",

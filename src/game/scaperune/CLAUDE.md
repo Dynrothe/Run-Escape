@@ -921,16 +921,27 @@ hit from the moment it starts.
 
 **Tiles that do something** (`effect` on a tiles rule, or a skin's own `effect`; `"none"` takes a skin's away):
 
-| Effect  | On a player                                        | On an enemy          | Ready-made skin             |
-| ------- | -------------------------------------------------- | -------------------- | --------------------------- |
-| `burn`  | 4% of their hitpoints every 0.5 s, with no grace   | 3 damage every 0.5 s | `lava` (glows, `glow: 0.3`) |
-| `heal`  | 3% of their hitpoints every 0.5 s                  | nothing              | `healGlyph` (a decal)       |
-| `haste` | 40% faster                                         | 40% faster           | `speedPlate`                |
-| `slow`  | 45% slower                                         | 45% slower           | `mud`, `sand`               |
-| `ice`   | they keep their momentum, steering 6% of it a tick | nothing              | `ice`                       |
+| Effect  | On a player                                        | On an enemy          | Ready-made skin       |
+| ------- | -------------------------------------------------- | -------------------- | --------------------- |
+| `burn`  | 4% of their hitpoints every 0.5 s, with no grace   | 3 damage every 0.5 s | `lava`                |
+| `heal`  | 3% of their hitpoints every 0.5 s                  | nothing              | `healGlyph` (a decal) |
+| `haste` | 40% faster                                         | 40% faster           | `speedPlate`          |
+| `slow`  | 45% slower                                         | 45% slower           | `mud`, `sand`         |
+| `ice`   | they keep their momentum, steering 6% of it a tick | nothing              | `ice`                 |
 
 Tune them with `tileEffects` (`burn: { damage, every, enemyDamage }`, `heal: { amount, every }`, `haste`, `slow`,
-`ice: { grip }`). Flying enemies don't burn. A skin's `glow` (0 to 1) lights it all over in its `tint`'s colour, for lava.
+`ice: { grip }`). Flying enemies don't burn.
+
+The ready-made `lava`, `ice`, `mud` and `sand` are the cache's flat tile of lava rock (loc 747, 18 triangles) with its
+texture swapped (`retexture`): lava's black crust with molten cracks (texture 59, which creeps on its own), ice's glassy
+streaks (53), earth (32) and dunes (38). A textured tile beats a recoloured slab: a slab's top is one colour. Lava also
+has a skin's `glow` (0 to 1, all over it in its `tint`'s colour) with a slow `pulse` on top, each tile on its own beat,
+a seam `light`, and an `idle` effect, embers (2246) drifting up off one tile in four every 2.4 s:
+
+```ts
+lava: { loc: 747, retexture: [[15, 59]], height: -0.13, tint: 0xd8885a, glow: 0.02, pulse: 0.14, light: 0xff7a1a,
+        idle: { spotAnim: 2246, every: 2.4, share: 4 }, effect: "burn" },
+```
 
 ```ts
 skins: [FLOOR_SKINS.greySlab, FLOOR_SKINS.lava, FLOOR_SKINS.ice, { ...FLOOR_SKINS.healGlyph, under: 0 }],

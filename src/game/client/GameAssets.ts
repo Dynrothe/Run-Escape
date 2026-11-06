@@ -187,7 +187,7 @@ function getSpotAnimIds(): number[] {
         // and each skin's own (FloorSkinDef.material)
         for (const skin of map.floor?.skins ?? []) {
             const { rise, fall, crack } = skin.material ?? {};
-            add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim);
+            add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
         }
     }
     for (const enemy of ENEMIES) {

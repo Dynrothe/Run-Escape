@@ -87,6 +87,10 @@ const CRACK_TILT = 22;
 // a slab's thickness at a time, from this shade to this
 const PLINTH_TOP = 0xd8d8d8;
 const PLINTH_BOTTOM = 0x8c8c8c;
+// A glowing skin's pulse (FloorSkinDef.pulse), times a second; and an idle effect's share of its
+// tiles (FloorSkinDef.idle)
+const PULSE_RATE = 0.35;
+const IDLE_SHARE = 4;
 // A sunken tile's darker, this much a tile down, and at most this much
 const SUNKEN_SHADE = 0.7;
 const SUNKEN_MOST = 0.45;
@@ -443,7 +447,11 @@ export class FloorView {
                 under,
                 underW: w / underSize,
                 underH: h / underSize,
-                glow: skin.glow ?? 0,
+                // A slow pulse over its glow, each tile on its own beat
+                glow:
+                    (skin.glow ?? 0) +
+                    (skin.pulse ?? 0) *
+                        (0.5 + 0.5 * Math.sin((seconds * PULSE_RATE + phase) * Math.PI * 2)),
                 pitch,
                 roll,
                 early: layout.type[i] === TYPE_PILLAR || lift > RAISED_HIDES,
@@ -670,9 +678,19 @@ export class FloorView {
                 this.amongStill(floor, col, row, tick, lift)
             ) {
                 actors.draw(lid, lid.anims[0], 0, x, ground, y, turn, options);
-                continue;
+            } else {
+                this.drawTile(actors, x, ground + pressed + sink, y, 0, edged, lift);
             }
-            this.drawTile(actors, x, ground + pressed + sink, y, 0, edged, lift);
+            // Now and then, on some of them, its idle effect (lava's embers)
+            const idle = skin.idle;
+            const idleFx =
+                idle && share % (idle.share ?? IDLE_SHARE) === 0 && this.effect(idle.spotAnim);
+            if (idle && idleFx) {
+                const every = Math.max(1, Math.round(idle.every * TICKS_PER_SECOND));
+                this.reset();
+                const since = Math.floor(now + phase * every) % every;
+                this.drawOnce(actors, idleFx, x, ground, y, since, phase, idle.scale ?? 1);
+            }
         }
         this.drawUnder(actors, sim, floor, slab, rising, tick);
     }

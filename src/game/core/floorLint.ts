@@ -30,6 +30,7 @@ const SKIN_TRIANGLES: Record<string, [whole: number, top: number]> = {
     "loc:53349": [186, 149],
     "loc:56393": [30, 30],
     "loc:7016": [214, 214],
+    "loc:747": [18, 10],
     "loc:45582": [338, 338],
 };
 const SLAB = SKIN_TRIANGLES["spot:2220"];

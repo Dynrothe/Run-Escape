@@ -56,10 +56,13 @@ export const FLOOR_MATERIALS = {
     },
 } satisfies Record<string, FloorMaterialDef>;
 
-// The Wardens' slab, recoloured, for the tiles that do something to whoever's on them
-// (FloorSkinDef.effect): the cache's HSL, a hue (64 to a turn), a saturation (8) and a lightness (128)
-const hsl = (hue: number, saturation: number, lightness: number) =>
-    (hue << 10) | (saturation << 7) | lightness;
+// The cache's flat tile of lava rock (loc 747: 18 triangles, texture 15, its top 0.13 tiles up)
+// with another texture, sunk to be flush with the floor
+const texturedTile = (texture: number) => ({
+    loc: 747,
+    retexture: [[15, texture]] as [number, number][],
+    height: -0.13,
+});
 
 export const FLOOR_SKINS = {
     // The Wardens' own slab, rising with its own animation
@@ -92,37 +95,26 @@ export const FLOOR_SKINS = {
     // tile, and the Tombs' gold-banded pillar on a 2 by 2 slab
     stonePillar: { loc: 7016 },
     tombsPillar: { loc: 45582, size: 2 },
-    // Tiles that do something (FloorEffect). Lava: a dark red crust, glowing a little all over and
-    // bright orange in its cracks, that burns.
+    // Tiles that do something (FloorEffect), all the cache's own flat textured tile (loc 747, a
+    // tile of lava rock, 18 triangles) with its texture swapped, sunk so its top's at the floor's.
+    // Lava: a black crust with molten cracks that creep (texture 59, which scrolls), glowing and
+    // pulsing slowly, bright in its seams, embers drifting up off some of it; it burns.
     lava: {
-        spotAnim: 2220,
-        recolor: slabTop(hsl(2, 7, 30), hsl(1, 7, 22), hsl(0, 6, 12)),
-        tint: 0xff6a28,
-        glow: 0.14,
+        ...texturedTile(59),
+        tint: 0xd8885a,
+        glow: 0.02,
+        pulse: 0.14,
         light: 0xff7a1a,
         effect: "burn",
         material: FLOOR_MATERIALS.lava,
+        idle: { spotAnim: 2246, every: 2.4, share: 4, scale: 0.8 },
     },
-    // Ice: pale blue, and you slide on it
-    ice: {
-        spotAnim: 2220,
-        recolor: slabTop(hsl(34, 2, 112), hsl(34, 3, 98), hsl(35, 3, 80)),
-        glow: 0.08,
-        tint: 0xe4f4ff,
-        effect: "ice",
-        material: FLOOR_MATERIALS.ice,
-    },
-    // Mud and sand: brown and pale, and slow going
-    mud: {
-        spotAnim: 2220,
-        recolor: slabTop(hsl(6, 3, 34), hsl(6, 3, 26), hsl(5, 3, 18)),
-        effect: "slow",
-    },
-    sand: {
-        spotAnim: 2220,
-        recolor: slabTop(hsl(8, 3, 92), hsl(8, 3, 84), hsl(8, 3, 74)),
-        effect: "slow",
-    },
+    // Ice: pale blue, glassy streaks (texture 53), and you slide on it
+    ice: { ...texturedTile(53), effect: "ice", material: FLOOR_MATERIALS.ice },
+    // Mud: dark brown earth (texture 32), slow going
+    mud: { ...texturedTile(32), tint: 0xb0a090, effect: "slow" },
+    // Sand: dunes (texture 38), slow going
+    sand: { ...texturedTile(38), effect: "slow" },
     // A glyph that heals whoever's on it: the rune decal, lit green (give it a skin under it)
     healGlyph: { loc: 56393, light: 0x6dff8e, effect: "heal" },
     // A speed plate: the Tombs' glyph plate, lit a cold blue

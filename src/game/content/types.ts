@@ -1747,8 +1747,13 @@ export type FloorSkinDef = {
     // (FloorDef.glow when unset), its strength and width (times as much), and the tremor before
     // a tile's own warning (times as much)
     cue?: { color?: number; strength?: number; width?: number; tremor?: number };
-    // A glow all over it, in its tint's colour (0 to 1): lava's
+    // A glow all over it, in its tint's colour (0 to 1): lava's; and how much more it glows at the
+    // height of a slow pulse, each tile on its own beat
     glow?: number;
+    pulse?: number;
+    // A spot animation played now and then on a share of its tiles at rest (lava's embers): every
+    // so many seconds, on one tile in share (4 when unset)
+    idle?: { spotAnim: number; every: number; share?: number; scale?: number };
     // What standing on it does (FloorEffect), unless a tiles rule says otherwise
     effect?: FloorEffect;
     // Its dust, chips and sounds as it rises, falls and cracks (FloorMaterialDef; FLOOR_MATERIALS)
