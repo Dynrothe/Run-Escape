@@ -6,7 +6,15 @@ import { describeMissing, parseRoomCode } from "../client/coop/CoopLobby";
 import { RoomListing, RoomView } from "../client/coop/protocol";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
-import { FUN_MAPS, MAPS, MAP_BY_ID, RAID_MAPS, getMap, getMapCharacter } from "../content/maps";
+import {
+    FUN_MAPS,
+    MAPS,
+    MAP_BY_ID,
+    RAID_MAPS,
+    getMap,
+    getMapCharacter,
+    isCoopMap,
+} from "../content/maps";
 import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
@@ -403,7 +411,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 {isHost ? (
                     <div className="ui-select-scroll ui-coop-maps">
                         <div className="ui-map-list">
-                            {[...MAPS, ...RAID_MAPS, ...FUN_MAPS].map((m) => {
+                            {[...MAPS, ...RAID_MAPS, ...FUN_MAPS].filter(isCoopMap).map((m) => {
                                 const selected = m.id === room.mapId;
                                 // Others in the room who haven't got it
                                 const without = lacking(m.id, false);

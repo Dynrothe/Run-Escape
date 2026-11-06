@@ -764,7 +764,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       none; `status` and `message` per phase, `ambients` (more timers, ground marks or cycles too),
       `confine: false` to let the player off the `bossArena` (and `Sim.confinedToArena`, which
       co-op's prediction reads).
-    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's in a pillar's
+    - Swings: `line` (a strip the way it faced; `line.track` turns it after the player for the
+      start of its windup, `Sim.trackLine`, and the view draws it from `BossWindup.dirX` each
+      frame, so it follows), `cover` (spares whoever's in a pillar's
       shadow from where it's cast, `inShadow`; the view lights the arena and draws the shadows'
       soft outlines, `shadowOutline`, the same shapes). Blasts: `square`. Projectiles: `wave` (through everyone, once
       each), `boomerang` (out and back, once each way), `from: "knights"`, `onHit` (drag, bind with
@@ -785,7 +787,7 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
-      it misses everyone (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
+      it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`) (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
       `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
       does nothing, the stars over it) when its arena's attack with `turns` catches it
       (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
@@ -806,13 +808,67 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. A press that
       can't go off yet is held a moment (`Hero.abilityHeldUntil`, `stepHeldAbilities`), and
       `openReach` is its reach while the boss's guard is down. Its damage
-      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`.
+      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`. It
+      lands on the boss on the bar, or with two final bosses up (the Scarab Mages) on either
+      (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
+    - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
+      till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
+      its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
+      it meanwhile breaks it (`breakChannel`, from `fireAbility`): the windup, chain and follow
+      are dropped, or the walkers vanish with no blast, and its guard's down `stagger` seconds
+      from then, with a `bossGuard` event whose `cause` ends in ` (broken)` (the sim counts
+      those) and `broken` on screen. A swing with `outside` hits only beyond that many tiles
+      from the boss: `GameView` draws the shelter green and the storm's edge closing in red
+      (`STORM_EDGE`), and the bot heads for the shelter first (`shelter` in `simulate-run.ts`).
     - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
       `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and
       each played out once (`Effect.once`; a trail's laid along its way, turned with
       `Effect.yaw`), and a `bossImpact` event that `GameClient` shakes the camera by (off with
       the Screen shake setting, `DisplaySettings.screenShake`, and by default for reduced
       motion) and `GameView` flashes the screen by, faintly.
+    - Two bosses fought together (the Scarab Mages, `content/cursedSands.ts`): both are
+      `finalBoss` events, so the run's won when both are down, and the second's event can be
+      later with `inArena` (`RunEventDef`: it turns up inside the `bossArena`, 4 to 9 tiles
+      from the player, `spawnBosses`). The first's intro mustn't have `alone`: `aloneWith`
+      stops every event till it's dead. `BossDef.enrage.partner` enrages a boss when one of its
+      partners dies (`enragePartners`, from `killEnemy`), at its own `tempo`
+      (`BossState.furyTempo`, in place of `ENRAGED_INTERVAL`); an attack with `enraged` and
+      `phases: [1]` is how a phased boss gets its later attacks early that way. A
+      `BossAttackDef.tether` (kind `tether`, used as it lands or as an ambient) is a beam from the
+      boss to the nearest living partner for `seconds`: `Sim.tethers` (`BossTether`, cleared with
+      the rest of a boss's attacks), read each tick between where the two are (`tetherEnds`), it
+      hurts each hero within `width / 2` of it once an `interval` after `warn` (`stepTethers`,
+      `segmentDistanceSq` in `core/arena.ts`, `Hero.tetherHitTick`), and `GameView.drawTether`
+      lays its `spotAnim` along it a tile apart, faint until it's armed. A pattern ambient with
+      `origin: "target"` bursts from where the nearest player stood as it began, so a ground
+      ambient on the player and that pattern on the same timer make marks that burst outwards.
+      One can echo the other's lunge (`EnemyDef.echoes` on a boss, below): the elder copies
+      the first's Crossfire, so two strips come from two ways at once.
+    - A ground attack's `trail` spots (the Champion of Scabaras) land on where the player it's
+      after stood `ago` seconds back: each hero keeps the last `TRAIL_SECONDS` of where they stood
+      (`Hero.trail`, a ring by tick written in `stepPlayer`), read in `markGround`; where
+      nothing's kept for that tick (they weren't stepped, or it's further back), it's on them.
+      It's sim state like any other, so co-op's copies agree, and nothing reads it without the
+      attack. An ordeal's `opener` (`BossOrdealDef`, `BossState.ordeal.opener`) is used once
+      as it begins, before its `attacks`: the Champion's nests, laid all at once rather than
+      coming among them as Xarpus's do. As an exhumes ends, each still up shows its
+      `healSpotAnim` going to the boss.
+    - An enemy that copies a boss's lunges (`EnemyDef.echoes`, an `EchoDef`: the Menaphite
+      Akh's shadow): as that boss starts one of the named line swings (`startBossAttack`), each
+      living enemy with `echoes` that isn't busy (nor, for a boss echoing its partner, winding
+      up, channelling, kneeling, stunned or in the air: `isBusyBoss`) starts its own copy
+      (`startEchoes`): the
+      boss's attack under the echo's `name`, `damage`, `seq` and `impact`, with no `opens`,
+      `chain` or `follow`, from where it stands at the hero nearest it, over the boss's windup
+      plus `later`, the nearest a hero first up to `most`. It's a `BossWindup` on the enemy
+      (`Enemy.echo`), stepped in place of its walking and shooting (`stepEcho`: `trackLine` as
+      the boss's, then the strip through `forEachHeroInReach` and `inStrip`, the trail, and a
+      dash down `line.dash` as `Enemy.echoDash`, with the rest of its impact where it stops).
+      The view draws it as the boss's strip (`drawBossWindups` reads `Enemy.echo` too), and the
+      echo's `seq` is baked with the enemy's model (`GameAssets.getEnemyBakes`), so it must be
+      one its rig can play. Name only a phase's attacks to keep it to that phase. The bot reads
+      every strip winding up (`lungeStrips`), and with two or more steps to the nearest spot
+      none reaches (`sharedPocket`); with one it steps across it as before.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before
@@ -846,8 +902,11 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   keeps the boss up for `seconds` after the last blast as a stage of its own (`stage: "finale"`,
   untouchable like the totems stage, the HUD's bar the time left): it opens with `opener`, keeps
   to `attacks` at `interval` like the flowers' `during` (`keepsTo`), doesn't wait for its
-  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient`, and
-  `stepPhase` kills it when the time's up. `Hero.damageByAttack` is what each boss attack did to
+  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient` (one pattern, its
+  `delay` not read), and `stepPhase` kills it when the time's up. A boss fought by its hitpoints
+  (no totems) gets one too: at none it's held at 1 behind `shieldEnd` instead of dying
+  (`lastStand`, from `damageEnemy`; both go through `startFinale`), with `shout` over it, and its
+  guard can't drop meanwhile (the Menaphite Akh's last stand). `Hero.damageByAttack` is what each boss attack did to
   that player, by name: `sim.damageByAttack` in the console, and the balance bot's `boss attacks
 that hit` line, for tuning a fight.
 - The Theatre of Blood's bosses (`content/theatre.ts`) add: patterns `wall` (a row with a gap

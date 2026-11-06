@@ -21,6 +21,7 @@ import {
     getArenaRegion,
     getMap,
     getMapCharacter,
+    isCoopMap,
     isDevMap,
     isFunMap,
 } from "../content/maps";
@@ -757,6 +758,10 @@ export class GameClient implements GameFrameHandler {
         }
         const room = this.hostedRoom();
         if (room) {
+            if (!isCoopMap(getMap(mapId))) {
+                this.sounds.denied();
+                return;
+            }
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -868,6 +873,11 @@ export class GameClient implements GameFrameHandler {
     // A room of this player's, for the map picked
     createRoom(open: boolean): void {
         const { mapId, endless, hard } = this.store.getSnapshot();
+        // A solo-only fight picked on your own: the room starts on the first map instead
+        if (!isCoopMap(getMap(mapId))) {
+            this.coop.create(open, MAPS[0].id, false, false);
+            return;
+        }
         this.coop.create(open, mapId, endless, hard);
     }
 
@@ -911,7 +921,7 @@ export class GameClient implements GameFrameHandler {
     // The maps this player has, and has endless and hard mode for, which rooms
     // go by
     private getUnlocks(): Unlocks {
-        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].map((m) => m.id);
+        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].filter(isCoopMap).map((m) => m.id);
         return {
             maps: ids.filter((id) => isMapUnlocked(this.save, id)),
             endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
@@ -947,7 +957,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         const map = getMap(room.mapId);
-        if (!isMapUnlocked(this.save, map.id)) {
+        if (!isMapUnlocked(this.save, map.id) || !isCoopMap(map)) {
             this.sounds.denied();
             return;
         }
@@ -1931,11 +1941,20 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.runRecorded = true;
-        // A part picked was for this run: the next one goes on from what's been won
-        this.store.set({ fightStage: undefined });
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
+        // A fight in parts: Retry plays the part lost again (one replayed, too, not the furthest
+        // reached), and Next fight the one after it. chosenStage falls back to the next not
+        // beaten when that isn't reached yet.
+        this.store.set({
+            fightStage:
+                result.stage === undefined
+                    ? undefined
+                    : result.victory
+                      ? result.stage + 1
+                      : result.stage,
+        });
         const locked = ALL_MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !c.only && !this.save.unlockedCharacters.includes(c.id),

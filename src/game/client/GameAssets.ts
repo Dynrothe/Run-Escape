@@ -670,6 +670,7 @@ export class GameAssets {
             enemy.revives?.seq ?? -1,
             enemy.blinks?.seq ?? -1,
             enemy.blinks?.surface?.seq ?? -1,
+            enemy.echoes?.seq ?? -1,
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
             enemy.boss?.intro?.seq ?? -1,
             enemy.boss?.surgeSeq ?? -1,

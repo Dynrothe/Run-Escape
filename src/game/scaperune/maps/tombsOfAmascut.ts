@@ -1,3 +1,4 @@
+import { POINT_BLANK_VOLLEY } from "../../content/cursedSands";
 import { APMEKEN_BARRIER_LOC, TOMBS_LIGHTING } from "../../content/tombs";
 import { MapDef } from "../../content/types";
 import {
@@ -1268,25 +1269,32 @@ export const BENEATH_CURSED_SANDS: MapDef = {
     stages: [
         {
             name: "Coenus, the Head Menaphite Guard",
-            events: [{ at: 0, kind: "finalBoss", enemyId: "coenus", hp: 10000 }],
+            events: [{ at: 0, kind: "finalBoss", enemyId: "coenus", hp: 8800 }],
             victoryText: "Coenus falls! Return when you're ready for what's below.",
         },
         {
             name: "the Scarab Mages",
             events: [
-                { at: 0, kind: "boss", enemyId: "scarab_mage", hp: 4800 },
-                { at: 0, kind: "finalBoss", enemyId: "scarab_mage_elder", hp: 5400 },
+                // Both to be beaten; the elder up in the square twenty seconds in
+                { at: 0, kind: "finalBoss", enemyId: "scarab_mage", hp: 3800 },
+                {
+                    at: 20,
+                    kind: "finalBoss",
+                    enemyId: "scarab_mage_elder",
+                    hp: 4500,
+                    inArena: true,
+                },
             ],
             victoryText: "The Scarab Mages are dust! The Champion waits below.",
         },
         {
             name: "the Champion of Scabaras",
-            events: [{ at: 0, kind: "finalBoss", enemyId: "champion_of_scabaras", hp: 13500 }],
+            events: [{ at: 0, kind: "finalBoss", enemyId: "champion_of_scabaras", hp: 6500 }],
             victoryText: "The Champion of Scabaras is defeated! One more stands in your way.",
         },
         {
             name: "the Menaphite Akh",
-            events: [{ at: 0, kind: "finalBoss", enemyId: "menaphite_akh", hp: 15000 }],
+            events: [{ at: 0, kind: "finalBoss", enemyId: "menaphite_akh", hp: 8000 }],
             victoryText: SANDS_DONE,
         },
     ],
@@ -1300,6 +1308,10 @@ export const BENEATH_CURSED_SANDS: MapDef = {
         requires: "desert",
         character: "sands_delver",
         weaponLevel: 4,
+        // Point-blank volley: in close while a boss's guard is down
+        ability: POINT_BLANK_VOLLEY,
+        // A quest, done on your own as OSRS's is
+        solo: true,
         // A ranger's kit for the desert, as the quest's played in: d'hide, a coif, an archers ring
         gear: [
             "coif",

@@ -71,6 +71,9 @@ import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
 
 const FROZEN_TINT = 0xa8d8ff;
+// Tiles past a sheltered swing's shelter its storm's edge starts, closing in as it winds up
+// (BossAttackDef.outside)
+const STORM_EDGE = 9;
 // Co-op teammates' names and arrows, like a friend's name in the client, and
 // the name of one who's down (out of the run)
 export const TEAMMATE_COLOR = "#00ff80";
@@ -135,6 +138,8 @@ const DISGUISE_COLOR = "#ff3020";
 const POOL_GROW_TICKS = 12;
 const POOL_DRY_TICKS = 50;
 const POOL_SCALE = 2.2;
+// Tiles apart a tether's spot animations are laid along it (BossAttackDef.tether)
+const TETHER_GAP = 1;
 // Swooshes are white, apart from these weapons' (r, g, b)
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
@@ -635,6 +640,10 @@ export class GameView {
 
         for (const pool of sim.pools) {
             this.drawPool(actors, sim, pool);
+        }
+
+        for (const tether of sim.tethers) {
+            this.drawTether(actors, sim, tether, alpha);
         }
 
         const teleporter = sim.raidTeleporter;
@@ -1450,6 +1459,44 @@ export class GameView {
         });
     }
 
+    // A tether between two bosses (BossAttackDef.tether): its spot animation laid along the way
+    // from one to the other, as an impact's trail is, faint until it's armed
+    private drawTether(
+        actors: ActorRenderer,
+        sim: Sim,
+        tether: Sim["tethers"][number],
+        alpha: number,
+    ): void {
+        const spotAnim = tether.attack.spotAnim;
+        const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+        const ends = sim.tetherEnds(tether);
+        if (!model || !ends || sim.tick >= tether.endTick) {
+            return;
+        }
+        const ax = lerp(ends.boss.prevX, ends.boss.x, alpha);
+        const ay = lerp(ends.boss.prevY, ends.boss.y, alpha);
+        const bx = lerp(ends.partner.prevX, ends.partner.x, alpha);
+        const by = lerp(ends.partner.prevY, ends.partner.y, alpha);
+        const length = Math.hypot(bx - ax, by - ay);
+        if (length < 0.01) {
+            return;
+        }
+        const dirX = (bx - ax) / length;
+        const dirY = (by - ay) / length;
+        const yaw = yawFromVector(dirX, dirY);
+        const anim = model.anims[0];
+        const frame = anim ? anim.getFrame(sim.tick, true) : 0;
+        const armed = sim.tick >= tether.armTick;
+        for (let at = TETHER_GAP / 2; at < length; at += TETHER_GAP) {
+            const x = ax + dirX * at;
+            const y = ay + dirY * at;
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y) - PROJECTILE_HEIGHT, y, yaw, {
+                alpha: armed ? 1 : 0.35,
+                unlit: 1,
+            });
+        }
+    }
+
     // A wave along the ground, or what's thrown drawn as an NPC (a knight's spinning
     // sword, BossAttackDef.lookId), never smaller than what it hits
     private drawSweeping(
@@ -2098,7 +2145,8 @@ export class GameView {
             this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
         }
         for (const enemy of sim.enemies) {
-            const windup = enemy.bossState?.windup;
+            // A boss's, or what's copying its lunge (EnemyDef.echoes), drawn the same
+            const windup = enemy.bossState?.windup ?? enemy.echo;
             if (!windup || enemy.dead) {
                 continue;
             }
@@ -2147,6 +2195,24 @@ export class GameView {
             }
             if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
                 // Where to hide instead of where it hits (it hits everywhere else)
+                continue;
+            }
+            const outside = kind === "swing" ? windup.attack.outside : undefined;
+            if (outside !== undefined) {
+                // Everywhere but at its feet (BossAttackDef.outside): the shelter in green, and
+                // the storm's edge in red closing in on it as it comes
+                const x = lerp(enemy.prevX, enemy.x, alpha);
+                const y = lerp(enemy.prevY, enemy.y, alpha);
+                this.traceGroundCircle(overlay, sim, x, y, outside);
+                ctx.fillStyle = `rgba(80, 255, 100, ${0.12 + 0.18 * t})`;
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = `rgba(80, 255, 100, ${0.6 + 0.4 * t})`;
+                ctx.stroke();
+                this.traceGroundCircle(overlay, sim, x, y, outside + STORM_EDGE * (1 - t));
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.5 * t})`;
+                ctx.stroke();
                 continue;
             }
             const line = kind === "swing" ? windup.attack.line : undefined;

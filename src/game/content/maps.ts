@@ -507,6 +507,11 @@ export function isFightMap(mapId: string): boolean {
 
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
+// Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
+export function isCoopMap(map: MapDef): boolean {
+    return map.fight?.solo !== true;
+}
+
 export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character;
 }

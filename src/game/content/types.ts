@@ -131,6 +131,13 @@ export type EnemyDef = {
     // (the fun maps' rangers and mages): a weak shot, for the enemy's own
     // damage, that only hits when a crowd's hit could
     shot?: EnemyShotDef;
+    // Copies a boss's lunges (the Menaphite Akh's shadow, NEW-7): as boss starts one of these
+    // attacks (by name, each a swing with a line), every living enemy with this winds up its own
+    // from where it stands, at the nearest hero, with the boss's windup and seq, and lands it
+    // down its own strip. Gate it to a phase by naming only that phase's attacks. A boss can
+    // echo its partner (the elder Scarab Mage's half of the Crossfire): only while it's free,
+    // not winding up, channelling, kneeling or in the air.
+    echoes?: EchoDef;
     // Lines it says now and then, over its head (the fun maps' chat)
     chat?: string[];
     // Never moves, and can't be knocked back or left behind (Pest Control's
@@ -496,6 +503,9 @@ export type GroundPatternDef = {
         // land and landing then seconds after. With cross, only the cells within cross
         // cells of the player's, along its row and column.
         | { shape: "checker"; then: number; cross?: number }
+        // trail: on where the player stood each of these many seconds ago (at most
+        // TRAIL_SECONDS), so the path they've just walked bursts (the Champion of Scabaras)
+        | { shape: "trail"; ago: number[] }
     )[];
     // Marked by a shadow on the floor, darkening as what falls comes down (BossAttackDef.falls),
     // rather than by its spot animation
@@ -739,6 +749,9 @@ export type BossOrdealDef = {
     seconds: number;
     attacks: string[];
     interval: number;
+    // Used once as it begins, before any of attacks: an exhumes' marks laid all at once (the
+    // Champion of Scabaras's nests), rather than coming among them
+    opener?: string;
     message: string;
     endMessage: string;
 };
@@ -781,7 +794,8 @@ export type BossAttackDef = {
     // quarters: QuartersDef's flowers split the arena;
     // surge: goes to the arena's edge in line with the player, then charges
     // right across it, hitting what's in its lane;
-    // mark: lands effect or parasite on the player, however far they run
+    // mark: lands effect or parasite on the player, however far they run;
+    // tether: a beam to its partner for a while (tether)
     kind:
         | "swing"
         | "projectile"
@@ -792,7 +806,8 @@ export type BossAttackDef = {
         | "ground"
         | "quarters"
         | "surge"
-        | "mark";
+        | "mark"
+        | "tether";
     // Out of the player's 25 base hitpoints; the biggest hits take about half
     damage: number;
     // Seconds the boss stands winding up (and animating) before it lands
@@ -971,9 +986,20 @@ export type BossAttackDef = {
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
     // way, and stunned if that's one of the map's pillars (BossDef.guard)
-    line?: { width: number; length: number; dash?: number };
-    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard)
+    // track: for this many seconds of its windup the strip turns after the nearest player (no
+    // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
+    line?: { width: number; length: number; dash?: number; track?: number };
+    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard): a swing,
+    // a wave or boomerang that reached no one, a surge that crossed without hitting anyone
     opens?: number;
+    // A spell it channels (BossDef.guard): its guard's down from the moment it begins until it's
+    // cast (a summon's walkTo: until its walkers are all in or dead), and the fight's button
+    // landing on it meanwhile breaks it: nothing's cast (walkers scatter, no blast), and its
+    // guard stays down stagger seconds more, with broken on screen (the Scarab Mages')
+    channel?: { stagger: number; broken?: string };
+    // Swings: hits only beyond this many tiles from the boss, so the shelter's at its feet (the
+    // elder's sandstorm over the whole room)
+    outside?: number;
     // Its arena's attack that hurts the boss too, if it's caught in it: a bolt that
     // reaches it (and stops there), a cell struck under its middle, a thrown sword through
     // it (once each way), for damage, stunning it (BossDef.guard) with stun
@@ -1025,6 +1051,11 @@ export type BossAttackDef = {
     // once every interval) and goes out for out, every period seconds, from the
     // first phase it's in until the fight's over or a phase leaves it out. Drawn
     // as locId playing seqs at each row; sound as each starts to burn.
+    // A beam from the boss to the nearest living partner (by enemy id) for seconds, swinging as
+    // they move: after warn seconds it hurts whoever's within width / 2 of it for the attack's
+    // damage, each of them once every interval (the Scarab Mages' sand). Drawn as spotAnim laid
+    // along it. Used as it lands, or as an ambient (BossPhasesDef ambients).
+    tether?: { partner: string; width: number; seconds: number; interval: number; warn: number };
     cycle?: {
         period: number;
         stagger: number;
@@ -1040,7 +1071,9 @@ export type BossAttackDef = {
 // A fight's own button (MapDef.fight.ability): Space, a pad's bottom face button or the
 // touch screen's, once every cooldown seconds. It hits the boss for damage, with impact on it,
 // as long as the boss's middle is within reach tiles of the player's; out of reach it does
-// nothing and costs nothing. The player plays playerSeq (one of their weapons' own, so it's
+// nothing and costs nothing. With two final bosses up (the Scarab Mages) it hits either, one
+// with its guard down first, then the nearer, and breaks a spell it's channelling
+// (BossAttackDef.channel). The player plays playerSeq (one of their weapons' own, so it's
 // baked) as it goes, with sound; iconObjId is its button.
 export type FightAbilityDef = {
     id: string;
@@ -1068,6 +1101,28 @@ export type ImpactDef = {
     trail?: ImpactSpotDef;
     shake?: number;
     flash?: string;
+};
+
+// An enemy that copies a boss's lunges (EnemyDef.echoes)
+export type EchoDef = {
+    // The boss it copies (an enemy id), and which of its line swings, by name
+    boss: string;
+    attacks: string[];
+    // What its copy's called (what hit, in the sims and the run's report), and its damage in
+    // place of the boss's
+    name: string;
+    damage: number;
+    // Its own animation as it winds up (baked with its model), timed so its blow falls as it
+    // lands (strikeAt, as BossAttackDef's)
+    seq: number;
+    strikeAt?: number;
+    // Seconds more windup than the boss's own, so the two strips land a beat apart
+    later?: number;
+    // What its copy throws up in place of the boss attack's impact: a trail down its strip,
+    // spots where it stops
+    impact?: ImpactDef;
+    // Only so many copy each attack, the nearest the hero first (all of them when unset)
+    most?: number;
 };
 
 // A boss whose guard drops (Justiciar Zachariah's). An attack with `opens` that misses everyone
@@ -1168,10 +1223,11 @@ export type BossPhasesDef = {
         // and back as the boss falls: an enrage that darkens the arena
         light?: number;
     }[];
-    // After the last blast it stands for seconds more before it falls, using
-    // only these attacks (by name) interval seconds apart, opener first, with
-    // ambient under them, and can't be hurt meanwhile: a last stand to live
-    // through (Phosani's desperation phase). Without it the last blast kills.
+    // After the last blast (or, without totems, at no hitpoints left) it stands for seconds more
+    // before it falls, using only these attacks (by name) interval seconds apart, opener first,
+    // with ambient (a pattern) under them, and can't be hurt meanwhile: a last stand to live
+    // through (Phosani's desperation phase, the Menaphite Akh's). Without it, it falls there.
+    // shout: over it as it begins.
     finale?: {
         seconds: number;
         attacks: string[];
@@ -1179,6 +1235,7 @@ export type BossPhasesDef = {
         opener?: string;
         ambient?: BossAmbientDef;
         message: string;
+        shout?: string;
     };
     // Without them, the phases go by its hitpoints (phases' until), each change a
     // pause (threshold), and it dies at none, as anything does
@@ -1251,7 +1308,15 @@ export type BossDef = {
     rises?: { times: number; hp: number; message: string; into?: string };
     // Every boss is enraged at half its hitpoints (or at, a share of them): it attacks and moves
     // faster, and uses its enraged attacks too. What it says when it is.
-    enrage: { message: string; shout?: string; at?: number };
+    // partner: when a boss with one of these ids dies, it's enraged at once (if it's up), with
+    // shout and message, its interval times tempo rather than the usual enraged one (the Scarab
+    // Mages: kill one and the other's furious)
+    enrage: {
+        message: string;
+        shout?: string;
+        at?: number;
+        partner?: { ids: string[]; shout?: string; message?: string; tempo?: number };
+    };
     // Calls in enemies around itself as its hitpoints drop to each fraction
     // (Kree'arra's bodyguards); a form it gets up as (rises.into)
     // calls in its own as it's hurt in turn (Nex's bodyguards)
@@ -1724,7 +1789,9 @@ export type RunEventDef =
     // Mid-run bosses, which drop an elite (or the odd master) casket, and the
     // final boss: killing it wins the run. hp: the boss's hitpoints on this
     // map, when they're not its own.
-    | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number };
+    // inArena: it turns up inside the map's bossArena, a few tiles from the player, not out past
+    // it (the Scarab Mages' elder, while the first's being fought)
+    | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number; inArena?: boolean };
 
 // A place to play: the part of the world a run happens in, what comes at you
 // there, and which map it opens up when it's beaten
@@ -1802,6 +1869,8 @@ export type MapDef = {
         ability?: FightAbilityDef;
         // Gear (items.ts, by id) everyone starts the fight wearing: the kit it's tuned to
         gear?: string[];
+        // Played on your own only (a quest's fights): never a co-op room's map
+        solo?: boolean;
     };
     // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;

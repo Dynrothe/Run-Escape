@@ -58,21 +58,40 @@ nothing bought, so a fresh account clearing Entry isn't a target.
   Menaphite Akh (11493, her own animations). Each part's a run of its own, kept once it's won
   (`SaveData.fightStages`), so you can leave and come back to the next, as OSRS keeps a quest's
   progress; only the last beats the map, and that's what opens the Tombs.
-- **Its fights**, after the wiki's: Coenus cleaves, charges and throws his spear at range, from
-  two thirds calls his guards (11527) and stamps round himself, and from a third rolls out a
-  shockwave to be slipped through; the mages bolt, fan and call scarab swarms, the second quicker; the Champion's
-  shadow bolts, Shadow Burst (four tiles round him), Shadow Rift (bursting where you stood) and
-  Shadow Flames (a swarm), and a ring of shadow in his last phase; the Akh's spear, her cone of
-  lightning (step beside or behind her), her shadow (11462) shooting from afar, and a storm of
-  lightning in her last phase. Each is in phases (two or three), a pause between.
+- **Its fights**, after the wiki's and then past them (`docs/design/beneath-cursed-sands.md` has
+  each one's design and numbers): Coenus is all reach, from the start lunging down a strip,
+  sweeping his front and harpooning whoever keeps away, with a shockwave rolling out of him; from
+  two thirds his guards (11527, who throw spears) march at you as a wall with a gap (the
+  Phalanx), and from a third spears rain down and he charges right across the room. What he
+  misses leaves his guard down for the quest's fight button, Point-blank volley. The two Scarab
+  Mages are fought at once, and their big spells are channelled: the mage stands with its guard
+  down while it casts, and Point-blank breaks the spell. The first fans scarabs, steps through
+  the sand, sends a stampede of scarabs across the room with a gap in it, and channels a swarm
+  back to it (shoot them, or break the spell and they scatter). Twenty seconds in the elder
+  comes up out of the sand, blasting, sinking the floor round you in a lattice of quicksand, and
+  calling a sandstorm over the whole room with the only shelter at its feet, where Point-blank
+  reaches. From their halves the two cross their spells (a strip from each, find the pocket),
+  the stampede comes in two ranks, a noose of scarabs closes and a beam of sand runs between
+  them that hurts to cross; kill one and the other's furious. The Champion steps out of the shadows beside you into
+  a burst, opens rifts that stay open and rolls rings of darkness out of him, twice sinks into
+  the dark while you smother his scarab nests (or he rises healed), and in his dark last phase
+  bursts the path you've just walked. The Akh spears her front, dives across the room down a
+  strip, casts a wedge of lightning and calls her shadow (11462), the floor sparking under you,
+  then throws orbs that follow you and leaves a lattice of sparks, and in her dark last phase
+  cages you in lightning and dives at whoever leaves it, her shadow diving with her from where
+  it stands (two strips at once); at no hitpoints she stands ten seconds more, untouchable (her
+  last stand), her shadow still diving with her. A dive she misses leaves her guard down too.
+  Each is in phases (two or three), most with a pause between.
 - **The kit's ours**: everyone plays the Sands Delver (`characters.ts`, the desert robes, the
   Crystal bow at level 4, faster, with more hitpoints and 10 a minute back, and a ranger's gear
   worn from the start: `MapDef.fight.gear`), so a fight lasts as long as its hitpoints make it.
-  Played, the kit does about 55 damage a second (the bot half that): Coenus 10000, the mages 4800
-  and 5400, the Champion 13500, the Akh 15000, three to four minutes each played, every phase
-  seen. After a part's won the result screen's button goes on to the next ("Next fight"). Their
-  mechanics hit for a little under Phosani's: what wears you down is the next one, not one big
+  Played, the kit does about 55 damage a second (the bot half that): Coenus 8800, the mages 3300
+  and 3900 (fought at once), the Champion 6500, the Akh 8000, three to four minutes each played,
+  every phase seen. After a part's won the result screen's button goes on to the next ("Next
+  fight"). Their mechanics hit for a little under Phosani's: what wears you down is the next one, not one big
   hit, and the windups (a second for a melee swing) and slow bolts are there to be read.
+- **On your own**: it's a quest, played solo as OSRS's is (`MapDef.fight.solo`), so a co-op
+  room can't pick it (`isCoopMap`).
 - **Where**: the raid's own squares under its own id (the recipe's the same), fought in Akkha's
   arena (`bossArena`), a tomb beneath the sands.
 - **Dev only, for now**: it's in `MAPS` on the dev server alone (`SCAPERUNE_DEV_FIGHTS` in
@@ -80,9 +99,13 @@ nothing bought, so a fresh account clearing Entry isn't a target.
   neither.
 - **The bot** (`FLAT=1 MAP=beneath_cursed_sands DODGE=1 STAGE=0..3`, sands_delver), which on
   these fights steps out of a swing or blast as it winds up and circles a melee boss back
-  towards the square's middle rather than backing into a corner: Coenus won 3/3 in about 3:30,
-  the mages 1/3 in 4:30 to 5:00, the Champion 3/3 in about 4:55, and the Akh lasts 4:45 to 6:00,
-  into her last phase and its storm, before she wins. The last the hardest; playtest it.
+  towards the square's middle rather than backing into a corner (and off its edges), finds a
+  wall's gap and presses the fight's button while a guard's down. On 3 seeds: Coenus won 3/3 in
+  about 3:00 (`GOD=1` 3:03 to 3:06); the mages 1/3, dying in their phase 2 otherwise, 3:06 to
+  3:24 to win (`GOD=1`); the Champion 2/3 in about 3:15 (`GOD=1` 3:12 to 3:20); and the Akh
+  0/3, dying in her last phase, 3:23 to 3:32 to win (`GOD=1`). It also reads the mages' tether
+  and blasts, her orbs, her cage's gap, her sparks, and the pocket between her dive's strip and
+  her shadow's.
 
 ## 4. Level-ups and gear without timed waves
 

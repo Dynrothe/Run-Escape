@@ -3,6 +3,7 @@ import {
     BossAttackDef,
     CasketTier,
     EnemyDef,
+    ImpactDef,
     LightLook,
     PlayerEffectDef,
     RandomEventDef,
@@ -133,6 +134,8 @@ export type BossState = {
     rises: number;
     // Below half its hitpoints: faster, and with its enraged attacks
     enraged: boolean;
+    // Enraged by its partner's death (BossDef enrage.partner): its interval's times this instead
+    furyTempo?: number;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
     phase?: BossPhase;
@@ -186,7 +189,13 @@ export type BossState = {
     // BossDef.shadowRealm, exhumes or yellows: how many have begun, and the one it's in, until
     // endTick or, for exhumes, its exhumeds are all smothered (left, -1 for the others)
     ordealsDone?: number;
-    ordeal?: { endTick: number; left: number; during: { attacks: string[]; interval: number } };
+    // opener: what it does first, once (BossOrdealDef.opener), till it's begun
+    ordeal?: {
+        endTick: number;
+        left: number;
+        during: { attacks: string[]; interval: number };
+        opener?: BossAttackDef;
+    };
     // One's due but waiting for expert's projectile to land: no more of expert's own meanwhile
     ordealHeld?: boolean;
 };
@@ -459,6 +468,11 @@ export type Enemy = {
     // spot to the other between these ticks, and nothing to the fight until
     // it lands
     flung?: EnemyFlung;
+    // Copying a boss's lunge (EnemyDef.echoes): winding its own up (drawn as the boss's strip
+    // is), then dashing down it with what it throws up where it stops, and nothing else till
+    // it's done
+    echo?: BossWindup;
+    echoDash?: EnemyFlung & { impact?: ImpactDef };
     abilities?: EnemyAbilities;
 };
 
@@ -654,6 +668,15 @@ export type DisguisedBoss = {
     shakeTick: number;
     // When it opens, -1 until it's shaking
     openTick: number;
+};
+
+// A beam from a boss to its partner (BossAttackDef.tether), between wherever the two are
+export type BossTether = {
+    bossUid: number;
+    attack: BossAttackDef;
+    // When it starts to hurt, and when it's gone
+    armTick: number;
+    endTick: number;
 };
 
 // A pool on the ground that hurts the player (BossAttackDef.pool)
