@@ -243,33 +243,32 @@ jobs:
                   DRAFT_EXISTS: ${{ needs.check.outputs.draft }}
                   ANDROID_BUILT: ${{ needs.android.result == 'success' }}
               run: |
-                  files=(release/Run-Escape-*-win-x64.zip release/game-*.zip release/cache-*.bin
+                  win_zip="Run-Escape-$VERSION-win-x64.zip"
+                  apk="Run-Escape-$VERSION-android.apk"
+                  files=("release/$win_zip" release/game-*.zip release/cache-*.bin
                       release/game-manifest.json)
-                  # Links at the top, as the cache's chunks bury these among the assets. They
-                  # work once the draft's published, which is when the tag exists.
+                  # Links at the top, as the cache's chunks bury these among the assets. A draft's
+                  # links can't be tried, as the tag only exists once it's published, so they're the
+                  # names uploaded: a renamed file fails the upload rather than leaving a dead link.
                   base="https://github.com/$GH_REPO/releases/download/v$VERSION"
-                  {
-                      printf '### Downloads\n\n'
-                      printf -- '- Windows: [Run-Escape-%s-win-x64.zip](%s/Run-Escape-%s-win-x64.zip)\n' \
-                          "$VERSION" "$base" "$VERSION"
-                      if [ "$ANDROID_BUILT" = true ]; then
-                          printf -- '- Android: [Run-Escape-%s-android.apk](%s/Run-Escape-%s-android.apk)\n' \
-                              "$VERSION" "$base" "$VERSION"
-                      fi
-                      printf '\n'
-                      cat release/notes.md
-                  } > release/full-notes.md
-                  mv release/full-notes.md release/notes.md
+                  downloads="- Windows: [$win_zip]($base/$win_zip)"
+                  android_notes=
                   if [ "$ANDROID_BUILT" = true ]; then
-                      files+=("release/Run-Escape-$VERSION-android.apk")
-                      printf '\n' >> release/notes.md
-                      cat release/android-notes.md >> release/notes.md
+                      files+=("release/$apk")
+                      # Beside the link, as a player who taps it may never scroll to the notes
+                      downloads+=$'\n'"- Android: [$apk]($base/$apk). If you have the app, install"
+                      downloads+=" this over it: uninstalling it first deletes your progress."
+                      android_notes=$'\n\n'$(cat release/android-notes.md)
                   fi
+                  # A file of its own, so the artifact's notes never get these twice
+                  printf '### Downloads\n\n%s\n\n%s%s\n' "$downloads" "$(cat release/notes.md)" \
+                      "$android_notes" > release/draft-notes.md
                   if [ "$DRAFT_EXISTS" = true ]; then
                       gh release upload "v$VERSION" "${files[@]}" --clobber
-                      gh release edit "v$VERSION" --notes-file release/notes.md --target "$GITHUB_SHA"
+                      gh release edit "v$VERSION" --notes-file release/draft-notes.md \
+                          --target "$GITHUB_SHA"
                   else
                       gh release create "v$VERSION" "${files[@]}" --draft \
-                          --title "Run Escape $VERSION" --notes-file release/notes.md \
+                          --title "Run Escape $VERSION" --notes-file release/draft-notes.md \
                           --target "$GITHUB_SHA"
                   fi

@@ -466,9 +466,10 @@ environment variables.
 never in an app store, and the app never checks for, downloads or installs a new version. That's
 by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
 first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built), and so do the app's About and Save help, whose New
-versions button opens the releases page. Unlike desktop players, whose launcher updates the game,
-Android players on an older APK can't join rooms on the current build until they install it.
+job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
+the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
+players, whose launcher updates the game, Android players on an older APK can't join rooms on the
+current build until they install it.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
@@ -519,7 +520,7 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
-| `release-files.ts`     | Makes the game zips, the chunks, the manifest and the notes       |
+| `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
 
 ### Where things are kept
@@ -621,8 +622,10 @@ It builds on Windows, with the OSRS cache kept between runs by `actions/cache` u
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
 [GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
-the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with links
-to those two. The links only work once the draft is published.
+the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
+to the zip, and to the APK when it's built. The links only work once the draft is published, so the
+`publish` job links the names it uploads: a renamed file fails the upload rather than leaving a
+dead link.
 **Publishing the draft by hand is what releases it to players**, and the tag only exists from then
 on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 

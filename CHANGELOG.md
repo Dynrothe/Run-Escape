@@ -26,6 +26,8 @@ the version in the corner).
   names, whether or not Share run stats is on. The setting now says so.
 - Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
   game's cache again.
+- The release page, by trippy22: the Windows and Android downloads are linked at the top, above
+  the long list of the game's files.
 
 ### Fixed
 
