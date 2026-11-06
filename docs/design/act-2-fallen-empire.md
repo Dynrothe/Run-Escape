@@ -572,6 +572,9 @@ Each Awakened win gives an Awakener's orb (8.6).
 
 Pets, items and relics stay out of the gauntlet, as they're out of the fights: each kit is the whole of its fight.
 
+**In co-op** (decided, 13.2): a party can run it together, each player as the fight's adventurer. The camp's
+blessings and the carried wounds are each player's own, and the room's retry is the host's call.
+
 ## 8. Rewards
 
 ### 8.1 What's out
@@ -604,7 +607,8 @@ them. No evolution, like the Toxic blowpipe.
 
 ### 8.3 Remixes
 
-Beating an Act II map opens its rule as a remix on **every** first-campaign map, Lumbridge to the Inferno: a switch on
+Beating an Act II map opens its rule as a remix on **every** first-campaign map, Lumbridge to the Inferno (and, once
+the act's done, on the other Act II maps: decided, 13.2): a switch on
 the map's card beside Hard and Endless, one switch for each remix opened. **All of them can be on at once**
 (decided). Each remix is a word before the map's name, and all four together is "Fallen":
 
@@ -731,6 +735,10 @@ Act II maps and remixes take them too; boss fights and the gauntlet don't (their
 run's coins are +1.5% a point, adding to the other bonuses (8.3), and badges go on the card at 100, 200 and 300 points.
 A record shows the points it was set at.
 
+**Hard mode is a preset of invocations** (decided, 13.2): the Hard switch turns on the set of invocations that
+matches today's hard-mode numbers, worth their points, so a hard run plays as it does now. Boss fights and the gauntlet
+don't take invocations, so their Hard stays a switch of its own.
+
 | Invocation      | Points | What                                                |
 | --------------- | ------ | --------------------------------------------------- |
 | Walk the path   | 10     | Enemies 15% faster                                  |
@@ -759,7 +767,7 @@ per tier on the adventurer screen and stays picked across runs until changed.
 
 **Where they apply.** Relics make runs easier, and Dynny wants the fights hard, so they're on every campaign map,
 Act II map and remix, and **off in boss fights and the gauntlet**. A record shows the relics it was set with, as it
-shows invocation points. Whether some records should be relic-free is a new question (13.2).
+shows invocation points, and hard-mode, remix and weekly Vault records are relic-free (decided, 13.2).
 
 Each relic is a small sim rule on the hero (deterministic, in co-op each player's own), and the adventurer screen gets
 a row of four slots. About a week for the two systems, with invocations' card switches.
@@ -847,22 +855,22 @@ not prototyped, and leave out playtest rounds: Zachariah took ten, and these are
 9. **Invocations and Relics**: "In, now". Both are in the first build (section 9, 10).
 10. **The Soulreaper axe**: "Melee only" (8.2).
 
-### 13.2 New questions these raise
+### 13.2 Decided next (Dynny, 2026-11-06, on #155)
 
-1. **The gauntlet in co-op**: a party running it together, each player as the fight's adventurer, or solo only?
-   Phosani's fight takes a party, so the engine can; the camp's blessings and the wounds would be each player's.
-2. **The gauntlet's order**: the player's choice (as designed), or one fixed order for everyone, so times compare?
-3. **Hard mode and invocations**: should hard mode become a preset of invocations? It's tidier, but changes every
-   map's hard records. (The second half of question 9, not yet answered.)
-4. **Remixes on Act II maps**: once the act's done, can the Act II maps take each other's remixes (a Dark
-   Stranglewood, a Frozen Lassar)? The rules allow it; it's 4 more maps of sets to tune and measure.
-5. **Records and relics**: a record shows the relics it was set with (as designed). Or should hard-mode, remix and Vault
-   records be relic-free, so they stay a test of the run?
-6. **The coin cap**: remixes, hard mode, Act II's steps and invocations add together up to +300%. Is that cap right,
-   or should stacking past it pay nothing?
-7. **Act II's steps in co-op**: the host's step counts for the room (as designed), or the highest in the room?
-8. **The gauntlet's wounds**: a fifth of each fight's damage carried to the next adventurer (as designed), or each
-   fight fresh, with the camp only for blessings?
+11. **The gauntlet in co-op**: "Co-op too". A party can run it together, each player as the fight's adventurer; the
+    camp's blessings and the wounds are each player's own (7.3).
+12. **The gauntlet's order**: "Player's choice", as designed. Times compare within the same order.
+13. **Hard mode and invocations**: "Yes". Hard mode becomes a preset of invocations (section 9). Its numbers stay what
+    they are today, so a hard run plays the same; its records are kept as the preset's.
+14. **Remixes on Act II maps**: "Yes". Once all four Act II maps are beaten, they take each other's remixes too (a Dark
+    Stranglewood, a Frozen Lassar). Their own rule's remix is greyed out on them. Measured with the rest in PR 10.
+15. **Records and relics**: "Yes". Hard-mode, remix and weekly Vault records are relic-free: a run with any relic on
+    still counts as a win, but sets only the map's ordinary records (9.2).
+16. **The coin cap**: "Yes". All coin bonuses add together up to +300%, and stacking past it pays nothing more.
+17. **Act II's steps in co-op**: "Host". The host's step counts for the room.
+18. **The gauntlet's wounds**: "Carry". A fifth of each fight's damage carries to the next adventurer, as designed.
+
+Nothing is open now.
 
 ## 14. Not verified
 
