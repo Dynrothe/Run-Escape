@@ -28,6 +28,7 @@ import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { LOCK_SPRITE } from "../content/shop";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
@@ -160,6 +161,7 @@ export function getGameSpriteIds(): number[] {
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        LOCK_SPRITE,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),

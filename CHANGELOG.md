@@ -7,6 +7,9 @@ the version in the corner).
 
 ### Added
 
+- Sailing, by Giordano: a new skill in the shop with the Set sail perk (2 ranks, one use each a
+  run). Lock a level up reward and it can't be picked now; at your next level up it comes first,
+  just as it was, marked as set sail so you know why it's there.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.

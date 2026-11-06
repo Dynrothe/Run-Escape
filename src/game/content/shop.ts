@@ -151,6 +151,17 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         baseCost: 600,
     },
     {
+        // Set sail: holds a level up reward over to the next level up, where it
+        // comes first as it was
+        id: "sailing",
+        name: "Sailing",
+        description: "Set sail: lock a level up reward for your next level up",
+        stat: "lock",
+        perRank: 1,
+        maxRank: 2,
+        baseCost: 800,
+    },
+    {
         id: "ring_of_life",
         name: "Ring of life",
         description: "Get back up once when you die",
@@ -225,3 +236,7 @@ export function getUpgradeCost(upgradeId: string, upgrades: Record<string, numbe
     const more = { ...upgrades, [upgradeId]: (upgrades[upgradeId] ?? 0) + 1 };
     return getPageCost(more) - getPageCost(upgrades);
 }
+
+// The padlock beside a level up reward that can be locked, or is (interface sprite 1342:
+// 29x22, the bank placeholder toggle's locked padlock icon)
+export const LOCK_SPRITE = 1342;

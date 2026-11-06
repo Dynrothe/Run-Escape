@@ -487,8 +487,10 @@ describe("save", () => {
 
     test("a page that paid more than today's prices gives some of it back with each rank", () => {
         expect.hasAssertions();
-        // Every skill maxed in the Skills screen's order, at the old prices
-        const upgrades = Object.fromEntries(SHOP_UPGRADES.map((u) => [u.id, u.maxRank]));
+        // Every skill maxed in the Skills screen's order, at the old prices (Sailing came later)
+        const upgrades = Object.fromEntries(
+            SHOP_UPGRADES.filter((u) => u.id !== "sailing").map((u) => [u.id, u.maxRank]),
+        );
         const save = migrateSave({
             ...createSave(),
             coins: 0,
