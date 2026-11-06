@@ -58,14 +58,15 @@ and start the game with `VITE_CLOUD_SAVE_URL=http://localhost:8791 bun run start
 
 ## How it works
 
-| Method and path      | Needs the code | Does                                                             |
-| -------------------- | -------------- | ---------------------------------------------------------------- |
-| `GET /v1/health`     | no             | `{service: "run-escape-cloud-saves"}`, so the game knows it's up |
-| `POST /v1/account`   | no             | a new sync code: `{code}`                                        |
-| `DELETE /v1/account` | yes            | deletes the code and every version of its save                   |
-| `GET /v1/save/meta`  | yes            | `{revision, summary, updatedAt}`, or `{revision: 0}` for none    |
-| `GET /v1/save`       | yes            | the same, and `save`: the text as it was sent                    |
-| `PUT /v1/save`       | yes            | `{baseRevision, save, force?}` → `{revision, updatedAt}`, or 409 |
+| Method and path            | Needs the code | Does                                                             |
+| -------------------------- | -------------- | ---------------------------------------------------------------- |
+| `GET /v1/health`           | no             | `{service: "run-escape-cloud-saves"}`, so the game knows it's up |
+| `POST /v1/account`         | no             | a new sync code: `{code}`                                        |
+| `DELETE /v1/account`       | yes            | marks the code deleted: `{deleted, restorableUntil}`             |
+| `POST /v1/account/restore` | yes            | undoes that while it's kept: `{restored}`                        |
+| `GET /v1/save/meta`        | yes            | `{revision, summary, updatedAt}`, or `{revision: 0}` for none    |
+| `GET /v1/save`             | yes            | the same, and `save`: the text as it was sent                    |
+| `PUT /v1/save`             | yes            | `{baseRevision, save, force?}` → `{revision, updatedAt}`, or 409 |
 
 The code goes in `Authorization: Bearer <code>`, in any case, with or without its dashes.
 
@@ -77,6 +78,11 @@ The code goes in `Authorization: Bearer <code>`, in any case, with or without it
   (its `version` or `gameVersion`) is a 409 with `reason: "newer"`: an older game has dropped
   the ids it doesn't know. `force: true` writes it anyway, when the player chooses to, as
   `saveOverNewer` does for the local save.
+- **Deleting is undoable for a week.** Anyone with a code can delete it, so a code that's leaked
+  mustn't be able to wipe every version at once. `DELETE` only marks the code deleted
+  (`accounts.deleted_at`). Its saves stay untouched for `DELETED_RETENTION_DAYS` (7), and
+  meanwhile every request with the code but `POST /v1/account/restore` gets a 410 with
+  `restorableUntil`, which restore undoes. The hourly job then removes the code and its saves.
 - **Backups.** `KEEP_VERSIONS` (6) are kept per code: the save and five before it. There's no
   restore in the game yet. To give a player an older one back, find their account by the code's
   hash and read the row, from `server/cloudflare`:
@@ -106,7 +112,10 @@ the maps with a victory, and `gameVersion`.
 - **Rate limits:** every request per address, new codes per address, and uploads per code.
 - **Daily caps:** `MAX_SAVES_PER_DAY` and `MAX_ACCOUNTS_PER_DAY`. Past them, the game is told to
   try again later and keeps its save locally.
-- **Deleting:** Settings in the game deletes the code and every version of its save.
+- **Deleting:** Settings in the game deletes the code. Its saves are kept for a week, for the code
+  to restore, then removed with it.
+- **What a leaked code can still do:** read the save, and write over it. The 6 versions and the
+  upload rate limit mean an old version outlasts a minute of uploads, not a determined flood.
 
 ## Budget
 

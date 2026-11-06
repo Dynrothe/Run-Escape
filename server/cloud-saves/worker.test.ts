@@ -12,6 +12,7 @@ import worker, {
 
 const origin = "https://game.example";
 const now = Date.parse("2026-11-06T12:00:00Z");
+const DAY = 86_400_000;
 const saveText = (changes: Record<string, unknown> = {}, gameVersion = "0.28.0") =>
     JSON.stringify({ ...JSON.parse(exportSave(createSave(), gameVersion)), ...changes });
 
@@ -238,15 +239,45 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
         expect(count("daily_intake")).toBe(0);
     });
 
-    it("deletes an account and every version of its save", async () => {
+    it("keeps a deleted code's saves for a week, for the code to restore, then removes them", async () => {
         const code = await newAccount();
         const other = await newAccount();
         await put(code, 0);
         await put(code, 1);
         await put(other, 0);
-        expect((await request("DELETE", "account", code)).status).toBe(200);
-        expect((await request("GET", "save", code)).status).toBe(401);
+        const deleted = await request("DELETE", "account", code);
+        expect(await deleted.json()).toEqual({ deleted: true, restorableUntil: now + 7 * DAY });
+        // Nothing but restoring works meanwhile, and nothing's gone
+        for (const [method, path] of [
+            ["GET", "save"],
+            ["GET", "save/meta"],
+            ["DELETE", "account"],
+        ]) {
+            const refused = await request(method, path, code);
+            expect(refused.status, `${method} ${path}`).toBe(410);
+            expect(await refused.json()).toMatchObject({ restorableUntil: now + 7 * DAY });
+        }
+        expect((await put(code, 2)).status).toBe(410);
+        expect(count("saves")).toBe(3);
+        expect(await (await request("POST", "account/restore", code)).json()).toEqual({
+            restored: true,
+        });
+        expect(await (await request("GET", "save/meta", code)).json()).toMatchObject({
+            revision: 2,
+        });
+        expect(await (await request("POST", "account/restore", other)).json()).toEqual({
+            restored: false,
+        });
+
+        // Deleted again, and a week on: only then are they gone
+        await request("DELETE", "account", code);
+        await prune(env, now + 7 * DAY - 1);
+        expect(count("saves")).toBe(3);
+        await prune(env, now + 7 * DAY + 1);
         expect(count("saves")).toBe(1);
         expect(count("accounts")).toBe(1);
+        expect((await request("GET", "save", code)).status).toBe(401);
+        expect((await request("POST", "account/restore", code)).status).toBe(401);
+        expect((await request("GET", "save", other)).status).toBe(200);
     });
 });

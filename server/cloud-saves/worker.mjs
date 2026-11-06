@@ -24,6 +24,10 @@ const DEFAULT_KEEP_VERSIONS = 6;
 // allowance, which the run collector shares if it's on the same account (README, Budget)
 const DEFAULT_MAX_SAVES_PER_DAY = 5000;
 const DEFAULT_MAX_ACCOUNTS_PER_DAY = 500;
+// A deleted code's saves are kept this long, for the code to restore
+const DEFAULT_DELETED_RETENTION_DAYS = 7;
+const retention = (env) =>
+    setting(env.DELETED_RETENTION_DAYS, DEFAULT_DELETED_RETENTION_DAYS, 1, 90) * DAY_MS;
 
 // Below 0 when a is older than b, above 0 when it's newer, as the game compares them
 // (compareGameVersions in src/game/core/save.ts)
@@ -160,15 +164,17 @@ async function readBody(request) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-// The account a request's sync code belongs to
+// The account a request's sync code belongs to: { id, deleted_at }
 async function account(request, env) {
     const header = request.headers.get("Authorization") ?? "";
     const code = header.startsWith("Bearer ") ? normalizeCode(header.slice(7)) : undefined;
     if (!code) return undefined;
-    const { results } = await env.DB.prepare("SELECT id FROM accounts WHERE code_hash = ?")
+    const { results } = await env.DB.prepare(
+        "SELECT id, deleted_at FROM accounts WHERE code_hash = ?",
+    )
         .bind(await sha256(code))
         .all();
-    return results[0]?.id;
+    return results[0];
 }
 
 async function latestSave(env, accountId) {
@@ -272,6 +278,7 @@ export async function handle(request, env, now = Date.now()) {
     const routes = {
         "/v1/health": ["GET"],
         "/v1/account": ["POST", "DELETE"],
+        "/v1/account/restore": ["POST"],
         "/v1/save/meta": ["GET"],
         "/v1/save": ["GET", "PUT"],
     };
@@ -315,14 +322,29 @@ export async function handle(request, env, now = Date.now()) {
         }
         return createAccount(env, now, respond);
     }
-    const accountId = await account(request, env);
-    if (!accountId) return respond({ error: "Unknown sync code" }, 401);
+    const found = await account(request, env);
+    if (!found) return respond({ error: "Unknown sync code" }, 401);
+    const accountId = found.id;
+    // Deleted: the saves are kept, untouched, until the hourly job removes them. Restoring is the
+    // only thing the code can do meanwhile.
+    if (found.deleted_at !== null && found.deleted_at !== undefined) {
+        if (pathname === "/v1/account/restore") {
+            await env.DB.prepare("UPDATE accounts SET deleted_at = NULL WHERE id = ?")
+                .bind(accountId)
+                .run();
+            return respond({ restored: true });
+        }
+        return respond(
+            { error: "Deleted", restorableUntil: found.deleted_at + retention(env) },
+            410,
+        );
+    }
+    if (pathname === "/v1/account/restore") return respond({ restored: false });
     if (pathname === "/v1/account") {
-        await env.DB.batch([
-            env.DB.prepare("DELETE FROM saves WHERE account_id = ?").bind(accountId),
-            env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(accountId),
-        ]);
-        return respond({ deleted: true });
+        await env.DB.prepare("UPDATE accounts SET deleted_at = ? WHERE id = ?")
+            .bind(now, accountId)
+            .run();
+        return respond({ deleted: true, restorableUntil: now + retention(env) });
     }
     if (pathname === "/v1/save/meta") return respond(meta(await latestSave(env, accountId)));
     if (request.method === "GET") {
@@ -337,6 +359,17 @@ export async function handle(request, env, now = Date.now()) {
 
 export async function prune(env, now = Date.now()) {
     if (!env.DB) return;
+    // Codes deleted longer ago than the retention, with every version of their saves
+    const gone = now - retention(env);
+    await env.DB.batch([
+        env.DB.prepare(
+            `DELETE FROM saves WHERE account_id IN
+            (SELECT id FROM accounts WHERE deleted_at IS NOT NULL AND deleted_at < ?)`,
+        ).bind(gone),
+        env.DB.prepare("DELETE FROM accounts WHERE deleted_at IS NOT NULL AND deleted_at < ?").bind(
+            gone,
+        ),
+    ]);
     await env.DB.prepare("DELETE FROM daily_intake WHERE day < ?")
         .bind(utcDay(now - 2 * DAY_MS))
         .run();

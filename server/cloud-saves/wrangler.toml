@@ -11,6 +11,8 @@ KEEP_VERSIONS = "6"
 # Saves and new sync codes stored a day at most, to stay inside D1's daily writes (README, Budget)
 MAX_SAVES_PER_DAY = "5000"
 MAX_ACCOUNTS_PER_DAY = "500"
+# A deleted code's saves are kept this long (1 to 90), for the code to restore (README)
+DELETED_RETENTION_DAYS = "7"
 
 # No database_id: the first `wrangler deploy` creates the database by this name, and the d1
 # commands find it by name.
