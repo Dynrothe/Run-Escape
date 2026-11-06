@@ -535,8 +535,15 @@ export const STRANGLEWOOD_EVENTS: RunEventDef[] = [
     { at: RUN_LENGTH, kind: "finalBoss", enemyId: "vardorvis", hp: 28000 },
 ];
 
-// The wood's roots (core/rules/RootRule.ts). Its looks are the wood's own: the Tendrils lying on
-// its floor for the roots, the small Strangled Plant for the sprouts, and a Tendril round your legs.
+// The wood's roots (core/rules/RootRule.ts), drawn with the two lightest Tendrils of Vardorvis's
+// arena (their models are his tendrils' bursts' too), the smaller for the loops, tips and what
+// wraps round your legs; in the reds of the Large Tendril they come from, not the near-black
+// they are
+const TENDRILS = [47599, 47600];
+const TENDRIL_RED: [number, number][] = [
+    [61714, 536],
+    [63894, 796],
+];
 export const STRANGLEWOOD_ROOTS: RootsRuleDef = {
     kind: "roots",
     start: 30,
@@ -562,9 +569,9 @@ export const STRANGLEWOOD_ROOTS: RootsRuleDef = {
         calm: 40,
     },
     look: {
-        roots: [48495, 48497, 48499, 48501],
-        sprouts: [48545, 48548],
+        runners: TENDRILS,
+        loops: [TENDRILS[0]],
+        recolor: TENDRIL_RED,
         cutSpotAnim: BLOWN_DUST,
-        wrap: 48499,
     },
 };

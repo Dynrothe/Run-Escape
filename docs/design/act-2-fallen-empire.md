@@ -143,15 +143,20 @@ The Strangled are faster on it, so a rooted map is a harder map.
 
 ### 3.2 How it reads
 
-- Roots are the Stranglewood's own: the Tendril ground locs (48495 to 48502) and Strangled Plant (48545 to 48551),
-  drawn by the game as an instanced layer over the ground (as `FloorView` draws floor tiles), not baked into the map.
-- A tile about to take root shows sprouts first (the small Tendril models, 1.5 s), then the roots rise in code (lifted
-  and settled, `rise: "code"`). The sprouts are the warning. Nothing is painted.
-- A cut snaps the roots down and back into the ground with a puff of leaves. A kill's clearing is a ring of the same.
+- Roots are the Stranglewood's own Tendrils (locs 47599 and 47600, the lightest of the models of Vardorvis's tendril
+  bursts), in the Large Tendril's reds, drawn by the game as instanced models over the ground, not baked into the map.
+  Each rooted cell has a runner laid along the ground from the cell it grew from, so the runners join up into roots
+  spreading out of the wood, and some have a loop arching up out of the ground. The wood's own floor tendrils (48495
+  to 48502) were tried first: blown up and packed, they read as red glyphs stamped on the floor, so they're off the
+  opened ground too, where they'd read as roots that don't hurt.
+- A tile about to take root shows the warning for 1.5 s: its runner creeping in towards it from the roots beside it,
+  and a tip pushing up through the ground. Then the runner reaches it and the loop heaves up. Nothing is painted.
+- A cut snaps a cell's runner in two, the pieces kicked up and sinking back into the ground with a puff of dust. A
+  kill's clearing is a ring of the same.
 - A root heart is the Large Tendril (NPC 12225, size 3, idle 10363), roots reaching out from it. While it lives, its
   roots pulse.
-- On roots your character's legs are wrapped (a Tendril model at the feet) and the walk slows. The hurt is the game's
-  usual red hitsplats.
+- On roots your character's legs are wrapped (two Tendrils at the feet, turning) and the walk slows. The hurt is the
+  game's usual red hitsplats.
 
 ### 3.3 The arena
 
@@ -211,6 +216,13 @@ The risk is the wood: Strangled Trees and ferns are dense, and roots add to it. 
 phone's view is about 23 by 11 tiles at 2 by 2 cells, about 65 cells at about 60 triangles each, so under 4k. Draw
 roots as cells of 2 by 2 tiles, never per tile. Measure the cut's worst view before roots go on. If it's over about
 55k without them, thin the cut's ferns (soft scenery) before its trees.
+
+As built: a phone's view at 844 by 390 takes in more than that, up to about 200 cells (36 by 26 tiles, the frustum's far
+edge is wide), and a cell is a Tendril of 78 or 110 triangles with a loop of 78 on some near the player, so a view all
+rooted is 6k to 20k. So the cut is thinned until each busy view is under 69k with every open cell in it rooted (the
+worst it can be): its world at most about 59k. The heaviest pieces were the ruined town's stepped tents' walls (500 to
+1,600 triangles each), its pillars and walls, and trees. `view-weight.ts` counts locs alone and comes out under the game's
+own count where walls are heavy, so measure with `frameProbe.sample` in the game.
 
 ## 4. The Lassar Undercity (the Whisperer)
 

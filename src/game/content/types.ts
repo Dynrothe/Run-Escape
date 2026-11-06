@@ -1623,10 +1623,16 @@ export type RootsRuleDef = {
         clear: number;
         calm: number;
     };
-    // What they're drawn as (client/RootsView.ts): scenery for the roots, picked by cell, and for the
-    // sprouts; the spot animation a cut throws up; and the scenery wrapped round the legs of a
-    // player on them
-    look: { roots: number[]; sprouts: number[]; cutSpotAnim: number; wrap: number };
+    // What they're drawn as (client/RootsView.ts), scenery all of it: runners laid along the
+    // ground from cell to cell, picked by cell; loops standing up out of it, which are also the tips
+    // pushing up where roots are coming and what wraps round the legs of a player on them; colours
+    // swapped on both, after the scenery's own; and the spot animation a cut throws up
+    look: {
+        runners: number[];
+        loops: number[];
+        recolor?: [from: number, to: number][];
+        cutSpotAnim: number;
+    };
 };
 
 // What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light

@@ -77,43 +77,43 @@ version and how to run it.
   crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
   on them.
 
-    | Adventurer          | Fights with | Starts with            | Bonus                                            | Joins for                                            |
-    | ------------------- | ----------- | ---------------------- | ------------------------------------------------ | ---------------------------------------------------- |
-    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                              |                                                      |
-    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                |                                                      |
-    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                 |                                                      |
-    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                               | Killing Count Draynor in Lumbridge                   |
-    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                               | Beating Lumbridge                                    |
-    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                      | Killing Ahrim in Barrows                             |
-    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                            | Beating Barrows                                      |
-    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                          | Surviving 10 minutes in the Wilderness               |
-    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                  | Beating the Wilderness                               |
-    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                 | Beating the Desert                                   |
-    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                              | Killing Damis in the Desert                          |
-    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                          | Beating the Fremennik Province                       |
-    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                   | Killing Dagannoth Rex in the Fremennik Province      |
-    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints              | Beating Karamja                                      |
-    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                | Surviving 13 minutes on Karamja                      |
-    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                | Beating Kourend                                      |
-    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                      | Killing Sarachnis in Kourend                         |
-    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                    | Beating Varlamore                                    |
-    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                | Killing the Javelin Colossus in Varlamore            |
-    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                           | Beating Morytania                                    |
-    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster              | Killing the Pestilent Bloat in Morytania             |
-    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                   | Beating the God Wars Dungeon                         |
-    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                  | Killing Kree'arra in the God Wars Dungeon            |
-    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder               | Beating Prifddinas                                   |
-    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                   | Surviving 10 minutes in Prifddinas                   |
-    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                               | Beating the Inferno                                  |
-    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                      | Killing JalTok-Jad in the Inferno                    |
-    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                         | Beating the Stranglewood                             |
-    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                          | Surviving 10 minutes on the Grand Exchange           |
-    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                 | Killing the Clan leader in East Varrock              |
-    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                               | Surviving 6:06 in Falador                            |
-    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                | Killing the AGS specer in Last Man Standing          |
-    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                | Killing the Flag carrier in Castle Wars              |
-    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
-    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
+    | Adventurer          | Fights with | Starts with            | Bonus                                             | Joins for                                            |
+    | ------------------- | ----------- | ---------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                               |                                                      |
+    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                 |                                                      |
+    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                  |                                                      |
+    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                | Killing Count Draynor in Lumbridge                   |
+    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                | Beating Lumbridge                                    |
+    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                       | Killing Ahrim in Barrows                             |
+    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                             | Beating Barrows                                      |
+    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                           | Surviving 10 minutes in the Wilderness               |
+    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                   | Beating the Wilderness                               |
+    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                  | Beating the Desert                                   |
+    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                               | Killing Damis in the Desert                          |
+    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                           | Beating the Fremennik Province                       |
+    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                    | Killing Dagannoth Rex in the Fremennik Province      |
+    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints               | Beating Karamja                                      |
+    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                 | Surviving 13 minutes on Karamja                      |
+    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                 | Beating Kourend                                      |
+    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                       | Killing Sarachnis in Kourend                         |
+    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                     | Beating Varlamore                                    |
+    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                 | Killing the Javelin Colossus in Varlamore            |
+    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                            | Beating Morytania                                    |
+    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster               | Killing the Pestilent Bloat in Morytania             |
+    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                    | Beating the God Wars Dungeon                         |
+    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                   | Killing Kree'arra in the God Wars Dungeon            |
+    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                | Beating Prifddinas                                   |
+    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                   |
+    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                  |
+    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                    |
+    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                             |
+    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
+    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
+    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
+    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                 | Killing the AGS specer in Last Man Standing          |
+    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                 | Killing the Flag carrier in Castle Wars              |
+    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                   | Destroying the purple portal in Pest Control         |
+    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                    | Phosani's Nightmare only (everyone plays them there) |
     | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
 
 - **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
@@ -362,9 +362,9 @@ version and how to run it.
   step it was won at, and an easier one shows its step until it's beaten at a harder one.
 - **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
   time, quicker as the run goes on (every 3 seconds at first, every 1.8 by 12:00). A patch about to
-  take root shows sprouts for a second and a half first; then the roots rise. On roots you're 25%
-  slower and, after half a second, lose 1% of your hitpoints every half second, and the Strangled
-  are 15% faster. Your hits cut them back: a hit on an enemy standing on roots clears them a tile
+  take root has roots creeping in towards it for a second and a half first; then they take it. On
+  roots you're 25% slower and, after half a second, lose 1% of your hitpoints every half second,
+  and the Strangled are 15% faster. Your hits cut them back: a hit on an enemy standing on roots clears them a tile
   round it, a kill there a tile and a half, and a sweep or slash clears everything in its arc. Cut
   ground can take root again from the roots beside it after 15 seconds. From 2:00 a **root heart**
   (a Large Tendril) comes up at a root front every 75 seconds, three at most: roots near it grow

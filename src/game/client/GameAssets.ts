@@ -36,6 +36,7 @@ import {
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    RootsRuleDef,
     WeaponDef,
 } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -396,6 +397,11 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
     return { spotAnim: floor.slam.spotAnim };
 }
 
+// A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
+export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
+    return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
+}
+
 // A piece of what's under a floor (FloorDef.under)
 export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
@@ -703,23 +709,26 @@ export class GameAssets {
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
         }
-        // A map's roots (MapDef.rule, client/RootsView.ts), and the tree an adventurer's trait
-        // fells (CharacterDef.trait)
-        const ruleLocs = new Set<number>();
+        // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
+        const rootLooks = new Set<string>();
         for (const map of ALL_MAPS) {
             const look = map.rule?.look;
-            for (const id of [...(look?.roots ?? []), ...(look?.sprouts ?? []), look?.wrap]) {
-                if (id !== undefined) {
-                    ruleLocs.add(id);
+            for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
+                const key = getRootLookKey(locId, look!);
+                if (!rootLooks.has(key)) {
+                    rootLooks.add(key);
+                    requests.push({ kind: "model", key, locId, recolor: look!.recolor });
                 }
             }
         }
+        // The tree an adventurer's trait fells (CharacterDef.trait)
+        const traitLocs = new Set<number>();
         for (const character of CHARACTERS) {
             if (character.trait) {
-                ruleLocs.add(character.trait.locId);
+                traitLocs.add(character.trait.locId);
             }
         }
-        for (const locId of ruleLocs) {
+        for (const locId of traitLocs) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
         // What's under a floor (a dev map's, as its slabs are)
