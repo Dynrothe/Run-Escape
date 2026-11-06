@@ -361,7 +361,7 @@ version and how to run it.
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
   step it was won at, and an easier one shows its step until it's beaten at a harder one.
 - **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
-  time, quicker as the run goes on (every 3 seconds at first, every 1.5 by 12:00). A patch about to
+  time, quicker as the run goes on (every 3 seconds at first, every 1.8 by 12:00). A patch about to
   take root shows sprouts for a second and a half first; then the roots rise. On roots you're 25%
   slower and, after half a second, lose 1% of your hitpoints every half second, and the Strangled
   are 15% faster. Your hits cut them back: a hit on an enemy standing on roots clears them a tile

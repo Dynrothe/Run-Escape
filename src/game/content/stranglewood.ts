@@ -55,11 +55,11 @@ export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
         walkSeq: 5570,
         attackSeq: 5571,
         deathSeq: 5575,
-        hp: 30,
-        damage: 3,
+        hp: 40,
+        damage: 4,
         speed: 1.8,
         radius: 0.4,
-        xp: 20,
+        xp: 26,
         sounds: STRANGLED_SOUNDS,
         knockbackResist: 0.3,
     },
@@ -72,11 +72,11 @@ export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
         walkSeq: 9096,
         attackSeq: 9097,
         deathSeq: 9098,
-        hp: 10,
+        hp: 12,
         damage: 2,
         speed: 3.1,
         radius: 0.35,
-        xp: 9,
+        xp: 10,
         sounds: BEAST_SOUNDS,
     },
     // Pouncers, from 4:00: the last few tiles in a rush
@@ -88,11 +88,11 @@ export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
         walkSeq: 9090,
         attackSeq: 9092,
         deathSeq: 9093,
-        hp: 20,
+        hp: 26,
         damage: 3,
         speed: 2.2,
         radius: 0.4,
-        xp: 15,
+        xp: 18,
         sounds: BEAST_SOUNDS,
         // Two tiles across in OSRS
         scale: 0.8,
@@ -250,7 +250,7 @@ export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
                 {
                     name: "Charge",
                     kind: "swing",
-                    damage: 5,
+                    damage: 6,
                     windup: 1.1,
                     cooldown: 4,
                     range: 14,
@@ -334,7 +334,7 @@ export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
         knockbackResist: 1,
         spawnMessage: "Vardorvis rises in the clearing!",
         boss: {
-            attackInterval: 2.4,
+            attackInterval: 2.2,
             fallSeconds: 2.4,
             enrage: { message: "Vardorvis is enraged!", shout: "The wood is mine!" },
             intro: {
@@ -520,19 +520,19 @@ export const STRANGLEWOOD_EVENTS: RunEventDef[] = [
     { at: 120, kind: "elite", enemyId: "strangled_boar" },
     { at: 200, kind: "elite", enemyId: "strangled_bear" },
     { at: 260, kind: "elite", enemyId: "strangled_lynx" },
-    { at: 300, kind: "boss", enemyId: "kasonde", hp: 3600 },
+    { at: 300, kind: "boss", enemyId: "kasonde", hp: 4200 },
     { at: 330, kind: "ring", enemyId: STRANGLED_ID, count: 30 },
     { at: 400, kind: "elite", enemyId: "strangled_bear" },
     { at: 480, kind: "elite", enemyId: "strangled_brute" },
     { at: 540, kind: "elite", enemyId: "strangled_lynx" },
-    { at: 600, kind: "boss", enemyId: "great_strangled_bear", hp: 7000 },
+    { at: 600, kind: "boss", enemyId: "great_strangled_bear", hp: 8000 },
     { at: 630, kind: "ring", enemyId: "strangled_boar", count: 40 },
     { at: 690, kind: "elite", enemyId: "strangled_bear" },
     { at: 750, kind: "elite", enemyId: "strangled_brute" },
     { at: 810, kind: "elite", enemyId: "strangled_bear" },
     { at: 840, kind: "ring", enemyId: STRANGLED_ID, count: 60 },
     { at: 870, kind: "elite", enemyId: "strangled_lynx" },
-    { at: RUN_LENGTH, kind: "finalBoss", enemyId: "vardorvis", hp: 24000 },
+    { at: RUN_LENGTH, kind: "finalBoss", enemyId: "vardorvis", hp: 28000 },
 ];
 
 // The wood's roots (core/rules/RootRule.ts). Its looks are the wood's own: the Tendrils lying on
@@ -540,8 +540,10 @@ export const STRANGLEWOOD_EVENTS: RunEventDef[] = [
 export const STRANGLEWOOD_ROOTS: RootsRuleDef = {
     kind: "roots",
     start: 30,
-    fronts: [3, 6],
-    every: [3, 1.5],
+    // The bot's runs left alone come to about a third by 8:00 and two thirds by 14:00, as the
+    // design asked
+    fronts: [3, 5],
+    every: [3, 1.8],
     lateBy: 720,
     sprout: 1.5,
     // Within ten tiles of the clearing's middle, where the last fight is
