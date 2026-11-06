@@ -13,6 +13,8 @@ let sockets: Socket[];
 let alarmAt: number | undefined;
 // How many of the next setAlarm calls fail
 let alarmFails: number;
+// Whether Cloudflare says when it last answered a socket's ping
+let pingTimes: boolean;
 
 // A hibernatable connection, as the room sees one
 class Socket {
@@ -83,7 +85,9 @@ async function loadRoom(): Promise<any> {
         acceptWebSocket: (socket: Socket) => sockets.push(socket),
         getWebSockets: () => sockets.filter((socket) => socket.connected),
         setWebSocketAutoResponse: () => {},
-        getWebSocketAutoResponseTimestamp: (socket: Socket) => socket.pingedAt,
+        ...(pingTimes && {
+            getWebSocketAutoResponseTimestamp: (socket: Socket) => socket.pingedAt,
+        }),
         blockConcurrencyWhile: (load: () => Promise<unknown>) => (ready = ready.then(load)),
     };
     const room = new Room(ctx, env);
@@ -168,6 +172,7 @@ describe("Cloudflare co-op room", () => {
         sockets = [];
         alarmAt = undefined;
         alarmFails = 0;
+        pingTimes = true;
         saved = undefined;
         writes = 0;
         listings = [];
@@ -466,6 +471,30 @@ describe("Cloudflare co-op room", () => {
         const again = await loadRoom();
         const [h] = again.room.members;
         await pinging(again, 2 * 60_000 + 61_000, [h]);
+        expect(guestSocket.closes).toEqual([1001]);
+    });
+
+    it("lets go of nobody for silence when it can't tell when their pings came", async () => {
+        pingTimes = false;
+        const { room, host, guest } = await party();
+        await pinging(room, 20 * 60_000, [host, guest]);
+        expect(room.room.members).toHaveLength(2);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("doesn't make a player's quiet look longer for having been out of memory", async () => {
+        const { room, host, guest } = await party();
+        const guestSocket = guest.socket;
+        // Past the first heartbeat, the guest says something, then goes quiet
+        await pinging(room, 110_000, [host], 10_000);
+        await say(room, guest, { t: "me", ready: true });
+        await pinging(room, 5000, [host], 5000);
+        const again = await loadRoom();
+        const [h] = again.room.members;
+        // Five minutes from when it last heard them, not from that heartbeat
+        await pinging(again, 250_000, [h], 10_000);
+        expect(guestSocket.closes).toEqual([]);
+        await pinging(again, 60_000, [h], 10_000);
         expect(guestSocket.closes).toEqual([1001]);
     });
 

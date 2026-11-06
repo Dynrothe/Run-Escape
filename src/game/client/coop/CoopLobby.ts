@@ -83,13 +83,15 @@ const PONG_WAIT_MS = 8000;
 // During a run, a room that's been quiet this long is pinged (keepAlive), so
 // a dead connection's found while the host still has the frames to send
 // again (RESEND_FRAMES in CoopRun). A guest hears the host's frames all the
-// time, so it's only a host whose guests are standing still that sends these.
+// time, so it's mostly a host whose guests are standing still that sends
+// these (and a guest while the host's quiet, as when maps are loading).
 const RUN_QUIET_MS = 5000;
 // keepAlive called further apart than this means the page was frozen or
 // asleep meanwhile, and what's come may not have been read yet: nothing's
 // judged until a fresh ping's had its time
 const KEEP_ALIVE_LATE_MS = 2000;
-// The same for the 30-second ping, which a hidden tab can slow to once a minute
+// The same for the regular ping, which Chrome can slow to once a minute in a
+// hidden tab
 const TICK_LATE_MS = PING_INTERVAL_MS * 2.5;
 // As the Cloudflare relay answers it without waking the room (room.mjs)
 const PING_TEXT = JSON.stringify({ t: "ping" });
@@ -204,7 +206,7 @@ export class CoopLobby {
     // When this player last did anything here, for LOBBY_IDLE_MS
     private activeAt = 0;
     // The room's connection: when anything last came on it, when it was last
-    // pinged, and when keepAlive and the 30-second ping last ran
+    // pinged, and when keepAlive and the regular ping last ran
     private roomHeardAt = 0;
     private roomPingAt?: number;
     private keptAliveAt = 0;
@@ -407,7 +409,7 @@ export class CoopLobby {
 
     // Called on each step of a co-op run, in a hidden tab too: pings a room
     // that's been quiet for RUN_QUIET_MS, and finds a dead connection within
-    // seconds rather than the 30-second ping's minute or so
+    // seconds rather than the regular ping's minute or so
     keepAlive(): void {
         const now = Date.now();
         const late = now - this.keptAliveAt > KEEP_ALIVE_LATE_MS;
@@ -736,6 +738,7 @@ export class CoopLobby {
         const late = now - this.tickAt > TICK_LATE_MS;
         this.tickAt = now;
         // Outside a run too: a room's connection that's stopped answering
+        // (keepAlive checks it more often during one)
         this.checkedRoomSocket(late);
         // Not this.entering, which a refused join (or the Node relay, which
         // sends no goto) leaves set

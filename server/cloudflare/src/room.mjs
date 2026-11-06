@@ -67,10 +67,14 @@ const SAVE_MS = 1000;
 // closing (a laptop asleep, a network that went away) otherwise holds their
 // place, and a host's run for everyone, until the room goes idle. The Node
 // relay finds those with its own pings, which a Durable Object can't send.
-// Games ping every 30 seconds (PING_INTERVAL_MS in CoopLobby.ts), which a
-// hidden tab can slow to once a minute, so this is well clear of that. It's
-// checked on the heartbeat, so it can be a minute more.
+// Games ping every PING_INTERVAL_MS (CoopLobby.ts), and Chrome can slow a
+// hidden tab's timers to once a minute, so this leaves plenty of room. It's
+// checked on the heartbeat, so it can be ROOM_HEARTBEAT_MS more.
 const SILENT_MS = 5 * 60_000;
+// How stale the time a player was last heard from can be on their socket's
+// attachment (remember()), so being out of memory can't make their quiet look
+// longer than it was by more than this
+const HEARD_SAVE_MS = 30_000;
 
 // A player's country, for their flag, unless they've hidden it. An open
 // room's host shows theirs anyway: it's where the room is, for whoever's
@@ -217,7 +221,7 @@ export class Room extends DurableObject {
     lastHeard(member) {
         let pinged = 0;
         try {
-            pinged = this.ctx.getWebSocketAutoResponseTimestamp?.(member.socket)?.getTime() ?? 0;
+            pinged = this.ctx.getWebSocketAutoResponseTimestamp(member.socket)?.getTime() ?? 0;
         } catch {
             // Closed
         }
@@ -228,6 +232,10 @@ export class Room extends DurableObject {
     // as if it had closed: held for a moment, in case their game's still
     // there and comes back, then out
     dropSilent(now) {
+        // Without the pings' times, a player who only pings would look silent
+        if (typeof this.ctx.getWebSocketAutoResponseTimestamp !== "function") {
+            return;
+        }
         for (const member of [...(this.room?.members ?? [])]) {
             const socket = member.socket;
             if (socket && !member.closed && now - this.lastHeard(member) > SILENT_MS) {
@@ -240,7 +248,7 @@ export class Room extends DurableObject {
     // What a connection carries through the room being out of memory: who
     // it's for, the room's code (which isn't saved until it's made), when
     // the next heartbeat's due, and when the room last heard from them
-    // (as of the last heartbeat, which is near enough for SILENT_MS)
+    // (within HEARD_SAVE_MS)
     remember(member) {
         try {
             member.socket?.serializeAttachment({
@@ -256,6 +264,7 @@ export class Room extends DurableObject {
                 beatAt: this.due.get("heartbeat")?.at,
                 heardAt: member.heardAt,
             });
+            member.heardSaved = member.heardAt;
         } catch {
             // Closed
         }
@@ -531,6 +540,9 @@ export class Room extends DurableObject {
             return;
         }
         member.heardAt = Date.now();
+        if (member.heardAt - (member.heardSaved ?? 0) > HEARD_SAVE_MS) {
+            this.remember(member);
+        }
         if (!member.limit.allow(typeof data === "string" ? data.length : data.byteLength)) {
             this.closeSocket(member, 1008);
             this.dropped(member);

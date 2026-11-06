@@ -29,9 +29,11 @@ const LOAD_WAIT_MS = 20_000;
 const MOVE_INTERVAL_MS = 66;
 // The host keeps what it's sent for this many frames (20 seconds), to send
 // again to a guest that missed some. A gap only comes from a dropped
-// connection, and the relay gives up on one after 15 seconds
-// (RESUME_GRACE_MS in server/cloudflare/src/room.mjs), so this outlasts any
-// gap while keeping a resend well inside the relay's limits.
+// connection: the relay gives up on a closed one after RESUME_GRACE_MS
+// (server/cloudflare/src/room.mjs), and the game finds one that died without
+// closing within RUN_QUIET_MS and PONG_WAIT_MS (keepAlive in CoopLobby.ts).
+// This outlasts either gap while keeping a resend well inside the relay's
+// limits; a longer one ends the guest's run (GIVE_UP_GAP_MS).
 const RESEND_FRAMES = 1000;
 // A guest asks for missing frames this often at most, and the host resends
 // this often at most whoever asks: one resend covers every guest behind
