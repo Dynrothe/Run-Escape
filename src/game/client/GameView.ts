@@ -1532,7 +1532,8 @@ export class GameView {
                 nextShoutTick: 0,
             };
         }
-        this.drawVisitor(actors, sim, this.tombsSpirit);
+        // Facing the way in, to the south, as OSRS's does, not following anyone round
+        this.drawVisitor(actors, sim, this.tombsSpirit, yawFromVector(0, -1));
         if (sim.tombsSpiritBundles(sim.focus ?? 0) > 0) {
             this.drawGlowCircle(actors, sim, at.x, at.y, 2);
         }
@@ -1556,8 +1557,8 @@ export class GameView {
         }
     }
 
-    // Facing the player, and blinking when they're about to go
-    private drawVisitor(actors: ActorRenderer, sim: Sim, visitor: Visitor): void {
+    // Facing the player (or the way it's told), and blinking when they're about to go
+    private drawVisitor(actors: ActorRenderer, sim: Sim, visitor: Visitor, facing?: number): void {
         const { def, x, y } = visitor;
         const model = this.assets.get("visitor:" + def.id);
         const left = (visitor.endTick - sim.tick) / TICKS_PER_SECOND;
@@ -1577,7 +1578,7 @@ export class GameView {
             x,
             this.ground(sim, x, y),
             y,
-            yawFromVector(player.x - x, player.y - y),
+            facing ?? yawFromVector(player.x - x, player.y - y),
             { scale: VISITOR_SCALE, silhouette: true },
         );
     }

@@ -1120,8 +1120,9 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             nexus: TOA_PLACES.nexus.arrive,
             // The Nexus's north end, as OSRS's way to the Wardens is
             wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),
-            // The Helpful Spirit, on the open floor west of the way up from the entrance
-            spirit: worldTile(NEXUS_ARRIVE.x - 4, NEXUS_ARRIVE.y + 9),
+            // The Helpful Spirit, at the foot of the steps up to the Wardens' landing, on the
+            // west strip of red floor (well clear of the Wardens' door)
+            spirit: worldTile(NEXUS_ARRIVE.x - 3, NEXUS_ARRIVE.y + 15),
             wardens: {
                 arrive: TOA_PLACES.wardens.arrive,
                 obelisk: TOA_PLACES.wardens.obelisk,
