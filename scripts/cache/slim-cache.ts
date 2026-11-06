@@ -3,21 +3,22 @@
 // few MB instead of the whole cache, and an update only the chunks that changed.
 //
 // What the game reads is found by loading what it loads, with its own loaders
-// (slim-load.ts): the renderer's textures, every model it bakes (enemies, spot
+// (slim-plan.ts resolves inputs; slim-load.ts executes them): textures, models (enemies, spot
 // animations, pickups and power-ups, the player in every outfit and every
 // wearable item), its sounds and sprites, an icon for every item in the
 // content, and each map's arena with the map squares around it. The chunks are
 // written to the out dir and read back, and every group has to come out of them
 // as it went in. Then it all gets loaded again from those chunks, and a group
 // that's missing fails the script. Both loads run in worker threads, a unit (a
-// map, a batch of bakes) at a time.
+// map, a batch of bakes) at a time. A checked run also keeps each unit's reads,
+// so a content change extracts only units whose resolved inputs changed.
 //
 //   bun run tsx scripts/cache/slim-cache.ts [out dir]
 //
 //   SLIM_WORKERS=n    worker threads, each holding a copy of the full cache;
 //                     the cores less one, up to 4, unless it's set
 //   SLIM_CHECK=0      skip loading it again from the slim cache (local runs only)
-//   SLIM_REUSE=0      do it all even if nothing it reads has changed
+//   SLIM_REUSE=0      do both full-cache extraction and validation, without reusing unit reads
 //
 // The out dir (dist/caches by default, so run it after the build) gets the
 // chunks in chunks/, each named after its sha256, and a caches.json listing
@@ -49,9 +50,15 @@ import { SectorCluster } from "../../src/rs/cache/store/SectorCluster";
 import { loadCache, loadCacheInfos } from "./load-util";
 import type { WorkerData, WorkerReply } from "./slim-cache-worker";
 import { findReusable, hashInputs, pruneChunks, storeRun, writeChunks } from "./slim-files";
-import type { SlimUnit } from "./slim-load";
+import type { SlimUnit } from "./slim-plan";
+import {
+    UnitReads,
+    mergeUnitReads,
+    reusableUnitReads,
+    storeUnitReads,
+    unitId,
+} from "./slim-unit-cache";
 
-// Before slim-load.ts, which counts reads through it, is loaded
 const readGroup = MemoryStore.prototype.read;
 
 const outDir = (process.argv[2] ?? "dist/caches").replace(/\/?$/, "/");
@@ -87,9 +94,9 @@ async function runPass(
     label: string,
     data: Omit<WorkerData, "entry">,
     { workers: count, units, describe }: Pass,
-): Promise<Set<string>> {
+): Promise<UnitReads> {
     const started = performance.now();
-    const reads = new Set<string>();
+    const reads: UnitReads = new Map();
     const boot = new URL("./slim-cache-boot.mjs", import.meta.url);
     const entry = new URL("./slim-cache-worker.ts", import.meta.url).href;
     let next = 0;
@@ -116,7 +123,7 @@ async function runPass(
                     return;
                 }
                 if ("reads" in reply) {
-                    reply.reads.forEach((key) => reads.add(key));
+                    reads.set(unitId(unit!), reply.reads);
                     done++;
                 }
                 give();
@@ -214,7 +221,15 @@ function readBuildId(): string | undefined {
 // (its listing, keys and file lengths, which change when a download fills one in).
 // Undefined, with a warning, if one can't be read: then the run is neither
 // reused nor kept.
-async function hashSlimInputs(fullInfo: CacheInfo): Promise<string | undefined> {
+async function hashSlimInputs(
+    fullInfo: CacheInfo,
+    entryPoints = [
+        "scripts/cache/slim-cache.ts",
+        // Worker entry points are passed through URLs and workerData, not static imports.
+        "scripts/cache/slim-cache-worker.ts",
+        "scripts/cache/slim-cache-boot.mjs",
+    ],
+): Promise<string | undefined> {
     const cacheDir = `caches/${GAME_CACHE_NAME}/`;
     try {
         const cacheFiles = fs
@@ -222,12 +237,7 @@ async function hashSlimInputs(fullInfo: CacheInfo): Promise<string | undefined> 
             .sort()
             .map((file) => [file, fs.statSync(cacheDir + file).size]);
         return await hashInputs(
-            [
-                "scripts/cache/slim-cache.ts",
-                // Worker entry points are passed through URLs and workerData, not static imports.
-                "scripts/cache/slim-cache-worker.ts",
-                "scripts/cache/slim-cache-boot.mjs",
-            ],
+            entryPoints,
             ["bun.lock", "tsconfig.json", cacheDir + "info.json", cacheDir + "keys.json"],
             JSON.stringify({ cache: fullInfo, files: cacheFiles }),
         );
@@ -328,7 +338,9 @@ async function checkSlimCache(
     keys: string[],
     pass: Pass,
 ): Promise<void> {
-    const reads = await runPass("Loaded it again from the slim cache", { info, chunkDir }, pass);
+    const reads = mergeUnitReads(
+        await runPass("Loaded it again from the slim cache", { info, chunkDir }, pass),
+    );
     const kept = new Set(keys);
     // Including reads whose error a loader caught and went on from
     const missing = [...reads].filter((key) => {
@@ -374,11 +386,34 @@ async function main(): Promise<void> {
     }
 
     // The game's content and loaders, only when there's loading to do
-    const { describeUnit, getSlimUnits } = await import("./slim-load");
+    const { describeUnit, getSlimUnits } = await import("./slim-plan");
     const pass: Pass = { workers, units: getSlimUnits(), describe: describeUnit };
+    // Planner/content changes are represented by each resolved unit's payload.
+    // Shared loader/recipe code, dependencies and cache changes invalidate every unit.
+    const unitInputs = inputs
+        ? await hashSlimInputs(fullInfo, [
+              "scripts/cache/slim-cache-worker.ts",
+              "scripts/cache/slim-cache-boot.mjs",
+              "scripts/cache/slim-unit-cache.ts",
+          ])
+        : undefined;
+    const results =
+        REUSE && unitInputs
+            ? reusableUnitReads(STORE_DIR, unitInputs, pass.units)
+            : new Map<string, string[]>();
+    const pending = pass.units.filter((unit) => !results.has(unitId(unit)));
+    console.log(`Reused extraction results for ${results.size} / ${pass.units.length} units`);
     const full = loadCache(fullInfo);
     console.log(`Loading what the game loads from ${GAME_CACHE_NAME}...`);
-    const reads = await runPass("Loaded what the game loads", { info: fullInfo }, pass);
+    const extracted = await runPass(
+        "Loaded what the game loads",
+        { info: fullInfo },
+        { ...pass, units: pending },
+    );
+    for (const [id, reads] of extracted) {
+        results.set(id, reads);
+    }
+    const reads = mergeUnitReads(results);
     const metaEntries = full.files.files.get(CacheFiles.META_FILE_NAME)!.byteLength;
     for (let indexId = 0; indexId < metaEntries / SectorCluster.SIZE; indexId++) {
         // The reference tables, for every index there is
@@ -440,6 +475,9 @@ async function main(): Promise<void> {
     if (CHECK && inputs) {
         try {
             storeRun(STORE_DIR, inputs, info, files, chunks);
+            if (unitInputs) {
+                storeUnitReads(STORE_DIR, unitInputs, pass.units, results);
+            }
         } catch (e) {
             console.warn(`Couldn't keep this run in ${STORE_DIR} for the next to reuse: ${e}`);
         }

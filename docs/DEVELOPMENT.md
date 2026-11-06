@@ -36,9 +36,11 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
-It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
-each holding the full cache. Which worker loads what doesn't change the result: it's the union of
-what they read, sorted, and each map takes out the ScapeRune squares an earlier one put in. Before
+`scripts/cache/slim-plan.ts` resolves the content into plain inputs: each map's region, batches of
+model requests, and separate texture, sound, sprite and item-icon groups. Workers run those inputs
+through `slim-load.ts`, each holding the full cache. Every unit gets fresh loader state, including
+its initialization reads: a warm model or type cache mustn't hide a dependency on a previous unit,
+and a map mustn't keep an earlier map's ScapeRune squares. Before
 anything's published, the chunks in the out dir are read back, and every group has to come out of
 them as it went in; the check then loads it all from those same chunks.
 
@@ -58,12 +60,28 @@ holds the new file), so one that stopped partway leaves no broken chunk behind. 
 doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
 registers it.
 
+When the whole-run fingerprint changes, `caches/slim/units.json` can still reuse individual
+extraction results. Each entry fingerprints its resolved payload together with the worker/loader
+dependency graph, package/configuration settings and full-cache metadata. Changing one map's
+region or a batch's models invalidates that unit, not the others. Changing a shared loader,
+ScapeRune recipe code, dependency or the full cache conservatively invalidates all units.
+Planner changes that produce identical payloads can reuse their reads. Bake batches are positional,
+so inserting a request can invalidate later batches in that group.
+
+Only missing or changed units are extracted from the full cache. Their read lists are merged
+with the reused ones, then **every unit still runs against the finished slim cache** and every
+stored group is compared with the full cache. Only a successful checked run saves the new unit
+manifest. It is one atomic file, with checksums for its read lists, and replaces the previous
+run's units rather than accumulating files. Missing entries are extracted normally; damaged
+entries or manifests are reported and re-extracted. This saves extraction work, not the final
+validation pass, and doesn't change the shipped chunk format.
+
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.
 - `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
   chunks are still read back and compared group by group. Leave the check on for anything players
-  get. An unchecked run isn't kept for reuse.
-- `SLIM_REUSE=0`: does it all even when nothing has changed.
+  get. An unchecked run saves neither whole-run nor per-unit reuse results.
+- `SLIM_REUSE=0`: does it all even when nothing has changed, ignoring both whole-run and unit reuse.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
