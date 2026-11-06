@@ -325,6 +325,27 @@ describe("co-op lockstep", () => {
         expect(guest.behind).toBe(8);
     });
 
+    it("a guest doesn't give up on frames for the time its page was frozen", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        // A gap, and then the page frozen with the resend asked for unread
+        guest.receiveDown({ from: 4, upTo: 6, events: [] });
+        clock.now += GIVE_UP_GAP_MS + 10_000;
+        // Back: the host's later frames are read first
+        let upTo = 6;
+        for (let ms = 0; ms < 1000; ms += 40, upTo += 2) {
+            clock.now += 40;
+            guest.receiveDown({ from: upTo, upTo: upTo + 2, events: [] });
+            expect(guest.cantCatchUp).toBe(false);
+        }
+        guest.receiveDown({ from: 2, upTo, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        expect(guest.behind).toBe(upTo);
+    });
+
     it("says it's stuck on a frame that keeps failing to step, and not on one that fails once", () => {
         const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
         const heroes = new Map(IDS.map((id, i) => [id, i]));
@@ -332,6 +353,8 @@ describe("co-op lockstep", () => {
         run.receiveUp("guest1", { loaded: true });
         run.receiveUp("guest2", { loaded: true });
         const step = run.sim.step.bind(run.sim);
+        // Thrown before the sim's changed, so trying again is sound here (one
+        // thrown partway through a step is only sound if every copy threw)
         let failing = 1;
         run.sim.step = () => {
             if (failing > 0) {

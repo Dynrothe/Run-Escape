@@ -2304,6 +2304,10 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.coop.keepAlive();
+        // Which can lose the room, and with it this run
+        if (this.coopStopped || this.coopRun !== run) {
+            return;
+        }
         if (run.stuck || run.cantCatchUp) {
             this.endBrokenCoopRun(run);
             return;
@@ -2317,6 +2321,7 @@ export class GameClient implements GameFrameHandler {
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
         const started = performance.now();
         let steps = 0;
+        let threw = true;
         try {
             while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
                 if (this.accumulator >= TICK_MS) {
@@ -2339,9 +2344,12 @@ export class GameClient implements GameFrameHandler {
                     }
                 }
             }
+            threw = false;
         } finally {
-            if (!run.canStep()) {
-                // Waiting on the host: no time to make up once it's back
+            if (threw || !run.canStep()) {
+                // Waiting on the host, or stopped by an error after a step: no
+                // time to make up (an error every frame would otherwise bank
+                // it, for a rush of frames once it stops)
                 this.accumulator = Math.min(this.accumulator, TICK_MS);
             }
             // What was stepped goes out even if something after a step threw,

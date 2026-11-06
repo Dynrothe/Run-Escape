@@ -31,9 +31,12 @@ const MOVE_INTERVAL_MS = 66;
 // again to a guest that missed some. A gap only comes from a dropped
 // connection: the relay gives up on a closed one after RESUME_GRACE_MS
 // (server/cloudflare/src/room.mjs), and the game finds one that died without
-// closing within RUN_QUIET_MS and PONG_WAIT_MS (keepAlive in CoopLobby.ts).
-// This outlasts either gap while keeping a resend well inside the relay's
-// limits; a longer one ends the guest's run (GIVE_UP_GAP_MS).
+// closing within RUN_QUIET_MS and PONG_WAIT_MS (keepAlive in CoopLobby.ts),
+// about 13 seconds. That leaves about 7 for coming back and asking: a slower
+// return (RESUME_WINDOW_MS allows 10) leaves a gap the host no longer has,
+// and the guests' runs end with a message (GIVE_UP_GAP_MS) rather than
+// freezing. Keeping more would make a resend bigger, and it has to stay well
+// inside the relay's limits.
 const RESEND_FRAMES = 1000;
 // A guest asks for missing frames this often at most, and the host resends
 // this often at most whoever asks: one resend covers every guest behind
@@ -51,8 +54,16 @@ export const DECIDE_AFTER_MS = 20_000;
 // RESEND_FRAMES before anyone noticed). A resend that can be had comes within
 // a second or two.
 export const GIVE_UP_GAP_MS = 20_000;
+// Missing frames seen further apart than this (a page that was frozen, or a
+// host that was away) start that wait over: a resend asked for before may be
+// on its way, not yet read
+const GAP_LATE_MS = 2000;
 // A frame that's failed to step this many times in a row (an error in the
-// game) never will, and the run stops rather than leaving everyone waiting
+// game) never will, and the run stops rather than leaving everyone waiting.
+// A failed step has already changed the sim (its events applied, part of a
+// step run), so trying again only keeps the copies together when every copy
+// failed the same way, as the same bug in the same sim does. One that failed
+// alone goes apart from the rest, and the hash check finds it.
 export const MAX_FAILED_STEPS = 50;
 // The most a hero's actions can queue for one frame. It's more than a player
 // can do, and with moves kept to the latest it keeps what the host sends small
@@ -369,7 +380,9 @@ export class CoopRun {
         if (Number.isSafeInteger(message.from) && message.from! > this.upTo) {
             // Some went missing: these come again with them
             const now = this.now();
-            this.gapSince ??= now;
+            if (this.gapSince === undefined || now - this.gapSeenAt > GAP_LATE_MS) {
+                this.gapSince = now;
+            }
             this.gapSeenAt = now;
             if (now - this.askedAt >= RESEND_ASK_MS) {
                 this.askedAt = now;

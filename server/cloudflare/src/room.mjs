@@ -69,12 +69,14 @@ const SAVE_MS = 1000;
 // relay finds those with its own pings, which a Durable Object can't send.
 // Games ping every PING_INTERVAL_MS (CoopLobby.ts), and Chrome can slow a
 // hidden tab's timers to once a minute, so this leaves plenty of room. It's
-// checked on the heartbeat, so it can be ROOM_HEARTBEAT_MS more.
+// checked on the heartbeat, so it can be ROOM_HEARTBEAT_MS more. When the
+// room last heard a player's messages is kept on their socket by each
+// heartbeat, so being out of memory can make it look up to a heartbeat
+// older; their pings' times are Cloudflare's, and exact.
 const SILENT_MS = 5 * 60_000;
-// How stale the time a player was last heard from can be on their socket's
-// attachment (remember()), so being out of memory can't make their quiet look
-// longer than it was by more than this
-const HEARD_SAVE_MS = 30_000;
+// The players let go for being away too long that a room remembers, to tell
+// their game why if it comes back after (resume)
+const AWAY_KEPT = 16;
 
 // A player's country, for their flag, unless they've hidden it. An open
 // room's host shows theirs anyway: it's where the room is, for whoever's
@@ -113,9 +115,6 @@ export class Room extends DurableObject {
         this.serial = 0;
         // The room's lastActive as last saved (the heartbeat saves it again)
         this.savedActive = undefined;
-        // Messages from a connection that isn't a player's current one,
-        // counted for the idle log (logIdle)
-        this.strays = 0;
         // The game's keep-alive, answered without waking the room, so
         // outside its RateLimit (see Cost from strangers in PR-REVIEW.md)
         ctx.setWebSocketAutoResponse(
@@ -164,10 +163,12 @@ export class Room extends DurableObject {
         const member = this.sockets.get(ws);
         if (member?.socket === ws) {
             this.receive(member, data);
-        } else {
+        } else if (this.room) {
             // A connection the room's done with can still have a few on the
-            // way: only counted
-            this.strays++;
+            // way: only counted, for the idle log (logIdle), and kept with
+            // the room through its being out of memory
+            this.room.strays = (this.room.strays ?? 0) + 1;
+            this.persist();
         }
     }
 
@@ -242,40 +243,48 @@ export class Room extends DurableObject {
 
     // The one line the room logs, when it closes as idle, for telling
     // afterwards why (README, The room's log): an object, which Workers Logs
-    // keeps field by field. Players by the start of their id, never their
-    // name or address.
+    // keeps field by field. Players by their id, which is random, never their
+    // name or address. It's only a log, so it never stops the room closing.
     logIdle() {
-        const room = this.room;
-        const now = Date.now();
-        const ago = (at) => (at ? now - at : null);
-        console.warn({
-            event: "coop_room",
-            kind: "idle",
-            room: this.code,
-            started: room?.started === true,
-            endless: room?.endless === true,
-            hard: room?.hard === true,
-            mapId: room?.mapId ?? null,
-            runFor: ago(room?.runStartedAt),
-            quietFor: ago(room?.lastActive),
-            strays: this.strays,
-            players: (room?.members ?? []).map((member) => ({
-                id: member.id.slice(0, 8),
-                host: member.id === room.hostId,
-                connected: member.socket !== undefined,
-                heardAgo: ago(member.heardAt),
-                pingedAgo: ago(this.pingedAt(member)),
-                awayFor: ago(member.awayAt),
-                discarded: member.discarded ?? null,
-            })),
-        });
+        try {
+            const room = this.room;
+            const now = Date.now();
+            const ago = (at) => (at ? now - at : null);
+            console.warn({
+                event: "coop_room",
+                kind: "idle",
+                room: this.code,
+                started: room?.started === true,
+                endless: room?.endless === true,
+                hard: room?.hard === true,
+                mapId: room?.mapId ?? null,
+                runFor: ago(room?.runStartedAt),
+                quietFor: ago(room?.lastActive),
+                strays: room?.strays ?? 0,
+                players: (room?.members ?? []).map((member) => ({
+                    id: member.id,
+                    host: member.id === room.hostId,
+                    connected: member.socket !== undefined,
+                    heardAgo: ago(member.heardAt),
+                    pingedAgo: ago(this.pingedAt(member)),
+                    awayFor: ago(member.awayAt),
+                    discarded: member.discarded ?? null,
+                })),
+            });
+        } catch (e) {
+            console.warn("Co-op room: couldn't log closing as idle:", e);
+        }
     }
 
     // A player's message the room threw away without a word, counted by
-    // reason for the idle log
+    // reason for the idle log, and saved with the room (save()) so its being
+    // out of memory doesn't lose them
     discarded(member, reason) {
         member.discarded ??= {};
         member.discarded[reason] = (member.discarded[reason] ?? 0) + 1;
+        if (this.room?.members.includes(member)) {
+            this.persist();
+        }
     }
 
     // Players whose connection has gone quiet for good (SILENT_MS) are let go
@@ -297,8 +306,8 @@ export class Room extends DurableObject {
 
     // What a connection carries through the room being out of memory: who
     // it's for, the room's code (which isn't saved until it's made), when
-    // the next heartbeat's due, and when the room last heard from them
-    // (within HEARD_SAVE_MS)
+    // the next heartbeat's due, and when the room last heard from them (as
+    // of the last heartbeat)
     remember(member) {
         try {
             member.socket?.serializeAttachment({
@@ -314,7 +323,6 @@ export class Room extends DurableObject {
                 beatAt: this.due.get("heartbeat")?.at,
                 heardAt: member.heardAt,
             });
-            member.heardSaved = member.heardAt;
         } catch {
             // Closed
         }
@@ -353,10 +361,13 @@ export class Room extends DurableObject {
         this.ctx.acceptWebSocket(server);
         const member = this.room?.members.find((m) => m.token === token && !m.closed);
         if (!member) {
-            // A room that's still going let them go (RESUME_GRACE_MS, SILENT_MS)
-            const message = this.room
-                ? "You were away too long, so you're out of the room."
-                : "The room closed while you were away.";
+            // Let go after being away (RESUME_GRACE_MS, SILENT_MS), or for
+            // something else (flooding it, a message it couldn't handle)
+            const message = !this.room
+                ? "The room closed while you were away."
+                : this.room.away?.includes(token)
+                  ? "You were away too long, so you're out of the room."
+                  : "You're no longer in that room.";
             server.send(JSON.stringify({ t: "error", message }));
             server.close(1000);
             return new Response(null, { status: 101, webSocket: client });
@@ -404,6 +415,11 @@ export class Room extends DurableObject {
         member.awayAt = since;
         this.later(`away:${member.serial}`, since + RESUME_GRACE_MS - Date.now(), () => {
             if (!member.socket) {
+                // Saved with the room as they leave it (leaveRoom)
+                const room = this.room;
+                if (room && member.token) {
+                    room.away = [...(room.away ?? []), member.token].slice(-AWAY_KEPT);
+                }
                 this.dropped(member);
             }
         });
@@ -579,6 +595,7 @@ export class Room extends DurableObject {
                     build: m.build,
                     token: m.token,
                     awayAt: m.awayAt,
+                    discarded: m.discarded,
                 })),
                 kicked: [...this.kicked],
             })
@@ -590,9 +607,6 @@ export class Room extends DurableObject {
             return;
         }
         member.heardAt = Date.now();
-        if (member.heardAt - (member.heardSaved ?? 0) > HEARD_SAVE_MS) {
-            this.remember(member);
-        }
         if (!member.limit.allow(typeof data === "string" ? data.length : data.byteLength)) {
             this.closeSocket(member, 1008);
             this.dropped(member);
@@ -1102,8 +1116,8 @@ export class Room extends DurableObject {
                 this.save();
             }
             this.later("heartbeat", ROOM_HEARTBEAT_MS, beat);
-            // When the next one's due, for the room made again after it's
-            // been out of memory
+            // When the next one's due, and when each player was last heard
+            // from, for the room made again after it's been out of memory
             for (const member of room.members) {
                 this.remember(member);
             }

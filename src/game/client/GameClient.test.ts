@@ -945,12 +945,12 @@ describe("a co-op run that breaks", () => {
             finishRun,
             updateHud() {},
         });
-        const update = () =>
+        const update = (ms = TICK_MS * 2) =>
             (
                 client as unknown as {
                     updateCoop(ms: number, sim: Sim, run: unknown): void;
                 }
-            ).updateCoop(TICK_MS * 2, sim, fake);
+            ).updateCoop(ms, sim, fake);
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
 
@@ -964,6 +964,31 @@ describe("a co-op run that breaks", () => {
         expect(update).toThrow("a bug in what's drawn");
         expect(stepFrame).toHaveBeenCalledOnce();
         expect(flush).toHaveBeenCalledOnce();
+    });
+
+    it("keeps no time back to make up when something after a step throws", () => {
+        const { client, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        // A slow frame's worth of steps due, and only one taken
+        expect(() => update(TICK_MS * 8)).toThrow("a bug in what's drawn");
+        expect((client as unknown as { accumulator: number }).accumulator).toBeLessThanOrEqual(
+            TICK_MS,
+        );
+    });
+
+    it("steps nothing once checking the room's connection has lost it", () => {
+        const { client, coop, stepFrame, flush, update } = coopClient({});
+        // The connection found dead and the room given up on, which ends the run
+        coop.keepAlive.mockImplementation(() =>
+            Object.assign(client, { coopRun: undefined, coopStopped: true }),
+        );
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        expect(flush).not.toHaveBeenCalled();
     });
 
     it("checks the room's connection on every update", () => {

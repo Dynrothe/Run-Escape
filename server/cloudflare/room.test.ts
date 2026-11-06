@@ -425,10 +425,23 @@ describe("Cloudflare co-op room", () => {
         expect(room.room.members.map((m: any) => m.id)).toEqual(["host"]);
         expect(host.socket.sent.at(-1)).toMatchObject({ t: "room" });
         expect(host.socket.closes).toEqual([]);
-        // Coming back after that, they're told why
+        // Coming back after that, they're told why, by the room made again too
         const late = new Socket("guest");
-        resume(room, guest.token, late);
+        resume(await loadRoom(), guest.token, late);
         expect(late.sent.at(-1).message).toBe("You were away too long, so you're out of the room.");
+    });
+
+    it("doesn't tell a player let go for something else that they were away", async () => {
+        const { room, guest } = await party();
+        const guestSocket = guest.socket;
+        // Far more than the rate limit allows in a second
+        for (let i = 0; i < 500 && guest.socket; i++) {
+            say(room, guest, { t: "me" });
+        }
+        expect(guestSocket.closes).toEqual([1008]);
+        const back = new Socket("guest");
+        resume(room, guest.token, back);
+        expect(back.sent.at(-1).message).toBe("You're no longer in that room.");
     });
 
     it("ends the run for everyone when the host's gone quiet, not half an hour later", async () => {
@@ -482,19 +495,20 @@ describe("Cloudflare co-op room", () => {
         expect(guest.socket.closes).toEqual([]);
     });
 
-    it("doesn't make a player's quiet look longer for having been out of memory", async () => {
+    it("keeps when it last heard from a player through being out of memory", async () => {
         const { room, host, guest } = await party();
         const guestSocket = guest.socket;
-        // Past the first heartbeat, the guest says something, then goes quiet
-        await pinging(room, 110_000, [host], 10_000);
+        // The guest says something, then goes quiet; a heartbeat passes, and
+        // the room's made again
+        await pinging(room, 100_000, [host], 10_000);
         await say(room, guest, { t: "me", ready: true });
-        await pinging(room, 5000, [host], 5000);
+        await pinging(room, 30_000, [host], 10_000);
         const again = await loadRoom();
         const [h] = again.room.members;
-        // Five minutes from when it last heard them, not from that heartbeat
-        await pinging(again, 250_000, [h], 10_000);
+        // Five minutes from when it last heard them, not from when they joined
+        await pinging(again, 280_000, [h], 10_000);
         expect(guestSocket.closes).toEqual([]);
-        await pinging(again, 60_000, [h], 10_000);
+        await pinging(again, 20_000, [h], 10_000);
         expect(guestSocket.closes).toEqual([1001]);
     });
 
@@ -509,6 +523,9 @@ describe("Cloudflare co-op room", () => {
         beforeEach(() => {
             vi.spyOn(console, "warn").mockImplementation(() => {});
         });
+        afterEach(() => {
+            vi.mocked(console.warn).mockRestore();
+        });
 
         it("logs one line when it closes a room as idle, with what it knew", async () => {
             const { room, host, guest } = await party();
@@ -521,8 +538,11 @@ describe("Cloudflare co-op room", () => {
             const back = new Socket("guest");
             resume(room, guest.token, back);
             await room.webSocketMessage(old, JSON.stringify({ t: "up", i: 1 }));
+            // Saved within a second, so the room made again still has them
+            await wait(room, 1000);
+            const again = await loadRoom();
             // Everyone's games ping, and nothing else
-            await pinging(room, 31 * 60_000, [host, guest]);
+            await pinging(again, 31 * 60_000, [host, guest]);
             const entries = logged();
             expect(entries).toHaveLength(1);
             const [entry] = entries;

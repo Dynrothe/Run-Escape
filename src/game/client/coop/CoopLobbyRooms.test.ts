@@ -299,12 +299,23 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
-    it("doesn't ping a room that's sending frames, however long", async () => {
+    it("pings a room that's sending frames only to be heard from, and keeps it", async () => {
         const { lobby, room } = await inRoom();
         room.answersPings = false;
+        // A guest standing still: nothing's sent but these, every 30 seconds,
+        // whatever its regular ping's slowed to
         await playFor(lobby, room, 60_000, true);
-        expect(pings(room)).toBe(0);
+        expect(pings(room)).toBe(2);
         expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("doesn't ping a room it's talking to", async () => {
+        const { lobby, room } = await inRoom();
+        for (let s = 0; s < 60; s++) {
+            lobby.sendUp({ move: [1, 0] });
+            await playFor(lobby, room, 1000, true);
+        }
+        expect(pings(room)).toBe(0);
     });
 
     it("pings a quiet room every few seconds, and keeps it while it answers", async () => {
