@@ -37,11 +37,9 @@ the version in the corner).
   with a message instead of freezing everyone. Fixed by trippy22.
 - The Armadyl crossbow shows each shot while you run, not only when you stand still: your
   adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
-
-### Fixed
-
 - Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
-  it: they waited for its middle to come into reach. Fixed by Okaeri.
+  it: they waited for its middle to come into reach. Auras, spells, arrows and the rest hit its
+  edge every time too, not only some of the time. Fixed by Okaeri.
 
 ## 0.27.0 - 2026-11-05
 

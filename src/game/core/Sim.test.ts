@@ -363,6 +363,91 @@ describe("melee", () => {
         expect(hitsOn(attackOnce(sim, 1), big).length).toBeGreaterThan(0);
     });
 
+    test("a slash both ways hits what's right beside you with both sides", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        sim.weapons[0].level = 2;
+        expect(sim["getEffectiveLevel"](sim.weapons[0]).amount).toBe(2);
+        const goblin = dummy(sim, 0.1, 0);
+        goblin.frozen = 1e6;
+        expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
+    });
+
+    test("a slash swings at a big enemy as soon as its edge is in reach", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        const reach = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // Its edge a fifth of a tile inside reach
+        const big = dummy(sim, reach + 2.8, 0, "boss");
+        big.radius = 3;
+        big.frozen = 1e6;
+        const events = attack(sim);
+        expect(events.some((e) => e.type === "slash")).toBe(true);
+        expect(hitsOn(events, big).length).toBeGreaterThan(0);
+    });
+
+    test("a slash's corners don't reach a big enemy clear of it", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        const reach = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // A goblin in front to swing at, and a big one off past the slash's far corner: inside
+        // the slash's box widened by its radius, but over half a tile clear of the box itself
+        const goblin = dummy(sim, 1.5, 0);
+        const big = dummy(sim, reach + 3.4, 3.6, "boss");
+        big.radius = 4;
+        for (const enemy of [goblin, big]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, goblin).length).toBeGreaterThan(0);
+        expect(hitsOn(events, big)).toEqual([]);
+    });
+
+    test("a sweep's far corners don't reach a big enemy clear of it", () => {
+        const sim = armed("two_handed_sword");
+        sim.enemies = [];
+        const level = sim["getEffectiveLevel"](sim.weapons[0]);
+        expect(level.amount).toBe(1);
+        const reach = level.area * (1 + sim.stats.area);
+        // Past the arc's side by more than its radius allows at that distance, but over a third
+        // of a tile clear of the arc's far corner (1.1 is SLASH_ARC)
+        const goblin = dummy(sim, 1.5, 0);
+        const angle = (level.arc ?? 1.1) + 0.55;
+        const dist = reach + 3.8;
+        const big = dummy(sim, dist * Math.cos(angle), dist * Math.sin(angle), "boss");
+        big.radius = 4;
+        for (const enemy of [goblin, big]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, goblin).length).toBeGreaterThan(0);
+        expect(hitsOn(events, big)).toEqual([]);
+    });
+
+    test("the Thunderclap reaches a big boss whose edge is in reach", () => {
+        const sim = armed("thunder_khopesh");
+        sim.enemies = [];
+        // Its edge a tile and a half off, its middle five and a half
+        const big = dummy(sim, 5.5, 0, "boss");
+        big.radius = 4;
+        big.frozen = 1e6;
+        // The third swing is the special
+        sim.weapons[0].uses = 2;
+        expect(hitsOn(attack(sim), big).length).toBeGreaterThan(0);
+        expect(sim.weapons[0].uses).toBe(3);
+    });
+
+    test("an aura touches a big enemy by its edge", () => {
+        const sim = armed("ice_burst", "wizard");
+        sim.enemies = [];
+        const radius = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // Its edge a tile inside the aura, its middle three tiles out
+        const big = dummy(sim, radius + 3, 0, "boss");
+        big.radius = 4;
+        big.frozen = 1e6;
+        expect(hitsOn(attack(sim), big).length).toBeGreaterThan(0);
+    });
+
     test("the Thunder khopesh's Thunderclap hits everything around you", () => {
         const sim = createSim();
         sim.enemies = [];
