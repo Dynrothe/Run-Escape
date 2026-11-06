@@ -1352,12 +1352,16 @@ by tile and loc by loc:
 
 **Charred locs** are the real ones with their colours burnt (`rs/config/loctype/LocOverrides.ts`): `CHARRED_LOCS + id`
 (`getCharredLoc`) is loc `id` with every face's lightness under half and its saturation a quarter, and its opaque textures
-swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured (see-through ones,
-leaves and bars, keep theirs). `LOWERED_LOCS + id` (`getLoweredLoc`) is the same squashed to `LOWERED_HEIGHT`. They're
+swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured; see-through green
+leaves turn scorched brown (33), and other see-through ones (bars, shingles) keep theirs, as a swap would fill their
+holes. `LOWERED_LOCS + id` (`getLoweredLoc`) is the same squashed to `LOWERED_HEIGHT`. They're
 read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and the slim cache
-keeps the base. Ids from `DERIVED_LOCS` are locs of our own made from another, listed in `LOC_OVERRIDES` with a `base`
-(Yama on his throne, `YAMA_ON_HIS_THRONE`: his throne's loc with his seated model on it, small, sitting with 12153).
-Keep every id under 2^21: the model caches key a loc by its id << 10.
+keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in `LOC_OVERRIDES` with a
+`base`. Keep every id under 2^21: the model caches key a loc by its id << 10.
+
+**A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
+his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground
+under it (it blocks nothing itself). As a loc he showed in his bind pose, arms out over the seat.
 
 **What it can't do**: a lowered wall is the wall squashed, flat along its top, not broken; a charred texture is one of
 two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the wall a door was

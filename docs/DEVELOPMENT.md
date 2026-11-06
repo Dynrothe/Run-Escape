@@ -934,6 +934,12 @@ adventurer can have:
   a pad's bottom button and its four shoulders, and on a touch screen `KitButtons`, the first
   big in the items' corner and the others round it. The HUD's `HudNumbers.abilities` are their
   charge.
+- **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
+  on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be:
+  a loc can't play a skeletal animation, so Yama sitting on his throne is one. They're baked as
+  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+- An explore map's HUD is the minimap, the hitpoints and the hero's buttons: no level, clock,
+  kills, coins, round, damage panel or quests (`Hud` in `ui/GameUi.tsx`).
 
 ### Raids
 
