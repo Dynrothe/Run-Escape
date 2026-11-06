@@ -284,7 +284,9 @@ export function getPlayerAttackSeqs(): number[] {
 
 // The run poses of the weapon in the player's hand (WeaponDef.runPose), of
 // the swings a look is baked with. Only its, since the sim records no other
-// weapon's swing while the player moves.
+// weapon's swing while the player moves. The look's weapon is the sim's
+// (Sim.getHeldWeapon, through getCurrentAppearance) as long as nothing else
+// is worn in the weapon slot, which a test checks.
 export function getHeldRunPoses(
     appearance: PlayerAppearance,
     attackSeqs: number[],
@@ -462,8 +464,7 @@ function getRequestBody(request: BakeRequest): string {
         case "npc":
             return `npc:${request.npcId}:${request.seqIds[0]}`;
         case "player":
-            // A look with run poses is the player's own, never merged
-            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}${request.runPoses ? ":" + JSON.stringify(request.runPoses) : ""}`;
+            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
@@ -1064,19 +1065,23 @@ export class GameAssets {
                     PLAYER_SEQS.death,
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
+                // The held weapon's aim over the run, for a moment after each
+                // shot on the move
+                const poses = getHeldRunPoses(appearance, attackSeqs);
                 const bake = await this.bake([
                     {
                         kind: "player",
                         key: "player",
                         appearance,
                         seqIds,
-                        // The held weapon's aim over the run, for a moment
-                        // after each shot on the move
-                        runPoses: {
-                            poses: getHeldRunPoses(appearance, attackSeqs),
-                            runSeqId: stance.run,
-                            maskSeqId: PLAYER_INTERLEAVE_SEQ,
-                        },
+                        runPoses:
+                            poses.length > 0
+                                ? {
+                                      poses,
+                                      runSeqId: stance.run,
+                                      maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                                  }
+                                : undefined,
                     },
                     ...getPowerUpLookRequests(appearance),
                 ]);

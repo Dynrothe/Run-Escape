@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import {
+    ActorAnim,
+    ActorModel,
+    ActorPage,
+    ActorRenderer,
+} from "../../mapviewer/webgl/actor/ActorRenderer";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { emptyStats } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS, getProjectileObjId, getWeapon } from "../content/weapons";
@@ -298,18 +303,33 @@ test("slashes and auras follow the displayed body without moving confirmed effec
 });
 
 describe("a weapon's run pose", () => {
-    const anim = (lengths: number[]) =>
+    const anim = (seqId: number, lengths: number[], runPose = false) =>
         new ActorAnim(
-            1,
+            seqId,
             new Int32Array(lengths.length * 4),
             new Uint16Array(lengths.length),
             Uint16Array.from(lengths),
             true,
-            true,
+            runPose,
         );
+    // The Armadyl crossbow's swing, posed over its stance's run
     const runLengths = [5, 4, 4, 4, 5, 4, 4, 4];
-    const run = anim(runLengths);
-    const runPose = anim(runLengths);
+    const run = anim(4228, runLengths);
+    const runPose = anim(4230, runLengths, true);
+
+    test("is kept apart from the swing it's a frame of", () => {
+        const swing = anim(4230, [3, 3, 3]);
+        for (const anims of [
+            [swing, run, runPose],
+            [runPose, run, swing],
+        ]) {
+            const model = new ActorModel({} as ActorPage, "player", 0, 0, 0, anims);
+            expect(model.getAnim(4230)).toBe(swing);
+            expect(model.getAnim(4228)).toBe(run);
+            expect(model.runPoses.get(4230)).toBe(runPose);
+            expect(model.runPoses.size).toBe(1);
+        }
+    });
 
     test("keeps the run's legs going as they were, whenever the shot was", () => {
         for (const moveTicks of [0, 7, 13, 33, 50, 101]) {
@@ -327,6 +347,6 @@ describe("a weapon's run pose", () => {
     });
 
     test("isn't played over another run", () => {
-        expect(getRunPoseFrame(runPose, anim([4, 4, 4]), 0, 0)).toBe(-1);
+        expect(getRunPoseFrame(runPose, anim(824, [4, 4, 4]), 0, 0)).toBe(-1);
     });
 });

@@ -8962,6 +8962,12 @@ export class Sim {
     }
 
     private stepWeapons(): void {
+        // On the move, only the weapon in hand's attacks are shown, and only
+        // if it has a run pose (WeaponDef.runPose): the view plays them over
+        // the run, and another weapon's would cut it short. Any other attack
+        // on the move goes unshown, as always. Only for show, so in no hash.
+        const held = this.player.moving ? this.getHeldWeapon() : undefined;
+        const posed = held?.def.runPose !== undefined ? held : undefined;
         for (const weapon of this.weapons) {
             if (weapon.cooldown > 0) {
                 weapon.cooldown--;
@@ -8993,10 +8999,7 @@ export class Sim {
                     y: this.player.y,
                 });
             }
-            // On the move, only the weapon in hand's: the view plays its
-            // attacks over the run, and another weapon's would cut them off.
-            // Only for show, so it's in no hash.
-            if (fired && (!this.player.moving || weapon === this.getHeldWeapon())) {
+            if (fired && (!this.player.moving || weapon === posed)) {
                 this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
                 this.player.attackStart = this.tick;
             }

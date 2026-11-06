@@ -134,12 +134,19 @@ function bakeAnim(
     };
 }
 
+// A seq's interleave order as groups, without the end marker it's decoded
+// with (SeqType.masks)
+export function getMovementGroups(masks: number[] | undefined): number[] {
+    return masks?.filter((group) => group < 0x100) ?? [];
+}
+
 // One frame of an attack over the run: a frame for each of the run's, timed
 // as the run, so the legs go on as they were while the upper body holds the
-// pose. getModel poses run frame r. Undefined if the two can't be put
-// together (a skeletal one, or another skeleton).
-function bakeRunPose(
-    state: WorkerState,
+// pose. getModel poses run frame r. Undefined if any of them can't be put
+// together (a skeletal one, or another skeleton): a frame missing would draw
+// nothing, so the run shows instead.
+export function bakeRunPose(
+    state: Pick<WorkerState, "seqTypeLoader">,
     segments: Segments,
     getModel: (runFrame: number) => Model | undefined,
     seqId: number,
@@ -147,23 +154,27 @@ function bakeRunPose(
 ): { anim: BakedAnim; reach: number } | undefined {
     const runType = state.seqTypeLoader.load(runSeqId);
     const count = runType.frameIds?.length ?? 0;
-    const first = count > 0 ? getModel(0) : undefined;
-    if (!first) {
+    if (count === 0) {
         return undefined;
+    }
+    const models: Model[] = [];
+    for (let i = 0; i < count; i++) {
+        const model = getModel(i);
+        if (!model) {
+            return undefined;
+        }
+        models.push(model);
     }
     const ranges = new Int32Array(count * 4);
     const frameSegments = new Uint16Array(count);
     const frameLengths = new Uint16Array(count);
     let reach = 0;
-    for (let i = 0; i < count; i++) {
-        const model = i === 0 ? first : getModel(i);
-        if (model) {
-            reach = Math.max(reach, getModelReach(model));
-            ranges.set(segments.addFrame(model, count - i), i * 4);
-            frameSegments[i] = segments.current;
-        }
+    models.forEach((model, i) => {
+        reach = Math.max(reach, getModelReach(model));
+        ranges.set(segments.addFrame(model, count - i), i * 4);
+        frameSegments[i] = segments.current;
         frameLengths[i] = runType.frameLengths?.[i] || 1;
-    }
+    });
     return {
         anim: {
             seqId,
@@ -281,9 +292,13 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
                     const set = bakeSet(state, segments, request.key, getModel, request.seqIds);
                     const runPoses = request.runPoses;
-                    if (runPoses) {
-                        const movementGroups =
-                            state.seqTypeLoader.load(runPoses.maskSeqId).masks ?? [];
+                    // The groups the run keeps, without the order's end
+                    // marker. With none, the swing would take the legs too,
+                    // so no pose is baked and the run shows.
+                    const movementGroups = runPoses
+                        ? getMovementGroups(state.seqTypeLoader.load(runPoses.maskSeqId).masks)
+                        : [];
+                    if (runPoses && movementGroups.length > 0) {
                         for (const { seqId, frame } of runPoses.poses) {
                             const baked = bakeRunPose(
                                 state,

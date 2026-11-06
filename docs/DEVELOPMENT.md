@@ -1049,12 +1049,17 @@ swing starts again at every attack). One frame over the run is the run's few fra
 player. The whole swing over the run cost its frames times the run's, about three times a player's
 look for the armadyl ranger, and baking it as one timeline instead, the run from the swing's
 start, made the legs jump back to the start of a stride at every shot. Only the weapon in hand
-gets it, and the sim records no other weapon's swing (`player.attackSeq`, `attackStart`) while the
-player moves, so another weapon can't cut it short; standing still, every weapon's shows, as
-before. It's display only, and in no hash. The cache's attacks have no interleave order of their
-own (it's what the client uses to play an action over a walk), so they borrow eating's
-(`PLAYER_INTERLEAVE_SEQ`), which lists the groups the walk keeps: the legs and the body's root. A
-skeletal swing or stance can't be put together that way and isn't baked, so it shows the run.
+gets it. While the player moves, the sim records a swing (`player.attackSeq`, `attackStart`) only
+from the weapon in hand, and only if it has a run pose, so another weapon can't cut it short and
+nothing else changes: any other swing on the move still goes unrecorded, as one would otherwise
+play its end when the player stops. Standing still, every weapon's shows. It's display only, and
+in no hash. The look's weapon (`getHeldRunPoses`) and the sim's (`Sim.getHeldWeapon`) agree as
+long as nothing else is worn in the weapon slot, which a test in `GameAssets.test.ts` checks. The
+cache's attacks have no interleave order of their own (it's what the client uses to play an action
+over a walk), so they borrow eating's (`PLAYER_INTERLEAVE_SEQ`), which lists the groups the walk
+keeps: the legs and the body's root. A skeletal swing or stance, or any run frame that can't be put
+together that way, means no pose is baked and the run shows, and so does an interleave order gone
+from the cache (the swing would take the legs too).
 
 A baked animation is a posed copy of the model per frame, so what an enemy costs is its triangles
 times its frames. A skeletal animation (the Colosseum's bosses, the gryphon, the naguas) has a pose
