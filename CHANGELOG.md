@@ -26,7 +26,8 @@ the version in the corner).
   names, whether or not Share run stats is on. The setting now says so.
 - Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
   game's cache again.
-- Theatre of Blood, by Okaeri: the Nylocas are slower.
+- Theatre of Blood, by Okaeri: the Nylocas are slower, and half as many come in their hall before
+  Nylocas Vasilias: there were too many to fight through.
 
 ### Fixed
 

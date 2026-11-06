@@ -391,6 +391,25 @@ describe("the Theatre's Nylocas", () => {
             expect(getEnemy(id).speed, id).toBeLessThan(PLAYER_SPEED * TICKS_PER_SECOND);
         }
     });
+
+    it("come fewer to their hall than to the Bloat's before it, wave for wave and in the ring", () => {
+        // Most of them shoot, so the raid's pace for the third hall swamped players with them
+        const rooms = getMap("theatre_of_blood").raid!.rooms;
+        const bloat = rooms.find((room) => room.boss === "tob_pestilent_bloat")!;
+        const nylocas = rooms.find((room) => room.boss === "nylocas_vasilias")!;
+        expect(nylocas.waves.length).toBe(bloat.waves.length);
+        nylocas.waves.forEach((wave, i) => {
+            expect(wave.spawnRate, `wave ${i}`).toBeLessThan(bloat.waves[i].spawnRate);
+            expect(wave.minAlive, `wave ${i}`).toBeLessThan(bloat.waves[i].minAlive);
+            expect(wave.maxAlive, `wave ${i}`).toBeLessThan(bloat.waves[i].maxAlive);
+        });
+        const ring = (room: RaidRoomDef) => {
+            const event = room.events.find((e) => e.kind === "ring");
+            return event?.kind === "ring" ? event.count : 0;
+        };
+        expect(ring(nylocas)).toBeGreaterThan(0);
+        expect(ring(nylocas)).toBeLessThan(ring(bloat));
+    });
 });
 
 describe("the Theatre's bullet shapes", () => {
