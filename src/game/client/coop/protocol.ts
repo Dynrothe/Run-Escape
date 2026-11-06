@@ -132,6 +132,8 @@ export type DownMessage = {
     upTo: number;
     events: FrameEvent[];
     hash?: [number, number];
+    // Wall-clock time until the next automatic choice, for display only.
+    decisionMs?: number;
 };
 
 export type ClientMessage =

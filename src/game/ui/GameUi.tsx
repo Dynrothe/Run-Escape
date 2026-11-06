@@ -1697,6 +1697,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
         <div className="ui-fill ui-run">
+            <ChoiceCountdown client={client} />
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />
@@ -1758,6 +1759,23 @@ function useHudNumber<T>(client: GameClient, pick: (numbers: HudNumbers) => T): 
         const numbers = store.getNumbers();
         return numbers && pick(numbers);
     });
+}
+
+function ChoiceCountdown({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.decisionSeconds);
+    if (seconds === undefined) {
+        return null;
+    }
+    return (
+        <div
+            className={"ui-choice-countdown" + (seconds <= 5 ? " ui-choice-countdown-soon" : "")}
+            role="timer"
+            aria-label={`Party choosing. Next automatic choice in ${seconds} seconds`}
+        >
+            <span>Party choosing</span>
+            <span className="ui-choice-countdown-time">Auto-choice in {seconds}s</span>
+        </div>
+    );
 }
 
 // A random event: what's for sale against the coins carried

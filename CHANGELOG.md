@@ -7,6 +7,8 @@ the version in the corner).
 
 ### Added
 
+- Co-op choice countdown, by Deivid Smarzaro: everyone can see when the next automatic reward
+  choice is due while the party is still choosing.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
@@ -78,7 +80,7 @@ the version in the corner).
 - Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
   pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
   more once dearer ones are bought.
-- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+- Skills, by Deivid Smarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
 - Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just
