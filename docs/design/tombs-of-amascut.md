@@ -630,24 +630,28 @@ account's state, caskets dropping as they always do (`zero`, nothing bought; `mi
 ranks and half of each Armoury line, `META=mid ARMOURY=mid`; `all`, everything, `META=max
 ARMOURY=max`; `shop` and `dev` on request).
 
-What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds each). A loss is a
-run that hit the sim's 90 minutes still trying: no Attempts invocation was on, so a wipe only starts
-the room or boss again, and the only revive is the shop's Ring of life (one a raid, not given back
-after a wipe). How far each lost run got: paths cleared, then the Wardens' phase reached.
+What it showed (November 2026, after the playtest pass: full raids, warrior, wizard and ranger, 3
+seeds each, raid levels 0, 150, 300 and 500; Fresh is `zero`, Mid-game `mid`, End-game `all`). A
+loss is a run that hit the sim's 90 minutes still trying: no Attempts invocation was on, so a
+wipe only starts the room or boss again, and the only revive is the shop's Ring of life (one a
+raid, not given back after a wipe). How far each lost run got: paths cleared, then the Wardens'
+phase reached.
 
-| Raid level   | Nothing bought                    | Shop                                                              | Shop and Armoury                          |
-| ------------ | --------------------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
-| Entry (0)    | 8 of 9 (2 paths)                  | 7 of 9 (4 paths phase 2 x2)                                       | 9 of 9                                    |
-| Normal (160) | 0 of 9 (their first path or none) | 6 of 9 (4 paths phase 2 x3)                                       | 9 of 9                                    |
-| Expert (300) | 0 of 9 (none)                     | 2 of 9 (4 paths phase 3, 4 paths phase 2, 3 paths x2, 2 paths x3) | 8 of 9 (4 paths phase 2)                  |
-| 500          | 0 of 9 (none)                     | 0 of 9 (their first path, one the second)                         | 0 of 9 (their first path, one the second) |
+| Invo Difficulty | Fresh Account                                  | Mid-game                              | End-game                                                       |
+| --------------- | ---------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| Entry (0-149)   | 7/9 (warrior lost 2: 4 paths, Wardens phase 2) | 8/9 (ranger lost 1: 4 paths, phase 2) | 9/9                                                            |
+| Normal (150+)   | 0/9 (all stuck on their first path's boss)     | 7/9 (lost: 3 paths; 4 paths, phase 2) | 6/9 (lost: 4 paths, phase 2; 2 paths; 1 path)                  |
+| Expert (300+)   | 0/9 (their first path)                         | 0/9 (none past 2 paths)               | 5/9 (wizard 3/3; warrior and ranger 1/3, lost on paths 1 to 3) |
+| Max invo (500)  | 0/9 (their first path)                         | 0/9 (their first path)                | 0/9 (none past 2 paths)                                        |
 
-That table is from before the Wardens' second pass (orb soaking, the third phase in OSRS's
-order: section 11). After it, with everything bought at Expert, 3 seeds each, the raid up to the
-Wardens and through them: the wizard 3 of 3 (no wipes), the warrior 2 of 3 (the loss stuck in
-Crondis, its third path; both Wardens runs won), the ranger 1 of 3 (both losses at Kephri, its
-second path, 35 wipes each: not the Wardens). The Wardens' room is no longer where a run with
-the best of everything dies; Kephri for the ranger and Crondis's corridor are.
+- Fresh account indicates anywhere from zero to a bought skills, but no upgraded armory
+- Mid-game indicates a decent amount of bought skills and mid-gear in armory
+- End-Game indicates optimal skill setup and end-game gear upgrades in armory
+
+Before the Wardens' second pass and the playtest pass, Expert with everything bought was 8 of 9;
+it's 5 of 9 now. The losses are on the paths before the Wardens (the sweep doesn't say which
+rooms), and every run that reached the Wardens won. Normal End-game at 6 of 9, under Mid-game's 7,
+is the bot: two of its losses stalled with no wipes.
 
 The curve asked for: Entry with nothing, Normal with the shop and better gear, Expert with the
 best of everything, and 500 past all three (with everything bought they stall in the Apmeken
