@@ -34,26 +34,21 @@ function describe(summary: CloudSummary | undefined): string {
     );
 }
 
-// Cloud save's first row in Settings, which its button on the title screen opens at
-export const CLOUD_SETTING_ID = "ui-setting-cloud";
-
 // The Settings row's layout, as GameUi's Setting draws it. wide: its control is a box to type
 // in, which wraps under the label and shrinks to fit a narrow screen.
 function CloudRow({
     name,
     text,
     wide = false,
-    id,
     children,
 }: {
     name: string;
-    id?: string;
     text?: ReactNode;
     wide?: boolean;
     children?: ReactNode;
 }): JSX.Element {
     return (
-        <div className={"ui-setting" + (wide ? " ui-setting-wide" : "")} id={id}>
+        <div className={"ui-setting" + (wide ? " ui-setting-wide" : "")}>
             <div className="ui-setting-label">
                 <div className="ui-setting-name">{name}</div>
                 {text && <div className="ui-setting-text">{text}</div>}
@@ -69,12 +64,16 @@ export function CloudSaveSettings({
     cloud,
     client,
     saving,
+    inPanel = false,
 }: {
     cloud: CloudView | undefined;
     client: GameClient;
     // Whether this tab's saving at all (no save block)
     saving: boolean;
+    // In cloud save's own panel, whose heading already says what it is
+    inPanel?: boolean;
 }): JSX.Element | null {
+    const first = inPanel ? "Status" : "Cloud save";
     const [typed, setTyped] = useState("");
     const [copied, setCopied] = useState(false);
     const sync = client.cloud;
@@ -101,8 +100,7 @@ export function CloudSaveSettings({
         return (
             <>
                 <CloudRow
-                    name="Cloud save"
-                    id={CLOUD_SETTING_ID}
+                    name={first}
                     text={
                         problem ??
                         "Keep a copy online, and take it to another device with a code. No account, name or email."
@@ -163,7 +161,7 @@ export function CloudSaveSettings({
     const code = cloud.code;
     return (
         <>
-            <CloudRow name="Cloud save" text={status} id={CLOUD_SETTING_ID}>
+            <CloudRow name={first} text={status}>
                 {restore}
                 <button
                     className="ui-button ui-button-small"
@@ -322,16 +320,43 @@ export function CloudChoicePanel({
     );
 }
 
-// Beside Settings on the title screen, where cloud save's offered: whether it's on, and whether it
-// needs looking at. It opens the choice when one's waiting, and Settings at cloud save otherwise.
-export function CloudSaveButton({
+// Behind cloud save's button on the title screen: its rows from Settings, on their own
+export function CloudSavePanel({
     cloud,
     client,
-    onOpenSettings,
+    saving,
+    onClose,
 }: {
     cloud: CloudView | undefined;
     client: GameClient;
-    onOpenSettings: () => void;
+    saving: boolean;
+    onClose: () => void;
+}): JSX.Element {
+    return (
+        <div className="ui-panel rs-border rs-background ui-settings ui-cloud-panel">
+            <h2>Cloud save</h2>
+            <div className="ui-settings-body">
+                <CloudSaveSettings cloud={cloud} client={client} saving={saving} inPanel />
+            </div>
+            <div className="ui-row">
+                <button className="ui-button" onClick={onClose}>
+                    Back
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// Beside Settings on the title screen, where cloud save's offered: whether it's on, and whether it
+// needs looking at. It opens the choice when one's waiting, and cloud save's panel otherwise.
+export function CloudSaveButton({
+    cloud,
+    client,
+    onOpen,
+}: {
+    cloud: CloudView | undefined;
+    client: GameClient;
+    onOpen: () => void;
 }): JSX.Element | null {
     if (!cloud || !client.cloud) {
         return null;
@@ -367,7 +392,7 @@ export function CloudSaveButton({
                 if (cloud.choice) {
                     client.cloud?.reopenChoice();
                 } else {
-                    onOpenSettings();
+                    onOpen();
                 }
             }}
         >

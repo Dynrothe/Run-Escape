@@ -1668,7 +1668,8 @@ sync code, and typing it on another device links that one. The local save stays 
 and none of this changes `SaveData`. Its button sits beside Settings on the title screen
 (`CloudSaveButton`): the client's storage chest with an up arrow (`CLOUD_SAVE_SPRITES` in
 `content/titleIcons.ts`), faded while it's off, with a "!" in its corner while a choice is
-waiting and a "no" sign while it can't sync. It opens the choice, or Settings at cloud save.
+waiting and a "no" sign while it can't sync. It opens the choice, or cloud save's own panel
+(`CloudSavePanel`): Settings' rows, on their own.
 
 - **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
   from or went up as, and the save's `fingerprint` then (a hash of its progress that leaves out

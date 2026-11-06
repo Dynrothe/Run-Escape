@@ -70,12 +70,7 @@ import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
-import {
-    CLOUD_SETTING_ID,
-    CloudChoicePanel,
-    CloudSaveButton,
-    CloudSaveSettings,
-} from "./CloudSave";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -587,19 +582,12 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
 }
 
 // Behind the title screen's Settings button
-// at: the id of a setting to open at, rather than the top
 function SettingsPanel({
     ui,
     client,
-    at,
     onClose,
-}: ScreenProps & { at?: string; onClose: () => void }): JSX.Element {
+}: ScreenProps & { onClose: () => void }): JSX.Element {
     const padKind = usePadKind();
-    useEffect(() => {
-        if (at) {
-            document.getElementById(at)?.scrollIntoView({ block: "start" });
-        }
-    }, [at]);
     return (
         <div className="ui-panel rs-border rs-background ui-settings">
             <h2>Settings</h2>
@@ -694,8 +682,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     // The cloud has a different save, and asks which to keep
     const cloudChoice = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     const [changelogOpen, setChangelogOpen] = useState(false);
-    // "cloud": opened from cloud save's button, so at its rows
-    const [settingsOpen, setSettingsOpen] = useState<boolean | "cloud">(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    // Cloud save's own panel, from its button
+    const [cloudOpen, setCloudOpen] = useState(false);
     // The notice, until it's closed (once for each new one)
     const [notice, setNotice] = useState<Notice>();
     useEffect(() => {
@@ -731,10 +720,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 if (e.code === "Enter" || e.code === "Space" || e.code === "Escape") {
                     closeNotice();
                 }
-            } else if (changelogOpen || settingsOpen) {
+            } else if (changelogOpen || settingsOpen || cloudOpen) {
                 if (e.code === "Escape") {
                     setChangelogOpen(false);
                     setSettingsOpen(false);
+                    setCloudOpen(false);
                 }
             } else if (
                 e.code === "Space" ||
@@ -750,6 +740,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         client,
         changelogOpen,
         settingsOpen,
+        cloudOpen,
         notice,
         closeNotice,
         ui.unreadableSave,
@@ -766,11 +757,18 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     if (settingsOpen) {
         return (
             <div className="ui-fill ui-center">
-                <SettingsPanel
-                    ui={ui}
+                <SettingsPanel ui={ui} client={client} onClose={() => setSettingsOpen(false)} />
+            </div>
+        );
+    }
+    if (cloudOpen) {
+        return (
+            <div className="ui-fill ui-center">
+                <CloudSavePanel
+                    cloud={ui.cloud}
                     client={client}
-                    at={settingsOpen === "cloud" ? CLOUD_SETTING_ID : undefined}
-                    onClose={() => setSettingsOpen(false)}
+                    saving={!ui.saveBlock}
+                    onClose={() => setCloudOpen(false)}
                 />
             </div>
         );
@@ -857,7 +855,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <CloudSaveButton
                     cloud={ui.cloud}
                     client={client}
-                    onOpenSettings={() => setSettingsOpen("cloud")}
+                    onOpen={() => setCloudOpen(true)}
                 />
                 <button
                     className="ui-title-link ui-title-settings"

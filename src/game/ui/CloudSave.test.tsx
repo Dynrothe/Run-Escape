@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CloudView } from "../client/CloudSave";
 import { GameClient } from "../client/GameClient";
 import { createSave } from "../core/save";
-import { CloudChoicePanel, CloudSaveButton, CloudSaveSettings } from "./CloudSave";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 
 afterEach(cleanup);
 
@@ -112,11 +112,11 @@ test("has a button on the title that says how it's doing and opens the way in", 
     const { client, cloud } = mockClient();
     const open = vi.fn();
     const { container, rerender } = render(
-        <CloudSaveButton cloud={undefined} client={client} onOpenSettings={open} />,
+        <CloudSaveButton cloud={undefined} client={client} onOpen={open} />,
     );
     expect(container).toBeEmptyDOMElement();
     const at = (view: CloudView) =>
-        rerender(<CloudSaveButton cloud={view} client={client} onOpenSettings={open} />);
+        rerender(<CloudSaveButton cloud={view} client={client} onOpen={open} />);
     at({ working: false });
     fireEvent.click(screen.getByRole("button", { name: "Cloud save: off" }));
     expect(open).toHaveBeenCalledTimes(1);
@@ -140,4 +140,21 @@ test("says until when a deleted code's kept, and restores it", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
     expect(cloud.restore).toHaveBeenCalledTimes(1);
+});
+
+test("has a panel of its own, with Settings' rows, that Back closes", () => {
+    const { client } = mockClient();
+    const close = vi.fn();
+    render(
+        <CloudSavePanel
+            cloud={{ code: CODE, working: false }}
+            client={client}
+            saving
+            onClose={close}
+        />,
+    );
+    expect(screen.getByRole("heading", { name: "Cloud save" })).toBeInTheDocument();
+    expect(screen.getByText(CODE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(close).toHaveBeenCalledTimes(1);
 });

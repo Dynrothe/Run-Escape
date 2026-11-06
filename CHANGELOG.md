@@ -8,8 +8,8 @@ the version in the corner).
 ### Added
 
 - Cloud save, by trippy22: keep a copy of your progress online, and bring it to another browser,
-  the Windows app or a phone with a code. No account, name or email. It's in Settings, and its
-  button beside Settings on the title screen shows whether it's synced.
+  the Windows app or a phone with a code. No account, name or email. Its button beside Settings
+  on the title screen shows whether it's synced and opens it; it's in Settings too.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
