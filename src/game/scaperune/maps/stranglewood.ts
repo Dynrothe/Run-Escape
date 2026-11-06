@@ -1,6 +1,6 @@
 import { Ground } from "../Ground";
 import { assertReachable, sealFrom } from "../collision";
-import { MAP_SQUARE_SIZE, type PlacedLoc, TILE_BLOCKED } from "../format";
+import { MAP_SQUARE_SIZE, type PlacedLoc, TILE_BLOCKED, type TileLevel } from "../format";
 import type { GeneratedMap } from "../generator";
 import { createNoise } from "../noise";
 import { cutPrefab } from "../prefab";
@@ -108,9 +108,15 @@ const CLEARING_VIEW = 20;
 // round Vardorvis's arena, which are his
 const PILLAR = /^(broken )?pillar$/i;
 const PILLARS_KEPT = 0.25;
-// The ruined town's walls (200 to 400 triangles a piece): some of each stays, with gaps where the
-// rest fell; of the carcasses round Vardorvis's arena (2,000 each), a fifth; and in the margin's
-// wood, the heavy scenery no one stands among
+// The ruined town, in grid tiles: its walls are what's drawn there (TENTS), so its pillars and
+// bushes come down (but Vardorvis's pillars) and its ferns thin to a third
+const TOWN = { x0: 115, y0: 112, x1: 180, y1: 190 };
+const FERN = /^fern$/i;
+const TOWN_FERNS_KEPT = 0.33;
+const BUSH = /^bush$/i;
+// Out of the town, the ruins' low walls (200 to 400 triangles a piece): some of each stays, with
+// gaps where the rest fell; of the carcasses round Vardorvis's arena (2,000 each), a fifth; and in
+// the margin's wood, the heavy scenery no one stands among
 const RUINS_KEPT: Record<number, number> = {
     48619: 0.17,
     48620: 0.2,
@@ -137,8 +143,21 @@ const RUINS_KEPT: Record<number, number> = {
     25095: 0.3,
 };
 // The ruined town's stepped tents (the Strangled Tents' heaviest pieces, 1,300 to 2,100 triangles
-// each) come down: a phone can't draw a street of them, and their floors and the town's walls stay
+// each) come down: a phone can't draw a street of them. Their straight runs, and the huts' low
+// walls (48619 to 48622, 200 to 600 triangles a piece), stand as the lightest of those low walls
+// (48620: 194, and 60 a corner), the huts' on half their line and the tents' on a third,
+// gaps where the rest fell, so the town's still a town of walled yards and huts, in ruins
 const TENTS = { from: 48599, to: 48613 };
+const HUT_WALLS = { from: 48619, to: 48622 };
+const LOW_WALL = 48620;
+const WALLS_KEPT = 0.5;
+const TENT_WALLS_KEPT = 0.35;
+// The town's cellar entries: black holes into the ground, with nothing round them now the tents
+// are down
+const ENTRIES = [48722, 48723, 48745, 48746];
+// The black floor under the town's pillars and entries (an overlay, cache id 36): where those
+// are gone it's a hole in the ground, so it takes the floor beside it
+const HOLE_OVERLAY = 36;
 // The wood's own Tendrils lying on its floor (decorations): on the opened ground they'd read as
 // roots (MapDef.rule) that don't hurt, so they're only in the wood
 const FLOOR_TENDRILS = { from: 48495, to: 48502 };
@@ -182,11 +201,21 @@ function buildDetail(context: BuildContext): GeneratedMap {
         ((Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(id, 2246822519)) >>> 0) /
         0xffffffff;
     const kept = (x: number, y: number) => hash(x, y) < UNDERGROWTH_KEPT;
+    const inTown = (loc: PlacedLoc) =>
+        loc.x >= TOWN.x0 && loc.x <= TOWN.x1 && loc.y >= TOWN.y0 && loc.y <= TOWN.y1;
     const thinned = (loc: PlacedLoc) => {
-        if (loc.id >= TENTS.from && loc.id <= TENTS.to) {
+        if (ENTRIES.includes(loc.id)) {
             return true;
         }
         if (loc.id >= FLOOR_TENDRILS.from && loc.id <= FLOOR_TENDRILS.to && opened(loc.x, loc.y)) {
+            return true;
+        }
+        const town = inTown(loc);
+        // The town's walls are already as they stand
+        if (loc.id === LOW_WALL && town) {
+            return false;
+        }
+        if (town && (loc.type === 10 || loc.type === 11) && BUSH.test(context.locs(loc.id).name)) {
             return true;
         }
         const share = GROUND_KEPT[loc.id] ?? RUINS_KEPT[loc.id];
@@ -199,7 +228,10 @@ function buildDetail(context: BuildContext): GeneratedMap {
         const name = context.locs(loc.id).name;
         if (PILLAR.test(name)) {
             const his = Math.hypot(loc.x - CLEARING.x, loc.y - CLEARING.y) < CLEAR_OF_CLEARING;
-            return !his && hash(loc.x, loc.y, 11) >= PILLARS_KEPT;
+            return !his && (town || hash(loc.x, loc.y, 11) >= PILLARS_KEPT);
+        }
+        if (town && FERN.test(name)) {
+            return hash(loc.x, loc.y, 13) >= TOWN_FERNS_KEPT;
         }
         if (!TREE.test(name)) {
             return false;
@@ -224,6 +256,18 @@ function buildDetail(context: BuildContext): GeneratedMap {
         x + REAL_X <= FENCE.x1 &&
         y + REAL_Y >= FENCE.y0 &&
         y + REAL_Y <= FENCE.y1;
+    // The town's walls: the low wall on over half of each one's line (types 0 and 3, a wall and its
+    // corner, are all it has), the rest fallen
+    wood.locs = wood.locs.flatMap((loc) => {
+        const tent = loc.id >= TENTS.from && loc.id <= TENTS.to;
+        const hut = loc.id >= HUT_WALLS.from && loc.id <= HUT_WALLS.to && inTown(loc);
+        if (!tent && !hut) {
+            return [loc];
+        }
+        const share = tent ? TENT_WALLS_KEPT : WALLS_KEPT;
+        const standing = (loc.type === 0 || loc.type === 3) && hash(loc.x, loc.y, 3) < share;
+        return standing ? [{ ...loc, id: LOW_WALL }] : [];
+    });
     // The real heights, as they are
     ground.stamp(wood, 0, 0, {
         floor: "all",
@@ -251,6 +295,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
             }
         }
     }
+    fillHoles(level, SIZE);
     // What can't be walked to from the start is blocked, so nothing turns up stranded
     const arena = { x0: ARENA_0, y0: ARENA_0, x1: ARENA_1, y1: ARENA_1 };
     const sealed = sealFrom(ground.grid, context.locs, [
@@ -274,6 +319,33 @@ function buildDetail(context: BuildContext): GeneratedMap {
         // A wheat field in the margin, on its hillside as the real one is
         fields: [{ ...MARGIN_FIELD, slopes: true }],
     };
+}
+
+// The black floor (HOLE_OVERLAY) takes the floor of a tile beside it that isn't, a ring at a time
+function fillHoles(level: TileLevel, size: number): void {
+    const hole = HOLE_OVERLAY + 1;
+    for (let changed = true; changed; ) {
+        changed = false;
+        for (let i = 0; i < size * size; i++) {
+            if (level.overlays[i] !== hole) {
+                continue;
+            }
+            const x = i % size;
+            const y = (i - x) / size;
+            const from = [i - 1, i + 1, i - size, i + size].find(
+                (j, n) =>
+                    (n === 0 ? x > 0 : n === 1 ? x < size - 1 : n === 2 ? y > 0 : y < size - 1) &&
+                    level.overlays[j] !== hole,
+            );
+            if (from !== undefined) {
+                level.overlays[i] = level.overlays[from];
+                level.underlays[i] = level.underlays[from];
+                level.shapes[i] = level.shapes[from];
+                level.rotations[i] = level.rotations[from];
+                changed = true;
+            }
+        }
+    }
 }
 
 export const STRANGLEWOOD_RECIPE: MapRecipe = {
