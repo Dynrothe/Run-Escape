@@ -71,6 +71,7 @@ import {
     SaveData,
     getFightStage,
     getNextUpgradeCost,
+    getReachedStages,
     getSkillCoins,
     importSave,
     isEndlessUnlocked,
@@ -1578,7 +1579,12 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
         name: "Bosses",
         groups: [
             { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            { name: "Raids", hint: "room by room, open from the start", maps: RAID_MAPS },
+            // On the dev server, the Tombs of Amascut too, behind its quest (MapDef.requires)
+            {
+                name: "Raids",
+                hint: "room by room",
+                maps: [...RAID_MAPS, ...DEV_MAPS.filter((map) => map.tombs)],
+            },
         ],
     },
     {
@@ -1589,7 +1595,13 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
     {
         id: "dev",
         name: "Dev",
-        groups: [{ name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
+        groups: [
+            {
+                name: "Dev maps",
+                hint: "dev server only",
+                maps: DEV_MAPS.filter((map) => !map.tombs),
+            },
+        ],
     },
 ]
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
@@ -1716,7 +1728,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 ))}
             </div>
             {/* Its own for each map, so a long one scrolled down doesn't leave the next scrolled */}
-            <MapDetails key={peek ?? ui.mapId} save={save} map={getMap(peek ?? ui.mapId)} />
+            <MapDetails
+                key={peek ?? ui.mapId}
+                save={save}
+                map={getMap(peek ?? ui.mapId)}
+                picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
+                onPick={
+                    (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
+                }
+            />
         </div>
     );
 }
@@ -1736,10 +1756,22 @@ function stageVictoryText(map: MapDef, stage: number | undefined): string {
     return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
 }
 
-function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element {
+function MapDetails({
+    save,
+    map,
+    picked,
+    onPick,
+}: {
+    save: SaveData;
+    map: MapDef;
+    // A fight in parts: the part picked to play, and picking one (the selected map's only)
+    picked?: number;
+    onPick?: (stage: number | undefined) => void;
+}): JSX.Element {
     const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
-    const stage = getFightStage(save, map.id);
+    const reached = getReachedStages(save, map.id);
+    const stage = picked !== undefined && picked < reached ? picked : getFightStage(save, map.id);
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
@@ -1769,6 +1801,24 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                                     ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
                                     : "Not beaten yet"}
                     </div>
+                    {map.stages && unlocked && onPick && reached > 1 && (
+                        <div className="ui-row ui-fight-parts">
+                            {map.stages.slice(0, reached).map((part, i) => (
+                                <button
+                                    key={part.name}
+                                    className={
+                                        "ui-button ui-button-small" +
+                                        (i === stage ? " ui-button-go" : "")
+                                    }
+                                    aria-pressed={i === stage}
+                                    title={part.name}
+                                    onClick={() => onPick(i)}
+                                >
+                                    Part {i + 1}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {endless && (
                         <div className="ui-card-style">
                             Endless best: round {endless.round}, {formatTime(endless.seconds)}

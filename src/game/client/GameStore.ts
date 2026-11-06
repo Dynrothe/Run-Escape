@@ -404,6 +404,9 @@ export type UiSnapshot = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
+    // it's for ends; the next not beaten when unset
+    fightStage?: number;
     // A raid's expert mode (solo for now)
     expert: boolean;
     hud?: HudView;

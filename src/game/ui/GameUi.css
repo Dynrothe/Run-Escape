@@ -2715,3 +2715,10 @@
     font-size: 13px;
     opacity: 0.85;
 }
+
+/* A fight in parts' part buttons, under its line on the map's card */
+.ui-fight-parts {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+}

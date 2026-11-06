@@ -660,6 +660,16 @@ export function getFightStage(save: SaveData, mapId: string): number {
     return stages && Number.isInteger(next) && next > 0 && next < stages.length ? next : 0;
 }
 
+// How many of a fight in parts' parts can be played (MapDef.stages): all of them once it's been
+// beaten, or each up to the next not beaten yet, to be fought again
+export function getReachedStages(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    if (!stages) {
+        return 0;
+    }
+    return (save.mapVictories[mapId] ?? 0) > 0 ? stages.length : getFightStage(save, mapId) + 1;
+}
+
 // The first map is always open; each after it opens once the one before it
 // has been beaten, or once it's been beaten itself (a co-op guest can win on
 // a map the host had open). The fun and seasonal maps are open from the start.
