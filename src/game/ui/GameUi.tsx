@@ -367,7 +367,7 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
     return (
         <Setting
             name="Share run stats"
-            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game"
+            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game. Co-op relays can still note a run their cheat checks flag."
         >
             <Toggle
                 on={ui.display.runStats}

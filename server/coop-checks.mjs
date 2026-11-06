@@ -1,6 +1,7 @@
 // What both co-op relays (coop-relay.mjs and cloudflare/) check of a run's
 // frames: what no honest host's game sends, and that lag, a slow device, a
 // dropped connection or a restart can't explain.
+import { BUILD, ID, MAX_RUN_SECONDS } from "./analytics/schema.mjs";
 
 // Sim.ts's TICKS_PER_SECOND. An honest host steps in real time at most: it
 // loses time on a stall rather than making it up.
@@ -46,21 +47,20 @@ export function heroIdsOf(game, maxParty) {
 
 // ---- What the run analytics collector keeps (server/analytics, run_checks) ----
 
-// The collector's formats. Whatever a host sends fits them, so a host can't
-// keep its run's row out by sending something the collector refuses.
-const ID = /^[a-z0-9_]{1,40}$/;
-const BUILD = /^[a-zA-Z0-9._-]{1,80}$/;
+// Whatever a host sends fits the collector's formats, so a host can't keep its
+// run's row out by sending something the collector refuses
 const fits = (format, value) =>
     typeof value === "string" && format.test(value) ? value : "unknown";
 
-// The run as the host's start says it is (the same as its run report says, if
-// the host's honest), for the entries and the collector's row
-export function runOf(game) {
+// The run, for the entries and the collector's row: its map, mode and endless
+// as the room has them (the relay's own, which the host can't pick at the
+// start), and its adventurers as the host's start says (none without one)
+export function runOf(room, game) {
     const heroes = Array.isArray(game?.heroes) ? game.heroes : [];
     return {
-        map: fits(ID, game?.mapId),
-        mode: game?.hard === true ? "hard" : "normal",
-        endless: game?.endless === true,
+        map: fits(ID, room?.mapId),
+        mode: room?.hard === true ? "hard" : "normal",
+        endless: room?.endless === true,
         characters: heroes.map((hero) => fits(ID, hero?.characterId)).sort(),
     };
 }
@@ -83,7 +83,9 @@ export function checkReport(summary, relay, ended) {
             characters.length === party
                 ? characters.map((id) => fits(ID, id))
                 : Array(party).fill("unknown"),
-        runSeconds: summary.runSeconds,
+        // RunWatch keeps the frames to real time, but a row past the
+        // collector's longest would be refused
+        runSeconds: Math.min(summary.runSeconds, MAX_RUN_SECONDS),
         counts: summary.counts,
         caught: summary.caught,
         ended,
@@ -177,11 +179,22 @@ export class RunWatch {
     // count of all), of the host being caught, and of the run's summary.
     // caught(kind) hears once, when a kind has had its STRIKES. run: what each
     // entry says the run is (room, map, build); names: player id -> name.
-    // resumed: made again mid-run.
+    // resumed: made again mid-run. startedAt: when the run started, by the
+    // relay's clock (undefined for a resumed watch that doesn't know). found:
+    // what the watch before a restart had found ({ counts, caught }).
     constructor(
         heroIds,
         hostId,
-        { log, caught, run = {}, names = new Map(), now = Date.now(), resumed = false },
+        {
+            log,
+            caught,
+            run = {},
+            names = new Map(),
+            now = Date.now(),
+            resumed = false,
+            startedAt = resumed ? undefined : now,
+            found,
+        },
     ) {
         this.heroIds = heroIds;
         this.hostId = hostId;
@@ -190,6 +203,7 @@ export class RunWatch {
         this.run = run;
         this.names = names;
         this.from = resumed ? now + RESUMED_MS : now;
+        this.startedAt = startedAt;
         this.guests = new Map();
         for (const id of heroIds) {
             if (id !== hostId && !this.guests.has(id)) {
@@ -197,9 +211,11 @@ export class RunWatch {
                     // Each direction sent, by when it last was
                     moves: new Map(),
                     actions: [],
-                    // When they were last decided for. Not timed from their
-                    // answers: a banish or reroll leaves the host waiting.
+                    // When they were last decided for, and at which frame.
+                    // Not timed from their answers: a banish or reroll leaves
+                    // the host waiting.
                     autoAt: resumed ? -Infinity : now,
+                    autoFrame: resumed ? -Infinity : 0,
                 });
             }
         }
@@ -209,8 +225,8 @@ export class RunWatch {
         // Frames sent again repeat ones already seen
         this.checkedUpTo = 0;
         this.reportedAt = new Map();
-        this.counts = {};
-        this.caughtFor = undefined;
+        this.counts = { ...found?.counts };
+        this.caughtFor = found?.caught ?? undefined;
         this.finished = false;
     }
 
@@ -326,6 +342,14 @@ export class RunWatch {
         if (d.upTo <= this.checkedUpTo) {
             return;
         }
+        // Further on than the run's had time for: found, and left out of
+        // what's checked, or one frame far ahead would pass over every frame
+        // after it (and the clock would start from it)
+        const beyond = d.upTo * TICK_MS - (now - (this.startedAt ?? -Infinity));
+        if (beyond > AHEAD_MS) {
+            this.flag("ahead", { frame: d.upTo, aheadSeconds: Math.round(beyond / 100) / 10 }, now);
+            return;
+        }
         if (now >= this.from) {
             this.checkClock(d.upTo, now);
             if (Array.isArray(d.events)) {
@@ -390,8 +414,12 @@ export class RunWatch {
             return;
         }
         if (event.auto === true) {
-            if (now - guest.autoAt < AUTO_AFTER_MS) {
-                const since = now - guest.autoAt;
+            const since = now - guest.autoAt;
+            // Soon after by the run's frames too: frames held through the
+            // host's dropped connection come all at once, with decisions it
+            // made DECIDE_AFTER_MS apart
+            const frames = event.frame - guest.autoFrame;
+            if (since < AUTO_AFTER_MS && frames * TICK_MS < AUTO_AFTER_MS) {
                 this.flag(
                     "auto",
                     {
@@ -403,6 +431,7 @@ export class RunWatch {
                 );
             }
             guest.autoAt = now;
+            guest.autoFrame = event.frame;
             return;
         }
         const key = actionKey(event.action);

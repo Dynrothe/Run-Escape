@@ -1179,7 +1179,7 @@ export function createRelay(limits = {}) {
         }
         const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(heroIds, room.hostId, {
-            run: { room: room.code, ...runOf(game), build: host?.build },
+            run: { room: room.code, ...runOf(room, game), build: host?.build },
             names: new Map(room.members.map((m) => [m.id, m.name])),
             log: (entry) => {
                 if (entry.kind === "caught") {

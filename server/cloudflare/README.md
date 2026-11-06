@@ -164,8 +164,7 @@ they haven't unlocked, as on the Node relay. `MULTIPLAYER_RUN_CHECKS = "end"` en
 the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged. With the
 `RUN_CHECKS_TOKEN` secret set, the `RUN_CHECKS` binding sends the run analytics collector a row
 for each run they find anything in ([Run checks](../analytics/README.md#run-checks)). The other
-limits
-are at the top of `src/shared.mjs`, the same numbers as `coop-relay.mjs`.
+limits are at the top of `src/shared.mjs`, the same numbers as `coop-relay.mjs`.
 
 **The run checks' log**: an object for each entry, with `event: "coop_run_check"` and its `kind`,
 which `bun run wrangler tail` shows as it happens. To keep them (for 7 days, searchable by field in

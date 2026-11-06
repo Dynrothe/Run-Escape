@@ -508,9 +508,12 @@ describe("Cloudflare co-op room", () => {
             };
             try {
                 const { room, host } = await party();
+                room.room.mapId = "barrows";
+                room.room.hard = true;
+                // The room's map and mode go in the row, whatever the start says
                 const game = {
-                    mapId: "barrows",
-                    hard: true,
+                    mapId: "lumbridge",
+                    hard: false,
                     endless: false,
                     heroes: [
                         { id: "host", characterId: "wizard" },
@@ -522,6 +525,8 @@ describe("Cloudflare co-op room", () => {
                 say(room, host, { t: "end" });
                 expect(sent).toEqual([]);
                 say(room, host, { t: "start", game });
+                // Found before the restart as well as after it
+                forged(room, host, 40);
                 await wait(room, 1000);
                 const again = await restart();
                 const [h, g] = again.room.members;
@@ -542,7 +547,7 @@ describe("Cloudflare co-op room", () => {
                         mode: "hard",
                         partySize: 2,
                         characters: ["ranger", "wizard"],
-                        counts: { move: 1 },
+                        counts: { move: 2 },
                         caught: null,
                         ended: false,
                     }),

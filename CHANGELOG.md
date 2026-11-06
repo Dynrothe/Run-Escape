@@ -22,6 +22,8 @@ the version in the corner).
 - The Dragon hunter crossbow fires the same clearer bolts: dragon bolts.
 - Co-op's out-of-step message, by trippy22: a guest whose game stops matching the host's is now
   told an integrity check failed.
+- Cheat checks on co-op relays, by trippy22: a relay can note a run its checks flag, with no
+  names, whether or not Share run stats is on. The setting now says so.
 
 ### Fixed
 

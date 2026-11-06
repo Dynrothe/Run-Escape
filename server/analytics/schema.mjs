@@ -2,6 +2,9 @@
 // expert exists and so on are the game's rules, so new content reaches the collector without a
 // deploy. Ids are bounded by their format, and MAX_RUNS_PER_DAY bounds what anyone can add.
 export const ID = /^[a-z0-9_]{1,40}$/;
+export const BUILD = /^[a-zA-Z0-9._-]{1,80}$/;
+// The longest run, in seconds, a report or a relay's row can have
+export const MAX_RUN_SECONDS = 7 * 86400;
 export const PLAY_TYPES = new Set(["singleplayer", "multiplayer"]);
 export const OUTCOMES = new Set(["completed", "failed", "abandoned", "disconnected"]);
 export const RELAYS = new Set(["none", "node", "cloudflare"]);
@@ -34,7 +37,7 @@ function readV1(value, now) {
         !UUID.test(value.runId) ||
         !validVersion(value.version) ||
         typeof value.build !== "string" ||
-        !/^[a-zA-Z0-9._-]{1,80}$/.test(value.build) ||
+        !BUILD.test(value.build) ||
         !isId(value.mapId) ||
         !isId(value.mode) ||
         !PLAY_TYPES.has(value.playType) ||
@@ -51,7 +54,7 @@ function readV1(value, now) {
         // Old enough to be a replay, or a clock that's a day out
         !Number.isSafeInteger(value.endedAt) ||
         Math.abs(value.endedAt - now) > DAY_MS ||
-        !number(value.durationSeconds, 7 * 86400) ||
+        !number(value.durationSeconds, MAX_RUN_SECONDS) ||
         (value.durationSeconds > 0 && value.durationSeconds < 0.02) ||
         !number(value.round, 100_000, true) ||
         value.round < 1 ||
@@ -135,7 +138,7 @@ export function validateRunCheck(value, now = Date.now()) {
         !UUID.test(value.checkId) ||
         !CHECK_RELAYS.has(value.relay) ||
         typeof value.build !== "string" ||
-        !/^[a-zA-Z0-9._-]{1,80}$/.test(value.build) ||
+        !BUILD.test(value.build) ||
         !isId(value.mapId) ||
         !isId(value.mode) ||
         typeof value.endless !== "boolean" ||
@@ -144,7 +147,7 @@ export function validateRunCheck(value, now = Date.now()) {
         !Array.isArray(value.characters) ||
         value.characters.length !== value.partySize ||
         !value.characters.every(isId) ||
-        !number(value.runSeconds, 7 * 86400) ||
+        !number(value.runSeconds, MAX_RUN_SECONDS) ||
         !counts ||
         typeof counts !== "object" ||
         Array.isArray(counts) ||

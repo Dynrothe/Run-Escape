@@ -53,7 +53,7 @@ const check = (changes = {}, summary = {}) => ({
     ...checkReport(
         {
             build: "0.25.0-abc123",
-            ...runOf({ mapId: "barrows", hard: true, heroes: [{ characterId: "wizard" }, {}] }),
+            ...runOf({ mapId: "barrows", hard: true }, { heroes: [{ characterId: "wizard" }, {}] }),
             party: 2,
             runSeconds: 312.4,
             counts: { move: 3, desync: 1 },
@@ -178,7 +178,7 @@ it("takes the relays' rows in the shape they send, whatever the host's game said
         {},
         {
             build: "<b>",
-            ...runOf({ mapId: "Not A Map", hard: "yes", heroes: [{ characterId: 7 }] }),
+            ...runOf({ mapId: "Not A Map", hard: "yes" }, { heroes: [{ characterId: 7 }] }),
             party: 1,
         },
     );
@@ -191,6 +191,8 @@ it("takes the relays' rows in the shape they send, whatever the host's game said
     expect(validateRunCheck(check({}, { characters: undefined }), now)?.characters).toBe(
         "unknown,unknown",
     );
+    // Nor with frames far past what the collector takes as a run
+    expect(validateRunCheck(check({}, { runSeconds: 1e14 }), now)?.run_seconds).toBe(7 * 86400);
     for (const change of [
         { schemaVersion: 2 },
         { checkId: "not-a-uuid" },

@@ -930,14 +930,18 @@
         SUM(desync > 0) AS desynced FROM run_checks ${w.sql}`,
                     w.params,
                 );
-                const mw = where(["play_type = 'multiplayer'"], CHECK_FILTERS);
+                // From the first day run_checks still has: daily_stats is kept far longer
+                const mw = where(
+                    ["play_type = 'multiplayer'", "day >= (SELECT MIN(day) FROM run_checks)"],
+                    CHECK_FILTERS,
+                );
                 const [reported] = await rows(
                     `SELECT SUM(runs) AS runs FROM daily_stats ${mw.sql}`,
                     mw.params,
                 );
                 const many = (n, one, more) => `${num(n || 0)} ${n === 1 ? one : more}`;
                 $("checksTotal").textContent =
-                    `${many(total.runs, "run", "runs")} with findings: ${many(total.caught, "host", "hosts")} caught, ${many(total.ended, "run", "runs")} ended, ${many(total.desynced, "run", "runs")} with a desync. ${many(reported.runs, "co-op run was", "co-op runs were")} reported for the same filters; a player who turned off Share run stats doesn't report theirs, but the relay still checks it.`;
+                    `${many(total.runs, "run", "runs")} with findings: ${many(total.caught, "host", "hosts")} caught, ${many(total.ended, "run", "runs")} ended, ${many(total.desynced, "run", "runs")} with a desync. ${many(reported.runs, "co-op run was", "co-op runs were")} reported for the same days and filters; a player who turned off Share run stats doesn't report theirs, but the relay still checks it.`;
                 const byBuild = await rows(
                     `SELECT build, relay, COUNT(*) AS runs, SUM(caught IS NOT NULL) AS caught, SUM(ended) AS ended,
         ${KINDS.map((k) => `SUM(${k}) AS ${k}`).join(", ")}
@@ -1189,16 +1193,17 @@ WHERE endless = 0
 GROUP BY a.value ORDER BY runs DESC;`,
                 // The same run's two rows share these, and a run the checks didn't end reaches the
                 // collector from both at about the same time. One the relay ended goes on alone
-                // on the host's game, which reports it later.
+                // on the host's game, which reports it later, perhaps on another UTC day.
                 "Run checks with their likely report": `SELECT c.received_at, c.map_id, c.characters, c.run_seconds,
   c.caught, c.ended, r.run_id, r.outcome, r.duration_seconds, r.players_left,
   ROUND((r.received_at - c.received_at) / 1000.0) AS seconds_apart
 FROM run_checks c
-LEFT JOIN runs r ON r.play_type = 'multiplayer' AND r.day = c.day AND r.build = c.build
+LEFT JOIN runs r ON r.play_type = 'multiplayer' AND r.relay = c.relay AND r.build = c.build
   AND r.map_id = c.map_id AND r.mode = c.mode AND r.endless = c.endless
   AND r.party_size = c.party_size AND r.characters = c.characters
   AND CASE WHEN c.ended = 1
-    THEN r.received_at >= c.received_at AND r.duration_seconds >= c.run_seconds - 5
+    THEN r.received_at >= c.received_at AND r.received_at < c.received_at + 86400000
+      AND r.duration_seconds >= c.run_seconds - 5
     ELSE ABS(r.received_at - c.received_at) < 120000
       AND ABS(r.duration_seconds - c.run_seconds) < 5 END
 ORDER BY c.received_at DESC;`,

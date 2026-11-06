@@ -495,7 +495,8 @@ describe("co-op relay", () => {
                     id: m.id,
                     characterId: "wizard",
                 }));
-                host.send({ t: "start", game: { mapId: "lumbridge", heroes } });
+                // The room's map goes in the row, whatever the start says
+                host.send({ t: "start", game: { mapId: "barrows", hard: true, heroes } });
                 await guests[0].next("start");
                 // Moves the guest never sent
                 for (let frame = 1; frame <= 3; frame++) {

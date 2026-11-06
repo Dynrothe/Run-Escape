@@ -8,11 +8,13 @@ CREATE TABLE run_checks (
     check_id TEXT NOT NULL,
     received_at INTEGER NOT NULL,
     relay TEXT NOT NULL CHECK (relay IN ('node', 'cloudflare')),
-    -- These five are as the host's game said; "unknown" where it said something no game would
+    -- As the host's game said; "unknown" where it said something no game would
     build TEXT NOT NULL,
+    -- The room's, as the relay had them
     map_id TEXT NOT NULL,
     mode TEXT NOT NULL,
     endless INTEGER NOT NULL CHECK (endless IN (0, 1)),
+    -- As the host's start said, like build
     characters TEXT NOT NULL,
     party_size INTEGER NOT NULL CHECK (party_size BETWEEN 1 AND 4),
     -- How far the run had got, by the host's frames

@@ -844,7 +844,9 @@ export class Room extends DurableObject {
                     }
                     room.started = true;
                     room.heroIds = heroIdsOf(message.game, MAX_PARTY);
-                    room.runInfo = room.heroIds && runOf(message.game);
+                    room.runInfo = room.heroIds && runOf(room, message.game);
+                    room.runStartedAt = Date.now();
+                    room.found = undefined;
                     this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
@@ -861,8 +863,10 @@ export class Room extends DurableObject {
                     room.started = false;
                     room.heroIds = undefined;
                     room.runInfo = undefined;
+                    room.runStartedAt = undefined;
                     this.watch?.finish();
                     this.watch = undefined;
+                    room.found = undefined;
                     this.persist(true);
                     this.broadcastRoom();
                 }
@@ -905,8 +909,11 @@ export class Room extends DurableObject {
         const host = room.members.find((m) => m.id === room.hostId);
         const watch = new RunWatch(room.heroIds, room.hostId, {
             resumed,
-            // (a run started before rooms kept runInfo has only its map)
-            run: { room: this.code, ...(room.runInfo ?? { map: room.mapId }), build: host?.build },
+            // (unknown for a run started before rooms kept it)
+            startedAt: room.runStartedAt,
+            found: resumed ? room.found : undefined,
+            // (a run started before rooms kept runInfo has no adventurers)
+            run: { room: this.code, ...(room.runInfo ?? runOf(room)), build: host?.build },
             names: new Map(room.members.map((m) => [m.id, m.name])),
             log: (entry) => {
                 // An object, which Workers Logs keeps field by field
@@ -914,6 +921,12 @@ export class Room extends DurableObject {
                 if (entry.kind === "summary") {
                     const ended = this.endsCaught && entry.caught !== null;
                     this.reportCheck?.(checkReport(entry, "cloudflare", ended));
+                } else {
+                    // Kept with the room, for the watch made again after a
+                    // restart or a sleep (what's found since a kind's last
+                    // entry can be lost with it, but not that it was found)
+                    room.found = { counts: { ...watch.counts }, caught: watch.caughtFor ?? null };
+                    this.persist();
                 }
             },
             caught: () => {

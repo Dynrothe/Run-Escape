@@ -3,7 +3,9 @@
 A separate Worker stores one anonymous report when a solo or multiplayer run ends. The solo
 client or co-op host posts to the same HTTPS endpoint, whichever relay hosted the room. Guests
 don't submit. A build without a collector URL sends nothing, and players can turn reporting off
-with Share run stats in Settings. Gameplay and local saves never wait for reporting.
+with Share run stats in Settings. Gameplay and local saves never wait for reporting. A co-op
+relay can also send a row of its own for a run its checks flag, whatever that setting says
+([Run checks](#run-checks)).
 
 ## Set up the collector
 
@@ -116,17 +118,18 @@ for composition, within their retention.
 
 The co-op relays check a run's frames as they pass (`server/coop-checks.mjs`). For each run they
 find anything in, a relay can send the collector a row of its own in `run_checks`: the host's
-game can't leave it out, and it's sent whether or not the players share their run stats. It holds
-no names, room codes or addresses: the run's build, map, mode, endless, party size and
-adventurers (as the host's game gave them, `unknown` where that was nothing a game sends), how far
-it got, a count of each kind found, the kind its host was caught by, and whether the relay ended
-it. An honest run sends nothing. `MAX_CHECKS_PER_DAY` caps the rows a day, and they expire with
-raw runs.
+game can't leave it out, and it's sent whether or not the players share their run stats (the
+setting says so). It holds no names, room codes or addresses: the run's map, mode and endless (the
+room's, which the relay chose), its build, party size and adventurers (as the host's game gave
+them, `unknown` where that was nothing a game sends), how far it got, a count of each kind found,
+the kind its host was caught by, and whether the relay ended it. An honest run sends nothing.
+`MAX_CHECKS_PER_DAY` caps the rows a day, and they expire with raw runs.
 
-Nothing joins a row to the host's report in `runs`, but the two share their day, build, map,
-mode, endless, party and adventurers, and a run the relay didn't end reaches the collector from
-both within moments, with about the same length. A run the relay ended goes on alone on the
-host's game, which reports it later. The viewer's SQL examples include the query.
+Nothing joins a row to the host's report in `runs`, but an honest host's two share their relay,
+build, map, mode, endless, party and adventurers, and a run the relay didn't end reaches the
+collector from both within moments, with about the same length. A run the relay ended goes on
+alone on the host's game, which reports it later, perhaps the next day. The viewer's SQL
+examples include the query.
 
 To turn it on, once the collector's deployed, choose a token (a random string of at least 32
 characters) and give it to the collector and the relay:

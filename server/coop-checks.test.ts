@@ -227,6 +227,56 @@ describe("watching a run", () => {
         expect(kinds()).toEqual(["auto"]);
     });
 
+    it("takes a decision held through the host's dropped connection, and the next on time", () => {
+        pass(30_000);
+        // The host's connection drops for 13 seconds, with a decision for the
+        // guest in the frames it held, which come all at once
+        const held = frame + 100;
+        const decision = { hero: 1, action: { kind: "choose", index: 0 }, auto: true };
+        watch.down({ upTo: frame + 650, events: [{ frame: held, ...decision }] }, now + 13_000);
+        now += 13_000;
+        frame += 650;
+        // The next one, DECIDE_AFTER_MS after it by the host's frames
+        pass(7000, [{ ...decision, action: { kind: "choose", index: 1 } }]);
+        expect(reports).toEqual([]);
+    });
+
+    it("finds a frame further on than the run's had time for, and checks the frames after", () => {
+        pass(2000);
+        watch.down({ upTo: Number.MAX_SAFE_INTEGER, events: [] }, now);
+        expect(kinds()).toEqual(["ahead"]);
+        reports = [];
+        pass(12_000);
+        pass(100, [{ hero: 1, move: [127, 0] }]);
+        expect(kinds()).toEqual(["move"]);
+        watch.finish();
+        const summary = entries[entries.length - 1];
+        expect(summary).toMatchObject({ kind: "summary", counts: { ahead: 1, move: 1 } });
+        expect(summary.runSeconds).toBeLessThan(15);
+    });
+
+    it("carries on from what the watch before a restart found", () => {
+        const resumed = (found: object) =>
+            new RunWatch(["host", "guest"], "host", {
+                now,
+                resumed: true,
+                found,
+                log: (entry) => entries.push(entry),
+                caught: (kind) => caught.push(kind),
+            });
+        resumed({ counts: { move: 1 }, caught: null }).finish();
+        watch = resumed({ counts: { move: 3 }, caught: "move" });
+        watch.down({ upTo: 2000, events: [] }, now + 40_000);
+        watch.down({ upTo: 2010, events: [{ frame: 2010, hero: 1, move: [1, 2] }] }, now + 40_200);
+        watch.finish();
+        expect(entries.filter((e) => e.kind === "summary")).toEqual([
+            expect.objectContaining({ counts: { move: 1 }, caught: null }),
+            expect.objectContaining({ counts: { move: 4 }, caught: "move" }),
+        ]);
+        // Caught once, before the restart
+        expect(caught).toEqual([]);
+    });
+
     it("finds frames running ahead of real time", () => {
         pass(12_000);
         // A tenth as fast again, then half
@@ -394,7 +444,7 @@ describe("the collector's rows", () => {
     const token = "a-relay-token-that-is-long-enough-to-use";
     const summary = {
         build: "0.28.0-abc",
-        ...runOf({ mapId: "barrows", heroes: [{ characterId: "wizard" }] }),
+        ...runOf({ mapId: "barrows" }, { mapId: "lumbridge", heroes: [{ characterId: "wizard" }] }),
         party: 1,
         runSeconds: 12.5,
         counts: { ahead: 1 },
@@ -442,5 +492,10 @@ describe("the collector's rows", () => {
         } finally {
             warn.mockRestore();
         }
+    });
+
+    it("has the room's map and mode, and no more run than the collector takes", () => {
+        const row = checkReport({ ...summary, runSeconds: 1e14 }, "node", false);
+        expect(row).toMatchObject({ mapId: "barrows", mode: "normal", runSeconds: 7 * 86400 });
     });
 });

@@ -334,7 +334,8 @@ Metrics contain aggregate numbers only, with no player names, addresses or room 
 **Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
 end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
 `VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
-shows in a build that has a collector. See the
+shows in a build that has a collector. A co-op relay set up for it also sends a row of its own for
+a run its checks flag, whatever that setting says (and the setting's text says so). See the
 [collector setup, daily analytics and leaderboard](../server/analytics/README.md). To look
 through an export of its database offline, run `node server/analytics/viewer/serve.mjs` and drop
 the file on the page.
@@ -1338,7 +1339,9 @@ that map for a player who hadn't got there. With no accounts, a player's maps ar
 this keeps fair players fair rather than stopping a cheat.
 
 Both relays check a run's frames as they pass (`server/coop-checks.mjs`) and log what they find,
-an object an entry with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
+each entry an object with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
+A Cloudflare room keeps what's been found with the room, so a restart or a sleep mid-run doesn't
+lose it.
 `MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does. Set up
 for it, a relay also sends the run analytics collector a row for each run they find anything in
 (`server/analytics/README.md`, Run checks).
