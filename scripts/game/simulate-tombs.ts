@@ -447,6 +447,8 @@ function runOnce(seed: number): Outcome {
         limit = start + 90 * 60 * TICKS_PER_SECOND;
     }
     let downs = 0;
+    // The furthest the run got: the Wardens' phase reached (0 for not yet)
+    let wardensPhase = 0;
     while (sim.tick < limit && !sim.runOver && (leading || !isDone(sim))) {
         if (leading && sim.state === "playing" && reached(sim)) {
             leading = false;
@@ -509,6 +511,7 @@ function runOnce(seed: number): Outcome {
             continue;
         }
         log?.step(sim);
+        wardensPhase = Math.max(wardensPhase, sim.tombsWardens?.phase ?? 0);
         watch.step(sim);
         if (!leading) {
             bossWatch.step(sim);
@@ -548,6 +551,10 @@ function runOnce(seed: number): Outcome {
         hits,
         notes: [
             ...leadNotes,
+            // How far it got, for a raid that's lost: paths cleared, then the Wardens' phase
+            `got to: ${sim.tombsPathsDone.length} paths` +
+                (wardensPhase > 0 ? `, Wardens phase ${wardensPhase}` : "") +
+                (done ? ", won" : ""),
             ...watch.notes(sim),
             ...bossWatch.notes(),
             ...attackNotes(sim),

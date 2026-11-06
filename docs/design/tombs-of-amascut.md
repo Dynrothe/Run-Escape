@@ -550,19 +550,23 @@ makes up a raid level as people tend to (the bosses' own first; never Attempts o
 `scripts/game/sweep-tombs.sh` runs every room, or the raid, by raid level and kit (`zero`, `shop`
 for `META=max`, `all` with `ARMOURY=max`, `dev`), a line each.
 
-What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds each):
+What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds each). A loss is a
+run that hit the sim's 90 minutes still trying: no Attempts invocation was on, so a wipe only starts
+the room or boss again, and the only revive is the shop's Ring of life (one a raid, not given back
+after a wipe). How far each lost run got: paths cleared, then the Wardens' phase reached.
 
-| Raid level   | Nothing bought | Shop   | Shop and Armoury |
-| ------------ | -------------- | ------ | ---------------- |
-| Entry (0)    | 6 of 9         | 9 of 9 | 9 of 9           |
-| Normal (160) | 0 of 9         | 6 of 9 | 4 of 9           |
-| Expert (300) | 0 of 9         | 0 of 9 | 1 of 9           |
-| 500          | 0 of 9         | 0 of 9 | 0 of 9           |
+| Raid level   | Nothing bought                       | Shop                                          | Shop and Armoury                                        |
+| ------------ | ------------------------------------ | --------------------------------------------- | ------------------------------------------------------- |
+| Entry (0)    | 6 of 9 (4 paths phase 2 x2, 2 paths) | 9 of 9                                        | 9 of 9                                                  |
+| Normal (160) | 0 of 9 (all in their first path)     | 5 of 9 (4 paths phase 2 x2, phase 3, 3 paths) | 9 of 9                                                  |
+| Expert (300) | 0 of 9 (all in their first path)     | 0 of 9 (7 in their second, 4 paths phase 2)   | 0 of 9 (4 in their second, 4 paths phase 3 x2, phase 2) |
+| 500          | 0 of 9 (all in their first path)     | 0 of 9 (all in their first or second)         | 0 of 9 (all in their first)                             |
 
 With nothing bought, all eight adventurers clear most rooms on their own at Entry, and 10 of 24
-whole raids. From Expert the bot mostly gets through the paths and then can't beat the Wardens
-(with every Wardens invocation on): it dodges, it doesn't plan, so Expert and past it are set by
-the curve and want playtesting more than the bot's numbers.
+whole raids. At Expert most runs clear Apmeken and Ba-Ba and then stall on Akkha (her magic and
+ranged bullets, with all her invocations on); the few that reach the Wardens lose there. At 500,
+even with everything bought, they stall in the Apmeken room or on Ba-Ba. The bot dodges, it doesn't plan, so Expert and past it are set by the curve and want
+playtesting more than the bot's numbers.
 
 **For trying a boss** (the dev server only, solo): God mode, on any map, and in the Nexus a button
 to each boss (the path bosses as the run is, with the dev skip's bow; the Wardens with the best of

@@ -33,7 +33,13 @@ one() {
     summary=$(echo "$out" | grep -E "^[0-9]+/[0-9]+ done" | tail -1)
     best=$(echo "$out" | grep -oE "best [0-9]+% left" | sed 's/best //; s/ left//' | tr '\n' ' ')
     never=$(echo "$out" | grep -c "never got there")
-    printf '%-8s %3s %-4s %-8s %s%s%s\n' "$room" "$level" "$kit" "$character" "$summary" \
+    # How far each seed got: "4p W3" is four paths and the Wardens' third phase
+    local far
+    far=$(echo "$out" | grep -oE "got to: [0-9]+ paths(, Wardens phase [0-9])?(, won)?" |
+        sed -e 's/got to: //' -e 's/ paths/p/' -e 's/, Wardens phase / W/' -e 's/, won/ won/' |
+        paste -sd ';' -)
+    printf '%-8s %3s %-4s %-8s %s%s%s%s\n' "$room" "$level" "$kit" "$character" "$summary" \
+        "${far:+ | got to $far}" \
         "${best:+ | boss best $best}" "$([ "$never" != 0 ] && echo " | never reached $never")"
 }
 
