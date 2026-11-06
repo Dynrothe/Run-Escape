@@ -901,7 +901,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && " hard"}
+                    {ui.hard &&
+                        (ui.expert && getMap(ui.mapId).raid && ui.coop.status === "offline"
+                            ? " expert"
+                            : " hard")}
                     {ui.endless && !getMap(ui.mapId).fun && " endless"}
                 </button>
             </div>
@@ -2892,7 +2895,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {result.hard && (
                                         <tr>
                                             <td>Difficulty</td>
-                                            <td>Hard</td>
+                                            <td>{result.expert ? "Expert" : "Hard"}</td>
                                         </tr>
                                     )}
                                     {result.endless && (

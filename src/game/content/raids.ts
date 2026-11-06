@@ -136,16 +136,31 @@ const WAVES_A_ROOM = 5;
 
 // A room's waves keep Lumbridge's pace for how far into the raid it is, over a run twice its
 // length (room n starts at Lumbridge's wave 2.5n). Its three lists of who comes are spread over
-// its five waves.
-function roomWaves(room: number, enemies: WaveDef["enemies"][]): WaveDef[] {
+// its five waves. `crowd` scales how many come (spawnRate, minAlive and maxAlive) for a hall whose
+// enemies hurt more than the pace allows for.
+function roomWaves(room: number, enemies: WaveDef["enemies"][], crowd = 1): WaveDef[] {
     const first = Math.round(room * 2.5);
     return Array.from({ length: WAVES_A_ROOM }, (_, i) => {
         const pace = LUMBRIDGE_WAVES[Math.min(first + i, LUMBRIDGE_WAVES.length - 1)];
         const who =
             enemies[Math.min(Math.floor((i * enemies.length) / WAVES_A_ROOM), enemies.length - 1)];
-        return { ...pace, start: i * WAVE_STEP, enemies: who };
+        return {
+            ...pace,
+            start: i * WAVE_STEP,
+            enemies: who,
+            spawnRate: pace.spawnRate * crowd,
+            minAlive: Math.round(pace.minAlive * crowd),
+            maxAlive: Math.round(pace.maxAlive * crowd),
+        };
     });
 }
+
+// The Nylocas hall's crowd (roomWaves' `crowd`, and its ring): most of its Nylocas shoot from
+// range, so at the pace's full numbers a player was hit from every side at once, and took many
+// times what the halls either side cost, and players took the portal past it. On expert, where
+// two colours in three don't take a player's style, those pile up to the cap.
+export const NYLOCAS_HALL_CROWD = 0.5;
+const NYLOCAS_RING = 40;
 
 // Elites through the room, and a ring of its commonest enemy late on
 function roomEvents(elite: string, ring: string, count: number): RunEventDef[] {
@@ -235,23 +250,31 @@ const TOB_ROOMS: RaidRoomDef[] = [
         "nylocas",
         {
             name: "Nylocas Vasilias",
-            waves: roomWaves(2, [
+            waves: roomWaves(
+                2,
                 [
-                    { id: "nylocas_ischyros", weight: 3 },
-                    { id: "tob_nylocas_toxobolos", weight: 1 },
+                    [
+                        { id: "tob_nylocas_ischyros", weight: 3 },
+                        { id: "tob_nylocas_toxobolos", weight: 1 },
+                    ],
+                    [
+                        { id: "tob_nylocas_ischyros", weight: 2 },
+                        { id: "tob_nylocas_toxobolos", weight: 2 },
+                        { id: "tob_nylocas_hagios", weight: 2 },
+                    ],
+                    [
+                        { id: "tob_big_nylocas_ischyros", weight: 1 },
+                        { id: "tob_nylocas_toxobolos", weight: 2 },
+                        { id: "tob_nylocas_hagios", weight: 2 },
+                    ],
                 ],
-                [
-                    { id: "nylocas_ischyros", weight: 2 },
-                    { id: "tob_nylocas_toxobolos", weight: 2 },
-                    { id: "tob_nylocas_hagios", weight: 2 },
-                ],
-                [
-                    { id: "big_nylocas_ischyros", weight: 1 },
-                    { id: "tob_nylocas_toxobolos", weight: 2 },
-                    { id: "tob_nylocas_hagios", weight: 2 },
-                ],
-            ]),
-            events: roomEvents("big_nylocas_ischyros", "nylocas_ischyros", 40),
+                NYLOCAS_HALL_CROWD,
+            ),
+            events: roomEvents(
+                "tob_big_nylocas_ischyros",
+                "tob_nylocas_ischyros",
+                Math.round(NYLOCAS_RING * NYLOCAS_HALL_CROWD),
+            ),
             // Meiyerditch is dark stone: brighter than the rest, or its alleys are lost
             hall: { brightness: 1.1 },
             boss: "nylocas_vasilias",
@@ -322,7 +345,7 @@ const TOB_ROOMS: RaidRoomDef[] = [
             waves: roomWaves(5, [
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_ischyros", weight: 2 },
+                    { id: "tob_big_nylocas_ischyros", weight: 2 },
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
@@ -332,12 +355,12 @@ const TOB_ROOMS: RaidRoomDef[] = [
                 ],
                 [
                     { id: "vyrewatch_sentinel", weight: 2 },
-                    { id: "big_nylocas_ischyros", weight: 1 },
+                    { id: "tob_big_nylocas_ischyros", weight: 1 },
                     { id: "tob_big_nylocas_toxobolos", weight: 1 },
                     { id: "tob_big_nylocas_hagios", weight: 1 },
                 ],
             ]),
-            events: roomEvents("vyrewatch_sentinel", "nylocas_ischyros", 60),
+            events: roomEvents("vyrewatch_sentinel", "tob_nylocas_ischyros", 60),
             boss: "tob_verzik_vitur",
             // Seconds for all its speed points (late, her three forms)
             par: 150,

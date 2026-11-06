@@ -926,7 +926,10 @@ a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its b
 gap between its `RaidRoomDef.at` and the last room's later, or at once when the portal's taken. So a
 quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
 hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
-boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' hits are
+boss time before it, so a long fight doesn't make later rooms tougher either. A room's waves
+(`roomWaves`) keep Lumbridge's pace for where it is in the raid; the Nylocas hall's are scaled by
+`NYLOCAS_HALL_CROWD` (spawn rate, the numbers alive and its ring), as most of its Nylocas shoot and
+at the full pace it cost a player far more than the halls either side. Raid bosses' hits are
 lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`), and their bullets can hit
 again after `BULLET_GRACE` rather than a second. The Maiden, the first boss, is the exception: her
 hits are scaled down by `MAIDEN_HIT_SCALE`, and her `bulletGrace` is a full second. Every one has an
@@ -940,8 +943,8 @@ more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
-exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`,
-`tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
+exhumed by `stepExhumed`). The raid's six Nylocas are copies (`RAID_NYLOCAS`, `tob_` ids),
+slower by `RAID_NYLOCAS_SPEED`, the green and blue ones shooting, so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
 calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
 healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
 of them within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of

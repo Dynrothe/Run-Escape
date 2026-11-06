@@ -28,6 +28,8 @@ the version in the corner).
   game's cache again.
 - The release page, by trippy22: the Windows and Android downloads are linked at the top, above
   the long list of the game's files.
+- Theatre of Blood, by Okaeri: the Nylocas are slower, and half as many come in their hall before
+  Nylocas Vasilias: there were too many to fight through.
 
 ### Fixed
 
@@ -44,6 +46,11 @@ the version in the corner).
   edge every time too, not only some of the time. Fixed by Okaeri.
 - Scenery made of overlapping pieces, like the God Wars entrance rock, blocks less of the empty
   ground round its base. Fixed by Deivid Smarzaro.
+- Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
+  you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
+  by Okaeri.
+- The results screen says Expert for a Theatre of Blood run on expert mode, not Hard. Fixed by
+  Okaeri.
 
 ## 0.27.0 - 2026-11-05
 

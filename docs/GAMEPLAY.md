@@ -370,7 +370,8 @@ version and how to run it.
       through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
       smother them, those left healing him; and Verzik gets up twice, and as the great spider
       throws her yellows, which only miss you in the glowing pool that comes with each. The
-      raid's green and blue Nylocas shoot from range.
+      raid's green and blue Nylocas shoot from range, so fewer come in their hall than the raid's
+      pace would bring.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
