@@ -43,6 +43,10 @@ go stale. Add anything that cost you time to work out.
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
+| Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
+| A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
+| The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
+| Adventurers' traits (the Forester's Timber!)           | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
