@@ -518,9 +518,12 @@ it's on purpose:
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
 - `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
-  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has, so a server
-  that ignores Range corrupts the cache. `gameServer.ts` clamps the end and answers 206, with a
-  `Content-Length` of what's left.
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has. A server
+  that ignores Range sends the whole file, and the download starts again from 0%, which a phone
+  on a slow or cut-off connection may never get past. `gameServer.ts` clamps the end and answers
+  206, with a `Content-Length` of what's left. The dev and preview server's `/caches` (in
+  `vite.config.ts`) does the same with its `parseRange`, and sends the whole file when `If-Range`
+  doesn't match the file's `Last-Modified`.
 
 Interception only works reliably for one session per process, so don't add a second.
 
