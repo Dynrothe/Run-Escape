@@ -1437,3 +1437,59 @@ describe("the save in the browser", () => {
         expect(store.getUnreadable()).toEqual([]);
     });
 });
+
+describe("Act II", () => {
+    test("opens once the Inferno's beaten, and not before, whatever else is", () => {
+        const save = createSave();
+        for (const map of CAMPAIGN_MAPS.filter((m) => m.id !== "inferno")) {
+            save.mapVictories[map.id] = 1;
+        }
+        expect(isMapUnlocked(save, "stranglewood")).toBe(false);
+        save.mapVictories.inferno = 1;
+        expect(isMapUnlocked(save, "stranglewood")).toBe(true);
+        // Not in the campaign's chain: the maps after the Inferno open as they did
+        expect(CAMPAIGN_MAPS.map((m) => m.id)).not.toContain("stranglewood");
+    });
+
+    test("a win's best is kept with its step, until it's beaten at a harder one", () => {
+        const save = createSave();
+        const win = (seconds: number, actStep: number) =>
+            recordRun(save, run("stranglewood", { victory: true, seconds, actStep }));
+        win(940, 0);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 940, step: 0 });
+        win(920, 0);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 920, step: 0 });
+        // Slower, but harder: that's the record now
+        win(960, 2);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 960, step: 2 });
+        // Quicker but easier doesn't take it back
+        win(900, 1);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 960, step: 2 });
+        // A loss is no record
+        recordRun(save, run("stranglewood", { seconds: 100, actStep: 3 }));
+        expect(save.actBest?.stranglewood.step).toBe(2);
+        // Off an act's maps, none are kept
+        recordRun(save, run("inferno", { victory: true, seconds: 900 }));
+        expect(save.actBest?.inferno).toBeUndefined();
+        // And it survives a reload
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).actBest).toEqual(save.actBest);
+    });
+
+    test("an endless record on an act's map keeps its step", () => {
+        const save = createSave();
+        recordRun(
+            save,
+            run("stranglewood", { endless: true, round: 2, seconds: 1200, actStep: 1 }),
+        );
+        expect(save.endlessBest.stranglewood).toEqual({ round: 2, seconds: 1200, step: 1 });
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).endlessBest.stranglewood.step).toBe(1);
+    });
+
+    test("beating the Stranglewood brings the Forester", () => {
+        const save = createSave();
+        save.mapVictories.inferno = 1;
+        expect(save.unlockedCharacters).not.toContain("forester");
+        recordRun(save, run("stranglewood", { victory: true, seconds: 930 }));
+        expect(save.unlockedCharacters).toContain("forester");
+    });
+});

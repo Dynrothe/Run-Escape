@@ -5,6 +5,7 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { getAct, getActStep } from "../content/acts";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -889,6 +890,8 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            // An act's map is at the host's step (content/acts.ts)
+            ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1311,6 +1314,7 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            actStep: getActStep(map, this.save.mapVictories),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1398,6 +1402,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            actStep: game.actStep,
             party,
             focus,
         });
@@ -1881,7 +1886,8 @@ export class GameClient implements GameFrameHandler {
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
                 firstHardWin,
-                unlockedMap: unlockedMap?.name,
+                // An act opens all its maps at once: it's the act that's said to open
+                unlockedMap: unlockedMap?.act ? getAct(unlockedMap.act.id).name : unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
@@ -2472,6 +2478,17 @@ export class GameClient implements GameFrameHandler {
                     this.store.toast(`A ${CASKETS[event.tier].name.toLowerCase()} drops!`);
                     break;
                 case "bossSpawned":
+                    // The final boss's own track takes over (MapDef.bossMusic)
+                    if (event.finalBoss && sim.map.bossMusic) {
+                        const music = musicFor(sim.map.bossMusic);
+                        if (music) {
+                            this.audio.playMusic(music);
+                        }
+                    }
+                    if (event.message) {
+                        this.store.toast(event.message, 6000);
+                    }
+                    break;
                 case "bossRose":
                 case "bossEnraged":
                 case "bossStage":
