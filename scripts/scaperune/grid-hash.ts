@@ -25,6 +25,7 @@ const SHIPPED_HASHES: Record<string, string> = {
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
     zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
     stranglewood: "581d3b3b950694fc7397adcddc354532df95a50f6b9919dfaaebbb410d99ce89",
+    battle_for_varrock: "c90889958d2e51c4d9a60ddb539802b53f47199012faa514baefa59385dbb045",
 };
 
 const check = !!process.env.CHECK;

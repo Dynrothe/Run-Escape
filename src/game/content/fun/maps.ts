@@ -1,4 +1,12 @@
+import {
+    BATTLE_FOR_VARROCK,
+    BRAZIER,
+    PALACE_FLOOR_ASCII,
+    WALL_OF_FLAME,
+} from "../../scaperune/maps/battleForVarrock";
+import { FLOOR_SKINS } from "../floorSkins";
 import { MapDef, RunEventDef } from "../types";
+import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
 
 // The fun maps: open from the start, endless from the start, and full of other
@@ -744,6 +752,66 @@ export const FUN_MAPS: MapDef[] = [
                 },
             },
             playerChat: { lines: PEST_CONTROL_PLAYER_LINES, every: [10, 18] },
+        },
+    },
+    {
+        id: "battle_for_varrock",
+        name: "The Battle for Varrock",
+        description:
+            "Varrock after the battle, every street and house of it burnt to ruins, fires still " +
+            "burning and the dead where they fell. Walk it as Justiciar Zachariah, his lunge, " +
+            "shock wave, ice, lightning and gaze on your buttons, up to Yama on his throne in " +
+            "the palace. Nothing to fight yet: a map to explore.",
+        // Varrock teleport
+        iconObjId: 8007,
+        // Varrock and the country round it, inside its margin (scaperune/maps/battleForVarrock.ts)
+        arena: BATTLE_FOR_VARROCK.arena,
+        // Just outside the south gate
+        spawn: BATTLE_FOR_VARROCK.spawn,
+        difficulty: { hp: 1, damage: 1 },
+        waves: [],
+        events: [],
+        finalBossWarning: "",
+        victoryText: "",
+        scaperune: true,
+        fun: {
+            // Nobody comes (FunMapDef.explore)
+            bosses: { pool: [], firstAt: Infinity, every: [Infinity, Infinity] },
+            character: "justiciar_zachariah",
+            explore: true,
+        },
+        // The palace's floor is gone: the game lays its own, ash-grey paving gone to soot with
+        // cinders and smouldering tiles among it, all solid (nothing rises or falls)
+        floor: {
+            ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor),
+            ascii: PALACE_FLOOR_ASCII,
+            skins: [
+                FLOOR_SKINS.ashenFlagstones,
+                FLOOR_SKINS.charredFlagstones,
+                FLOOR_SKINS.smouldering,
+            ],
+            tiles: [
+                { type: "solid", turn: "random" },
+                { share: 0.3, skin: 1 },
+                { share: 0.03, skin: 2 },
+            ],
+            seed: 3482,
+            script: [],
+            loopSeconds: 60,
+        },
+        // A smoky, dimmed city lit by its fires
+        lighting: {
+            ambient: 0.92,
+            ambientColor: 0xf4e4da,
+            locs: {
+                4266: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                5499: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                31722: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
+                3862: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
+                // Either side of Yama's throne
+                [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
+            },
         },
     },
 ];

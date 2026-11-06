@@ -1,4 +1,5 @@
 import { MapRecipe } from "../recipe";
+import { BATTLE_FOR_VARROCK_RECIPE } from "./battleForVarrock";
 import { HALLOWED_NIGHT } from "./hallowedNight";
 import { OWLS_COURT_RECIPE } from "./owlsCourt";
 import { SISTERHOOD_SANCTUARY } from "./sisterhoodSanctuary";
@@ -12,4 +13,5 @@ export const SCAPERUNE_MAPS: MapRecipe[] = [
     THEATRE_OF_BLOOD,
     OWLS_COURT_RECIPE,
     STRANGLEWOOD_RECIPE,
+    BATTLE_FOR_VARROCK_RECIPE,
 ];

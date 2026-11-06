@@ -89,9 +89,11 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 }
 
 describe("the dark", () => {
-    test("only dev maps have lights, and everywhere else is lit everywhere", () => {
+    test("only dev maps and burnt Varrock have lights, and everywhere else is lit everywhere", () => {
+        // The Battle for Varrock's fires glow, its smoke dims it a little (fun/maps.ts)
+        const lit = new Set(["battle_for_varrock"]);
         for (const map of ALL_MAPS) {
-            expect(map.lighting === undefined || map.dev === true).toBe(true);
+            expect(map.lighting === undefined || map.dev === true || lit.has(map.id)).toBe(true);
         }
         const sim = createSim("lumbridge");
         expect(sim.lighting).toBeUndefined();
