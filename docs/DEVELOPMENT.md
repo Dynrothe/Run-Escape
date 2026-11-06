@@ -705,6 +705,12 @@ gives a ScapeRune map a loc a different model or size, and two bugs were fixed (
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 
+Collision uses the cache models' ground footprints, not their overhanging tops. In `ArenaGrid`,
+overlapping scenery (such as the God Wars entrance rock and its base) can fit their combined
+footprint on exposed sides. Contacts with other blockers, walls and blocked floor stay unchanged;
+an unknown or invisible model keeps the group's original bounds. This is done when the grid is
+built, before its pathfinding steps, and changes neither the scenery nor its shading.
+
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
 (`ReferenceTable`); a group's files stay in one array (`Archive`), so a file's data can be part of

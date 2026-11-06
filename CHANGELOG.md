@@ -37,6 +37,7 @@ the version in the corner).
   with a message instead of freezing everyone. Fixed by trippy22.
 - The Armadyl crossbow shows each shot while you run, not only when you stand still: your
   adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
+- Overlapping scenery, including the God Wars entrance rock, blocks less empty ground beyond its visible base. Fixed by @braiansmarzaro.
 
 ## 0.27.0 - 2026-11-05
 
