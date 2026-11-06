@@ -81,6 +81,7 @@ public final class MainActivity extends Activity {
     private boolean gameReady;
     private boolean destroyed;
     private int diagnosticGeneration;
+    private AppUpdater updater;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -93,6 +94,11 @@ public final class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
+        try {
+            updater = new AppUpdater(this);
+        } catch (RuntimeException exception) {
+            android.util.Log.i("AppUpdater", "Updates unavailable on this device", exception);
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
@@ -301,8 +307,8 @@ public final class MainActivity extends Activity {
                                             + "Source: github.com/Dynrothe/Run-Escape\n\n"
                                             + "A fan project, not affiliated with Jagex. "
                                             + "Old School RuneScape assets belong to Jagex.\n\n"
-                                            + "New versions are on GitHub, and the app doesn't update "
-                                            + "itself: install a new version's APK over this one. Co-op "
+                                            + "The app checks GitHub for updates when opened and asks "
+                                            + "before downloading one. Android asks you to install it. Co-op "
                                             + "needs everyone on the same version.\n\n"
                                             + "Use Android's Back action to reopen this menu.")
                                     .setNeutralButton("Licenses", (about, action) -> showLicenses())
@@ -316,7 +322,7 @@ public final class MainActivity extends Activity {
                 }).setOnDismissListener(dialog -> hideSystemBars()).show();
     }
 
-    // The only place the APK is published. The app never checks for or downloads a new version.
+    // The release page is also available from About.
     private void openReleases() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)));
@@ -615,6 +621,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (updater != null) updater.onPause();
         if (webView != null) webView.onPause();
         super.onPause();
     }
@@ -623,11 +630,13 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
+        if (updater != null) updater.onResume();
     }
 
     @Override
     protected void onDestroy() {
         destroyed = true;
+        if (updater != null) updater.close();
         diagnosticGeneration++;
         handler.removeCallbacksAndMessages(null);
         if (webFileCallback != null) {

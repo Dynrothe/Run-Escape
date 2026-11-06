@@ -201,7 +201,7 @@ jobs:
                   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: python3 scripts/android/sign-apk.py --version "$VERSION"
 
-            # How to install it and update it, for the release's notes: the app never updates itself
+            # How to install it and use in-app updates, for the release's notes
             - run: sed "s/<version>/$VERSION/g" android/release-notes.md > release/android-notes.md
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
