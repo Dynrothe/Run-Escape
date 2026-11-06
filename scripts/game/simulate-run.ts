@@ -236,6 +236,29 @@ function sidestepBullets(sim: Sim): { x: number; y: number } | undefined {
     return { x: awayX / length, y: awayY / length };
 }
 
+// Away that way, or as near it as there's room (round the side, not into a wall or the boss
+// square's edge), as a person circles out rather than backing into a corner
+function openWay(sim: Sim, x: number, y: number): { x: number; y: number } {
+    const player = sim.player;
+    const square = sim.map.bossArena;
+    for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.6, -1.6, 2.2, -2.2]) {
+        const cx = x * Math.cos(turn) - y * Math.sin(turn);
+        const cy = x * Math.sin(turn) + y * Math.cos(turn);
+        const tx = player.x + cx * 1.6;
+        const ty = player.y + cy * 1.6;
+        const inside =
+            !square ||
+            (tx > square.baseX + 0.6 &&
+                tx < square.baseX + square.size - 0.6 &&
+                ty > square.baseY + 0.6 &&
+                ty < square.baseY + square.size - 0.6);
+        if (inside && !sim.grid.isSolid(Math.floor(tx), Math.floor(ty))) {
+            return { x: cx, y: cy };
+        }
+    }
+    return { x, y };
+}
+
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
 // also keeps out of any boss's ground marks that hurt, phased or not.
 // Without DODGE it only goes where the fight needs it to: the totems and the
@@ -368,6 +391,28 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 }
             }
         }
+        // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
+        // what anyone steps out of
+        if (windup?.attack.kind === "swing") {
+            const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
+            const dx = player.x - boss.x;
+            const dy = player.y - boss.y;
+            const away = Math.hypot(dx, dy);
+            if (away < reach) {
+                return openWay(sim, away > 0.001 ? dx / away : 1, away > 0.001 ? dy / away : 0);
+            }
+        }
+        if (windup?.attack.kind === "blast") {
+            const reach = (windup.attack.radius ?? 1) + player.radius + 0.5;
+            for (const spot of windup.targets) {
+                const dx = player.x - spot.x;
+                const dy = player.y - spot.y;
+                const away = Math.hypot(dx, dy);
+                if (away < reach) {
+                    return away > 0.001 ? { x: dx / away, y: dy / away } : { x: 1, y: 0 };
+                }
+            }
+        }
         for (const projectile of sim.enemyProjectiles) {
             if (!projectile.hit) {
                 continue;
@@ -417,6 +462,22 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                     ? { x: 0, y: 0 }
                     : towards(best.x, best.y);
             }
+        }
+        // A fight in parts (Beneath Cursed Sands): round a boss that's close, not straight away from
+        // it, pulled back towards the square's middle, as a ranged player kites a melee boss and
+        // never backs into a corner
+        const square = sim.map.bossArena;
+        const close = Math.hypot(player.x - boss.x, player.y - boss.y);
+        if (sim.map.stages && square && close < 5) {
+            const ax = (player.x - boss.x) / Math.max(close, 0.001);
+            const ay = (player.y - boss.y) / Math.max(close, 0.001);
+            const mx = square.baseX + square.size / 2 - player.x;
+            const my = square.baseY + square.size / 2 - player.y;
+            const middle = Math.max(Math.hypot(mx, my), 0.001);
+            const x = ax * 0.7 - ay * 0.8 + (mx / middle) * 0.6;
+            const y = ay * 0.7 + ax * 0.8 + (my / middle) * 0.6;
+            const length = Math.max(Math.hypot(x, y), 0.001);
+            return { x: x / length, y: y / length };
         }
         for (const hazard of sim.hazards) {
             // A checker's cell (GroundHazard.half), once it's shown: off it the short way

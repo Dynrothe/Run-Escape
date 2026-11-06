@@ -1273,8 +1273,8 @@ export const BENEATH_CURSED_SANDS: MapDef = {
         {
             name: "the Scarab Mages",
             events: [
-                { at: 0, kind: "boss", enemyId: "scarab_mage", hp: 3500 },
-                { at: 0, kind: "finalBoss", enemyId: "scarab_mage_elder", hp: 4000 },
+                { at: 0, kind: "boss", enemyId: "scarab_mage", hp: 2800 },
+                { at: 0, kind: "finalBoss", enemyId: "scarab_mage_elder", hp: 3200 },
             ],
             victoryText: "The Scarab Mages are dust! The Champion waits below.",
         },
