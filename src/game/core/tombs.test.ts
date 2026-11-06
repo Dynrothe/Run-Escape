@@ -17,6 +17,7 @@ import {
     APMEKEN,
     APMEKEN_WAVES,
     CRONDIS,
+    SCABARAS,
     TOMBS_BOSSES,
     TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
@@ -26,7 +27,7 @@ import {
 import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND, wardenFrontRow } from "./Sim";
+import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
 
@@ -1601,6 +1602,7 @@ const SCABARAS_DEF = {
         north: grid3([1050, 1052, 1054], [1020, 1022, 1024]),
         south: grid3([1050, 1052, 1054], [1010, 1012, 1014]),
     },
+    slates: [{ x: 1040.5, y: 1030.5 }],
 };
 const TEST_SCABARAS: MapDef = {
     ...TEST_TOMBS,
@@ -1683,11 +1685,21 @@ describe("the Scabaras room", () => {
     }
     const caskets = (sim: Sim) => sim.pickups.filter((p) => p.kind === "casket").length;
 
+    it("has slates by the way in that say what the symbols are worth, to whoever's by one", () => {
+        const sim = scabaras();
+        expect(sim.scabarasInfo!.slate).toBeUndefined();
+        const slate = SCABARAS_DEF.slates[0];
+        sim.player.x = sim.player.prevX = slate.x + 1;
+        sim.player.y = sim.player.prevY = slate.y;
+        expect(sim.scabarasInfo!.slate).toContain("Line 1");
+        expect(sim.scabarasInfo!.slate).toContain("Foot 9");
+    });
+
     it("lays out every board as it begins", () => {
         const sim = scabaras();
         const scabaras_ = room(sim);
-        expect(scabaras_.sequence.order).toHaveLength(5);
-        expect(new Set(scabaras_.sequence.order).size).toBe(5);
+        expect(scabaras_.sequence.order).toHaveLength(SCABARAS.sequenceSteps);
+        expect(new Set(scabaras_.sequence.order).size).toBe(SCABARAS.sequenceSteps);
         expect(scabaras_.lights.every((lit) => lit)).toBe(false);
         const { target, values } = scabaras_.addition;
         expect(target).toBeGreaterThanOrEqual(20);
@@ -1700,7 +1712,13 @@ describe("the Scabaras room", () => {
 
     it("makes everything harder with the path level", () => {
         const sim = scabaras(["pathmaster"]);
-        expect(room(sim).sequence.order).toHaveLength(8);
+        // A plate more every two path levels (Pathmaster's is 3), up to six
+        expect(room(sim).sequence.order).toHaveLength(
+            Math.min(
+                SCABARAS.sequenceMost,
+                SCABARAS.sequenceSteps + Math.floor(3 / SCABARAS.sequenceEvery),
+            ),
+        );
         expect(room(sim).matching.matched.filter((m) => m)).toHaveLength(1);
         expect(sim["scabarasRockEvery"]()).toBeLessThan(4.5);
     });
@@ -1952,7 +1970,9 @@ describe("Kephri", () => {
     function intermission(invocations: string[] = []): Sim {
         const sim = atKephri(invocations);
         const boss = kephri(sim);
-        boss.hp = Math.floor(boss.maxHp * DEF.intermissions.at[0]) - 1;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(boss, sim.tombsKephri!.shield * 2, 0, boss.x, boss.y);
+        expect(boss.hp).toBe(boss.maxHp);
         seconds(sim, 0.1, SOUTH);
         expect(sim.tombsKephri!.intermission).toBeDefined();
         return sim;
@@ -1967,19 +1987,32 @@ describe("Kephri", () => {
         expect(boss.y).toBe(y);
     });
 
-    it("breaks her shield at its share: dazed, she can't be hurt, and her overlord comes", () => {
+    it("takes hits on her shield, her hitpoints untouched, and shows which of three it is", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        const fight = sim.tombsKephri!;
+        expect(fight.shield).toBe(fight.shieldMax);
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(boss, 100, 0, boss.x, boss.y);
+        expect(boss.hp).toBe(boss.maxHp);
+        expect(fight.shield).toBeLessThan(fight.shieldMax);
+        const bar = sim.kephriBar(boss)!;
+        expect(bar.stage).toBe("shield");
+        expect(bar.phase).toBe(1);
+        expect(bar.status).toBe(`Shield 1 of ${DEF.shields.count}`);
+    });
+
+    it("breaks her shield: dazed, she can't be hurt, and her overlord comes", () => {
         const sim = intermission();
         const boss = kephri(sim);
-        expect(boss.hp).toBe(Math.round(boss.maxHp * DEF.intermissions.at[0]));
+        expect(boss.hp).toBe(boss.maxHp);
         sim["damageSource"] = "weapon:scythe_of_vitur";
         expect(sim.damageEnemy(boss, 500, 0, boss.x, boss.y)).toBe(0);
         expect(sim.enemies.some((e) => !e.dead && e.def.id === "kephri_spitting")).toBe(true);
     });
 
-    it("sends her swarms round the edge, quicker as they come, healing her if they reach her", () => {
+    it("sends her swarms round the edge, quicker as they come, charging her shield if they reach her", () => {
         const sim = intermission();
-        const boss = kephri(sim);
-        const hp = boss.hp;
         const seen = new Set<string>();
         for (let i = 0; i < 20 * TICKS_PER_SECOND; i++) {
             for (const swarm of swarms(sim)) {
@@ -1988,7 +2021,7 @@ describe("Kephri", () => {
             seconds(sim, 1 / TICKS_PER_SECOND, SOUTH);
         }
         expect(seen.size).toBeGreaterThan(10);
-        expect(boss.hp).toBeGreaterThan(hp);
+        expect(sim.tombsKephri!.leaked).toBeGreaterThan(0);
     });
 
     it("comes out of it once the swarms and overlords are dead", () => {
@@ -2004,6 +2037,8 @@ describe("Kephri", () => {
         }
         expect(sim.tombsKephri!.intermission).toBeUndefined();
         expect(sim.tombsKephri!.phase).toBe(1);
+        // Behind her second shield, whole again
+        expect(sim.tombsKephri!.shield).toBeGreaterThanOrEqual(sim.tombsKephri!.shieldMax);
         sim["damageSource"] = "weapon:scythe_of_vitur";
         expect(sim.damageEnemy(boss, 50, 0, boss.x, boss.y)).toBeGreaterThan(0);
     });
@@ -2094,9 +2129,10 @@ describe("Kephri", () => {
     it("comes back for her last without her swarm, throwing everyone back", () => {
         const sim = atKephri();
         const boss = kephri(sim);
-        sim.tombsKephri!.phase = DEF.intermissions.at.length;
+        // Behind her third shield: breaking it is her last
+        sim.tombsKephri!.phase = DEF.shields.count - 1;
         sim["damageSource"] = "weapon:scythe_of_vitur";
-        sim.damageEnemy(boss, boss.hp + 10, 0, boss.x, boss.y);
+        sim.damageEnemy(boss, sim.tombsKephri!.shield * 2, 0, boss.x, boss.y);
         seconds(sim, 0.2, SOUTH);
         const risen = kephri(sim);
         expect(risen.def.id).toBe("kephri_final");
@@ -2732,6 +2768,28 @@ describe("the Wardens' first phase", () => {
         }
     });
 
+    it("holds the obelisk at a quarter till a Warden's pyramids have come and gone", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
+        sim["damageEnemy"](obelisk, obelisk.maxHp * 10, 0, obelisk.x, obelisk.y);
+        expect(obelisk.dead).toBe(false);
+        expect(obelisk.hp).toBe(Math.round(obelisk.maxHp * WARDENS.holdShare));
+        expect(fight.phase).toBe(1);
+        // A Warden charges, throws its pyramids, and once they've gone it can break
+        for (
+            let i = 0;
+            i < 60 && (fight.pyramidsDone === undefined || sim.tick < fight.pyramidsDone);
+            i++
+        ) {
+            step(sim, 1);
+            sim.player.hp = sim.player.maxHp;
+        }
+        expect(fight.pyramidsDone).toBeDefined();
+        sim["damageEnemy"](obelisk, obelisk.maxHp * 10, 0, obelisk.x, obelisk.y);
+        expect(obelisk.hp).toBeLessThanOrEqual(0);
+    });
+
     it("sends orbs down the troughs that charge their Warden, unless a player soaks them", () => {
         const sim = atWardens();
         const fight = sim.tombsWardens!;
@@ -2822,6 +2880,8 @@ describe("the Wardens' first phase", () => {
         const fight = sim.tombsWardens!;
         fight.charge.elidinis = 80;
         fight.charge.tumeken = 20;
+        // Past its first pyramids, so it can break
+        fight.pyramidsDone = sim.tick;
         const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
         sim.damageEnemy(obelisk, 1e9, 0, sim.player.x, sim.player.y);
         step(sim, 0.1);
@@ -3022,6 +3082,18 @@ describe("the Wardens' second and last phases", () => {
         step(sim, 0.1);
         const siphons = three.siphons!;
         expect(siphons.uids).toHaveLength(WARDENS.three.count[0]);
+        // In one of its formations, in front of it, mirrored or not
+        const want = formationSpots(WARDENS.three.formations[three.formation], siphons.uids.length);
+        const front = wardenFrontRow(warden) + 0.5;
+        const landed = siphons.uids.map((uid) => find(sim, uid));
+        const fits = (flip: number) =>
+            landed.every(
+                (siphon, i) =>
+                    Math.floor(siphon.x) === Math.floor(warden.x + flip * want[i].x) &&
+                    Math.floor(siphon.y) === Math.floor(front + want[i].y),
+            );
+        expect(fits(1) || fits(-1)).toBe(true);
+        expect(landed.every((siphon) => siphon.y < warden.y)).toBe(true);
         expect(warden.def.id).toBe("tumeken_warden_charging");
         // Nothing gets at it while they're out
         const charging = warden.hp;
@@ -3061,6 +3133,10 @@ describe("the Wardens' second and last phases", () => {
             "zebaks_phantom",
             "babas_phantom",
         ]);
+        // Zebak's on its left (west), Ba-Ba's on its right
+        const [zebak, baba] = three.phantoms.map((uid) => find(sim, uid));
+        expect(zebak.x).toBeLessThan(warden.x);
+        expect(baba.x).toBeGreaterThan(warden.x);
         expect(three.phantoms.every((uid) => find(sim, uid).bossState?.enraged)).toBe(false);
         hit(sim, warden, "dark_bow", warden.maxHp);
         expect(warden.hp).toBeCloseTo(warden.maxHp * WARDENS.three.enrage.at, 0);

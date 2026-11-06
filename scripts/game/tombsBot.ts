@@ -150,6 +150,9 @@ export function tombsMove(sim: Sim): Point | undefined {
     }
     // Through the barrier into the room: a few tiles past its line, away from the safe corridor
     if (!room.started && def.gate) {
+        if (def.gate.x === undefined) {
+            return walkTo(sim, def.arrive.x, (def.gate.y ?? def.arrive.y) + 3);
+        }
         const into = def.gate.x < def.arrive.x ? -3 : 3;
         return walkTo(sim, def.gate.x + into, def.arrive.y);
     }
@@ -1209,12 +1212,17 @@ function foodMove(sim: Sim): Point | undefined {
     return best && walkTo(sim, best.x, best.y);
 }
 
-// Kephri's overlords, killed first: the spitter shoots and poisons for as long as it's up, the
-// soldier heals her, and none of her shield comes back till they're dead
-const KEPHRI_OVERLORDS = ["kephri_spitting", "kephri_soldier", "kephri_arcane"];
+// Kephri's overlords, killed first, the Arcane Scarab before all (as the OSRS Wiki says: its
+// charged swarm hits hardest), then the spitter (it shoots and poisons for as long as it's up),
+// then the soldier (it heals her); none of her shield comes back till they're dead
+const KEPHRI_OVERLORDS = ["kephri_arcane", "kephri_spitting", "kephri_soldier"];
+
+// How far from Kephri's edge the bot waits: she's in the middle of her arena, so a Dung Strike's
+// throw (KEPHRI.dung.knock) from further out puts it against a wall, stunned among the dung
+const KEPHRI_KEEP = 1.5;
 
 // Kephri: her overlords while they're up, as near as the weapons need (the soldier's slashes kept
-// at arm's length if they reach further); otherwise near enough for every weapon, off what's close
+// at arm's length if they reach further); otherwise close to her, off what's close
 function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
     const player = sim.player;
     const overlord = sim.enemies
@@ -1226,10 +1234,12 @@ function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
                     Math.hypot(b.x - player.x, b.y - player.y),
         )[0];
     if (!overlord) {
-        return kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5);
+        return kite(sim, { x: boss.x, y: boss.y - (boss.radius + KEPHRI_KEEP) }, 2.5);
     }
     const reach = heroReach(sim);
-    const keep = overlord.radius + Math.max(1, Math.min(4, reach - 0.6));
+    // Out of the soldier's slashes, whatever the weapons' reach
+    const least = overlord.def.id === "kephri_soldier" ? 2.2 : 1;
+    const keep = overlord.radius + Math.max(least, Math.min(4, reach - 0.6));
     const dx = player.x - overlord.x;
     const dy = player.y - overlord.y;
     const away = Math.hypot(dx, dy) || 1;

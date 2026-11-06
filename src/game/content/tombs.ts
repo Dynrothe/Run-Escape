@@ -1230,9 +1230,12 @@ export function getScabarasTrickle(wave: number): WaveDef {
 // rockRadius once they land (rockWarn after they start, as 302's roof falls), breaking into
 // shards: bullets out all round.
 export const SCABARAS = {
-    sequenceSteps: 5,
-    sequenceMost: 9,
-    flash: 0.6,
+    // Four plates, one more every two path levels, up to six (nine at a plate a level was more
+    // than anyone could hold), each lit a little longer
+    sequenceSteps: 4,
+    sequenceEvery: 2,
+    sequenceMost: 6,
+    flash: 0.8,
     gap: 0.25,
     showAfter: 1.5,
     retry: 2.5,
@@ -1256,8 +1259,10 @@ export const SCABARAS = {
     shardDamage: 3,
     shardLook: "rolling_boulder",
     shardScale: 0.35,
-    // Tiles from a plate's middle that count as standing on it
+    // Tiles from a plate's middle that count as standing on it, and from a slate's that's near
+    // enough to read it
     plateReach: 0.55,
+    slateReach: 2,
     rockSpotAnim: 302,
     locs: {
         // Sequence: as it stands, lit by the game, stepped on
@@ -1301,12 +1306,15 @@ const KEPHRI_SOUNDS = { attack: -1, hit: -1, death: -1 };
 const SCARAB_SPIT = 2152;
 
 export const KEPHRI: KephriDef = {
+    // Three shields, as OSRS has her: each takes share of her hitpoints in hits, and her own
+    // hitpoints aren't touched till the third's gone and she rises for her last. A swarm that
+    // reaches her overcharges the next (swarm.shield of it, overcharge at most)
+    // The Soldier Scarab's heals feed her shield this much of one each, before her last
+    shields: { count: 3, share: 1 / 3, overcharge: 0.15, soldierFeed: 0.06 },
     intermissions: {
-        // At these shares of her hitpoints her shield breaks: dazed, she can't be hurt while
-        // swarms (swarms of them) rush in to restore it, and her overlords come (moreOverlords
-        // too, with More Overlords). It's over once the swarms are all in or dead and the
-        // overlords are dead.
-        at: [0.66, 0.33],
+        // After the first two shields break: dazed, she can't be hurt while swarms (swarms of
+        // them) rush in to restore it, and her overlords come (moreOverlords too, with More
+        // Overlords). It's over once the swarms are all in or dead and the overlords are dead.
         swarms: [28, 24],
         overlords: [["kephri_spitting"], ["kephri_soldier", "kephri_arcane"]],
         moreOverlords: [["kephri_soldier"], ["kephri_spitting"]],
@@ -1315,7 +1323,10 @@ export const KEPHRI: KephriDef = {
     },
     swarm: {
         enemyId: "kephri_swarm",
-        // A share of her hitpoints each heals her by, reaching her, and how near is reaching
+        // A share of her shield each adds, reaching her (of her hitpoints, on her last), and how
+        // near is reaching. A tenth: with Medic!, sending them between her intermissions too,
+        // that's hard, as OSRS's Medic! is
+        shield: 0.1,
         heal: 0.015,
         reach: 1.2,
         // Seconds between each one (the first four, then the next, and so on: 4 game ticks, then
@@ -1366,19 +1377,21 @@ export const KEPHRI: KephriDef = {
         charge: 7,
         disperse: 0.2,
         spotAnim: 2149,
+        // South-east of her, then north-west, the middle of the south, north-east, as OSRS's
         spots: [
-            [4, -5],
-            [-4, -5],
-            [0, -8],
-            [5, -2],
+            [5, -5],
+            [-5, 5],
+            [0, -6],
+            [5, 5],
         ],
         message: "The Arcane Scarab charges its swarm!",
     },
-    // Where her overlords come in, in tiles from her
+    // Where her overlords come in, in tiles from her (she's in the middle of her arena): the
+    // Spitting Scarab north-east, the Soldier east, the Arcane south-east, as OSRS's
     overlordAt: {
-        kephri_spitting: [5, -3],
-        kephri_soldier: [-5, -3],
-        kephri_arcane: [4, -5],
+        kephri_spitting: [5, 5],
+        kephri_soldier: [6, 0],
+        kephri_arcane: [5, -5],
     },
     finalMessage: "Kephri's swarm is gone: she's open to attack, and throws everyone back!",
 };
@@ -2067,6 +2080,10 @@ export const WARDENS: WardensDef = {
         damage: 4,
     },
     shot: { flight: 8, impactSpotAnim: 1605 },
+    // The obelisk won't go below this share of its hitpoints till a Warden's pyramids have come
+    // and gone: OSRS's lasts long enough that they always do, and a run with little to hit it
+    // with at Entry, where it's weakest, broke it before either Warden had charged
+    holdShare: 0.25,
     startDelay: 3,
     message: "The obelisk ignites! Soak a Warden's orbs for power against it, and break it.",
     endMessage: "The obelisk shatters!",
@@ -2178,6 +2195,42 @@ export const WARDENS: WardensDef = {
         // apart on a floor this size, couldn't be reached in the window, so every fourth charge
         // was a ripple nobody could help
         count: [3, 4, 4, 5],
+        // The shapes they land in, a different one each charge and mirrored at random: each a
+        // set of lines, in tiles from the middle of the row in front of the Warden (x east, y
+        // north, so in front's below 0), the siphons spread evenly along them. A line slanting
+        // across, a V pointing at it, a row, and two staggered lines, as the OSRS Wiki's
+        // screenshot of them has them
+        formations: [
+            [
+                [
+                    [-9, -2],
+                    [9, -10],
+                ],
+            ],
+            [
+                [
+                    [-9, -9],
+                    [0, -2],
+                    [9, -9],
+                ],
+            ],
+            [
+                [
+                    [-11, -6],
+                    [11, -6],
+                ],
+            ],
+            [
+                [
+                    [-11, -9],
+                    [-3, -3],
+                ],
+                [
+                    [1, -10],
+                    [9, -4],
+                ],
+            ],
+        ],
         window: 10.8,
         insanityWindow: 4.8,
         siphon: {

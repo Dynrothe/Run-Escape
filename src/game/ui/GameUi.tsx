@@ -2431,9 +2431,12 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
         return null;
     }
     return (
-        <div className="ui-round">
-            The tablet says {info.target}: made {info.sum}
-        </div>
+        <>
+            <div className="ui-round">
+                The tablet says {info.target}: made {info.sum}
+            </div>
+            {info.slate && <div className="ui-round">The slate reads: {info.slate}</div>}
+        </>
     );
 }
 

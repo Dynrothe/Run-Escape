@@ -207,8 +207,10 @@ const AKKHA_LINE = 10;
 
 // The Scabaras room, square 55,82 whole: the entry on the east (45337, local 62,31), the exit on
 // the west (45128, 1,30). Two long halls, north and south, of three rooms each, joined at both ends
-// and parted by walls and a chasm. In the cut's own tiles (y from 5268), unturned: the party's put
-// in the entry's nook, behind a barrier at x 59 the sim holds.
+// and parted by walls and a chasm. Turned a quarter clockwise, so it's walked up the screen as
+// the rest of the raid is: in from the south, out to Kephri at the north, the halls east and west.
+// The constants below are in the cut's own tiles (y from 5268), unturned (scabarasTile turns them):
+// the party's put in the entry's nook, behind a barrier at x 59 the sim holds.
 const SCABARAS: RoomCut = {
     x: 3520,
     y: 5268,
@@ -216,9 +218,17 @@ const SCABARAS: RoomCut = {
     sizeY: 24,
     plane: 0,
     cell: [5, 0],
-    arrive: [60, 12],
+    // (turned) The entry's nook: the cut's 60,12
+    arrive: [12, 3],
+    turns: 1,
 };
 const SCABARAS_GATE = { x: 59, y: [10, 11, 12, 13] };
+// The slates by the way in, on the walls either side, that say what each of Addition's symbols
+// is worth (OSRS has them on the north and south walls by the entrance): stand by one to read it
+const SCABARAS_SLATES = [
+    [56, 15],
+    [56, 8],
+];
 // Its boards (OSRS spawns its plates as the room starts, so they're not in the map), every other
 // tile so a plate's stepped on by itself: Sequence in the east room of the north hall, Lights out
 // in the east room of the south, Addition in the middle room of the north, and Matching's two
@@ -235,7 +245,8 @@ const SCABARAS_LIGHTS = [
     [49, 8],
     [49, 6],
 ];
-const SCABARAS_ADDITION = [35, 37, 39, 41].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
+// On its room's patterned floor (x 36 to 42), every other tile
+const SCABARAS_ADDITION = [36, 38, 40, 42].flatMap((x) => [16, 18, 20].map((y) => [x, y]));
 const SCABARAS_MATCHING = {
     north: [5, 7, 9].flatMap((x) => [16, 18, 20].map((y) => [x, y])),
     south: [5, 7, 9].flatMap((x) => [4, 6, 8].map((y) => [x, y])),
@@ -277,9 +288,10 @@ const KEPHRI_ARENA: RoomCut = {
     arrive: [10, 4],
     turns: 1,
 };
-// (turned) Where she sits, the line past which (north) she rises, and her swarms' way in round
-// the floor's edge, clockwise from the north-west
-const KEPHRI_AT = [10.5, 15.5];
+// (turned) Where she sits (in the middle, on the dais: its pieces 45164 to 45181 round local 31,32
+// of square 55,84), the line past which (north) she rises, and her swarms' way in round the
+// floor's edge, clockwise from the north-west
+const KEPHRI_AT = [10.5, 11.5];
 const KEPHRI_LINE = 6;
 const KEPHRI_SWARMS = [
     [2, 14],
@@ -625,12 +637,11 @@ export const TOA_PLACES = {
     },
     scabaras: {
         arrive: worldTile(SCABARAS_ROOM.arrive.x, SCABARAS_ROOM.arrive.y),
+        // Across the way in, turned: a line at the barrier tiles' north edge
         gate: {
-            x: MAP_X * MAP_SQUARE_SIZE + SCABARAS_ROOM.at.x + SCABARAS_GATE.x,
+            y: scabarasTile(SCABARAS_GATE.x, SCABARAS_GATE.y[0]).y + 0.5,
             locId: APMEKEN_BARRIER_LOC,
-            tiles: SCABARAS_GATE.y.map((y) =>
-                worldTile(SCABARAS_ROOM.at.x + SCABARAS_GATE.x, SCABARAS_ROOM.at.y + y),
-            ),
+            tiles: SCABARAS_GATE.y.map((y) => scabarasTile(SCABARAS_GATE.x, y)),
         },
         entrances: SCABARAS_ENTRANCES.map(([x, y]) => scabarasTile(x, y)),
         puzzle: {
@@ -641,6 +652,7 @@ export const TOA_PLACES = {
                 north: SCABARAS_MATCHING.north.map(([x, y]) => scabarasTile(x, y)),
                 south: SCABARAS_MATCHING.south.map(([x, y]) => scabarasTile(x, y)),
             },
+            slates: SCABARAS_SLATES.map(([x, y]) => scabarasTile(x, y)),
         },
     },
     // Akkha's arena: where the party comes in, where he rises (its middle), the line past which
@@ -763,8 +775,10 @@ function crondisPoint(x: number, y: number): { x: number; y: number } {
 }
 
 // A tile's middle in the Scabaras room, in world tiles
+// A tile of the Scabaras room, in the cut's own tiles, as it's turned (a quarter clockwise: x
+// across 64 becomes y up, y becomes x), in world tiles
 function scabarasTile(x: number, y: number): { x: number; y: number } {
-    return worldTile(SCABARAS_ROOM.at.x + x, SCABARAS_ROOM.at.y + y);
+    return worldTile(SCABARAS_ROOM.at.x + y, SCABARAS_ROOM.at.y + (SCABARAS.sizeX - 1 - x));
 }
 
 // A spot in the Apmeken room from its tile in square 59,82, in world tiles

@@ -155,6 +155,7 @@ import {
     RandomEventEffect,
     SpecialAttackDef,
     Stats,
+    TombsGateDef,
     TombsPathDef,
     TombsSpotDef,
     TombsWardensPlaces,
@@ -993,6 +994,9 @@ export type WardensFight = {
     // What each has spent on its attacks so far
     spent: Record<WardenSide, number>;
     pausedUntil: Record<WardenSide, number>;
+    // When the first pyramids are done with (gone), once a Warden's thrown them: the obelisk's
+    // held till then (WardensDef holdShare)
+    pyramidsDone?: number;
     next: Record<WardenSide, "pyramids" | "shot">;
     troughs: Record<WardenSide, number[]>;
     trough: Record<WardenSide, number>;
@@ -1073,6 +1077,8 @@ export type WardensThree = {
     enraged: boolean;
     nextRow: number;
     nextLightning: number;
+    // The last charge's formation (WardensPhaseThreeDef formations), so the next isn't the same
+    formation: number;
     over: boolean;
 };
 
@@ -1081,6 +1087,39 @@ export type WardensThree = {
 export function wardenFrontRow(warden: { y: number; radius: number }): number {
     return Math.floor(warden.y - warden.radius) - 1;
 }
+
+// count spots spread evenly along a formation's lines (WardensPhaseThreeDef formations), each in
+// the middle of its share of their length
+export function formationSpots(
+    lines: [number, number][][],
+    count: number,
+): { x: number; y: number }[] {
+    const segments: { ax: number; ay: number; bx: number; by: number; length: number }[] = [];
+    for (const line of lines) {
+        for (let i = 1; i < line.length; i++) {
+            const [ax, ay] = line[i - 1];
+            const [bx, by] = line[i];
+            segments.push({ ax, ay, bx, by, length: fm.hypot(bx - ax, by - ay) });
+        }
+    }
+    const total = segments.reduce((sum, s) => sum + s.length, 0);
+    const spots: { x: number; y: number }[] = [];
+    for (let i = 0; i < count && total > 0; i++) {
+        let along = ((i + 0.5) / count) * total;
+        for (const s of segments) {
+            if (along <= s.length || s === segments[segments.length - 1]) {
+                const t = s.length > 0 ? Math.min(1, along / s.length) : 0;
+                spots.push({ x: s.ax + (s.bx - s.ax) * t, y: s.ay + (s.by - s.ay) * t });
+                break;
+            }
+            along -= s.length;
+        }
+    }
+    return spots;
+}
+
+// What the Scabaras room's slates say: each of Addition's symbols and its worth
+const SCABARAS_SLATE = SCABARAS.symbolNames.map((name, i) => `${name} ${i + 1}`).join(", ");
 
 // The rows of the last floor the enrage leaves: from the one in front of the Warden north
 function wardenFrontKeep(
@@ -1116,7 +1155,12 @@ export type ZebakFight = {
 // each Arcane Scarab's charge (when it began, its hitpoints then, where it's flown to)
 export type KephriFight = {
     uid: number;
+    // Shields broken so far; the one she's behind, its full strength, and what swarms that got to
+    // her in an intermission put on the next
     phase: number;
+    shield: number;
+    shieldMax: number;
+    leaked: number;
     final: boolean;
     intermission?: {
         left: number;
@@ -4477,7 +4521,7 @@ export class Sim {
     private stepHealer(enemy: Enemy, abilities: EnemyAbilities, heals: EnemyHealsDef): void {
         const tick = this.tick;
         let target = abilities.healTarget;
-        if (target && (hurtFraction(target) >= 1 || !this.canHeal(enemy, heals, target))) {
+        if (target && (this.healthShare(target) >= 1 || !this.canHeal(enemy, heals, target))) {
             target = abilities.healTarget = undefined;
         }
         if (!target && (tick + enemy.uid) % HEAL_RETARGET_TICKS === 0) {
@@ -4492,7 +4536,12 @@ export class Sim {
         }
         abilities.nextHeal = tick + secondsToTicks(heals.interval);
         const phase = target.bossState?.phase;
-        if (phase) {
+        const kephri = this.tombsKephri;
+        if (kephri?.uid === target.uid) {
+            // Kephri's Soldier Scarab: her shield, or her hitpoints on her last
+            const feed = target.def.boss?.kephri?.shields.soldierFeed ?? 0;
+            this.restoreKephri(target, kephri, feed, heals.fraction);
+        } else if (phase) {
             // Only its shield can be fed
             phase.shield = Math.min(
                 phase.shieldMax,
@@ -4514,11 +4563,24 @@ export class Sim {
     }
 
     // The most hurt enemy a healer heals within its reach
+    // How whole something a healer might go to is: its hitpoints' share, but Kephri's shield
+    // before her last (none while it's down, all of it overcharged as far as it goes)
+    private healthShare(enemy: Enemy): number {
+        const kephri = this.tombsKephri;
+        const def = enemy.def.boss?.kephri;
+        if (kephri?.uid === enemy.uid && def && !kephri.final) {
+            return kephri.intermission
+                ? 0
+                : kephri.shield / (kephri.shieldMax * (1 + def.shields.overcharge));
+        }
+        return hurtFraction(enemy);
+    }
+
     private findHealTarget(enemy: Enemy, heals: EnemyHealsDef): Enemy | undefined {
         let best: Enemy | undefined;
         let bestFraction = 1;
         for (const other of this.enemies) {
-            const fraction = hurtFraction(other);
+            const fraction = this.healthShare(other);
             if (fraction < bestFraction && this.canHeal(enemy, heals, other)) {
                 best = other;
                 bestFraction = fraction;
@@ -5244,9 +5306,15 @@ export class Sim {
                         };
                     }
                     if (enemy.def.boss?.kephri) {
+                        const shieldMax = Math.round(
+                            enemy.maxHp * enemy.def.boss.kephri.shields.share,
+                        );
                         this.tombsKephri = {
                             uid: enemy.uid,
                             phase: 0,
+                            shield: shieldMax,
+                            shieldMax,
+                            leaked: 0,
                             final: false,
                             nextDungTick:
                                 this.tick + secondsToTicks(enemy.def.boss.kephri.dung.every),
@@ -6245,6 +6313,9 @@ export class Sim {
         }
         const attack = fight.next[side];
         fight.next[side] = attack === "pyramids" ? "shot" : "pyramids";
+        if (attack === "pyramids" && fight.pyramidsDone === undefined) {
+            fight.pyramidsDone = this.tick + secondsToTicks(WARDENS.pyramids.leave);
+        }
         if (attack === "pyramids") {
             this.addEffect(def.pyramidsSpotAnim, at.x, at.y, 0, secondsToTicks(4));
             const { cell, cols, rows, from } = WARDENS.pyramids;
@@ -6344,11 +6415,18 @@ export class Sim {
         const left = Math.max(0, enemy.hp) / enemy.maxHp;
         if (fight.phase === 1 && enemy.uid === fight.obeliskUid) {
             const energy = this.hero.wardenEnergy;
+            const held =
+                (fight.pyramidsDone === undefined || this.tick < fight.pyramidsDone) &&
+                enemy.hp <= enemy.maxHp * WARDENS.holdShare;
             return {
                 phase: 1,
                 stage: "hp",
                 fraction: left,
-                status: energy > 0 ? `Break the obelisk! Soaked ${energy}` : "Break the obelisk!",
+                status: held
+                    ? "It holds till the Wardens' pyramids have come!"
+                    : energy > 0
+                      ? `Break the obelisk! Soaked ${energy}`
+                      : "Break the obelisk!",
             };
         }
         const two = fight.two;
@@ -6891,6 +6969,7 @@ export class Sim {
             enraged: false,
             nextRow: 0,
             nextLightning: 0,
+            formation: -1,
             over: false,
         };
         this.emit({ type: "notice", message: `${WARDENS.wardens[side].name} ${def.message}` });
@@ -6983,20 +7062,36 @@ export class Sim {
         this.animate(warden, def.chargeSeq);
         const spots: { x: number; y: number }[] = [];
         if (floor) {
-            // In front of it and beside it, not behind the crater, where getting to one and back
-            // is a walk round it
-            const rows = Math.max(
-                1,
-                Math.min(floor.sizeY - 4, Math.floor(warden.y) - floor.y0 - 1),
-            );
-            for (let tries = 0; tries < 200 && spots.length < count; tries++) {
-                const x = floor.x0 + 2 + this.rng.int(floor.sizeX - 4) + 0.5;
-                const y = floor.y0 + 2 + this.rng.int(rows) + 0.5;
-                if (
-                    !floor.isFalling(Math.floor(x), Math.floor(y), this.tick) &&
-                    spots.every((spot) => fm.hypot(spot.x - x, spot.y - y) >= 4)
-                ) {
-                    spots.push({ x, y });
+            // In one of its formations in front of it, not the last one, mirrored at random
+            const shapes = def.formations;
+            let pick = this.rng.int(shapes.length);
+            if (pick === three.formation && shapes.length > 1) {
+                pick = (pick + 1 + this.rng.int(shapes.length - 1)) % shapes.length;
+            }
+            three.formation = pick;
+            const flip = this.rng.chance(0.5) ? -1 : 1;
+            const front = wardenFrontRow(warden) + 0.5;
+            const free = (x: number, y: number) =>
+                floor.index(x, y) >= 0 &&
+                y < Math.floor(warden.y) &&
+                !floor.isFalling(x, y, this.tick) &&
+                spots.every((spot) => Math.floor(spot.x) !== x || Math.floor(spot.y) !== y);
+            for (const at of formationSpots(shapes[pick], count)) {
+                const ax = Math.floor(warden.x + flip * at.x);
+                const ay = Math.floor(front + at.y);
+                // Its own tile, or the nearest free one round it
+                found: for (let r = 0; r <= 3; r++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                        for (let dx = -r; dx <= r; dx++) {
+                            if (
+                                Math.max(Math.abs(dx), Math.abs(dy)) === r &&
+                                free(ax + dx, ay + dy)
+                            ) {
+                                spots.push({ x: ax + dx + 0.5, y: ay + dy + 0.5 });
+                                break found;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -7016,12 +7111,13 @@ export class Sim {
             nextBeam: this.tick,
         };
         this.emit({ type: "notice", message: def.siphonMessage });
-        // A phantom with the second charge (east of it) and the third (west), as OSRS has them
+        // A phantom with the second charge (on its left, the west: Zebak's, Akkha's) and the
+        // third (its right), as OSRS has them
         const which = three.batch - 2;
         if (which === 0 || which === 1) {
             const id = def.forms[three.side].phantoms[which];
             const at = {
-                x: warden.x + (which === 0 ? def.phantomOffset : -def.phantomOffset),
+                x: warden.x + (which === 0 ? -def.phantomOffset : def.phantomOffset),
                 y: warden.y,
             };
             const phantom = this.spawnEnemy(getEnemy(id), "boss", at, 1);
@@ -7267,8 +7363,9 @@ export class Sim {
         const gate = this.tombsGate;
         if (!room.started) {
             // Waiting in the safe corridor: it begins once someone's through the barrier
-            const through =
-                !gate || this.heroes.some((hero) => this.isUp(hero) && hero.player.x < gate.x);
+            const through = this.heroes.some(
+                (hero) => this.isUp(hero) && this.throughTombsGate(hero.player),
+            );
             if (through) {
                 room.started = true;
                 if (het) {
@@ -7729,22 +7826,21 @@ export class Sim {
         this.stepKephriSwarms(boss, fight, def);
     }
 
-    // Her shield breaking at each of its shares of her hitpoints: dazed and shielded, no attacks,
-    // while her swarms come round the edge and her overlords fight. Over once they're all done.
+    // Her shield broken (one of the first two): dazed and shielded, no attacks, while her swarms
+    // come round the edge and her overlords fight. Over once they're all done, behind the next.
     private stepKephriIntermission(boss: Enemy, fight: KephriFight, def: KephriDef): void {
-        const at = def.intermissions.at;
         const state = boss.bossState;
         if (!fight.intermission) {
-            if (
-                fight.final ||
-                fight.phase >= at.length ||
-                boss.hp > boss.maxHp * at[fight.phase] ||
-                state?.windup
-            ) {
+            if (fight.final || fight.phase >= def.intermissions.swarms.length || fight.shield > 0) {
+                return;
+            }
+            // Broken mid-attack: shielded till it's done, then dazed
+            if (state?.windup) {
+                boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
                 return;
             }
             const which = fight.phase;
-            boss.hp = Math.max(boss.hp, Math.round(boss.maxHp * at[which]));
+            fight.leaked = 0;
             const level = this.tombsPathLevel;
             const swarms = def.intermissions.swarms[which] + 2 * level;
             const overlords = [
@@ -7804,6 +7900,10 @@ export class Sim {
         if (intermission.left === 0 && !swarmsUp && !intermission.overlords.some(alive)) {
             fight.intermission = undefined;
             fight.phase++;
+            // Behind her next shield, overcharged by the swarms that got to her
+            fight.shield = Math.round(
+                fight.shieldMax * (1 + Math.min(def.shields.overcharge, fight.leaked)),
+            );
             boss.shieldEnd = 0;
             if (state) {
                 state.channelEnd = 0;
@@ -7830,8 +7930,9 @@ export class Sim {
         }
     }
 
-    // Swarms that get to her restore her (her shield, as her hitpoints) and are gone; Medic! has
-    // them come outside her intermissions too
+    // Swarms that get to her restore her and are gone: her next shield in an intermission, the one
+    // she's behind otherwise (Medic! has them come outside her intermissions too), her hitpoints
+    // on her last
     private stepKephriSwarms(boss: Enemy, fight: KephriFight, def: KephriDef): void {
         const points = this.tombsPathRoom?.boss?.swarms ?? [];
         if (
@@ -7851,13 +7952,74 @@ export class Sim {
             if (fm.hypot(enemy.x - boss.x, enemy.y - boss.y) > reach) {
                 continue;
             }
-            boss.hp = Math.min(
-                boss.maxHp,
-                boss.hp + Math.max(1, Math.round(boss.maxHp * def.swarm.heal)),
-            );
+            this.restoreKephri(boss, fight, def.swarm.shield, def.swarm.heal);
             this.addEffect(2144, boss.x, boss.y, 0, 30, boss.uid);
             this.vanish(enemy);
         }
+    }
+
+    // Something restoring her: shield (a share of a shield's strength) before her last, heal (a
+    // share of her hitpoints) on it
+    private restoreKephri(boss: Enemy, fight: KephriFight, shield: number, heal: number): void {
+        const def = boss.def.boss?.kephri;
+        if (fight.final || !def) {
+            boss.hp = Math.min(boss.maxHp, boss.hp + Math.max(1, Math.round(boss.maxHp * heal)));
+        } else if (fight.intermission || fight.shield <= 0) {
+            // Towards the next (a broken one isn't mended: she's dazed as soon as she can be)
+            fight.leaked += shield;
+        } else {
+            fight.shield = Math.min(
+                Math.round(fight.shieldMax * (1 + def.shields.overcharge)),
+                fight.shield + Math.max(1, Math.round(fight.shieldMax * shield)),
+            );
+        }
+    }
+
+    // A hit on her before her last: off the shield she's behind, her hitpoints untouched; the
+    // third gone, she's down (and rises for her last, BossDef.rises). What the shield took.
+    private kephriTakes(boss: Enemy, fight: KephriFight, damage: number): number {
+        const taken = Math.min(fight.shield, damage);
+        fight.shield -= taken;
+        if (fight.shield > 0) {
+            return taken;
+        }
+        const def = boss.def.boss?.kephri;
+        if (def && fight.phase >= def.shields.count - 1) {
+            boss.hp = 0;
+        } else {
+            // Broken: nothing gets at her till she's dazed (stepKephriIntermission), even if
+            // she's mid-attack
+            boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
+        }
+        return taken;
+    }
+
+    // Kephri's bar on the HUD: the shield she's behind, which of them, or her hitpoints on her last
+    kephriBar(
+        enemy: Enemy,
+    ): { phase: number; stage: "shield" | "hp"; fraction: number; status: string } | undefined {
+        const fight = this.tombsKephri;
+        const def = enemy.def.boss?.kephri;
+        if (!fight || !def || fight.uid !== enemy.uid) {
+            return undefined;
+        }
+        const count = def.shields.count;
+        if (fight.final) {
+            return {
+                phase: count + 1,
+                stage: "hp",
+                fraction: Math.max(0, enemy.hp) / enemy.maxHp,
+                status: "Her swarm's gone: she's open to attack!",
+            };
+        }
+        return {
+            phase: fight.phase + 1,
+            stage: "shield",
+            fraction: fight.intermission ? 0 : Math.min(1, fight.shield / fight.shieldMax),
+            status: fight.intermission
+                ? "Kill the swarms before they restore her shield!"
+                : `Shield ${fight.phase + 1} of ${count}`,
+        };
     }
 
     private kephriDungEvery(def: KephriDef): number {
@@ -8370,15 +8532,14 @@ export class Sim {
         this.emit({
             type: "notice",
             message:
-                "Four puzzles: follow the plates' order (north-east), light the ring (south-east), " +
-                "make the tablet's number (north), then match the symbols (west).",
+                "Four puzzles: follow the plates' order (east, by the way in), light the ring " +
+                "(west, by the way in), make the tablet's number (east, further on), then match " +
+                "the symbols (at the far end).",
         });
         this.emit({
             type: "notice",
             message:
-                "The symbols: " +
-                SCABARAS.symbolNames.map((name, i) => `${name} ${i + 1}`).join(", ") +
-                ".",
+                "The slates by the way in say what each symbol's worth: stand by one to read it.",
         });
     }
 
@@ -8392,7 +8553,10 @@ export class Sim {
 
     // A new order for the Sequence's plates, shown after so many seconds: no plate twice
     private newScabarasSequence(def: ScabarasDef, after: number): ScabarasRoom["sequence"] {
-        const steps = Math.min(SCABARAS.sequenceMost, SCABARAS.sequenceSteps + this.tombsPathLevel);
+        const steps = Math.min(
+            SCABARAS.sequenceMost,
+            SCABARAS.sequenceSteps + Math.floor(this.tombsPathLevel / SCABARAS.sequenceEvery),
+        );
         const plates = def.sequence.map((_, i) => i);
         const order: number[] = [];
         for (let i = 0; i < steps && plates.length > 0; i++) {
@@ -8502,17 +8666,26 @@ export class Sim {
         return sequence.order[i];
     }
 
-    // The room's puzzles for the HUD: how many solved, and Addition's number and what's made
-    get scabarasInfo(): { solved: number; of: number; target: number; sum: number } | undefined {
+    // The room's puzzles for the HUD: how many solved, Addition's number and what's made, and
+    // what a slate by the way in says, for whoever's stood by one
+    get scabarasInfo():
+        | { solved: number; of: number; target: number; sum: number; slate?: string }
+        | undefined {
         const scabaras = this.tombsRoom?.scabaras;
         if (!scabaras || this.tombsRoom?.doneTick !== undefined) {
             return undefined;
         }
+        const slates = this.tombsPathRoom?.scabaras?.slates ?? [];
+        const player = this.player;
+        const reading = slates.some(
+            (slate) => fm.hypot(slate.x - player.x, slate.y - player.y) <= SCABARAS.slateReach,
+        );
         return {
             solved: scabaras.solved.length,
             of: 4,
             target: scabaras.addition.target,
             sum: scabaras.addition.sum,
+            slate: reading ? SCABARAS_SLATE : undefined,
         };
     }
 
@@ -9255,7 +9428,7 @@ export class Sim {
     }
 
     // The barrier between a Tombs room's safe corridor and the room, while there's one
-    get tombsGate(): { x: number; locId: number; tiles: { x: number; y: number }[] } | undefined {
+    get tombsGate(): TombsGateDef | undefined {
         return this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room?.gate;
     }
 
@@ -9265,25 +9438,34 @@ export class Sim {
         return room !== undefined && room.started && room.doneTick === undefined && !room.boss;
     }
 
-    // Shut, the barrier's a wall: nothing gets east of it, the party or the baboons
+    // Shut, the barrier's a wall: nothing gets back past it into the corridor (east of it, or
+    // south), the party or the baboons
     private holdTombsGate(): void {
         const gate = this.tombsGate;
         if (!gate || !this.tombsGateShut) {
             return;
         }
-        for (const hero of this.heroes) {
-            const player = hero.player;
-            const limit = gate.x - player.radius;
-            if (player.x > limit) {
-                player.x = limit;
+        const hold = (one: { x: number; y: number; radius: number }) => {
+            if (gate.x !== undefined) {
+                one.x = Math.min(one.x, gate.x - one.radius);
+            } else {
+                one.y = Math.max(one.y, gate.y + one.radius);
             }
+        };
+        for (const hero of this.heroes) {
+            hold(hero.player);
         }
         for (const enemy of this.enemies) {
-            const limit = gate.x - enemy.radius;
-            if (!enemy.dead && enemy.x > limit) {
-                enemy.x = limit;
+            if (!enemy.dead) {
+                hold(enemy);
             }
         }
+    }
+
+    // Whether someone's through a room's barrier, out of its corridor
+    private throughTombsGate(player: { x: number; y: number }): boolean {
+        const gate = this.tombsGate;
+        return !gate || (gate.x !== undefined ? player.x < gate.x : player.y > gate.y);
     }
 
     // Where the issue is, for the game's hint arrow over it
@@ -14380,6 +14562,7 @@ export class Sim {
         const wardens = this.tombsWardens;
         const two = wardens?.phase === 2 ? wardens.two : undefined;
         const three = wardens?.phase === 3 ? wardens.three : undefined;
+        const kephri = this.tombsKephri;
         const style = this.sourceStyle;
         if (
             two &&
@@ -14464,12 +14647,24 @@ export class Sim {
             shown = this.wardenTakes(enemy, damage, two);
         } else if (three && enemy.uid === three.wardenUid) {
             enemy.hp = this.wardenThreeHp(enemy, three, enemy.hp - damage);
+        } else if (wardens?.phase === 1 && enemy.uid === wardens.obeliskUid) {
+            // Held till the first pyramids have come and gone
+            const held =
+                wardens.pyramidsDone === undefined || this.tick < wardens.pyramidsDone
+                    ? Math.round(enemy.maxHp * WARDENS.holdShare)
+                    : 0;
+            enemy.hp = Math.max(Math.min(enemy.hp, held), enemy.hp - damage);
+        } else if (kephri && enemy.uid === kephri.uid && !kephri.final) {
+            // Off her shield: what it took is what's shown, and what the points go by (her three
+            // shields come to her hitpoints, so they're worth what those were)
+            shown = this.kephriTakes(enemy, kephri, damage);
         } else {
             enemy.hp -= damage;
         }
         enemy.flash = 5;
         if (worth > 0 && pointsTo) {
-            const taken = Math.max(0, hpBefore - Math.max(0, pointsTo.hp));
+            const onShield = kephri && enemy.uid === kephri.uid && hpBefore > 0 && !kephri.final;
+            const taken = onShield ? shown : Math.max(0, hpBefore - Math.max(0, pointsTo.hp));
             // Shared out by damage in co-op: a fair share of each boss is its whole worth
             const party = this.heroes.filter((hero) => !hero.left).length;
             const points = (taken / pointsTo.maxHp) * worth * party;

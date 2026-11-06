@@ -2837,15 +2837,16 @@ export class GameClient implements GameFrameHandler {
                         : undefined,
                 };
             }
-            // The Wardens' three phases
-            const wardens = sim.wardensBar(shownBoss);
-            if (wardens) {
-                boss.fraction = wardens.fraction;
+            // The Wardens' three phases, Kephri's three shields and her last
+            const tombs = sim.wardensBar(shownBoss) ?? sim.kephriBar(shownBoss);
+            if (tombs) {
+                const kephri = shownBoss.def.boss?.kephri;
+                boss.fraction = tombs.fraction;
                 boss.fight = {
-                    phase: wardens.phase,
-                    phases: 3,
-                    stage: wardens.stage,
-                    status: wardens.status,
+                    phase: tombs.phase,
+                    phases: kephri ? kephri.shields.count + 1 : 3,
+                    stage: tombs.stage,
+                    status: tombs.status,
                     totems: [],
                 };
             }

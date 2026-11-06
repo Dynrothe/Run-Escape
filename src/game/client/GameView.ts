@@ -755,7 +755,8 @@ export class GameView {
                 tile.x,
                 height,
                 tile.y,
-                TOMBS_GATE_YAW,
+                // Across a way in from the south it stands as the loc does; from the east, turned
+                gate.x !== undefined ? TOMBS_GATE_YAW : 0,
             );
         }
     }
@@ -1143,7 +1144,7 @@ export class GameView {
                 },
             );
         };
-        if (boss && !fight.final && !fight.intermission) {
+        if (boss && !fight.final && !fight.intermission && fight.shield > 0) {
             play(KEPHRI_SHIELD_SPOTANIM, boss.x, boss.y, 1.6);
         }
         for (const index of sim.kephriDungHeroes) {
@@ -1198,6 +1199,10 @@ export class GameView {
                 put(locs.stepped, p.x, p.y, true);
             }
         });
+        // The slates by the way in: what the symbols are worth (the HUD says, by one)
+        for (const p of def.slates) {
+            put(locs.tablet, p.x, p.y);
+        }
         const matching = scabaras.matching;
         for (const side of ["north", "south"] as const) {
             def.matching[side].forEach((p, i) => {

@@ -345,19 +345,25 @@ raid's ranges.
       magic bring an unseen melee hit), Stay Vigilant, Feeling Special.
     - Not in yet: Detonate (a party's crosses).
 - **The Scabaras room** (`SCABARAS` in `content/tombs.ts`, `Sim.stepScabaras`): square 55,82 whole,
-  unturned, entered from the east nook behind a barrier at x 59 the sim holds. OSRS spawns its plates
-  as the room starts, so the boards are drawn by the client (`GameView.drawScabaras`) with the cache's
-  own plates, on tiles whose patterned floor decoration the map leaves out. All four puzzles are
-  needed (OSRS's solo takes one a side, then the last), each a casket and the next wave:
-    - **Sequence** (north hall's east room): 12 plates light one at a time (0.6 s each), 5 steps plus
-      one a path level, up to 9. Step on them in order; a wrong plate drops the roof on you and a
-      new order's shown.
-    - **Lights out** (south hall's east room): a ring of 8, each toggling itself and its neighbours,
-      scrambled by 3 presses plus the path level. A scarab knocks a light out every 14 s (less with
-      levels).
-    - **Addition** (north hall's middle room): 12 symbols worth 1 to 9 (Line to Foot) and the
-      tablet's number, 20 to 45, shown on the HUD. Past it, the roof comes down and they reset.
-    - **Matching** (the west room, last): two boards of the same nine hidden symbols either side of
+  turned a quarter clockwise so it's walked up the screen as the rest of the raid is: in from the
+  south behind a barrier across the way in (the sim holds it: `gate.y`), out to Kephri at the north,
+  the cut's north hall now the east and its south hall the west. The map's constants stay in the
+  cut's own tiles, turned by `scabarasTile`. OSRS spawns its plates as the room starts, so the
+  boards are drawn by the client (`GameView.drawScabaras`) with the cache's own plates, on tiles
+  whose patterned floor decoration (45380) the map leaves out. All four puzzles are needed (OSRS's
+  solo takes one a side, then the last), each a casket and the next wave:
+    - **The slates** by the way in, one on each wall, as OSRS's: stand by one and the HUD says what
+      each of Addition's symbols is worth (drawn with the Ancient tablet, 45339).
+    - **Sequence** (the east hall, by the way in): 12 plates light one at a time (0.8 s each), 4
+      steps, one more every two path levels, up to 6 (it was 5 plus one a level, up to 9: too
+      many). Step on them in order; a wrong plate drops the roof on you and a new order's shown.
+    - **Lights out** (the west hall, by the way in): a ring of 8, each toggling itself and its
+      neighbours, scrambled by 3 presses plus the path level. A scarab knocks a light out every 14 s
+      (less with levels).
+    - **Addition** (the east hall's middle room): 12 symbols worth 1 to 9 (Line to Foot), on the
+      room's patterned floor (a column of them stood a tile off it, on the walkway, before), and
+      the tablet's number, 20 to 45, shown on the HUD. Past it, the roof comes down and they reset.
+    - **Matching** (the far, north room, last): two boards of the same nine hidden symbols either side of
       the chasm. A pair that matches stays; one that doesn't drops the roof and hides again. 4 are
       done as it starts, one fewer each path level.
     - A mistake takes a quarter of your hitpoints, through armour. Meanwhile rocks fall near
@@ -370,23 +376,28 @@ raid's ranges.
       it: they're left out, and its tiles won't turn till then anyway.
 - **Kephri** (`KEPHRI` in `content/tombs.ts`, `Sim.stepKephri`), the Scabaras path's boss, after its
   room. Her arena is square 55,84's floor, cut without the teleport crystal's room past its chasm and
-  turned a quarter clockwise, so you walk in from the south and she sits at the north. She never moves.
+  turned a quarter clockwise, so you walk in from the south. She sits in its middle on the dais, as
+  OSRS has her, and never moves.
     - **Her attacks**, as data: fireballs (Vorkath's firebomb, 2167) down on where you stood under
       their shadows, twice, each breaking into shards; rings of scarab spit with a way through; her
       swarm spiralling out both ways; and Mass Incubation, eggs thrown round the arena: dark ones
       hatch an Agile Scarab, the light one goes off in a 3 by 3 and breaks into shards unless
       it's broken first.
-    - **Her shield** (2141 round her) breaks at 66% and 33%: dazed (11720) and shielded, she
+    - **Her three shields** (2141 round her), as OSRS's: each takes a third of her hitpoints in
+      hits, and her own hitpoints aren't touched till the third's gone. Her bar shows the shield
+      and which of three it is. After the first two break, she's dazed (11720) and shielded, and
       doesn't attack while swarms (28, then 24, more with path levels) come round the arena's edge
       clockwise from six holes, one every 4 game ticks, then 3, 2 and 1, sometimes three at once
-      from path level 2. Each that reaches her heals her. Her overlords come too: a Spitting Scarab,
-      then a Soldier (whose swarm heals her every 5 s) and an Arcane Scarab, which charges and then
-      sends a ring of red swarm all round unless it's hit hard enough to fly off and start again.
-      It's over once the swarms and overlords are all done.
+      from path level 2. Each that reaches her overcharges the next shield (a tenth of it, 15%
+      over at most). Her overlords come too, where OSRS has them: a Spitting Scarab north-east of
+      her, then a Soldier east (whose swarm feeds her shield every 5 s) and an Arcane Scarab
+      south-east, which charges and then sends a ring of red swarm all round unless it's hit hard
+      enough to fly off (north-west, the middle of the south, north-east) and start again. It's
+      over once the swarms and overlords are all done, and she's behind the next shield.
     - **Dung Strike**: flies round you (2146) for 1.8 s, then she throws you straight back from
       her, stunned for 2 s, with dung left along the way as walls for a while.
-    - **Her last**: at 0 she's back with a quarter of her hitpoints as 11721, her swarm gone,
-      throwing the whole party back.
+    - **Her last**: the third shield gone, she's back with a quarter of her hitpoints as 11721, her
+      swarm gone, throwing the whole party back; swarms and the Soldier heal her hitpoints now.
     - **Invocations**: Lively Larvae (two more dark eggs), More Overlords, Blowing Mud (two
       thrown back), Medic! (swarms between her shield's breaks too, at half speed), Aerial
       Assault (bigger, harder fireballs).
@@ -438,6 +449,9 @@ raid's ranges.
       125 charged and Tumeken's 0, so the first attack comes about 9 s in and the two never
       discharge together unless soaking brings them level (both sets of pyramids at once would
       leave no cell clear, and both shots at once are half a bar).
+    - The obelisk won't go below a quarter of its hitpoints till a Warden's first pyramids have
+      come and gone (`WARDENS.holdShare`): OSRS's lasts long enough that they always come, and at
+      Entry, with little to hit it with, it was broken before either Warden had charged.
     - Orbs (11769) leave it each side every 1.2 s, a tile every 0.6 s for 8, down one of three
       troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). An
       orb a player walks into along its trough (anywhere but its spawn tile) is soaked: its Warden
@@ -495,12 +509,15 @@ raid's ranges.
     - At 80, 60, 40 and 20% (no hit takes it past one), it charges (11763/11764): 3, 4, 4, then 5
       siphons (11772) for one player, one more each for every other (seven for one, four tiles
       apart, couldn't be reached in time: every fourth charge was a ripple nobody could help),
-      land over the floor, beamed (2227), each stopped by a player stepping on it
+      land in front of it in a formation, a different one each charge and mirrored at random
+      (`WARDENS.three.formations`: a line slanting across, a V pointing at it, a row, two
+      staggered lines, after the OSRS Wiki's screenshot; the wiki gives no coordinates), beamed (2227), each stopped by a player stepping on it
       (reversed, 11773) within 10.8 s (Insanity 4.8). Nothing hurts the Warden while they're out. All stopped, it staggers for 5% of its
       hitpoints; any left, the floor erupts out from the middle. The slams start again from east
       (Insanity: where they left off).
-    - The second charge (60%) brings a path boss's phantom east of it and the third (40%) another
-      west, each at the floor's edge level with it, as OSRS has them, each with its boss's usual attacks: Zebak's (fans of his magic or
+    - The second charge (60%) brings a path boss's phantom on its left (west) and the third (40%)
+      another on its right, each at the floor's edge level with it, as OSRS has them (Zebak's on
+      the left), each with its boss's usual attacks: Zebak's (fans of his magic or
       ranged: no acid, no jugs, that's his room) and Ba-Ba's (a rock on where you stand) with
       Tumeken's; Akkha's (three of his ranged or magic) and Kephri's (a fireball lobbed onto you,
       wider with Aerial Assault) with Elidinis'. They can't be hit.
@@ -561,6 +578,9 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   and die following), and, with every spot in reach acid, rolling a jug at rest to break by the
   pool; and it sidesteps bullets, boss blasts and swings, and the Wardens' red skulls as they
   turn (a sidestep at the last beats their turning circle).
+- **Kephri**: her overlords first, the Arcane Scarab before the others (the wiki's advice), kept
+  out of the Soldier's reach; between, a tile and a half from her (she's in the middle, and a Dung
+  Strike from further out threw it against a wall, stunned among the dung).
 - **The Wardens**: phase one soaking the orbs of the side whose Warden its own style can't hurt
   first (a magic hero takes Tumeken's, so Elidinis' wakes open to magic; ranged the other way),
   walking to each orb's next tile along its trough till it holds the most, then a step off every

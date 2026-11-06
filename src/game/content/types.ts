@@ -603,8 +603,9 @@ export type ZebakDef = {
 
 // Kephri's fight (BossDef.kephri; Sim.stepKephri), as content/tombs.ts's KEPHRI says
 export type KephriDef = {
+    // soldierFeed: of a shield, what each of the Soldier Scarab's heals puts on it
+    shields: { count: number; share: number; overcharge: number; soldierFeed: number };
     intermissions: {
-        at: number[];
         swarms: number[];
         overlords: string[][];
         moreOverlords: string[][];
@@ -613,6 +614,7 @@ export type KephriDef = {
     };
     swarm: {
         enemyId: string;
+        shield: number;
         heal: number;
         reach: number;
         cadence: number[];
@@ -1879,6 +1881,7 @@ export type WardensDef = {
     };
     shot: { flight: number; impactSpotAnim: number };
     // Seconds before the first orbs, once the party's in
+    holdShare: number;
     startDelay: number;
     message: string;
     endMessage: string;
@@ -1994,6 +1997,9 @@ export type WardensPhaseThreeDef = {
     slamSeqs: { east: number; west: number; both: number };
     at: number[];
     count: number[];
+    // Where they land: shapes, each a set of lines of [x, y] points in tiles from the middle of
+    // the row in front of the Warden (y north), the siphons spread evenly along them
+    formations: [number, number][][][];
     window: number;
     insanityWindow: number;
     siphon: {
@@ -2086,11 +2092,14 @@ export type TombsPathDef = {
             lights: { x: number; y: number }[];
             addition: { x: number; y: number }[];
             matching: { north: { x: number; y: number }[]; south: { x: number; y: number }[] };
+            // The slates by the way in that say what Addition's symbols are worth
+            slates: { x: number; y: number }[];
         };
-        // The barrier between the safe corridor and the room (east of it): the party comes in
-        // behind it, and the room starts once someone walks through. It's the sim's: a line at
-        // world x, held while the room's on, and the loc drawn on its tiles while it's shut.
-        gate?: { x: number; locId: number; tiles: { x: number; y: number }[] };
+        // The barrier between the safe corridor and the room: the party comes in behind it, and
+        // the room starts once someone walks through. It's the sim's: a line at world x (the
+        // corridor east of it) or world y (the corridor south of it, the room walked north), held
+        // while the room's on, and the loc drawn on its tiles while it's shut.
+        gate?: TombsGateDef;
         // Where its enemies come in, in world tiles: the Apmeken room's holes in the walls
         entrances?: { x: number; y: number }[];
         // The path's boss, after its room: the party's brought to arrive, and it rises at `at`
@@ -2123,6 +2132,12 @@ export type TombsPathDef = {
         };
     };
 };
+
+// A Tombs room's barrier (TombsPathDef room gate): a line at world x or world y, never both
+export type TombsGateDef = { locId: number; tiles: { x: number; y: number }[] } & (
+    | { x: number; y?: undefined }
+    | { y: number; x?: undefined }
+);
 
 export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reach: number };
 
