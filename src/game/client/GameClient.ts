@@ -58,6 +58,7 @@ import {
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getReachedStages,
     getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -1361,7 +1362,7 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
-            stage: getFightStage(this.save, mapId),
+            stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1882,6 +1883,19 @@ export class GameClient implements GameFrameHandler {
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
+    // A fight in parts: the part picked (one reached), or the next not beaten
+    private chosenStage(mapId: string): number {
+        const picked = this.store.getSnapshot().fightStage;
+        return picked !== undefined && picked < getReachedStages(this.save, mapId)
+            ? picked
+            : getFightStage(this.save, mapId);
+    }
+
+    // A fight in parts' part to play next, picked on the map screen
+    pickFightStage(stage: number | undefined): void {
+        this.store.set({ fightStage: stage });
+    }
+
     private finishRun(
         endedEarly?: string,
         early: "abandoned" | "disconnected" = endedEarly ? "disconnected" : "abandoned",
@@ -1891,6 +1905,8 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.runRecorded = true;
+        // A part picked was for this run: the next one goes on from what's been won
+        this.store.set({ fightStage: undefined });
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();

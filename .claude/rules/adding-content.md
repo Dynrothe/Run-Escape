@@ -250,7 +250,8 @@ offered once found, with nothing else to add. Pets never go in the sim: see Pets
 
 The Tombs of Amascut is being built a room or a boss at a time, as a dev map
 (`scaperune/maps/tombsOfAmascut.ts`), to the plan in `docs/design/tombs-of-amascut.md`: keep it
-off the Raids tab until it's finished. A new invocation goes in `INVOCATIONS`
+off the Raids tab in a build until it's finished (on the dev server it's listed with the raids,
+behind its quest, Beneath Cursed Sands: `MapDef.requires`). A new invocation goes in `INVOCATIONS`
 (`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
 A new room or boss, or a mechanic in one, needs the Tombs' bot to know it (`scripts/game/tombsBot.ts`:
 the puzzle's steps, where to stand, what to step round), and its sim run on it
