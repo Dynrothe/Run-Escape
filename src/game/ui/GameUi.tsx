@@ -1297,6 +1297,14 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
             { name: "Campaign", maps: CAMPAIGN_MAPS },
         ],
     },
+    {
+        id: "bosses",
+        name: "Bosses",
+        groups: [
+            { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
+            { name: "Raids", hint: "room by room, open from the start", maps: RAID_MAPS },
+        ],
+    },
     // Beside Bosses, open once the Inferno's beaten
     {
         id: "fallen_empire",
@@ -1308,14 +1316,6 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
             },
         ],
         act: FALLEN_EMPIRE,
-    },
-    {
-        id: "bosses",
-        name: "Bosses",
-        groups: [
-            { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            { name: "Raids", hint: "room by room, open from the start", maps: RAID_MAPS },
-        ],
     },
     {
         id: "fun",
