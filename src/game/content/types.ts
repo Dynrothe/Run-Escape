@@ -1800,6 +1800,8 @@ export type MapDef = {
         weaponLevel: number;
         strikeReach?: number;
         ability?: FightAbilityDef;
+        // Gear (items.ts, by id) everyone starts the fight wearing: the kit it's tuned to
+        gear?: string[];
     };
     // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;

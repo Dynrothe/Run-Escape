@@ -1843,6 +1843,10 @@ export class Sim {
             // A boss fight's kit: the weapon at its level, and nothing more ever
             if (this.map.fight) {
                 this.weapons[0].level = this.map.fight.weaponLevel;
+                // and its gear, worn from the start (MapDef.fight.gear)
+                for (const id of this.map.fight.gear ?? []) {
+                    this.equip(id);
+                }
             }
             this.updateStats();
             hero.player.hp = hero.player.maxHp;
