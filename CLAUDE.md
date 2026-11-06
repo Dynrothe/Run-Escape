@@ -231,6 +231,8 @@ desktop build.
   "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
+- A player kept invulnerable from the console (`player.invulnerable` over 30) blinks white every 5
+  ticks, as after a hit, so a screenshot can catch them pale grey. Keep their hitpoints up instead.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,
   and the failed load can leave a bad cache in the browser profile for that port.
 - A slow first load after the dev server starts, or a page that reloads itself mid-load, is
