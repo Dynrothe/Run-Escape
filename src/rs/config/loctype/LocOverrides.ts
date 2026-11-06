@@ -3,6 +3,9 @@
 // thread reads this, which is why it's a constant and not sent to them. Only use ids that are
 // placed nowhere in the real world (world-index.ts), or that scenery changes too.
 export type LocOverride = {
+    // A loc of our own (an id from DERIVED_LOCS on): the cache's loc base, with the changes below.
+    // Only what's set changes, unlike an override of a cache id, whose size goes to 128 unset.
+    base?: number;
     models?: number[];
     // 128 is as the model was made
     size?: number;
@@ -10,7 +13,40 @@ export type LocOverride = {
     solid?: boolean;
     // Lifts the model this far off the ground, in scene units (128 to a tile), for what floats
     height?: number;
+    // Its tiles across and deep, and the animation it plays where it stands (a loc of our own)
+    sizeX?: number;
+    sizeY?: number;
+    seq?: number;
+    // Burnt: every colour of its models darkened and greyed (see CHARRED_LOCS)
+    charred?: boolean;
 };
+
+// Locs of our own, past every id the cache has. They're placed by ScapeRune maps only, so nothing
+// in the real world changes. Ids stay under 2^21: the model caches key a loc by its id << 10.
+// CHARRED_LOCS + id is that cache loc burnt (getCharredLoc): the same in every way but its
+// colours, for a map in ruins (maps/battleForVarrock.ts).
+export const CHARRED_LOCS = 1 << 20;
+// Others made from a cache loc, listed in LOC_OVERRIDES with a base
+export const DERIVED_LOCS = CHARRED_LOCS + (1 << 19);
+
+export function getCharredLoc(id: number): number {
+    return CHARRED_LOCS + id;
+}
+
+// What a loc id's data is read from: its own, or for a loc of ours, the cache loc it's made from
+export function getLocBase(id: number): number {
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return id - CHARRED_LOCS;
+    }
+    return LOC_OVERRIDES.get(id)?.base ?? id;
+}
+
+export function getLocOverride(id: number): LocOverride | undefined {
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return { base: id - CHARRED_LOCS, charred: true };
+    }
+    return LOC_OVERRIDES.get(id);
+}
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5

@@ -21,6 +21,25 @@ export type ContourGroundInfo = {
     entityZ: number;
 };
 
+// A burnt loc's colours (LocType.charred): each face's lightness to CHAR_LIGHT of what it was,
+// its saturation halved, so wood goes near black, stone a dark grey and paint a sooty dull
+// version of itself. Textured faces' colours are their light, so they darken the same way.
+const CHAR_LIGHT = 0.36;
+
+export function charColour(hsl: number): number {
+    const hue = (hsl >> 10) & 63;
+    const saturation = (hsl >> 7) & 7;
+    const lightness = hsl & 127;
+    return (hue << 10) | ((saturation >> 1) << 7) | Math.max(2, Math.round(lightness * CHAR_LIGHT));
+}
+
+function charColours(model: ModelData): void {
+    const colours = model.faceColors;
+    for (let i = 0; i < model.faceCount; i++) {
+        colours[i] = charColour(colours[i]);
+    }
+}
+
 export class LocModelLoader {
     static mergeLocModelsCache: ModelData[] = new Array(4);
 
@@ -144,7 +163,7 @@ export class LocModelLoader {
             model,
             true,
             rotation === 0 && !hasResize && !hasOffset,
-            !locType.recolorFrom,
+            !locType.recolorFrom && !locType.charred,
             false,
         );
 
@@ -177,6 +196,10 @@ export class LocModelLoader {
             for (let i = 0; i < locType.retextureFrom.length; i++) {
                 copy.retexture(locType.retextureFrom[i], locType.retextureTo[i]);
             }
+        }
+
+        if (locType.charred) {
+            charColours(copy);
         }
 
         if (hasResize) {
