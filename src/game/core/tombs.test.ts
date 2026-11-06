@@ -1431,6 +1431,83 @@ describe("Akkha", () => {
         return sim;
     }
     const akkha = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsAkkha!.uid)!;
+
+    describe("Detonate", () => {
+        // A party of two at him, each put on a tile
+        function party(): Sim {
+            const sim = new Sim({
+                grid: makeGrid(field(), 1000, 1000),
+                mapId: TEST_AKKHA.id,
+                characterId: "",
+                metaStats: emptyStats(),
+                seed: 3,
+                spawnX: 1036.5,
+                spawnY: 1036.5,
+                party: ["warrior", "wizard"].map((characterId) => ({
+                    name: characterId,
+                    characterId,
+                    metaStats: emptyStats(),
+                })),
+            });
+            for (const hero of sim.heroes) {
+                sim.as(hero.index, () => (sim.weapons = []));
+            }
+            sim.player.x = sim.player.prevX = 1042.5;
+            sim.step();
+            expect(sim.devSkipToTombsBoss()).toBe(true);
+            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+            expect(sim.tombsAkkha).toBeDefined();
+            return sim;
+        }
+        const put = (sim: Sim, index: number, x: number, y: number) => {
+            const player = sim.heroes[index].player;
+            player.x = player.prevX = x;
+            player.y = player.prevY = y;
+            player.hp = player.maxHp;
+            player.invulnerable = 0;
+        };
+
+        it("hurts a teammate in the marked one's plus, and spares one on the same tile", () => {
+            const sim = party();
+            const fight = sim.tombsAkkha!;
+            fight.attacks = 0;
+            fight.detonate = { tick: sim.tick + 1, cross: [false, false] };
+            put(sim, 0, 1030.5, 1032.5);
+            put(sim, 1, 1031.5, 1032.5);
+            sim.step();
+            sim.step();
+            expect(fight.detonate).toBeUndefined();
+            const second = sim.heroes[1].player;
+            expect(second.hp).toBeLessThan(second.maxHp);
+            // Both on one tile: nothing
+            fight.detonate = { tick: sim.tick + 1, cross: [false, false] };
+            put(sim, 0, 1030.5, 1032.5);
+            put(sim, 1, 1030.5, 1032.5);
+            sim.step();
+            sim.step();
+            expect(second.hp).toBe(second.maxHp);
+            expect(sim.heroes[0].player.hp).toBe(sim.heroes[0].player.maxHp);
+        });
+
+        it("misses a teammate off its row and column (but an X catches the corners)", () => {
+            const sim = party();
+            const fight = sim.tombsAkkha!;
+            fight.attacks = 0;
+            fight.detonate = { tick: sim.tick + 1, cross: [false, false] };
+            put(sim, 0, 1030.5, 1032.5);
+            put(sim, 1, 1031.5, 1033.5);
+            sim.step();
+            sim.step();
+            const second = sim.heroes[1].player;
+            expect(second.hp).toBe(second.maxHp);
+            fight.detonate = { tick: sim.tick + 1, cross: [true, true] };
+            put(sim, 0, 1030.5, 1032.5);
+            put(sim, 1, 1031.5, 1033.5);
+            sim.step();
+            sim.step();
+            expect(second.hp).toBeLessThan(second.maxHp);
+        });
+    });
     const special = (sim: Sim) => {
         sim.tombsAkkha!.attacks = DEF.specialEvery;
     };

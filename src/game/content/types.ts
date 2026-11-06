@@ -679,6 +679,11 @@ export type AkkhaDef = {
         damage: number;
         message: string;
     };
+    // Detonate, in a party only: everyone's marked, and seconds later each goes off in a plus round
+    // their tile (an X instead, half the time, with Feeling Special), for damage (a share of the
+    // hitpoints of whoever else is on those tiles, through armour) and spotAnim on each. Whoever's on
+    // the same tile as them is spared, so a party all on one tile takes nothing.
+    detonate: { seconds: number; damage: number; spotAnim: number; message: string };
     // Trailing orbs: for seconds, an orb on every tile anyone leaves, armed after arm seconds, that
     // goes off (damage, its quadrant's element) under whoever comes within radius; gone linger
     // seconds after. Feeling Special drops one ahead of you too.
