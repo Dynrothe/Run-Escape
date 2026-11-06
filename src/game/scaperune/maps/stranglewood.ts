@@ -75,40 +75,73 @@ const GROUND_KEPT: Record<number, number> = {
     48508: 0.5,
     48510: 0.5,
     48453: 0.5,
+    48454: 0.4,
     48566: 0.2,
     48557: 0.2,
     48558: 0.2,
     48623: 0.2,
+    48624: 0.2,
+    48625: 0.2,
+    48626: 0.2,
     48627: 0.2,
+    48628: 0.2,
+    48629: 0.2,
+    48630: 0.2,
+    48631: 0.2,
+    48632: 0.2,
     48532: 0.2,
     48567: 0.2,
     48525: 0.2,
     559: 0.2,
 };
-// The trees on the opened ground: half of them, the rest left standing to walk round. Each is
-// over a thousand triangles, and the wood's edge and thickets keep all of theirs.
+// The trees on the opened ground: a quarter of them, the rest left standing to walk round. Each
+// is over a thousand triangles.
 const TREE = /^(strangled tree|pine tree|pine)$/i;
 const TREES_KEPT = 0.25;
-// And in the wood itself (the arena's edge and its thickets), most of them
-const WOOD_TREES_KEPT = 0.5;
-// The ruined town's walls and pillars (400 and 1,400 triangles a piece) are ruins: some of each
-// stays, with gaps where the rest fell; and of the carcasses round Vardorvis's arena (2,000 each),
-// a few
+// And in the wood itself (the arena's edge and its thickets), a quarter too; and round
+// Vardorvis's arena, where the last fight is drawn with the crowd, his attacks and the roots, an
+// eighth, within this far of its middle
+const WOOD_TREES_KEPT = 0.25;
+const CLEARING_TREES_KEPT = 0.12;
+const CLEARING_VIEW = 20;
+// The ruined town's pillars (1,300 to 1,500 triangles each) are ruins: a quarter stand, but those
+// round Vardorvis's arena, which are his
+const PILLAR = /^(broken )?pillar$/i;
+const PILLARS_KEPT = 0.25;
+// The ruined town's walls (200 to 400 triangles a piece): some of each stays, with gaps where the
+// rest fell; of the carcasses round Vardorvis's arena (2,000 each), a fifth; and in the margin's
+// wood, the heavy scenery no one stands among
 const RUINS_KEPT: Record<number, number> = {
-    48619: 0.3,
-    48620: 0.3,
-    48434: 0.5,
-    48436: 0.5,
-    48438: 0.5,
-    48413: 0.35,
-    48414: 0.35,
-    48415: 0.35,
-    48416: 0.35,
-    48417: 0.35,
+    48619: 0.17,
+    48620: 0.2,
+    48621: 0.35,
+    48622: 0.35,
+    48413: 0.2,
+    48414: 0.2,
+    48415: 0.2,
+    48416: 0.2,
+    48417: 0.2,
+    42078: 0.3,
+    // The wood's own undergrowth, where it's left standing (500 triangles a bush or plant)
+    48545: 0.4,
+    48547: 0.4,
+    48548: 0.4,
+    48549: 0.4,
+    11911: 0.5,
+    11912: 0.5,
+    11913: 0.5,
+    11914: 0.5,
+    14540: 0.3,
+    40552: 0.5,
+    31780: 0.3,
+    25095: 0.3,
 };
 // The ruined town's stepped tents (the Strangled Tents' heaviest pieces, 1,300 to 2,100 triangles
 // each) come down: a phone can't draw a street of them, and their floors and the town's walls stay
-const TENTS = { from: 48599, to: 48603 };
+const TENTS = { from: 48599, to: 48613 };
+// The wood's own Tendrils lying on its floor (decorations): on the opened ground they'd read as
+// roots (MapDef.rule) that don't hurt, so they're only in the wood
+const FLOOR_TENDRILS = { from: 48495, to: 48502 };
 // Water: the sea's overlays and the river's (map file ids, textured water)
 const WATER_OVERLAYS = new Set([6, 442, 445, 448, 451]);
 
@@ -153,14 +186,31 @@ function buildDetail(context: BuildContext): GeneratedMap {
         if (loc.id >= TENTS.from && loc.id <= TENTS.to) {
             return true;
         }
+        if (loc.id >= FLOOR_TENDRILS.from && loc.id <= FLOOR_TENDRILS.to && opened(loc.x, loc.y)) {
+            return true;
+        }
         const share = GROUND_KEPT[loc.id] ?? RUINS_KEPT[loc.id];
         if (share !== undefined) {
             return hash(loc.x, loc.y, loc.id) >= share;
         }
-        if ((loc.type !== 10 && loc.type !== 11) || !TREE.test(context.locs(loc.id).name)) {
+        if (loc.type !== 10 && loc.type !== 11) {
             return false;
         }
-        return hash(loc.x, loc.y, 7) >= (opened(loc.x, loc.y) ? TREES_KEPT : WOOD_TREES_KEPT);
+        const name = context.locs(loc.id).name;
+        if (PILLAR.test(name)) {
+            const his = Math.hypot(loc.x - CLEARING.x, loc.y - CLEARING.y) < CLEAR_OF_CLEARING;
+            return !his && hash(loc.x, loc.y, 11) >= PILLARS_KEPT;
+        }
+        if (!TREE.test(name)) {
+            return false;
+        }
+        const nearClearing = Math.hypot(loc.x - CLEARING.x, loc.y - CLEARING.y) < CLEARING_VIEW;
+        const treesKept = nearClearing
+            ? CLEARING_TREES_KEPT
+            : opened(loc.x, loc.y)
+              ? TREES_KEPT
+              : WOOD_TREES_KEPT;
+        return hash(loc.x, loc.y, 7) >= treesKept;
     };
     const undergrowth = (loc: PlacedLoc) => {
         if (loc.level !== 0 || (loc.type !== 10 && loc.type !== 11)) {
