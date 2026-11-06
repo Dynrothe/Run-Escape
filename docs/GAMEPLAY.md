@@ -203,11 +203,13 @@ version and how to run it.
   shields that drop one by one.
 - **The Battle for Varrock** (on the Fun tab, its own row: a map to explore): Varrock as it is in
   OSRS, every house, shop, street, church and the palace where they stand, burnt to ruins. Walls
-  charred, some fallen, some half fallen and some still burning; roofs, doors and upstairs gone;
-  breaches in the city wall; trees burnt, the grass gone to ash. Fires still burn, with burnt
-  skeletons and the dead raiders of Phosani's Sanctuary and the Theatre of Blood where they fell.
-  The palace's floor is the floor system's tiles in an ashen skin, with Yama on his throne at its
-  north end. You start outside the south gate as Justiciar Zachariah, his own model, with the
+  charred, some fallen, some broken down (the Wilderness's ruined walls) and some still burning;
+  roofs, doors and upstairs gone; breaches in the city wall with its stone in the gaps; trees
+  burnt, every bush and plant gone, the grass gone to ash. Where the square's fountain stood is a
+  crater, burning at its heart. Fires still burn, with burnt skeletons and the dead raiders of
+  Phosani's Sanctuary and the Theatre of Blood where they fell. The palace's floor is the floor
+  system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
+  throne at its north end. You start outside the south gate as Justiciar Zachariah, his own model, with the
   moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
   of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
   For now there's nothing to fight: no waves, no bosses, no random events and nothing hurts.

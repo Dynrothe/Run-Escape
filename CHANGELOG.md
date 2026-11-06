@@ -8,7 +8,8 @@ the version in the corner).
 ### Added
 
 - The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where
-  it stands, fires still burning and the dead where they fell, up to Yama on his throne in the
+  it stands, broken walls and breaches heaped with rubble, a crater where the square's fountain
+  was, fires still burning and the dead where they fell, up to Yama on his throne in the
   palace. Explore it as Justiciar Zachariah, with his lunge, shock wave, ice barrage, lightning
   and the Owl's gaze on buttons of your own. Nothing to fight there yet.
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four

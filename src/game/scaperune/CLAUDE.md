@@ -1336,37 +1336,53 @@ through it; `maps/battleForVarrock.ts` is Varrock's, and its `RULES` are the set
 by tile and loc by loc:
 
 - **Walls** (types 0 to 3 and 9) are charred, and by a noise over the walls (`wallScale` tiles a feature, so runs
-  fall together) some fall (`fallen`) or are half their height (`lowered`). A tenth of the fallen straight ones can be a
-  wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is what makes the place read as
-  itself.
+  fall together) some fall (`fallen`) or are broken down (`broken`): the cache's own broken walls in their place
+  (`crumbled`, by loc type and turned as the wall was), broken off near the top (`high`) or down to a stub (`low`)
+  as the noise nears `fallen`. Varrock's are the Wilderness's ruins' (14622 to 14627, 14632: the ruin west of the Dark
+  Warriors' Fortress), dark stone that sits with Varrock's grey burnt. A fallen straight wall can leave its stones on
+  the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the fallen straight ones
+  can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is what makes the place
+  read as itself. What rested on the walls (`tops`: a gateway's deck, a lintel) goes where a wall beside it fell or
+  broke, as it would float.
 - **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
-  tiles are down and open there, both faces, walkway and rails gone. `wallTopsKept` is the share of the walkway and its
-  rails still up. A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its
-  heaviest phone view from 74k to under 60k.
+  tiles are down and open there, both faces, walkway and rails gone, and the wall's stone is in the gap
+  (`breachRubble`): a pile at each end against what still stands, and loose rubble that blocks nothing across the
+  rest (`LOOSE_RUBBLE`), so it's still a way through. `wallTopsKept` is the share of the walkway and its rails still
+  up. A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
+  phone view from 74k to under 60k. Anything with a shown level 1 counts as one, a square's fountain too (its water's
+  plane): Varrock's crater clears its own.
 - **Roofs, wall decorations, floor decoration and upstairs** go, but for a city wall's walkway and a bridge's deck
-  (level 1 with `TILE_BRIDGE`), whose walls stay burnt and whose blocking objects go, so it's still a way across.
+  (level 1 with `TILE_BRIDGE`), whose walls stay burnt and whose blocking objects go, so it's still a way across, and
+  `steps` (floor decorations the ground climbs under: a palace's front steps), which stay burnt.
 - **Objects** by name: trees become burnt trees of their size (`burntTrees`, `treesKept` of them), plants and what went
-  with the fire (doors, curtains, banners, torches: `plant`, `gone`) go, `landmark` names stay (a square's fountain,
-  the market's stalls), and of the rest `furnitureKept` stay, charred.
+  with the fire (doors, curtains, banners, torches: `plant`, `gone`; nameless plants by id, `plants`) go, `landmark`
+  names stay (a square's fountain, the market's stalls), and of the rest `furnitureKept` stay, charred. A loc that
+  changes with a var (a farming patch, a STASH's bush, a seasonal one) goes by the name of what it shows
+  (`LocInfo.shows`, as the game draws it with its vars at 0): most are null-named, and kept as furniture they were
+  bushes with scorched leaves.
 - **The ground**: `underlays` turns grass and earth to mottled ash, and `overlays` paving and wooden floors to soot.
 
 **Charred locs** are the real ones with their colours burnt (`rs/config/loctype/LocOverrides.ts`): `CHARRED_LOCS + id`
 (`getCharredLoc`) is loc `id` with every face's lightness under half and its saturation a quarter, and its opaque textures
 swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured; see-through green
 leaves turn scorched brown (33), and other see-through ones (bars, shingles) keep theirs, as a swap would fill their
-holes. `LOWERED_LOCS + id` (`getLoweredLoc`) is the same squashed to `LOWERED_HEIGHT`. They're
-read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and the slim cache
-keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in `LOC_OVERRIDES` with a
-`base`. Keep every id under 2^21: the model caches key a loc by its id << 10.
+holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
+the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
+`LOC_OVERRIDES` with a `base` (`LOOSE_RUBBLE`: the cache's rubble, charred and `walkable`). Keep every id under 2^21:
+the model caches key a loc by its id << 10.
 
 **A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
 his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground
 under it (it blocks nothing itself). As a loc he showed in his bind pose, arms out over the seat.
 
-**What it can't do**: a lowered wall is the wall squashed, flat along its top, not broken; a charred texture is one of
-two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the wall a door was
-in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks (the Grand
-Exchange's counter) are its `squares`.
+**The floor system's tiles are flat**, each at the ground's height at its middle, so a floor (`MapDef.floor`) over
+steps or a slope comes out as strips at different heights with the ground showing between them. Varrock's palace floor
+starts at the top of its front steps; the court and the steps are the ground's.
+
+**What it can't do**: a broken wall is one of the Wilderness's few pieces, dark stone whatever the wall was; a charred
+texture is one of two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the
+wall a door was in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks
+(the Grand Exchange's counter) are its `squares`.
 
 ### City walls
 
