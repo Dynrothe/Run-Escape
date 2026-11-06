@@ -1,0 +1,43 @@
+name = "run-escape-cloud-saves"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+
+[vars]
+# Comma-separated game origins: the desktop app's and the Android app's are already here; add the
+# web game's. localhost belongs in .dev.vars, never here.
+ALLOWED_ORIGINS = "https://run-escape.invalid,https://appassets.androidplatform.net"
+# The newest save and its backups, per sync code
+KEEP_VERSIONS = "6"
+# Saves and new sync codes stored a day at most, to stay inside D1's daily writes (README, Budget)
+MAX_SAVES_PER_DAY = "5000"
+MAX_ACCOUNTS_PER_DAY = "500"
+
+# No database_id: the first `wrangler deploy` creates the database by this name, and the d1
+# commands find it by name.
+[[d1_databases]]
+binding = "DB"
+database_name = "run-escape-cloud-saves"
+migrations_dir = "migrations"
+
+# Rate limit namespaces are per account. The run collector has 11501 and 11502: change these if
+# another Worker of yours uses them.
+# Every request, per address
+[[ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "11503"
+simple = { limit = 60, period = 60 }
+
+# New sync codes, per address
+[[ratelimits]]
+name = "ACCOUNT_LIMITER"
+namespace_id = "11504"
+simple = { limit = 3, period = 60 }
+
+# Uploads, per sync code
+[[ratelimits]]
+name = "UPLOAD_LIMITER"
+namespace_id = "11505"
+simple = { limit = 6, period = 60 }
+
+[triggers]
+crons = ["23 * * * *"]
