@@ -53,8 +53,8 @@ describe("the Battle for Varrock", () => {
         expect(floor.rect).toEqual(BATTLE_FOR_VARROCK.palaceFloor);
         expect(floor.script).toEqual([]);
         expect(floor.tiles?.[0]).toMatchObject({ type: "solid" });
-        // From the palace's front gate
-        const lint = lintFloor(floor, { x: 12, y: 1 });
+        // From the top of the palace's front steps
+        const lint = lintFloor(floor, { x: 12, y: 0 });
         expect(lint.warnings).toEqual([]);
         expect(lint.triangles.busy).toBeLessThanOrEqual(PHONE_TRIANGLES);
     });

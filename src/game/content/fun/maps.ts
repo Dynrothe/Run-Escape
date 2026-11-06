@@ -1,6 +1,7 @@
 import {
     BATTLE_FOR_VARROCK,
     BRAZIER,
+    CRATER_HEART,
     PALACE_FLOOR_ASCII,
     WALL_OF_FLAME,
     YAMA_SCALE,
@@ -781,8 +782,9 @@ export const FUN_MAPS: MapDef[] = [
             character: "justiciar_zachariah",
             explore: true,
         },
-        // The palace's floor is gone: the game lays its own, ash-grey paving gone to soot with
-        // cinders and smouldering tiles among it, all solid (nothing rises or falls)
+        // The palace's floor is gone: the game lays its own from the top of its front steps,
+        // ash-grey paving gone to soot with cinders and smouldering tiles among it, all solid
+        // (nothing rises or falls)
         floor: {
             ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor),
             ascii: PALACE_FLOOR_ASCII,
@@ -822,6 +824,8 @@ export const FUN_MAPS: MapDef[] = [
                 [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
                 // Either side of Yama's throne
                 [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
+                // The crater's molten heart, where the square's fountain stood
+                [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
             },
         },
     },

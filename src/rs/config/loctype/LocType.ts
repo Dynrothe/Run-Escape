@@ -4,7 +4,7 @@ import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
 import { VarManager } from "../vartype/VarManager";
 import { LocModelType } from "./LocModelType";
-import { CHARRED_LOCS, LOWERED_HEIGHT, LOWERED_LOCS, getLocOverride } from "./LocOverrides";
+import { CHARRED_LOCS, getLocOverride } from "./LocOverrides";
 import { LocTypeLoader } from "./LocTypeLoader";
 
 export class LocType extends Type {
@@ -586,6 +586,10 @@ export class LocType extends Type {
                 this.clipType = 2;
                 this.blocksProjectile = false;
             }
+            if (override.walkable) {
+                this.clipType = 0;
+                this.blocksProjectile = false;
+            }
             if (override.height !== undefined) {
                 this.offsetHeight = -override.height;
             }
@@ -595,15 +599,11 @@ export class LocType extends Type {
                 this.seqId = override.seq;
                 this.randomSeqIds = undefined;
             }
-            if (override.lowered) {
-                this.modelSizeHeight = Math.round(this.modelSizeHeight * LOWERED_HEIGHT);
-            }
             if (override.charred) {
                 this.charred = true;
                 // A burnt loc that changes with a varbit changes into burnt ones
-                const into = override.lowered ? LOWERED_LOCS : CHARRED_LOCS;
                 this.transforms = this.transforms?.map((id) =>
-                    id === -1 || id >= CHARRED_LOCS ? id : into + id,
+                    id === -1 || id >= CHARRED_LOCS ? id : CHARRED_LOCS + id,
                 );
             }
         } else if (override) {

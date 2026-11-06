@@ -1,4 +1,4 @@
-import { getCharredLoc, getLoweredLoc } from "../../rs/config/loctype/LocOverrides";
+import { getCharredLoc } from "../../rs/config/loctype/LocOverrides";
 import {
     LEVELS,
     type PlacedLoc,
@@ -11,7 +11,7 @@ import { createNoise } from "./noise";
 import type { LocInfo } from "./recipe";
 
 // A place cut from the real world, burnt to ruins: the same streets, walls and squares, with
-// every building's walls charred, some of them fallen or half fallen, its roof, doors and
+// every building's walls charred, some of them fallen or broken down, its roof, doors and
 // upstairs gone, what grew there burnt off and the ground gone to ash. It works on a cut
 // (prefab.ts cutPrefab) before it's stamped, so any real town can be put through it; what's
 // left standing is the real loc, burnt (LocOverrides.ts CHARRED_LOCS), so a building keeps its
@@ -30,10 +30,19 @@ export type RuinRules = {
     // For the noise that picks which runs of wall fall, and what's thinned
     seed: number;
     // Walls: where the noise (about 0 to 1, features `wallScale` tiles across) is over
-    // `fallen` a run of wall is gone, over `lowered` it's half its height, and below it stands
+    // `fallen` a run of wall is gone, over `broken` it's broken down (`crumbled`), and below it
+    // stands
     wallScale: number;
     fallen: number;
-    lowered: number;
+    broken: number;
+    // What a broken wall is: the cache's own broken walls (the Wilderness's ruins), by loc type
+    // (0 straight, 1 and 3 corner posts, 2 a corner, 9 diagonal). `high` (broken off near the top)
+    // where the noise is under halfway from `broken` to `fallen`, `low` (a stub) over it. A type
+    // with neither falls.
+    crumbled: { high: Partial<Record<number, number>>; low: Partial<Record<number, number>> };
+    // Stones a fallen straight wall left along where it stood (a floor decoration that blocks
+    // nothing, turned as the wall was), for this share of them
+    fallenStones?: { ids: number[]; share: number };
     // The share of what stood indoors that's left, burnt (tables, chairs, beds, stalls)
     furnitureKept: number;
     // Ground underlays as they become: each id to a list of ash floors, picked by a second noise
@@ -45,13 +54,24 @@ export type RuinRules = {
     // The share of trees that stand, burnt (the rest burnt to nothing)
     treesKept?: number;
     // Whether a loc is a tree, a plant (burnt off), or something that went with the fire
-    // (doors, curtains, torches): by name
+    // (doors, curtains, torches): by name, and plants with no name (a rose bush, a potted
+    // palm) by id
     tree: RegExp;
     plant: RegExp;
+    plants?: number[];
     gone: RegExp;
     // A city wall stands, burnt, but for breaches: where the walls' noise is over this, the wall's
     // band is down to the ground and open, both faces, walkway and rails gone
     breaches?: number;
+    // What's left in a breach: piles of the wall's stone (`ends`, which block) at its ends
+    // against the wall still standing, for share of those tiles, and loose stone (`loose`, locs
+    // and their types, which block nothing) for looseShare of the rest
+    breachRubble?: {
+        ends: number[];
+        share: number;
+        loose: [id: number, type: number][];
+        looseShare: number;
+    };
     // The share of a city wall's walkway and rails (upstairs, shown from the ground) still up
     wallTopsKept?: number;
     // Where a straight run of wall fell, some of it's still burning: this loc (a wall of fire)
@@ -60,17 +80,24 @@ export type RuinRules = {
     // What's left standing whatever furnitureKept says: what makes the place itself (a square's
     // fountain, a church's altar, the market's stalls)
     landmark: RegExp;
+    // Floor decorations that stay, burnt, where the rest go: steps, which the ground under them
+    // climbs (a palace's front steps)
+    steps?: number[];
+    // What rests on the walls round it (a gate's lintel, the deck over a gateway): gone where a
+    // wall next to it fell or broke, as it would float
+    tops?: number[];
     // Tiles the conversion leaves alone, in the cut's tiles (a place it's done by hand)
     skip?: (x: number, y: number) => boolean;
 };
 
 export type RuinReport = {
     charred: number;
-    lowered: number;
+    broken: number;
     fallen: number;
     burning: number;
     breached: number;
     burntTrees: number;
+    rubble: number;
     removed: number;
 };
 
@@ -96,11 +123,12 @@ export function ruinGrid(
     const { sizeX, sizeY } = grid;
     const report: RuinReport = {
         charred: 0,
-        lowered: 0,
+        broken: 0,
         fallen: 0,
         burning: 0,
         breached: 0,
         burntTrees: 0,
+        rubble: 0,
         removed: 0,
     };
     const walls = createNoise(rules.seed, 2);
@@ -159,6 +187,7 @@ export function ruinGrid(
         }
     }
     const out: PlacedLoc[] = [];
+    const down = new Uint8Array(sizeX * sizeY);
     for (const loc of grid.locs) {
         if (breach[loc.x + loc.y * sizeX]) {
             report.removed++;
@@ -168,13 +197,80 @@ export function ruinGrid(
             out.push(loc);
             continue;
         }
-        const kept = ruinLoc(grid, loc, locs, rules, walls, report);
+        const kept = ruinLoc(grid, loc, locs, rules, walls, report, out);
         if (kept) {
             out.push(kept);
         }
+        // Where a wall's down or broken, for what rested on it
+        if (loc.level === 0 && WALL_TYPES.has(loc.type) && kept?.id !== getCharredLoc(loc.id)) {
+            down[loc.x + loc.y * sizeX] = 1;
+        }
+    }
+    if (rules.tops) {
+        const tops = new Set(rules.tops.map(getCharredLoc));
+        const unsupported = (loc: PlacedLoc) => {
+            for (let y = Math.max(0, loc.y - 1); y <= Math.min(sizeY - 1, loc.y + 1); y++) {
+                for (let x = Math.max(0, loc.x - 1); x <= Math.min(sizeX - 1, loc.x + 1); x++) {
+                    if (down[x + y * sizeX]) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        const before = out.length;
+        out.splice(
+            0,
+            out.length,
+            ...out.filter((loc) => !(loc.level === 0 && tops.has(loc.id) && unsupported(loc))),
+        );
+        report.removed += before - out.length;
+    }
+    if (rules.breachRubble) {
+        fillBreaches(grid, breach, rules.breachRubble, out, report);
     }
     grid.locs = out;
     return report;
+}
+
+// The wall's stone where it came down: a pile at a breach's ends, against what still stands,
+// and loose stones across the rest of it, which block nothing, so it's still a way through
+function fillBreaches(
+    grid: TileGrid,
+    breach: Uint8Array,
+    rubble: NonNullable<RuinRules["breachRubble"]>,
+    out: PlacedLoc[],
+    report: RuinReport,
+): void {
+    const { sizeX, sizeY } = grid;
+    const standing = (x: number, y: number) =>
+        x >= 0 && y >= 0 && x < sizeX && y < sizeY && isCityWallTile(grid, x, y);
+    const place = (id: number, type: number, x: number, y: number) => {
+        const rotation = Math.floor(tileHash(x, y, 42) * 4);
+        out.push({ id, type, rotation, level: 0, x, y });
+        report.rubble++;
+    };
+    const pick = <T>(list: T[], x: number, y: number) =>
+        list[Math.floor(tileHash(x, y, 41) * list.length)];
+    for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+            if (!breach[x + y * sizeX]) {
+                continue;
+            }
+            const end =
+                standing(x - 1, y) ||
+                standing(x + 1, y) ||
+                standing(x, y - 1) ||
+                standing(x, y + 1);
+            const roll = tileHash(x, y, 40);
+            if (end && roll < rubble.share) {
+                place(pick(rubble.ends, x, y), LOC_NORMAL, x, y);
+            } else if (!end && roll < rubble.looseShare) {
+                const [id, type] = pick(rubble.loose, x, y);
+                place(id, type, x, y);
+            }
+        }
+    }
 }
 
 function ruinLoc(
@@ -184,6 +280,7 @@ function ruinLoc(
     rules: RuinRules,
     walls: (x: number, y: number) => number,
     report: RuinReport,
+    out: PlacedLoc[],
 ): PlacedLoc | undefined {
     const i = loc.x + loc.y * grid.sizeX;
     const removed = () => {
@@ -209,12 +306,17 @@ function ruinLoc(
         const kept = tileHash(loc.x, loc.y, loc.level + 11) < (rules.wallTopsKept ?? 1);
         return shown && kept && WALL_TYPES.has(loc.type) ? charred() : removed();
     }
+    if (loc.type === LOC_FLOOR_DECORATION && rules.steps?.includes(loc.id)) {
+        return charred();
+    }
     if (loc.type === LOC_FLOOR_DECORATION || WALL_DECORATIONS.has(loc.type) || isRoof(loc.type)) {
         return removed();
     }
     const info = locs(loc.id);
-    const name = info.name ?? "";
-    if (rules.gone.test(name) || rules.plant.test(name)) {
+    // A loc that changes with a var is what it shows (a farming patch's weeds, a STASH's bush)
+    const shown = info.shows !== undefined && info.shows !== -1 ? locs(info.shows) : info;
+    const name = shown.name ?? "";
+    if (rules.gone.test(name) || rules.plant.test(name) || rules.plants?.includes(loc.id)) {
         return removed();
     }
     if (WALL_TYPES.has(loc.type)) {
@@ -222,18 +324,30 @@ function ruinLoc(
             return charred();
         }
         const n = walls(loc.x / rules.wallScale, loc.y / rules.wallScale);
-        if (n > rules.fallen) {
+        const { high, low } = rules.crumbled;
+        const crumbled =
+            n > (rules.broken + rules.fallen) / 2
+                ? (low[loc.type] ?? high[loc.type])
+                : (high[loc.type] ?? low[loc.type]);
+        if (n > rules.fallen || (n > rules.broken && crumbled === undefined)) {
             const burning = rules.burning;
             if (burning && loc.type === 0 && tileHash(loc.x, loc.y, 7) < burning.share) {
                 report.burning++;
                 return { ...loc, id: burning.wall };
             }
+            // Its stones where it stood
+            const stones = rules.fallenStones;
+            if (stones && loc.type === 0 && tileHash(loc.x, loc.y, 12) < stones.share) {
+                const id = stones.ids[Math.floor(tileHash(loc.x, loc.y, 13) * stones.ids.length)];
+                out.push({ ...loc, id, type: LOC_FLOOR_DECORATION });
+                report.rubble++;
+            }
             report.fallen++;
             return undefined;
         }
-        if (n > rules.lowered) {
-            report.lowered++;
-            return { ...loc, id: getLoweredLoc(loc.id) };
+        if (crumbled !== undefined && n > rules.broken) {
+            report.broken++;
+            return { ...loc, id: crumbled };
         }
         return charred();
     }
@@ -242,7 +356,7 @@ function ruinLoc(
             if (tileHash(loc.x, loc.y, 8) >= (rules.treesKept ?? 1)) {
                 return removed();
             }
-            const size = Math.max(info.sizeX, info.sizeY);
+            const size = Math.max(shown.sizeX, shown.sizeY);
             const sizes = Object.keys(rules.burntTrees)
                 .map(Number)
                 .sort((a, b) => b - a);

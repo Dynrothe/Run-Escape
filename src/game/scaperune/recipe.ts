@@ -14,6 +14,9 @@ export type LocInfo = {
     blocksProjectile: boolean;
     // Locs with no model draw nothing, and the game lets you through them
     drawn: boolean;
+    // A loc that changes with a var (a farming patch, a STASH, a seasonal bush): the loc it
+    // shows, as the game draws it with every var at 0 (LocType.transform), or -1 for none
+    shows?: number;
 };
 
 export type BuildContext = {

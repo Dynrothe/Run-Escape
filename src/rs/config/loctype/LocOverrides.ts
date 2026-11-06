@@ -11,6 +11,8 @@ export type LocOverride = {
     size?: number;
     // Blocks walking, not projectiles, whatever the loc did
     solid?: boolean;
+    // Blocks nothing, whatever the loc did (a loc of our own: rubble to walk over)
+    walkable?: boolean;
     // Lifts the model this far off the ground, in scene units (128 to a tile), for what floats
     height?: number;
     // Its tiles across and deep, and the animation it plays where it stands (a loc of our own)
@@ -19,41 +21,34 @@ export type LocOverride = {
     seq?: number;
     // Burnt: every colour of its models darkened and greyed (see CHARRED_LOCS)
     charred?: boolean;
-    // Squashed to LOWERED_HEIGHT of its height (see LOWERED_LOCS)
-    lowered?: boolean;
 };
 
 // Locs of our own, past every id the cache has. They're placed by ScapeRune maps only, so nothing
 // in the real world changes. Ids stay under 2^21: the model caches key a loc by its id << 10.
 // CHARRED_LOCS + id is that cache loc burnt (getCharredLoc): the same in every way but its
-// colours, for a map in ruins (scaperune/ruins.ts). LOWERED_LOCS + id is the same burnt and
-// squashed to LOWERED_HEIGHT of its height: a wall half fallen.
+// colours, for a map in ruins (scaperune/ruins.ts).
 export const CHARRED_LOCS = 1 << 20;
-export const LOWERED_LOCS = CHARRED_LOCS + (1 << 17);
-export const LOWERED_HEIGHT = 0.45;
-// Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base (none yet)
+// Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base
 export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
+// Rubble, burnt, that blocks nothing (the cache's Rubble, 12812 to 12814): what's left in a ruined
+// city wall's breach, which is still a way through (scaperune/ruins.ts)
+export const LOOSE_RUBBLE = [DERIVED_LOCS, DERIVED_LOCS + 1, DERIVED_LOCS + 2];
 
 export function getCharredLoc(id: number): number {
     return CHARRED_LOCS + id;
 }
 
-export function getLoweredLoc(id: number): number {
-    return LOWERED_LOCS + id;
-}
-
 // What a loc id's data is read from: its own, or for a loc of ours, the cache loc it's made from
 export function getLocBase(id: number): number {
     if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
-        return id >= LOWERED_LOCS ? id - LOWERED_LOCS : id - CHARRED_LOCS;
+        return id - CHARRED_LOCS;
     }
     return LOC_OVERRIDES.get(id)?.base ?? id;
 }
 
 export function getLocOverride(id: number): LocOverride | undefined {
     if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
-        const lowered = id >= LOWERED_LOCS;
-        return { base: getLocBase(id), charred: true, ...(lowered && { lowered: true }) };
+        return { base: getLocBase(id), charred: true };
     }
     return LOC_OVERRIDES.get(id);
 }
@@ -88,4 +83,7 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // units up from the floor, one in a plane with the raised edge of the stone tile under it
     // (38198, 6 units up), so they z-fought (check-coplanar.ts). An odd lift keeps every step off it.
     [38542, { height: 1 }],
+    [LOOSE_RUBBLE[0], { base: 12812, charred: true, walkable: true }],
+    [LOOSE_RUBBLE[1], { base: 12813, charred: true, walkable: true }],
+    [LOOSE_RUBBLE[2], { base: 12814, charred: true, walkable: true }],
 ]);
