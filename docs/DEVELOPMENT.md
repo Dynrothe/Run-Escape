@@ -620,7 +620,9 @@ It builds on Windows, with the OSRS cache kept between runs by `actions/cache` u
 `CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
-[GitHub builds and releases](#github-builds-and-releases)).
+[GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
+the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with links
+to those two. The links only work once the draft is published.
 **Publishing the draft by hand is what releases it to players**, and the tag only exists from then
 on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
