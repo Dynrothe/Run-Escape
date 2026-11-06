@@ -504,6 +504,12 @@ const SPLIT_RANGE = 6;
 const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
+// Dropping to the next terrace (BossPhasesDef descend): the arc's height, tiles, and how far
+// apart a party lands
+const DESCENT_ARC = 1.6;
+const PARTY_SPACING = 1.5;
+// A cracked fault caving in under a boss (BossDef.sinks) goes this many ticks after it's hit
+const CAVE_IN_TICKS = 8;
 // What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
 export const FLOOR_SOURCE = "floor";
 // What a floor's tiles do (FloorEffect), unless the floor says otherwise (FloorDef.tileEffects):
@@ -743,6 +749,9 @@ export type Hero = {
         startTick: number;
         endTick: number;
         holdEnd: number;
+        // Dropped down to the next terrace (BossPhasesDef descend): drawn in an arc this high,
+        // tiles, and not frozen blue
+        arc?: number;
     };
     curse?: PlayerCurse;
     parasite?: PlayerParasite;
@@ -858,6 +867,9 @@ export class Sim {
     private readonly bulletTargets: BulletTarget[] = [];
     // What a boss has marked on the ground, and its corpse flowers
     hazards: GroundHazard[] = [];
+    // Loads let fall on the boss by a floor's plates (FloorTriggerDef.load): where, and when
+    // they let go and land (the view draws them falling)
+    loads: { x: number; y: number; startTick: number; landTick: number; trigger: string }[] = [];
     quarters?: BossQuarters;
     // A boss's entrance under way, and a boss it's just the player and
     // (BossIntroDef.alone), for as long as it's up
@@ -2462,6 +2474,7 @@ export class Sim {
         this.stepEnemyProjectiles();
         this.stepBossFight();
         this.stepFloor();
+        this.stepLoads();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -5246,9 +5259,120 @@ export class Sim {
                 this.emit({ type: "bossShout", enemyUid: boss.uid, text: threshold.shout });
             }
             this.showImpact(threshold.impact, boss.x, boss.y);
+            if (next.descend) {
+                this.startDescent(boss, next.descend);
+            }
         }
         this.pushStage(boss, phase, next.message ?? next.status ?? "");
         return true;
+    }
+
+    // The arena giving way into the next phase (BossPhasesDef descend): everything of the
+    // boss's in the air is gone, everyone's held where they are, and the floor's group falls
+    private startDescent(
+        boss: Enemy,
+        descend: NonNullable<BossPhasesDef["phases"][number]["descend"]>,
+    ): void {
+        // Whatever had it open is over: it's a new shelf
+        const state = boss.bossState!;
+        state.exposedEnd = state.coreEnd = state.stunEnd = this.tick;
+        state.sunkStart = state.sunkEnd = undefined;
+        this.bullets.clear();
+        this.emitters = [];
+        this.hazards = [];
+        this.loads = [];
+        // Held a moment past the drop, which takes over from there (stepDescent)
+        const until = this.tick + secondsToTicks(descend.at) + 2;
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            const player = this.player;
+            this.hold = undefined;
+            this.hero.drag = {
+                fromX: player.x,
+                fromY: player.y,
+                toX: player.x,
+                toY: player.y,
+                startTick: this.tick,
+                endTick: until,
+                holdEnd: until,
+                arc: 0,
+            };
+            player.frozen = Math.max(player.frozen, until - this.tick);
+        }
+        this.use(current);
+        this.floorAct({ kind: "drop", group: descend.group, whole: true, delay: descend.delay });
+        if (descend.floorPhase) {
+            this.floorAct({ kind: "phase", phase: descend.floorPhase, delay: descend.at });
+        }
+    }
+
+    // Partway through the threshold it drops: everyone to the next terrace, side by side, and the
+    // boss to where it rises, each in an arc, landing together
+    private stepDescent(boss: Enemy, phase: BossPhase): void {
+        const phases = boss.def.boss!.phases!;
+        const descend = phases.phases[phase.index].descend;
+        const threshold = phases.threshold;
+        const state = boss.bossState!;
+        if (!descend || !threshold || phase.pauseEnd === undefined) {
+            return;
+        }
+        const start = phase.pauseEnd - secondsToTicks(threshold.seconds);
+        const fall = Math.max(1, secondsToTicks(descend.fall));
+        if (this.tick === start + secondsToTicks(descend.at)) {
+            const heroes = this.heroes.filter((hero) => this.isUp(hero));
+            const current = this.hero;
+            heroes.forEach((hero, i) => {
+                this.use(hero);
+                const player = this.player;
+                const side = (i - (heroes.length - 1) / 2) * PARTY_SPACING;
+                this.hero.drag = {
+                    fromX: player.x,
+                    fromY: player.y,
+                    toX: descend.start.x + side,
+                    toY: descend.start.y,
+                    startTick: this.tick,
+                    endTick: this.tick + fall,
+                    holdEnd: this.tick + fall,
+                    arc: DESCENT_ARC,
+                };
+                player.frozen = Math.max(player.frozen, fall);
+            });
+            this.use(current);
+            state.descent = {
+                fromX: boss.x,
+                fromY: boss.y,
+                toX: descend.rise.x,
+                toY: descend.rise.y,
+                startTick: this.tick,
+                endTick: this.tick + fall,
+            };
+        }
+        const descent = state.descent;
+        if (descent) {
+            const f = Math.min(
+                1,
+                (this.tick + 1 - descent.startTick) / (descent.endTick - descent.startTick),
+            );
+            boss.x = descent.fromX + (descent.toX - descent.fromX) * f;
+            boss.y = descent.fromY + (descent.toY - descent.fromY) * f;
+            if (f >= 1) {
+                state.descent = undefined;
+                this.showImpact(descend.impact, boss.x, boss.y);
+                // The flow field's worked out again for where they've landed
+                const current = this.hero;
+                for (const hero of this.heroes) {
+                    if (this.isUp(hero)) {
+                        this.use(hero);
+                        this.updateFlowField();
+                    }
+                }
+                this.use(current);
+            }
+        }
     }
 
     // Kneeling at a threshold: up it gets for the last of it (riseSeq)
@@ -5257,6 +5381,7 @@ export class Sim {
         if (end === undefined) {
             return false;
         }
+        this.stepDescent(boss, phase);
         if (this.tick >= end) {
             // Up, and straight on with the new phase
             phase.pauseEnd = phase.riseTick = undefined;
@@ -5306,6 +5431,7 @@ export class Sim {
         this.bullets.clear();
         this.emitters = [];
         this.hazards = [];
+        this.loads = [];
         this.quarters = undefined;
         const current = this.hero;
         for (const hero of this.heroes) {
@@ -6296,7 +6422,12 @@ export class Sim {
         if (fell.length > 0 || back.length > 0) {
             // Enemies on a tile that's gone go to the nearest that isn't
             for (const enemy of this.enemies) {
-                if (!enemy.dead && this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))) {
+                if (
+                    !enemy.dead &&
+                    !this.isSunk(enemy) &&
+                    enemy.bossState?.phase?.pauseEnd === undefined &&
+                    this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))
+                ) {
                     const to = this.findFloorSpot(enemy.x, enemy.y, enemy.radius);
                     enemy.x = to.x;
                     enemy.y = to.y;
@@ -6346,6 +6477,10 @@ export class Sim {
             for (const message of floor.press(tiles, this.tick, origin)) {
                 this.emit({ type: "notice", message });
             }
+            for (const name of floor.fired) {
+                this.letLoadGo(name);
+            }
+            floor.fired = [];
         }
         if (floor.hasEffects) {
             this.stepFloorEffects(floor);
@@ -6995,6 +7130,10 @@ export class Sim {
             this.stepDash(enemy, state.dash);
             return;
         }
+        // Hauled out of a fault it sank into (BossDef.sinks), onto the nearest floor
+        if (state.sunkEnd !== undefined && this.tick >= state.sunkEnd) {
+            this.climbOut(enemy);
+        }
         if (this.isStunned(enemy)) {
             return;
         }
@@ -7280,9 +7419,22 @@ export class Sim {
             windup.targets = [{ x: player.x, y: player.y }];
         }
         state.windup = windup;
-        // What it does to the floor as it starts, at the player it's after
+        // What it does to the floor as it starts, at the player it's after, or from its own feet
+        // (BossAttackDef.floorAt), to the fault line nearest them (floorNearest)
         if (attack.floor) {
-            this.floorAct(attack.floor, player);
+            let action: FloorActionDef | undefined = attack.floor;
+            if (attack.floorNearest && this.floor && "group" in action) {
+                const group = this.floor.nearestGroup(
+                    attack.floorNearest,
+                    player.x,
+                    player.y,
+                    this.tick,
+                );
+                action = group ? { ...action, group } : undefined;
+            }
+            if (action) {
+                this.floorAct(action, attack.floorAt === "boss" ? enemy : player);
+            }
         }
         this.animateStatues(attack, windup.from, attack.statues?.windupSeq);
         // Somewhere safe from it, there from the start (GroundPatternDef.safe)
@@ -7449,7 +7601,7 @@ export class Sim {
         dirX: number,
         dirY: number,
         length: number,
-    ): { x: number; y: number; stuck: boolean } {
+    ): { x: number; y: number; stuck: boolean; smash?: { x: number; y: number } } {
         const pillars = this.map.features?.pillars;
         let x = enemy.x;
         let y = enemy.y;
@@ -7458,6 +7610,11 @@ export class Sim {
             const ny = enemy.y + dirY * along;
             if (boxCircle(pillars, nx, ny, enemy.radius)) {
                 return { x, y, stuck: true };
+            }
+            // A floor's pillar: smashed through, if it smashes (line.smashes), else stopped at
+            const pillar = this.floorPillarUnder(nx, ny, enemy.radius + 0.1);
+            if (pillar) {
+                return { x, y, stuck: false, smash: pillar };
             }
             const inTheWay = this.heroes.some(
                 (hero) =>
@@ -7490,6 +7647,7 @@ export class Sim {
             startTick: this.tick,
             endTick: this.tick + Math.max(1, Math.round((length / DASH_SPEED) * TICKS_PER_SECOND)),
             stuck: end.stuck,
+            smash: attack.line?.smashes ? end.smash : undefined,
         };
     }
 
@@ -7505,6 +7663,15 @@ export class Sim {
         // What it throws up where it stops, and its sword stuck in the stone
         this.showImpact(dash.attack.impact, enemy.x, enemy.y);
         const guard = enemy.def.boss?.guard;
+        // Through a floor's pillar: it breaks (line.smashes)
+        if (dash.smash && this.floor) {
+            this.floor.hitPillar(dash.smash.x, dash.smash.y, this.tick, 255);
+            this.showImpact(guard?.stuck, dash.smash.x + 0.5, dash.smash.y + 0.5);
+        }
+        // Run onto a cracked fault, it caves in under it (BossDef.sinks)
+        if (dash.attack.crushes) {
+            this.caveIn(enemy);
+        }
         if (dash.stuck && guard) {
             const dx = dash.toX - dash.fromX;
             const dy = dash.toY - dash.fromY;
@@ -7676,9 +7843,178 @@ export class Sim {
             y: boss.y,
             opened: this.isExposed(boss),
         });
+        // Open, but not already broken open: a second blow on its bare core doesn't keep it bare
+        const wasOpen = this.isExposed(boss) && !this.isCoreOpen(boss);
         this.damageSource = `ability:${ability.id}`;
         this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+        // Its guard broken open for longer (FightAbilityDef.opens)
+        const opens = ability.opens;
+        const state = boss.bossState;
+        if (opens && wasOpen && state && !boss.dead) {
+            state.coreEnd = this.tick + secondsToTicks(opens.seconds);
+            state.exposedEnd = Math.max(state.exposedEnd ?? 0, state.coreEnd);
+            this.showImpact(opens.impact, boss.x, boss.y, undefined, boss.uid);
+            if (opens.sound !== undefined) {
+                this.emit({
+                    type: "bossAttack",
+                    enemyId: boss.def.id,
+                    sound: opens.sound,
+                    x: boss.x,
+                    y: boss.y,
+                });
+            }
+        }
         return true;
+    }
+
+    // Whether a boss's core is bare now (FightAbilityDef.opens)
+    isCoreOpen(enemy: Enemy): boolean {
+        return this.tick < (enemy.bossState?.coreEnd ?? 0);
+    }
+
+    // Whether a boss is down in a fault that caved in under it (BossDef.sinks)
+    isSunk(enemy: Enemy): boolean {
+        return this.tick < (enemy.bossState?.sunkEnd ?? 0);
+    }
+
+    // A floor pillar's tile under a circle (most of it), if one stands there
+    private floorPillarUnder(
+        x: number,
+        y: number,
+        radius: number,
+    ): { x: number; y: number } | undefined {
+        const floor = this.floor;
+        if (!floor?.hasPillars) {
+            return undefined;
+        }
+        for (let ty = Math.floor(y - radius); ty <= Math.floor(y + radius); ty++) {
+            for (let tx = Math.floor(x - radius); tx <= Math.floor(x + radius); tx++) {
+                const nx = Math.min(Math.max(x, tx), tx + 1);
+                const ny = Math.min(Math.max(y, ty), ty + 1);
+                if ((nx - x) ** 2 + (ny - y) ** 2 < radius * radius && floor.isPillarTile(tx, ty)) {
+                    return { x: tx, y: ty };
+                }
+            }
+        }
+        return undefined;
+    }
+
+    // A blast's spot behind a floor pillar from the boss (BossAttackDef.blocked): the pillar
+    // takes it, cracking, and what it throws up is there instead
+    private blockedByPillar(boss: Enemy, attack: BossAttackDef, x: number, y: number): boolean {
+        const floor = this.floor;
+        const pillar = floor?.pillarBetween(boss.x, boss.y, x, y);
+        if (!floor || !pillar) {
+            return false;
+        }
+        floor.hitPillar(pillar.x, pillar.y, this.tick);
+        this.showImpact(attack.impact, pillar.x + 0.5, pillar.y + 0.5);
+        return true;
+    }
+
+    // Caught on a cracked fault (BossAttackDef.crushes): it caves in, and the boss sinks into
+    // it, stunned (BossDef.sinks)
+    private caveIn(boss: Enemy): void {
+        const sinks = boss.def.boss?.sinks;
+        const floor = this.floor;
+        const state = boss.bossState;
+        if (!sinks || !floor || !state || boss.dead || this.runOver) {
+            return;
+        }
+        const caved = floor.caveIn(boss.x, boss.y, boss.radius * 0.8, this.tick, CAVE_IN_TICKS);
+        if (caved.length === 0) {
+            return;
+        }
+        this.showImpact(sinks.impact, boss.x, boss.y);
+        this.dropGuard(boss, sinks.stun, true, "Fault");
+        if (this.isStunned(boss)) {
+            state.sunkStart = this.tick;
+            state.sunkEnd = state.stunEnd;
+            if (sinks.shout) {
+                this.emit({ type: "bossShout", enemyUid: boss.uid, text: sinks.shout });
+            }
+        }
+    }
+
+    // Out of the hole: up onto the nearest floor that's there, hauling itself up
+    private climbOut(boss: Enemy): void {
+        const state = boss.bossState!;
+        state.sunkStart = state.sunkEnd = undefined;
+        if (this.floor && this.grid.isDropped(Math.floor(boss.x), Math.floor(boss.y))) {
+            const to = this.findFloorSpot(boss.x, boss.y, boss.radius);
+            boss.x = boss.prevX = to.x;
+            boss.y = boss.prevY = to.y;
+        }
+        const seq = boss.def.boss?.sinks?.climbSeq;
+        if (seq !== undefined) {
+            boss.anim = "attack";
+            boss.attackSeq = seq;
+            boss.animStart = this.tick;
+        }
+    }
+
+    // A floor's plate set off: its load let go over the boss where it stands (FloorTriggerDef.load)
+    private letLoadGo(name: string): void {
+        const load = this.floor?.def.triggers?.[name]?.load;
+        const boss = this.shownBoss;
+        if (!load || !boss || boss.dead || boss.bossState?.leap) {
+            return;
+        }
+        this.loads.push({
+            x: boss.x,
+            y: boss.y,
+            startTick: this.tick,
+            landTick: this.tick + Math.max(1, secondsToTicks(load.seconds)),
+            trigger: name,
+        });
+        if (load.sound !== undefined) {
+            this.emit({
+                type: "bossAttack",
+                enemyId: boss.def.id,
+                sound: load.sound,
+                x: boss.x,
+                y: boss.y,
+            });
+        }
+    }
+
+    // Loads landing: on the boss if it's still under one, hurt and stunned
+    private stepLoads(): void {
+        if (this.loads.length === 0) {
+            return;
+        }
+        const boss = this.shownBoss;
+        for (const drop of this.loads) {
+            if (drop.landTick !== this.tick) {
+                continue;
+            }
+            const load = this.floor?.def.triggers?.[drop.trigger]?.load;
+            if (!load) {
+                continue;
+            }
+            this.showImpact(load.impact, drop.x, drop.y);
+            const under =
+                boss !== undefined &&
+                !boss.dead &&
+                fm.hypot(boss.x - drop.x, boss.y - drop.y) <= load.radius;
+            if (under) {
+                const current = this.hero;
+                this.use(this.nearestHero(boss.x, boss.y));
+                this.damageSource = "court";
+                this.damageEnemy(boss, load.damage, 0, boss.x, boss.y, 0);
+                this.use(current);
+                const guard = boss.def.boss?.guard;
+                if (load.stun && guard && !boss.dead) {
+                    this.dropGuard(boss, load.stun, true, "Load");
+                }
+                if (load.message) {
+                    this.emit({ type: "notice", message: load.message });
+                }
+            } else if (load.missMessage) {
+                this.emit({ type: "notice", message: load.missMessage });
+            }
+        }
+        this.loads = this.loads.filter((drop) => drop.landTick > this.tick);
     }
 
     // What the fight's button would land on now: the boss, up, in reach of the current hero
@@ -7792,11 +8128,16 @@ export class Sim {
         if (attack.kind === "swing" || attack.kind === "blast") {
             // A swing hits around the boss, a blast where the player was (and
             // around there); the player is hit once however many land on them
-            const spots = attack.kind === "swing" ? [{ x: enemy.x, y: enemy.y }] : windup.targets;
+            let spots = attack.kind === "swing" ? [{ x: enemy.x, y: enemy.y }] : windup.targets;
             if (attack.leap) {
                 this.leapTo(enemy, spots[0]);
             }
             const radius = attack.radius ?? 2;
+            // Cover (BossAttackDef.blocked): a floor pillar between it and a spot takes the blow
+            // instead, and nobody's hit there
+            if (attack.kind === "blast" && attack.blocked) {
+                spots = spots.filter(({ x, y }) => !this.blockedByPillar(enemy, attack, x, y));
+            }
             // A lunge's strip (BossAttackDef.line), a blast's square (square)
             const line = attack.kind === "swing" ? attack.line : undefined;
             const half = attack.kind === "blast" && attack.square ? attack.square / 2 : 0;
@@ -7895,6 +8236,10 @@ export class Sim {
             // Missed everyone: its guard's down (BossDef.guard)
             if (!landed && attack.opens !== undefined) {
                 this.dropGuard(enemy, attack.opens, false, attack.name);
+            }
+            // Stamped down on a cracked fault, it caves in under it (BossDef.sinks)
+            if (attack.crushes && !line?.dash) {
+                this.caveIn(enemy);
             }
             return;
         }

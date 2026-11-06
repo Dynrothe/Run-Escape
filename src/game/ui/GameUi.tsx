@@ -2093,14 +2093,16 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                         ? "Out of reach!"
                         : boss.fight.guard === "stunned"
                           ? "Stunned!"
-                          : boss.fight.guard === "exposed"
-                            ? "Guard down!"
-                            : (boss.fight.status ??
-                              (boss.fight.stage === "totems"
-                                  ? "Charge the totems!"
-                                  : boss.fight.stage === "finale"
-                                    ? "Stay on your feet!"
-                                    : "Break her shield!"))}
+                          : boss.fight.guard === "core"
+                            ? "Core exposed!"
+                            : boss.fight.guard === "exposed"
+                              ? "Guard down!"
+                              : (boss.fight.status ??
+                                (boss.fight.stage === "totems"
+                                    ? "Charge the totems!"
+                                    : boss.fight.stage === "finale"
+                                      ? "Stay on your feet!"
+                                      : "Break her shield!"))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
                     )}

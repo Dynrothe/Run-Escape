@@ -62,6 +62,12 @@ const SHIELDED_TINT = 0xd0b8ff;
 // A boss with its guard down (BossDef.guard): warmed gold, and glinting as it pulses
 const EXPOSED_TINT = 0xffc860;
 const EXPOSED_FLASH = 0.3;
+// A boss broken open by the fight's button (FightAbilityDef.opens): its core's molten glow
+const CORE_TINT = 0xff8a3c;
+// A boss sinking into a fault (BossDef.sinks), and climbing out: over this many ticks
+const SINK_TICKS = 10;
+// A boss dropping to the next terrace (BossPhasesDef descend): its arc's height, tiles
+const DESCENT_ARC_HEIGHT = 2;
 const EXPOSED_PULSE = 12;
 // A blockable attack winding up shows the shelter behind the glyph out this
 // far from the boss, in tiles
@@ -896,13 +902,30 @@ export class GameView {
         if (player.flash > 0) {
             tint = PLAYER_HIT_TINT;
         }
-        if (player.frozen > 0) {
+        // Dropping to the next terrace (BossPhasesDef descend): held, not frozen, and in an arc
+        // from the ground it left to the ground it lands on
+        const drag = sim.heroes[hero]?.drag;
+        if (player.frozen > 0 && drag?.arc === undefined) {
             tint = FROZEN_TINT;
         }
         if (player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0) {
             flash = 0.5;
         }
-        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
+        let height = this.ground(sim, x, y);
+        if (drag?.arc && tick < drag.endTick) {
+            const f = Math.min(
+                1,
+                Math.max(0, (tick + alpha - drag.startTick) / (drag.endTick - drag.startTick)),
+            );
+            height =
+                lerp(
+                    this.ground(sim, drag.fromX, drag.fromY),
+                    this.ground(sim, drag.toX, drag.toY),
+                    f,
+                ) -
+                drag.arc * 4 * f * (1 - f);
+        }
+        actors.draw(model, anim, frame, x, height, y, pose.yaw, {
             silhouette: true,
             tint,
             flash,
@@ -965,6 +988,33 @@ export class GameView {
         let height =
             this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
             (sink * model.height * enemy.scale) / 128;
+        // Down in a fault that's caved in under it (BossDef.sinks): it drops in fast and hauls
+        // itself out at the end; and dropping to the next terrace in an arc (descend)
+        const state = enemy.bossState;
+        const sinks = def.boss?.sinks;
+        if (sinks && state?.sunkStart !== undefined && state.sunkEnd !== undefined && !enemy.dead) {
+            const t = tick + alpha;
+            const down = Math.min(1, (t - state.sunkStart) / SINK_TICKS);
+            const up = Math.min(1, Math.max(0, (state.sunkEnd - t) / SINK_TICKS));
+            height += sinks.depth * Math.min(down, up);
+        }
+        const descent = state?.descent;
+        if (descent) {
+            const f = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (tick + alpha - descent.startTick) / (descent.endTick - descent.startTick),
+                ),
+            );
+            height =
+                lerp(
+                    this.ground(sim, descent.fromX, descent.fromY),
+                    this.ground(sim, descent.toX, descent.toY),
+                    f,
+                ) -
+                DESCENT_ARC_HEIGHT * 4 * f * (1 - f);
+        }
         // Thrown out by a boss: up and over in an arc (negative is up)
         const flung = enemy.flung;
         if (flung) {
@@ -991,7 +1041,8 @@ export class GameView {
         // The boss is hit all the time; a full flash would leave him white
         let flash = enemy.flash > 0 ? (enemy.boss ? 0.2 : 0.55) : 0;
         if (enemy.boss && !enemy.dead && sim.isExposed(enemy)) {
-            tint = EXPOSED_TINT;
+            // Broken open (FightAbilityDef.opens): its core's glow, hotter than a guard down
+            tint = sim.isCoreOpen(enemy) ? CORE_TINT : EXPOSED_TINT;
             flash = Math.max(
                 flash,
                 EXPOSED_FLASH *
@@ -1319,9 +1370,15 @@ export class GameView {
                 }
             } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
+                // A spot behind a floor pillar from it isn't hit (BossAttackDef.blocked): the
+                // pillar takes it, so it's left off
                 const spots =
                     kind === "blast"
-                        ? windup.targets
+                        ? windup.targets.filter(
+                              (spot) =>
+                                  !windup.attack.blocked ||
+                                  !sim.floor?.pillarBetween(enemy.x, enemy.y, spot.x, spot.y),
+                          )
                         : [
                               {
                                   x: lerp(enemy.prevX, enemy.x, alpha),

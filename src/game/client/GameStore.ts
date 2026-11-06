@@ -248,7 +248,7 @@ export type BossView = {
         // and the player's out of it
         outOfReach?: boolean;
         // Its guard's down (BossDef.guard): exposed after a miss, or stunned
-        guard?: "exposed" | "stunned";
+        guard?: "exposed" | "stunned" | "core";
         // How charged each totem is, 0 to 1
         totems: number[];
         curseAttacks?: number;

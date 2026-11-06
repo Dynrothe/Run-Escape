@@ -223,6 +223,7 @@ function getSpotAnimIds(): number[] {
     };
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
+        addImpact(map.fight?.ability?.opens?.impact);
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
@@ -233,6 +234,10 @@ function getSpotAnimIds(): number[] {
         for (const skin of map.floor?.skins ?? []) {
             const { rise, fall, crack } = skin.material ?? {};
             add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
+        }
+        // A plate's load landing (FloorTriggerDef.load)
+        for (const trigger of Object.values(map.floor?.triggers ?? {})) {
+            addImpact(trigger.load?.impact);
         }
     }
     for (const enemy of ENEMIES) {
@@ -246,6 +251,12 @@ function getSpotAnimIds(): number[] {
             add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);
             add(...(attack.impactSpotAnims ?? []));
             addImpact(attack.impact);
+            // What it throws in an arc (BossAttackDef.arc)
+            add(attack.arc?.spotAnim);
+        }
+        addImpact(enemy.boss?.sinks?.impact);
+        for (const phase of enemy.boss?.phases?.phases ?? []) {
+            addImpact(phase.descend?.impact);
         }
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);

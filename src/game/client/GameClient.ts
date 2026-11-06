@@ -2778,9 +2778,11 @@ export class GameClient implements GameFrameHandler {
                         Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,
                     guard: sim.isStunned(shownBoss)
                         ? "stunned"
-                        : sim.isExposed(shownBoss)
-                          ? "exposed"
-                          : undefined,
+                        : sim.isCoreOpen(shownBoss)
+                          ? "core"
+                          : sim.isExposed(shownBoss)
+                            ? "exposed"
+                            : undefined,
                     totems: phase.totems.map((totem) =>
                         phase.stage === "shield" ? 0 : 1 - Math.max(0, totem.hp) / totem.maxHp,
                     ),

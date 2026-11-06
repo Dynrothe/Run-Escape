@@ -62,10 +62,13 @@ export function getGameSoundIds(): number[] {
         ids.push(thrall.sound);
     }
     for (const map of MAPS) {
-        ids.push(map.fight?.ability?.sound ?? -1);
+        ids.push(map.fight?.ability?.sound ?? -1, map.fight?.ability?.opens?.sound ?? -1);
     }
     for (const map of ALL_MAPS) {
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
+        for (const trigger of Object.values(map.floor?.triggers ?? {})) {
+            ids.push(trigger.load?.sound ?? -1);
+        }
         for (const skin of map.floor?.skins ?? []) {
             const { rise, fall, crack } = skin.material ?? {};
             ids.push(rise?.sound ?? -1, fall?.sound ?? -1, crack?.sound ?? -1);

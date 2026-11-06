@@ -168,6 +168,20 @@ export type BossState = {
     stunEnd?: number;
     // It can't be stunned again until this tick (BossGuardDef.stunGrace)
     stunGraceEnd?: number;
+    // Sunk into a fault that's caved in under it (BossDef.sinks), from sunkStart until sunkEnd
+    sunkStart?: number;
+    sunkEnd?: number;
+    // Broken open by the fight's button (FightAbilityDef.opens): its guard's down till then
+    coreEnd?: number;
+    // Dropping to the next terrace at a threshold (BossPhasesDef descend): from, to, ticks
+    descent?: {
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        startTick: number;
+        endTick: number;
+    };
     // A lunge's dash (BossAttackDef line.dash): from (fromX, fromY) to (toX, toY) over these
     // ticks, stunned at the end if it's run into a pillar (stuck)
     dash?: {
@@ -179,6 +193,8 @@ export type BossState = {
         startTick: number;
         endTick: number;
         stuck: boolean;
+        // A floor's pillar it smashes through as it gets there (BossAttackDef line.smashes)
+        smash?: { x: number; y: number };
     };
     // BossDef.shadowRealm, exhumes or yellows: how many have begun, and the one it's in, until
     // endTick or, for exhumes, its exhumeds are all smothered (left, -1 for the others)

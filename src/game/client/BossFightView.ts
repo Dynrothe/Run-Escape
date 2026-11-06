@@ -47,6 +47,12 @@ const DARK = 0.78;
 const FADE_TICKS = 40;
 // Warnings on the ground (her marks, lanes, cones and aim) are drawn nearly see
 // through, so what's under them shows and they're there to be read, not stared at
+// A boulder thrown in an arc (BossAttackDef.arc) leaves his hands this high (tiles) and is drawn
+// this far up off the ground as it lands, so it lands on it, not in it; a load falls from this
+// high unless it says
+const ARC_HANDS = 2.4;
+const ARC_LAND = 0.4;
+const LOAD_HEIGHT = 9;
 const WARNING_ALPHA = 0.1;
 // The curse's pink pulses this many times a second, quicker on its last
 // attack, and flashes this long from this alpha as it lifts
@@ -202,6 +208,129 @@ export class BossFightView {
         for (const hazard of sim.hazards) {
             this.drawHazard(actors, sim, hazard);
         }
+        this.drawArcs(actors, sim, alpha);
+        this.drawLoads(actors, sim, alpha);
+    }
+
+    // What's thrown in an arc or dropped from high above (BossAttackDef.arc), for its last
+    // seconds: a blast's boulders from the boss's hands to each spot (to the pillar in the way,
+    // if one is: blocked), and a ground attack's rocks down onto each mark
+    private drawArcs(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const now = sim.tick + alpha;
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const arc = windup?.attack.arc;
+            if (!windup || !arc || arc.from !== "boss" || enemy.dead) {
+                continue;
+            }
+            const span = arc.seconds * TICKS_PER_SECOND;
+            const f = 1 - (windup.landTick - now) / span;
+            if (f < 0 || f > 1) {
+                continue;
+            }
+            const look = this.arcLook(arc);
+            if (!look) {
+                continue;
+            }
+            const hands = this.ground(sim, enemy.x, enemy.y) - ARC_HANDS;
+            for (const target of windup.targets) {
+                let tx = target.x;
+                let ty = target.y;
+                const pillar =
+                    windup.attack.blocked && sim.floor?.pillarBetween(enemy.x, enemy.y, tx, ty);
+                if (pillar) {
+                    tx = pillar.x + 0.5;
+                    ty = pillar.y + 0.5;
+                }
+                const x = lerp(enemy.x, tx, f);
+                const y = lerp(enemy.y, ty, f);
+                const height =
+                    lerp(hands, this.ground(sim, tx, ty) - ARC_LAND, f) -
+                    arc.height * 4 * f * (1 - f);
+                this.drawArcLook(actors, look, arc.scale ?? 1, x, height, y, now);
+            }
+        }
+        for (const hazard of sim.hazards) {
+            const arc = hazard.attack.arc;
+            if (!arc || arc.from !== "sky") {
+                continue;
+            }
+            const f = 1 - (hazard.landTick - now) / (arc.seconds * TICKS_PER_SECOND);
+            const look = f >= 0 && f <= 1 ? this.arcLook(arc) : undefined;
+            if (look) {
+                const ground = this.ground(sim, hazard.x, hazard.y) - ARC_LAND;
+                // Falling, faster as it comes
+                this.drawArcLook(
+                    actors,
+                    look,
+                    arc.scale ?? 1,
+                    hazard.x,
+                    ground - arc.height * (1 - f * f),
+                    hazard.y,
+                    now,
+                );
+            }
+        }
+    }
+
+    // Loads let fall on the boss by a floor's plates (FloorTriggerDef.load), coming down
+    private drawLoads(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const now = sim.tick + alpha;
+        for (const drop of sim.loads) {
+            const load = sim.floor?.def.triggers?.[drop.trigger]?.load;
+            if (!load?.lookId) {
+                continue;
+            }
+            const look = this.arcLook({ lookId: load.lookId });
+            if (!look) {
+                continue;
+            }
+            const f = Math.min(
+                1,
+                Math.max(0, (now - drop.startTick) / (drop.landTick - drop.startTick)),
+            );
+            const ground = this.ground(sim, drop.x, drop.y) - ARC_LAND;
+            this.drawArcLook(
+                actors,
+                look,
+                1,
+                drop.x,
+                ground - (load.height ?? LOAD_HEIGHT) * (1 - f * f),
+                drop.y,
+                now,
+            );
+        }
+    }
+
+    private arcLook(arc: {
+        spotAnim?: number;
+        lookId?: string;
+    }): { model: ActorModel; anim: ActorAnim; scale: number } | undefined {
+        if (arc.lookId !== undefined) {
+            const look = getEnemy(arc.lookId);
+            const model = this.assets.get(getEnemyModelKey(look, 0));
+            return model && { model, anim: model.getAnim(look.idleSeq), scale: look.scale ?? 1 };
+        }
+        const model =
+            arc.spotAnim !== undefined ? this.assets.get("spot:" + arc.spotAnim) : undefined;
+        return model && { model, anim: model.anims[0], scale: 1 };
+    }
+
+    private drawArcLook(
+        actors: ActorRenderer,
+        look: { model: ActorModel; anim: ActorAnim; scale: number },
+        scale: number,
+        x: number,
+        height: number,
+        y: number,
+        now: number,
+    ): void {
+        const frame = look.anim.getFrame(Math.floor(now));
+        // Tumbling as it goes
+        actors.draw(look.model, look.anim, frame, x, height, y, Math.floor(now * 40) & 2047, {
+            scale: look.scale * scale,
+            flash: 0,
+        });
     }
 
     // Her real portals and spores, at the size of what they do: nothing else marks
