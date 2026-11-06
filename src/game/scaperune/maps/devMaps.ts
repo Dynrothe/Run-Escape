@@ -6,6 +6,7 @@ import {
 } from "../generator";
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
+import { BACKDROP_TEST_RECIPE } from "./backdropTest";
 import { CLIFF_GALLERY } from "./cliffGallery";
 import { DEPTH_TEST_RECIPE } from "./depthTest";
 import { KALUAS_WAKE } from "./kaluasWake";
@@ -132,6 +133,7 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     PREFAB_GALLERY,
     CLIFF_GALLERY,
     DEPTH_TEST_RECIPE,
+    BACKDROP_TEST_RECIPE,
     ROCK_SHEET,
     WALL_SHEET,
     VARDHELM,
