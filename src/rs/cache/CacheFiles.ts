@@ -299,6 +299,13 @@ async function fetchCachedFile(
         headers,
         signal,
     });
+    // Asked for what's past the end: every part was saved, and only the whole file's copy wasn't
+    // (the page was closed or reloaded as it was written)
+    if (offset > 0 && resp.status === 416) {
+        const buffer = partsToBuffer(parts, shared);
+        await saveWhole(cache, path, buffer, partUrls);
+        return { name, data: buffer };
+    }
     if (resp.status !== 200 && resp.status !== 206) {
         throw new Error("Failed downloading " + path + ", " + resp.status);
     }
@@ -356,26 +363,41 @@ async function fetchCachedFile(
 
     const buffer = partsToBuffer(parts, shared);
 
-    cache.put(
-        path,
-        new Response(ReadableBufferStream(buffer), {
-            status: 200,
-            headers: {
-                "Content-Type": "application/octet-stream",
-                "Content-Length": buffer.byteLength.toString(),
-            },
-        }),
-    );
-
     if (incremental) {
         await Promise.all(cacheUpdates);
-        for (const url of partUrls) {
-            cache.delete(url);
-        }
     }
+    await saveWhole(cache, path, buffer, partUrls);
 
     return {
         name,
         data: buffer,
     };
+}
+
+// Keeps the whole file, and drops its parts only once that's saved: a phone can take a while to
+// write a big cache, or run out of room, and with the parts gone first a reload started the
+// download again from where the last part left off. If it can't be saved, the parts stay, so
+// the next load picks up from them rather than from nothing.
+async function saveWhole(
+    cache: Cache,
+    path: string,
+    buffer: ArrayBuffer,
+    partUrls: RequestInfo[],
+): Promise<void> {
+    try {
+        await cache.put(
+            path,
+            new Response(ReadableBufferStream(buffer), {
+                status: 200,
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": buffer.byteLength.toString(),
+                },
+            }),
+        );
+    } catch (e) {
+        console.warn("Couldn't keep " + path + ", it'll load from its parts next time", e);
+        return;
+    }
+    await Promise.all(partUrls.map((url) => cache.delete(url)));
 }

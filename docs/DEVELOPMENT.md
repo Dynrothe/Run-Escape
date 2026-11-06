@@ -554,7 +554,9 @@ it's on purpose:
   on a slow or cut-off connection may never get past. `gameServer.ts` clamps the end and answers
   206, with a `Content-Length` of what's left. The dev and preview server's `/caches` (in
   `vite.config.ts`) does the same with its `parseRange`, and sends the whole file when `If-Range`
-  doesn't match the file's `Last-Modified`.
+  doesn't match the file's `Last-Modified`. Once it has the whole file it keeps that and only then
+  drops its parts, so a page reloaded while a phone's still writing it (or out of room) resumes from
+  the parts, and a 416 for a resume past the end means every part was there.
 
 Interception only works reliably for one session per process, so don't add a second.
 
