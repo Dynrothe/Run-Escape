@@ -114,6 +114,7 @@ version and how to run it.
     | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
     | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
     | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Prospector          | Melee       | Dragon warhammer       | 20% faster, 20% more hitpoints, heals 10 a minute | The Quarry Colossus only (everyone plays them there) |
 
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
@@ -191,7 +192,8 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, the Quarry
+  Colossus), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
@@ -342,6 +344,12 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
+    - **The Quarry Colossus** (a boss fight, open once Justiciar Zachariah's beaten): the Sunken
+      Quarry, three shelves cut down a cliff, a level apart, over a chasm with lava at its bottom;
+      a cut face with an unfinished statue north, spoil heaps stepping away east, cranes on the
+      shelves' edges, pillars of uncut rock on them. You start on the top shelf with the next in
+      sight below. No waves, no picks, no items: you play the Prospector with a Dragon warhammer,
+      to The Plundered Tomb. It can't be endless; it has a hard mode once it's beaten.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -544,6 +552,20 @@ version and how to run it.
       guard's down; a press a moment early is held till it can go off. His lightning hurts only within the
       swirl on each cell, and never him, and the knights' swords fly right across the court. A boss fight has no
       items, so no item bar, and its results have Retry.
+    - **The Quarry Colossus**: a stone colossus whose quarry is his weapon. Three phases, one a
+      shelf: at 78% and 42% the shelf gives way under everyone and the fight drops to the next,
+      smaller one, the last with lava welling up through its cracks. His **Stamp** heaves the floor
+      in rings out from his feet, all but along a cross (or the diagonals), which stay down; his
+      **Fault slam** heaves the fault line nearest you, and a fault heaved twice falls into the
+      chasm for a while; his **Charge** barges down a strip three wide; his **Boulders** fly in an
+      arc at where you stood, and a pillar between you takes them (three and it breaks); later a
+      side of the shelf heaves (**Heave**), then all of it with a way through (**Upheaval**); and
+      rocks fall off the cliff round you all fight. **Fighting back**: a charge that misses leaves
+      his guard down (double damage); lure him onto a cracked fault and it caves in under him and
+      he sinks, stunned; step on a crane's plate and its load drops where he stands, a big hit and
+      a stun if he's still there. **Shatter**, the fight's button, is a pickaxe blow from beside
+      him, and with his guard down it breaks a plate off him: his core's bare and his guard stays
+      down five seconds.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

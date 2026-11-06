@@ -42,6 +42,8 @@ go stale. Add anything that cost you time to work out.
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| The Quarry Colossus, the Sunken Quarry (and its floor) | `content/quarryColossus.ts`, `scaperune/maps/quarryColossus.ts`        |
+| The Colossus's design, its numbers and its shelves     | `docs/design/quarry-colossus.md`                                       |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |

@@ -5,6 +5,14 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- The Quarry Colossus: a new boss fight, open once Justiciar Zachariah is beaten. A stone colossus
+  on a quarry's shelves over a chasm: the floor heaves round his feet, faults crack and fall away,
+  his boulders smash the pillars you hide behind, and each phase the shelf gives way and the fight
+  drops to the next. Lure him onto a cracked fault, drop a crane's load on him, and Shatter his
+  plates to bare his core. You play the Prospector, with a Dragon warhammer.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

@@ -960,6 +960,28 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   them whole, to compare.
 - The floor preview, `?floorpreview` on the dev server (`ui/FloorPreview.tsx`, checks in
   `core/floorLint.ts`), draws a floor flat and plays its script on a timeline.
+- A shipped fight uses it: the Quarry Colossus (`content/quarryColossus.ts`,
+  `docs/design/quarry-colossus.md`). What it added, each behind a field of its own:
+    - A floor in pieces (three shelves apart): `wouldSplit` keeps each piece whole rather than the
+      floor as one, and a pattern can be kept to a group (`FloorPatternDef.group`, its extent and
+      middle the group's). A drop with `whole` takes every tile of its group, pillars and plates
+      too (a shelf giving way). A ripple's `from` leaves its inner rings down.
+    - Pillars that break (`FloorDef.pillars`, `ArenaFloor.hitPillar`): cracked by blows (drawn as
+      a fragile tile's damage), then fallen away as a hole, rebuilt as a pillar.
+    - Bosses on the floor: `BossAttackDef.floorAt` (from its own feet), `floorNearest` (the group of
+      several nearest the player: a fault line), `crushes` (a cracked fragile tile under it caves in,
+      `ArenaFloor.caveIn`, and it sinks in, stunned: `BossDef.sinks`, `BossState.sunkEnd`, drawn
+      lower), `blocked` (a floor pillar between it and a blast's spot takes it), `line.smashes`
+      (its dash breaks a floor pillar), `arc` (a blast's thrown things and a ground attack's falling
+      ones drawn in flight, `BossFightView.drawArcs`).
+    - A plate that drops a load on the boss (`FloorTriggerDef.load`, `Sim.loads`, `stepLoads`):
+      where it stands as the plate's pressed, landing after its seconds, hurting and stunning it if
+      it's still there.
+    - Shelves giving way between phases (`BossPhasesDef.phases[i].descend`): through the threshold
+      everyone's held, the group falls, and the players drop in an arc to the next shelf
+      (`Hero.drag.arc`, drawn by `GameView`) and the boss to its rise (`BossState.descent`).
+    - `FightAbilityDef.opens`: used with the boss's guard down, its guard stays down longer
+      (`BossState.coreEnd`, `Sim.isCoreOpen`), tinted molten, and the boss bar says "Core exposed!".
 
 ### Pets
 

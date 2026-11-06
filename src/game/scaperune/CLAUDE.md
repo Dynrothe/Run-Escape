@@ -1066,6 +1066,14 @@ from above and plays the script with the player at the start on a timeline you c
 `core/floorLint.ts` finds: pieces cut off, tiles behind ledges, see-through skins, level ramps, triggers on no tile,
 and a rough phone triangle count against 69k.
 
+**A floor in pieces** (the Quarry Colossus's three shelves, `maps/quarryColossus.ts`): give its shape a union of
+them, a group each, and holes and falls keep each piece whole. A pattern with `group` stays on that group, by its
+extent; a drop with `whole: true` takes all of a group, pillars and plates too (a shelf giving way). Real height
+under a floor works: FloorView stands each tile on the map's ground, so shelves at different heights, a face between
+them, need no lift. **Pillars can break**: `FloorDef.pillars` (`hits`, `fall`), struck by `ArenaFloor.hitPillar`
+(a boss's boulder, its charge), cracking as a fragile tile does, then a hole until it rebuilds. **A plate can drop a
+load on the boss** (`FloorTriggerDef.load`).
+
 **Checks.** `core/floorLayout.test.ts` lays out and plays each demo for a loop and a half, and
 `core/floorFeatures.test.ts` lints each one. Their checks:
 

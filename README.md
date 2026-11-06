@@ -40,6 +40,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 - **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
   that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
   reaches him from close by.
+- **The Quarry Colossus**, a boss fight down a quarry's shelves over a chasm: the floor heaves and
+  falls away, the shelf gives way each phase, and the quarry can be turned on him.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
   you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
 

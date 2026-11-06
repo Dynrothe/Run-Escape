@@ -165,8 +165,11 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
   under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
   (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
-  and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
-  `docs/DEVELOPMENT.md` has the lot.
+  and what a blow throws up (`impact`, an `ImpactDef`). A boss can work a map's floor
+  (`MapDef.floor`): its attacks' `floor`, `floorAt`, `floorNearest`, `crushes` and `blocked`,
+  `BossDef.sinks`, a plate's `load`, and phases that `descend` to the next shelf (the Quarry
+  Colossus's, under A floor that fights back). Boss fights as data in `docs/DEVELOPMENT.md` has
+  the lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
