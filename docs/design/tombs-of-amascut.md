@@ -527,8 +527,10 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
 - **Crondis**: water fetched empty-handed (a band only spills what you carry), filled once a band's
   gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
   half.
-- **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover; Akkha's spared quadrant and
-  his dead shadows' quadrants; Kephri near enough; Zebak's island near him, behind a boulder for
+- **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover; Akkha's spared quadrant (by
+  the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
+  come quicker than a walk between corners), round his body (the flow field only knows the walls)
+  and his dead shadows' quadrants; Kephri near enough; Zebak's island near him, behind a boulder for
   the roar and in a wave's gap; and it sidesteps bullets, boss blasts and swings.
 - **The Wardens**: phase one blocking Tumeken's side by the obelisk; phase two by the Warden or
   its core, off the obelisk's marks; phase three at the floor's north end in the column the next
@@ -555,18 +557,26 @@ run that hit the sim's 90 minutes still trying: no Attempts invocation was on, s
 the room or boss again, and the only revive is the shop's Ring of life (one a raid, not given back
 after a wipe). How far each lost run got: paths cleared, then the Wardens' phase reached.
 
-| Raid level   | Nothing bought                       | Shop                                          | Shop and Armoury                                        |
-| ------------ | ------------------------------------ | --------------------------------------------- | ------------------------------------------------------- |
-| Entry (0)    | 6 of 9 (4 paths phase 2 x2, 2 paths) | 9 of 9                                        | 9 of 9                                                  |
-| Normal (160) | 0 of 9 (all in their first path)     | 5 of 9 (4 paths phase 2 x2, phase 3, 3 paths) | 9 of 9                                                  |
-| Expert (300) | 0 of 9 (all in their first path)     | 0 of 9 (7 in their second, 4 paths phase 2)   | 0 of 9 (4 in their second, 4 paths phase 3 x2, phase 2) |
-| 500          | 0 of 9 (all in their first path)     | 0 of 9 (all in their first or second)         | 0 of 9 (all in their first)                             |
+| Raid level   | Nothing bought                       | Shop                                                | Shop and Armoury                                             |
+| ------------ | ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
+| Entry (0)    | 6 of 9 (4 paths phase 2 x2, 2 paths) | 9 of 9                                              | 9 of 9                                                       |
+| Normal (160) | 0 of 9 (all in their first path)     | 5 of 9 (4 paths phase 2 x2, phase 3, 3 paths)       | 9 of 9                                                       |
+| Expert (300) | 0 of 9 (all in their first path)     | 0 of 9 (4 paths phase 2 x2, 3 paths x2, 2 paths x5) | 1 of 9 (4 paths phase 2 x2, phase 3, 3 paths x2, 2 paths x3) |
+| 500          | 0 of 9 (all in their first path)     | 0 of 9 (all in their first or second)               | 0 of 9 (all in their first)                                  |
 
 With nothing bought, all eight adventurers clear most rooms on their own at Entry, and 10 of 24
-whole raids. At Expert most runs clear Apmeken and Ba-Ba and then stall on Akkha (her magic and
-ranged bullets, with all her invocations on); the few that reach the Wardens lose there. At 500,
-even with everything bought, they stall in the Apmeken room or on Ba-Ba. The bot dodges, it doesn't plan, so Expert and past it are set by the curve and want
+whole raids. At Expert, Akkha's Memory Blast with Feeling Special was the wall until the bot
+learnt to hop across the quadrants' lines as a person does (below): now most runs get to their
+third path or the Wardens, and lose there or to Akkha's bullets. At 500, even with everything
+bought, they stall in the Apmeken room or on Ba-Ba. The bot dodges, it doesn't plan, so Expert and past it are set by the curve and want
 playtesting more than the bot's numbers.
+
+What the bot still does worse than a person, measured at Expert Akkha with the best of everything
+and God mode on: about 25 damage a minute from his bullets, most of it Red sand's tracking
+triplets, Sandstorm's spirals and Stamp's rings. It sidesteps what's in flight; it doesn't strafe
+round him or read a volley before it fires, and standing further out made it worse, since it then
+retreats along his bullets' lines as he comes. A planner that read the emitters' volleys and
+searched a path over 1.6 s was tried and measured no better, so it isn't in.
 
 **For trying a boss** (the dev server only, solo): God mode, on any map, and in the Nexus a button
 to each boss (the path bosses as the run is, with the dev skip's bow; the Wardens with the best of
