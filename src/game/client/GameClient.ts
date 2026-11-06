@@ -670,10 +670,21 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
+    // of its testing buttons), phones on the tunnel included.
+    get devTools(): boolean {
+        return (
+            import.meta.env.DEV &&
+            typeof location !== "undefined" &&
+            new URLSearchParams(location.search).has("devtools")
+        );
+    }
+
     // Dev only: god mode, nothing hurting the player (Sim.devGod), for watching a fight
     toggleDevGod(): void {
         const sim = this.sim;
-        if (import.meta.env.DEV && !this.coopRun && sim) {
+        if (this.devTools && !this.coopRun && sim) {
             sim.devGod = !sim.devGod;
             this.updateHud(true);
         }
@@ -681,7 +692,7 @@ export class GameClient implements GameFrameHandler {
 
     // Dev only: to the Wardens, with the best of everything or as the run is (Sim.devToWardens)
     devToWardens(kit = true): void {
-        if (import.meta.env.DEV && !this.coopRun) {
+        if (this.devTools && !this.coopRun) {
             this.sim?.devToWardens(kit);
             this.updateHud(true);
         }
@@ -689,7 +700,7 @@ export class GameClient implements GameFrameHandler {
 
     // Dev only: from the Nexus straight to a path's boss (Sim.devToTombsBoss)
     devToTombsBoss(pathId: string): void {
-        if (import.meta.env.DEV && !this.coopRun) {
+        if (this.devTools && !this.coopRun) {
             this.sim?.devToTombsBoss(pathId);
             this.updateHud(true);
         }
@@ -697,7 +708,7 @@ export class GameClient implements GameFrameHandler {
 
     // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
     devSkipToTombsBoss(): void {
-        if (import.meta.env.DEV && !this.coopRun) {
+        if (this.devTools && !this.coopRun) {
             this.sim?.devSkipToTombsBoss();
         }
     }
@@ -2941,9 +2952,9 @@ export class GameClient implements GameFrameHandler {
             tombsShadows: sim.akkhaShadows
                 ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
                 : undefined,
-            devGod: import.meta.env.DEV ? sim.devGod : undefined,
+            devGod: this.devTools ? sim.devGod : undefined,
             devWardens:
-                import.meta.env.DEV &&
+                this.devTools &&
                 sim.map.tombs?.wardens !== undefined &&
                 !sim.tombsPath &&
                 !sim.tombsWardens,
