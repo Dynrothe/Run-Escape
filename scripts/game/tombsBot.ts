@@ -1164,6 +1164,11 @@ function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point 
 
 // Akkha: the quadrant his Memory Blast spares at each burst; with his shadows up, the quadrant of
 // one that's dead (he walks after you, and only there can he be hurt), off his trailing orbs
+// Where the bot stands for Akkha's Memory Blast: this far from the middle along the line the safe
+// quadrant shares with the next, and this far across it into the safe one
+const AKKHA_HOP_OUT = 3.4;
+const AKKHA_HOP_IN = 0.7;
+
 function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point {
     const fight = sim.tombsAkkha!;
     const q = def.quadrants!;
@@ -1172,14 +1177,47 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         const sy = quadrant === 0 || quadrant === 1 ? 1 : -1;
         return { x: q.middle.x + sx * q.half * 0.45, y: q.middle.y + sy * q.half * 0.45 };
     };
-    const orbs = fight.orbs.map((o) => ({ x: o.x, y: o.y }));
+    // Round his orbs, and round him: he's solid, and the flow field only knows the walls, so a
+    // walk across the room (to a hop spot the other side of him in his Memory Blast) would push
+    // against him till the burst landed
+    const avoid = fight.orbs.map((o) => ({ x: o.x, y: o.y }));
+    for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+            const x = Math.floor(boss.x) + dx + 0.5;
+            const y = Math.floor(boss.y) + dy + 0.5;
+            if (Math.hypot(x - boss.x, y - boss.y) <= boss.radius + 0.6) {
+                avoid.push({ x, y });
+            }
+        }
+    }
     const go = (to: Point) =>
         Math.hypot(to.x - sim.player.x, to.y - sim.player.y) < 1
             ? nudge(sim, to.x, to.y)
-            : walkAvoiding(sim, to.x, to.y, orbs, 0);
+            : walkAvoiding(sim, to.x, to.y, avoid, 0);
     const memory = fight.memory;
     if (memory && memory.step < memory.order.length) {
-        return go(corner(memory.order[memory.step]));
+        // The whole order's shown before the bursts come, so stand in the safe quadrant right by
+        // its line with the next, and hop across as each burst lands: a step of a tile or so,
+        // whatever the burst gap (Feeling Special makes it 1.2 s, far less than a walk between
+        // corners). Out of Keep Back's reach of him in the middle, so 3.4 tiles out along the
+        // line the two share.
+        const safe = memory.order[memory.step];
+        const next = memory.order[memory.step + 1];
+        const sign = (quadrant: number) => ({
+            x: quadrant === 1 || quadrant === 2 ? 1 : -1,
+            y: quadrant === 0 || quadrant === 1 ? 1 : -1,
+        });
+        const s = sign(safe);
+        const n = next === undefined ? s : sign(next);
+        const along = AKKHA_HOP_OUT;
+        const across = AKKHA_HOP_IN;
+        const spot =
+            next === undefined
+                ? { x: q.middle.x + s.x * along * 0.75, y: q.middle.y + s.y * along * 0.75 }
+                : n.x !== s.x
+                  ? { x: q.middle.x + s.x * across, y: q.middle.y + s.y * along }
+                  : { x: q.middle.x + s.x * along, y: q.middle.y + s.y * across };
+        return go(spot);
     }
     if (fight.shadows.length > 0) {
         const dead = fight.shadows.filter((s) => {
@@ -1212,7 +1250,7 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         boss.radius + Math.min(6, Math.max(1.2, heroReach(sim) - 0.5)),
         q,
     );
-    return walkAvoiding(sim, spot.x, spot.y, orbs, 0);
+    return walkAvoiding(sim, spot.x, spot.y, avoid, 0);
 }
 
 // How far the hero's weapons reach, the furthest of them: a slash's or sweep's reach, an aura's
