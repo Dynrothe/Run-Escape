@@ -99,7 +99,123 @@ export class ArenaGrid {
                 }
             }
         }
+        this.fitOverlappingLocs();
         this.steps = new Steps(this, this.baseX, this.baseY, this.sizeX, this.sizeY);
+    }
+
+    // A rock and its base can overlap. Fit their combined bounds on exposed
+    // sides only; faces touching other blockers must still meet.
+    private fitOverlappingLocs(): void {
+        const locs = this.data.collisionLocs;
+        const count = locs.length / COLLISION_LOC_STRIDE;
+        const parent = Int32Array.from({ length: count }, (_, i) => i);
+        const owners = new Int32Array(this.sizeX * this.sizeY).fill(-1);
+        const root = (loc: number): number => {
+            while (parent[loc] !== loc) {
+                parent[loc] = parent[parent[loc]];
+                loc = parent[loc];
+            }
+            return loc;
+        };
+        for (let loc = 0; loc < count; loc++) {
+            this.forLocTiles(loc, (x, y) => {
+                const i = this.indexOf(x, y);
+                if (i < 0) {
+                    return;
+                }
+                if (owners[i] >= 0) {
+                    parent[root(loc)] = root(owners[i]);
+                }
+                owners[i] = loc;
+            });
+        }
+        const groups = new Map<number, { count: number; known: boolean; box: Box }>();
+        for (let loc = 0; loc < count; loc++) {
+            const at = loc * COLLISION_LOC_STRIDE;
+            const id = root(loc);
+            let group = groups.get(id);
+            if (!group) {
+                group = {
+                    count: 0,
+                    known: true,
+                    box: { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
+                };
+                groups.set(id, group);
+            }
+            group.count++;
+            const [x0, y0, x1, y1] = locs.subarray(at + 4, at + 8);
+            group.known &&= Number.isFinite(x0 + y0 + x1 + y1) && x0 < x1 && y0 < y1;
+            group.box.x0 = Math.min(group.box.x0, x0);
+            group.box.y0 = Math.min(group.box.y0, y0);
+            group.box.x1 = Math.max(group.box.x1, x1);
+            group.box.y1 = Math.max(group.box.y1, y1);
+        }
+        for (let i = 0; i < owners.length; i++) {
+            if (owners[i] < 0) {
+                continue;
+            }
+            const group = groups.get(root(owners[i]))!;
+            if (!group.known || group.count < 2) {
+                continue;
+            }
+            const x = this.baseX + (i % this.sizeX);
+            const y = this.baseY + Math.floor(i / this.sizeX);
+            if (
+                (this.getFlags(x, y) &
+                    (WALL_FLAGS | CollisionFlag.FLOOR | CollisionFlag.FLOOR_DECORATION)) !==
+                0
+            ) {
+                continue;
+            }
+            const id = root(owners[i]);
+            let touchesOther = false;
+            for (let dy = -1; dy <= 1 && !touchesOther; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (!this.isSolid(x + dx, y + dy)) {
+                        continue;
+                    }
+                    const next = this.indexOf(x + dx, y + dy);
+                    if (next < 0 || owners[next] < 0 || root(owners[next]) !== id) {
+                        touchesOther = true;
+                        break;
+                    }
+                }
+            }
+            if (touchesOther) {
+                continue;
+            }
+            const at = i * 4;
+            const box = group.box;
+            // setInsetBox marks sides with open ground beyond both corners.
+            // Never remove a tile or pull apart a shared edge.
+            if (this.boxes[at] > 0) {
+                this.boxes[at] = Math.min(Math.max(this.boxes[at], box.x0 - x), this.boxes[at + 2]);
+            }
+            if (this.boxes[at + 1] > 0) {
+                this.boxes[at + 1] = Math.min(
+                    Math.max(this.boxes[at + 1], box.y0 - y),
+                    this.boxes[at + 3],
+                );
+            }
+            if (this.boxes[at + 2] < 1) {
+                this.boxes[at + 2] = Math.max(
+                    Math.min(this.boxes[at + 2], box.x1 - x),
+                    this.boxes[at],
+                );
+            }
+            if (this.boxes[at + 3] < 1) {
+                this.boxes[at + 3] = Math.max(
+                    Math.min(this.boxes[at + 3], box.y1 - y),
+                    this.boxes[at + 1],
+                );
+            }
+        }
+    }
+
+    private indexOf(tileX: number, tileY: number): number {
+        const x = tileX - this.baseX;
+        const y = tileY - this.baseY;
+        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
     }
 
     // The whole tile, but for objects a little less on each side that has open
