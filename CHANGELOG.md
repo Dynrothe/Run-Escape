@@ -40,7 +40,8 @@ the version in the corner).
 - Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
   it: they waited for its middle to come into reach. Auras, spells, arrows and the rest hit its
   edge every time too, not only some of the time. Fixed by Okaeri.
-- Overlapping scenery, including the God Wars entrance rock, blocks less empty ground beyond its visible base. Fixed by @braiansmarzaro.
+- Scenery made of overlapping pieces, like the God Wars entrance rock, blocks less of the empty
+  ground round its base. Fixed by Deivid Smarzaro.
 
 ## 0.27.0 - 2026-11-05
 

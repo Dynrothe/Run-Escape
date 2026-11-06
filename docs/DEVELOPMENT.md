@@ -694,6 +694,15 @@ src/rs/audio/               the client's sound effect synth: instruments, envelo
 src/rs/model/player/         player models from identity kits and worn items
 ```
 
+A loc blocks only the ground its model stands on (below about waist height, from
+`RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
+loc that stands on its own to it, a signpost to its post. Locs that share a tile, like the God
+Wars entrance rock and its base, are a stack, and shrink together to the ground they all stand on,
+on the sides of their tiles that face open ground. Either way the open ground round them has to be
+one piece, walls counted, so nobody gets round the end of a fence. A loc with no model to go by
+keeps its tiles, as does a stack with one, or with one that draws nothing; so do a stack's tiles
+with walls or blocked floor on them, or another blocker beside them.
+
 Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.iconSpriteId` in
 `content/items.ts`), drawn by `ItemIcon` given a `spriteId` and no item. They are in
 `client/GameAssets.ts`'s `getGameSpriteIds`, so `scripts/cache/sprites.ts check` and the
@@ -706,12 +715,6 @@ learned the rev 241 opcodes, the map loader can take extra map squares as plain 
 gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
-
-Collision uses the cache models' ground footprints, not their overhanging tops. In `ArenaGrid`,
-overlapping scenery (such as the God Wars entrance rock and its base) can fit their combined
-footprint on exposed sides. Contacts with other blockers, walls and blocked floor stay unchanged;
-an unknown or invisible model keeps the group's original bounds. This is done when the grid is
-built, before its pathfinding steps, and changes neither the scenery nor its shading.
 
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays

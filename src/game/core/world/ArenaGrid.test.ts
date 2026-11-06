@@ -120,6 +120,42 @@ describe("overlapping scenery", () => {
         }
     });
 
+    test("does not open a way round the end of a fence", () => {
+        // A fence along the north of row 203, either side of a narrow rock on its base
+        const rows = [...OPEN];
+        rows[3] = "___..___";
+        const rock: TestLoc = {
+            x: 103,
+            y: 202,
+            sizeX: 2,
+            sizeY: 3,
+            stands: [103.75, 202.3, 104.25, 204.7],
+        };
+        const base: TestLoc = {
+            x: 103,
+            y: 203,
+            sizeX: 2,
+            sizeY: 1,
+            stands: [103.8, 203.2, 104.2, 203.8],
+        };
+        const grid = makeGrid(rows, 100, 200, [rock, base]);
+        expect(box(grid, 103, 203).x0).toBeCloseTo(103.2);
+        for (const radius of [0.3, 0.35]) {
+            for (const [x, dx] of [
+                [102.5, 1],
+                [105.5, -1],
+            ]) {
+                const pos = { x, y: 202.5 };
+                moveCircle(grid, pos, dx, 0, radius);
+                moveCircle(grid, pos, 0, 3, radius);
+                expect(pos.y).toBeLessThan(204);
+            }
+        }
+        // With a way round, the fence takes nothing from it
+        rows[3] = "___.....";
+        expect(box(makeGrid(rows, 100, 200, [rock, base]), 103, 203).x0).toBeCloseTo(103.75);
+    });
+
     test("does not pull apart neighbouring groups with bases on opposite sides", () => {
         const low: TestLoc = {
             x: 102,
