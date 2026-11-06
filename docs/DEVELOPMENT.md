@@ -405,16 +405,18 @@ chunk it lists.
 
 ### Online and offline play
 
-The web build and the app each need the relay and the run collector, and they must match: the
-build as `VITE_COOP_URL` and `VITE_RUN_ANALYTICS_URL`, the app as `-PcoopUrl` and
-`-PrunAnalyticsUrl` (the `COOP_URL` and `RUN_ANALYTICS_URL` repository variables in the workflows).
-Empty means solo only, or no run stats, as on desktop. Android, desktop and the website share rooms
+The web build and the app each need the relay, the run collector and the cloud-save Worker, and
+they must match: the build as `VITE_COOP_URL`, `VITE_RUN_ANALYTICS_URL` and `VITE_CLOUD_SAVE_URL`,
+the app as `-PcoopUrl`, `-PrunAnalyticsUrl` and `-PcloudSaveUrl` (the `COOP_URL`,
+`RUN_ANALYTICS_URL` and `CLOUD_SAVE_URL` repository variables in the workflows). Empty means solo
+only, no run stats, or no cloud save, as on desktop. Android, desktop and the website share rooms
 only on the same game build.
 
 The game runs at `https://appassets.androidplatform.net/assets/game/index.html`, answered inside
 the app. **Never change that address or the application ID, `io.jere.run_escape`**: Android
 players' saves belong to them. `RelayPolicy.java` lets out what the desktop app does, and nothing
-else: the relay's https address (GET only), and the collector's one URL by POST and its preflight.
+else: the relay's https address (GET only), the collector's one URL by POST and its preflight, and
+the cloud-save Worker's `/v1/` (GET, PUT, POST, DELETE and preflights, no query).
 Its `connect-src` says the same, as WebSockets skip the app's request handling; workers get it too.
 
 Shared memory needs cross-origin isolation, which COOP and COEP headers alone don't give a WebView:
@@ -488,8 +490,10 @@ first.
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
-set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+has to be `wss://`. The app lets out only that relay, POSTs to that one collector URL if the
+`RUN_ANALYTICS_URL` variable is set, and requests to the cloud-save Worker's `/v1/` if
+`CLOUD_SAVE_URL` is (an https origin, `isCloudSaveRequest` in `src/util/cloudSaveUrl.ts`):
+`protocol.handle` in `main.ts` answers every other https
 request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
 `gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 

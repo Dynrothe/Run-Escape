@@ -33,12 +33,18 @@ const MIME_TYPES: Record<string, string> = {
     ".wasm": "application/wasm",
 };
 
-// Where the page may connect: the app, its relay and its run collector. protocol.handle in main.ts
-// already answers every https request itself, but WebSockets don't go through it, so this is what
-// keeps those in. Workers get their own copy, from their script's answer.
-export function contentSecurityPolicy(relayOrigin: string | undefined, analytics?: string): string {
+// Where the page may connect: the app, its relay, its run collector and cloud saves.
+// protocol.handle in main.ts already answers every https request itself, but WebSockets don't go
+// through it, so this is what keeps those in. Workers get their own copy, from their script's
+// answer.
+export function contentSecurityPolicy(
+    relayOrigin: string | undefined,
+    analytics?: string,
+    cloudSaves?: string,
+): string {
     const relay = relayOrigin ? ` ${relayOrigin} ${relayOrigin.replace(/^https:/, "wss:")}` : "";
-    return `connect-src 'self'${relay}${analytics ? ` ${analytics}` : ""}`;
+    const saves = cloudSaves ? ` ${cloudSaves}/v1/` : "";
+    return `connect-src 'self'${relay}${analytics ? ` ${analytics}` : ""}${saves}`;
 }
 
 function status(code: number, headers: Record<string, string> = {}): Response {
@@ -99,16 +105,19 @@ export function getRelayOrigin(coopUrl: string): string | undefined {
     }
 }
 
-// Answers a request for the game like the static server it's written for. relayOrigin and
-// analytics are the only addresses apart from the app's own that the page may connect to (see
-// getRelayOrigin and runAnalyticsUrl).
+// Answers a request for the game like the static server it's written for. relayOrigin, analytics
+// and cloudSaves are the only addresses apart from the app's own that the page may connect to (see
+// getRelayOrigin, runAnalyticsUrl and cloudSaveUrl).
 export async function serveGame(
     root: string,
     request: Request,
     relayOrigin?: string,
     analytics?: string,
+    cloudSaves?: string,
 ): Promise<Response> {
-    const csp = { "Content-Security-Policy": contentSecurityPolicy(relayOrigin, analytics) };
+    const csp = {
+        "Content-Security-Policy": contentSecurityPolicy(relayOrigin, analytics, cloudSaves),
+    };
     const url = new URL(request.url);
     if (url.origin !== GAME_ORIGIN) {
         return status(403, csp);

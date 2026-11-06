@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 
+import { cloudSaveUrl, isCloudSaveRequest } from "../src/util/cloudSaveUrl";
 import { runAnalyticsUrl } from "../src/util/runAnalyticsUrl";
 import { GameFolder, pickGameFolder } from "./gameFiles";
 import { GAME_ORIGIN, getRelayOrigin, serveGame } from "./gameServer";
@@ -38,6 +39,7 @@ const log = (message: string) =>
 // The relay, from the build (see build-main.ts). Empty for a build with none.
 declare const __COOP_URL__: string;
 declare const __RUN_ANALYTICS_URL__: string;
+declare const __CLOUD_SAVE_URL__: string;
 
 function openExternally(url: string): void {
     if (/^https?:\/\//.test(url)) {
@@ -174,12 +176,17 @@ function openGame(): BrowserWindow {
 async function start(): Promise<void> {
     Menu.setApplicationMenu(null);
     const gameSession = session.fromPartition(GAME_PARTITION);
-    // Everything's the game's own but the relay and the run collector, the only things let out.
-    // The collector only by POST (and its preflight) to its one URL, without cookies or redirects.
+    // Everything's the game's own but the relay, the run collector and cloud saves, the only things
+    // let out. The collector only by POST (and its preflight) to its one URL, and cloud saves only
+    // to the Worker's /v1/, both without cookies or redirects.
     const relayOrigin = getRelayOrigin(__COOP_URL__);
     const analytics = runAnalyticsUrl(__RUN_ANALYTICS_URL__);
+    const cloudSaves = cloudSaveUrl(__CLOUD_SAVE_URL__);
     gameSession.protocol.handle("https", (request) => {
-        if (request.url === analytics && ["POST", "OPTIONS"].includes(request.method)) {
+        if (
+            (request.url === analytics && ["POST", "OPTIONS"].includes(request.method)) ||
+            isCloudSaveRequest(request.method, request.url, cloudSaves)
+        ) {
             return gameSession.fetch(request, {
                 bypassCustomProtocolHandlers: true,
                 redirect: "error",
@@ -189,7 +196,7 @@ async function start(): Promise<void> {
         if (new URL(request.url).origin === relayOrigin) {
             return gameSession.fetch(request, { bypassCustomProtocolHandlers: true });
         }
-        return serveGame(gameRoot, request, relayOrigin, analytics);
+        return serveGame(gameRoot, request, relayOrigin, analytics, cloudSaves);
     });
     // The game only ever asks for these two
     gameSession.setPermissionRequestHandler((_contents, permission, callback) => {

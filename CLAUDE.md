@@ -198,7 +198,8 @@ desktop build.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
 - The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
-  the relay, and the run collector. A new address the game reaches needs adding to both.
+  the relay, the run collector, and the cloud-save Worker's `/v1/`. A new address the game
+  reaches needs adding to both.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
   there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:
