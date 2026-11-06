@@ -5,9 +5,10 @@ another browser, the desktop app or a phone. There's no login and nothing person
 the account. The game makes one when a player turns on cloud save, shows it to copy, and the
 player types it in on the other device. The Worker keeps only the code's SHA-256.
 
-The local save stays the main copy. The game uploads after the writes it already makes (a run's
-results, a purchase), and a game whose build has no cloud-save URL, or that can't reach it,
-doesn't offer cloud save at all.
+The local save stays the main copy. The game uploads at save points (a run's results, leaving
+Skills or the Armoury, an import, leaving the tab), only when the progress has changed, and two
+minutes apart at least. A game whose build has no cloud-save URL, or that can't reach it, doesn't
+offer cloud save at all.
 
 ## Set up the Worker
 
