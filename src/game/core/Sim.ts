@@ -1,3 +1,4 @@
+import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { WeaponDamageBalance } from "../content/balance";
 import { getCharacter } from "../content/characters";
@@ -127,6 +128,7 @@ import {
     WeaponDef,
     emptyStats,
 } from "../content/types";
+import type { CharacterTraitDef } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
@@ -229,6 +231,7 @@ import {
     TYPE_FRAGILE,
 } from "./floorLayout";
 import { fm } from "./fmath";
+import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
@@ -517,6 +520,7 @@ const FLEE_LOOKAHEAD = 1;
 
 // What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
 export const FLOOR_SOURCE = "floor";
+// And from the map's rule (MapDef.rule): its kind, "roots"
 // What a floor's tiles do (FloorEffect), unless the floor says otherwise (FloorDef.tileEffects):
 // burn's share of the player's hitpoints and how often (seconds), and its hit on an enemy; heal's
 // share and how often; haste's and slow's change to speed; ice's grip
@@ -531,12 +535,15 @@ const FLOOR_ICE_GRIP = 0.06;
 // Tiles from a player that a slab coming up, or a tile going, shakes the camera (FloorDef.shake)
 const FLOOR_SLAM_SHAKE_REACH = 1.5;
 const FLOOR_DROP_SHAKE_REACH = 2.5;
+// How often what lays the map's rule's stuff as it goes does (EnemyDef.plants), in ticks
+const RULE_TRAIL_TICKS = 10;
 
 // The events that are one hero's own, which co-op tags with who: what they
 // did, what happened to them, what they picked up
 const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
     "weapon",
     "slash",
+    "treeFall",
     "aura",
     "playerHit",
     "playerPoisoned",
@@ -601,6 +608,9 @@ export type SimOptions = {
     // For trying things out on the dev server (?raidtest): a raid's rooms this many seconds
     // apart, and every level up's pick straight to its max
     testing?: SimTesting;
+    // An act's map (MapDef.act): how many of the act's other maps had been beaten as it started
+    // (the host's, in co-op), which sets its toughness (content/acts.ts). 0 when unset.
+    actStep?: number;
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -617,6 +627,8 @@ export type RunResult = {
     expert: boolean;
     // A raid's chest, once it's beaten
     raidChest?: RaidChest;
+    // An act's map: the step it was played at (SimOptions.actStep)
+    actStep?: number;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -770,6 +782,13 @@ export type Hero = {
     floorEffectNext: number;
     glideX: number;
     glideY: number;
+    // The map's rule (MapDef.rule): ticks they've stood on what it hurts on, one after another,
+    // and when it next can
+    ruleTicks: number;
+    ruleHurtNext: number;
+    // Their adventurer's trait (CharacterDef.trait): kills towards it, and whether it's ready
+    traitKills: number;
+    traitReady: boolean;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -811,6 +830,11 @@ export class Sim {
     readonly rng: Rng;
     // A floor that rises and falls away (MapDef.floor)
     readonly floor: ArenaFloor | undefined;
+    // The map's rule (MapDef.rule, core/rules): roots creeping in
+    readonly rule: RunRule | undefined;
+    // An act's map: the step it's played at, and its toughness there (the map's own off an act)
+    readonly actStep: number;
+    readonly difficulty: { hp: number; damage: number };
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
@@ -1235,6 +1259,12 @@ export class Sim {
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
             : undefined;
+        // On its own Rng, so a map without one plays as it did
+        this.rule = this.map.rule
+            ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
+            : undefined;
+        this.actStep = this.map.act ? Math.max(0, Math.floor(options.actStep ?? 0)) : 0;
+        this.difficulty = getStepDifficulty(this.map, this.actStep);
         // Building it takes a while, so it's done here, with the map, rather
         // than on the tick the first flier turns up (getFlight still can)
         if (hasFliers(this.map)) {
@@ -1406,6 +1436,10 @@ export class Sim {
             floorEffectNext: 0,
             glideX: 0,
             glideY: 0,
+            ruleTicks: 0,
+            ruleHurtNext: 0,
+            traitKills: 0,
+            traitReady: false,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -1650,6 +1684,7 @@ export class Sim {
             hard: this.hard,
             expert: this.expert,
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
+            ...(this.map.act && { actStep: this.actStep }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -2320,7 +2355,10 @@ export class Sim {
     // What coins found in the run are worth: less in endless runs, and less
     // again in their later rounds (see endless.ts), and more on hard mode
     get coinScale(): number {
-        return (this.endless ? endlessCoinScale(this.round) : 1) * (this.hard ? HARD_COINS : 1);
+        const scale =
+            (this.endless ? endlessCoinScale(this.round) : 1) * (this.hard ? HARD_COINS : 1);
+        // An act's later steps pay more (content/acts.ts)
+        return this.map.act ? scale * (1 + getStepCoins(this.map, this.actStep)) : scale;
     }
 
     // Coins for high alching an item, as the run pays them
@@ -2506,6 +2544,7 @@ export class Sim {
         this.stepEnemyProjectiles();
         this.stepBossFight();
         this.stepFloor();
+        this.stepRule();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -2566,7 +2605,12 @@ export class Sim {
             curse: this.curse,
             arena: this.confinedToArena ? this.bossArena : undefined,
             faces: this.introFacing,
-            floor: this.floor?.hasEffects && !frozen ? this.floorMovement() : undefined,
+            floor:
+                this.floor?.hasEffects && !frozen
+                    ? this.floorMovement()
+                    : this.rule && !frozen
+                      ? this.ruleMovement()
+                      : undefined,
         });
         if (this.floor?.hasEffects) {
             this.hero.glideX = player.x - player.prevX;
@@ -3028,8 +3072,12 @@ export class Sim {
         // Bosses are tuned as they are (or for the map they're on); later maps
         // are tougher all round, and so are endless runs' later rounds and hard
         // mode
-        const difficulty = this.map.difficulty;
+        const difficulty = this.difficulty;
         const bossDamage = difficulty.damage * this.roundDamage * this.hardScale.damage;
+        // A boss's own hitpoints on the map (the event's) climb with an act's steps too
+        if (bossHp !== undefined && this.map.act) {
+            bossHp *= difficulty.hp / this.map.difficulty.hp;
+        }
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp *
@@ -3056,7 +3104,11 @@ export class Sim {
         const enemy: Enemy = {
             uid: this.nextUid++,
             def,
-            variant: def.outfits ? this.rng.int(def.outfits.length) : 0,
+            variant: def.outfits
+                ? this.rng.int(def.outfits.length)
+                : def.looks
+                  ? this.rng.int(def.looks.length)
+                  : 0,
             x: pos.x,
             y: pos.y,
             prevX: pos.x,
@@ -3500,8 +3552,18 @@ export class Sim {
                     (!touching || healTarget) &&
                     !(fighting && dirX === 0 && dirY === 0)
                 ) {
-                    // Faster or slower on a floor's plates (FloorEffect haste, slow)
-                    const pace = this.floor?.hasEffects ? this.floorPace(enemy.x, enemy.y) : 1;
+                    // Faster or slower on a floor's plates (FloorEffect haste, slow), or on what
+                    // the map's rule lays (roots)
+                    let pace = this.floor?.hasEffects
+                        ? this.floorPace(enemy.x, enemy.y)
+                        : this.rule && !enemy.def.flies && !enemy.def.stationary
+                          ? this.rule.enemyPace(enemy.x, enemy.y)
+                          : 1;
+                    // A pouncer's rush, the last few tiles (EnemyDef.pounce)
+                    const pounce = enemy.def.pounce;
+                    if (pounce && distance <= pounce.range) {
+                        pace *= pounce.speed;
+                    }
                     moveX += dirX * enemy.speed * pace;
                     moveY += dirY * enemy.speed * pace;
                 }
@@ -5543,6 +5605,17 @@ export class Sim {
                 case "player":
                     add(player.x, player.y);
                     break;
+                case "rule":
+                    // Where the map's rule has laid its stuff near them (roots erupting)
+                    for (const spot of this.rule?.pickSpots(
+                        player.x,
+                        player.y,
+                        spots.within,
+                        spots.count,
+                    ) ?? []) {
+                        add(spot.x, spot.y);
+                    }
+                    break;
                 case "ring": {
                     const middle = spots.around === "player" ? player : enemy;
                     for (let i = 0; i < spots.count; i++) {
@@ -5737,6 +5810,9 @@ export class Sim {
         const dy = lane.toY - lane.fromY;
         enemy.x = lane.fromX + dx * f;
         enemy.y = lane.fromY + dy * f;
+        if (attack.rule?.lane !== undefined) {
+            this.rule?.plant(enemy.x, enemy.y, attack.rule.lane);
+        }
         // Through each of them once
         this.forEachHeroInReach(() => {
             const player = this.player;
@@ -6464,6 +6540,62 @@ export class Sim {
         floor.act(action, this.tick, () => at ?? this.floorTarget().player);
     }
 
+    // The map's rule (MapDef.rule, core/rules): it grows, and wears down whoever's standing where
+    // it hurts (each player on their own clock)
+    private stepRule(): void {
+        const rule = this.rule;
+        if (!rule) {
+            return;
+        }
+        rule.step(this.ruleHost);
+        const def = rule.def;
+        const grace = secondsToTicks(def.hurt.grace);
+        const every = Math.max(1, secondsToTicks(def.hurt.every));
+        this.forEachHeroInReach(() => {
+            const { player } = this;
+            if (!this.isUp(this.hero) || !rule.hurtsAt(player.x, player.y)) {
+                this.hero.ruleTicks = 0;
+                return;
+            }
+            this.hero.ruleTicks++;
+            if (this.hero.ruleTicks >= grace && this.tick >= this.hero.ruleHurtNext) {
+                this.hero.ruleHurtNext = this.tick + every;
+                const damage = Math.max(1, Math.round(player.maxHp * def.hurt.share));
+                this.damagePlayer(damage, def.kind, false, -1, true, false);
+            }
+        });
+        // What lays the rule's stuff as it goes (EnemyDef.plants: a bear's trail)
+        if (this.tick % RULE_TRAIL_TICKS === 0) {
+            for (const enemy of this.enemies) {
+                if (!enemy.dead && enemy.def.plants) {
+                    rule.plant(enemy.x, enemy.y, enemy.def.plants);
+                }
+            }
+        }
+    }
+
+    // What the map's rule can ask of the run (RuleHost)
+    private readonly ruleHost: RuleHost = ((sim: Sim): RuleHost => ({
+        get tick() {
+            return sim.tick;
+        },
+        get mapSeconds() {
+            return sim.mapSeconds;
+        },
+        heroPositions: () => {
+            const out: number[] = [];
+            for (const hero of sim.heroes) {
+                if (sim.isUp(hero)) {
+                    out.push(hero.player.x, hero.player.y);
+                }
+            }
+            return out;
+        },
+        spawnRuleEnemy: (enemyId, x, y) =>
+            sim.spawnEnemy(getEnemy(enemyId), "normal", sim.walkableSpot(x, y))?.uid,
+        isEnemyAlive: (uid) => sim.enemies.some((enemy) => enemy.uid === uid && !enemy.dead),
+    }))(this);
+
     // The floor's tiles that do something to whoever's on them (FloorEffect): burning and healing
     // players every so often, and burning enemies
     private stepFloorEffects(floor: ArenaFloor): void {
@@ -6508,6 +6640,12 @@ export class Sim {
                 }
             }
         }
+    }
+
+    // How the map's rule moves the player where they stand (on roots, slower), or nothing
+    private ruleMovement(): MovementRules["floor"] {
+        const pace = this.rule!.playerPace(this.player.x, this.player.y);
+        return pace !== 1 ? { pace } : undefined;
     }
 
     // How a floor's tile moves the player on it (FloorEffect haste, slow and ice), or nothing
@@ -7583,6 +7721,11 @@ export class Sim {
         const f = Math.min(1, (this.tick - dash.startTick) / span);
         enemy.x = dash.fromX + (dash.toX - dash.fromX) * f;
         enemy.y = dash.fromY + (dash.toY - dash.fromY) * f;
+        // Roots laid down the strip it runs (BossAttackDef.rule lane)
+        const lane = dash.attack.rule?.lane;
+        if (lane !== undefined) {
+            this.rule?.plant(enemy.x, enemy.y, lane);
+        }
         if (f < 1) {
             return;
         }
@@ -7880,6 +8023,13 @@ export class Sim {
             const spots = attack.kind === "swing" ? [{ x: enemy.x, y: enemy.y }] : windup.targets;
             if (attack.leap) {
                 this.leapTo(enemy, spots[0]);
+            }
+            // A root heart where it lands, the first time (BossAttackDef.rule)
+            const state = enemy.bossState;
+            if (attack.rule?.heart && this.rule && state && !state.ruleHeart) {
+                state.ruleHeart = true;
+                const at = attack.leap ? spots[0] : enemy;
+                this.rule.plantHeart(this.ruleHost, at.x, at.y);
             }
             const radius = attack.radius ?? 2;
             // A lunge's strip (BossAttackDef.line), a blast's square (square)
@@ -8989,6 +9139,10 @@ export class Sim {
             enemyId: enemy.def.id,
             ...(poison && { poison }),
         });
+        // A player's hit cuts back what the map's rule has laid under it (roots)
+        if (this.rule && !poison && source !== "other") {
+            this.rule.onHit(enemy.x, enemy.y);
+        }
         const resist = enemy.def.knockbackResist ?? 0;
         if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
             const dx = enemy.x - fromX;
@@ -9046,6 +9200,7 @@ export class Sim {
         // One brought back by a reviver was counted the first time it died
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
+            this.countTraitKill();
             if (lastCopy) {
                 this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
             }
@@ -9062,6 +9217,7 @@ export class Sim {
             this.glyphs = this.glyphs.filter((glyph) => glyph.bossUid !== enemy.uid);
             this.endBossFight(enemy);
         }
+        this.rule?.onKill(enemy.uid, enemy.x, enemy.y);
         this.emit({
             type: "kill",
             enemyUid: enemy.uid,
@@ -9247,6 +9403,11 @@ export class Sim {
         const caskets = enemy.def.caskets;
         if (enemy.elite) {
             this.dropCasket(enemy.x + 0.4, enemy.y, true);
+        } else if (!enemy.boss && caskets) {
+            // Not a boss, but worth caskets of its own (a root heart)
+            caskets.forEach((tier, i) => {
+                this.dropCasketOfTier(tier, enemy.x + 0.4, enemy.y + i * 0.6);
+            });
         } else if (enemy.boss && !enemy.finalBoss && caskets) {
             // Its own caskets instead of the usual one
             caskets.forEach((tier, i) => {
@@ -9487,6 +9648,80 @@ export class Sim {
         }
     }
 
+    // The hero's adventurer's trait (CharacterDef.trait), if they have one
+    private get trait(): CharacterTraitDef | undefined {
+        return getCharacter(this.hero.characterId).trait;
+    }
+
+    private countTraitKill(): void {
+        const trait = this.trait;
+        if (trait?.kind === "timber" && !this.hero.traitReady) {
+            this.hero.traitKills++;
+            if (this.hero.traitKills >= trait.every) {
+                this.hero.traitKills = 0;
+                this.hero.traitReady = true;
+            }
+        }
+    }
+
+    // How much further than their reach a hero's swings cut the map's rule's stuff (roots)
+    private cutReach(): number {
+        const trait = this.trait;
+        return trait?.kind === "timber" ? trait.cutReach : 0;
+    }
+
+    // Timber! (the Forester's trait): with it ready, this swing fells a tree instead, along a strip
+    // ahead, hitting everything in it for its damage times the swing's, and cutting what's laid
+    // there. False when it isn't ready (or isn't theirs).
+    private fellTree(def: WeaponDef, level: WeaponDef["levels"][number]): boolean {
+        const trait = this.trait;
+        if (trait?.kind !== "timber" || !this.hero.traitReady) {
+            return false;
+        }
+        this.hero.traitReady = false;
+        const player = this.player;
+        const aim = this.aimMelee(trait.length, def);
+        const half = trait.width / 2;
+        this.emit({
+            type: "treeFall",
+            x: player.x,
+            y: player.y,
+            dirX: aim.x,
+            dirY: aim.y,
+            length: trait.length,
+            locId: trait.locId,
+            ...(trait.sound !== undefined && { sound: trait.sound }),
+        });
+        this.rule?.onSwing(player.x, player.y, aim.x, aim.y, trait.length, 0, trait.width + 1);
+        this.showImpact(
+            trait.impact,
+            player.x + aim.x * trait.length,
+            player.y + aim.y * trait.length,
+            {
+                dirX: -aim.x,
+                dirY: -aim.y,
+                length: trait.length,
+            },
+        );
+        const hit: Enemy[] = [];
+        this.enemyHash.query(player.x, player.y, trait.length + 1, (enemy) => {
+            const ox = enemy.x - player.x;
+            const oy = enemy.y - player.y;
+            const along = ox * aim.x + oy * aim.y;
+            const across = Math.abs(ox * -aim.y + oy * aim.x);
+            if (
+                !enemy.dead &&
+                along >= -0.3 &&
+                along <= trait.length + enemy.radius &&
+                across <= half + enemy.radius
+            ) {
+                hit.push(enemy);
+            }
+        });
+        this.meleeHits(def, { ...level, damage: level.damage * trait.damage }, hit, undefined);
+        return true;
+    }
+
     // Where a melee attack aims: at the nearest enemy in reach, otherwise the
     // way the player faces (kiting means facing away from what's chasing you)
     private aimMelee(reach: number, def: WeaponDef): { x: number; y: number } {
@@ -9519,6 +9754,9 @@ export class Sim {
             this.fireAoeSpecial(def, level, special, special.aoe);
             return;
         }
+        if (this.fellTree(def, level)) {
+            return;
+        }
         const player = this.player;
         const reach = level.area * (1 + this.stats.area);
         const width = SLASH_WIDTH * (1 + this.stats.area);
@@ -9541,6 +9779,7 @@ export class Sim {
                 arc: SLASH_ARC,
                 weaponId: def.id,
             });
+            this.rule?.onSwing(player.x, player.y, dirX, dirY, reach + this.cutReach(), 0, width);
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
@@ -9580,6 +9819,9 @@ export class Sim {
             this.fireAoeSpecial(def, level, special, special.aoe);
             return;
         }
+        if (this.fellTree(def, level)) {
+            return;
+        }
         const player = this.player;
         const reach = level.area * (1 + this.stats.area);
         const arc = level.arc ?? SLASH_ARC;
@@ -9600,6 +9842,7 @@ export class Sim {
                 arc,
                 weaponId: def.id,
             });
+            this.rule?.onSwing(player.x, player.y, dirX, dirY, reach + this.cutReach(), arc, 0);
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
@@ -11614,7 +11857,7 @@ export class Sim {
     private powerUpDamageScale(): number {
         return (
             this.enemyHpScale() *
-            this.map.difficulty.hp *
+            this.difficulty.hp *
             this.roundHp *
             this.hardScale.hp *
             this.partyScale.hp
@@ -12046,7 +12289,7 @@ export class Sim {
             // Enemy hitpoints as of now, unlike a map's bosses, which are placed
             // for when they turn up
             const enemy = getEnemy(effect.enemyId);
-            const hp = enemy.hp * this.map.difficulty.hp * this.enemyHpScale();
+            const hp = enemy.hp * this.difficulty.hp * this.enemyHpScale();
             if (this.spawnBosses(enemy, "boss", hp).length === 0) {
                 return false;
             }

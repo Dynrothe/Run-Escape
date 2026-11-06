@@ -38,6 +38,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { SimEvent } from "../../src/game/core/entities";
+import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
@@ -45,6 +46,8 @@ import { loadRegionData } from "./collision-snapshot";
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
 const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
+// Cells round it, each way, the bot looks at for roots to keep off
+const ROOT_LOOK = 3;
 // How often to print progress (REPORT=15 for every 15 seconds)
 const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 
@@ -81,6 +84,8 @@ const SLOPPY_LAPSE = 3;
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
+// An act's map's step (content/acts.ts)
+const actStep = parseInt(process.env.STEP ?? "0");
 if (finalBoss) {
     map.events = map.events.map((e) =>
         e.kind === "finalBoss" ? { at: e.at, kind: e.kind, enemyId: finalBoss, hp: e.hp } : e,
@@ -174,6 +179,9 @@ function botMove(sim: Sim): { x: number; y: number } {
     let ax = 0;
     let ay = 0;
     let threat = 0;
+    // A map's root hearts (MapDef.rule) are worth walking up to and cutting down, as a person
+    // would: they make the roots round them grow
+    const heart = sim.rule instanceof RootRule ? sim.rule.def.hearts.enemyId : undefined;
     for (const enemy of sim.enemies) {
         if (enemy.dead) {
             continue;
@@ -181,6 +189,12 @@ function botMove(sim: Sim): { x: number; y: number } {
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const distSq = dx * dx + dy * dy;
+        if (enemy.def.id === heart && distSq < 400) {
+            const w = distSq > 9 ? -1.5 / Math.sqrt(distSq) : 1 / Math.max(distSq, 0.25);
+            ax += dx * w;
+            ay += dy * w;
+            continue;
+        }
         if (enemy.boss && (enemy.def.stationary || sim.isNapping(enemy))) {
             // One that can't come to you (the Maiden, Xarpus), or that's down for a moment (the
             // Bloat), a person walks up to, to about 2.5 tiles, or nothing but a ranged weapon
@@ -224,6 +238,31 @@ function botMove(sim: Sim): { x: number; y: number } {
         const pull = threat < 0.08 ? 1 : 0.6 / (1 + threat * 4);
         ax += (bx / len) * pull;
         ay += (by / len) * pull;
+    }
+    // Off the roots (MapDef.rule): a person steps off what slows and hurts them, the nearer the
+    // more, and harder once they're on it
+    if (sim.rule instanceof RootRule) {
+        const rule = sim.rule;
+        const on = rule.isRooted(player.x, player.y);
+        let rx = 0;
+        let ry = 0;
+        for (let dy = -ROOT_LOOK; dy <= ROOT_LOOK; dy++) {
+            for (let dx = -ROOT_LOOK; dx <= ROOT_LOOK; dx++) {
+                const x = player.x + dx * CELL;
+                const y = player.y + dy * CELL;
+                if ((dx !== 0 || dy !== 0) && rule.isRooted(x, y)) {
+                    const d2 = dx * dx + dy * dy;
+                    rx -= dx / d2;
+                    ry -= dy / d2;
+                }
+            }
+        }
+        const len = Math.hypot(rx, ry);
+        if (len > 1e-6) {
+            const push = on ? 2 : 0.35;
+            ax += (rx / len) * push;
+            ay += (ry / len) * push;
+        }
     }
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
@@ -597,6 +636,7 @@ function runOnce(characterId: string, seed: number) {
         unlockedItems,
         endless,
         hard,
+        actStep,
         expert,
         armoury,
     });
@@ -626,6 +666,8 @@ function runOnce(characterId: string, seed: number) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
     }
     let fightTicks = 0;
+    // Ticks stood on roots (MapDef.rule)
+    let rootTicks = 0;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
@@ -707,6 +749,9 @@ function runOnce(characterId: string, seed: number) {
         useAbility(sim);
         const pressed = uncursed(sim, move);
         sim.step(pressed.x, pressed.y);
+        if (sim.rule?.hurtsAt(sim.player.x, sim.player.y)) {
+            rootTicks++;
+        }
         const fighting = sim.shownBoss?.bossState?.phase;
         if (fighting) {
             fightTicks++;
@@ -741,7 +786,12 @@ function runOnce(characterId: string, seed: number) {
                 `  ${formatClock(sim.seconds)}${endless ? ` r${sim.round}` : ""}  lvl ${String(sim.level).padStart(2)}  ` +
                     `hp ${String(Math.max(0, Math.round(sim.player.hp))).padStart(3)}/${sim.player.maxHp}  ` +
                     `kills ${String(sim.kills).padStart(5)}  alive ${String(alive).padStart(3)}  ` +
-                    `coins ${String(sim.coins).padStart(4)}  ${weapons} | ${passives} | ${gear}`,
+                    `coins ${String(sim.coins).padStart(4)}  ${weapons} | ${passives} | ${gear}` +
+                    // How much of the ground's rooted (MapDef.rule), and how long the bot's spent
+                    // on it
+                    (sim.rule instanceof RootRule
+                        ? `  roots ${Math.round(sim.rule.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
+                        : ""),
             );
             if (endless) {
                 // How the best weapon's damage keeps up with the round's hitpoints: a
@@ -836,6 +886,7 @@ function runParty(characterId: string, seed: number) {
         spawnY: map.spawn.y,
         endless,
         hard,
+        actStep,
         expert,
         party: Array.from({ length: partySize }, (_, i) => ({
             name: "bot" + (i + 1),

@@ -4,8 +4,11 @@
 // the map's total, so this is where to look before tuning for one.
 //
 // The view is the game's (GameClient, CameraRig): pitch -400, 18 tiles away on a desktop and 15
-// on a phone held sideways (PHONE=1), a 45 degree field of view, 16 by 9. On flat ground that's
-// about 27 by 16 tiles, a little more of it north of the player than south. The renderer culls
+// on a phone held sideways (PHONE=1), a 45 degree field of view, 16 by 9 (844 by 390 on the
+// phone, as its budget's measured). On flat ground that's about 27 by 16 tiles, a little more of
+// it north of the player than south. It counts the locs alone, so a view's measured in the game
+// (frameProbe) comes out higher: a few thousand more on open ground, and more where walls are
+// heavy. The renderer culls
 // in cells of 8 tiles (CullGrid, docs/DEVELOPMENT.md "What gets drawn"), each a box round what's
 // in it, as high as its tallest loc, and draws a cell whole if any of it is in view, so a cell
 // just past the screen's edge counts, as it does in the game. A loc wider than a cell gets a
@@ -24,7 +27,12 @@ import { createViewTest, pickPeaks } from "./research/geometry";
 import { createShapes, locLabel, openWorld, round } from "./research/lib";
 
 const PHONE = process.env.PHONE === "1";
-const CAMERA = { pitch: -400, distance: PHONE ? 15 : 18, fov: 45, aspect: 16 / 9 };
+const CAMERA = {
+    pitch: -400,
+    distance: PHONE ? 15 : 18,
+    fov: 45,
+    aspect: PHONE ? 844 / 390 : 16 / 9,
+};
 const CELL = 8;
 // Tiles between the player's positions tried: 2 is four times quicker on a big map
 const STEP = Number(process.env.STEP ?? 1);

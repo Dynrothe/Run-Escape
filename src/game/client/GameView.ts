@@ -58,6 +58,7 @@ import {
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
+import { RootsView } from "./RootsView";
 
 const FROZEN_TINT = 0xa8d8ff;
 // Co-op teammates' names and arrows, like a friend's name in the client, and
@@ -168,6 +169,11 @@ const FLASH_MS = 700;
 const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
+// A felled tree (CharacterTraitDef timber): ticks it takes to fall, to lie there and to fade
+const TREE_FALL_TICKS = 20;
+const TREE_LIE_TICKS = 25;
+const TREE_FADE_TICKS = 20;
+const TREE_TICKS = TREE_FALL_TICKS + TREE_LIE_TICKS + TREE_FADE_TICKS;
 const ROCK_FALL_HEIGHT = 14;
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -258,6 +264,16 @@ export class GameView {
     localPlayerPose?: PlayerPose;
     private hitsplats: Hitsplat[] = [];
     private slashes: SlashFx[] = [];
+    // Trees felled (CharacterTraitDef timber), falling along their strip
+    private trees: {
+        x: number;
+        y: number;
+        dirX: number;
+        dirY: number;
+        length: number;
+        locId: number;
+        start: number;
+    }[] = [];
     auras: AuraFx[] = [];
     private blasts: BlastFx[] = [];
     private swings: SwingFx[] = [];
@@ -277,12 +293,14 @@ export class GameView {
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
+    private readonly roots: RootsView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
         this.floor = new FloorView(assets);
+        this.roots = new RootsView(assets);
     }
 
     reset(): void {
@@ -373,6 +391,17 @@ export class GameView {
                 case "visitorShout":
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== VISITOR_SHOUT);
                     this.shouts.push({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
+                    break;
+                case "treeFall":
+                    pushCapped(this.trees, {
+                        x: event.x,
+                        y: event.y,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        length: event.length,
+                        locId: event.locId,
+                        start: sim.tick,
+                    });
                     break;
                 case "slash":
                     pushCapped(this.slashes, {
@@ -637,6 +666,12 @@ export class GameView {
         this.fight.submitActors(actors, sim, alpha);
         actors.unlitAtLeast = 0;
         this.floor.submitActors(actors, sim, alpha);
+        const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
+        this.roots.submitActors(actors, sim, focus.x, focus.y);
+        this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
+        for (const tree of this.trees) {
+            this.drawTree(actors, sim, tree);
+        }
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -665,6 +700,47 @@ export class GameView {
                     : UNLIT,
             );
         }
+    }
+
+    // Timber! A tree stood at the strip's near end, tipping over along it faster and faster, then
+    // lying a moment and fading
+    private drawTree(
+        actors: ActorRenderer,
+        sim: Sim,
+        tree: {
+            x: number;
+            y: number;
+            dirX: number;
+            dirY: number;
+            length: number;
+            locId: number;
+            start: number;
+        },
+    ): void {
+        const model = this.assets.get("loc:" + tree.locId);
+        if (!model) {
+            return;
+        }
+        const ticks = sim.tick - tree.start;
+        const t = Math.min(1, ticks / TREE_FALL_TICKS);
+        const fade = Math.max(
+            0,
+            1 - Math.max(0, ticks - TREE_FALL_TICKS - TREE_LIE_TICKS) / TREE_FADE_TICKS,
+        );
+        // Its foot a little behind the player, so it lies along the strip; tall enough to reach
+        const x = tree.x - tree.dirX * 0.5;
+        const y = tree.y - tree.dirY * 0.5;
+        const scale = (tree.length * 128) / Math.max(1, model.height);
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            x,
+            this.ground(sim, x, y),
+            y,
+            yawFromVector(tree.dirX, tree.dirY),
+            { scale, pitch: Math.round(t * t * 512), alpha: fade },
+        );
     }
 
     // Falling faster and faster, then fading away where it landed

@@ -180,6 +180,15 @@ export type EnemyDef = {
     // Drawn as this item's model, never animated, instead of as the NPC
     // (Phosani's eggs are the Parasitic egg): npcId goes unused
     objId?: number;
+    // Drawn as one of these NPCs instead of npcId, picked as each turns up: looks of the same
+    // creature that share its animations (the Strangled's)
+    looks?: number[];
+    // Lays the map's rule's stuff (roots, MapDef.rule) this many tiles round it as it goes: a
+    // Strangled Bear's trail
+    plants?: number;
+    // Rushes the last range tiles to the player at speed times its pace (a Strangled Lynx's
+    // pounce)
+    pounce?: { range: number; speed: number };
     // Still alive this many seconds after it turns up, it's gone, and count of
     // into come out where it stood, dropping nothing (Phosani's eggs hatch
     // parasites unless they're broken first)
@@ -458,6 +467,9 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // rule: on count of what the map's rule has laid within within tiles of the player (roots
+        // erupting), as many as there are; nothing on a map without a rule
+        | { shape: "rule"; count: number; within: number }
         // checker: every cell of one colour of the map's checker (ArenaFeatures.checker),
         // at random, square; then the other colour's cells, shown from when the first
         // land and landing then seconds after. With cross, only the cells within cross
@@ -571,6 +583,10 @@ export type BossAttackDef = {
     // What it does to the map's floor (MapDef.floor) as it starts, aimed at the player it's after
     // (Sim.floorAct): drop the tile under them, start a pattern, change phase
     floor?: FloorActionDef;
+    // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
+    // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
+    // radius tiles either side of it. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1437,6 +1453,27 @@ export type CharacterDef = {
     // nowhere else: never in the roster, never unlocked, never counted (the
     // Inquisitor, Phosani's)
     only?: string;
+    // A way to play rather than a bonus (CharacterTraitDef)
+    trait?: CharacterTraitDef;
+};
+
+// An adventurer's trait (CharacterDef.trait), which the sim plays out for their hero.
+// timber (the Forester's): every `every` kills, their next melee swing fells a tree instead, a
+// strip `length` tiles long and `width` across ahead of them, hitting everything in it for
+// `damage` times the swing's own, drawn as locId falling over; and their swings cut what a map's
+// rule lays (roots) cutReach tiles further out.
+export type CharacterTraitDef = {
+    kind: "timber";
+    name: string;
+    every: number;
+    length: number;
+    width: number;
+    damage: number;
+    cutReach: number;
+    locId: number;
+    sound?: number;
+    // What it throws up as it lands, along the strip (ImpactDef)
+    impact?: ImpactDef;
 };
 
 export type ShopUpgradeDef = {
@@ -1513,6 +1550,8 @@ export type MapDef = {
     // its recording goes in src/media/music, named as GameClient's musicFor
     // says, and until it's there the map plays nothing
     music?: string;
+    // The track that takes over as the final boss comes (its own), as music is named and found
+    bossMusic?: string;
     // Fun maps: endless from the start and outside the unlock chain (see
     // FunMapDef). Campaign maps leave it unset.
     fun?: FunMapDef;
@@ -1547,9 +1586,72 @@ export type MapDef = {
     // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
     // it fall away. A prototype, on a dev map only.
     floor?: FloorDef;
+    // A map of an act after the first campaign (content/acts.ts): open once requires (a map id)
+    // has been beaten, in any order with the act's other maps, outside the campaign's chain. Its
+    // toughness is the act's step (ActDef.steps), set as a run starts by how many of the act's
+    // other maps have been beaten; difficulty is its first step's.
+    act?: { id: string; requires: string };
+    // The rule it's played by (RunRuleDef, core/rules): what makes it that map, run by the sim
+    // every tick
+    rule?: RunRuleDef;
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
+};
+
+// A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the
+// map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
+// put them on old ones). Shared things (roots) are the party's; what it does to a player is each
+// player's own.
+export type RunRuleDef = RootsRuleDef;
+
+// The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
+// hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
+// grow. They're cells of 2 by 2 tiles, drawn by client/RootsView.ts as they're hit: a cell hurts
+// where its roots stand, all of it.
+export type RootsRuleDef = {
+    kind: "roots";
+    // Seconds into the run they start creeping
+    start: number;
+    // How many creeping fronts there are, and the seconds between each one's spreads, from start to
+    // lateBy seconds, easing between
+    fronts: [from: number, to: number];
+    every: [from: number, to: number];
+    lateBy: number;
+    // Seconds a cell shows sprouts before it takes root: the warning
+    sprout: number;
+    // The circle roots never take (a final fight's clearing), in world tiles
+    safe?: { x: number; y: number; radius: number };
+    // On roots: a player's this much slower, and after grace seconds on them loses share of their
+    // hitpoints every `every` seconds; enemies are haste faster (not fliers)
+    slow: number;
+    hurt: { share: number; every: number; grace: number };
+    haste: number;
+    // Tiles round an enemy a player's hit cuts (one on roots), and a kill on roots; seconds before a
+    // cut cell can take root again from a rooted neighbour
+    cut: { hit: number; kill: number; regrow: number };
+    // Root hearts: enemyId turns up at a root front every `every` seconds from `from`, at most max
+    // at once; roots within reach tiles of one grow twice as fast; killed, it clears clear tiles
+    // round it, where nothing takes root for calm seconds
+    hearts: {
+        enemyId: string;
+        from: number;
+        every: number;
+        max: number;
+        reach: number;
+        clear: number;
+        calm: number;
+    };
+    // What they're drawn as (client/RootsView.ts), scenery all of it: runners laid along the
+    // ground from cell to cell, picked by cell; loops standing up out of it, which are also the tips
+    // pushing up where roots are coming and what wraps round the legs of a player on them; colours
+    // swapped on both, after the scenery's own; and the spot animation a cut throws up
+    look: {
+        runners: number[];
+        loops: number[];
+        recolor?: [from: number, to: number][];
+        cutSpotAnim: number;
+    };
 };
 
 // What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light

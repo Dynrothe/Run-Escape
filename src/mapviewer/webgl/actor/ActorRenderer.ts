@@ -480,6 +480,12 @@ export class ActorRenderer {
         }
     }
 
+    // Whether a sphere (world tiles, y as draw's) is in this frame's view, for a caller that
+    // knows better than a model's reach where it'll be (a model laid flat along a line)
+    inView(x: number, y: number, z: number, radius: number): boolean {
+        return !this.frustum || this.frustum.intersectsSphere(x, y, z, radius + CULL_MARGIN);
+    }
+
     // Actors outside the frustum aren't drawn. Models are tested as a sphere,
     // which covers every frame at any yaw.
     beginFrame(frustum?: Frustum): void {

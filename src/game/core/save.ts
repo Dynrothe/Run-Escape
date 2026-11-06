@@ -105,6 +105,9 @@ export type SaveData = {
     trophies: string[];
     // The pet taken along on runs (pets.ts), one of the trophies found
     pet?: string;
+    // An act's map id -> its best win (content/acts.ts): the quickest at the highest step it's
+    // been won at, so an easier one's kept, with its step, until it's beaten at a harder one
+    actBest?: Record<string, ActRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // When the player last exported it (Date.now()), so an exported file says
@@ -112,8 +115,11 @@ export type SaveData = {
     lastExported?: number;
 };
 
-// The round reached, and how long the run lasted
-export type EndlessRecord = { round: number; seconds: number };
+// The round reached, and how long the run lasted (on an act's map, at which step)
+export type EndlessRecord = { round: number; seconds: number; step?: number };
+
+// A win on an act's map: how long it took, at which step
+export type ActRecord = { seconds: number; step: number };
 
 export function createSave(): SaveData {
     return {
@@ -228,6 +234,9 @@ export function migrateSave(raw: unknown): SaveData {
                 const round = num(record?.round, 0);
                 if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
                     to[id] = { round, seconds: num(record?.seconds, 0) };
+                    if (typeof record.step === "number" && record.step >= 0) {
+                        to[id].step = Math.floor(record.step);
+                    }
                 }
             }
         }
@@ -270,6 +279,15 @@ export function migrateSave(raw: unknown): SaveData {
         for (const id of data.trophies) {
             if (TROPHY_BY_ID.has(id) && !save.trophies.includes(id)) {
                 save.trophies.push(id);
+            }
+        }
+    }
+    if (data.actBest && typeof data.actBest === "object") {
+        for (const [id, record] of Object.entries(data.actBest)) {
+            const seconds = num(record?.seconds, 0);
+            if (MAP_BY_ID.get(id)?.act && seconds > 0) {
+                save.actBest ??= {};
+                save.actBest[id] = { seconds, step: Math.max(0, Math.floor(num(record?.step, 0))) };
             }
         }
     }
@@ -440,6 +458,8 @@ export type RunSummary = {
     hard?: boolean;
     // A raid's expert mode (hard as well)
     expert?: boolean;
+    // An act's map: the step it was played at (content/acts.ts)
+    actStep?: number;
     victory: boolean;
     seconds: number;
     level: number;
@@ -475,6 +495,10 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         if (run.expert) {
             save.expertVictories[run.mapId] = (save.expertVictories[run.mapId] ?? 0) + 1;
         }
+        if (!run.endless && isActRecord(save, run)) {
+            save.actBest ??= {};
+            save.actBest[run.mapId] = { seconds: run.seconds, step: run.actStep ?? 0 };
+        }
     }
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
@@ -482,6 +506,9 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     if (run.endless && isEndlessRecord(save, run)) {
         const records = run.hard ? save.hardEndlessBest : save.endlessBest;
         records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
+        if (MAP_BY_ID.get(run.mapId)?.act) {
+            records[run.mapId].step = run.actStep ?? 0;
+        }
     }
     for (const id of run.gearFound ?? []) {
         if (isCasketGear(id) && !save.foundGear.includes(id)) {
@@ -579,6 +606,17 @@ export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
 }
 
+// Whether a win on an act's map is its best (SaveData.actBest): at a higher step than the one
+// kept, or as high and quicker
+export function isActRecord(save: SaveData, run: RunSummary): boolean {
+    if (!run.victory || !MAP_BY_ID.get(run.mapId)?.act || isDevMap(run.mapId)) {
+        return false;
+    }
+    const best = save.actBest?.[run.mapId];
+    const step = run.actStep ?? 0;
+    return !best || step > best.step || (step === best.step && run.seconds < best.seconds);
+}
+
 // Beating a map counts from any run so far; the rest need doing in one run
 function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
     switch (task.kind) {
@@ -629,6 +667,11 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
     if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId)) {
         return true;
+    }
+    // An act's maps open together once the map it requires has been beaten, in any order
+    const act = MAP_BY_ID.get(mapId)?.act;
+    if (act) {
+        return (save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
     }
     // A boss fight opens once the map it's the hard mode of has been beaten
     const fight = MAP_BY_ID.get(mapId)?.fight;
