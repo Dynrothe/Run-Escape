@@ -112,6 +112,9 @@ const TENTS = { from: 48599, to: 48603 };
 // Water: the sea's overlays and the river's (map file ids, textured water)
 const WATER_OVERLAYS = new Set([6, 442, 445, 448, 451]);
 
+// The real wheat field in the margin's south-east square (19,51), in grid tiles
+const MARGIN_FIELD = { x0: 223, y0: 1, x1: 235, y1: 10 };
+
 const toGrid = (realX: number, realY: number) => ({ x: realX - REAL_X, y: realY - REAL_Y });
 
 const CLEARING = toGrid(CLEARING_REAL.x, CLEARING_REAL.y);
@@ -218,6 +221,8 @@ function buildDetail(context: BuildContext): GeneratedMap {
         waterfalls: [],
         // All of it is the real world's
         designed: [{ x0: 0, y0: 0, x1: SIZE - 1, y1: SIZE - 1 }],
+        // A wheat field in the margin, on its hillside as the real one is
+        fields: [{ ...MARGIN_FIELD, slopes: true }],
     };
 }
 
