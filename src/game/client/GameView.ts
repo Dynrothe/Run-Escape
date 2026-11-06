@@ -12,6 +12,7 @@ import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from ".
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
 import { EnemyDef } from "../content/types";
+import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
     Hero,
@@ -505,8 +506,10 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
-                scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+            const look = PROJECTILE_ITEM_LOOKS[projectile.objId];
+            const yaw = (projectile.yaw + (look?.yawOffset ?? 0)) & 2047;
+            actors.draw(model, anim, frame, x, height, y, yaw, {
+                scale: look?.scale ?? (projectile.kind === "rune" ? RUNE_SCALE : 1),
             });
         }
 

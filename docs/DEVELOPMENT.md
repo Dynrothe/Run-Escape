@@ -36,26 +36,55 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
-It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
-each holding the full cache. Which worker loads what doesn't change the result: it's the union of
-what they read, sorted, and each map takes out the ScapeRune squares an earlier one put in. Before
-anything's published, the chunks in the out dir are read back, and every group has to come out of
-them as it went in; the check then loads it all from those same chunks.
+`scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
+bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
+full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
+what making them read, so what it reads doesn't depend on what ran before it in that worker: a warm
+model cache would hide a group an earlier unit read, and a map would keep an earlier map's
+ScapeRune squares. The one exception is the config type loaders made from an archive, which take
+a while to make and read nothing after: a worker makes those once, and every unit gets the reads
+that made them. Before anything's published, the chunks in the out dir are read back, and every
+group has to come out of them as it went in; the check then loads it all from those same chunks.
 
-A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if nothing it
-reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock`, `tsconfig.json`,
-and the full cache's `info.json`, `keys.json` and the size of each of its files. Chunks are
-written under a temporary name and renamed into place (tried again for a few seconds while Windows
-holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
-doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
-registers it.
+A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
+changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
+`slim-cache-boot.mjs` without running them: their files and what esbuild makes of them count, with
+`tsconfig.json`, `bun.lock` (all of it, so any change to the packages counts), the dependency and
+runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`, `keys.json` and
+file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
+version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
+be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
+reused cache still has its chunks' hashes checked and gets the current build. `caches/slim/` isn't
+kept between CI jobs. Chunks are written under a temporary name and renamed into place (tried again
+for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
+chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
+`slim-cache-boot.mjs`, which registers it.
+
+When something it's made from has changed, `caches/slim/units.json` still has what each unit read
+last time, fingerprinted with the unit's inputs and the workers' code, configuration and full
+cache. Only units without a match are loaded from the full cache, so a content change loads again
+only the units whose inputs it changes. Bakes and icons are batched by a hash of their keys, not
+their places in the content, so adding a weapon or an enemy changes only the batch or two it lands
+in. The workers import ScapeRune's recipes by address, so esbuild doesn't trace them into every
+unit: instead each map with a recipe carries the recipes' own fingerprint, and changing a recipe,
+or the waves and bosses one imports, loads only those maps again. A change to a shared loader, a
+package or the full cache loads every unit again.
+
+**Every unit still loads again from the finished slim cache**, so reuse saves loading from the full
+cache, not the check. What each unit read in the check is what's kept for the next run: with
+nothing missing it's the same as from the full one, and it's checked unit by unit, so a read list
+that came up short last time (from a change the fingerprints don't cover) isn't kept. If the check
+finds something missing, or a unit fails on it, and units were reused, it loads those units again
+from the full cache and checks once more, rather than stop. `units.json` is one file, written whole, with a checksum for
+each read list, and has only the current plan's units. A damaged entry, or file, is reported and
+loaded again.
 
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.
 - `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
   chunks are still read back and compared group by group. Leave the check on for anything players
-  get. An unchecked run isn't kept for reuse.
-- `SLIM_REUSE=0`: does it all even when nothing has changed.
+  get. An unchecked run keeps nothing for reuse.
+- `SLIM_REUSE=0`: loads it all, reusing neither the last run nor its units.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
@@ -334,7 +363,8 @@ Metrics contain aggregate numbers only, with no player names, addresses or room 
 **Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
 end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
 `VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
-shows in a build that has a collector. See the
+shows in a build that has a collector. A co-op relay set up for it also sends a row of its own for
+a run its checks flag, whatever that setting says (and the setting's text says so). See the
 [collector setup, daily analytics and leaderboard](../server/analytics/README.md). To look
 through an export of its database offline, run `node server/analytics/viewer/serve.mjs` and drop
 the file on the page.
@@ -649,6 +679,7 @@ src/game/
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
+  coop-checks.mjs  both relays' checks on a run's frames
   cloudflare/  the same relay on Cloudflare Durable Objects, each room near its host (README.md)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per segment and pass (without
@@ -1073,6 +1104,11 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   when nothing's changed. Something new that changes often goes in `HudNumbers`, and its numbers
   are rounded as they're shown (whole seconds), so they don't change when nothing on screen does.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
+  `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
+  left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
+  `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the
+  Pyromancer's phoenix) is used first, then the shop's Ring of life (its `objId`). The "saves you"
+  toast names the one used (`getUsedRevive`).
 - **The minimap** redraws 30 times a second at most, leaves out enemies off it, and draws its
   dots a colour at a time.
 - **The casket's rays** have their fade drawn into them (an SVG gradient), not a `mask-image`, which
@@ -1226,7 +1262,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
-  run, rather than everyone waiting on a copy that can't recover.
+  run, rather than everyone waiting on a copy that can't recover. It tells the relay first
+  (`outOfStep`), for the relay's log; the host ignores it.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
@@ -1330,6 +1367,14 @@ hard mode goes out in `GameStart`, like endless, so every player's copy plays th
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.
 
+Both relays check a run's frames as they pass (`server/coop-checks.mjs`) and log what they find,
+each entry an object with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
+A Cloudflare room keeps what's been found with the room, so a restart or a sleep mid-run doesn't
+lose it.
+`MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does. Set up
+for it, a relay also sends the run analytics collector a row for each run they find anything in
+(`server/analytics/README.md`, Run checks).
+
 A room's map, endless and hard mode are the relay's: the host's game sends `settings` and shows
 what comes back in the room update, never a pick of its own, so a refused one changes nothing. A
 host picking a map keeps endless and hard mode on only where everyone has them for it
@@ -1376,6 +1421,25 @@ each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The ro
 joining or leaving, and the run starting or ending, at once and before telling anyone; other
 changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
+
+A room's connection can also die without closing (a laptop asleep, a network that went away). During
+a run `GameClient` calls `CoopLobby.keepAlive()` on each step, which pings a room that's been quiet
+for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as dropped, coming back
+as above while the host still has the frames (about 7 seconds are left for that: past them the
+guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
+replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
+standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
+every `PING_INTERVAL_MS` checks the connection outside a run. The Cloudflare room lets go of a
+player it's heard nothing from, not even a ping, for `SILENT_MS`, as if their connection had closed
+(the Node relay finds those with its own pings). A guest whose missing frames haven't come for
+`GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
+`GAP_LATE_MS` between sightings (a frozen page) starts that wait over. A frame that fails to step
+`MAX_FAILED_STEPS` times in a row ends the run too (an error in the game; the host leaving ends it
+for everyone). A failed step has already changed the sim, so trying it again only keeps the copies
+together when every copy failed alike; the hash check finds one that didn't. The host's frames go
+out even when something after a step throws, and no time is banked for the steps it stopped. Only
+the Cloudflare relay gives a room its own connection to check; the rest is the game's, so it holds
+on either relay.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it

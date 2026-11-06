@@ -3352,21 +3352,28 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(20997);
     });
 
-    test("the Toxic blowpipe fires a better dart at each level, bronze to dragon", () => {
-        const darts = getWeapon("toxic_blowpipe").levels.map((level, i) => {
-            const sim = armed("toxic_blowpipe", "ranger");
-            sim.weapons[0].level = i + 1;
-            dummy(sim, 5, 0);
-            attack(sim);
-            expect(sim.projectiles.length).toBeGreaterThan(0);
-            // Drawn as the spot animation, not as an item
-            for (const projectile of sim.projectiles) {
-                expect(projectile).toMatchObject({ spotAnim: level.projectileSpotAnim, objId: -1 });
-            }
-            return level.projectileSpotAnim;
-        });
-        expect(new Set(darts).size).toBe(darts.length);
-    });
+    test.each(["toxic_blowpipe", "armadyl_crossbow"])(
+        "%s fires a different projectile at each level, bronze to dragon",
+        (weaponId) => {
+            const projectiles = getWeapon(weaponId).levels.map((level, i) => {
+                const sim = armed(weaponId, "ranger");
+                sim.weapons[0].level = i + 1;
+                dummy(sim, 5, 0);
+                attack(sim);
+                expect(sim.projectiles.length).toBeGreaterThan(0);
+                for (const projectile of sim.projectiles) {
+                    expect(projectile).toMatchObject({
+                        spotAnim: level.projectileSpotAnim ?? -1,
+                        objId: level.projectileObjId ?? -1,
+                    });
+                }
+                expect(sim.getHeldObjId()).toBe(getWeapon(weaponId).iconObjId);
+                return level.projectileObjId ?? level.projectileSpotAnim;
+            });
+            expect(projectiles.every((id) => id !== undefined)).toBe(true);
+            expect(new Set(projectiles).size).toBe(projectiles.length);
+        },
+    );
 
     test("the Toxic blowpipe's venom hurts every second, and spreads", () => {
         const sim = armed("toxic_blowpipe", "ranger");

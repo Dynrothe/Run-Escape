@@ -76,6 +76,28 @@ export const RESUME_WINDOW_MS = 10_000;
 const RESUME_DELAYS_MS = [0, 250, 500, 1000, 2000];
 // What's said in the room meanwhile waits, up to this many messages
 const MAX_WAITING_MESSAGES = 2000;
+// A room's connection can die without closing (a network that went away, a
+// laptop asleep), and then nothing says so. One that's sent nothing back for
+// this long after a ping is taken as dropped, and made again as above.
+const PONG_WAIT_MS = 8000;
+// During a run, a room that's been quiet this long is pinged (keepAlive), so
+// a dead connection's found while the host still has the frames to send
+// again (RESEND_FRAMES in CoopRun). A guest hears the host's frames all the
+// time, so it's mostly a host whose guests are standing still that sends
+// these (and a guest while the host's quiet, as when maps are loading).
+// keepAlive also pings a room it's sent nothing to for PING_INTERVAL_MS (a
+// guest standing still), so the room hears from a hidden tab whose regular
+// ping the browser has slowed (SILENT_MS in room.mjs).
+const RUN_QUIET_MS = 5000;
+// keepAlive called further apart than this means the page was frozen or
+// asleep meanwhile, and what's come may not have been read yet: nothing's
+// judged until a fresh ping's had its time
+const KEEP_ALIVE_LATE_MS = 2000;
+// The same for the regular ping, which Chrome can slow to once a minute in a
+// hidden tab
+const TICK_LATE_MS = PING_INTERVAL_MS * 2.5;
+// As the Cloudflare relay answers it without waking the room (room.mjs)
+const PING_TEXT = JSON.stringify({ t: "ping" });
 
 const GONE_TEXT: Record<GoneReason, string> = {
     left: "",
@@ -186,6 +208,14 @@ export class CoopLobby {
     private pingTimer?: number;
     // When this player last did anything here, for LOBBY_IDLE_MS
     private activeAt = 0;
+    // The room's connection: when anything last came on it, when anything
+    // was last sent on it, when it was last pinged, and when keepAlive and the
+    // regular ping last ran
+    private roomHeardAt = 0;
+    private roomSentAt = 0;
+    private roomPingAt?: number;
+    private keptAliveAt = 0;
+    private tickAt = 0;
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
@@ -328,9 +358,81 @@ export class CoopLobby {
             this.roomSocket && ROOM_MESSAGES.has(message.t) ? this.roomSocket : this.socket;
         if (socket?.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify(message));
+            if (socket === this.roomSocket) {
+                this.roomSentAt = Date.now();
+            }
         }
         if (message.t === "ping" && this.roomSocket?.readyState === WebSocket.OPEN) {
-            this.roomSocket.send(JSON.stringify(message));
+            this.pingRoom(this.roomSocket);
+        }
+    }
+
+    private pingRoom(socket: WebSocket): void {
+        const now = Date.now();
+        socket.send(PING_TEXT);
+        this.roomSentAt = now;
+        // A ping still unanswered keeps its time, so another can't put off
+        // finding the connection dead
+        if (!this.isRoomPingUnanswered()) {
+            this.roomPingAt = now;
+        }
+    }
+
+    private isRoomPingUnanswered(): boolean {
+        return this.roomPingAt !== undefined && this.roomHeardAt < this.roomPingAt;
+    }
+
+    // Whether the room's connection has gone PONG_WAIT_MS since a ping with
+    // nothing at all back
+    private isRoomSilent(now: number): boolean {
+        return this.isRoomPingUnanswered() && now - this.roomPingAt! > PONG_WAIT_MS;
+    }
+
+    // Checks the room's connection, and makes it again if it's stopped
+    // answering. Returns it if it's open and still in use: not while coming
+    // back, and not after a gap (late), which starts the check again.
+    private checkRoomSocket(late: boolean): WebSocket | undefined {
+        const socket = this.roomSocket;
+        if (!socket || this.resuming || socket.readyState !== WebSocket.OPEN) {
+            return undefined;
+        }
+        if (late) {
+            this.roomPingAt = undefined;
+            return undefined;
+        }
+        if (this.isRoomSilent(Date.now())) {
+            this.roomSocketDead(socket);
+            return undefined;
+        }
+        return socket;
+    }
+
+    // A room connection that stopped answering: closed, and made again as if it
+    // had dropped, since a dead one may never say it's closed
+    private roomSocketDead(socket: WebSocket): void {
+        console.warn("Co-op: the room's connection stopped answering, so it's being made again");
+        socket.onclose = null;
+        socket.onmessage = null;
+        socket.close();
+        this.roomSocketClosed(socket);
+    }
+
+    // Called on each step of a co-op run, in a hidden tab too: pings a room
+    // that's been quiet for RUN_QUIET_MS, or that's heard nothing from this
+    // game for PING_INTERVAL_MS, and finds a dead connection within seconds
+    // rather than the regular ping's minute or so
+    keepAlive(): void {
+        const now = Date.now();
+        const late = now - this.keptAliveAt > KEEP_ALIVE_LATE_MS;
+        this.keptAliveAt = now;
+        const socket = this.checkRoomSocket(late);
+        if (
+            socket &&
+            ((!this.isRoomPingUnanswered() &&
+                now - Math.max(this.roomHeardAt, this.roomPingAt ?? 0) >= RUN_QUIET_MS) ||
+                now - this.roomSentAt >= PING_INTERVAL_MS)
+        ) {
+            this.pingRoom(socket);
         }
     }
 
@@ -387,10 +489,14 @@ export class CoopLobby {
     // The room's connection, once it's in
     private useRoomSocket(socket: WebSocket): void {
         this.roomSocket = socket;
+        // The room's just heard from it (the create, join or resume)
+        this.roomHeardAt = this.roomSentAt = Date.now();
+        this.roomPingAt = undefined;
         socket.onmessage = (event) => {
             if (socket !== this.roomSocket) {
                 return;
             }
+            this.roomHeardAt = Date.now();
             let received: ServerMessage;
             try {
                 received = JSON.parse(String(event.data));
@@ -399,20 +505,22 @@ export class CoopLobby {
             }
             this.receive(received);
         };
-        socket.onclose = () => {
-            if (socket !== this.roomSocket) {
-                return;
-            }
-            this.roomSocket = undefined;
-            // Closed by the room after a "gone" (which said why), or lost
-            if (!this.view.room) {
-                this.outOfRoom();
-            } else if (this.resume) {
-                this.startResuming();
-            } else {
-                this.roomLost("Lost the connection to the room.");
-            }
-        };
+        socket.onclose = () => this.roomSocketClosed(socket);
+    }
+
+    private roomSocketClosed(socket: WebSocket): void {
+        if (socket !== this.roomSocket) {
+            return;
+        }
+        this.roomSocket = undefined;
+        // Closed by the room after a "gone" (which said why), or lost
+        if (!this.view.room) {
+            this.outOfRoom();
+        } else if (this.resume) {
+            this.startResuming();
+        } else {
+            this.roomLost("Lost the connection to the room.");
+        }
     }
 
     private startResuming(): void {
@@ -640,6 +748,14 @@ export class CoopLobby {
     // Pings, or closes the connection if this player's left it be
     private tick(): void {
         const now = Date.now();
+        const late = now - this.tickAt > TICK_LATE_MS;
+        this.tickAt = now;
+        // Outside a run: a room's connection that's stopped answering. During
+        // one keepAlive checks it, more often, and a regular ping slowed in a
+        // hidden tab mustn't start its check over.
+        if (now - this.keptAliveAt > KEEP_ALIVE_LATE_MS) {
+            this.checkRoomSocket(late);
+        }
         // Not this.entering, which a refused join (or the Node relay, which
         // sends no goto) leaves set
         if (this.view.room || this.enteringSocket) {

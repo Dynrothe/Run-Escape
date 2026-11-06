@@ -10,15 +10,32 @@ the version in the corner).
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
+- Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
+  it saves you, and the Pyromancer's own revive shows as a phoenix.
 
 ### Changed
 
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
+- The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
+  levels.
+- The Dragon hunter crossbow fires the same clearer bolts: dragon bolts.
+- Co-op's out-of-step message, by trippy22: a guest whose game stops matching the host's is now
+  told an integrity check failed.
+- Cheat checks on co-op relays, by trippy22: a relay can note a run its checks flag, with no
+  names, whether or not Share run stats is on. The setting now says so.
+- Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
+  game's cache again.
 - Theatre of Blood, by Okaeri: the Nylocas are slower.
 
 ### Fixed
 
+- Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
+- Co-op could freeze for half an hour when a connection died without closing (a network that
+  dropped, a laptop asleep). Your game now notices within seconds and reconnects, and a player
+  who's gone silent is dropped after about five minutes. Fixed by trippy22.
+- A co-op run that can't go on (a guest too far behind to catch up, or an error in the game) ends
+  with a message instead of freezing everyone. Fixed by trippy22.
 - Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
   you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
   by Okaeri.

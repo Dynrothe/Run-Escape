@@ -372,6 +372,22 @@ describe("power-ups in the cache", () => {
         expect(keys).toContain("spot:" + VISITOR_SPOTANIM);
     });
 
+    test("weapons' projectile items are baked at every level, so the slim cache gets them", () => {
+        const requests = GameAssets.getBaseRequests();
+        for (const weapon of WEAPONS) {
+            for (const level of weapon.levels) {
+                if (level.projectileObjId !== undefined) {
+                    expect(requests, weapon.id).toContainEqual({
+                        kind: "obj",
+                        key: "obj:" + level.projectileObjId,
+                        objId: level.projectileObjId,
+                        count: 1,
+                    });
+                }
+            }
+        }
+    });
+
     // Every level's, not only the first: the Toxic blowpipe's darts change as it levels
     test("weapons' spot animations are baked at every level, so the slim cache gets them", () => {
         const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));

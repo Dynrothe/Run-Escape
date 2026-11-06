@@ -31,7 +31,7 @@ import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
@@ -247,16 +247,14 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId = getProjectileObjId(weapon, level);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {

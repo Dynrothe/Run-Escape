@@ -162,7 +162,10 @@ host.room.send(JSON.stringify({ t: "down", d: { upTo: 6, events: [] } }));
 ok((await guest.next("down")).d.upTo === 6, "and the host's frames reach it again");
 const stranger = new Client("stranger");
 await stranger.open(`${base}/room/${goto.code}?resume=nottherighttoken`);
-ok(/closed/.test((await stranger.next("error")).message), "a wrong token is turned away");
+ok(
+    /no longer in that room/.test((await stranger.next("error")).message),
+    "a wrong token is turned away",
+);
 
 // Round trip guest -> host -> guest, the path a guest's input takes
 const loops = [];
